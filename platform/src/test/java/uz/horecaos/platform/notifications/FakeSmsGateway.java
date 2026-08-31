@@ -4,15 +4,18 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An SMS gateway that fails on demand (ADR 0007, ADR 0020).
@@ -45,7 +48,11 @@ public final class FakeSmsGateway implements AutoCloseable {
     }
 
     public static FakeSmsGateway start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        // A literal loopback address rather than the hostname-resolving
+        // constructor: AddressSelection flags the latter because resolving a
+        // name can pick any of several IPs, which is not a concern for
+        // "127.0.0.1" but the fix is the same either way.
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         FakeSmsGateway gateway = new FakeSmsGateway(server);
         server.createContext("/provider/commands", gateway::handle);
         server.setExecutor(Executors.newFixedThreadPool(4));
@@ -86,7 +93,10 @@ public final class FakeSmsGateway implements AutoCloseable {
         String idempotencyKey = header(exchange, IDEMPOTENCY_HEADER);
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
 
-        switch (scenario.get()) {
+        // AtomicReference#get is nullable by type regardless of what has ever
+        // been stored; this one is constructed with SUCCESS and every behaveAs
+        // call requires a non-null Scenario, so it is never actually empty.
+        switch (Objects.requireNonNull(scenario.get())) {
             case SUCCESS -> {
                 String reference = acceptOnce(idempotencyKey, body);
                 respond(exchange, 200, """
@@ -137,7 +147,7 @@ public final class FakeSmsGateway implements AutoCloseable {
      * <p>A repeated key returns the first reference and sends nothing further,
      * which is exactly the behaviour a retry path has to be tested against.
      */
-    private String acceptOnce(String idempotencyKey, String requestBody) {
+    private String acceptOnce(@Nullable String idempotencyKey, String requestBody) {
         if (idempotencyKey == null) {
             return newMessage(requestBody);
         }
@@ -169,7 +179,7 @@ public final class FakeSmsGateway implements AutoCloseable {
         }
     }
 
-    private static String header(HttpExchange exchange, String name) {
+    private static @Nullable String header(HttpExchange exchange, String name) {
         List<String> values = exchange.getRequestHeaders().get(name);
         return values == null || values.isEmpty() ? null : values.getFirst();
     }
@@ -183,3 +193,4 @@ public final class FakeSmsGateway implements AutoCloseable {
         ACCEPTED_THEN_TIMEOUT
     }
 }
+

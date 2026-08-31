@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -154,6 +155,21 @@ public class PosOrderExportService {
         }
 
         Map<String, String> config = configuration.resolve(binding.get()).orElse(Map.of());
+
+        // The venue reference is optional everywhere else PosContext carries it,
+        // but Clopos's order-create call requires it unconditionally (see
+        // CloposAdapter#exportOrder) and the export row's own column is NOT NULL —
+        // so a binding configured with neither key cannot export orders at all,
+        // and that is refused here the same way an unmapped capability is, rather
+        // than surfacing later as a database constraint violation.
+        String venueReference = config.getOrDefault("clopos.venueId", venueOf(config));
+        if (venueReference == null) {
+            log.debug(
+                    "No venue reference configured for binding {}; cannot export orders",
+                    binding.get().bindingId());
+            return Optional.empty();
+        }
+
         List<LineFingerprint.Line> fingerprintLines = fingerprintLines(binding.get(), order);
 
         UUID exportId = exports.open(new JdbcPosExportStore.NewExport(
@@ -169,7 +185,7 @@ public class PosOrderExportService {
                 truncate(order.publicOrderNumber(), 20),
                 LineFingerprint.of(fingerprintLines),
                 LineFingerprint.phoneHash(order.customerPhone()),
-                config.getOrDefault("clopos.venueId", venueOf(config)),
+                venueReference,
                 clock.instant()));
 
         return Optional.of(exportId);
@@ -411,7 +427,7 @@ public class PosOrderExportService {
             UUID tenantId,
             UUID exportId,
             OperatorDecision decision,
-            String landedExternalId,
+            @Nullable String landedExternalId,
             String reason,
             String operator) {
 
@@ -592,14 +608,11 @@ public class PosOrderExportService {
         return line.productNameSnapshot() + " " + line.variantNameSnapshot();
     }
 
-    private static String venueOf(Map<String, String> config) {
+    private static @Nullable String venueOf(Map<String, String> config) {
         return config.get("venueId");
     }
 
     private static String truncate(String value, int limit) {
-        if (value == null) {
-            return null;
-        }
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 

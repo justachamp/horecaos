@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.pricing.application.MenuMembershipLookup;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.PricingInputs;
@@ -212,7 +213,7 @@ class PromotionPricingTests {
                 null);
     }
 
-    private static PricingInputs inputs(PromotionInputs promotions) {
+    private static PricingInputs inputs(@Nullable PromotionInputs promotions) {
         return new PricingInputs(
                 "UZS",
                 PUBLICATION,

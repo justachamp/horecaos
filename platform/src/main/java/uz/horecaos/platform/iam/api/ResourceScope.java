@@ -109,7 +109,7 @@ public record ResourceScope(
         return other.chain().contains(this);
     }
 
-    private static void requireAllNull(UUID... values) {
+    private static void requireAllNull(@Nullable UUID... values) {
         for (UUID value : values) {
             if (value != null) {
                 throw new IllegalArgumentException("Scope identifiers below the scope type must be absent");

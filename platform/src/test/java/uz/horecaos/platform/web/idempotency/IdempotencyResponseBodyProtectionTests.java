@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -78,6 +79,9 @@ class IdempotencyResponseBodyProtectionTests {
     /** A second protected field on the same response, so a partial fix fails too. */
     private static final String OWNERS_INSTRUCTION = "Ring the top bell";
 
+    // @DynamicPropertySource is a static hook Spring's test runner guarantees
+    // runs before context startup and every test method, which NullAway cannot see.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll
@@ -312,7 +316,7 @@ class IdempotencyResponseBodyProtectionTests {
                 VALUES (:id, :tenantId, 1, 'TENANT_SHARED', TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes(TENANT.toString().getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(TENANT.toString().getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", TENANT)
                 .update();
         jdbc.sql("""

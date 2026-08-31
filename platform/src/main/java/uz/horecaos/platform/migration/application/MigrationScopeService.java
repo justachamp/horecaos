@@ -1051,7 +1051,7 @@ public class MigrationScopeService {
             Map<String, Object> evidenceSnapshot,
             String requestedBy,
             String decidedBy,
-            UUID approvalRequestId,
-            Instant requestedAt,
+            @Nullable UUID approvalRequestId,
+            @Nullable Instant requestedAt,
             String idempotencyKey) {}
 }

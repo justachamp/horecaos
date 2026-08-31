@@ -10,11 +10,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -84,14 +86,12 @@ class NotificationDeliveryTests {
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
+    private static final UUID LOCATION = UUID.randomUUID();
     private static final String PHONE = "+998901234567";
     private static final Instant NOW = Instant.parse("2026-08-22T09:00:00Z");
     private static final String MARKETING_PURPOSE = "ORDER_UPDATES";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private FakeSmsGateway gateway;
     private CamelContext camel;
@@ -118,9 +118,6 @@ class NotificationDeliveryTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for notification delivery tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -160,7 +157,7 @@ class NotificationDeliveryTests {
         templateStore = new JdbcTemplateStore(jdbc);
         templates = new NotificationTemplateService(templateStore, objectMapper, clock);
 
-        seedTenantAndCustomer(clock);
+        seedTenantAndCustomer();
         seedProviderInstallation();
 
         NotificationGateway providerGateway = new NotificationGateway(
@@ -180,7 +177,7 @@ class NotificationDeliveryTests {
         orders = new StubOrderDirectory();
         orderId = UUID.randomUUID();
         orders.publish(new OrderDirectory.OrderSummary(
-                orderId, TENANT, BRAND, null, "A-17", accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
+                orderId, TENANT, BRAND, LOCATION, "A-17", accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
 
         NotificationEligibilityService eligibility = new NotificationEligibilityService(
                 notifications, templates, consent, contacts, orders, transport, objectMapper, clock);
@@ -398,7 +395,7 @@ class NotificationDeliveryTests {
     void aGuestOrderIsSuppressedWithItsReason() {
         UUID guestOrder = UUID.randomUUID();
         orders.publish(new OrderDirectory.OrderSummary(
-                guestOrder, TENANT, BRAND, null, "A-18", null, "hash", "CONFIRMED", "UZS", 1_000L, 1));
+                guestOrder, TENANT, BRAND, LOCATION, "A-18", null, "hash", "CONFIRMED", "UZS", 1_000L, 1));
 
         trigger.onOrderingEvent(orderConfirmed(guestOrder));
         worker.drain();
@@ -412,7 +409,7 @@ class NotificationDeliveryTests {
         UUID silentAccount = insertAccount();
         UUID theirOrder = UUID.randomUUID();
         orders.publish(new OrderDirectory.OrderSummary(
-                theirOrder, TENANT, BRAND, null, "A-19", silentAccount, null, "CONFIRMED", "UZS", 1_000L, 1));
+                theirOrder, TENANT, BRAND, LOCATION, "A-19", silentAccount, null, "CONFIRMED", "UZS", 1_000L, 1));
 
         trigger.onOrderingEvent(orderConfirmed(theirOrder));
         worker.drain();
@@ -569,7 +566,7 @@ class NotificationDeliveryTests {
                 TENANT, BRAND, OrderNotificationTrigger.ORDER_CONFIRMED, NotificationChannel.SMS, MessageLocale.RU);
 
         assertThat(resolved.isFound()).isTrue();
-        assertThat(resolved.template().brandId()).isEqualTo(BRAND);
+        assertThat(Objects.requireNonNull(resolved.template()).brandId()).isEqualTo(BRAND);
     }
 
     // ------------------------------------------------------------ personal data
@@ -600,10 +597,10 @@ class NotificationDeliveryTests {
         trigger.onOrderingEvent(orderConfirmed());
         worker.drain();
 
-        UUID endpointId = queries.detail(TENANT, confirmationFor(orderId))
+        UUID endpointId = Objects.requireNonNull(queries.detail(TENANT, confirmationFor(orderId))
                 .orElseThrow()
                 .notification()
-                .recipientEndpointId();
+                .recipientEndpointId());
         var endpoint = notifications.endpoint(TENANT, endpointId).orElseThrow();
 
         assertThat(endpoint.normalizedHash()).isNotBlank();
@@ -628,10 +625,10 @@ class NotificationDeliveryTests {
         assertThat(queries.forOrder(OTHER_TENANT, orderId)).isEmpty();
         assertThat(notifications.endpoint(
                         OTHER_TENANT,
-                        queries.detail(TENANT, notificationId)
+                        Objects.requireNonNull(queries.detail(TENANT, notificationId)
                                 .orElseThrow()
                                 .notification()
-                                .recipientEndpointId()))
+                                .recipientEndpointId())))
                 .isEmpty();
     }
 
@@ -663,7 +660,7 @@ class NotificationDeliveryTests {
                 subject,
                 NOW,
                 BRAND,
-                null,
+                LOCATION,
                 "RESTAURANT_APPROVAL",
                 "HORECAOS_OPERATIONS",
                 NOW,
@@ -734,7 +731,7 @@ class NotificationDeliveryTests {
         templates.activate(TENANT, templateId, versionNumber, "copy-approver");
     }
 
-    private void seedTenantAndCustomer(Clock clock) {
+    private void seedTenantAndCustomer() {
         jdbc.sql("""
                 INSERT INTO tenant.tenants (
                     id, slug, legal_name, display_name, default_currency, default_timezone,
@@ -745,6 +742,18 @@ class NotificationDeliveryTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'pilot-brand', 'Pilot brand', 'ACTIVE')
                 """).param("id", BRAND).param("tenantId", TENANT).update();
+        // The events and notification rows below carry a real location id, and
+        // fk_notification_location requires it to resolve to an actual row.
+        jdbc.sql("""
+                INSERT INTO tenant.locations (
+                    id, tenant_id, brand_id, code, slug, display_name, timezone, status)
+                VALUES (:id, :tenantId, :brandId, 'PILOT', 'pilot-location', 'Pilot location',
+                    'Asia/Tashkent', 'ACTIVE')
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         accountId = insertAccount();
         profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, PHONE, true);
@@ -859,7 +868,7 @@ class NotificationDeliveryTests {
         return notifications.find(TENANT, notificationId).orElseThrow().status();
     }
 
-    private String suppressionReasonOf(UUID notificationId) {
+    private @Nullable String suppressionReasonOf(UUID notificationId) {
         return notifications.find(TENANT, notificationId).orElseThrow().suppressionReason();
     }
 
@@ -901,3 +910,5 @@ class NotificationDeliveryTests {
         }
     }
 }
+
+

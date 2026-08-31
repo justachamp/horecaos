@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.camel.common;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -21,7 +22,7 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 @Component
 public class ProviderExceptionClassifier {
 
-    public ProviderOutcome classify(int statusCode, String body, Duration retryAfter) {
+    public ProviderOutcome classify(int statusCode, @Nullable String body, @Nullable Duration retryAfter) {
         if (statusCode >= 200 && statusCode < 300) {
             return ProviderOutcome.success(java.util.Map.of("body", body == null ? "" : body), null);
         }
@@ -36,7 +37,8 @@ public class ProviderExceptionClassifier {
      * 408 and 425 were {@code UNCERTAIN} here and {@code RETRYABLE} there, and
      * the wired-in path was the unsafe one.
      */
-    public ProviderOutcome classifyFailureStatus(int statusCode, String body, Duration retryAfter) {
+    public ProviderOutcome classifyFailureStatus(
+            int statusCode, @Nullable String body, @Nullable Duration retryAfter) {
         String detail = body == null ? "" : body;
         if (statusCode == 408 || statusCode == 425) {
             // The provider received the request and timed out processing it, so

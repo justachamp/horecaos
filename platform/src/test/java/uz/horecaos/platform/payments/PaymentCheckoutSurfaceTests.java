@@ -13,6 +13,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -345,7 +346,9 @@ class PaymentCheckoutSurfaceTests {
 
         var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
-        Map<String, String> parameters = queryOf(session.checkoutUrl());
+        // A PresentationRequest.link() session always carries a checkout URL;
+        // only a push presentation can leave it null.
+        Map<String, String> parameters = queryOf(Objects.requireNonNull(session.checkoutUrl()));
         assertThat(session.checkoutUrl()).startsWith("https://my.click.uz/services/pay/?");
         assertThat(parameters.get("merchant_id")).isEqualTo(CLICK_MERCHANT_ID);
         assertThat(parameters.get("service_id")).isEqualTo(CLICK_SERVICE_ID);
@@ -446,7 +449,8 @@ class PaymentCheckoutSurfaceTests {
         var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
 
         assertThat(session.checkoutUrl()).startsWith(PAYME_CHECKOUT_HOST + "/");
-        String encoded = session.checkoutUrl()
+        // Same PresentationRequest.link() invariant as clickPaymentLink() above.
+        String encoded = Objects.requireNonNull(session.checkoutUrl())
                 .substring(PAYME_CHECKOUT_HOST.length() + 1)
                 .replace("%2F", "/");
         String payload = new String(Base64.getDecoder().decode(encoded), StandardCharsets.US_ASCII);
@@ -1021,12 +1025,13 @@ class PaymentCheckoutSurfaceTests {
 
         @Override
         public Optional<BindingRef> primaryBinding(
-                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return Optional.empty();
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+        public List<BindingRef> candidateBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return List.of();
         }
 

@@ -154,7 +154,7 @@ public class JdbcPricingStore {
                 .list());
     }
 
-    public void insertQuote(Quote quote, String idempotencyKey, Map<String, Object> calculationDocument) {
+    public void insertQuote(Quote quote, @Nullable String idempotencyKey, Map<String, Object> calculationDocument) {
         jdbc.sql("""
                 INSERT INTO pricing.quotes (
                     id, tenant_id, brand_id, location_id, customer_account_id, currency, status,

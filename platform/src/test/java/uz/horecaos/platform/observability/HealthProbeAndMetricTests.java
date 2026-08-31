@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -143,10 +144,12 @@ class HealthProbeAndMetricTests {
         // Asserted structurally rather than by reading the response, because the
         // group shows no details to anyone: a passing 200 proves nothing about
         // what was checked to produce it.
-        assertThat(groups.get("liveness").isMember("db"))
+        var liveness = Objects.requireNonNull(groups.get("liveness"), "No such health endpoint group: liveness");
+        var readiness = Objects.requireNonNull(groups.get("readiness"), "No such health endpoint group: readiness");
+        assertThat(liveness.isMember("db"))
                 .as("a liveness probe that fails on a slow database restarts the only container there is")
                 .isFalse();
-        assertThat(groups.get("readiness").isMember("db"))
+        assertThat(readiness.isMember("db"))
                 .as("the proxy must not stop routing to its only upstream because the database is slow")
                 .isFalse();
     }
@@ -155,8 +158,9 @@ class HealthProbeAndMetricTests {
     @Order(2)
     @DisplayName("the external probe asks whether a customer could order")
     void customerGroupConsultsTheDatabase() {
-        assertThat(groups.get("customer")).isNotNull();
-        assertThat(groups.get("customer").isMember("db")).isTrue();
+        var customer = groups.get("customer");
+        assertThat(customer).isNotNull();
+        assertThat(Objects.requireNonNull(customer).isMember("db")).isTrue();
     }
 
     @Test

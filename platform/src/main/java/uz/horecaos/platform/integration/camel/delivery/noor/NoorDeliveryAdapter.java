@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner;
@@ -197,18 +198,17 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
         body.put("vendor_order_id", request.horecaosReference());
         // Noor accepts exactly one pickup point per order. A multi-pickup basket
         // has to become several orders upstream; it cannot be flattened here.
-        body.put(
-                "pickup",
-                Map.of(
-                        "lat", request.pickup().latitude(),
-                        "lon", request.pickup().longitude(),
-                        "address", request.pickup().address(),
-                        "contact_name", request.pickup().contactName(),
-                        "contact_phone", request.pickup().contactPhone(),
-                        "comment",
-                                request.pickup().comment() == null
-                                        ? ""
-                                        : request.pickup().comment()));
+        // Built with a mutable map rather than Map.of(): a pickup contact name or
+        // phone is optional on the domain request, and Map.of() throws on a null
+        // value rather than accepting one.
+        Map<String, Object> pickup = new LinkedHashMap<>();
+        pickup.put("lat", request.pickup().latitude());
+        pickup.put("lon", request.pickup().longitude());
+        pickup.put("address", request.pickup().address());
+        pickup.put("contact_name", request.pickup().contactName() == null ? "" : request.pickup().contactName());
+        pickup.put("contact_phone", request.pickup().contactPhone() == null ? "" : request.pickup().contactPhone());
+        pickup.put("comment", request.pickup().comment() == null ? "" : request.pickup().comment());
+        body.put("pickup", pickup);
         body.put("dropoff", dropoff(request));
         body.put("delivery", delivery);
         return body;
@@ -247,7 +247,7 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
         return dropoff;
     }
 
-    private static long minorUnits(Object price) {
+    private static long minorUnits(@Nullable Object price) {
         if (price == null) {
             return 0L;
         }

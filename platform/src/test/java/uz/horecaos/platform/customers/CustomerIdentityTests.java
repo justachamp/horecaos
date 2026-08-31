@@ -53,9 +53,6 @@ class CustomerIdentityTests {
     private static final Instant POLICY_EFFECTIVE_FROM = Instant.parse("2026-08-20T00:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcCustomerStore store;
@@ -68,9 +65,6 @@ class CustomerIdentityTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for customer identity tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

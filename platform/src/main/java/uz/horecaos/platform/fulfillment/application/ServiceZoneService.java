@@ -134,8 +134,9 @@ public class ServiceZoneService {
      */
     @Transactional
     public void activate(UUID tenantId, UUID brandId, UUID zoneId, int version, UUID actorId) {
-        store.zoneRole(tenantId, brandId, zoneId)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
+        if (store.zoneRole(tenantId, brandId, zoneId).isEmpty()) {
+            throw new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand");
+        }
 
         VersionStatus status = store.versionStatus(tenantId, zoneId, version)
                 .orElseThrow(() ->
@@ -249,6 +250,8 @@ public class ServiceZoneService {
     }
 
     /**
+     * A new zone version to draft.
+     *
      * @param priority the first key of the overlap ranking. Higher wins; ties fall
      *                 to the smaller area and then to the zone id, so a tie is
      *                 resolved rather than left to the planner

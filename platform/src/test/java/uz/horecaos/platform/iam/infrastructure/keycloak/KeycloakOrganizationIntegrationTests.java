@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -275,10 +276,12 @@ class KeycloakOrganizationIntegrationTests {
                 new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
         usersToRemove.add(membership.subjectId());
 
-        Map<String, Object> stored = admin.get()
-                .uri("/admin/realms/{realm}/users/{id}", REALM, membership.subjectId())
-                .retrieve()
-                .body(MAP);
+        Map<String, Object> stored = Objects.requireNonNull(
+                admin.get()
+                        .uri("/admin/realms/{realm}/users/{id}", REALM, membership.subjectId())
+                        .retrieve()
+                        .body(MAP),
+                "Keycloak returned no body for the user it was just asked about");
 
         assertThat(stored).isNotNull();
         assertThat(String.valueOf(stored.get("firstName")))

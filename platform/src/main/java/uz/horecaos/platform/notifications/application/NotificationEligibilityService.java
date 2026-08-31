@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -101,6 +102,11 @@ public class NotificationEligibilityService {
         Instant now = clock.instant();
         NotificationChannel channel = NotificationChannel.valueOf(row.channel());
         NotificationClass notificationClass = NotificationClass.valueOf(row.notificationClass());
+        // This service only ever runs on a row a worker just claimed, so the claim
+        // token is always set; asserting it here rather than carrying the
+        // @Nullable type through the method is what lets markReady below take a
+        // plain UUID like every other claim-scoped write in this module does.
+        UUID claimToken = Objects.requireNonNull(row.claimToken(), "eligibility runs only on a claimed row");
 
         if (!channel.isWired() || !transport.supports(channel.name())) {
             // Refused here rather than at the last step, so a tenant who authored
@@ -119,21 +125,29 @@ public class NotificationEligibilityService {
         }
         OrderSummary summary = order.get();
 
-        if (!summary.hasAccount()) {
+        UUID accountId = summary.customerAccountId();
+        if (accountId == null) {
             // A guest order has no ADR 0015 account, so there is no contact to
             // resolve and no consent record to read. The first slice takes
             // phone-authenticated customers, so this is the honest answer rather
-            // than an error.
+            // than an error. Checking the id directly (rather than
+            // summary.hasAccount()) is what lets the compiler carry the non-null
+            // fact through the rest of this method.
             return suppress(row, SuppressionReason.NO_RECIPIENT_ACCOUNT, now);
         }
-        UUID accountId = summary.customerAccountId();
 
         MessageLocale locale = contacts.preferredLocale(row.tenantId(), accountId)
                 .flatMap(MessageLocale::parse)
                 .orElse(MessageLocale.FALLBACK);
 
         var resolution = templates.resolve(row.tenantId(), row.brandId(), row.templateKey(), channel, locale);
-        if (!resolution.isFound()) {
+        var template = resolution.template();
+        var version = resolution.version();
+        if (template == null || version == null) {
+            // Checking the resolved rows directly (rather than
+            // resolution.isFound()) is what lets the compiler carry the non-null
+            // fact into the rest of this method; Resolution guarantees the two
+            // travel together.
             SuppressionReason reason =
                     switch (resolution.outcome()) {
                         case NO_ACTIVE_TEMPLATE -> SuppressionReason.NO_ACTIVE_TEMPLATE;
@@ -143,14 +157,15 @@ public class NotificationEligibilityService {
             return suppress(row, reason, now);
         }
 
-        var template = resolution.template();
-
         // The gate. Only the classes that legally need a decision ask for one, and
         // absence of a decision is withheld rather than permitted — "we never
         // asked" and "they said yes" are the two states a default-true would merge.
         if (notificationClass.requiresConsent()) {
-            boolean granted = consent.consentFor(
-                            row.tenantId(), accountId, row.brandId(), template.consentPurpose(), channel.name())
+            String consentPurpose = Objects.requireNonNull(
+                    template.consentPurpose(),
+                    "template %s is %s and must declare a consent purpose"
+                            .formatted(template.id(), notificationClass));
+            boolean granted = consent.consentFor(row.tenantId(), accountId, row.brandId(), consentPurpose, channel.name())
                     .map(ConsentDirectory.ConsentState::granted)
                     .orElse(false);
             if (!granted) {
@@ -169,7 +184,12 @@ public class NotificationEligibilityService {
             }
         }
 
-        Optional<ContactEndpoint> contact = contacts.primaryContact(row.tenantId(), accountId, channel.contactMethod());
+        // Reachable only for a wired channel (the isWired() check above), and
+        // every wired channel names a contact method; PUSH and MESSAGING_APP
+        // carry null here but are never wired in this release.
+        var contactMethod = Objects.requireNonNull(
+                channel.contactMethod(), () -> channel + " is wired but names no contact method");
+        Optional<ContactEndpoint> contact = contacts.primaryContact(row.tenantId(), accountId, contactMethod);
         if (contact.isEmpty()) {
             return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
         }
@@ -187,9 +207,9 @@ public class NotificationEligibilityService {
         boolean ready = notifications.markReady(
                 row.tenantId(),
                 row.id(),
-                row.claimToken(),
+                claimToken,
                 template.id(),
-                template.activeVersion(),
+                version.versionNumber(),
                 locale.tag(),
                 accountId,
                 endpointId,
@@ -235,3 +255,4 @@ public class NotificationEligibilityService {
         return false;
     }
 }
+

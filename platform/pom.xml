@@ -245,15 +245,19 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
             <plugin>
-                <!-- ADR 0054. Error Prone + NullAway on every compile, all
-                     findings demoted to warnings (-XepAllErrorsAsWarnings,
-                     which also covers NullAway's own default ERROR severity).
-                     Promotion to build-failing errors is a follow-up change
-                     per check family, made when its warning count is zero.
-                     NullAway is scoped to this codebase's own packages so it
-                     does not report on framework or library code it cannot
-                     annotate. The JDK export/opens flags Error Prone's javac
-                     plugin needs live in .mvn/jvm.config. -->
+                <!-- ADR 0054. Error Prone + NullAway on every compile. Promoted
+                     off -XepAllErrorsAsWarnings on 2026-08-31: the full-tree
+                     inventory (regenerated after fixing the -Xmaxwarns
+                     undercount below) reached zero findings, including
+                     NullAway, whose 29 remaining @SuppressWarnings("NullAway")
+                     sites each carry a one-line justification rather than
+                     being unexplained. Error Prone's own default-ERROR checks
+                     and NullAway's default-ERROR severity (spelled out
+                     explicitly below rather than left implicit) now fail the
+                     build. NullAway is scoped to this codebase's own packages
+                     so it does not report on framework or library code it
+                     cannot annotate. The JDK export/opens flags Error Prone's
+                     javac plugin needs live in .mvn/jvm.config. -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
@@ -263,7 +267,7 @@
                              javac's default ifError=INIT stop policy runs before
                              the Error Prone plugin gets a chance to see the tree. -->
                         <arg>--should-stop=ifError=FLOW</arg>
-                        <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -Xep:StringConcatToTextBlock:OFF -XepOpt:NullAway:AnnotatedPackages=uz.horecaos.platform</arg>
+                        <arg>-Xplugin:ErrorProne -Xep:StringConcatToTextBlock:OFF -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=uz.horecaos.platform</arg>
                         <!-- StringConcatToTextBlock is OFF because the checker itself crashes
                              (Iterables.getLast inside matchLiteral) on valid code in
                              FiscalObligationService — a tool bug, not a finding; re-enable on

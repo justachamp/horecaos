@@ -44,7 +44,7 @@ public class TargetWritesFencedException extends RuntimeException {
     }
 
     private static String describe(
-            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
+            MigrationCapability capability, @Nullable UUID scopeId, ScopeState state, WriteMode writeMode) {
         String scope = scopeId == null ? "no migration scope" : "scope " + scopeId;
         return "The target may not write %s: %s is in %s with write mode %s (ADR 0024)"
                 .formatted(capability, scope, state, writeMode);
@@ -55,7 +55,7 @@ public class TargetWritesFencedException extends RuntimeException {
     }
 
     /** The scope that fenced the write, or null when none covered the request. */
-    public UUID scopeId() {
+    public @Nullable UUID scopeId() {
         return scopeId;
     }
 

@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 
@@ -45,8 +46,12 @@ public sealed interface SourcingDecision {
      * @param intent {@link BookingIntent#HOLD} only where the partner supports
      *               holds. On a partner whose create is live — verified for Noor
      *               — this is always a booking, never a speculative one
+     * @param requestedPickupAt the scheduled pickup instant for
+     *               {@link BookingIntent#BOOK_FOR_PICKUP_WINDOW}, or null for a
+     *               booking made now
      */
-    record BookPartner(PartnerOption partner, BookingIntent intent, Instant requestedPickupAt, String reason)
+    record BookPartner(
+            PartnerOption partner, BookingIntent intent, @Nullable Instant requestedPickupAt, String reason)
             implements SourcingDecision {}
 
     /**

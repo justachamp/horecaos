@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -129,12 +130,14 @@ class DeliveryGatewayTests {
     private static ProviderInstallationLookup lookup(String status) {
         return new ProviderInstallationLookup() {
             @Override
-            public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId, String code) {
+            public Optional<BindingRef> primaryBinding(
+                    UUID tenantId, UUID brandId, @Nullable UUID locationId, String code) {
                 return Optional.empty();
             }
 
             @Override
-            public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String code) {
+            public List<BindingRef> candidateBindings(
+                    UUID tenantId, UUID brandId, @Nullable UUID locationId, String code) {
                 return List.of();
             }
 

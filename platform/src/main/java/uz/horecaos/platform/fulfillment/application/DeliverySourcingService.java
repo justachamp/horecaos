@@ -436,7 +436,8 @@ public class DeliverySourcingService {
      * written under, which is what makes the replay find its own attempt.
      */
     static UUID commandId(UUID planId, UUID bindingId, int attempt) {
-        return UUID.nameUUIDFromBytes(("horecaos.delivery-attempt:%s:%s:%d".formatted(planId, bindingId, attempt))
+        return UUID.nameUUIDFromBytes("horecaos.delivery-attempt:%s:%s:%d"
+                .formatted(planId, bindingId, attempt)
                 .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -447,7 +448,8 @@ public class DeliverySourcingService {
      * crash.
      */
     static UUID quoteId(UUID planId, UUID bindingId, int round) {
-        return UUID.nameUUIDFromBytes(("horecaos.delivery-quote:%s:%s:%d".formatted(planId, bindingId, round))
+        return UUID.nameUUIDFromBytes("horecaos.delivery-quote:%s:%s:%d"
+                .formatted(planId, bindingId, round)
                 .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -482,6 +484,8 @@ public class DeliverySourcingService {
     public static final UUID DEFAULTS_ID = UUID.fromString("00000000-0000-0000-0000-000000000014");
 
     /**
+     * What one sourcing tick decided and did.
+     *
      * @param progress what the next tick would see if it did not read the attempt
      *                 rows. It does read them — this is here so a caller holding
      *                 one tick in its hand can assert on what changed

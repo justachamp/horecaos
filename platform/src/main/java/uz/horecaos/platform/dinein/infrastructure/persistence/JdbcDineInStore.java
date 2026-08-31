@@ -10,8 +10,10 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.dinein.domain.QrMode;
@@ -618,9 +620,9 @@ public class JdbcDineInStore {
             SessionStatus from,
             SessionStatus to,
             int expectedVersion,
-            Instant closedAt,
-            Long settledTotalMinor,
-            String closeReasonCode,
+            @Nullable Instant closedAt,
+            @Nullable Long settledTotalMinor,
+            @Nullable String closeReasonCode,
             Instant now) {
 
         Map<String, Object> params = new HashMap<>();
@@ -731,11 +733,14 @@ public class JdbcDineInStore {
             String displayName,
             int seats,
             boolean joinable,
-            BigDecimal layoutX,
-            BigDecimal layoutY,
+            @Nullable BigDecimal layoutX,
+            @Nullable BigDecimal layoutY,
             String status,
-            String qrTokenHash,
-            Instant qrTokenRotatedAt,
+            // Both null together and both set together: V0034's ck_table_qr_pair
+            // makes a digest with no rotation instant, or the reverse, impossible
+            // to write. A table nobody has printed a code for has neither.
+            @Nullable String qrTokenHash,
+            @Nullable Instant qrTokenRotatedAt,
             int version) {}
 
     public record GuestSessionRow(
@@ -748,20 +753,20 @@ public class JdbcDineInStore {
             QrMode qrMode,
             Instant issuedAt,
             Instant expiresAt,
-            Instant revokedAt,
-            String revokedReason) {}
+            @Nullable Instant revokedAt,
+            @Nullable String revokedReason) {}
 
     public record ReservationRow(
             UUID id,
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String guestNameEncrypted,
             String guestPhoneEncrypted,
             String guestPhoneLookupHash,
-            String secondaryPhoneEncrypted,
-            String noteEncrypted,
+            @Nullable String secondaryPhoneEncrypted,
+            @Nullable String noteEncrypted,
             int partySize,
             Instant requestedFrom,
             Instant requestedTo,
@@ -776,7 +781,7 @@ public class JdbcDineInStore {
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID reservationId,
+            @Nullable UUID reservationId,
             Integer partySize,
             LocalDate businessDate,
             String openedBy,
@@ -784,12 +789,15 @@ public class JdbcDineInStore {
             SessionStatus status,
             Integer serviceChargeRateBpSnapshot,
             String currency,
-            Long settledTotalMinor,
-            Instant closedAt,
-            String closeReasonCode,
+            @Nullable Long settledTotalMinor,
+            @Nullable Instant closedAt,
+            @Nullable String closeReasonCode,
             int version) {}
 
     /**
+     * One table's read of a requested window: whether it is booked, occupied,
+     * both, or neither.
+     *
      * @param booked   a confirmed or seated booking overlaps the asked-for window
      * @param occupied somebody is sitting there now, which is a different fact
      */
@@ -862,7 +870,7 @@ public class JdbcDineInStore {
                 row.getBigDecimal("layout_y"),
                 row.getString("status"),
                 row.getString("qr_token_hash"),
-                instant(row, "qr_token_rotated_at"),
+                nullableInstant(row, "qr_token_rotated_at"),
                 row.getInt("version"));
     }
 
@@ -877,7 +885,7 @@ public class JdbcDineInStore {
                 QrMode.valueOf(row.getString("qr_mode_snapshot")),
                 instant(row, "issued_at"),
                 instant(row, "expires_at"),
-                instant(row, "revoked_at"),
+                nullableInstant(row, "revoked_at"),
                 row.getString("revoked_reason"));
     }
 
@@ -920,12 +928,23 @@ public class JdbcDineInStore {
                 row.getObject("service_charge_rate_bp_snapshot", Integer.class),
                 row.getString("currency"),
                 row.getObject("settled_total_minor", Long.class),
-                instant(row, "closed_at"),
+                nullableInstant(row, "closed_at"),
                 row.getString("close_reason_code"),
                 row.getInt("version"));
     }
 
+    /**
+     * Reads a column the schema declares {@code NOT NULL}.
+     *
+     * <p>A null here is a fact this schema does not allow, so it fails at the row
+     * that produced it rather than travelling on as an {@code Instant} typed to
+     * promise it can't happen.
+     */
     private static Instant instant(ResultSet row, String column) throws SQLException {
+        return Objects.requireNonNull(nullableInstant(row, column), () -> column + " was NULL for a NOT NULL column");
+    }
+
+    private static @Nullable Instant nullableInstant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
@@ -934,7 +953,7 @@ public class JdbcDineInStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    private static OffsetDateTime nullableUtc(Instant instant) {
+    private static @Nullable OffsetDateTime nullableUtc(@Nullable Instant instant) {
         return instant == null ? null : utc(instant);
     }
 }

@@ -79,9 +79,9 @@ public class JdbcOutcomeReasonStore {
             UUID reasonId,
             int expectedVersion,
             String internalName,
-            String stockDisposition,
-            String liabilityParty,
-            String customerRefund,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
+            @Nullable String customerRefund,
             @Nullable List<String> allowedFulfillmentModes,
             Instant now) {
 
@@ -237,9 +237,9 @@ public class JdbcOutcomeReasonStore {
             OutcomeReasonKind kind,
             String systemCategory,
             String internalName,
-            String stockDisposition,
-            String liabilityParty,
-            String customerRefund,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
+            @Nullable String customerRefund,
             @Nullable List<String> allowedFulfillmentModes,
             Instant createdAt) {}
 

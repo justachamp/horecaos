@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.api;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The settlement an order is discharged by (ADR 0046), asked for by ordering and
@@ -127,13 +128,13 @@ public interface OrderSettlementPort {
             UUID tenantId,
             UUID brandId,
             UUID orderId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String currency,
             long totalMinor,
             String paymentMethodCode,
             long redeemFromBalanceMinor,
             String idempotencyKey,
-            String actor) {}
+            @Nullable String actor) {}
 
     /**
      * Whether a real implementation is present.

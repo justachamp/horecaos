@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -128,7 +129,7 @@ public class ProviderHttpClient {
             ProviderCall call,
             String path,
             Map<String, String> headers,
-            Object body,
+            @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "POST", path, headers, body, onSuccess);
     }
@@ -137,7 +138,7 @@ public class ProviderHttpClient {
             ProviderCall call,
             String path,
             Map<String, String> headers,
-            Object body,
+            @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "PATCH", path, headers, body, onSuccess);
     }
@@ -146,7 +147,7 @@ public class ProviderHttpClient {
             ProviderCall call,
             String path,
             Map<String, String> headers,
-            Object body,
+            @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "PUT", path, headers, body, onSuccess);
     }
@@ -378,7 +379,7 @@ public class ProviderHttpClient {
         return truncate(summary, MAX_DETAIL_CHARS) + suffix;
     }
 
-    private static boolean isScalar(Object value) {
+    private static boolean isScalar(@Nullable Object value) {
         return value != null && !(value instanceof Map) && !(value instanceof Collection);
     }
 

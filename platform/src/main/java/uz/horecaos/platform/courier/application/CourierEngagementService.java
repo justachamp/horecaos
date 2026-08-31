@@ -356,7 +356,11 @@ public class CourierEngagementService {
         return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 
-    /** @param displayReference a non-personal handle a dispatch board may show */
+    /**
+     * A courier engagement to create.
+     *
+     * @param displayReference a non-personal handle a dispatch board may show
+     */
     public record NewCourier(
             UUID tenantId,
             UUID courierTypeId,
@@ -368,13 +372,18 @@ public class CourierEngagementService {
             String reason,
             String correlationId) {}
 
+    /**
+     * A registration to verify.
+     *
+     * @param evidenceMediaId optional; checked for ownership only when present
+     */
     public record VerifyRegistration(
             UUID tenantId,
             UUID engagementId,
             String registrationIdentifier,
             LocalDate validUntil,
             VerificationMethod method,
-            UUID evidenceMediaId,
+            @Nullable UUID evidenceMediaId,
             ActorRef actor,
             String reason,
             String correlationId) {}

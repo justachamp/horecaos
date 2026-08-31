@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -157,7 +158,10 @@ public class JdbcCutoverDecisionStore implements MigrationCutoverDecisionStore {
                 // and make the row claim a platform approval it does not have.
                 row.getObject("approval_request_is_platform", Boolean.class),
                 row.getString("idempotency_key"),
-                instantOrNull(row, "requested_at"),
-                instantOrNull(row, "decided_at"));
+                // NOT NULL in V0024; instantOrNull is the shared column reader and
+                // stays conservative for columns that can be blank, but this one
+                // never is.
+                Objects.requireNonNull(instantOrNull(row, "requested_at"), "requested_at is NOT NULL"),
+                Objects.requireNonNull(instantOrNull(row, "decided_at"), "decided_at is NOT NULL"));
     }
 }

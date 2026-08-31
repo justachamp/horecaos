@@ -12,6 +12,7 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -203,13 +204,13 @@ public class LegalEntityController {
             UUID id,
             String code,
             String legalName,
-            String shortName,
+            @Nullable String shortName,
             String tin,
             boolean vatRegistered,
-            String vatCertificateReference,
-            UUID taxProfileId,
-            String registeredAddress,
-            String contactPhone,
+            @Nullable String vatCertificateReference,
+            @Nullable UUID taxProfileId,
+            @Nullable String registeredAddress,
+            @Nullable String contactPhone,
             OperatingUnitStatus status,
             int version) {
 
@@ -236,9 +237,9 @@ public class LegalEntityController {
             UUID locationId,
             UUID legalEntityId,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil,
+            @Nullable LocalDate effectiveUntil,
             String approvedBy,
-            String approvalReference,
+            @Nullable String approvalReference,
             int version) {
 
         static LocationFiscalAssignmentView of(LocationFiscalAssignment assignment) {

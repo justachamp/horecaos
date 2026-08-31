@@ -55,7 +55,11 @@ public final class ImageCostLimits {
 
     private ImageCostLimits() {}
 
-    /** @return true when this header describes an image the platform will decode */
+    /**
+     * Whether an image's own header fits inside every one of this platform's limits.
+     *
+     * @return true when this header describes an image the platform will decode
+     */
     public static boolean withinBudget(ProbedImage image) {
         return image.widthPx() <= MAX_DIMENSION_PX
                 && image.heightPx() <= MAX_DIMENSION_PX

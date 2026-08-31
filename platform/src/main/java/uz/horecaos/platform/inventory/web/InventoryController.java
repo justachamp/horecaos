@@ -106,11 +106,20 @@ public class InventoryController {
         return ResponseEntity.ok(inventory.checkAvailability(tenantId, locationId, Set.copyOf(variantIds)));
     }
 
+    /**
+     * The acting user as a UUID.
+     *
+     * <p>The subject is a Keycloak identifier and is a UUID in this deployment. It
+     * is parsed rather than assumed: a subject that is not one would otherwise be
+     * stored as a nil id and quietly attribute the availability change to nobody.
+     */
     private UUID actorId() {
+        String subject = currentActor.get().subject();
         try {
-            return UUID.fromString(currentActor.get().subject());
+            return UUID.fromString(subject);
         } catch (IllegalArgumentException notAUuid) {
-            return null;
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "This principal has no identifier that can be recorded as an actor");
         }
     }
 

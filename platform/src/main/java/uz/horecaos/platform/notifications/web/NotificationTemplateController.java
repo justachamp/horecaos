@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -198,6 +199,8 @@ public class NotificationTemplateController {
             @Size(max = 64) String consentPurpose) {}
 
     /**
+     * One version's draft wording, submitted in every locale at once.
+     *
      * @param wordings keyed by locale tag; every supported locale must be present
      * @param variablesSchema the allowlist, as name to declared type. A template
      *                        may name these and nothing else
@@ -215,16 +218,22 @@ public class NotificationTemplateController {
     public record VersionResponse(UUID templateId, int versionNumber) {}
 
     public record WordingResponse(
-            String locale, String subject, String body, String contentHash, String status, String approvedBy) {}
+            String locale,
+            @Nullable String subject,
+            String body,
+            String contentHash,
+            String status,
+            @Nullable String approvedBy) {}
 
     public record TemplateResponse(
             UUID id,
-            UUID brandId,
+            @Nullable UUID brandId,
             String templateKey,
             String notificationClass,
             String channel,
-            String consentPurpose,
+            @Nullable String consentPurpose,
             String status,
-            Integer activeVersion,
+            @Nullable Integer activeVersion,
             int version) {}
 }
+

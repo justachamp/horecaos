@@ -92,6 +92,8 @@ public final class SourcingPlanner {
     private SourcingPlanner() {}
 
     /**
+     * Decides who to ask next for one plan, in-house fleet or delivery partner.
+     *
      * @param candidates couriers ADR 0042's dispatch gate has already allowed.
      *                   This method filters for capacity and for who has already
      *                   been asked; it does not re-decide eligibility, which

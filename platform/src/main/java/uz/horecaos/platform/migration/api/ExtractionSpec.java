@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.api;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What to read from the legacy database, and how to page it (ADR 0024).
@@ -42,9 +43,9 @@ public record ExtractionSpec(
         String entityType,
         String table,
         String stableKeyColumn,
-        String watermarkColumn,
+        @Nullable String watermarkColumn,
         List<String> columns,
-        String filter) {
+        @Nullable String filter) {
 
     private static final Pattern ENTITY_TYPE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
     private static final Pattern IDENTIFIER = Pattern.compile("^[a-z_][a-z0-9_]{0,62}$");

@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -101,7 +102,9 @@ class RouteDescriptorTests {
     @Test
     void everyDescriptorLinksARunbookThatExists() {
         for (RouteDescriptor descriptor : RouteDescriptor.loadAll(ROUTES)) {
-            String runbook = descriptor.fields().get("Runbook").replace("`", "");
+            String runbook = Objects.requireNonNull(
+                            descriptor.fields().get("Runbook"), () -> descriptor.name() + " has no Runbook field")
+                    .replace("`", "");
             Path target = Path.of(runbook.split("#", 2)[0].trim());
 
             assertThat(Files.exists(target))

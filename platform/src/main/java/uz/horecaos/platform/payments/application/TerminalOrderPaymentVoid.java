@@ -113,7 +113,12 @@ public class TerminalOrderPaymentVoid {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderCancelled(OrderCancelled event) {
-        voidAnyLivePayment(event.tenantId().value(), event.orderId(), event.reasonCode());
+        // A cancellation is not required to carry a reason code (unlike expiry,
+        // which always means the same thing); fall back to a generic one so the
+        // void still records something rather than requiring a non-null value
+        // the event genuinely may not have.
+        String reasonCode = event.reasonCode() == null ? "ORDER_CANCELLED" : event.reasonCode();
+        voidAnyLivePayment(event.tenantId().value(), event.orderId(), reasonCode);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -184,7 +189,10 @@ public class TerminalOrderPaymentVoid {
                         attempt.id(),
                         orderId);
             }
-            case REJECTED, RETRYABLE -> unvoidable(orderId, attempt, outcome.failureCode());
+            case REJECTED, RETRYABLE -> unvoidable(
+                    orderId,
+                    attempt,
+                    outcome.failureCode() == null ? "provider gave no failure code" : outcome.failureCode());
         }
     }
 

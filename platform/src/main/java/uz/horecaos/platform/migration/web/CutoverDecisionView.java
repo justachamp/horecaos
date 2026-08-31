@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.Decision;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.DecisionRow;
 import uz.horecaos.platform.migration.domain.ScopeState;
@@ -24,6 +25,8 @@ import uz.horecaos.platform.migration.domain.ScopeState;
  *                     actually looking at
  * @param decidedBy    null for a decision nobody made — a request withdrawn or
  *                     expired — and never equal to {@code requestedBy}
+ * @param approvalRequestId the ADR 0027 maker-checker request this discharges,
+ *                          or null when policy required none
  */
 public record CutoverDecisionView(
         UUID id,
@@ -35,7 +38,7 @@ public record CutoverDecisionView(
         String reason,
         String requestedBy,
         String decidedBy,
-        UUID approvalRequestId,
+        @Nullable UUID approvalRequestId,
         Instant requestedAt,
         Instant decidedAt) {
 

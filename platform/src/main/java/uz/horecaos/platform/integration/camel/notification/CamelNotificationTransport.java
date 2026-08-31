@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
@@ -41,7 +42,11 @@ public class CamelNotificationTransport implements NotificationTransport {
 
     @Override
     public DispatchOutcome reconcile(
-            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey) {
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String providerIdempotencyKey) {
         ProviderOutcome outcome = send(
                 NotificationRouteBuilder.STATUS_ENDPOINT,
                 NotificationSendOperation.queryStatus(tenantId, brandId, locationId, channel, providerIdempotencyKey));
@@ -117,7 +122,7 @@ public class CamelNotificationTransport implements NotificationTransport {
                         UUID.fromString(bindingId), text(outcome.normalized(), NotificationGateway.PROVIDER_TYPE_KEY));
     }
 
-    private static String text(Map<String, Object> normalized, String key) {
+    private static @Nullable String text(Map<String, Object> normalized, String key) {
         Object value = normalized.get(key);
         return value == null ? null : String.valueOf(value);
     }

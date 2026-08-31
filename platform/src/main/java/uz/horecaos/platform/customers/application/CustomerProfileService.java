@@ -460,9 +460,11 @@ public class CustomerProfileService {
      * differently and a support agent searching for a customer finds nobody.
      */
     private static String normalize(ContactType type, String rawValue) {
-        Optional.ofNullable(rawValue)
-                .filter(value -> !value.isBlank())
-                .orElseThrow(() -> new IllegalArgumentException("A contact value is required"));
+        // rawValue is declared non-null, but this guarded null check preserves what the
+        // Optional-based version it replaces did for a value that got here anyway.
+        if (rawValue == null || rawValue.isBlank()) {
+            throw new IllegalArgumentException("A contact value is required");
+        }
 
         return switch (type) {
             // Delegated rather than inlined, because the ADR 0015 verification path
@@ -572,6 +574,8 @@ public class CustomerProfileService {
     public record ContactPointSummary(UUID id, ContactType type, String verificationStatus, boolean isPrimary) {}
 
     /**
+     * An address as revealed to its owner.
+     *
      * @param version the row's optimistic-concurrency version, so a customer
      *                editing their own address can present it as an
      *                {@code If-Match} precondition and lose loudly to a second tab

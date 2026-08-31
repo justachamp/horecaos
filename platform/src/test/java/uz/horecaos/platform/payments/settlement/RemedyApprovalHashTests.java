@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -268,15 +269,15 @@ class RemedyApprovalHashTests {
     }
 
     private static long exposure(FutureDiscountCommand command) {
-        long perUse =
-                command.benefit() == EntitlementBenefit.FIXED_AMOUNT ? command.amountMinor() : command.maximumMinor();
+        // Same FIXED_AMOUNT/otherwise invariant as OrderRemedyService's own
+        // perUseMaximum: amountMinor is set exactly for FIXED_AMOUNT, maximumMinor
+        // for every other benefit.
+        long perUse = command.benefit() == EntitlementBenefit.FIXED_AMOUNT
+                ? Objects.requireNonNull(command.amountMinor())
+                : Objects.requireNonNull(command.maximumMinor());
         return perUse * command.uses();
     }
 
-    // See theFactorsBindNotJustTheirProduct: percentBasisPoints/amountMinor/
-    // maximumMinor are mutually exclusive by production design but not yet
-    // annotated @Nullable on FutureDiscountCommand itself.
-    @SuppressWarnings("NullAway")
     private static FutureDiscountCommand discount(
             EntitlementBenefit benefit,
             Long amountMinor,

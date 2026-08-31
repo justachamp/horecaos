@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -313,7 +314,10 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                 row.getString("target_owner"),
                 new OwnershipModes(writeMode, readMode),
                 ScopeState.valueOf(row.getString("state")),
-                instantOrNull(row, "state_entered_at"),
+                // NOT NULL in V0024; instantOrNull is the shared column reader and
+                // stays conservative for columns that can be blank, but this one
+                // never is.
+                Objects.requireNonNull(instantOrNull(row, "state_entered_at"), "state_entered_at is NOT NULL"),
                 documentOrEmpty(objectMapper, row, "checkpoint"),
                 row.getInt("version"));
     }

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reads the several time formats Clopos uses.
@@ -31,8 +32,12 @@ public final class CloposTime {
 
     private CloposTime() {}
 
-    /** @return null for anything unparseable, because a wrong instant is worse than none */
-    public static Instant parse(String value) {
+    /**
+     * Parses one of Clopos's several timestamp shapes.
+     *
+     * @return null for anything unparseable, because a wrong instant is worse than none
+     */
+    public static @Nullable Instant parse(@Nullable String value) {
         if (value == null || value.isBlank() || "null".equals(value)) {
             return null;
         }

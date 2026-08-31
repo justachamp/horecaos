@@ -143,7 +143,7 @@ public class PricingEngine {
         // extracted, because VAT is owed on what the customer actually pays.
         // Extracting first and discounting after would charge tax on money
         // nobody handed over, and the receipt would not reconcile.
-        PromotionEvaluator.Outcome offers = evaluateOffers(request, inputs, lines, grossTotal, now);
+        PromotionEvaluator.Outcome offers = evaluateOffers(inputs, lines, grossTotal, now);
 
         long lineDiscountTotal = 0;
         if (!offers.isEmpty()) {
@@ -425,11 +425,7 @@ public class PricingEngine {
      * engine stays a pure function.
      */
     private PromotionEvaluator.Outcome evaluateOffers(
-            QuoteRequest request,
-            PricingInputs inputs,
-            List<Quote.QuoteLine> lines,
-            long grossTotal,
-            java.time.Instant now) {
+            PricingInputs inputs, List<Quote.QuoteLine> lines, long grossTotal, java.time.Instant now) {
 
         PromotionInputs offers = inputs.promotions();
         if (offers == null || offers.promotions().isEmpty()) {

@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
 import uz.horecaos.platform.migration.domain.ReadMode;
@@ -26,6 +27,8 @@ import uz.horecaos.platform.migration.domain.WriteMode;
  *                       window and the soak period are both "has it been here
  *                       long enough", which {@code updatedAt} stops being able to
  *                       answer after any unrelated edit
+ * @param brandId        null for a scope covering the whole tenant
+ * @param locationId     null for a scope covering the whole brand
  * @param version        the optimistic-concurrency token, echoed in the {@code
  *                       ETag} and required back on every transition
  */
@@ -33,8 +36,8 @@ public record ScopeView(
         UUID id,
         UUID programId,
         UUID tenantId,
-        UUID brandId,
-        UUID locationId,
+        @Nullable UUID brandId,
+        @Nullable UUID locationId,
         MigrationCapability capability,
         String sourceOwner,
         String targetOwner,

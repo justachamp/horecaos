@@ -8,12 +8,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,7 +54,7 @@ class CamelShipmentBookingPortTests {
     private static final UUID ONE_PHASE_BINDING = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
     private static final UUID TWO_PHASE_BINDING = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
 
-    private CamelContext camel;
+    private @Nullable CamelContext camel;
 
     @AfterEach
     void stopCamel() {
@@ -205,8 +207,10 @@ class CamelShipmentBookingPortTests {
         // False here instructs a partner to collect the basket price from the
         // recipient, so a value dropped in translation charges the customer a
         // second time for food HorecaOS was already paid for.
-        assertThat(noor.lastRequest.prepaid()).isTrue();
-        assertThat(noor.lastRequest.horecaosReference()).isEqualTo("QO-3003");
+        DeliveryPartner.DeliveryRequest lastRequest =
+                Objects.requireNonNull(noor.lastRequest, "book() above must have called create");
+        assertThat(lastRequest.prepaid()).isTrue();
+        assertThat(lastRequest.horecaosReference()).isEqualTo("QO-3003");
     }
 
     @Test
@@ -232,7 +236,9 @@ class CamelShipmentBookingPortTests {
                 "UZS",
                 "corr-1"));
 
-        assertThat(noor.lastRequest.requestedPickupAt()).isEqualTo(pickup);
+        assertThat(Objects.requireNonNull(noor.lastRequest, "book() above must have called create")
+                        .requestedPickupAt())
+                .isEqualTo(pickup);
     }
 
     private ShipmentBookingPort port(ScriptedPartner... partners) throws Exception {
@@ -316,12 +322,12 @@ class CamelShipmentBookingPortTests {
 
         return new ProviderInstallationLookup() {
             @Override
-            public Optional<BindingRef> primaryBinding(UUID t, UUID b, UUID l, String code) {
+            public Optional<BindingRef> primaryBinding(UUID t, UUID b, @Nullable UUID l, String code) {
                 return Optional.empty();
             }
 
             @Override
-            public List<BindingRef> candidateBindings(UUID t, UUID b, UUID l, String code) {
+            public List<BindingRef> candidateBindings(UUID t, UUID b, @Nullable UUID l, String code) {
                 if (!TENANT.equals(t) || !LOCATION.equals(l)) {
                     return List.of();
                 }
@@ -381,7 +387,7 @@ class CamelShipmentBookingPortTests {
 
         private ProviderOutcome createOutcome;
         private ProviderOutcome confirmOutcome;
-        private DeliveryRequest lastRequest;
+        private @Nullable DeliveryRequest lastRequest;
         private int creates;
         private int confirms;
 

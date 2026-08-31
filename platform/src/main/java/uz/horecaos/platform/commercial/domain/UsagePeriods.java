@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 
@@ -44,7 +45,12 @@ public final class UsagePeriods {
      * @param billingStart the live subscription's current period start, or null
      * @param billingEnd   the live subscription's current period end, or null
      */
-    public static UsagePeriod of(ResetPeriod reset, Instant at, ZoneId zone, Instant billingStart, Instant billingEnd) {
+    public static UsagePeriod of(
+            ResetPeriod reset,
+            Instant at,
+            ZoneId zone,
+            @Nullable Instant billingStart,
+            @Nullable Instant billingEnd) {
 
         return switch (reset) {
             case NONE -> new UsagePeriod(UsagePeriod.LIFETIME, Instant.EPOCH, NEVER);

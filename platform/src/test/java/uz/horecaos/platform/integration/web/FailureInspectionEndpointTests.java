@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,7 +89,7 @@ class FailureInspectionEndpointTests {
      * the latest version it is a validate, not a migration, and it is the only
      * thing in this suite that would notice a clone that arrived at the wrong one.
      */
-    private static TestDatabase.Handle db;
+    private static TestDatabase.@Nullable Handle db;
 
     @BeforeAll
     static void requireDocker() {

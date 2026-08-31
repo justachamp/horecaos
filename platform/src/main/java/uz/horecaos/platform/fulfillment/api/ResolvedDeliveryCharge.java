@@ -83,37 +83,16 @@ public record ResolvedDeliveryCharge(
      * and an irreproducible or colliding hash proves nothing.
      */
     public String canonicalForm() {
-        return new StringBuilder()
-                .append("outcome=")
-                .append(outcome)
-                .append(":currency=")
-                .append(currency)
-                .append(":fee=")
-                .append(feeMinor)
-                .append(":tariffDiscount=")
-                .append(tariffDiscountMinor)
-                .append(":zone=")
-                .append(zoneId)
-                .append('@')
-                .append(zoneVersion)
-                .append(":tariff=")
-                .append(tariffId)
-                .append('@')
-                .append(tariffVersion)
-                .append(":band=")
-                .append(bandSequence)
-                .append(":rule=")
-                .append(timeRuleSequence)
-                .append(":distance=")
-                .append(distanceMeters)
-                .append('/')
-                .append(distanceMode)
-                .append('/')
-                .append(distanceSource)
-                .append(":minBasket=")
-                .append(minBasketMinor)
-                .append(":freeFrom=")
-                .append(freeDeliveryFromMinor)
-                .toString();
+        return "outcome=" + outcome
+                + ":currency=" + currency
+                + ":fee=" + feeMinor
+                + ":tariffDiscount=" + tariffDiscountMinor
+                + ":zone=" + zoneId + '@' + zoneVersion
+                + ":tariff=" + tariffId + '@' + tariffVersion
+                + ":band=" + bandSequence
+                + ":rule=" + timeRuleSequence
+                + ":distance=" + distanceMeters + '/' + distanceMode + '/' + distanceSource
+                + ":minBasket=" + minBasketMinor
+                + ":freeFrom=" + freeDeliveryFromMinor;
     }
 }

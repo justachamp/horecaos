@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A path from the legacy filesystem, normalized and judged (ADR 0010).
@@ -39,7 +40,7 @@ public record LegacyPath(String normalized) {
      *         carries control characters, is empty, or names something the
      *         migration has no business reading
      */
-    public static Optional<LegacyPath> of(String raw) {
+    public static Optional<LegacyPath> of(@Nullable String raw) {
         if (raw == null || raw.isBlank()) {
             return Optional.empty();
         }
@@ -54,7 +55,10 @@ public record LegacyPath(String normalized) {
         }
 
         Deque<String> segments = new ArrayDeque<>();
-        for (String segment : candidate.split("/")) {
+        // The two-arg overload with limit -1 disables String#split(String)'s
+        // surprising trailing-empty-removal; the loop below already treats an
+        // empty segment as a no-op, so this changes nothing observable here.
+        for (String segment : candidate.split("/", -1)) {
             if (segment.isEmpty() || ".".equals(segment)) {
                 continue;
             }

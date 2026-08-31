@@ -6,6 +6,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,7 +83,8 @@ class YandexDeliveryAdapterTests {
 
         Object first = partner.callTo("/claims/create").list("route_points").getFirst();
         @SuppressWarnings("unchecked")
-        Map<String, Object> address = (Map<String, Object>) ((Map<String, Object>) first).get("address");
+        Map<String, Object> address = Objects.requireNonNull(
+                (Map<String, Object>) ((Map<String, Object>) first).get("address"));
 
         // Reversed, this delivers to a point in the Indian Ocean rather than
         // failing, which is why it is asserted rather than trusted.
@@ -214,7 +217,7 @@ class YandexDeliveryAdapterTests {
         return new ProviderCall(partner.baseUrl(), "yandex-token", "cmd-1", Duration.ofSeconds(5));
     }
 
-    private static DeliveryRequest request(Instant pickupAt) {
+    private static DeliveryRequest request(@Nullable Instant pickupAt) {
         return new DeliveryRequest(
                 "QO-2002",
                 new Pickup(41.3111, 69.2797, "Amir Temur 1", "Kitchen", "+998901112233", null),

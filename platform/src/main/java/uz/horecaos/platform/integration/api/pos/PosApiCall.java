@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One call from a POS adapter to a point-of-sale API (ADR 0007).
@@ -47,11 +48,11 @@ public record PosApiCall(
         String operation,
         String method,
         String path,
-        Function<String, Map<String, Object>> body,
+        @Nullable Function<String, Map<String, Object>> body,
         Effect effect,
         Function<String, Map<String, String>> authorization,
         String correlationId,
-        Duration timeout) {
+        @Nullable Duration timeout) {
 
     public PosApiCall {
         Objects.requireNonNull(tenantId, "A tenant id is required");

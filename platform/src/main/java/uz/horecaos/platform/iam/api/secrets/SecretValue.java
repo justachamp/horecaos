@@ -48,8 +48,11 @@ public final class SecretValue {
         if (encoded.hasArray()) {
             // The encoder sizes its buffer for the worst case, so the copy it
             // hands back is usually larger than the secret and is about to be
-            // dropped with the secret still in it.
-            Arrays.fill(encoded.array(), (byte) 0);
+            // dropped with the secret still in it. arrayOffset() is respected
+            // rather than assumed zero, since array() alone says nothing about
+            // where this buffer's own view into it starts.
+            byte[] backing = encoded.array();
+            Arrays.fill(backing, encoded.arrayOffset(), backing.length, (byte) 0);
         }
         return bytes;
     }

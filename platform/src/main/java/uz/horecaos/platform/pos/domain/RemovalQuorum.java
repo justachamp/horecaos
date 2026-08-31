@@ -40,6 +40,8 @@ public final class RemovalQuorum {
     private RemovalQuorum() {}
 
     /**
+     * Whether a streak of absences is enough to treat an entity as removed.
+     *
      * @param consecutiveAbsentRuns how many consecutive runs have failed to see
      *                              this entity, including the current one
      * @param everyWalkStable       whether every run in that streak used a paging

@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -123,8 +124,8 @@ public class JdbcOrderProcessStore {
             int expectedVersion,
             String status,
             String checkpointJson,
-            Instant nextAttemptAt,
-            String lastError,
+            @Nullable Instant nextAttemptAt,
+            @Nullable String lastError,
             Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_process_states

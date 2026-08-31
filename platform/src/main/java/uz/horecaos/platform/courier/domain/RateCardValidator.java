@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.domain;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Distance band coverage, checked at activation (ADR 0042).
@@ -37,7 +38,10 @@ public final class RateCardValidator {
             return;
         }
 
-        if (bands.getFirst().bandFromMeters() != 0) {
+        // bandFromMeters is required for every PER_KM_BAND component (the
+        // RateComponent compact constructor enforces it); `bands` is filtered to
+        // PER_KM_BAND above.
+        if (Objects.requireNonNull(bands.getFirst().bandFromMeters()) != 0) {
             throw new InvalidRateCardException("Distance bands must start at zero metres; this card starts at %d"
                     .formatted(bands.getFirst().bandFromMeters()));
         }
@@ -50,7 +54,8 @@ public final class RateCardValidator {
                         .formatted(previous.bandFromMeters()));
             }
             int expected = previous.bandToMeters();
-            if (current.bandFromMeters() < expected) {
+            // Same PER_KM_BAND invariant as above.
+            if (Objects.requireNonNull(current.bandFromMeters()) < expected) {
                 throw new InvalidRateCardException("Distance bands overlap between %d and %d metres"
                         .formatted(current.bandFromMeters(), expected));
             }

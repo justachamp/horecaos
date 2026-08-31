@@ -116,6 +116,10 @@ public class ProcessHealth {
      * restarting the only container on the box over it would turn one bad row
      * into an outage.
      */
+    // Intentional identity check below: Throwable does not override equals(),
+    // and the walk asks whether getCause() returned the very same object (a
+    // self-referential cycle), not merely an equal-valued one.
+    @SuppressWarnings("ReferenceEquality")
     public static boolean isProcessFatal(Throwable failure) {
         Throwable cause = failure;
         for (int depth = 0; cause != null && depth < MAXIMUM_CAUSE_DEPTH; depth++) {
@@ -195,8 +199,10 @@ public class ProcessHealth {
     }
 
     /**
-     * @return whether this process has already declared itself unwell, so a test
-     *         or a component deciding whether to start more work can ask
+     * Whether this process has already declared itself unwell.
+     *
+     * @return true once {@link #reportFatal} has recorded a process-fatal error,
+     *         so a test or a component deciding whether to start more work can ask
      */
     public boolean isBroken() {
         return reported.get();

@@ -55,6 +55,9 @@ import uz.horecaos.platform.pricing.domain.TaxCalculation;
 public class PromotionEvaluator {
 
     /**
+     * Runs stages 3 and 4 (item promotions, then order and delivery promotions)
+     * over the basket and returns what applies.
+     *
      * @param now compared against each promotion's window. Handed in rather than
      *        read, so this method answers identically on a second run.
      */
@@ -104,7 +107,7 @@ public class PromotionEvaluator {
             if (promotion.scope() != scope) {
                 continue;
             }
-            Set<String> matchedLines = matchingLines(promotion, basket, context);
+            Set<String> matchedLines = matchingLines(promotion, basket);
             if (!conditionsHold(promotion, basket, context, matchedLines)) {
                 continue;
             }
@@ -159,7 +162,7 @@ public class PromotionEvaluator {
             .thenComparing(candidate -> candidate.promotion().promotionId(), Comparator.reverseOrder());
 
     /** Which of the basket's lines this promotion's item conditions name. */
-    private Set<String> matchingLines(Promotion promotion, Basket basket, PromotionContext context) {
+    private Set<String> matchingLines(Promotion promotion, Basket basket) {
         Set<String> matched = basket.lines().stream()
                 .map(BasketLine::lineId)
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
@@ -322,7 +325,7 @@ public class PromotionEvaluator {
 
         long total = perLine.values().stream().mapToLong(Long::longValue).sum() + orderMinor + deliveryMinor;
         if (promotion.maximumDiscountMinor() != null && total > promotion.maximumDiscountMinor()) {
-            return capped(promotion, perLine, orderMinor, deliveryMinor, total);
+            return capped(promotion, perLine, orderMinor, deliveryMinor);
         }
         return new Benefit(Map.copyOf(perLine), orderMinor, deliveryMinor, total);
     }
@@ -335,8 +338,7 @@ public class PromotionEvaluator {
      * a few minor units from the cap, and a quote whose adjustments do not sum to
      * its own discount is one nobody can reconcile.
      */
-    private Benefit capped(
-            Promotion promotion, Map<String, Long> perLine, long orderMinor, long deliveryMinor, long uncapped) {
+    private Benefit capped(Promotion promotion, Map<String, Long> perLine, long orderMinor, long deliveryMinor) {
 
         // Every caller only reaches capped() after confirming maximumDiscountMinor
         // is present and exceeded; requireNonNull documents that invariant rather
@@ -346,7 +348,10 @@ public class PromotionEvaluator {
         List<String> keys = new ArrayList<>(perLine.keySet());
         long[] weights = new long[keys.size() + 2];
         for (int i = 0; i < keys.size(); i++) {
-            weights[i] = perLine.get(keys.get(i));
+            // keys is exactly perLine.keySet(), so every key here is present;
+            // requireNonNull documents that rather than letting an unboxing NPE
+            // explain it badly if the invariant were ever broken.
+            weights[i] = Objects.requireNonNull(perLine.get(keys.get(i)), "key came from perLine's own keySet");
         }
         weights[keys.size()] = orderMinor;
         weights[keys.size() + 1] = deliveryMinor;

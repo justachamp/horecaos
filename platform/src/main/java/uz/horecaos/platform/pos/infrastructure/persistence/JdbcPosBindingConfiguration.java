@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -95,14 +96,14 @@ public class JdbcPosBindingConfiguration {
                 .optional();
     }
 
-    private Map<String, String> merge(String installationJson, String bindingJson) {
+    private Map<String, String> merge(@Nullable String installationJson, @Nullable String bindingJson) {
         Map<String, String> merged = new LinkedHashMap<>();
         flatten(installationJson, merged);
         flatten(bindingJson, merged);
         return Map.copyOf(merged);
     }
 
-    private void flatten(String json, Map<String, String> into) {
+    private void flatten(@Nullable String json, Map<String, String> into) {
         if (json == null || json.isBlank()) {
             return;
         }

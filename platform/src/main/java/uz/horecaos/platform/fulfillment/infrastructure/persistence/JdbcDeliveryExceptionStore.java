@@ -39,6 +39,8 @@ public class JdbcDeliveryExceptionStore {
     }
 
     /**
+     * Opens an operator-facing exception for a plan, deduplicated by the unique index.
+     *
      * @return true when this call opened the exception. False means one was
      *         already open for this plan and reason, which is the normal answer on
      *         every tick after the first

@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -259,12 +260,12 @@ public class KitchenBoardController {
             String sequenceLabel,
             String status,
             String releaseMode,
-            Instant releaseAt,
-            Instant releasedAt,
-            Instant targetReadyAt,
-            Integer prepEstimateSeconds,
-            Instant startedAt,
-            Instant readyAt,
+            @Nullable Instant releaseAt,
+            @Nullable Instant releasedAt,
+            @Nullable Instant targetReadyAt,
+            @Nullable Integer prepEstimateSeconds,
+            @Nullable Instant startedAt,
+            @Nullable Instant readyAt,
             int version,
             List<ItemView> items) {
 

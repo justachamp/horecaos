@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,9 +36,6 @@ class JdbcProviderInstallationLookupTests {
     private static final String CAPABILITY = "QuoteDelivery";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcProviderInstallationLookup lookup;
@@ -48,9 +46,6 @@ class JdbcProviderInstallationLookupTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -239,7 +234,7 @@ class JdbcProviderInstallationLookupTests {
         return id;
     }
 
-    private UUID insertBinding(UUID installationId, UUID brandId, UUID locationId, int priority) {
+    private UUID insertBinding(UUID installationId, UUID brandId, @Nullable UUID locationId, int priority) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO integration.bindings
@@ -314,7 +309,9 @@ class JdbcProviderInstallationLookupTests {
                     .param("id", location)
                     .param("tenantId", TENANT)
                     .param("brandId", BRAND)
-                    .param("code", "L" + location.toString().substring(24).toUpperCase())
+                    .param(
+                            "code",
+                            "L" + location.toString().substring(24).toUpperCase(java.util.Locale.ROOT))
                     .param("slug", "l-" + location.toString().substring(24))
                     .update();
         }

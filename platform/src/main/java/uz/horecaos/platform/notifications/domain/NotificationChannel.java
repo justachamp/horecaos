@@ -1,5 +1,6 @@
 package uz.horecaos.platform.notifications.domain;
 
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMethod;
 
 /**
@@ -18,9 +19,9 @@ public enum NotificationChannel {
     MESSAGING_APP(false, null);
 
     private final boolean wired;
-    private final ContactMethod contactMethod;
+    private final @Nullable ContactMethod contactMethod;
 
-    NotificationChannel(boolean wired, ContactMethod contactMethod) {
+    NotificationChannel(boolean wired, @Nullable ContactMethod contactMethod) {
         this.wired = wired;
         this.contactMethod = contactMethod;
     }
@@ -31,7 +32,8 @@ public enum NotificationChannel {
     }
 
     /** The ADR 0015 contact kind this channel addresses, or null where none applies. */
-    public ContactMethod contactMethod() {
+    public @Nullable ContactMethod contactMethod() {
         return contactMethod;
     }
 }
+

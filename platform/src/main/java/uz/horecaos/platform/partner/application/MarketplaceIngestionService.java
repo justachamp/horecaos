@@ -9,8 +9,10 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -192,10 +194,9 @@ public class MarketplaceIngestionService {
             references.add(ExternalReference.partner(ExternalReferenceType.PARTNER_DISPLAY_CODE, push.displayCode()));
         }
 
+        String handoverCode = push.handoverCode();
         HandoverChallengeType challengeType =
-                push.handoverCode() == null || push.handoverCode().isBlank()
-                        ? HandoverChallengeType.NONE
-                        : HandoverChallengeType.CODE;
+                handoverCode == null || handoverCode.isBlank() ? HandoverChallengeType.NONE : HandoverChallengeType.CODE;
 
         // The order id is chosen here rather than by the adapter, because the
         // handover hash is bound to it: a hash computed after the row exists
@@ -220,7 +221,16 @@ public class MarketplaceIngestionService {
                 lines,
                 references,
                 challengeType,
-                challengeType == HandoverChallengeType.NONE ? null : hasher.hash(orderId, push.handoverCode()),
+                challengeType == HandoverChallengeType.NONE
+                        ? null
+                        // challengeType is CODE only when handoverCode was checked
+                        // non-null and non-blank immediately above; requireNonNull
+                        // documents that invariant for the checker rather than
+                        // letting a null slip into the hasher unexplained.
+                        : hasher.hash(
+                                orderId,
+                                Objects.requireNonNull(
+                                        handoverCode, "challengeType is CODE only when handoverCode is present")),
                 "PARTNER",
                 now));
 
@@ -317,7 +327,7 @@ public class MarketplaceIngestionService {
             return;
         }
 
-        settlements
+        OrderSettlementPort.PlannedSettlement planned = settlements
                 .planSettlement(new OrderSettlementPort.SettlementRequest(
                         principal.tenantId(),
                         venue.brandId(),
@@ -335,9 +345,23 @@ public class MarketplaceIngestionService {
                                 + "aggregator order the customer paid for and that has no "
                                 + "settlement cannot be refunded or remedied, so it is not an "
                                 + "order this platform will acknowledge."));
+
+        // The class comment on OrderSettlementPort#PlannedSettlement documents an
+        // actual production incident: moneyDueMinor once got derived a second time
+        // instead of read back from the settlement, and the duplicate derivation
+        // drifted from the request. With no balance redemption on a marketplace
+        // order (redeemFromBalanceMinor is always 0L above), moneyDueMinor must
+        // equal exactly what the aggregator says the customer paid; anything else
+        // is that same class of bug and must fail loudly here rather than leave a
+        // courier or a refund working from the wrong figure.
+        if (planned.moneyDueMinor() != totals.customerPaidTotalMinor()) {
+            throw new IllegalStateException("Order " + orderId + " settled for " + planned.moneyDueMinor()
+                    + " but the partner push said the customer paid " + totals.customerPaidTotalMinor()
+                    + ": a settlement that disagrees with the aggregator's own total must not be acknowledged");
+        }
     }
 
-    private RejectionCode validate(
+    private @Nullable RejectionCode validate(
             PartnerPrincipal principal, JdbcPartnerStore.Venue venue, PartnerOrderPush push, Instant now) {
 
         if (push.lines().isEmpty()) {
@@ -443,14 +467,14 @@ public class MarketplaceIngestionService {
     public record PartnerOrderPush(
             String venueReference,
             String externalOrderId,
-            String displayCode,
+            @Nullable String displayCode,
             String fulfillmentMode,
             ExternalTotals totals,
             DiscountFunding discountFunding,
             List<PushLine> lines,
-            String handoverCode,
-            Instant pickupExpectedAt,
-            String rawPayloadJson,
+            @Nullable String handoverCode,
+            @Nullable Instant pickupExpectedAt,
+            @Nullable String rawPayloadJson,
             String rawTotalsJson) {
 
         public PartnerOrderPush {
@@ -470,7 +494,7 @@ public class MarketplaceIngestionService {
             int quantity,
             long unitAmountMinor,
             long lineAmountMinor,
-            Long taxAmountMinor) {}
+            @Nullable Long taxAmountMinor) {}
 
     /**
      * What became of one partner push.
@@ -484,9 +508,9 @@ public class MarketplaceIngestionService {
     public record Outcome(
             boolean accepted,
             boolean duplicate,
-            UUID orderId,
-            String publicOrderNumber,
-            RejectionCode rejectionCode,
+            @Nullable UUID orderId,
+            @Nullable String publicOrderNumber,
+            @Nullable RejectionCode rejectionCode,
             List<String> unmappedItems) {
 
         public Outcome {
@@ -501,7 +525,7 @@ public class MarketplaceIngestionService {
             return new Outcome(true, true, orderId, null, null, List.of());
         }
 
-        static Outcome rejected(RejectionCode code, UUID orderId) {
+        static Outcome rejected(RejectionCode code, @Nullable UUID orderId) {
             return new Outcome(false, false, orderId, null, code, List.of());
         }
     }

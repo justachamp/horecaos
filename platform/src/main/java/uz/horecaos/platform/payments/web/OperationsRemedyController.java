@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -215,6 +216,8 @@ public class OperationsRemedyController {
     // ----------------------------------------------------------- payloads
 
     /**
+     * A refund or delivery-fee reimbursement, as the console submits it.
+     *
      * @param executedBy the person who performed the refund in the provider's
      *                   cabinet, which is frequently not the person recording it.
      *                   Kept apart from the recording actor so an investigation can
@@ -253,6 +256,8 @@ public class OperationsRemedyController {
     }
 
     /**
+     * A future-discount grant, as the console submits it.
+     *
      * @param percentBasisPoints set for a percentage discount; a maximum is then
      *                           mandatory
      * @param validForDays       the window. Bounded rather than open-ended
@@ -295,13 +300,21 @@ public class OperationsRemedyController {
             @NotBlank @Size(max = 500) String reason,
             @Size(max = 128) String correlationId) {}
 
-    /** @param recorded false when the remedy had already been verified or disputed */
+    /**
+     * Whether a verification or dispute was recorded.
+     *
+     * @param recorded false when the remedy had already been verified or disputed
+     */
     public record VerificationResponse(boolean recorded) {}
 
     /**
+     * What recording a remedy came to, or the pending approval standing in its way.
+     *
      * @param approvalStatus       NOT_REQUIRED, PENDING, APPROVED or DECLINED
      *                             (ADR 0027). On PENDING nothing was written and
      *                             nothing moved
+     * @param approvalRequestId    the approval this remedy waited on, or null when
+     *                             none was required
      * @param attestedMoney        the part of the amount the platform is recording
      *                             on an operator's word and cannot verify
      * @param platformSettledMoney the part the platform performed itself and can
@@ -311,22 +324,22 @@ public class OperationsRemedyController {
      */
     public record RemedyResponse(
             String approvalStatus,
-            UUID approvalRequestId,
-            UUID remedyId,
-            RemedyType remedyType,
-            UUID orderId,
-            ApiMoney amount,
-            ApiMoney attestedMoney,
-            ApiMoney platformSettledMoney,
-            String settlementBasis,
-            String verificationState,
-            ExecutionChannel executionChannel,
-            String providerReference,
-            String executedBy,
-            Instant executedAt,
-            String recordedBy,
-            Instant recordedAt,
-            ApiMoney deliveryFeeBasis) {
+            @Nullable UUID approvalRequestId,
+            @Nullable UUID remedyId,
+            @Nullable RemedyType remedyType,
+            @Nullable UUID orderId,
+            @Nullable ApiMoney amount,
+            @Nullable ApiMoney attestedMoney,
+            @Nullable ApiMoney platformSettledMoney,
+            @Nullable String settlementBasis,
+            @Nullable String verificationState,
+            @Nullable ExecutionChannel executionChannel,
+            @Nullable String providerReference,
+            @Nullable String executedBy,
+            @Nullable Instant executedAt,
+            @Nullable String recordedBy,
+            @Nullable Instant recordedAt,
+            @Nullable ApiMoney deliveryFeeBasis) {
 
         static RemedyResponse of(RemedyOutcome outcome) {
             String status =
@@ -343,12 +356,13 @@ public class OperationsRemedyController {
                         case ApprovalOutcome.Approved approved -> approved.requestId();
                         case ApprovalOutcome.Declined declined -> declined.requestId();
                     };
-            if (!outcome.recorded()) {
+            RemedyRow remedy = outcome.remedy();
+            if (remedy == null) {
                 return new RemedyResponse(
                         status, requestId, null, null, null, null, null, null, null, null, null, null, null, null, null,
                         null, null);
             }
-            RemedyResponse recorded = of(outcome.remedy());
+            RemedyResponse recorded = of(remedy);
             return new RemedyResponse(
                     status,
                     requestId,
@@ -394,6 +408,8 @@ public class OperationsRemedyController {
     }
 
     /**
+     * One remedy type's totals, split by who moved the money.
+     *
      * @param unverified how much of the attested money on these rows nothing has
      *                   corroborated. Reported per type, and never folded into the
      *                   total beside it

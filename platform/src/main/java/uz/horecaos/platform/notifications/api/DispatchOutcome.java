@@ -48,24 +48,26 @@ public record DispatchOutcome(
         UNCERTAIN
     }
 
-    public static DispatchOutcome accepted(String externalMessageId, String providerStatus) {
+    public static DispatchOutcome accepted(
+            @Nullable String externalMessageId, @Nullable String providerStatus) {
         return new DispatchOutcome(Status.ACCEPTED, externalMessageId, providerStatus, null, null, null, null, null);
     }
 
-    public static DispatchOutcome rejected(String errorCode, String detail) {
+    public static DispatchOutcome rejected(@Nullable String errorCode, @Nullable String detail) {
         return new DispatchOutcome(Status.REJECTED, null, null, errorCode, detail, null, null, null);
     }
 
-    public static DispatchOutcome retryable(String errorCode, String detail, Duration retryAfter) {
+    public static DispatchOutcome retryable(
+            @Nullable String errorCode, @Nullable String detail, @Nullable Duration retryAfter) {
         return new DispatchOutcome(Status.RETRYABLE, null, null, errorCode, detail, retryAfter, null, null);
     }
 
-    public static DispatchOutcome uncertain(String errorCode, String detail) {
+    public static DispatchOutcome uncertain(@Nullable String errorCode, @Nullable String detail) {
         return new DispatchOutcome(Status.UNCERTAIN, null, null, errorCode, detail, null, null, null);
     }
 
     /** The same outcome, attributed to the account that produced it. */
-    public DispatchOutcome from(UUID bindingId, String providerType) {
+    public DispatchOutcome from(UUID bindingId, @Nullable String providerType) {
         return new DispatchOutcome(
                 status, externalMessageId, providerStatus, errorCode, detail, retryAfter, bindingId, providerType);
     }

@@ -163,8 +163,18 @@ public class SmsGateway {
         // Not disposed: the resolver caches and hands back the same instance, so
         // clearing it here would blank the credential for every other caller.
         SecretValue credential = secrets.resolve(reference);
+        // This provider has no idempotency key (SmsVerificationOperation's own
+        // javadoc explains why /search exists instead), so nothing reads this
+        // back; the challenge id stands in rather than passing a null through a
+        // field ProviderCall's own toString treats as always present.
         ProviderOutcome outcome = call.apply(
-                operation, account.get(), new ProviderCall(installation.baseUrl(), credential.reveal(), null, timeout));
+                operation,
+                account.get(),
+                new ProviderCall(
+                        installation.baseUrl(),
+                        credential.reveal(),
+                        operation.challengeId().toString(),
+                        timeout));
 
         if (isWrongKey(outcome)) {
             // One read past the cache, exactly as ADR 0028 prescribes. On this
@@ -187,7 +197,7 @@ public class SmsGateway {
                     new ProviderCall(
                             installation.baseUrl(),
                             secrets.resolveFresh(reference).reveal(),
-                            null,
+                            operation.challengeId().toString(),
                             timeout));
         }
         return outcome;

@@ -7,8 +7,11 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,6 +23,7 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.application.GrantAuditListener;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
@@ -72,9 +76,6 @@ class GrantManagementServiceTests {
     private static final Instant CLOCK_INSTANT = Instant.parse("2026-08-20T10:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private static final String PLATFORM_GRANTER = "platform-granter-1";
 
@@ -88,9 +89,6 @@ class GrantManagementServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -113,9 +111,10 @@ class GrantManagementServiceTests {
         // Deliberately not the caching proxy: these tests are about the grant
         // rules, and a cache would hide a grant that was written but not yet
         // visible, turning a rule failure into a flake.
-        authorization = new JdbcAuthorizationService(jdbc, clock, () -> null) {
+        authorization = new JdbcAuthorizationService(
+                jdbc, clock, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
             @Override
-            public void evictGrants(String subject, UUID tenantId) {
+            public void evictGrants(String subject, @Nullable UUID tenantId) {
                 // no cache in this fixture
             }
         };

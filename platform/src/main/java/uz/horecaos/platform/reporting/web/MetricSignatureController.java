@@ -60,6 +60,8 @@ public class MetricSignatureController {
     }
 
     /**
+     * A request to record finance's sign-off on one metric version.
+     *
      * @param reason why this definition is being signed. ADR 0027 refuses a
      *               user-initiated action without one, and "finance agreed" with
      *               no meeting or document named is not an answer anyone can use
@@ -69,8 +71,11 @@ public class MetricSignatureController {
             @NotBlank @Size(max = 512) String reason) {}
 
     /**
+     * The recorded signature.
+     *
      * @param definitionDigest the exact wording that was signed, so the signature
      *                         can be proved to cover the text in that release
      */
     public record SignatureResponse(String metricCode, String definitionDigest, String signedBy) {}
 }
+

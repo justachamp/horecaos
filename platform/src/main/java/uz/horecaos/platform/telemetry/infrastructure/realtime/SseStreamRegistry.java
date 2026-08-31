@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -149,7 +150,7 @@ public class SseStreamRegistry {
             Set<Subscription> subscriptions,
             StreamSink sink,
             Instant tokenExpiry,
-            String lastEventId) {
+            @Nullable String lastEventId) {
 
         if (connections.size() >= MAXIMUM_STREAMS) {
             refusedConnects.increment();
@@ -462,7 +463,12 @@ public class SseStreamRegistry {
             return tokenExpiry;
         }
 
-        Map<Subscription, Pending> pending() {
+        // Package-private would still expose Pending, a type private to the
+        // enclosing SseStreamRegistry, in a non-private member's signature. Every
+        // actual caller (onSignal, flush) is a method of that same enclosing
+        // class, and Java's access rules let it reach a nested class's private
+        // members directly, so narrowing here costs nothing.
+        private Map<Subscription, Pending> pending() {
             return pending;
         }
 

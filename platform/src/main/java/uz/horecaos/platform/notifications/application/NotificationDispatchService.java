@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -375,20 +376,37 @@ public class NotificationDispatchService {
     }
 
     private Rendered render(NotificationRow row) {
+        // Eligibility is what freezes these three onto the row (markReady), and
+        // this method only ever runs on a row that reached READY; a row missing
+        // any of them here is a data fault rather than an unresolved message.
+        UUID templateId = Objects.requireNonNull(
+                row.templateId(), () -> "Notification %s has no template frozen onto it".formatted(row.id()));
+        int templateVersion = Objects.requireNonNull(
+                row.templateVersion(),
+                () -> "Notification %s has no template version frozen onto it".formatted(row.id()));
+        String locale = Objects.requireNonNull(
+                row.locale(), () -> "Notification %s has no locale frozen onto it".formatted(row.id()));
+
         VersionRow version = templates
-                .version(row.tenantId(), row.templateId(), row.templateVersion(), row.locale())
+                .version(row.tenantId(), templateId, templateVersion, locale)
                 .orElseThrow(() -> new IllegalStateException(
                         "The template version frozen onto notification %s no longer exists".formatted(row.id())));
 
         Map<String, String> variables = objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE);
-        return new Rendered(
-                TemplateRenderer.render(version.subjectTemplate(), variables),
-                TemplateRenderer.render(version.bodyTemplate(), variables));
+        // The body template is never null (a template version cannot be saved
+        // without one), so its rendering is asserted non-null even though
+        // TemplateRenderer.render's return type is nullable for the subject case.
+        String body = Objects.requireNonNull(TemplateRenderer.render(version.bodyTemplate(), variables));
+        return new Rendered(TemplateRenderer.render(version.subjectTemplate(), variables), body);
     }
 
     private UUID endpointContactPoint(NotificationRow row) {
+        // Frozen by eligibility alongside the template; see render()'s comment.
+        UUID endpointId = Objects.requireNonNull(
+                row.recipientEndpointId(),
+                () -> "Notification %s has no recipient endpoint frozen onto it".formatted(row.id()));
         return notifications
-                .endpoint(row.tenantId(), row.recipientEndpointId())
+                .endpoint(row.tenantId(), endpointId)
                 .map(JdbcNotificationStore.EndpointRow::contactPointId)
                 .orElseThrow(() ->
                         new IllegalStateException("Notification %s has no resolvable endpoint".formatted(row.id())));
@@ -415,7 +433,7 @@ public class NotificationDispatchService {
      * recognise. Guessing upward is how HorecaOS ends up claiming a delivery the
      * provider never confirmed.
      */
-    private static String normalize(String providerStatus) {
+    private static String normalize(@Nullable String providerStatus) {
         if (providerStatus == null) {
             return "UNKNOWN";
         }
@@ -430,5 +448,6 @@ public class NotificationDispatchService {
     }
 
     /** Exists for the length of one call and is never persisted or logged. */
-    private record Rendered(String subject, String body) {}
+    private record Rendered(@Nullable String subject, String body) {}
 }
+

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.Node;
@@ -37,46 +38,49 @@ class RealtimeSignalConsumerRestartTests {
 
     private static final String TOPIC = "realtime.signals";
 
-    private RestartableConsumer consumer;
+    private @Nullable RestartableConsumer consumer;
 
     @AfterEach
     void stop() {
-        if (consumer != null) {
-            consumer.destroy();
-            awaitUntil(() -> !consumer.isRunning());
+        RestartableConsumer current = consumer;
+        if (current != null) {
+            current.destroy();
+            awaitUntil(() -> !current.isRunning());
         }
     }
 
     @Test
     void aColdStartTimeoutIsRetriedRatherThanEndingTheFanOut() {
-        consumer = new RestartableConsumer(1);
+        RestartableConsumer local = new RestartableConsumer(1);
+        consumer = local;
 
-        consumer.start();
+        local.start();
 
-        awaitUntil(() -> consumer.attempts.get() >= 2);
-        assertThat(consumer.isRunning())
+        awaitUntil(() -> local.attempts.get() >= 2);
+        assertThat(local.isRunning())
                 .as("a transient broker failure must not disable realtime push for the life of " + "the process")
                 .isTrue();
     }
 
     @Test
     void aFailureThatNeverClearsKeepsRetryingWithoutSpinning() {
-        consumer = new RestartableConsumer(Integer.MAX_VALUE);
+        RestartableConsumer local = new RestartableConsumer(Integer.MAX_VALUE);
+        consumer = local;
 
-        consumer.start();
-        awaitUntil(() -> consumer.attempts.get() >= 2);
-        int afterFirstBackoff = consumer.attempts.get();
+        local.start();
+        awaitUntil(() -> local.attempts.get() >= 2);
+        int afterFirstBackoff = local.attempts.get();
 
         // The delay doubles, so a second window of the same length cannot produce
         // as many attempts as the first. Without a backoff this would be a thread
         // reconnecting to a refusing broker as fast as the socket allows.
         sleep(Duration.ofMillis(1500));
-        assertThat(consumer.attempts.get() - afterFirstBackoff).isLessThanOrEqualTo(2);
+        assertThat(local.attempts.get() - afterFirstBackoff).isLessThanOrEqualTo(2);
     }
 
     @Test
     void aTopicWithNoPartitionsIsRetriedRatherThanPolledForever() {
-        consumer = new RestartableConsumer(0) {
+        RestartableConsumer local = new RestartableConsumer(0) {
             @Override
             Consumer<String, String> createConsumer() {
                 attempts.incrementAndGet();
@@ -85,21 +89,23 @@ class RealtimeSignalConsumerRestartTests {
                 return new SlowPollingMockConsumer();
             }
         };
+        consumer = local;
 
-        consumer.start();
+        local.start();
 
-        awaitUntil(() -> consumer.attempts.get() >= 2);
+        awaitUntil(() -> local.attempts.get() >= 2);
     }
 
     @Test
     void shutdownDuringBackoffStopsTheThread() {
-        consumer = new RestartableConsumer(Integer.MAX_VALUE);
-        consumer.start();
-        awaitUntil(() -> consumer.attempts.get() >= 1);
+        RestartableConsumer local = new RestartableConsumer(Integer.MAX_VALUE);
+        consumer = local;
+        local.start();
+        awaitUntil(() -> local.attempts.get() >= 1);
 
         Instant before = Instant.now();
-        consumer.destroy();
-        awaitUntil(() -> !consumer.isRunning());
+        local.destroy();
+        awaitUntil(() -> !local.isRunning());
 
         assertThat(Duration.between(before, Instant.now()))
                 .as("the retry must never create a thread that outlives the context")
@@ -150,6 +156,12 @@ class RealtimeSignalConsumerRestartTests {
             super("latest");
         }
 
+        // Deliberately not synchronized, unlike the method it overrides: the whole
+        // point of this override is to sleep *outside* the monitor MockConsumer's
+        // real poll() holds, so a concurrent wakeup() (itself synchronized) is not
+        // made to wait for a sleeping poll to finish before it can interrupt it.
+        // Declaring this synchronized would silently defeat the fixture.
+        @SuppressWarnings("UnsynchronizedOverridesSynchronized")
         @Override
         public ConsumerRecords<String, String> poll(Duration timeout) {
             // Outside the monitor MockConsumer holds, so a wakeup() from the

@@ -501,6 +501,8 @@ public class StorefrontCustomerController {
     }
 
     /**
+     * A profile edit, applied as a partial update.
+     *
      * @param preferredLocale a BCP 47 tag. Read by the ADR 0020 notification path
      *                        to choose the language a message is sent in, which
      *                        until this endpoint existed nothing ever wrote
@@ -541,7 +543,11 @@ public class StorefrontCustomerController {
         }
     }
 
-    /** @param productIds resolved against the menu by the caller. */
+    /**
+     * The customer's shortlisted products.
+     *
+     * @param productIds resolved against the menu by the caller.
+     */
     public record FavouritesResponse(List<UUID> productIds) {}
 
     /**

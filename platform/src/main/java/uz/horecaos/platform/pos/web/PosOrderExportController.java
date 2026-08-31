@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -184,12 +185,17 @@ public class PosOrderExportController {
     }
 
     /**
+     * A person's decision about one export nothing else could settle.
+     *
      * @param externalOrderId required for {@link OperatorDecision#LANDED}, ignored
      *                        otherwise
      */
     public record ResolutionRequest(
             @NotNull OperatorDecision decision,
-            @Size(max = 64) String externalOrderId,
+            // Required only for LANDED (enforced in PosOrderExportService, since
+            // that is a cross-field rule the bean-validation annotations on this
+            // record cannot express); absent on ABSENT/ABANDON requests.
+            @Nullable @Size(max = 64) String externalOrderId,
             @NotBlank @Size(max = 1000) String reason) {}
 
     /** Carries no customer detail. The order id is the way to an authorized read. */
@@ -198,22 +204,24 @@ public class PosOrderExportController {
             UUID orderId,
             String state,
             int attemptCount,
-            String correlationReference,
-            String externalOrderId,
+            @Nullable String correlationReference,
+            @Nullable String externalOrderId,
             String venue,
             String requestedAt) {}
 
     /**
+     * One recovery-read candidate, as the API exposes it.
+     *
      * @param correlationEchoed the only field here that decides anything. Where it
      *                          is true the candidate is our order by identity;
      *                          where it is false the rest is resemblance
      */
     public record CandidateView(
             String externalOrderId,
-            String externalStatus,
-            String externalCreatedAt,
+            @Nullable String externalStatus,
+            @Nullable String externalCreatedAt,
             boolean correlationEchoed,
             boolean phoneMatches,
             boolean fingerprintMatches,
-            Integer timeDeltaSeconds) {}
+            @Nullable Integer timeDeltaSeconds) {}
 }

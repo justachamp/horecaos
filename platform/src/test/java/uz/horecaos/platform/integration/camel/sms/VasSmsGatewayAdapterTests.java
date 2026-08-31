@@ -123,7 +123,7 @@ class VasSmsGatewayAdapterTests {
             ProviderOutcome outcome = adapter.send(
                     sendOperation(),
                     ACCOUNT,
-                    new ProviderCall(gateway.baseUrl(), "the-key", null, Duration.ofMillis(150)));
+                    new ProviderCall(gateway.baseUrl(), "the-key", "cmd-1", Duration.ofMillis(150)));
 
             assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.UNCERTAIN);
             assertThat(gateway.callsTo("/send")).isEqualTo(1);
@@ -271,7 +271,7 @@ class VasSmsGatewayAdapterTests {
     }
 
     private static ProviderCall call(RecordingSmsGateway gateway) {
-        return new ProviderCall(gateway.baseUrl(), "the-key", null, Duration.ofSeconds(5));
+        return new ProviderCall(gateway.baseUrl(), "the-key", "cmd-1", Duration.ofSeconds(5));
     }
 
     private static SmsVerificationOperation sendOperation() {

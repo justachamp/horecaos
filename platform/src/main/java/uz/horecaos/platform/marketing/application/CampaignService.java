@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -75,6 +76,8 @@ public class CampaignService {
      * @param benefitOfferId an existing ADR 0018 offer, or null. The campaign
      *                       editor selects from offers and has no field in which to
      *                       invent one
+     * @param loyaltyAccrualRuleId an existing ADR 0046 accrual rule, or null when
+     *                             this campaign grants no points
      */
     @Transactional
     public UUID create(
@@ -88,8 +91,8 @@ public class CampaignService {
             int recipientCap,
             Long costCeilingMinor,
             String currency,
-            UUID benefitOfferId,
-            UUID loyaltyAccrualRuleId,
+            @Nullable UUID benefitOfferId,
+            @Nullable UUID loyaltyAccrualRuleId,
             UUID authorId) {
 
         if (channel.carriesMarginalCost() && costCeilingMinor == null) {
@@ -296,5 +299,10 @@ public class CampaignService {
      *                 zero passes every ceiling check there is
      */
     public record Estimate(
-            UUID snapshotId, int memberCount, int candidateCount, Long lowMinor, Long highMinor, String currency) {}
+            UUID snapshotId,
+            int memberCount,
+            int candidateCount,
+            @Nullable Long lowMinor,
+            @Nullable Long highMinor,
+            String currency) {}
 }

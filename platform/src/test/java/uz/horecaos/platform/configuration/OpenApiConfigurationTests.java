@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -25,8 +26,9 @@ class OpenApiConfigurationTests {
                 .satisfies(requirement ->
                         assertThat(requirement).containsKey(OpenApiConfiguration.BEARER_SECURITY_SCHEME));
 
-        SecurityScheme bearerScheme =
-                openApi.getComponents().getSecuritySchemes().get(OpenApiConfiguration.BEARER_SECURITY_SCHEME);
+        SecurityScheme bearerScheme = Objects.requireNonNull(
+                openApi.getComponents().getSecuritySchemes().get(OpenApiConfiguration.BEARER_SECURITY_SCHEME),
+                "The bearer security scheme must be registered under BEARER_SECURITY_SCHEME");
         assertThat(bearerScheme.getType()).isEqualTo(SecurityScheme.Type.HTTP);
         assertThat(bearerScheme.getScheme()).isEqualTo("bearer");
         assertThat(bearerScheme.getBearerFormat()).isEqualTo("JWT");

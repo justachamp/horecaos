@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -278,7 +279,7 @@ class DayAggregatorTests {
         Instant placed = Instant.parse("2026-08-21T14:00:00Z");
         return new OrderFact(
                 TENANT,
-                UUID.nameUUIDFromBytes(seed.getBytes()),
+                UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)),
                 DAY,
                 1,
                 placed,
@@ -313,7 +314,7 @@ class DayAggregatorTests {
         Instant placed = Instant.parse("2026-08-21T14:00:00Z");
         return new OrderFact(
                 TENANT,
-                UUID.nameUUIDFromBytes(seed.getBytes()),
+                UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)),
                 DAY,
                 1,
                 placed,
@@ -344,3 +345,4 @@ class DayAggregatorTests {
                 1);
     }
 }
+

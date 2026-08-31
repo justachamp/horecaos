@@ -107,7 +107,7 @@ public interface MigrationCutoverDecisionStore {
             Map<String, Object> evidenceSnapshot,
             String requestedBy,
             String decidedBy,
-            UUID approvalRequestId,
+            @Nullable UUID approvalRequestId,
             @Nullable Boolean approvalRequestIsPlatform,
             String idempotencyKey,
             Instant requestedAt,

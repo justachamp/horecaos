@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.SourceKind;
 
@@ -60,6 +61,8 @@ public final class CloposCatalogNormalizer {
     }
 
     /**
+     * Turns one page-through's raw Clopos JSON into a canonical snapshot.
+     *
      * @param walkStable whether the paged read could have skipped rows. Carried
      *                   through to the snapshot because it decides how much a
      *                   single run's absence is worth as evidence of a removal
@@ -75,9 +78,9 @@ public final class CloposCatalogNormalizer {
         List<CatalogSnapshot.Category> categories = new ArrayList<>();
         for (Map<String, Object> raw : rawCategories) {
             categories.add(new CatalogSnapshot.Category(
-                    id(raw, "id"),
+                    requiredId(raw, "id"),
                     id(raw, "parent_id"),
-                    text(raw, "name"),
+                    requiredText(raw, "name"),
                     intOf(raw, "sort_order", 0),
                     CloposEnvelope.flag(raw, "status", true),
                     boxedInt(raw, "depth"),
@@ -98,18 +101,18 @@ public final class CloposCatalogNormalizer {
                 // same variant can arrive twice; the run's staging key is the
                 // external id, which collapses the duplicate rather than
                 // reporting a conflict for something that is not one.
-                variants.add(variant(raw, id(raw, "parent_id")));
+                variants.add(variant(raw, requiredId(raw, "parent_id")));
                 continue;
             }
 
             List<Map<String, Object>> nested = listOf(raw, "modifications");
             for (Map<String, Object> nestedVariant : nested) {
-                variants.add(variant(nestedVariant, id(raw, "id")));
+                variants.add(variant(nestedVariant, requiredId(raw, "id")));
             }
 
             products.add(new CatalogSnapshot.Product(
-                    id(raw, "id"),
-                    text(raw, "name"),
+                    requiredId(raw, "id"),
+                    requiredText(raw, "name"),
                     id(raw, "category_id"),
                     kind,
                     kind.menuCandidate(),
@@ -122,11 +125,11 @@ public final class CloposCatalogNormalizer {
                     raw));
 
             for (Map<String, Object> rawGroup : listOf(raw, "modificator_groups")) {
-                String groupId = id(rawGroup, "id");
+                String groupId = requiredId(rawGroup, "id");
                 groups.add(new CatalogSnapshot.ModifierGroup(
                         groupId,
-                        id(raw, "id"),
-                        text(rawGroup, "name"),
+                        requiredId(raw, "id"),
+                        requiredText(rawGroup, "name"),
                         intOf(rawGroup, "min", 0),
                         // A group with no stated maximum permits one choice. Zero
                         // would be a group nobody can choose from, which is not
@@ -137,9 +140,9 @@ public final class CloposCatalogNormalizer {
 
                 for (Map<String, Object> rawModifier : listOf(rawGroup, "modificators")) {
                     modifiers.add(new CatalogSnapshot.Modifier(
-                            id(rawModifier, "id"),
+                            requiredId(rawModifier, "id"),
                             groupId,
-                            text(rawModifier, "name"),
+                            requiredText(rawModifier, "name"),
                             minor(CloposEnvelope.decimal(rawModifier, "price")),
                             currency,
                             CloposEnvelope.flag(rawModifier, "status", true),
@@ -151,7 +154,7 @@ public final class CloposCatalogNormalizer {
         List<CatalogSnapshot.Availability> availability = new ArrayList<>();
         for (Map<String, Object> raw : rawStopList) {
             availability.add(new CatalogSnapshot.Availability(
-                    id(raw, "id"), CloposEnvelope.decimal(raw, "limit"), stopListTime(raw), raw));
+                    requiredId(raw, "id"), CloposEnvelope.decimal(raw, "limit"), stopListTime(raw), raw));
         }
 
         return new CatalogSnapshot(
@@ -160,9 +163,9 @@ public final class CloposCatalogNormalizer {
 
     private CatalogSnapshot.Variant variant(Map<String, Object> raw, String parentId) {
         return new CatalogSnapshot.Variant(
-                id(raw, "id"),
+                requiredId(raw, "id"),
                 parentId,
-                text(raw, "name"),
+                requiredText(raw, "name"),
                 minor(CloposEnvelope.decimal(raw, "price")),
                 currency,
                 CloposEnvelope.flag(raw, "status", true),
@@ -178,12 +181,12 @@ public final class CloposCatalogNormalizer {
      * the API uses seconds or {@code YYYY-MM-DD HH:mm:ss} strings. Reading it as
      * seconds puts every availability observation somewhere in the year 57000.
      */
-    private static Instant stopListTime(Map<String, Object> raw) {
+    private static @Nullable Instant stopListTime(Map<String, Object> raw) {
         Object value = raw.get("timestamp");
         return value instanceof Number number ? Instant.ofEpochMilli(number.longValue()) : null;
     }
 
-    static SourceKind kindOf(String cloposType) {
+    static SourceKind kindOf(@Nullable String cloposType) {
         if (cloposType == null) {
             return SourceKind.UNKNOWN;
         }
@@ -210,11 +213,11 @@ public final class CloposCatalogNormalizer {
      * rather than truncation, because truncating a price that arrived as 8.5
      * loses money quietly in the restaurant's favour on every line.
      */
-    static Long minor(BigDecimal amount) {
+    static @Nullable Long minor(@Nullable BigDecimal amount) {
         return amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact();
     }
 
-    private static String id(Map<String, Object> raw, String key) {
+    private static @Nullable String id(Map<String, Object> raw, String key) {
         Object value = raw.get(key);
         if (value == null) {
             return null;
@@ -225,9 +228,38 @@ public final class CloposCatalogNormalizer {
         return value instanceof Number number ? Long.toString(number.longValue()) : String.valueOf(value);
     }
 
-    private static String text(Map<String, Object> raw, String key) {
+    /**
+     * An identifier the canonical model treats as required, failing fast rather
+     * than staging a row the difference engine or the database cannot key on.
+     *
+     * <p>Every call site here reads a Clopos field the API documents as always
+     * present. A missing value is not a modeled absence like a category's parent
+     * or a product's unit — it is malformed provider data, and storing a null
+     * primary reference silently would surface as a NOT NULL violation several
+     * steps later, or worse, as a mapping nobody can join back to its provider row.
+     */
+    private static String requiredId(Map<String, Object> raw, String key) {
+        String value = id(raw, key);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Clopos response is missing the required field \"" + key + "\"");
+        }
+        return value;
+    }
+
+    private static @Nullable String text(Map<String, Object> raw, String key) {
         Object value = raw.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    /** As {@link #requiredId}, for a text field the canonical model treats as required. */
+    private static String requiredText(Map<String, Object> raw, String key) {
+        String value = text(raw, key);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Clopos response is missing the required field \"" + key + "\"");
+        }
+        return value;
     }
 
     private static int intOf(Map<String, Object> raw, String key, int fallback) {
@@ -235,7 +267,7 @@ public final class CloposCatalogNormalizer {
         return value instanceof Number number ? number.intValue() : fallback;
     }
 
-    private static Integer boxedInt(Map<String, Object> raw, String key) {
+    private static @Nullable Integer boxedInt(Map<String, Object> raw, String key) {
         Object value = raw.get(key);
         return value instanceof Number number ? number.intValue() : null;
     }

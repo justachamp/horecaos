@@ -40,6 +40,8 @@ public class JdbcRemedyStore {
     // ------------------------------------------------------------- remedies
 
     /**
+     * A remedy granted against an order, and how its money is accounted for.
+     *
      * @param attestedMoneyMinor   the part a person says moved in a place HorecaOS
      *                             cannot see. Unverifiable by construction
      * @param platformSettledMinor the part HorecaOS performed in its own ledger and
@@ -71,7 +73,7 @@ public class JdbcRemedyStore {
             @Nullable Long deliveryFeeBasisMinor,
             String recordedBy,
             Instant recordedAt,
-            UUID approvalRequestId,
+            @Nullable UUID approvalRequestId,
             int version) {}
 
     public void insertRemedy(RemedyRow remedy, String idempotencyKey, Instant now) {
@@ -294,9 +296,9 @@ public class JdbcRemedyStore {
             UUID customerAccountId,
             EntitlementScope appliesTo,
             EntitlementBenefit benefit,
-            Integer percentBasisPoints,
-            Long amountMinor,
-            Long maximumMinor,
+            @Nullable Integer percentBasisPoints,
+            @Nullable Long amountMinor,
+            @Nullable Long maximumMinor,
             String currency,
             int usesGranted,
             int usesConsumed,
@@ -471,7 +473,7 @@ public class JdbcRemedyStore {
                         row.getLong("subtotal_discount_minor"),
                         row.getLong("delivery_discount_minor"),
                         row.getString("currency"),
-                        instant(row, "redeemed_at")))
+                        requiredInstant(row, "redeemed_at")))
                 .list();
     }
 
@@ -502,7 +504,7 @@ public class JdbcRemedyStore {
                 instant(row, "verified_at"),
                 feeBasis,
                 row.getString("recorded_by"),
-                instant(row, "recorded_at"),
+                requiredInstant(row, "recorded_at"),
                 row.getObject("approval_request_id", UUID.class),
                 row.getInt("version"));
     }
@@ -522,8 +524,8 @@ public class JdbcRemedyStore {
                 row.getString("currency"),
                 row.getInt("uses_granted"),
                 row.getInt("uses_consumed"),
-                instant(row, "starts_at"),
-                instant(row, "expires_at"),
+                requiredInstant(row, "starts_at"),
+                requiredInstant(row, "expires_at"),
                 EntitlementStatus.valueOf(row.getString("status")),
                 row.getInt("version"));
     }
@@ -531,6 +533,22 @@ public class JdbcRemedyStore {
     private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
+    }
+
+    /**
+     * Like {@link #instant}, for a column the schema declares {@code NOT NULL}
+     * ({@code redeemed_at}, {@code recorded_at}, {@code starts_at}, {@code
+     * expires_at}). A null here means the database's own constraint was violated
+     * out from under this mapping, which is a corruption to fail loudly on rather
+     * than a case to model as {@code @Nullable} and quietly propagate.
+     */
+    private static Instant requiredInstant(ResultSet row, String column) throws SQLException {
+        Instant value = instant(row, column);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Column " + column + " is NOT NULL in the schema but this row had none");
+        }
+        return value;
     }
 
     private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {

@@ -405,6 +405,8 @@ public class JdbcCartStore {
      * A cart as it stands right now.
      *
      * @param customerAccountId    null for a guest cart
+     * @param guestReferenceHash   null for an account cart — a cart carries
+     *                             exactly one of the two identities
      * @param pricingQuoteId       null until the cart is priced, and cleared by
      *                             every edit — a cart holding a quote for
      *                             contents it no longer has is not this cart's
@@ -421,7 +423,7 @@ public class JdbcCartStore {
             UUID locationId,
             UUID channelId,
             @Nullable UUID customerAccountId,
-            String guestReferenceHash,
+            @Nullable String guestReferenceHash,
             FulfillmentMode fulfillmentMode,
             String currency,
             CartStatus status,

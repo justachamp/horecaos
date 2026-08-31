@@ -16,6 +16,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 class KafkaOutboxPublisherTests {
 
-    private static KafkaContainer kafkaContainer;
+    private static @Nullable KafkaContainer kafkaContainer;
     private static String bootstrapServers;
 
     @BeforeAll

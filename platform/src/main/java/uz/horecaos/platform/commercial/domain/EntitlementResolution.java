@@ -1,6 +1,7 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementSource;
@@ -42,10 +43,10 @@ public final class EntitlementResolution {
      */
     public static EntitlementValue resolve(
             EntitlementKey<?> key,
-            PlanEntitlement planEntitlement,
-            EntitlementOverride override,
-            SubscriptionStatus status,
-            String planCurrency,
+            @Nullable PlanEntitlement planEntitlement,
+            @Nullable EntitlementOverride override,
+            @Nullable SubscriptionStatus status,
+            @Nullable String planCurrency,
             EnforcementMode ceiling,
             Instant at) {
 
@@ -124,7 +125,7 @@ public final class EntitlementResolution {
                 source);
     }
 
-    private static EnforcementMode firstNonNull(EnforcementMode first, EnforcementMode second) {
+    private static EnforcementMode firstNonNull(@Nullable EnforcementMode first, EnforcementMode second) {
         return first != null ? first : second;
     }
 }

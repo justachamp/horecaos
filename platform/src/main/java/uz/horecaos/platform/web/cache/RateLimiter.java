@@ -2,6 +2,7 @@ package uz.horecaos.platform.web.cache;
 
 import java.time.Duration;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Application-level rate limiting (ADR 0033).
@@ -18,8 +19,14 @@ public interface RateLimiter {
 
     Decision check(Key key, Policy policy);
 
-    /** Composes the dimensions the edge cannot see. */
-    record Key(String operation, String tenantId, String principalSubject) {
+    /**
+     * Composes the dimensions the edge cannot see.
+     *
+     * <p>{@code tenantId} is null for a limit keyed before a lookup has said whose
+     * tenant this is at all — the QR table-token exchange, for one, where the
+     * digest alone is the credential and no tenant is known until it resolves.
+     */
+    record Key(String operation, @Nullable String tenantId, String principalSubject) {
 
         public Key {
             Objects.requireNonNull(operation, "An operation is required");
@@ -31,6 +38,8 @@ public interface RateLimiter {
     }
 
     /**
+     * The parameters of one rate limit.
+     *
      * @param failOpen whether an unavailable limiter backend allows the request.
      *                 Reads generally fail open; expensive writes fail closed.
      *                 The choice is per limit rather than global, because the

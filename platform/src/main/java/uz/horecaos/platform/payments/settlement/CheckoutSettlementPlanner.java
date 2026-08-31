@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.jspecify.annotations.Nullable;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
@@ -191,6 +192,10 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
                         false),
                 Math.subtractExact(request.totalMinor(), redeemed)));
 
+        // A settlement request from an unattended flow (e.g. an expiry sweep)
+        // carries no actor; the plan and the points reservation it may trigger
+        // still need one to attribute against.
+        String actor = request.actor() == null ? "system:checkout" : request.actor();
         SettlementRow settlement = settlements.plan(new OrderSettlementService.SettlementPlan(
                 request.tenantId(),
                 request.brandId(),
@@ -200,7 +205,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
                 request.totalMinor(),
                 tenders,
                 request.idempotencyKey(),
-                request.actor()));
+                actor));
 
         return Optional.of(plannedFrom(request.tenantId(), settlement));
     }
@@ -458,7 +463,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      * leaves it for an operator. Guessing a timing here would either settle money
      * nobody collected or leave a paid order unrefundable.
      */
-    private CaptureTiming timingOf(UUID tenantId, TenderRow tender) {
+    private @Nullable CaptureTiming timingOf(UUID tenantId, TenderRow tender) {
         return store.findMethod(tenantId, tender.paymentMethodId())
                 .flatMap(row -> PaymentMethod.fromCode(row.code()).map(PaymentMethod::captureTiming))
                 .orElse(null);

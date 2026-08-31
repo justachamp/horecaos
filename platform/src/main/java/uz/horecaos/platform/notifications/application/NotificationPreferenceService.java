@@ -3,6 +3,7 @@ package uz.horecaos.platform.notifications.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -49,7 +50,7 @@ public class NotificationPreferenceService {
     public void set(
             UUID tenantId,
             UUID accountId,
-            UUID brandId,
+            @Nullable UUID brandId,
             NotificationClass notificationClass,
             NotificationChannel channel,
             boolean enabled) {

@@ -15,6 +15,8 @@ public interface FieldProtection {
     ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext);
 
     /**
+     * Decrypts a protected value back to its plaintext.
+     *
      * @param purpose recorded as an ADR 0027 audit fact for sensitive and
      *                financial classes, because the difference between an agent
      *                viewing one customer and exporting fifty thousand is

@@ -63,6 +63,8 @@ public record CapabilitySnapshot(
     }
 
     /**
+     * What one capability was found to support, and the evidence behind that finding.
+     *
      * @param idempotency    what the provider guarantees about a repeated command.
      *                       Carried on the capability rather than on the provider
      *                       because it differs per operation: on the first real

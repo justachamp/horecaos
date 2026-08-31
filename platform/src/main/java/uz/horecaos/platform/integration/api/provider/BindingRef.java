@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.api.provider;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the ADRs call {@code provider_binding_id} (ADR 0026).
@@ -12,6 +13,10 @@ import java.util.UUID;
  *
  * <p>Domain modules receive one of these plus a capability. They never see a
  * credential, a base URL, or a provider DTO.
+ *
+ * @param brandId    always present: the compact constructor below throws
+ *                   before a binding without one is ever built
+ * @param locationId null for a brand-wide binding — see {@link #scopeKey()}
  */
 public record BindingRef(
         UUID bindingId,
@@ -20,7 +25,7 @@ public record BindingRef(
         ProviderCategory category,
         String providerType,
         UUID brandId,
-        UUID locationId) {
+        @Nullable UUID locationId) {
 
     public BindingRef {
         Objects.requireNonNull(bindingId, "A binding id is required");

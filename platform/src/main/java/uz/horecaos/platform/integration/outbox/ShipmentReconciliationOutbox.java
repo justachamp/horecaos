@@ -133,11 +133,11 @@ public class ShipmentReconciliationOutbox implements ReconciliationRequester {
             UUID operationCommandId,
             UUID bindingId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String providerType,
             String capability,
             String externalReference,
-            String uncertainErrorCode) {}
+            @Nullable String uncertainErrorCode) {}
 
     /**
      * The settled answer.

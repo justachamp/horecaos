@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -32,6 +33,8 @@ public class JdbcSettlementStore {
     }
 
     /**
+     * A registered tenant payment method.
+     *
      * @param settlesFromBalance the flag every rule keys on, rather than the code.
      *                           A balance-backed method registered later inherits
      *                           reservation ordering, the money-tender invariant,
@@ -205,9 +208,15 @@ public class JdbcSettlementStore {
     }
 
     /**
+     * One tender within a settlement.
+     *
      * @param refundedMinor how much of this tender has already been given back.
      *     Present so that a second partial refund cannot re-refund the whole
      *     tender; see {@code V0048}.
+     * @param paymentIntentId never set on a balance tender (the CHECK constraint
+     *     {@code NOT settles_from_balance OR payment_intent_id IS NULL} refuses it)
+     * @param loyaltyReservationId never set on a money tender (the CHECK constraint
+     *     {@code settles_from_balance OR loyalty_reservation_id IS NULL} refuses it)
      */
     public record TenderRow(
             UUID id,
@@ -219,8 +228,8 @@ public class JdbcSettlementStore {
             long amountMinor,
             String currency,
             TenderStatus status,
-            UUID paymentIntentId,
-            UUID loyaltyReservationId,
+            @Nullable UUID paymentIntentId,
+            @Nullable UUID loyaltyReservationId,
             long refundedMinor,
             int version) {
 
@@ -428,6 +437,6 @@ public class JdbcSettlementStore {
     }
 
     private static OffsetDateTime utc(Instant instant) {
-        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
+        return instant.atOffset(ZoneOffset.UTC);
     }
 }

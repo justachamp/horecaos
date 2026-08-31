@@ -27,7 +27,7 @@ public record SecretReference(String environment, SecretCategory category, Strin
 
     public static SecretReference parse(String value) {
         Objects.requireNonNull(value, "A secret reference is required");
-        String[] parts = value.split(SEPARATOR);
+        String[] parts = value.split(SEPARATOR, -1);
         if (parts.length != 5 || !PREFIX.equals(parts[0])) {
             throw new IllegalArgumentException(
                     "Malformed secret reference. Expected horecaos:{environment}:{category}:{owner}:{id}");

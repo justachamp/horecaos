@@ -62,9 +62,9 @@ public interface RemedyEntitlementPort {
             UUID brandId,
             EntitlementScope appliesTo,
             EntitlementBenefit benefit,
-            Integer percentBasisPoints,
-            Long amountMinor,
-            Long maximumMinor,
+            @Nullable Integer percentBasisPoints,
+            @Nullable Long amountMinor,
+            @Nullable Long maximumMinor,
             String currency,
             int usesRemaining,
             Instant expiresAt) {}

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -152,7 +153,12 @@ public class JdbcSourcingJobStore {
      *                  to arrive in a column nobody was watching
      */
     public boolean reschedule(
-            UUID jobId, UUID leaseToken, Instant dueAt, String checkpointJson, String errorCode, Instant now) {
+            UUID jobId,
+            UUID leaseToken,
+            Instant dueAt,
+            String checkpointJson,
+            @Nullable String errorCode,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.delivery_sourcing_jobs
                 SET status = 'PENDING', due_at = :dueAt,
@@ -222,6 +228,8 @@ public class JdbcSourcingJobStore {
     }
 
     /**
+     * A sourcing job claimed for this tick, with the state a scoring pass needs.
+     *
      * @param claimedAttempt the attempt number this claim is, already incremented.
      *                       A tick reads it to decide whether it has spent its
      *                       retry budget

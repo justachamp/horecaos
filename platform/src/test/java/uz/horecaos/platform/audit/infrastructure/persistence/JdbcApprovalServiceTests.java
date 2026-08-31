@@ -109,7 +109,9 @@ class JdbcApprovalServiceTests {
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
                 .isEqualTo(ErrorCode.APPROVAL_POLICY_REQUIRED);
-        assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
+        // .get(), not .find(): this counter must exist by now, and RequiredSearch says so
+        // with a clear MeterNotFoundException instead of an NPE if it somehow does not.
+        assertThat(meters.get(JdbcApprovalService.RESOLUTION_METRIC)
                         .tags(
                                 "action",
                                 ApprovalAction.COURIER_MANUAL_PENALTY.code(),
@@ -161,7 +163,9 @@ class JdbcApprovalServiceTests {
         assertThat(resolutions("unresolved"))
                 .as("an operator has to be able to alert on a control nothing reaches")
                 .isEqualTo(1.0);
-        assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
+        // .get(), not .find(): this counter must exist by now, and RequiredSearch says so
+        // with a clear MeterNotFoundException instead of an NPE if it somehow does not.
+        assertThat(meters.get(JdbcApprovalService.RESOLUTION_METRIC)
                         .tag("outcome", "unresolved")
                         .counter()
                         .getId()

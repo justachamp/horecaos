@@ -177,7 +177,7 @@ public class JdbcKitchenStore {
      *         fallback station and {@code KitchenRoutingUnresolved}
      */
     public Optional<ResolvedStation> resolveStation(
-            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, UUID productId) {
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, @Nullable UUID productId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);

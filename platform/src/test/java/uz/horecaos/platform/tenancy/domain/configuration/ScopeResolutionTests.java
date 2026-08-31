@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -96,7 +97,10 @@ class ScopeResolutionTests {
 
     @Test
     void aBrandScopedRequestNeverSeesALocationValue() {
-        ResourceScope brandScope = ResourceScope.brand(LOCATION.tenantId(), LOCATION.brandId());
+        // LOCATION is a ScopeType.LOCATION scope, so its own constructor invariant
+        // guarantees both identifiers are set.
+        ResourceScope brandScope =
+                ResourceScope.brand(Objects.requireNonNull(LOCATION.tenantId()), Objects.requireNonNull(LOCATION.brandId()));
 
         Resolved<Integer> resolved = ScopeResolution.resolve(
                 KEY,

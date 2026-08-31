@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -23,7 +24,7 @@ public record OrderConfirmed(
         UUID brandId,
         UUID locationId,
         String acceptanceMode,
-        String decisionChannel,
+        @Nullable String decisionChannel,
         Instant confirmedAt,
         String currency,
         long totalMinor,
@@ -69,7 +70,7 @@ public record OrderConfirmed(
             UUID brandId,
             UUID locationId,
             String acceptanceMode,
-            String decisionChannel,
+            @Nullable String decisionChannel,
             // ISO-8601 text; see OrderAwaitingApproval for why the wire shape of a
             // timestamp is pinned rather than left to the serializer.
             String confirmedAt,

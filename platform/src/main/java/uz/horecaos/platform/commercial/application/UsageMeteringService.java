@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
@@ -214,5 +215,5 @@ public class UsageMeteringService implements UsageMeter {
     }
 
     /** A cached figure that disagreed with the ledger it is supposed to summarise. */
-    public record Divergence(String entitlementKey, String periodKey, Long stored, long recomputed) {}
+    public record Divergence(String entitlementKey, String periodKey, @Nullable Long stored, long recomputed) {}
 }

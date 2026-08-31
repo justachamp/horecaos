@@ -19,6 +19,8 @@ public class SupportQuery {
     }
 
     /**
+     * The FAQ categories published for this brand, in one locale.
+     *
      * @return an empty list when the brand has published no FAQ. Empty and
      *     absent are the same answer on purpose: a brand with nothing to say is
      *     not an error, and a storefront renders it as a screen with no

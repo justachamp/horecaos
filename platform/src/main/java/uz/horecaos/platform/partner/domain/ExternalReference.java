@@ -50,7 +50,8 @@ public record ExternalReference(
             stripped = stripped.substring(1);
         }
         StringBuilder normalised = new StringBuilder(stripped.length());
-        for (char character : stripped.toCharArray()) {
+        for (int i = 0; i < stripped.length(); i++) {
+            char character = stripped.charAt(i);
             if (Character.isWhitespace(character) || character == '-') {
                 continue;
             }

@@ -94,7 +94,12 @@ public record FiscalDocument(
      * split inside a CLICK payment, and a cash order has no CLICK payment to split.
      */
     public static FiscalDocument notApplicableForCash(
-            UUID id, UUID tenantId, UUID orderId, UUID legalEntityId, UUID paymentIntentId, Instant createdAt) {
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            @Nullable UUID legalEntityId,
+            UUID paymentIntentId,
+            Instant createdAt) {
         return new FiscalDocument(
                 id,
                 tenantId,

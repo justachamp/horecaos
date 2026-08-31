@@ -91,9 +91,6 @@ class CourierTelemetryTests {
     private static final double CHORSU_LON = 69.234100;
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcTelemetryStore store;
@@ -117,9 +114,6 @@ class CourierTelemetryTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for courier telemetry tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

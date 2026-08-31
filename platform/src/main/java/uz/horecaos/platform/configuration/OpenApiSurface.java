@@ -52,6 +52,10 @@ enum OpenApiSurface {
             "/api/v1/platform-admin/**");
 
     private final String id;
+
+    // The checker cannot see immutability through the interface type, but the
+    // constructor below always assigns a List.of(...) unmodifiable list.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final List<String> pathPatterns;
 
     OpenApiSurface(String id, String... pathPatterns) {

@@ -156,11 +156,11 @@ public class JdbcTemplateStore {
     public void insertTemplate(
             UUID id,
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String templateKey,
             String notificationClass,
             String channel,
-            String consentPurpose,
+            @Nullable String consentPurpose,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
@@ -187,7 +187,7 @@ public class JdbcTemplateStore {
             UUID templateId,
             int versionNumber,
             String locale,
-            String subjectTemplate,
+            @Nullable String subjectTemplate,
             String bodyTemplate,
             String variablesSchemaJson,
             String contentHash,

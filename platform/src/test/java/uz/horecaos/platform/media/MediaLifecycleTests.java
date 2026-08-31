@@ -24,6 +24,7 @@ import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 import javax.imageio.ImageIO;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -118,9 +119,6 @@ class MediaLifecycleTests {
 
     private static TestDatabase.Handle db;
     private static GenericContainer<?> minio;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
     private static S3Client s3;
     private static S3Presigner presigner;
 
@@ -140,9 +138,6 @@ class MediaLifecycleTests {
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the media lifecycle tests");
 
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
 
         minio = new GenericContainer<>(DockerImageName.parse("minio/minio:RELEASE.2025-07-23T15-54-02Z"))
                 .withCommand("server", "/data")
@@ -1043,7 +1038,7 @@ class MediaLifecycleTests {
                 .list();
     }
 
-    private String jobErrorCode(MediaAssetId assetId) {
+    private @Nullable String jobErrorCode(MediaAssetId assetId) {
         return jdbc.sql("SELECT last_error_code FROM media.derivative_jobs WHERE asset_id = :id")
                 .param("id", assetId.value())
                 // Wrapped, because a null column is the assertion in the test
@@ -1154,17 +1149,17 @@ class MediaLifecycleTests {
                 .single();
     }
 
-    private Instant jobErroredAt(MediaAssetId assetId) {
+    private @Nullable Instant jobErroredAt(MediaAssetId assetId) {
         return jdbc.sql("SELECT last_error_at FROM media.derivative_jobs WHERE asset_id = :id")
                 .param("id", assetId.value())
-                .query((row, number) -> {
-                    var at = row.getObject("last_error_at", java.time.OffsetDateTime.class);
-                    return at == null ? null : at.toInstant();
-                })
-                .single();
+                .query((row, number) -> java.util.Optional.ofNullable(
+                                row.getObject("last_error_at", java.time.OffsetDateTime.class))
+                        .map(java.time.OffsetDateTime::toInstant))
+                .single()
+                .orElse(null);
     }
 
-    private String rejectionDetail(MediaAssetId assetId) {
+    private @Nullable String rejectionDetail(MediaAssetId assetId) {
         return jdbc.sql("SELECT rejection_detail FROM media.assets WHERE asset_id = :id")
                 .param("id", assetId.value())
                 .query((row, number) -> row.getString("rejection_detail"))

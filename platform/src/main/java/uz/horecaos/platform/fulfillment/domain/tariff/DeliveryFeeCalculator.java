@@ -60,6 +60,8 @@ public final class DeliveryFeeCalculator {
     private DeliveryFeeCalculator() {}
 
     /**
+     * Computes the fee a tariff charges for one distance at one local moment.
+     *
      * @throws UnpriceableDistanceException when the band set in force has no band
      *                                      containing the distance, which activation
      *                                      validation is supposed to have made
@@ -286,6 +288,8 @@ public final class DeliveryFeeCalculator {
     private record Accrued(long milliMinor, @Nullable TariffBand band) {}
 
     /**
+     * What one tariff computation produced, band and discount included.
+     *
      * @param band             the band the journey ended in, which is what the
      *                         evidence row names
      * @param computedFeeMinor the fee before the tariff's clamp, kept so evidence

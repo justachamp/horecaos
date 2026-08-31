@@ -30,6 +30,8 @@ public final class LineFingerprint {
     private LineFingerprint() {}
 
     /**
+     * The stable fingerprint for one order's line composition.
+     *
      * @param lines the exported lines. May be empty only in a test; an order with
      *              no lines is refused earlier, because a kitchen ticket for
      *              nothing is a ticket somebody has to walk over and ask about
@@ -71,6 +73,8 @@ public final class LineFingerprint {
     }
 
     /**
+     * One exported order line, as used for fingerprinting.
+     *
      * @param unitAmountMinor whole minor units. For UZS a minor unit is a whole
      *                        som, which is why this is a long and never a double:
      *                        a fingerprint computed through floating point would

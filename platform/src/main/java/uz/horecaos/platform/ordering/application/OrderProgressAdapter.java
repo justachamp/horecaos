@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -45,7 +46,7 @@ public class OrderProgressAdapter implements OrderProgressPort {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         // The fulfilment-mode split at READY is not repeated here. A COMPLETED
         // proposal on a delivery order is refused by OrderStateMachine, which is

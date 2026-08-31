@@ -94,9 +94,10 @@ public class DutySessionService {
         if (shift.registrationValidUntil().isBefore(today)) {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT,
-                    "This courier's self-employment registration expired on %s. New work and new "
-                            + "collection are refused until it is renewed; work already accepted is "
-                            + "unaffected (ADR 0042).".formatted(shift.registrationValidUntil()),
+                    ("This courier's self-employment registration expired on %s. New work and new "
+                                    + "collection are refused until it is renewed; work already accepted is "
+                                    + "unaffected (ADR 0042).")
+                            .formatted(shift.registrationValidUntil()),
                     Map.of(
                             "reason",
                             "REGISTRATION_LAPSED",
@@ -204,6 +205,9 @@ public class DutySessionService {
     }
 
     /**
+     * A request to open a duty session for a courier already on an ADR 0042
+     * shift.
+     *
      * @param collectionGate resolved through ADR 0030 before it reaches here, so
      *                       the narrower gate is a configuration change rather
      *                       than a code change

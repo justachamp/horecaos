@@ -24,7 +24,7 @@ public record QuoteRequest(
         @Nullable UUID customerAccountId,
         String channel,
         List<Line> lines,
-        String idempotencyKey,
+        @Nullable String idempotencyKey,
         @Nullable Delivery delivery) {
 
     public QuoteRequest {
@@ -47,7 +47,7 @@ public record QuoteRequest(
             @Nullable UUID customerAccountId,
             String channel,
             List<Line> lines,
-            String idempotencyKey) {
+            @Nullable String idempotencyKey) {
         this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, null);
     }
 

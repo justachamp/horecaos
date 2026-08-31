@@ -43,6 +43,8 @@ public record BranchOrigin(UUID locationId, GeoPoint point, String source) {
     private static final String NOT_GEOCODED = "NOT_GEOCODED";
 
     /**
+     * Establishes a branch's origin point, refusing the two ways it can be unusable.
+     *
      * @throws UnlocatedBranchException when the branch cannot originate a zone or
      *                                  a measurement
      */

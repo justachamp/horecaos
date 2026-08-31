@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -143,10 +144,12 @@ public class ServiceScheduleService {
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("Location", locationId)
+                // The guard above already rejected a non-FOLLOW_SCHEDULE command with a
+                // blank/absent reasonCode, so it is provably set on this branch.
                 .because(
                         command.mode() == ServiceMode.FOLLOW_SCHEDULE
                                 ? "Returned to the published schedule"
-                                : command.reasonCode())
+                                : Objects.requireNonNull(command.reasonCode()))
                 .changed(changeDocument(command))
                 .correlatedBy(correlationId())
                 .occurredAt(now)

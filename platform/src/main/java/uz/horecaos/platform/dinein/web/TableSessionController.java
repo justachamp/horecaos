@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -218,16 +219,16 @@ public class TableSessionController {
 
     record SessionResponse(
             UUID sessionId,
-            UUID reservationId,
+            @Nullable UUID reservationId,
             Integer partySize,
             LocalDate businessDate,
             Instant openedAt,
             String status,
             Integer serviceChargeRateBp,
             String currency,
-            Long settledTotalMinor,
-            Instant closedAt,
-            String closeReasonCode,
+            @Nullable Long settledTotalMinor,
+            @Nullable Instant closedAt,
+            @Nullable String closeReasonCode,
             int version) {
 
         static SessionResponse of(SessionRow row) {

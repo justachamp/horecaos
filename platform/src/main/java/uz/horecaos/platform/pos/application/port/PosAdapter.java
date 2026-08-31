@@ -127,11 +127,13 @@ public interface PosAdapter {
     }
 
     /**
+     * The outcome of a whole-catalog read, and the catalog itself on success.
+     *
      * @param snapshot null unless the outcome succeeded. A partial catalog is not
      *                 a catalog: staging half a menu and diffing it would report
      *                 the unread half as removals
      */
-    record CatalogRead(ProviderOutcome outcome, CatalogSnapshot snapshot) {}
+    record CatalogRead(ProviderOutcome outcome, @Nullable CatalogSnapshot snapshot) {}
 
     record AvailabilityRead(ProviderOutcome outcome, List<CatalogSnapshot.Availability> entries) {
 
@@ -141,6 +143,8 @@ public interface PosAdapter {
     }
 
     /**
+     * The outcome of sending one order, and the vendor's own reference for it.
+     *
      * @param externalOrderId the vendor's identifier, present only on success
      * @param approvalPending whether the till still has to accept this order. True
      *                        where the vendor is a genuine authority and we did
@@ -237,6 +241,8 @@ public interface PosAdapter {
         }
 
         /**
+         * One line of the order, as the till needs to receive it.
+         *
          * @param externalProductId the vendor's own identifier for the thing. The
          *                          only stable key at least one vendor offers, and
          *                          the reason a mapping exists at all

@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -233,7 +234,7 @@ class LegacyDeliveryParityTests {
         // comment tells it to leave this alone: applying a refusal to branches that
         // have never been subject to it is not a migration, it is a policy change.
         assertThat(legacy.minOrderPrice()).isNotNull();
-        assertThat(legacy.discount().minOrderPrice()).isNotNull();
+        assertThat(Objects.requireNonNull(legacy.discount()).minOrderPrice()).isNotNull();
         assertThat(tariff.minFeeMinor()).isZero();
         assertThat(tariff.maxFeeMinor()).isNull();
     }

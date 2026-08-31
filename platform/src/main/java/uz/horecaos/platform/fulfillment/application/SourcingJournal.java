@@ -113,6 +113,8 @@ public interface SourcingJournal {
             UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now);
 
     /**
+     * A partner booking attempt about to be opened.
+     *
      * @param idempotencyKey the key the partner sees, derived from the plan, the
      *                       binding and the attempt number. Never random: a fresh
      *                       id defeats the provider-side deduplication a retry
@@ -135,6 +137,8 @@ public interface SourcingJournal {
             Instant now) {}
 
     /**
+     * An in-house courier offer about to be opened.
+     *
      * @param expiresAt when the offer lapses. Never null: a courier who is never
      *                  told an offer ended holds an order nobody else can be given
      * @param policyId  the ADR 0030 policy this decision resolved under, or null

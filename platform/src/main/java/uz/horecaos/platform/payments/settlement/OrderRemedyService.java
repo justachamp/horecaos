@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -150,6 +151,8 @@ public class OrderRemedyService {
     }
 
     /**
+     * A refund to record against an order.
+     *
      * @param amountMinor       whole som (ADR 0018). Full and partial are the same
      *                          command: "full" is the amount that happens to equal
      *                          what is left, and a separate full-refund entry point
@@ -176,6 +179,8 @@ public class OrderRemedyService {
             @Nullable String correlationId) {}
 
     /**
+     * A future-discount entitlement to grant against an order.
+     *
      * @param uses      how many future orders this is good for, at most
      *                  {@link #MAXIMUM_GRANTED_USES}
      * @param validFor  the window from now. An entitlement with no end is a
@@ -186,9 +191,9 @@ public class OrderRemedyService {
             UUID orderId,
             EntitlementScope appliesTo,
             EntitlementBenefit benefit,
-            Integer percentBasisPoints,
-            Long amountMinor,
-            Long maximumMinor,
+            @Nullable Integer percentBasisPoints,
+            @Nullable Long amountMinor,
+            @Nullable Long maximumMinor,
             int uses,
             Duration validFor,
             String reasonCode,
@@ -198,6 +203,9 @@ public class OrderRemedyService {
             @Nullable String correlationId) {}
 
     /**
+     * What recording a remedy came to: either the row it wrote, or an approval
+     * still pending.
+     *
      * @param remedy null when {@code approval} says a second pair of eyes is
      *               needed, in which case nothing was written and nothing moved
      */
@@ -343,7 +351,7 @@ public class OrderRemedyService {
      *         not supply one — stored as null on the remedy so a later
      *         reconciliation can find every reimbursement that was never bounded
      */
-    private Long checkDeliveryFeeCeiling(RefundCommand command) {
+    private @Nullable Long checkDeliveryFeeCeiling(RefundCommand command) {
         OptionalLong charged = deliveryFees.deliveryFeeMinor(command.tenantId(), command.orderId());
         if (charged.isEmpty()) {
             return null;
@@ -517,8 +525,12 @@ public class OrderRemedyService {
      * one shape of this remedy worth a second pair of eyes.
      */
     private static long exposureOf(FutureDiscountCommand command) {
-        long perUse =
-                command.benefit() == EntitlementBenefit.FIXED_AMOUNT ? command.amountMinor() : command.maximumMinor();
+        // validate() has already run by the time this is called and enforced the
+        // pairing the schema itself enforces (V0052): a fixed-amount grant always
+        // carries amountMinor, a percentage grant always carries maximumMinor.
+        long perUse = command.benefit() == EntitlementBenefit.FIXED_AMOUNT
+                ? Objects.requireNonNull(command.amountMinor(), "a fixed-amount grant always carries an amount")
+                : Objects.requireNonNull(command.maximumMinor(), "a percentage grant always carries a maximum");
         return Math.multiplyExact(perUse, command.uses());
     }
 
@@ -546,9 +558,9 @@ public class OrderRemedyService {
                 if (command.maximumMinor() == null || command.maximumMinor() <= 0) {
                     throw new ApiException(
                             ErrorCode.VALIDATION_FAILED,
-                            "A percentage discount carries a per-use maximum: without one, 20% "
-                                    + "off is 2 000 som on a delivery fee and 400 000 on a "
-                                    + "catering order");
+                            "A percentage discount carries a per-use maximum: without one, a "
+                                    + "20 percent discount is 2 000 som off a delivery fee and "
+                                    + "400 000 off a catering order");
                 }
                 if (command.amountMinor() != null) {
                     throw new ApiException(ErrorCode.VALIDATION_FAILED, "A percentage discount has no fixed amount");
@@ -586,7 +598,7 @@ public class OrderRemedyService {
             String source,
             ActorRef actor,
             String reason,
-            String correlationId) {
+            @Nullable String correlationId) {
         if (state == VerificationState.UNVERIFIED) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
@@ -778,7 +790,7 @@ public class OrderRemedyService {
             JdbcRemedyStore.RemedyRow remedy,
             String reason,
             ActorRef actor,
-            UUID approvalId,
+            @Nullable UUID approvalId,
             @Nullable String correlationId,
             Map<String, Object> changes,
             Instant now) {
@@ -795,7 +807,7 @@ public class OrderRemedyService {
                 .build());
     }
 
-    private static UUID approvalIdOf(ApprovalOutcome outcome) {
+    private static @Nullable UUID approvalIdOf(ApprovalOutcome outcome) {
         return outcome instanceof ApprovalOutcome.Approved approved ? approved.requestId() : null;
     }
 }

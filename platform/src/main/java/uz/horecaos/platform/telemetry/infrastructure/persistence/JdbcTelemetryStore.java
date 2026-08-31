@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
@@ -397,21 +398,26 @@ public class JdbcTelemetryStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("sessionId", sessionId)
-                .query((resultSet, rowNumber) -> {
-                    OffsetDateTime first = resultSet.getObject("first_observed_at", OffsetDateTime.class);
-                    if (first == null) {
-                        return null;
-                    }
-                    return new TrackAggregate(
-                            resultSet.getInt("distance_meters"),
-                            resultSet.getInt("observation_count"),
-                            first.toInstant(),
-                            resultSet
-                                    .getObject("last_observed_at", OffsetDateTime.class)
-                                    .toInstant());
-                })
-                .optional()
-                .filter(aggregate -> aggregate != null);
+                .query(JdbcTelemetryStore::readAggregate)
+                // Spring's RowMapper#mapRow itself may not return null, so "no
+                // track windows for this session" is an empty Optional *from* the
+                // mapper, for the one row this no-GROUP-BY aggregate always
+                // produces, rather than a null the mapper is not allowed to hand
+                // back.
+                .single();
+    }
+
+    private static Optional<TrackAggregate> readAggregate(ResultSet resultSet, int rowNumber) throws SQLException {
+        OffsetDateTime first = resultSet.getObject("first_observed_at", OffsetDateTime.class);
+        if (first == null) {
+            return Optional.empty();
+        }
+        OffsetDateTime last = java.util.Objects.requireNonNull(
+                resultSet.getObject("last_observed_at", OffsetDateTime.class),
+                "last_observed_at was NULL alongside a non-null first_observed_at");
+        return Optional.of(new TrackAggregate(
+                resultSet.getInt("distance_meters"), resultSet.getInt("observation_count"), first.toInstant(),
+                last.toInstant()));
     }
 
     // ------------------------------------------------------------------ summaries
@@ -535,17 +541,17 @@ public class JdbcTelemetryStore {
                 row.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
-    private static Double doubleOrNull(ResultSet row, String column) throws SQLException {
+    private static @Nullable Double doubleOrNull(ResultSet row, String column) throws SQLException {
         java.math.BigDecimal value = row.getBigDecimal(column);
         return value == null ? null : value.doubleValue();
     }
 
-    private static Instant instantOrNull(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 
@@ -565,9 +571,9 @@ public class JdbcTelemetryStore {
             LocalDate registrationValidUntil,
             String openedBySubject,
             Instant startedAt,
-            Instant suspendedAt,
-            Instant endedAt,
-            String endReason,
+            @Nullable Instant suspendedAt,
+            @Nullable Instant endedAt,
+            @Nullable String endReason,
             int version) {}
 
     public record LivePositionRow(
@@ -579,10 +585,10 @@ public class JdbcTelemetryStore {
             double latitude,
             double longitude,
             double accuracyMeters,
-            Double headingDegrees,
-            Double speedMps,
-            Integer batteryPercent,
-            Boolean deviceCharging,
+            @Nullable Double headingDegrees,
+            @Nullable Double speedMps,
+            @Nullable Integer batteryPercent,
+            @Nullable Boolean deviceCharging,
             int activeAssignmentCount,
             Instant capturedAt,
             Instant receivedAt) {}
@@ -617,13 +623,13 @@ public class JdbcTelemetryStore {
             UUID tenantId,
             UUID courierId,
             UUID dutySessionId,
-            UUID shipmentId,
+            @Nullable UUID shipmentId,
             int distanceMeters,
             int observationCount,
             Instant firstObservedAt,
             Instant lastObservedAt,
-            String protectedPickupPoint,
-            String protectedDeliveryPoint,
+            @Nullable String protectedPickupPoint,
+            @Nullable String protectedDeliveryPoint,
             Instant createdAt) {}
 
     /** What a session's windows add up to, computed without decrypting one. */

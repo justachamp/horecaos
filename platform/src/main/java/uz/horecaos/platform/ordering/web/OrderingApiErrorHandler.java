@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.web;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -48,6 +49,12 @@ public class OrderingApiErrorHandler {
         Map<String, Object> properties = new HashMap<>();
         properties.put("capability", exception.capability().name());
         properties.put("migrationScopeId", exception.scopeId());
-        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), properties);
+        return ApiProblem.withProperties(
+                ErrorCode.RESOURCE_CONFLICT,
+                // Throwable#getMessage is nullable by the JDK's own contract, even
+                // though this exception's own message always carries the scope's
+                // state and write mode.
+                Objects.requireNonNullElse(exception.getMessage(), "Target writes are fenced"),
+                properties);
     }
 }

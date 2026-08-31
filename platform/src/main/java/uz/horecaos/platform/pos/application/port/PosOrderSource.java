@@ -24,12 +24,16 @@ import org.jspecify.annotations.Nullable;
 public interface PosOrderSource {
 
     /**
+     * The order facts a till needs, revealed for this call and never stored.
+     *
      * @return empty when no order of that id belongs to this tenant, which is the
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<ExportableOrder> find(UUID tenantId, UUID orderId, String revealPurpose);
 
     /**
+     * One order's facts, as a till needs to receive them.
+     *
      * @param status               the ADR 0019 status at the moment of the read.
      *                             Carried so the export can refuse an order that
      *                             never reached {@code CONFIRMED}: a kitchen
@@ -73,6 +77,8 @@ public interface PosOrderSource {
         }
 
         /**
+         * One line of the order, as a till needs to receive it.
+         *
          * @param sourceVariantId what HorecaOS sold. The external identifier is
          *                        resolved from this through the ADR 0026 mapping
          *                        rather than from the name, because a provider's

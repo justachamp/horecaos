@@ -3,6 +3,7 @@ package uz.horecaos.platform.iam.api.organizations;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Creates and reconciles Keycloak organizations (ADR 0009).
@@ -45,7 +46,8 @@ public interface OrganizationProvisioner {
     /** Links an existing verified subject, or creates and invites one. */
     MembershipRef ensureMembership(EnsureMembership command);
 
-    record EnsureOrganization(UUID tenantId, String alias, String displayName, String existingOrganizationId) {
+    record EnsureOrganization(
+            UUID tenantId, String alias, String displayName, @Nullable String existingOrganizationId) {
 
         public EnsureOrganization {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -53,7 +55,7 @@ public interface OrganizationProvisioner {
         }
     }
 
-    record EnsureMembership(String organizationId, String email, String existingSubjectId) {
+    record EnsureMembership(String organizationId, String email, @Nullable String existingSubjectId) {
 
         public EnsureMembership {
             Objects.requireNonNull(organizationId, "An organization id is required");

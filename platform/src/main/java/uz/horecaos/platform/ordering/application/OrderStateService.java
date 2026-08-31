@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -541,7 +542,7 @@ public class OrderStateService {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
         return advance(tenantId, orderId, target, expectedVersion, reasonCode, actorType, actorId, correlationId, null);
     }
 
@@ -569,8 +570,8 @@ public class OrderStateService {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId,
-            OrderOutcome completion) {
+            @Nullable String correlationId,
+            @Nullable OrderOutcome completion) {
 
         Instant now = clock.instant();
         OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -671,7 +672,7 @@ public class OrderStateService {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             // A programming error in the caller, not a refusal: without a key
@@ -848,7 +849,7 @@ public class OrderStateService {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
         return cancel(tenantId, orderId, expectedVersion, reasonCode, actorType, actorId, correlationId, null);
     }
 
@@ -875,8 +876,8 @@ public class OrderStateService {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId,
-            OrderOutcome prepared) {
+            @Nullable String correlationId,
+            @Nullable OrderOutcome prepared) {
 
         Instant now = clock.instant();
         OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -1015,11 +1016,11 @@ public class OrderStateService {
             OrderRow order,
             OrderStatus target,
             int version,
-            String reasonCode,
-            String decisionChannel,
-            String actorType,
-            String actorId,
-            OrderOutcome outcome,
+            @Nullable String reasonCode,
+            @Nullable String decisionChannel,
+            @Nullable String actorType,
+            @Nullable String actorId,
+            @Nullable OrderOutcome outcome,
             Instant now) {
 
         // ADR 0039: every order ends in exactly one recorded outcome, written in
@@ -1075,13 +1076,13 @@ public class OrderStateService {
         // terminal() rather than on a list of statuses, so a terminal status added
         // later cannot be the one somebody forgets.
         if (target == OrderStatus.COMPLETED) {
-            settlements.recordHandover(order.tenantId(), order.orderId(), actorId == null ? actorType : actorId);
+            settlements.recordHandover(order.tenantId(), order.orderId(), actorOf(actorType, actorId));
         } else if (target.terminal()) {
             settlements.recordTerminalOutcome(
                     order.tenantId(),
                     order.orderId(),
                     reasonCode == null ? target.name() : reasonCode,
-                    actorId == null ? actorType : actorId);
+                    actorOf(actorType, actorId));
         }
 
         TenantId tenant = new TenantId(order.tenantId());
@@ -1166,18 +1167,18 @@ public class OrderStateService {
     private void recordAudit(
             OrderRow order,
             String actionCode,
-            String actorType,
-            String actorId,
-            String reasonCode,
+            @Nullable String actorType,
+            @Nullable String actorId,
+            @Nullable String reasonCode,
             int version,
             Map<String, Object> changed,
             AuditFact.Outcome outcome,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         ActorRef actor =
                 switch (actorType == null ? "SERVICE" : actorType) {
-                    case "USER" -> ActorRef.user(actorId, null);
+                    case "USER" -> ActorRef.user(actorId == null ? "unknown-user" : actorId, null);
                     case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
                     // A customer is a person, but not a platform user: recording them as
                     // USER would put them in the same population as staff in every audit
@@ -1200,6 +1201,18 @@ public class OrderStateService {
                 .correlatedBy(correlationId == null ? order.orderId().toString() : correlationId)
                 .occurredAt(now)
                 .build());
+    }
+
+    /**
+     * The best identifier available for a settlement-facing actor field, which —
+     * unlike {@link #recordAudit}'s {@link ActorRef} — is a single required
+     * string with no structured "unknown" case of its own.
+     */
+    private static String actorOf(@Nullable String actorType, @Nullable String actorId) {
+        if (actorId != null) {
+            return actorId;
+        }
+        return actorType == null ? "ordering" : actorType;
     }
 
     private DecisionResult settledOutcome(UUID tenantId, UUID orderId, ApprovalDecisionRow seen, OrderRow order) {
@@ -1230,6 +1243,8 @@ public class OrderStateService {
     }
 
     /**
+     * A restaurant's approve or reject click, on one order.
+     *
      * @param decisionId stable across retries of one human decision, so the same
      *                   click arriving twice is one decision rather than two
      * @param issuedAt   when the operator decided, not when the command arrived;
@@ -1243,15 +1258,21 @@ public class OrderStateService {
             String actorId,
             String reasonCode,
             Instant issuedAt,
-            String correlationId) {}
+            @Nullable String correlationId) {}
 
     /**
+     * The result of one approve/reject command against an order.
+     *
      * @param applied whether this caller's command is the one that moved the order
      * @param effectiveDecision the decision that actually settled it, which may be
-     *                          somebody else's
+     *                          somebody else's, or null when the order has no
+     *                          approval decision at all
      */
     public record DecisionResult(
-            boolean applied, OrderStatus status, int orderVersion, ApprovalDecisionRow effectiveDecision) {}
+            boolean applied,
+            OrderStatus status,
+            int orderVersion,
+            @Nullable ApprovalDecisionRow effectiveDecision) {}
 
     public static class OrderNotFoundException extends RuntimeException {
         public OrderNotFoundException(UUID orderId) {

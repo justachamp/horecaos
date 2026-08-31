@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -138,14 +140,15 @@ public class CommercialControlPlaneController {
     /** One line of a plan: the limit, the boundary behaviour, and the overage rate. */
     public record EntitlementLine(
             String entitlementKey,
-            Long limit,
-            Boolean enabled,
+            @Nullable Long limit,
+            @Nullable Boolean enabled,
             String enforcementMode,
             String resetPeriod,
-            Integer warnThresholdBasisPoints,
-            ApiMoney overageUnitPrice) {
+            @Nullable Integer warnThresholdBasisPoints,
+            @Nullable ApiMoney overageUnitPrice) {
 
         static EntitlementLine of(PlanEntitlement entitlement, String currency) {
+            Long overageUnitPriceMinor = entitlement.overageUnitPriceMinor();
             return new EntitlementLine(
                     entitlement.entitlementKey(),
                     entitlement.integerValue(),
@@ -153,9 +156,7 @@ public class CommercialControlPlaneController {
                     entitlement.enforcementMode().name(),
                     entitlement.resetPeriod().name(),
                     entitlement.warnThresholdBasisPoints(),
-                    entitlement.overageUnitPriceMinor() == null
-                            ? null
-                            : ApiMoney.of(entitlement.overageUnitPriceMinor(), currency));
+                    overageUnitPriceMinor == null ? null : ApiMoney.of(overageUnitPriceMinor, currency));
         }
     }
 
@@ -165,10 +166,10 @@ public class CommercialControlPlaneController {
             UUID planVersionId,
             String status,
             String startAt,
-            String trialEndAt,
+            @Nullable String trialEndAt,
             String currentPeriodStart,
             String currentPeriodEnd,
-            String suspensionReason,
+            @Nullable String suspensionReason,
             long version) {
 
         static SubscriptionResponse of(Subscription subscription) {
@@ -176,15 +177,15 @@ public class CommercialControlPlaneController {
                     subscription.id(),
                     subscription.planVersionId(),
                     subscription.status().name(),
-                    text(subscription.startAt()),
+                    subscription.startAt().toString(),
                     text(subscription.trialEndAt()),
-                    text(subscription.currentPeriodStart()),
-                    text(subscription.currentPeriodEnd()),
+                    subscription.currentPeriodStart().toString(),
+                    subscription.currentPeriodEnd().toString(),
                     subscription.suspensionReason(),
                     subscription.version());
         }
 
-        private static String text(java.time.Instant instant) {
+        private static @Nullable String text(java.time.@Nullable Instant instant) {
             return instant == null ? null : instant.toString();
         }
     }
@@ -192,7 +193,7 @@ public class CommercialControlPlaneController {
     /** The whole entitlement set with its hash. */
     public record EntitlementSnapshotResponse(
             UUID tenantId,
-            UUID subscriptionId,
+            @Nullable UUID subscriptionId,
             String hash,
             String resolvedAt,
             List<ResolvedEntitlement> entitlements) {
@@ -213,15 +214,16 @@ public class CommercialControlPlaneController {
     /** One resolved entitlement, with its provenance. */
     public record ResolvedEntitlement(
             String entitlementKey,
-            Long limit,
-            Boolean enabled,
+            @Nullable Long limit,
+            @Nullable Boolean enabled,
             String declaredMode,
             String effectiveMode,
             String resetPeriod,
-            ApiMoney overageUnitPrice,
+            @Nullable ApiMoney overageUnitPrice,
             String source) {
 
         static ResolvedEntitlement of(EntitlementValue value) {
+            Long overageUnitPriceMinor = value.overageUnitPriceMinor();
             return new ResolvedEntitlement(
                     value.key().code(),
                     value.limit(),
@@ -229,9 +231,11 @@ public class CommercialControlPlaneController {
                     value.declaredMode().name(),
                     value.effectiveMode().name(),
                     value.resetPeriod().name(),
-                    value.overageUnitPriceMinor() == null
+                    overageUnitPriceMinor == null
                             ? null
-                            : ApiMoney.of(value.overageUnitPriceMinor(), value.currency()),
+                            // EntitlementValue's own constructor guarantees a currency
+                            // wherever an overage price is set.
+                            : ApiMoney.of(overageUnitPriceMinor, Objects.requireNonNull(value.currency())),
                     value.source().name());
         }
     }
@@ -246,9 +250,10 @@ public class CommercialControlPlaneController {
             long adjustedQuantity,
             long consumedQuantity,
             int movementCount,
-            String lastEventAt) {
+            @Nullable String lastEventAt) {
 
         static UsageResponse of(JdbcUsageStore.StoredPeriodTotal total) {
+            java.time.Instant lastEventAt = total.lastEventAt();
             return new UsageResponse(
                     total.entitlementKey(),
                     total.periodKey(),
@@ -258,7 +263,7 @@ public class CommercialControlPlaneController {
                     total.adjustmentQuantity(),
                     total.consumedQuantity(),
                     total.eventCount(),
-                    total.lastEventAt() == null ? null : total.lastEventAt().toString());
+                    lastEventAt == null ? null : lastEventAt.toString());
         }
     }
 }

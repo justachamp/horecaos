@@ -5,6 +5,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -46,7 +47,8 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
     }
 
     @Override
-    public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    public Optional<BindingRef> primaryBinding(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
 
         List<Candidate> candidates = candidates(tenantId, brandId, locationId, capabilityCode);
 
@@ -62,7 +64,8 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
     }
 
     @Override
-    public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    public List<BindingRef> candidateBindings(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
 
         return candidates(tenantId, brandId, locationId, capabilityCode).stream()
                 .sorted((left, right) -> {
@@ -124,7 +127,8 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
                 .optional();
     }
 
-    private List<Candidate> candidates(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    private List<Candidate> candidates(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
 
         return jdbc.sql(SELECT_BINDINGS)
                 .param("tenantId", tenantId)

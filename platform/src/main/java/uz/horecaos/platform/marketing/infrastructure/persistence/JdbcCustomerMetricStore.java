@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -138,7 +139,10 @@ public class JdbcCustomerMetricStore {
                         row.getString("metric_name"),
                         row.getString("projected_value"),
                         row.getString("recomputed_value"),
-                        instant(row.getObject("observed_at", OffsetDateTime.class))))
+                        // observed_at is NOT NULL DEFAULT now() (V0043), unlike the
+                        // other timestamps in this file, so this reads it directly
+                        // rather than through the null-forwarding instant() helper.
+                        row.getObject("observed_at", OffsetDateTime.class).toInstant()))
                 .list();
     }
 
@@ -425,11 +429,11 @@ public class JdbcCustomerMetricStore {
                    (SELECT count(*) FROM projected) AS metric_rows
             """.formatted(RECOMPUTED, COMPARED, DRIFT_INSERT, UPSERT);
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
@@ -446,7 +450,7 @@ public class JdbcCustomerMetricStore {
             int marketingMessages7d,
             int marketingMessages30d,
             int metricDefinitionVersion,
-            Instant watermarkEventAt) {}
+            @Nullable Instant watermarkEventAt) {}
 
     public record DriftRow(
             UUID customerAccountId,

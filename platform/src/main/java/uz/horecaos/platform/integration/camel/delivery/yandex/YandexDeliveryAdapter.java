@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner;
@@ -242,7 +243,12 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
                         "fullname", pickup.address(),
                         "coordinates", coordinates(pickup.longitude(), pickup.latitude()),
                         "comment", pickup.comment() == null ? "" : pickup.comment()));
-        point.put("contact", Map.of("name", pickup.contactName(), "phone", pickup.contactPhone()));
+        // A mutable map, not Map.of(): a pickup contact is optional on the domain
+        // request and Map.of() throws on a null value rather than accepting one.
+        Map<String, Object> contact = new LinkedHashMap<>();
+        contact.put("name", pickup.contactName() == null ? "" : pickup.contactName());
+        contact.put("phone", pickup.contactPhone() == null ? "" : pickup.contactPhone());
+        point.put("contact", contact);
         return point;
     }
 
@@ -267,7 +273,10 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
         point.put("visit_order", 2);
         point.put("type", "destination");
         point.put("address", address);
-        point.put("contact", Map.of("name", dropoff.contactName(), "phone", dropoff.contactPhone()));
+        Map<String, Object> contact = new LinkedHashMap<>();
+        contact.put("name", dropoff.contactName() == null ? "" : dropoff.contactName());
+        contact.put("phone", dropoff.contactPhone() == null ? "" : dropoff.contactPhone());
+        point.put("contact", contact);
         // Yandex settles with the merchant, not the recipient, so no
         // cash-on-delivery block is sent. A prepaid basket needs no flag here —
         // unlike Noor, where omitting one charges the customer twice.
@@ -279,7 +288,7 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
         return List.of(longitude, latitude);
     }
 
-    private static long minorUnits(Object price) {
+    private static long minorUnits(@Nullable Object price) {
         if (price == null) {
             return 0L;
         }

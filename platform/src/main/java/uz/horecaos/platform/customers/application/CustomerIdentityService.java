@@ -206,6 +206,8 @@ public class CustomerIdentityService implements CustomerDirectory {
     }
 
     /**
+     * The account a sign-in resolved to.
+     *
      * @param created true on first sign-in, which is when a storefront should ask
      *                for consent rather than assume it
      */

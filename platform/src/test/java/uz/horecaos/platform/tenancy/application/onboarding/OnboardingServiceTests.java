@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -241,7 +242,10 @@ class OnboardingServiceTests {
         UUID runId = startRun();
         drain(runId);
 
-        UUID requestId = service.activate(runId, ADMIN, "go live").approvalRequestId();
+        // A configured activation-approval policy (above) means this outcome is
+        // AWAITING_APPROVAL, which is the one case approvalRequestId() is set.
+        UUID requestId = Objects.requireNonNull(
+                service.activate(runId, ADMIN, "go live").approvalRequestId());
         new JdbcApprovalService(
                         jdbc,
                         new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),

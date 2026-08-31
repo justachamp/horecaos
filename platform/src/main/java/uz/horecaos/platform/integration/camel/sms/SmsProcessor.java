@@ -1,7 +1,9 @@
 package uz.horecaos.platform.integration.camel.sms;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.apache.camel.Exchange;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -62,13 +64,13 @@ public class SmsProcessor {
      * reaches every log line the call produces.
      */
     public void restoreContext(Exchange exchange) {
-        SmsVerificationOperation operation = operation(exchange);
+        SmsVerificationOperation operation = requireOperation(exchange);
         MDC.put("tenantId", operation.tenantId().toString());
         MDC.put("challengeId", operation.challengeId().toString());
     }
 
     public void send(Exchange exchange) {
-        SmsVerificationOperation operation = operation(exchange);
+        SmsVerificationOperation operation = requireOperation(exchange);
         ProviderOutcome outcome = gateway.send(operation);
         count("send", outcome);
         exchange.getIn().setHeader(SmsRouteBuilder.OUTCOME_HEADER, outcome);
@@ -97,7 +99,7 @@ public class SmsProcessor {
      * one.
      */
     public void resolve(Exchange exchange) {
-        SmsVerificationOperation operation = operation(exchange);
+        SmsVerificationOperation operation = requireOperation(exchange);
         ProviderOutcome resolved = gateway.resolve(operation.resolving());
         count("resolve", resolved);
 
@@ -110,7 +112,7 @@ public class SmsProcessor {
     }
 
     public void recordOutcome(Exchange exchange) {
-        SmsVerificationOperation operation = operation(exchange);
+        SmsVerificationOperation operation = requireOperation(exchange);
         ProviderOutcome outcome = outcome(exchange);
         String reason = outcome == null ? "NONE" : outcome.errorCode();
 
@@ -171,11 +173,22 @@ public class SmsProcessor {
         MDC.remove("challengeId");
     }
 
-    private static ProviderOutcome outcome(Exchange exchange) {
+    private static @Nullable ProviderOutcome outcome(Exchange exchange) {
         return exchange.getIn().getHeader(SmsRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
     }
 
-    private static SmsVerificationOperation operation(Exchange exchange) {
+    private static @Nullable SmsVerificationOperation operation(Exchange exchange) {
         return exchange.getIn().getBody(SmsVerificationOperation.class);
+    }
+
+    /**
+     * {@link #operation(Exchange)}, except for the steps that run only after the
+     * route has placed the operation on the exchange body — a missing body at
+     * that point is a route wiring defect, not a case those steps can recover
+     * from. {@link #deadLetter(Exchange)} is the one step that may run before the
+     * body is set, which is why it alone tolerates null.
+     */
+    private static SmsVerificationOperation requireOperation(Exchange exchange) {
+        return Objects.requireNonNull(operation(exchange), "No SMS verification operation on the exchange body");
     }
 }

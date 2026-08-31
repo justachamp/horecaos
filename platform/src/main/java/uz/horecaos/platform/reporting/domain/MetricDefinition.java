@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What one number means (ADR 0043).
@@ -58,8 +59,8 @@ public record MetricDefinition(
         String inclusion,
         String exclusion,
         String refundTreatment,
-        String openQuestion,
-        LocalDate effectiveFrom) {
+        @Nullable String openQuestion,
+        @Nullable LocalDate effectiveFrom) {
 
     /** How rows combine into one figure. */
     public enum Aggregation {

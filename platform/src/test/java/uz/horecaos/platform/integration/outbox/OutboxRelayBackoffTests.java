@@ -100,7 +100,9 @@ class OutboxRelayBackoffTests {
                 null,
                 NOW.minusSeconds(60),
                 "{}",
-                null,
+                // trace_context is NOT NULL with a '{}' default in the schema; a
+                // real claimed row is never missing it.
+                "{}",
                 attemptCount,
                 UUID.randomUUID()));
     }

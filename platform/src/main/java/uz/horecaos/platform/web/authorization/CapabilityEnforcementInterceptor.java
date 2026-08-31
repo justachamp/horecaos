@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -111,7 +112,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
 
     @Override
     public void afterCompletion(
-            HttpServletRequest request, HttpServletResponse response, Object handler, Exception failure) {
+            HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable Exception failure) {
 
         if (enforce) {
             return;
@@ -154,7 +155,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
         }
     }
 
-    private RequiresCapability declarationOf(Object handler) {
+    private @Nullable RequiresCapability declarationOf(Object handler) {
         return handler instanceof HandlerMethod method ? method.getMethodAnnotation(RequiresCapability.class) : null;
     }
 

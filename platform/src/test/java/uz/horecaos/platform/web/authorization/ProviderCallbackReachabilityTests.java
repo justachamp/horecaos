@@ -78,6 +78,9 @@ class ProviderCallbackReachabilityTests {
      * the latest version it is a validate, not a migration, and it is the only
      * thing in this suite that would notice a clone that arrived at the wrong one.
      */
+    // @DynamicPropertySource is a static hook Spring's test runner guarantees
+    // runs before context startup and every test method, which NullAway cannot see.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll

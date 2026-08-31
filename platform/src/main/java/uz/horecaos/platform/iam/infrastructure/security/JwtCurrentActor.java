@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -55,13 +56,22 @@ public class JwtCurrentActor implements CurrentActor {
         }
 
         Jwt jwt = jwtAuthentication.getToken();
+        String subject = jwt.getSubject();
+        if (subject == null) {
+            // A Keycloak access token with no "sub" claim is not a shape this
+            // resource server accepts. Refused here, as the same 403 every other
+            // authentication failure in this method produces, rather than left to
+            // surface as whatever AuthenticatedActor's own constructor guard
+            // throws several frames away.
+            throw new AccessDeniedException("An authenticated Keycloak access token is required");
+        }
         return new AuthenticatedActor(
-                jwt.getSubject(),
+                subject,
                 clientRoles(jwt.getClaim("resource_access")),
                 organizationRoles(jwt.getClaim(ORGANIZATION_CLAIM)));
     }
 
-    private Map<String, Set<String>> organizationRoles(Object claim) {
+    private Map<String, Set<String>> organizationRoles(@Nullable Object claim) {
         if (!(claim instanceof Map<?, ?> organizations)) {
             return Map.of();
         }
@@ -80,7 +90,7 @@ public class JwtCurrentActor implements CurrentActor {
         return result;
     }
 
-    private Set<String> clientRoles(Object rawResourceAccess) {
+    private Set<String> clientRoles(@Nullable Object rawResourceAccess) {
         if (!(rawResourceAccess instanceof Map<?, ?> resourceAccess)) {
             return Set.of();
         }

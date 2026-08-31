@@ -1,5 +1,6 @@
 package uz.horecaos.platform.partner.web;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -48,7 +49,7 @@ public class PartnerTokenReader {
         throw unauthenticated();
     }
 
-    private static String claim(Jwt jwt, String name) {
+    private static @Nullable String claim(Jwt jwt, String name) {
         Object value = jwt.getClaim(name);
         return value instanceof String text && !text.isBlank() ? text.strip() : null;
     }

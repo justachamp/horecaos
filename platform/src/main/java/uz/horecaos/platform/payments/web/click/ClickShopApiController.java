@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.web.click;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -72,8 +73,8 @@ public class ClickShopApiController {
 
     private ClickShopApiResponse answer(String bindingRef, String action, Map<String, String> form) {
 
-        String clickTransId = form.get("click_trans_id");
-        String merchantTransId = form.get("merchant_trans_id");
+        @Nullable String clickTransId = form.get("click_trans_id");
+        @Nullable String merchantTransId = form.get("merchant_trans_id");
         boolean completing = ClickCallbackRequest.ACTION_COMPLETE.equals(action);
 
         ClickCallbackDecision decision;
@@ -101,8 +102,23 @@ public class ClickShopApiController {
                             clickTransId, merchantTransId, decision.merchantTransactionId(), decision.error());
         }
 
+        Integer merchantTransactionId = decision.merchantTransactionId();
+        if (merchantTransactionId == null) {
+            // ClickCallbackDecision's own contract pairs this with attemptId: both
+            // are null only when the request never got as far as naming an
+            // attempt, which is exactly what the !decision.successful() branch
+            // above already covers. Reaching here with none would be the
+            // processor answering success without minting the id Click needs
+            // echoed back — answered -7 so Click retries rather than risking an
+            // unboxing failure on a genuine processor bug.
+            log.error(
+                    "A Click {} succeeded but named no merchant transaction id; answering -7 so Click retries.",
+                    action);
+            return ClickShopApiResponse.failed(clickTransId, merchantTransId, ClickShopApiError.FAILED_TO_UPDATE_USER);
+        }
+
         return completing
-                ? ClickShopApiResponse.confirmed(clickTransId, merchantTransId, decision.merchantTransactionId())
-                : ClickShopApiResponse.prepared(clickTransId, merchantTransId, decision.merchantTransactionId());
+                ? ClickShopApiResponse.confirmed(clickTransId, merchantTransId, merchantTransactionId)
+                : ClickShopApiResponse.prepared(clickTransId, merchantTransId, merchantTransactionId);
     }
 }

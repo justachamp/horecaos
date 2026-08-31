@@ -14,6 +14,8 @@ package uz.horecaos.platform.telemetry.infrastructure.realtime;
 public interface StreamSink {
 
     /**
+     * Writes one frame.
+     *
      * @param eventName the SSE {@code event:} field — {@code signal},
      *                  {@code snapshot}, or {@code resync}
      * @param id        the SSE {@code id:} field, which a reconnecting client

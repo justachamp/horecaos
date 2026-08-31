@@ -393,6 +393,8 @@ public class JdbcAssignmentStore {
     // --------------------------------------------------------------- row types
 
     /**
+     * A new sourcing attempt to insert, internal offer or partner booking alike.
+     *
      * @param expiresAt required for an internal offer and null for a partner
      *                  attempt, which is {@code ck_attempt_offer_expires} stated
      *                  in Java's type system as far as it goes
@@ -413,6 +415,8 @@ public class JdbcAssignmentStore {
             Instant now) {}
 
     /**
+     * The attempt being promoted to the plan's winner, and the status it must still hold.
+     *
      * @param fromStatus the status the attempt must still be in. REQUESTED for a
      *                   partner booking, OFFERED for a courier taking an offer
      */

@@ -25,7 +25,7 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *                         rather than looked up, because the gate belongs on the
  *                         order and this module must not be the second place that
  *                         decides it
- * @param goodsSubtotal    the post-discount goods subtotal in minor units,
+ * @param goodsSubtotalMinor the post-discount goods subtotal in minor units,
  *                         excluding the delivery fee and any service charge.
  *                         Comparing a threshold against a total that includes the
  *                         fee makes the fee oscillate: adding it crosses the

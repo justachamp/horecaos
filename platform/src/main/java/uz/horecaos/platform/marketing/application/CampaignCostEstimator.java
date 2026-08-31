@@ -3,6 +3,7 @@ package uz.horecaos.platform.marketing.application;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.SmsSegments;
@@ -54,7 +55,7 @@ public class CampaignCostEstimator {
             MarketingChannel channel,
             Map<String, String> bodiesByLocale,
             Map<String, Integer> membersByLocale,
-            Long pricePerSegmentMinor,
+            @Nullable Long pricePerSegmentMinor,
             String currency) {
 
         if (!channel.carriesMarginalCost()) {
@@ -91,7 +92,8 @@ public class CampaignCostEstimator {
     }
 
     /** What one recipient's message costs, used to reserve a batch before sending it. */
-    public long perRecipientCostMinor(MarketingChannel channel, String body, Long pricePerSegmentMinor) {
+    public long perRecipientCostMinor(
+            MarketingChannel channel, @Nullable String body, @Nullable Long pricePerSegmentMinor) {
         if (!channel.carriesMarginalCost() || pricePerSegmentMinor == null || body == null) {
             return 0;
         }

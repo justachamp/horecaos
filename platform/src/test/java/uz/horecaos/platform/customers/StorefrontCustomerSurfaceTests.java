@@ -119,6 +119,9 @@ class StorefrontCustomerSurfaceTests {
      */
     private static final String OWNERS_STREET = "Chinobod ko'chasi 12A, kvartira 47";
 
+    // NullAway does not recognise @DynamicPropertySource as a field initializer the way
+    // it does @BeforeAll/@BeforeEach; `db` is always set there before any @Test method runs.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll

@@ -117,7 +117,7 @@ public record AuditFact(
             return this;
         }
 
-        public Builder because(String value) {
+        public Builder because(@Nullable String value) {
             this.reason = value;
             return this;
         }

@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 
 /**
@@ -20,9 +21,9 @@ public record NotificationSendOperation(
         Kind kind,
         UUID tenantId,
         UUID brandId,
-        UUID locationId,
+        @Nullable UUID locationId,
         String channel,
-        NotificationDispatch dispatch,
+        @Nullable NotificationDispatch dispatch,
         String providerIdempotencyKey) {
 
     public enum Kind {
@@ -58,7 +59,11 @@ public record NotificationSendOperation(
     }
 
     public static NotificationSendOperation queryStatus(
-            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey) {
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String providerIdempotencyKey) {
         return new NotificationSendOperation(
                 Kind.QUERY_STATUS, tenantId, brandId, locationId, channel, null, providerIdempotencyKey);
     }

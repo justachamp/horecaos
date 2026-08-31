@@ -29,10 +29,16 @@ public class JdbcTargetQuery implements TargetQuery {
 
     @Override
     public Optional<BigInteger> exactInteger(String sql, Map<String, Object> parameters) {
+        // The mapped column is a SQL aggregate and genuinely comes back NULL when
+        // nothing matched. The row mapper wraps that in an Optional itself, rather
+        // than returning a bare nullable value, so every element on the
+        // one-row-expected list stays non-null; DataAccessUtils#optionalResult
+        // still enforces at most one row and still turns zero rows into empty.
         return jdbc.sql(sql)
                 .params(parameters)
-                .query((row, number) -> exact(row.getObject(1)))
-                .optional();
+                .query((row, number) -> Optional.ofNullable(exact(row.getObject(1))))
+                .optional()
+                .orElse(Optional.empty());
     }
 
     @Override

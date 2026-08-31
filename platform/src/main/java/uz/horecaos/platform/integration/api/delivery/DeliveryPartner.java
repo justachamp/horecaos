@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -60,6 +61,9 @@ public interface DeliveryPartner {
     ProviderOutcome queryShipment(String externalReference, ProviderCall call);
 
     /**
+     * One provider-neutral delivery request, translated from the tenant's
+     * booking intent.
+     *
      * @param prepaid whether HorecaOS already took payment. Some partners will
      *                otherwise collect from the recipient, charging twice.
      * @param requestedPickupAt null for as-soon-as-possible
@@ -68,7 +72,7 @@ public interface DeliveryPartner {
             String horecaosReference,
             Pickup pickup,
             Dropoff dropoff,
-            Instant requestedPickupAt,
+            @Nullable Instant requestedPickupAt,
             boolean prepaid,
             long itemValueMinor,
             String currency,
@@ -92,9 +96,9 @@ public interface DeliveryPartner {
             double latitude,
             double longitude,
             String address,
-            String contactName,
-            String contactPhone,
-            String comment) {
+            @Nullable String contactName,
+            @Nullable String contactPhone,
+            @Nullable String comment) {
 
         /**
          * Every component here is personal data — a precise location is as
@@ -113,12 +117,12 @@ public interface DeliveryPartner {
             double latitude,
             double longitude,
             String address,
-            String contactName,
-            String contactPhone,
-            String comment,
-            String entrance,
-            String floor,
-            String apartment) {
+            @Nullable String contactName,
+            @Nullable String contactPhone,
+            @Nullable String comment,
+            @Nullable String entrance,
+            @Nullable String floor,
+            @Nullable String apartment) {
 
         /** As {@link Pickup#toString()}, and this one is the customer's home. */
         @Override

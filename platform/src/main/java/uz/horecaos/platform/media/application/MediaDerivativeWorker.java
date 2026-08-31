@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -154,7 +155,11 @@ public class MediaDerivativeWorker {
         renderOnce();
     }
 
-    /** @return how many jobs this poll claimed, which is not how many succeeded */
+    /**
+     * Claims and works one batch.
+     *
+     * @return how many jobs this poll claimed, which is not how many succeeded
+     */
     public int renderOnce() {
         if (!running.compareAndSet(false, true)) {
             return 0;
@@ -387,7 +392,7 @@ public class MediaDerivativeWorker {
                 errorCode);
     }
 
-    private void terminate(ClaimedJob job, String errorCode, Instant now, Throwable cause) {
+    private void terminate(ClaimedJob job, String errorCode, Instant now, @Nullable Throwable cause) {
         jobs.abandon(job.jobId(), job.leaseToken(), errorCode, now);
         abandoned.increment();
         // The cause is attached here and not on the retry path above, because

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +75,9 @@ public class ReservationService {
     }
 
     /**
+     * A booking request for one or more tables, held under one turnaround-widened
+     * exclusion window.
+     *
      * @param tableIds every table the party is booked onto. A booking for four
      *                 tables that can hold three holds none: the whole set is one
      *                 transaction, so the constraint that refuses the fourth rolls
@@ -83,11 +87,11 @@ public class ReservationService {
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String guestName,
             String guestPhone,
-            String secondaryPhone,
-            String note,
+            @Nullable String secondaryPhone,
+            @Nullable String note,
             int partySize,
             Instant requestedFrom,
             Instant requestedTo,
@@ -324,7 +328,8 @@ public class ReservationService {
                 .serialize();
     }
 
-    private String protectNullable(UUID tenantId, UUID reservationId, String column, String plaintext) {
+    private @Nullable String protectNullable(
+            UUID tenantId, UUID reservationId, String column, @Nullable String plaintext) {
         return plaintext == null || plaintext.isBlank() ? null : protect(tenantId, reservationId, column, plaintext);
     }
 

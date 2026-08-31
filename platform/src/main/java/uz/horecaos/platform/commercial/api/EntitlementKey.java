@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.api;
 
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A typed, code-owned entitlement definition (ADR 0021).
@@ -23,7 +24,7 @@ import java.util.Set;
 public record EntitlementKey<T>(
         String code,
         Class<T> valueType,
-        T safeDefault,
+        @Nullable T safeDefault,
         EnforcementMode defaultMode,
         ResetPeriod resetPeriod,
         String unit,
@@ -89,7 +90,7 @@ public record EntitlementKey<T>(
         private final String code;
         private final Class<T> valueType;
         private final String unit;
-        private T safeDefault;
+        private @Nullable T safeDefault;
         private ResetPeriod resetPeriod = ResetPeriod.NONE;
         private Set<String> allowedDimensions = Set.of();
         private String owningModule = "platform";

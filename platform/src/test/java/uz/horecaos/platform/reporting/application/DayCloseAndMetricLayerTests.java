@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.Clock;
 import java.time.Instant;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -596,7 +598,7 @@ class DayCloseAndMetricLayerTests {
     }
 
     private static UUID orderId(String seed) {
-        return UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
+        return UUID.nameUUIDFromBytes(("order:" + seed).getBytes(StandardCharsets.UTF_8));
     }
 
     private void insertOrder(
@@ -618,11 +620,11 @@ class DayCloseAndMetricLayerTests {
             Instant closedAt,
             long totalMinor,
             long discountMinor,
-            Instant promisedAt) {
+            @Nullable Instant promisedAt) {
 
         UUID orderId = orderId(seed);
-        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
-        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes());
+        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
         long subtotal = totalMinor + discountMinor;
 
         jdbc.sql("""
@@ -806,14 +808,14 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
                 """).param("id", CUSTOMER).param("t", TENANT).update();
 
-        channelId = UUID.nameUUIDFromBytes("channel".getBytes());
+        channelId = UUID.nameUUIDFromBytes("channel".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status, guest_orders_allowed)
                 VALUES (:id, :t, 'TELEGRAM', 'TELEGRAM', 'Telegram bot', 'ACTIVE', false)
                 """).param("id", channelId).param("t", TENANT).update();
 
-        UUID catalogId = UUID.nameUUIDFromBytes("catalog".getBytes());
+        UUID catalogId = UUID.nameUUIDFromBytes("catalog".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
@@ -823,7 +825,7 @@ class DayCloseAndMetricLayerTests {
                 .param("b", BRAND)
                 .update();
 
-        publicationId = UUID.nameUUIDFromBytes("publication".getBytes());
+        publicationId = UUID.nameUUIDFromBytes("publication".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
@@ -844,9 +846,9 @@ class DayCloseAndMetricLayerTests {
      * it beyond the intent's legal entity.
      */
     private void seedPaymentConfiguration() {
-        UUID installationId = UUID.nameUUIDFromBytes("installation".getBytes());
-        UUID bindingId = UUID.nameUUIDFromBytes("binding".getBytes());
-        merchantBindingId = UUID.nameUUIDFromBytes("merchant-binding".getBytes());
+        UUID installationId = UUID.nameUUIDFromBytes("installation".getBytes(StandardCharsets.UTF_8));
+        UUID bindingId = UUID.nameUUIDFromBytes("binding".getBytes(StandardCharsets.UTF_8));
+        merchantBindingId = UUID.nameUUIDFromBytes("merchant-binding".getBytes(StandardCharsets.UTF_8));
 
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (code, provider_category,
@@ -943,3 +945,4 @@ class DayCloseAndMetricLayerTests {
         }
     }
 }
+

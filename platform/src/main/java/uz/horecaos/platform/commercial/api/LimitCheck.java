@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.api;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One answered question about one tenant's entitlement (ADR 0021).
@@ -31,7 +32,7 @@ import java.util.UUID;
 public record LimitCheck(
         String entitlementKey,
         UUID tenantId,
-        Long limit,
+        @Nullable Long limit,
         long consumed,
         long requested,
         UsagePeriod period,
@@ -62,7 +63,7 @@ public record LimitCheck(
     }
 
     /** What is left before the limit, or null when unlimited. */
-    public Long remaining() {
+    public @Nullable Long remaining() {
         return limit == null ? null : Math.max(0, limit - consumed);
     }
 
@@ -74,11 +75,16 @@ public record LimitCheck(
      * so 21 extra locations at 250 000 is 5 250 000, and any code that divides
      * this by a hundred is wrong.
      */
-    public Long overageChargeMinor() {
+    public @Nullable Long overageChargeMinor() {
         if (overageQuantity == 0 || !value.billableOverage()) {
             return null;
         }
-        return Math.multiplyExact(overageQuantity, value.overageUnitPriceMinor());
+        // billableOverage() being true is exactly the invariant that guarantees
+        // a unit price is set; this makes that guarantee explicit rather than
+        // unboxing a value the checker cannot otherwise prove is present.
+        Long unitPriceMinor = Objects.requireNonNull(
+                value.overageUnitPriceMinor(), "A billable overage always carries a unit price");
+        return Math.multiplyExact(overageQuantity, unitPriceMinor);
     }
 
     /**

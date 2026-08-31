@@ -11,9 +11,11 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -264,13 +266,7 @@ class OrderAmendmentAndOutcomeTests {
         // meaningful if it reads the table the export actually writes, and a stub
         // here would reproduce exactly the failure this port was built to end.
         amendments = new OrderAmendmentService(
-                orderStore,
-                amendmentStore,
-                processStore,
-                auditRecorder,
-                objectMapper,
-                clock,
-                new JdbcPosExportStatus(jdbc));
+                orderStore, amendmentStore, auditRecorder, objectMapper, clock, new JdbcPosExportStatus(jdbc));
 
         var migrationOwnership = new MigrationOwnershipService(
                 new JdbcMigrationScopeStore(jdbc, objectMapper), new SimpleMeterRegistry());
@@ -306,7 +302,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("checkout writes revision 1, and it is the only CHECKOUT revision an order can have")
     void checkoutWritesRevisionOne() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         var revisions = orderQuery.revisions(TENANT, orderId);
         assertThat(revisions).hasSize(1);
@@ -339,7 +335,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("applying an amendment appends a revision and leaves the previous one untouched")
     void anAmendmentAppendsRatherThanEdits() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         var before = orderQuery.revisions(TENANT, orderId).getFirst();
 
         var result = amend("k-1", OrderAmendmentService.AmendmentCommand.kitchenNote("Без лука"));
@@ -386,7 +382,7 @@ class OrderAmendmentAndOutcomeTests {
     @DisplayName("an amendment cannot move the order total, so a settlement planned before it "
             + "still agrees with the order")
     void anAmendmentLeavesTheSettledTotalAlone() {
-        UUID orderId = placeOrder("idem-total").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-total"));
         long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
 
         amend("k-total-1", OrderAmendmentService.AmendmentCommand.kitchenNote("Острее"));
@@ -409,7 +405,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a second amendment loses the compare-and-set rather than producing a second revision")
     void twoAmendmentsOnOneOrderSettleAtOne() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         tx(() -> amendments.propose(
@@ -442,7 +438,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a version that moved between the read and the write loses, even at the same status")
     void anActionCannotSettleOnAVersionThatMovedUnderneathIt() {
-        UUID orderId = placeOrder("idem-race").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-race"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         OrderStateService racing = orderStateWith.apply(new AmendedMidFlightOrderStore(jdbc));
@@ -486,7 +482,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("one open amendment per order: the second operator is told who has it")
     void onlyOneAmendmentIsOpenAtATime() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         // Proposed without applying, so it stays open and holds the order.
@@ -522,7 +518,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an amendment past the quote TTL applies nothing")
     void anExpiredAmendmentAppliesNothing() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         var proposed = tx(() -> amendments.propose(
@@ -554,7 +550,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("the expiry sweep settles amendments nobody finished")
     void theSweepExpiresOverdueAmendments() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         tx(() -> amendments.propose(
@@ -583,7 +579,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an unbuilt command is refused by name and writes nothing")
     void anUnbuiltCommandIsRefused() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         assertThatThrownBy(() -> tx(() -> amendments.propose(
@@ -611,7 +607,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("change-due short of the total warns the operator rather than refusing the order")
     void changeDueShortOfTheTotalIsAWarning() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         long total = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
 
         var result = amend("k-1", OrderAmendmentService.AmendmentCommand.cashTendered(total - 1_000));
@@ -627,7 +623,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("the callback flag is raised and resolved by the same command, recording who cleared it")
     void theCallbackFlagRecordsWhoResolvedIt() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         amend("k-1", OrderAmendmentService.AmendmentCommand.callback(true));
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().callbackRequested())
@@ -647,7 +643,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a retried proposal replays rather than amending twice")
     void aRetriedProposalIsHarmless() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         tx(() -> amendments.propose(
@@ -666,7 +662,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an amendment never applies underneath an unacknowledged POS export")
     void aSentPosExportBlocksAmendment() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         // Written into integration.pos_order_exports, which is where the export
@@ -690,7 +686,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an uncertain POS export blocks an amendment too")
     void anUncertainPosExportBlocksAmendment() {
-        UUID orderId = placeOrder("idem-unc").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-unc"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         // The case most worth guarding. An export that may or may not have landed
@@ -708,7 +704,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an order no till ever received is still amendable")
     void anOrderWithNoPosExportIsAmendable() {
-        UUID orderId = placeOrder("idem-none").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-none"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         // A location with no till exports nothing, and that is the ordinary case
@@ -768,7 +764,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("the database refuses an applied increase the customer never agreed to")
     void anUnconfirmedIncreaseCannotBeStored() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         // Written by hand because no financial command exists to produce a
         // positive delta yet. The constraint is what has to hold when one does:
@@ -799,14 +795,14 @@ class OrderAmendmentAndOutcomeTests {
     void theThreeRefusalsAreDifferentFacts() {
         requireApproval();
 
-        UUID rejected = placeOrder("idem-1").orderId();
+        UUID rejected = orderIdOf(placeOrder("idem-1"));
         tx(() -> orderState.decide(TENANT, rejected, decision("d-1", OrderStateService.DecisionAction.REJECT)));
 
-        UUID expired = placeOrder("idem-2").orderId();
+        UUID expired = orderIdOf(placeOrder("idem-2"));
         clock.advance(Duration.ofMinutes(6));
         tx(() -> orderState.approvalDeadlineReached(TENANT, expired));
 
-        UUID cancelled = placeOrder("idem-3").orderId();
+        UUID cancelled = orderIdOf(placeOrder("idem-3"));
         int version = orderStore.find(TENANT, cancelled).orElseThrow().version();
         tx(() -> orderState.cancel(TENANT, cancelled, version, "CUSTOMER_CALLED", "USER", "sharif", null));
 
@@ -824,7 +820,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a completed order records how it was completed, not merely that it was")
     void completionRecordsHow() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         advance(orderId, OrderStatus.PREPARING);
         advance(orderId, OrderStatus.READY);
 
@@ -855,7 +851,7 @@ class OrderAmendmentAndOutcomeTests {
                         List.of(FulfillmentMode.DELIVERY),
                         texts("Доставлено"))));
 
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         advance(orderId, OrderStatus.PREPARING);
         advance(orderId, OrderStatus.READY);
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
@@ -874,7 +870,7 @@ class OrderAmendmentAndOutcomeTests {
         requireApproval();
         UUID writeOff = writeOffReason();
 
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         tx(() -> outcomes.cancel(
@@ -897,7 +893,7 @@ class OrderAmendmentAndOutcomeTests {
     void cancellationAfterCommitmentRecordsTheDisposition() {
         UUID writeOff = writeOffReason();
 
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
                 .as("this branch auto-confirms, so the hold has been committed")
                 .isEqualTo(OrderStatus.CONFIRMED);
@@ -929,7 +925,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("cancelling a confirmed order needs a reason; without one it is still refused")
     void confirmedCancellationWithoutAReasonIsRefused() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         assertThatThrownBy(
@@ -943,7 +939,7 @@ class OrderAmendmentAndOutcomeTests {
     @DisplayName("the cancellation event carries the category, disposition and liable party")
     void theCancellationEventCarriesTheOutcome() {
         UUID writeOff = writeOffReason();
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         tx(() -> outcomes.cancel(
@@ -969,7 +965,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("only one outcome can ever be recorded for one order")
     void anOrderHasExactlyOneOutcome() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
         tx(() -> outcomes.cancel(
                 TENANT,
@@ -1052,7 +1048,7 @@ class OrderAmendmentAndOutcomeTests {
         UUID reasonId = writeOffReason();
         tx(() -> reasons.archive(TENANT, reasonId, 1));
 
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         assertThatThrownBy(() -> tx(() -> outcomes.cancel(
@@ -1068,7 +1064,7 @@ class OrderAmendmentAndOutcomeTests {
     @DisplayName("renaming a reason does not rewrite an outcome already recorded under it")
     void theOutcomeSnapshotSurvivesARename() {
         UUID reasonId = writeOffReason();
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
         tx(() -> outcomes.cancel(
                 TENANT,
@@ -1105,7 +1101,7 @@ class OrderAmendmentAndOutcomeTests {
     @DisplayName("attribution records who entered the order and who accepted it, separately")
     void attributionSeparatesEnteringFromAccepting() {
         requireApproval();
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         var received = orderStore.find(TENANT, orderId).orElseThrow();
         assertThat(received.createdByActorType()).isEqualTo("CUSTOMER");
@@ -1124,7 +1120,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("the database refuses to rewrite who took an order")
     void attributionCannotBeRewritten() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         // A leaderboard a later action can rewrite measures nothing, so the rule
         // is enforced where a support "fix" cannot bypass it.
@@ -1140,7 +1136,7 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("an auto-confirmed order names the rule that accepted it rather than nobody")
     void anAutoConfirmedOrderNamesTheSystem() {
-        UUID orderId = placeOrder("idem-1").orderId();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
 
         var order = orderStore.find(TENANT, orderId).orElseThrow();
         assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
@@ -1188,6 +1184,15 @@ class OrderAmendmentAndOutcomeTests {
                 .cartId();
     }
 
+    /**
+     * The order id of a checkout that succeeded. {@code CheckoutResult.orderId}
+     * is null for a rejected or unavailable outcome (ADR 0019); every call site
+     * here is on the CREATED/REPLAYED path, where the order always exists.
+     */
+    private static UUID orderIdOf(CheckoutService.CheckoutResult result) {
+        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
+    }
+
     private CheckoutService.CheckoutResult placeOrder(String idempotencyKey) {
         UUID cart = openCart();
         tx(() -> carts.putLine(
@@ -1200,8 +1205,8 @@ class OrderAmendmentAndOutcomeTests {
                 BRAND,
                 cart,
                 row.version(),
-                row.pricingQuoteId(),
-                row.pricingContextHash(),
+                Objects.requireNonNull(row.pricingQuoteId(), "the fixture cart is always priced first"),
+                Objects.requireNonNull(row.pricingContextHash(), "the fixture cart is always priced first"),
                 idempotencyKey,
                 // Naming a method is a precondition of checkout now: an order that
                 // names none plans no settlement and can never be refunded.
@@ -1536,7 +1541,7 @@ class OrderAmendmentAndOutcomeTests {
     /** The unwired payments port, which is a stand-in in production too. */
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override
-        public UUID createIntent(
+        public @Nullable UUID createIntent(
                 UUID tenantId,
                 UUID orderId,
                 long amountMinor,

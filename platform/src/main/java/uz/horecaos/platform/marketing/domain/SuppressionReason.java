@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing.domain;
 
 import java.time.Duration;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Why a customer is suppressed, and for how long (ADR 0044).
@@ -32,9 +33,9 @@ public enum SuppressionReason {
      */
     PLATFORM_BLOCK(null);
 
-    private final Duration lifetime;
+    private final @Nullable Duration lifetime;
 
-    SuppressionReason(Duration lifetime) {
+    SuppressionReason(@Nullable Duration lifetime) {
         this.lifetime = lifetime;
     }
 

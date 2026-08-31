@@ -98,6 +98,9 @@ class CustomerSessionSurfaceTests {
 
     private static final String STAFF_SUBJECT = "staff-subject";
 
+    // NullAway does not recognise @DynamicPropertySource as a field initializer the way
+    // it does @BeforeAll/@BeforeEach; `db` is always set there before any @Test method runs.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll

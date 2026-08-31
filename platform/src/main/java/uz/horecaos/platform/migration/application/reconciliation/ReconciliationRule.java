@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.application.reconciliation;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
@@ -60,8 +61,8 @@ public interface ReconciliationRule {
     record RuleContext(
             UUID tenantId,
             UUID scopeId,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             String entityType,
             LegacyQuery legacy,
             TargetQuery target) {}

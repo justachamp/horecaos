@@ -3,6 +3,7 @@ package uz.horecaos.platform.marketing.api;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The seam between a campaign and the ADR 0020 delivery path.
@@ -38,7 +39,7 @@ public interface CampaignMessagePort {
      *         is not an error the caller retries: it is a deployment without
      *         notifications, and {@link #isWired} says so up front
      */
-    UUID enqueue(MarketingMessage message);
+    @Nullable UUID enqueue(MarketingMessage message);
 
     /**
      * The raw body template for each locale this campaign would send in.
@@ -93,7 +94,7 @@ public interface CampaignMessagePort {
             String idempotencyKey,
             Map<String, String> variables,
             Instant scheduledAt,
-            Instant expiresAt) {
+            @Nullable Instant expiresAt) {
 
         public MarketingMessage {
             variables = variables == null ? Map.of() : Map.copyOf(variables);

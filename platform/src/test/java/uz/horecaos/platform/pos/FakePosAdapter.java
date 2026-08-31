@@ -2,6 +2,7 @@ package uz.horecaos.platform.pos;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.Entry;
@@ -42,17 +44,21 @@ public final class FakePosAdapter implements PosAdapter {
 
     private final Map<String, String> ordersByCorrelation = new ConcurrentHashMap<>();
     private final AtomicInteger sideEffects = new AtomicInteger();
-    private final List<String> exportedCorrelations = new ArrayList<>();
 
-    private ProviderOutcome nextExportOutcome;
+    // Plain ArrayList, not List.copyOf below: OrderExport#correlationReference is
+    // @Nullable (the provider may silently drop the field), and both ArrayList and
+    // Collections.unmodifiableList tolerate that where List.copyOf would throw.
+    private final List<@Nullable String> exportedCorrelations = new ArrayList<>();
+
+    private @Nullable ProviderOutcome nextExportOutcome;
 
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {
         return sideEffects.get();
     }
 
-    public List<String> exportedCorrelations() {
-        return List.copyOf(exportedCorrelations);
+    public List<@Nullable String> exportedCorrelations() {
+        return Collections.unmodifiableList(new ArrayList<>(exportedCorrelations));
     }
 
     /** Makes the next export fail the way a real one does. */
@@ -136,14 +142,21 @@ public final class FakePosAdapter implements PosAdapter {
             return new ExportResult(scripted, null, false);
         }
         exportedCorrelations.add(order.correlationReference());
-        String external = ordersByCorrelation.computeIfAbsent(
-                order.correlationReference(), key -> "fake-order-" + sideEffects.incrementAndGet());
+        // ConcurrentHashMap refuses a null key outright, and a null correlation
+        // reference has no identity to deduplicate on anyway, so it always gets a
+        // fresh external id instead of going through the map.
+        String correlation = order.correlationReference();
+        String external = correlation == null
+                ? "fake-order-" + sideEffects.incrementAndGet()
+                : ordersByCorrelation.computeIfAbsent(
+                        correlation, key -> "fake-order-" + sideEffects.incrementAndGet());
         return new ExportResult(ProviderOutcome.success(Map.of(), external), external, false);
     }
 
     @Override
     public RecoveryRead findExportedOrder(PosContext context, ExportProbe probe) {
-        String external = ordersByCorrelation.get(probe.correlationReference());
+        String probeCorrelation = probe.correlationReference();
+        String external = probeCorrelation == null ? null : ordersByCorrelation.get(probeCorrelation);
         if (external == null) {
             return new RecoveryRead(ProviderOutcome.success(Map.of(), null), List.of());
         }

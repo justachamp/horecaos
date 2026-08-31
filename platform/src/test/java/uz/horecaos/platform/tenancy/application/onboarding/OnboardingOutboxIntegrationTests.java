@@ -247,7 +247,12 @@ class OnboardingOutboxIntegrationTests {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableTransactionManagement
+    // proxyTargetClass matches Spring Boot's production default (CGLIB): since
+    // JdbcOutboxStore gained the RelayStore interface, the bare annotation's
+    // JDK-proxy default satisfies only the interface, and this context injects
+    // the concrete class for append(), which the relay-facing interface
+    // deliberately does not carry.
+    @EnableTransactionManagement(proxyTargetClass = true)
     static class TestConfiguration {
 
         // Wired from the outer class's setUp(), before the context refreshes;

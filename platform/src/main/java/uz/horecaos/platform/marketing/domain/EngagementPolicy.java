@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Quiet hours and the frequency cap, resolved for one brand (ADR 0044).
@@ -28,8 +29,8 @@ public record EngagementPolicy(
         ZoneId timezone,
         int messagesPer7Days,
         int messagesPer30Days,
-        Long smsPricePerSegmentMinor,
-        String currency) {
+        @Nullable Long smsPricePerSegmentMinor,
+        @Nullable String currency) {
 
     /**
      * The morning boundary is later than a European default on purpose: a 09:00
@@ -143,11 +144,11 @@ public record EngagementPolicy(
 
     /** A tenant's requested override. Any null field means "leave the platform value". */
     public record EngagementOverride(
-            LocalTime quietHoursStart,
-            LocalTime quietHoursEnd,
-            ZoneId timezone,
-            Integer messagesPer7Days,
-            Integer messagesPer30Days,
-            Long smsPricePerSegmentMinor,
-            String currency) {}
+            @Nullable LocalTime quietHoursStart,
+            @Nullable LocalTime quietHoursEnd,
+            @Nullable ZoneId timezone,
+            @Nullable Integer messagesPer7Days,
+            @Nullable Integer messagesPer30Days,
+            @Nullable Long smsPricePerSegmentMinor,
+            @Nullable String currency) {}
 }

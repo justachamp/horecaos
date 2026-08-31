@@ -20,7 +20,11 @@ public record AvailabilityDecision(boolean available, List<Unavailable> unavaila
         return new AvailabilityDecision(false, List.copyOf(items));
     }
 
-    /** @param reason a stable code an operator UI can translate */
+    /**
+     * One item that keeps the cart from being fully available.
+     *
+     * @param reason a stable code an operator UI can translate
+     */
     public record Unavailable(UUID variantId, String reason) {
 
         public static Unavailable soldOut(UUID variantId) {

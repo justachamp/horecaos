@@ -214,7 +214,12 @@ public class CustomerSessionService {
     }
 
     private AuditFact fact(
-            String action, UUID tenantId, UUID brandId, UUID targetId, Map<String, Object> changes, Instant now) {
+            String action,
+            UUID tenantId,
+            @Nullable UUID brandId,
+            UUID targetId,
+            Map<String, Object> changes,
+            Instant now) {
 
         // A service actor, as on verification: there is no operator here, and
         // AuditFact demands a reason only of a USER actor.
@@ -232,6 +237,8 @@ public class CustomerSessionService {
     }
 
     /**
+     * A session freshly established.
+     *
      * @param token returned once, in the response that established it, and never
      *              again. There is no endpoint that reissues it: the customer
      *              proves their number again

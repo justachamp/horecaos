@@ -8,11 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,8 +42,8 @@ class DeliveryRouteTests {
     private static final UUID INSTALLATION = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
 
-    private CamelContext camel;
-    private RecordingReconciliationOutbox reconciliations;
+    private @Nullable CamelContext camel;
+    private @Nullable RecordingReconciliationOutbox reconciliations;
 
     @AfterEach
     void stopCamel() {
@@ -242,7 +244,7 @@ class DeliveryRouteTests {
         // learns it is unsettled; the difference is that the platform now owes
         // itself an answer and will go and get one.
         assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.UNCERTAIN);
-        assertThat(reconciliations.requested()).singleElement().satisfies(command -> {
+        assertThat(Objects.requireNonNull(reconciliations).requested()).singleElement().satisfies(command -> {
             assertThat(command.externalReference()).isEqualTo("ext-1");
             assertThat(command.capability()).isEqualTo("CREATE_ON_DEMAND_SHIPMENT");
             assertThat(command.uncertainErrorCode()).isEqualTo("READ_TIMEOUT");
@@ -262,7 +264,7 @@ class DeliveryRouteTests {
 
         // A query deferring a query would enqueue forever, and the loop would
         // look exactly like a partner outage while being self-inflicted.
-        assertThat(reconciliations.requested()).isEmpty();
+        assertThat(Objects.requireNonNull(reconciliations).requested()).isEmpty();
     }
 
     private List<ProviderOutcome> runMany(
@@ -278,11 +280,9 @@ class DeliveryRouteTests {
             SimpleMeterRegistry meters)
             throws Exception {
         DeliveryGateway gateway = new DeliveryGateway(partners, lookup(), fixedResolver());
+        reconciliations = new RecordingReconciliationOutbox();
         DeliveryProcessor processor = new DeliveryProcessor(
-                gateway,
-                new DeliveryCircuitBreakers(meters, Clock.systemUTC()),
-                meters,
-                reconciliations = new RecordingReconciliationOutbox());
+                gateway, new DeliveryCircuitBreakers(meters, Clock.systemUTC()), meters, reconciliations);
 
         camel = new DefaultCamelContext();
         camel.addRoutes(new DeliveryRouteBuilder(processor));
@@ -304,31 +304,31 @@ class DeliveryRouteTests {
     private ProviderOutcome run(ScriptedPartner partner, DeliveryOperation operation) throws Exception {
         DeliveryGateway gateway = new DeliveryGateway(List.of(partner), lookup(), fixedResolver());
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        reconciliations = new RecordingReconciliationOutbox();
         DeliveryProcessor processor = new DeliveryProcessor(
-                gateway,
-                new DeliveryCircuitBreakers(meters, Clock.systemUTC()),
-                meters,
-                reconciliations = new RecordingReconciliationOutbox());
+                gateway, new DeliveryCircuitBreakers(meters, Clock.systemUTC()), meters, reconciliations);
 
         camel = new DefaultCamelContext();
         camel.addRoutes(new DeliveryRouteBuilder(processor));
         camel.start();
 
         try (ProducerTemplate template = camel.createProducerTemplate()) {
-            return template.request(
-                            DeliveryRouteBuilder.OPERATION_ENDPOINT,
-                            exchange -> exchange.getIn().setBody(operation))
-                    .getIn()
-                    .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+            return Objects.requireNonNull(
+                    template.request(
+                                    DeliveryRouteBuilder.OPERATION_ENDPOINT,
+                                    exchange -> exchange.getIn().setBody(operation))
+                            .getIn()
+                            .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class),
+                    "The route did not set an outcome header");
         }
     }
 
-    private static DeliveryOperation operation(DeliveryCapability capability, String reference) {
+    private static DeliveryOperation operation(DeliveryCapability capability, @Nullable String reference) {
         return operationFor("scripted", capability, reference);
     }
 
     private static DeliveryOperation operationFor(
-            String providerType, DeliveryCapability capability, String reference) {
+            String providerType, DeliveryCapability capability, @Nullable String reference) {
         BindingRef binding = new BindingRef(
                 UUID.randomUUID(), INSTALLATION, TENANT, ProviderCategory.DELIVERY, providerType, BRAND, null);
         DeliveryPartner.DeliveryRequest request = new DeliveryPartner.DeliveryRequest(
@@ -365,12 +365,12 @@ class DeliveryRouteTests {
                 new SecretReference("local", SecretCategory.PROVIDER_DELIVERY, "tenant", "scripted");
         return new ProviderInstallationLookup() {
             @Override
-            public Optional<BindingRef> primaryBinding(UUID t, UUID b, UUID l, String code) {
+            public Optional<BindingRef> primaryBinding(UUID t, UUID b, @Nullable UUID l, String code) {
                 return Optional.empty();
             }
 
             @Override
-            public List<BindingRef> candidateBindings(UUID t, UUID b, UUID l, String code) {
+            public List<BindingRef> candidateBindings(UUID t, UUID b, @Nullable UUID l, String code) {
                 return List.of();
             }
 

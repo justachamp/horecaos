@@ -14,6 +14,7 @@ import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
+import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
@@ -116,12 +117,13 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             // ALREADY_ISSUED with certainty, because it never asked the provider.
             return Outcome.ALREADY_ISSUED;
         }
-        if (document.legalEntityId() == null) {
+        UUID legalEntityId = document.legalEntityId();
+        PaymentProviderType providerType = document.providerType();
+        if (legalEntityId == null || providerType == null) {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        Optional<ProviderBinding> binding =
-                bindings.resolve(tenantId, document.legalEntityId(), document.providerType(), LocalDate.now(clock));
+        Optional<ProviderBinding> binding = bindings.resolve(tenantId, legalEntityId, providerType, LocalDate.now(clock));
         if (binding.isEmpty() || !binding.get().supportsPartnerFiscalization()) {
             return Outcome.NO_PROVIDER_PATH;
         }

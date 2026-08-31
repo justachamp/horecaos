@@ -131,6 +131,8 @@ public class OperationsCourierPositionController {
     }
 
     /**
+     * A request to decrypt one courier's track over one window.
+     *
      * @param purpose why somebody is looking, in a sentence they can be held to.
      *                Not an enum: the reasons a track is opened are an open set —
      *                a customer says it never arrived, a courier disputes a

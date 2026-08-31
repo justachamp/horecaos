@@ -1,7 +1,11 @@
 package uz.horecaos.platform.telemetry.infrastructure.startup;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,8 +87,11 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
         }
 
         List<Verdict> verdicts = new ArrayList<>();
-        verdicts.add(TrackRetentionFloor.check(
-                "The code default", TelemetryConfigurationKeys.TRACK_RETENTION_DAYS.defaultValue(), period, dispute));
+        int codeDefault = Objects.requireNonNull(
+                TelemetryConfigurationKeys.TRACK_RETENTION_DAYS.defaultValue(),
+                "TRACK_RETENTION_DAYS declares no code default; the startup floor check has nothing "
+                        + "to check the default against");
+        verdicts.add(TrackRetentionFloor.check("The code default", codeDefault, period, dispute));
 
         for (StoredRetention stored : storedRetentions()) {
             verdicts.add(TrackRetentionFloor.check(stored.origin(), stored.days(), period, dispute));
@@ -145,23 +152,30 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
                  WHERE key_code = :keyCode
                 """)
                 .param("keyCode", TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE)
-                .query((resultSet, rowNumber) -> {
-                    if (resultSet.getBoolean("is_explicit_null")) {
-                        return null;
-                    }
-                    Long days = resultSet.getObject("integer_value", Long.class);
-                    if (days == null) {
-                        return null;
-                    }
-                    String scopeType = resultSet.getString("scope_type");
-                    Object tenantId = resultSet.getObject("tenant_id");
-                    return new StoredRetention(
-                            tenantId == null ? scopeType : scopeType + " " + tenantId, Math.toIntExact(days));
-                })
+                .query(TrackRetentionFloorCheck::readStoredRetention)
                 .list()
                 .stream()
-                .filter(stored -> stored != null)
+                .flatMap(Optional::stream)
                 .toList();
+    }
+
+    // Spring's RowMapper#mapRow itself may not return null, so a row with no
+    // explicit value, or an explicit null, maps to an empty Optional rather
+    // than to null — flattened away above, same effect as the filter it
+    // replaces.
+    private static Optional<StoredRetention> readStoredRetention(ResultSet resultSet, int rowNumber)
+            throws SQLException {
+        if (resultSet.getBoolean("is_explicit_null")) {
+            return Optional.empty();
+        }
+        Long days = resultSet.getObject("integer_value", Long.class);
+        if (days == null) {
+            return Optional.empty();
+        }
+        String scopeType = resultSet.getString("scope_type");
+        Object tenantId = resultSet.getObject("tenant_id");
+        return Optional.of(
+                new StoredRetention(tenantId == null ? scopeType : scopeType + " " + tenantId, Math.toIntExact(days)));
     }
 
     private record StoredRetention(String origin, int days) {}

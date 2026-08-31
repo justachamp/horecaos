@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.dinein.domain.BearerToken;
@@ -68,6 +69,9 @@ public class QrEntryService {
     }
 
     /**
+     * The result of a successful scan: a short-lived guest token and everything
+     * the storefront needs to render the table it points at.
+     *
      * @param guestToken returned once and never again. The client holds it for the
      *                   evening and presents it on every subsequent call
      */
@@ -80,7 +84,7 @@ public class QrEntryService {
             UUID locationId,
             UUID tableId,
             String tableCode,
-            UUID openSessionId) {}
+            @Nullable UUID openSessionId) {}
 
     /** What a resolved guest token is allowed to see, with no token in it. */
     public record GuestContext(

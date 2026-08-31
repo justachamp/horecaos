@@ -75,6 +75,8 @@ public record FieldAuthorityPolicy(int version, Map<String, FieldAuthority> byFi
     }
 
     /**
+     * Who owns the given field under this policy version.
+     *
      * @return {@link FieldAuthority#HORECAOS} for a field nobody assigned. The safe
      *         default: an unassigned field auto-applying is how a provider gains
      *         authority over something by the platform forgetting to name it

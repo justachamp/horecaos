@@ -2,7 +2,9 @@ package uz.horecaos.platform.integration.camel.payment;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.apache.camel.Exchange;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -130,7 +132,7 @@ public class PaymentProcessor {
         PaymentRouteBuilder.clearContext();
     }
 
-    private void count(String event, MerchantApiCall call, ProviderOutcome outcome) {
+    private void count(String event, MerchantApiCall call, @Nullable ProviderOutcome outcome) {
         // Bounded tags only. A tenant id or a merchant transaction id here would
         // make the cardinality unbounded and eventually take the registry down.
         meters.counter(
@@ -147,6 +149,10 @@ public class PaymentProcessor {
     }
 
     static MerchantApiCall call(Exchange exchange) {
-        return exchange.getIn().getBody(MerchantApiCall.class);
+        // Every step on this route runs after the route places a MerchantApiCall
+        // on the exchange body; a missing body is a route wiring defect, not a
+        // case any of these steps can recover from.
+        return Objects.requireNonNull(
+                exchange.getIn().getBody(MerchantApiCall.class), "No merchant API call on the exchange body");
     }
 }

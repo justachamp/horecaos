@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -1304,7 +1305,7 @@ class CourierCompensationTests {
                 "Ten consecutive on-time deliveries");
     }
 
-    private static RateComponent band(int from, Integer to, long perKmMinor) {
+    private static RateComponent band(int from, @Nullable Integer to, long perKmMinor) {
         return new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, from, perKmMinor, from, to, null);
     }
 

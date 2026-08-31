@@ -250,7 +250,13 @@ class IdempotentResponseClassificationTests {
 
     // ------------------------------------------------------------------- fixtures
 
-    @SuppressWarnings("unused")
+    // "unused": every method here exists only to be reflected on by signature()
+    // below (ResponseBodyProtection.classify/isScannable read the generic return
+    // type, never the value), so none is ever called.
+    // "NullAway": for the same reason, "return null" here is a stub body that is
+    // provably never executed rather than a real nullable contract; the six
+    // ResponseEntity<...> return types stay honestly non-null for reflection.
+    @SuppressWarnings({"unused", "NullAway"})
     private static final class Samples {
 
         ResponseEntity<SampleAddress> wrapped() {

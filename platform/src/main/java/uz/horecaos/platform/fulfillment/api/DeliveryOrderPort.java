@@ -44,6 +44,8 @@ public interface DeliveryOrderPort {
     Optional<DeliveryOrder> deliveryOrder(UUID tenantId, UUID orderId);
 
     /**
+     * One order's delivery-relevant facts, decrypted once for dispatch.
+     *
      * @param orderReference   the public order number. The only order identifier a
      *                         partner is ever given, because it is the one already
      *                         shouted across a counter

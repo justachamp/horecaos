@@ -36,6 +36,12 @@ public enum Grain {
         LEGAL_ENTITY
     }
 
+    // ImmutableEnumChecker judges by the field's declared type, which is the
+    // mutable List interface, and cannot see that the constructor stores an
+    // unmodifiable copy. List.copyOf below makes every instance genuinely
+    // immutable (mutation throws), and dimensions() hands the same reference
+    // out, so there is no path to shared mutable state for the check to catch.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final List<Dimension> dimensions;
 
     Grain(List<Dimension> dimensions) {
@@ -58,3 +64,4 @@ public enum Grain {
         return dimensions.contains(Dimension.LEGAL_ENTITY);
     }
 }
+

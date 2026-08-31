@@ -28,6 +28,8 @@ import java.util.UUID;
 public interface CourierProximityPort {
 
     /**
+     * How far each named courier currently is from one branch.
+     *
      * @param locationId the branch to measure from. Its published coordinate is
      *                   the one on {@code tenant.locations}, in clear because a
      *                   restaurant's address is advertised by the merchant

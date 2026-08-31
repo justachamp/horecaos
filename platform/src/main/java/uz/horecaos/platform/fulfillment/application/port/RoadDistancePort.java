@@ -24,6 +24,10 @@ public interface RoadDistancePort {
 
     Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId);
 
-    /** @param provider the adapter's own name, stored so a bad calibration can be traced to it */
+    /**
+     * A measured road distance in metres, attributed to the provider that answered.
+     *
+     * @param provider the adapter's own name, stored so a bad calibration can be traced to it
+     */
     record RoadDistance(int meters, String provider) {}
 }

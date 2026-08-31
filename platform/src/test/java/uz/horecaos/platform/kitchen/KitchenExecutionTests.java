@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -75,9 +77,6 @@ class KitchenExecutionTests {
     private static final Instant NOON = Instant.parse("2026-08-25T07:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcKitchenStore store;
@@ -122,9 +121,6 @@ class KitchenExecutionTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for kitchen execution tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -443,7 +439,9 @@ class KitchenExecutionTests {
                 new JdbcKitchenOrderSource(jdbc),
                 proposals,
                 audit,
-                Clock.fixed(ticket.releaseAt().plusSeconds(1), ZoneOffset.UTC));
+                // This order was seeded with a promise, so the ticket has a computed
+                // release time.
+                Clock.fixed(Objects.requireNonNull(ticket.releaseAt()).plusSeconds(1), ZoneOffset.UTC));
 
         assertThat(later.releaseDue(50)).isEqualTo(1);
         assertThat(later.releaseDue(50))
@@ -474,7 +472,9 @@ class KitchenExecutionTests {
         UUID orderId = seedConfirmedOrder("A-043", promisedAt, 25, 20, burger);
         TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
-        Instant tooLate = ticket.releaseAt().plus(Duration.ofMinutes(30));
+        // This order was seeded with a promise, so the ticket has a computed
+        // release time.
+        Instant tooLate = Objects.requireNonNull(ticket.releaseAt()).plus(Duration.ofMinutes(30));
 
         Throwable refused = catchThrowable(() -> tickets.reschedule(
                 TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, tooLate, false, "RUSH", "manager", null));
@@ -501,7 +501,9 @@ class KitchenExecutionTests {
         UUID orderId = seedConfirmedOrder("A-044", NOON.plus(Duration.ofHours(9)), 25, 20, burger);
         TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
-        Instant earlier = ticket.releaseAt().minus(Duration.ofMinutes(30));
+        // This order was seeded with a promise, so the ticket has a computed
+        // release time.
+        Instant earlier = Objects.requireNonNull(ticket.releaseAt()).minus(Duration.ofMinutes(30));
         TicketRow after = tickets.reschedule(
                 TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, earlier, false, null, "manager", null);
 
@@ -859,12 +861,14 @@ class KitchenExecutionTests {
                 .orElse(new Resolution(fallbackStation, RoutingLevel.FALLBACK));
     }
 
-    private void brandRule(UUID variantId, UUID productId, UUID categoryId, StationRole role) {
+    private void brandRule(
+            @Nullable UUID variantId, @Nullable UUID productId, @Nullable UUID categoryId, StationRole role) {
         stationService.route(new KitchenStationService.NewRoutingRule(
                 TENANT, BRAND, null, variantId, productId, categoryId, role, null));
     }
 
-    private void locationRule(UUID variantId, UUID productId, UUID categoryId, UUID stationId) {
+    private void locationRule(
+            @Nullable UUID variantId, @Nullable UUID productId, @Nullable UUID categoryId, UUID stationId) {
         stationService.route(new KitchenStationService.NewRoutingRule(
                 TENANT, BRAND, branch, variantId, productId, categoryId, null, stationId));
     }
@@ -1017,7 +1021,11 @@ class KitchenExecutionTests {
      * is its lines, its promise, and its status.
      */
     private UUID seedConfirmedOrder(
-            String number, Instant promisedAt, Integer prepMinutes, Integer travelMinutes, Catalogue... lines) {
+            String number,
+            @Nullable Instant promisedAt,
+            @Nullable Integer prepMinutes,
+            @Nullable Integer travelMinutes,
+            Catalogue... lines) {
 
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
@@ -1222,7 +1230,7 @@ class KitchenExecutionTests {
                 String reasonCode,
                 String actorType,
                 String actorId,
-                String correlationId) {
+                @Nullable String correlationId) {
             keys.add(idempotencyKey);
             proposed.computeIfAbsent(orderId, key -> new CopyOnWriteArrayList<>())
                     .add(progress);

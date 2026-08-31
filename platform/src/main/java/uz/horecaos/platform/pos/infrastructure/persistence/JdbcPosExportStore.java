@@ -358,7 +358,7 @@ public class JdbcPosExportStore {
                 .list();
     }
 
-    private static Instant toInstant(OffsetDateTime value) {
+    private static @Nullable Instant toInstant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -382,9 +382,14 @@ public class JdbcPosExportStore {
             UUID installationId,
             ExportState state,
             int attemptCount,
-            String correlationReference,
-            String externalOrderId,
-            String externalReceiptId,
+            // Schema-nullable (V0036): correlation_reference/external_order_id/
+            // external_receipt_id have no NOT NULL. The first is unset only if the
+            // provider silently drops the field (see the column comment); the other
+            // two are unset until the provider names its own order, which for most
+            // of an export's life it has not yet done.
+            @Nullable String correlationReference,
+            @Nullable String externalOrderId,
+            @Nullable String externalReceiptId,
             String lineFingerprint,
             String customerPhoneHash,
             String externalVenueReference,

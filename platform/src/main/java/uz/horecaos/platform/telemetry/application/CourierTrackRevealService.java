@@ -142,6 +142,9 @@ public class CourierTrackRevealService {
     }
 
     /**
+     * A request to decrypt one courier's track over one window, always for a
+     * recorded reason.
+     *
      * @param brandId  and {@code locationId} name the scope the capability was
      *                 checked at, so the audit entry records where the authority
      *                 came from and not only who used it

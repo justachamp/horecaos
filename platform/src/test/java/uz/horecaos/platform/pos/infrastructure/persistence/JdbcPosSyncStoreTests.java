@@ -54,9 +54,6 @@ class JdbcPosSyncStoreTests {
     private static final int OVER_ONE_CHUNK = 601;
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPosSyncStore store;
@@ -69,9 +66,6 @@ class JdbcPosSyncStoreTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -359,7 +353,7 @@ class JdbcPosSyncStoreTests {
             groups.add(new CatalogSnapshot.ModifierGroup(
                     "G-" + index, "P-" + index, "Group " + index, 0, 1, false, Map.of("id", index)));
             modifiers.add(new CatalogSnapshot.Modifier(
-                    "M-" + index, "G-" + index, "Modifier " + index, null, null, true, Map.of("id", index)));
+                    "M-" + index, "G-" + index, "Modifier " + index, null, "UZS", true, Map.of("id", index)));
             availability.add(new CatalogSnapshot.Availability(
                     "P-" + index, java.math.BigDecimal.valueOf(index), NOW, Map.of("id", index)));
         }

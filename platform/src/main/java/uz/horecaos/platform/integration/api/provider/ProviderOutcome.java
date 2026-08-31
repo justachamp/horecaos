@@ -50,7 +50,7 @@ public record ProviderOutcome(
         return new ProviderOutcome(Status.RETRYABLE, Map.of(), null, errorCode, detail, retryAfter);
     }
 
-    public static ProviderOutcome uncertain(String errorCode, String detail) {
+    public static ProviderOutcome uncertain(@Nullable String errorCode, String detail) {
         return new ProviderOutcome(Status.UNCERTAIN, Map.of(), null, errorCode, detail, null);
     }
 

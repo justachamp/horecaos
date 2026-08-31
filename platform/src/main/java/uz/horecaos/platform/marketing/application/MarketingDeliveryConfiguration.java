@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,7 +53,7 @@ public class MarketingDeliveryConfiguration {
         return new CampaignMessagePort() {
 
             @Override
-            public UUID enqueue(MarketingMessage message) {
+            public @Nullable UUID enqueue(MarketingMessage message) {
                 // Returning a fabricated id would be worse than returning none: a
                 // campaign report would follow it to a notifications module that
                 // has no such row, and the failure would surface far from its cause.

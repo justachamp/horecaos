@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -193,7 +194,7 @@ class RefundAndRemedyTests {
 
         RemedyOutcome outcome = refund(order, 100_000L, consoleRefund());
 
-        RemedyRow remedy = outcome.remedy();
+        RemedyRow remedy = Objects.requireNonNull(outcome.remedy(), "this refund needed no approval");
         assertThat(remedy.amountMinor()).isEqualTo(100_000L);
         assertThat(remedy.attestedMoneyMinor())
                 .as("the 96 000 that went back through the card is an assertion about a cabinet "
@@ -217,12 +218,14 @@ class RefundAndRemedyTests {
         UUID order = settledSplitOrder("A-2", 100_000L, 4_000L);
         Instant inTheCabinet = NOW.minus(Duration.ofMinutes(20));
 
-        RemedyRow remedy = refund(
-                        order,
-                        50_000L,
-                        new RefundEvidence(
-                                ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-88213", "cashier-7", inTheCabinet))
-                .remedy();
+        RemedyRow remedy = Objects.requireNonNull(
+                refund(
+                                order,
+                                50_000L,
+                                new RefundEvidence(
+                                        ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-88213", "cashier-7", inTheCabinet))
+                        .remedy(),
+                "this refund needed no approval");
 
         assertThat(remedy.verificationState())
                 .as("nothing in this build can corroborate it: ADR 0013's settlement import does "
@@ -271,8 +274,9 @@ class RefundAndRemedyTests {
         // Money first, points last: the money tender is exhausted by the first
         // call, so the second reaches only the points.
         refund(order, 96_000L, consoleRefund());
-        RemedyRow onlyPoints = refund(order, 4_000L, new RefundEvidence(null, null, null, null))
-                .remedy();
+        RemedyRow onlyPoints = Objects.requireNonNull(
+                refund(order, 4_000L, new RefundEvidence(null, null, null, null)).remedy(),
+                "this refund needed no approval");
 
         assertThat(onlyPoints.settlementBasis()).isEqualTo(SettlementBasis.PLATFORM_SETTLED);
         assertThat(onlyPoints.attestedMoneyMinor()).isZero();
@@ -286,7 +290,8 @@ class RefundAndRemedyTests {
     @DisplayName("the unverified worklist is the gap, and a verification takes a row off it")
     void unverifiedAttestationsAreQueryableAndDischargeable() {
         UUID order = settledSplitOrder("A-6", 100_000L, 4_000L);
-        RemedyRow remedy = refund(order, 96_000L, consoleRefund()).remedy();
+        RemedyRow remedy = Objects.requireNonNull(
+                refund(order, 96_000L, consoleRefund()).remedy(), "this refund needed no approval");
 
         assertThat(remedies.unverifiedAttestations(TENANT, Duration.ofHours(24), 50))
                 .as("recorded a moment ago, it has had no chance to appear in a settlement file")
@@ -476,10 +481,12 @@ class RefundAndRemedyTests {
         UUID order = settledSplitOrder("D-3", 100_000L, 4_000L);
         deliveryFees.fee = OptionalLong.empty();
 
-        RemedyRow remedy = transactions
-                .execute(status ->
-                        remedies.recordDeliveryFeeReimbursement(command(order, 8_000L, consoleRefund(), "k-fee")))
-                .remedy();
+        RemedyRow remedy = Objects.requireNonNull(
+                transactions
+                        .execute(status -> remedies.recordDeliveryFeeReimbursement(
+                                command(order, 8_000L, consoleRefund(), "k-fee")))
+                        .remedy(),
+                "this reimbursement needed no approval");
 
         assertThat(remedy.deliveryFeeBasisMinor())
                 .as("null is not zero: zero would mean free delivery, and this row means nobody "
@@ -497,7 +504,8 @@ class RefundAndRemedyTests {
     void aFutureDiscountIsNotMoney() {
         UUID order = settledSplitOrder("E-1", 100_000L, 4_000L);
 
-        RemedyRow remedy = grantThreeFreeDeliveries(order).remedy();
+        RemedyRow remedy = Objects.requireNonNull(
+                grantThreeFreeDeliveries(order).remedy(), "this grant needed no approval");
 
         assertThat(remedy.remedyType()).isEqualTo(RemedyType.FUTURE_DISCOUNT);
         assertThat(remedy.amountMinor()).isZero();
@@ -517,7 +525,9 @@ class RefundAndRemedyTests {
     void aRedemptionIsIdempotentPerOrder() {
         UUID granting = settledSplitOrder("E-2", 100_000L, 4_000L);
         UUID entitlementId =
-                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+                entitlementOf(Objects.requireNonNull(
+                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+                        .id());
         UUID next = order("E-3", 60_000L, 12_000L, customerId);
 
         RedemptionOutcome first = transactions.execute(status ->
@@ -540,7 +550,9 @@ class RefundAndRemedyTests {
     void anEntitlementIsExhaustedByItsGrantedUses() {
         UUID granting = settledSplitOrder("E-4", 100_000L, 4_000L);
         UUID entitlementId =
-                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+                entitlementOf(Objects.requireNonNull(
+                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+                        .id());
 
         for (int use = 1; use <= 3; use++) {
             UUID next = order("E-4-" + use, 60_000L, 12_000L, customerId);
@@ -570,7 +582,9 @@ class RefundAndRemedyTests {
     void theBoundsOfAGrantAreEnforcedWhereTheMoneyIsTaken() {
         UUID granting = settledSplitOrder("E-5", 100_000L, 4_000L);
         UUID entitlementId =
-                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+                entitlementOf(Objects.requireNonNull(
+                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+                        .id());
         UUID next = order("E-6", 60_000L, 12_000L, customerId);
 
         assertThat(transactions
@@ -756,7 +770,8 @@ class RefundAndRemedyTests {
         assertThat(outcome.recorded())
                 .as("the whole point: the customer's money can be given back")
                 .isTrue();
-        assertThat(outcome.remedy().attestedMoneyMinor()).isEqualTo(96_000L);
+        assertThat(Objects.requireNonNull(outcome.remedy(), "just asserted recorded()").attestedMoneyMinor())
+                .isEqualTo(96_000L);
         assertThat(points.reversed)
                 .as("and no points are returned, because they were already released; refunding "
                         + "them here would pay the customer twice for one leg")
@@ -833,8 +848,9 @@ class RefundAndRemedyTests {
                 .as("the apology an operator actually owes a customer whose free meal was cold "
                         + "costs the tenant nothing today and is not bounded by a tender")
                 .isTrue();
-        assertThat(goodwill.remedy().settlementBasis()).isEqualTo(SettlementBasis.NOT_MONEY);
-        assertThat(goodwill.remedy().amountMinor())
+        RemedyRow goodwillRemedy = Objects.requireNonNull(goodwill.remedy(), "just asserted recorded()");
+        assertThat(goodwillRemedy.settlementBasis()).isEqualTo(SettlementBasis.NOT_MONEY);
+        assertThat(goodwillRemedy.amountMinor())
                 .as("carrying no money columns at all, it cannot be summed into a refund figure "
                         + "by a query that forgot to filter")
                 .isZero();

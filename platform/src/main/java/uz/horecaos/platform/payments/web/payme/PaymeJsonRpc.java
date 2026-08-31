@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.web.payme;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeRpcException;
 
 /**
@@ -39,13 +40,13 @@ final class PaymeJsonRpc {
 
     private PaymeJsonRpc() {}
 
-    static Map<String, Object> success(Object requestId, Map<String, Object> result) {
+    static Map<String, Object> success(@Nullable Object requestId, Map<String, Object> result) {
         Map<String, Object> body = envelope(requestId);
         body.put("result", result);
         return body;
     }
 
-    static Map<String, Object> error(Object requestId, PaymeRpcException failure) {
+    static Map<String, Object> error(@Nullable Object requestId, PaymeRpcException failure) {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", failure.code());
         error.put("message", failure.localised().asMap());
@@ -60,7 +61,7 @@ final class PaymeJsonRpc {
         return body;
     }
 
-    private static Map<String, Object> envelope(Object requestId) {
+    private static Map<String, Object> envelope(@Nullable Object requestId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jsonrpc", VERSION);
         // Present even when null, because a response with no id member at all is a

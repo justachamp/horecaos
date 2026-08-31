@@ -104,7 +104,11 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("order_id", UUID.class),
                         row.getString("provider_type"),
                         requiredInstant(row, "submitted_at"),
-                        requiredInstant(row, "reporting_deadline_at"),
+                        // Nullable by design at claim time: ReportingDeadline.of's own
+                        // javadoc calls a null recorded deadline "the normal case today";
+                        // requireNonNull here failed every sweep over rows the payment
+                        // seam creates.
+                        instant(row, "reporting_deadline_at"),
                         row.getString("business_zone"),
                         row.getObject("version", Integer.class)))
                 .list();
@@ -652,7 +656,7 @@ public class JdbcFiscalLifecycleStore {
             UUID orderId,
             String providerType,
             Instant submittedAt,
-            Instant reportingDeadlineAt,
+            @Nullable Instant reportingDeadlineAt,
             String businessZone,
             int version) {}
 

@@ -190,6 +190,8 @@ public class CustomerController {
             boolean primary) {}
 
     /**
+     * A new address to add to the customer's book.
+     *
      * @param coordinateSource required rather than inferred from whether
      *                         coordinates arrived, because inferring it would
      *                         make "not geocoded yet" and "this address has no

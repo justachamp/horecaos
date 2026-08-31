@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -244,16 +245,16 @@ public class FailureOperationsService {
                         rs.getObject("aggregate_id", UUID.class),
                         rs.getString("correlation_id"),
                         rs.getString("causation_id"),
-                        instant(rs, "occurred_at"),
-                        instant(rs, "next_attempt_at"),
+                        requiredInstant(rs, "occurred_at"),
+                        requiredInstant(rs, "next_attempt_at"),
                         instant(rs, "dead_lettered_at"),
                         instant(rs, "published_at"),
                         instant(rs, "resolved_at"),
                         rs.getString("resolved_by"),
                         rs.getString("resolution_reason"),
                         rs.getString("resolution_evidence"),
-                        instant(rs, "created_at"),
-                        instant(rs, "updated_at")))
+                        requiredInstant(rs, "created_at"),
+                        requiredInstant(rs, "updated_at")))
                 .optional();
     }
 
@@ -303,22 +304,27 @@ public class FailureOperationsService {
                         rs.getString("correlation_id"),
                         rs.getString("causation_id"),
                         rs.getString("payload_sha256"),
-                        instant(rs, "occurred_at"),
-                        instant(rs, "received_at"),
-                        instant(rs, "available_at"),
+                        requiredInstant(rs, "occurred_at"),
+                        requiredInstant(rs, "received_at"),
+                        requiredInstant(rs, "available_at"),
                         instant(rs, "processed_at"),
                         instant(rs, "dead_lettered_at"),
                         instant(rs, "resolved_at"),
                         rs.getString("resolved_by"),
                         rs.getString("resolution_reason"),
                         rs.getString("resolution_evidence"),
-                        instant(rs, "updated_at")))
+                        requiredInstant(rs, "updated_at")))
                 .optional();
     }
 
-    private static Instant instant(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+    private static @Nullable Instant instant(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
         OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
+    }
+
+    /** For a column the schema declares {@code NOT NULL}; a null here is a corrupt row, not a valid state. */
+    private static Instant requiredInstant(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        return java.util.Objects.requireNonNull(instant(rs, column), () -> column + " is NOT NULL in the schema");
     }
 
     /**
@@ -400,7 +406,11 @@ public class FailureOperationsService {
      * declared fine.
      */
     public boolean resolveOutboxEvent(
-            UUID eventId, FailureCategory category, ActorRef actor, String reason, String evidenceReference) {
+            UUID eventId,
+            FailureCategory category,
+            ActorRef actor,
+            String reason,
+            @Nullable String evidenceReference) {
 
         requireResolutionInputs(category, reason, evidenceReference);
         return report(
@@ -408,7 +418,11 @@ public class FailureOperationsService {
     }
 
     private Resolution resolveOutboxWithin(
-            UUID eventId, FailureCategory category, ActorRef actor, String reason, String evidenceReference) {
+            UUID eventId,
+            FailureCategory category,
+            ActorRef actor,
+            String reason,
+            @Nullable String evidenceReference) {
 
         Optional<UUID> tenantId = outboxTenant(eventId);
         if (tenantId.isEmpty()) {
@@ -466,7 +480,7 @@ public class FailureOperationsService {
             FailureCategory category,
             ActorRef actor,
             String reason,
-            String evidenceReference) {
+            @Nullable String evidenceReference) {
 
         requireResolutionInputs(category, reason, evidenceReference);
         return report(unitOfWork.execute(
@@ -479,7 +493,7 @@ public class FailureOperationsService {
             FailureCategory category,
             ActorRef actor,
             String reason,
-            String evidenceReference) {
+            @Nullable String evidenceReference) {
 
         Optional<UUID> tenantId = inboxTenant(consumerName, eventId);
         if (tenantId.isEmpty()) {
@@ -549,7 +563,7 @@ public class FailureOperationsService {
      * @param awaiting non-null exactly when a second signature is needed and the
      *                 committed request is what the operator has to wait on
      */
-    private record Resolution(boolean changed, ApprovalOutcome awaiting) {
+    private record Resolution(boolean changed, @Nullable ApprovalOutcome awaiting) {
 
         static Resolution applied(boolean changed) {
             return new Resolution(changed, null);
@@ -564,7 +578,8 @@ public class FailureOperationsService {
         }
     }
 
-    private static void requireResolutionInputs(FailureCategory category, String reason, String evidenceReference) {
+    private static void requireResolutionInputs(
+            FailureCategory category, String reason, @Nullable String evidenceReference) {
 
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("Resolving a failure requires a reason");
@@ -648,7 +663,7 @@ public class FailureOperationsService {
         }
 
         /** The pending or declined request, when the outcome names one. */
-        public UUID approvalRequestId() {
+        public @Nullable UUID approvalRequestId() {
             return switch (outcome) {
                 case ApprovalOutcome.Pending pending -> pending.requestId();
                 case ApprovalOutcome.Declined declined -> declined.requestId();
@@ -774,9 +789,9 @@ public class FailureOperationsService {
             String causationId,
             Instant occurredAt,
             Instant nextAttemptAt,
-            Instant deadLetteredAt,
-            Instant publishedAt,
-            Instant resolvedAt,
+            @Nullable Instant deadLetteredAt,
+            @Nullable Instant publishedAt,
+            @Nullable Instant resolvedAt,
             String resolvedBy,
             String resolutionReason,
             String resolutionEvidence,
@@ -822,9 +837,9 @@ public class FailureOperationsService {
             Instant occurredAt,
             Instant receivedAt,
             Instant availableAt,
-            Instant processedAt,
-            Instant deadLetteredAt,
-            Instant resolvedAt,
+            @Nullable Instant processedAt,
+            @Nullable Instant deadLetteredAt,
+            @Nullable Instant resolvedAt,
             String resolvedBy,
             String resolutionReason,
             String resolutionEvidence,

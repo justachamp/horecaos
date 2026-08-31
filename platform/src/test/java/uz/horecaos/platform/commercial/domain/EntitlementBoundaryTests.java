@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -151,11 +153,15 @@ class EntitlementBoundaryTests {
                 BoundaryPolicy.overageQuantity(value, 41, 0));
 
         assertThat(check.overageQuantity()).isEqualTo(21);
-        assertThat(check.overageChargeMinor())
+        // SOFT mode with a real overage price makes this billable, so the charge
+        // is never null here; the assertion above already proves it, and this
+        // makes that guarantee explicit rather than unboxing blind.
+        long overageChargeMinor = Objects.requireNonNull(check.overageChargeMinor());
+        assertThat(overageChargeMinor)
                 .as("a minor unit of UZS is one whole som; dividing this by a hundred "
                         + "is the bug that shipped here once already")
                 .isEqualTo(5_250_000L);
-        assertThat(9_000_000L + check.overageChargeMinor()).isEqualTo(14_250_000L);
+        assertThat(9_000_000L + overageChargeMinor).isEqualTo(14_250_000L);
     }
 
     @Test
@@ -385,7 +391,10 @@ class EntitlementBoundaryTests {
     // ------------------------------------------------------------- fixtures
 
     private static EntitlementValue counted(
-            Long limit, EnforcementMode declared, EnforcementMode effective, Long overagePrice) {
+            @Nullable Long limit,
+            EnforcementMode declared,
+            EnforcementMode effective,
+            @Nullable Long overagePrice) {
         return new EntitlementValue(
                 ORDERS,
                 limit,

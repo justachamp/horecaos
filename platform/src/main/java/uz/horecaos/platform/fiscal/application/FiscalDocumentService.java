@@ -205,7 +205,7 @@ public class FiscalDocumentService {
             String idempotencyKey,
             ActorRef actor,
             String reason,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         FiscalDocumentRow document =
                 documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));
@@ -274,7 +274,12 @@ public class FiscalDocumentService {
      */
     @Transactional
     public boolean reopen(
-            UUID tenantId, UUID documentId, int expectedVersion, ActorRef actor, String reason, String correlationId) {
+            UUID tenantId,
+            UUID documentId,
+            int expectedVersion,
+            ActorRef actor,
+            String reason,
+            @Nullable String correlationId) {
 
         FiscalDocumentRow document =
                 documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));

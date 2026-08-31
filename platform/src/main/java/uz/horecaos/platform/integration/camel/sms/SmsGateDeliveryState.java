@@ -1,5 +1,7 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The per-message state {@code /search} reports, from
  * {@code docs/providers/sms-gateway-vas.md}.
@@ -50,7 +52,7 @@ enum SmsGateDeliveryState {
         this.failure = failure;
     }
 
-    static SmsGateDeliveryState of(Integer wireValue) {
+    static SmsGateDeliveryState of(@Nullable Integer wireValue) {
         if (wireValue == null) {
             return UNRECOGNISED;
         }

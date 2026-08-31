@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -167,7 +168,7 @@ public class OrderNotificationTrigger {
     }
 
     /** The rejection reason, as the stable code the event carries. */
-    private static Map<String, String> reasonVariables(String reasonCode) {
+    private static Map<String, String> reasonVariables(@Nullable String reasonCode) {
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("reasonCode", reasonCode == null ? "UNSPECIFIED" : reasonCode);
         return variables;
@@ -177,3 +178,4 @@ public class OrderNotificationTrigger {
         return objectMapper.writeValueAsString(variables);
     }
 }
+

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,8 @@ public class TableSessionService {
     }
 
     /**
+     * A request to seat a party at one or more tables, with or without a booking.
+     *
      * @param reservationId null for a walk-in, which is most covers. A reservation
      *                      and an occupancy are different facts, and this is the
      *                      column where they meet
@@ -82,7 +85,7 @@ public class TableSessionService {
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID reservationId,
+            @Nullable UUID reservationId,
             List<UUID> tableIds,
             Integer partySize,
             String currency,
@@ -289,7 +292,7 @@ public class TableSessionService {
             UUID sessionId,
             SessionStatus to,
             int expectedVersion,
-            String closeReasonCode,
+            @Nullable String closeReasonCode,
             String actorSubject,
             String reason) {
 

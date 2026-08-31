@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -81,7 +82,7 @@ public class AudienceService {
             UUID tenantId,
             UUID brandId,
             String name,
-            String description,
+            @Nullable String description,
             List<AudiencePredicate> predicates,
             UUID authorId,
             String correlationId) {
@@ -295,5 +296,6 @@ public class AudienceService {
     }
 
     /** What a build produced, before any campaign is attached to it. */
-    public record SnapshotResult(UUID snapshotId, int candidateCount, int memberCount, Instant metricWatermarkAt) {}
+    public record SnapshotResult(
+            UUID snapshotId, int candidateCount, int memberCount, @Nullable Instant metricWatermarkAt) {}
 }

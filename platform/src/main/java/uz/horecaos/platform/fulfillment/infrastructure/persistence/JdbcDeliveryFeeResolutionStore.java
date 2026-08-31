@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -184,11 +185,11 @@ public class JdbcDeliveryFeeResolutionStore {
         return java.util.Arrays.stream(elements).map(UUID.class::cast).toList();
     }
 
-    private static String name(DistanceMode mode) {
+    private static @Nullable String name(@Nullable DistanceMode mode) {
         return mode == null ? null : mode.name();
     }
 
-    private static String name(DistanceSource source) {
+    private static @Nullable String name(@Nullable DistanceSource source) {
         return source == null ? null : source.name();
     }
 }

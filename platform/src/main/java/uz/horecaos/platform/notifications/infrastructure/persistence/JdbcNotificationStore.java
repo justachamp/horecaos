@@ -543,7 +543,7 @@ public class JdbcNotificationStore {
             UUID attemptId,
             String providerEventId,
             String normalizedStatus,
-            String providerStatus,
+            @Nullable String providerStatus,
             Instant occurredAt,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
@@ -641,7 +641,7 @@ public class JdbcNotificationStore {
     public void upsertPreference(
             UUID tenantId,
             UUID accountId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String notificationClass,
             String channel,
             boolean enabled,
@@ -721,15 +721,15 @@ public class JdbcNotificationStore {
                 row.getString("variables"),
                 row.getString("variables_hash"),
                 row.getString("rendered_content_hash"),
-                instant(row.getObject("scheduled_at", OffsetDateTime.class)),
+                requireInstant(row.getObject("scheduled_at", OffsetDateTime.class)),
                 instant(row.getObject("expires_at", OffsetDateTime.class)),
                 row.getInt("attempt_count"),
-                instant(row.getObject("next_attempt_at", OffsetDateTime.class)),
+                requireInstant(row.getObject("next_attempt_at", OffsetDateTime.class)),
                 row.getObject("claim_token", UUID.class),
                 instant(row.getObject("terminal_at", OffsetDateTime.class)),
                 row.getString("last_error"),
                 row.getInt("version"),
-                instant(row.getObject("created_at", OffsetDateTime.class)));
+                requireInstant(row.getObject("created_at", OffsetDateTime.class)));
     }
 
     private static AttemptRow attemptRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
@@ -745,7 +745,7 @@ public class JdbcNotificationStore {
                 row.getString("external_message_id"),
                 row.getString("failure_code"),
                 row.getBoolean("uncertain_outcome"),
-                instant(row.getObject("requested_at", OffsetDateTime.class)),
+                requireInstant(row.getObject("requested_at", OffsetDateTime.class)),
                 instant(row.getObject("acknowledged_at", OffsetDateTime.class)));
     }
 
@@ -766,6 +766,16 @@ public class JdbcNotificationStore {
         return value == null ? null : value.toInstant();
     }
 
+    /**
+     * Converts a column the schema declares {@code NOT NULL}. {@link
+     * java.sql.ResultSet#getObject} is typed nullable regardless of the column
+     * constraint, so this asserts the invariant instead of silently widening every
+     * caller's return type to {@code @Nullable}.
+     */
+    private static Instant requireInstant(@Nullable OffsetDateTime value) {
+        return java.util.Objects.requireNonNull(value, "NOT NULL column returned null").toInstant();
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
@@ -783,13 +793,13 @@ public class JdbcNotificationStore {
             UUID notificationId,
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String notificationClass,
             String channel,
             String templateKey,
             String subjectType,
             UUID subjectId,
-            UUID recipientAccountId,
+            @Nullable UUID recipientAccountId,
             UUID triggerEventId,
             String idempotencyKey,
             String triggerVariablesJson,
@@ -874,3 +884,4 @@ public class JdbcNotificationStore {
             String timezone,
             int version) {}
 }
+

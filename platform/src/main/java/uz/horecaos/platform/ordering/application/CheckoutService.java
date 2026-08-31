@@ -14,10 +14,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -265,6 +267,7 @@ public class CheckoutService {
         // The quote must be the one bound to this cart. A client naming any quote
         // id could otherwise name one priced for a different, cheaper basket.
         if (cart.pricingQuoteId() == null
+                || cart.pricingContextHash() == null
                 || !cart.pricingQuoteId().equals(command.quoteId())
                 || !cart.pricingContextHash().equals(command.contextHash())) {
             return settle(
@@ -295,7 +298,15 @@ public class CheckoutService {
                 cart.fulfillmentMode(),
                 now);
         if (!decision.available()) {
-            return settle(attemptId, null, "NOT_SERVICEABLE", decision.reason().name(), now);
+            // Serviceability's own compact constructor guarantees a reason whenever
+            // it is unavailable; NullAway cannot see that cross-field invariant.
+            return settle(
+                    attemptId,
+                    null,
+                    "NOT_SERVICEABLE",
+                    Objects.requireNonNull(decision.reason(), "An unavailable location must say why")
+                            .name(),
+                    now);
         }
 
         // Where it is going, for an order that is going anywhere (ADR 0014, ADR
@@ -345,12 +356,16 @@ public class CheckoutService {
         // merchant account behind it is refused here rather than at the payment
         // step, because the alternative is an order that has taken a kitchen slot
         // and a quote and can never be paid.
-        if (!payments.canAcceptPayment(command.tenantId(), cart.locationId(), command.paymentMethodCode())) {
+        // namesAPaymentMethod(command) above already required a non-blank method;
+        // NullAway cannot see that guarantee across the helper call.
+        String paymentMethodCode =
+                Objects.requireNonNull(command.paymentMethodCode(), "namesAPaymentMethod already required one");
+        if (!payments.canAcceptPayment(command.tenantId(), cart.locationId(), paymentMethodCode)) {
             return settle(
                     attemptId,
                     null,
                     "PAYMENT_METHOD_UNAVAILABLE",
-                    "This location cannot take " + command.paymentMethodCode(),
+                    "This location cannot take " + paymentMethodCode,
                     now);
         }
 
@@ -466,7 +481,7 @@ public class CheckoutService {
         // 6. The order, and everything it must remember for ever.
         var policy = acceptancePolicies.resolve(command.tenantId(), command.brandId(), cart.locationId());
         boolean approvalRequired = policy.policy().mode() == AcceptanceMode.RESTAURANT_APPROVAL;
-        Instant approvalDeadline = approvalRequired ? now.plus(policy.policy().approvalTimeout()) : null;
+        @Nullable Instant approvalDeadline = approvalRequired ? now.plus(policy.policy().approvalTimeout()) : null;
 
         String publicNumber = allocateNumber(command.tenantId(), cart.locationId(), now);
         OrderPromise promise = promise(command, cart, quantities.keySet(), decision, now);
@@ -476,7 +491,7 @@ public class CheckoutService {
         // the answer is ADR 0013's capture timing for the channel's method, and
         // ordering owning a copy of that table is how the two drift apart.
         boolean paymentFirst =
-                payments.paymentRequiredBeforeConfirmation(command.tenantId(), orderId, command.paymentMethodCode());
+                payments.paymentRequiredBeforeConfirmation(command.tenantId(), orderId, paymentMethodCode);
 
         orders.insertOrder(new JdbcOrderStore.NewOrder(
                 orderId,
@@ -608,7 +623,7 @@ public class CheckoutService {
                         cart.customerAccountId(),
                         quote.currency(),
                         quote.totalMinor(),
-                        command.paymentMethodCode(),
+                        paymentMethodCode,
                         command.redeemFromBalanceMinor(),
                         command.idempotencyKey(),
                         command.actorId()));
@@ -622,7 +637,7 @@ public class CheckoutService {
                 orderId,
                 amountDueMinor(orderId, command, quote, settlement),
                 quote.currency(),
-                command.paymentMethodCode(),
+                paymentMethodCode,
                 command.idempotencyKey());
         if (paymentFirst && intentId == null) {
             // An order that may not be confirmed until it is paid, and nothing to
@@ -654,7 +669,15 @@ public class CheckoutService {
         if (paymentFirst) {
             finalStatus = awaitPayment(command, orderId, now);
         } else if (approvalRequired) {
-            finalStatus = awaitApproval(command, cart, orderId, policy.policy(), approvalDeadline, now);
+            // approvalRequired is exactly the condition that set approvalDeadline
+            // above; NullAway cannot correlate the two across the branch.
+            finalStatus = awaitApproval(
+                    command,
+                    cart,
+                    orderId,
+                    policy.policy(),
+                    Objects.requireNonNull(approvalDeadline, "restaurant approval requires a deadline"),
+                    now);
         } else {
             finalStatus = confirmImmediately(command, cart, orderId, policy.policy(), quote, now);
         }
@@ -1021,7 +1044,8 @@ public class CheckoutService {
         return objectMapper.writeValueAsString(captured.destination());
     }
 
-    private String protect(UUID tenantId, UUID orderId, String column, String plaintext) {
+    private @Nullable String protect(
+            UUID tenantId, UUID orderId, String column, @Nullable String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
             return null;
         }
@@ -1043,11 +1067,16 @@ public class CheckoutService {
      * person's words; copying the cart's ciphertext into an order line would
      * produce a note nobody could ever read again.
      */
-    private String reEncryptNote(UUID tenantId, CartLineRow cartLine, UUID orderLineId) {
+    private @Nullable String reEncryptNote(
+            UUID tenantId, @Nullable CartLineRow cartLine, UUID orderLineId) {
         if (cartLine == null || cartLine.customerNoteEncrypted() == null) {
             return null;
         }
-        String note = cartService.revealNote(tenantId, cartLine, "ORDER_SNAPSHOT");
+        // revealNote's own null branch is exactly the customerNoteEncrypted()
+        // check just above, so a non-null encrypted note always reveals as one;
+        // NullAway cannot see that guarantee across the method call.
+        String note = Objects.requireNonNull(
+                cartService.revealNote(tenantId, cartLine, "ORDER_SNAPSHOT"), "an encrypted note must reveal");
         return protection
                 .protect(
                         tenantId,
@@ -1059,13 +1088,6 @@ public class CheckoutService {
 
     // ------------------------------------------------------------- helpers
 
-    /**
-     * The human-facing number: the branch's local date and a counter that resets
-     * with it.
-     *
-     * <p>Local rather than UTC, because a UTC date rolls over at 05:00 in Tashkent
-     * and would split one evening's service across two numbering days.
-     */
     /**
      * The promised time, decided here and never again (ADR 0036).
      *
@@ -1096,6 +1118,13 @@ public class CheckoutService {
         return OrderPromise.assemble(now, decision.preparationMinutes(), slowestItem, null);
     }
 
+    /**
+     * The human-facing number: the branch's local date and a counter that resets
+     * with it.
+     *
+     * <p>Local rather than UTC, because a UTC date rolls over at 05:00 in Tashkent
+     * and would split one evening's service across two numbering days.
+     */
     private String allocateNumber(UUID tenantId, UUID locationId, Instant now) {
         ZoneId zone = tenancy.timezoneOf(tenantId, locationId)
                 .orElseThrow(() -> new IllegalStateException("Location " + locationId + " has no timezone"));
@@ -1113,7 +1142,8 @@ public class CheckoutService {
         return quantities;
     }
 
-    private CheckoutResult settle(UUID attemptId, UUID orderId, String code, String detail, Instant now) {
+    private CheckoutResult settle(
+            UUID attemptId, @Nullable UUID orderId, String code, String detail, Instant now) {
         attempts.complete(attemptId, orderId, code, detail, now);
         return CheckoutResult.rejected(code, detail, warnings());
     }
@@ -1303,11 +1333,11 @@ public class CheckoutService {
             UUID quoteId,
             String contextHash,
             String idempotencyKey,
-            String paymentMethodCode,
+            @Nullable String paymentMethodCode,
             long redeemFromBalanceMinor,
             String actorType,
-            String actorId,
-            String correlationId) {
+            @Nullable String actorId,
+            @Nullable String correlationId) {
 
         /**
          * Everything that makes this request the request it is.
@@ -1343,6 +1373,8 @@ public class CheckoutService {
     }
 
     /**
+     * The one answer a checkout attempt settles to, whichever way it went.
+     *
      * @param outcome    CREATED on the first success, REPLAYED when an earlier
      *                   identical request had already created it, REJECTED for a
      *                   settled business refusal
@@ -1352,12 +1384,12 @@ public class CheckoutService {
      */
     public record CheckoutResult(
             Outcome outcome,
-            UUID orderId,
-            String publicOrderNumber,
-            OrderStatus status,
+            @Nullable UUID orderId,
+            @Nullable String publicOrderNumber,
+            @Nullable OrderStatus status,
             int orderVersion,
-            String rejectionCode,
-            String rejectionDetail,
+            @Nullable String rejectionCode,
+            @Nullable String rejectionDetail,
             List<AvailabilityDecision.Unavailable> unavailableItems,
             List<String> warnings) {
 

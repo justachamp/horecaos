@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -189,7 +190,7 @@ public class QrEntryController {
             UUID brandId,
             UUID locationId,
             String tableCode,
-            UUID openSessionId) {}
+            @Nullable UUID openSessionId) {}
 
     record GuestBillResponse(
             UUID sessionId, String status, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {}

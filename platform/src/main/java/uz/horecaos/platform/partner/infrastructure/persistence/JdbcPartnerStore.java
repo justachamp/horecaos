@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.partner.domain.HandoverChallengeStatus;
@@ -182,7 +183,8 @@ public class JdbcPartnerStore {
         insertPush(push, "REJECTED", code.name(), null);
     }
 
-    private void insertPush(InboundPush push, String outcome, String rejectionCode, UUID orderId) {
+    private void insertPush(
+            InboundPush push, String outcome, @Nullable String rejectionCode, @Nullable UUID orderId) {
         Map<String, Object> row = new HashMap<>();
         row.put("id", UUID.randomUUID());
         row.put("tenantId", push.tenantId());
@@ -376,7 +378,7 @@ public class JdbcPartnerStore {
             UUID challengeId,
             HandoverChallengeStatus status,
             String verifiedBy,
-            String bypassReasonCode,
+            @Nullable String bypassReasonCode,
             Instant at) {
 
         Map<String, Object> row = new HashMap<>();
@@ -606,7 +608,7 @@ public class JdbcPartnerStore {
                 .list();
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -627,7 +629,7 @@ public class JdbcPartnerStore {
             String externalOrderId,
             String encryptedPayload,
             String payloadSha256,
-            Instant pickupExpectedAt,
+            @Nullable Instant pickupExpectedAt,
             Instant receivedAt) {}
 
     public record ReferenceMatch(
@@ -658,7 +660,7 @@ public class JdbcPartnerStore {
             UUID installationId,
             String clientId,
             PartnerClientStatus status,
-            Instant secretExpiresAt) {}
+            @Nullable Instant secretExpiresAt) {}
 
     public record StagedOutcome(String outcome, String rejectionCode, UUID orderId) {
 
@@ -672,12 +674,12 @@ public class JdbcPartnerStore {
             UUID locationId,
             String direction,
             String providerName,
-            Instant lastSuccessAt,
-            String lastSuccessReference,
-            Instant lastFailureAt,
-            String lastFailureCode,
+            @Nullable Instant lastSuccessAt,
+            @Nullable String lastSuccessReference,
+            @Nullable Instant lastFailureAt,
+            @Nullable String lastFailureCode,
             int staleAfterSeconds,
-            Integer observedMedianIntervalSeconds,
+            @Nullable Integer observedMedianIntervalSeconds,
             String alertState,
-            Long silenceSeconds) {}
+            @Nullable Long silenceSeconds) {}
 }

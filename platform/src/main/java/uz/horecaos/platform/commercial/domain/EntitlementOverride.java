@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 
 /**
@@ -15,9 +16,9 @@ import uz.horecaos.platform.commercial.api.EnforcementMode;
  */
 public record EntitlementOverride(
         String entitlementKey,
-        Long integerValue,
-        Boolean booleanValue,
-        EnforcementMode enforcementMode,
+        @Nullable Long integerValue,
+        @Nullable Boolean booleanValue,
+        @Nullable EnforcementMode enforcementMode,
         Instant validFrom,
         Instant validUntil) {
 

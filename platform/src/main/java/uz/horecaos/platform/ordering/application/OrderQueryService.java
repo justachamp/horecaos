@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -190,7 +191,10 @@ public class OrderQueryService {
                 .filter(row -> row.contactEncrypted() != null)
                 .map(row -> protection.reveal(
                         tenantId,
-                        ProtectedValue.deserialize(row.contactEncrypted()),
+                        // The filter above already required this non-null; NullAway
+                        // cannot see that guarantee across the two lambdas.
+                        ProtectedValue.deserialize(
+                                Objects.requireNonNull(row.contactEncrypted(), "filtered for non-null above")),
                         new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_CONTACT_COLUMN, orderId),
                         purpose));
     }
@@ -246,7 +250,10 @@ public class OrderQueryService {
      */
     @Transactional(readOnly = true)
     public Optional<OrderDetail> detailForCustomer(
-            UUID tenantId, UUID orderId, UUID customerAccountId, String guestReferenceHash) {
+            UUID tenantId,
+            UUID orderId,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash) {
         return detail(tenantId, orderId).filter(found -> {
             OrderRow order = found.order();
             if (customerAccountId != null) {

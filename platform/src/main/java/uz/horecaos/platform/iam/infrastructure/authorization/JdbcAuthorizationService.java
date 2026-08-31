@@ -7,6 +7,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -166,7 +167,7 @@ public class JdbcAuthorizationService implements AuthorizationService {
      * is called by grant management and by the ADR 0032 grants-changed event.
      */
     @Cacheable(cacheNames = "iam.grants", key = "#subject + '|' + #tenantId", sync = true)
-    public List<GrantRow> grantsFor(String subject, UUID tenantId) {
+    public List<GrantRow> grantsFor(String subject, @Nullable UUID tenantId) {
         return jdbc.sql(SELECT_GRANTS)
                 .param("subject", subject)
                 .param("tenantId", tenantId)
@@ -211,7 +212,7 @@ public class JdbcAuthorizationService implements AuthorizationService {
 
     /** Drops a principal's cached grants immediately after a change. */
     @CacheEvict(cacheNames = "iam.grants", key = "#subject + '|' + #tenantId")
-    public void evictGrants(String subject, UUID tenantId) {
+    public void evictGrants(String subject, @Nullable UUID tenantId) {
         // The annotation performs the eviction; the method body is the seam.
     }
 

@@ -821,7 +821,7 @@ public class KitchenTicketService {
             String reasonCode,
             Map<String, Object> changed,
             AuditFact.Outcome outcome,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -838,6 +838,8 @@ public class KitchenTicketService {
     }
 
     /**
+     * The result of a state-transition command against one ticket item.
+     *
      * @param applied whether this caller's command is the one that moved the item.
      *                False is a settled outcome, not a failure
      */

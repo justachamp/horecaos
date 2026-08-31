@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -309,7 +310,7 @@ class LegalEntityAssignmentTests {
     }
 
     /** Straight to SQL, because what is being asserted is the constraint and not the service. */
-    private void insertAssignment(UUID locationId, UUID entityId, LocalDate from, LocalDate until) {
+    private void insertAssignment(UUID locationId, UUID entityId, LocalDate from, @Nullable LocalDate until) {
         jdbc.sql("""
                 INSERT INTO tenant.location_fiscal_assignments (id, tenant_id, brand_id,
                     location_id, legal_entity_id, effective_from, effective_until, approved_by)

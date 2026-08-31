@@ -76,7 +76,6 @@ public class JdbcDeliveryTariffStore {
                 .optional();
     }
 
-    /** The live version of a tariff, with its bands and time rules. */
     /**
      * Whether this tariff belongs to this brand.
      *
@@ -100,6 +99,7 @@ public class JdbcDeliveryTariffStore {
                 .isPresent();
     }
 
+    /** The live version of a tariff, with its bands and time rules. */
     public Optional<DeliveryTariff> loadActive(UUID tenantId, UUID tariffId) {
         return load(tenantId, tariffId, null);
     }

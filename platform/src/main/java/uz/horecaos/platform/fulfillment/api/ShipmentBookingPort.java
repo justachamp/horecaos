@@ -183,6 +183,8 @@ public interface ShipmentBookingPort {
      *                   charges the customer twice
      * @param itemValueMinor integer minor units — whole som for UZS. The goods
      *                   value the courier is carrying, not the delivery fee
+     * @param requestedPickupAt required for {@link BookingIntent#BOOK_FOR_PICKUP_WINDOW},
+     *                   null for a booking made now
      */
     record BookingCommand(
             UUID commandId,
@@ -194,7 +196,7 @@ public interface ShipmentBookingPort {
             String horecaosReference,
             Waypoint pickup,
             Waypoint dropoff,
-            Instant requestedPickupAt,
+            @Nullable Instant requestedPickupAt,
             boolean prepaid,
             long itemValueMinor,
             String currency,
@@ -279,27 +281,36 @@ public interface ShipmentBookingPort {
     }
 
     /**
+     * What a booking attempt against one partner produced.
+     *
+     * @param providerType       the partner that answered, absent when no
+     *                           binding could be resolved at all (there is no
+     *                           partner to name)
      * @param externalReference the partner's own id, present on a booking or a
      *                          hold and absent otherwise. An {@code UNCERTAIN}
      *                          receipt with no reference is the case only a
      *                          human can resolve
+     * @param errorCode          present on a refusal or fault, absent on a
+     *                           successful booking or hold
+     * @param detail             present alongside {@code errorCode}, absent
+     *                           otherwise
      */
     record BookingReceipt(
             BookingStatus status,
             UUID commandId,
             UUID bindingId,
-            String providerType,
-            String externalReference,
-            String errorCode,
-            String detail) {
+            @Nullable String providerType,
+            @Nullable String externalReference,
+            @Nullable String errorCode,
+            @Nullable String detail) {
 
         public static BookingReceipt of(
                 BookingStatus status,
                 BookingCommand command,
-                String providerType,
-                String externalReference,
-                String errorCode,
-                String detail) {
+                @Nullable String providerType,
+                @Nullable String externalReference,
+                @Nullable String errorCode,
+                @Nullable String detail) {
             return new BookingReceipt(
                     status,
                     command.commandId(),

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -156,6 +157,8 @@ public class OrderOutcomeReasonController {
     }
 
     /**
+     * A reason to author or update, in every required locale at once.
+     *
      * @param customerTexts what the customer is told, keyed by locale tag. A
      *                      different statement from {@code internalName}, and the
      *                      split is what stops «Не дозвонились» being published to
@@ -196,7 +199,7 @@ public class OrderOutcomeReasonController {
             String stockDisposition,
             String liabilityParty,
             String customerRefund,
-            List<String> allowedFulfillmentModes,
+            @Nullable List<String> allowedFulfillmentModes,
             Map<String, String> customerTexts,
             String status,
             int version,

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
@@ -66,6 +67,8 @@ public class OrderSettlementService {
     public record PlannedTender(UUID paymentMethodId, long amountMinor) {}
 
     /**
+     * A proposed set of tenders to settle an order with.
+     *
      * @param customerAccountId null for a guest checkout, which cannot include a
      *                          balance tender because there is no account for one
      *                          to draw on
@@ -74,7 +77,7 @@ public class OrderSettlementService {
             UUID tenantId,
             UUID brandId,
             UUID orderId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String currency,
             long totalMinor,
             List<PlannedTender> tenders,
@@ -190,13 +193,14 @@ public class OrderSettlementService {
                     now);
 
             if (method.settlesFromBalance()) {
-                if (plan.customerAccountId() == null) {
+                UUID customerAccountId = plan.customerAccountId();
+                if (customerAccountId == null) {
                     throw new ApiException(ErrorCode.VALIDATION_FAILED, "A guest checkout cannot redeem points");
                 }
                 PointsRedemptionPort.PointsHold hold = points.reserve(new PointsRedemptionPort.ReserveCommand(
                         plan.tenantId(),
                         plan.brandId(),
-                        plan.customerAccountId(),
+                        customerAccountId,
                         plan.orderId(),
                         tenderId,
                         planned.amountMinor(),

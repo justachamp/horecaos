@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.camel.sms;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 
 /**
  * smsgw.vas.uz's status codes, and what each one means for a verification code
@@ -122,7 +123,7 @@ enum SmsGateCode {
         this.reasonCode = reasonCode;
     }
 
-    static SmsGateCode of(Integer wireValue) {
+    static SmsGateCode of(@Nullable Integer wireValue) {
         return wireValue == null ? UNDOCUMENTED : BY_WIRE_VALUE.getOrDefault(wireValue, UNDOCUMENTED);
     }
 

@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -19,8 +20,8 @@ public record OrderRejected(
         Instant occurredAt,
         UUID brandId,
         UUID locationId,
-        String decisionChannel,
-        String reasonCode,
+        @Nullable String decisionChannel,
+        @Nullable String reasonCode,
         String status,
         int orderVersion)
         implements OrderingEvent {
@@ -51,8 +52,8 @@ public record OrderRejected(
             UUID orderId,
             UUID brandId,
             UUID locationId,
-            String decisionChannel,
-            String reasonCode,
+            @Nullable String decisionChannel,
+            @Nullable String reasonCode,
             String status,
             int orderVersion) {}
 }

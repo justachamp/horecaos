@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -78,22 +79,23 @@ public class PosSyncRunController {
             @Valid @RequestBody StartRequest request) {
 
         PosCatalogSyncService.RunResult result = sync.run(tenantId, request.bindingId(), "MANUAL", dryRun);
+        UUID runId = result.runId();
 
-        if (result.started()) {
+        if (runId != null) {
             audit.record(AuditFact.of("pos.catalog_sync_started", AuditClass.BUSINESS)
                     .by(ActorRef.user(currentActor.get().subject(), null))
                     .at(ResourceScope.tenant(tenantId))
-                    .target("PosSyncRun", result.runId())
+                    .target("PosSyncRun", runId)
                     .because("Manual catalog import")
                     .changed(Map.of("bindingId", request.bindingId().toString(), "dryRun", Boolean.toString(dryRun)))
                     .usingCapability(Capability.POS_SYNC_EXECUTE.code())
-                    .correlatedBy(result.runId().toString())
+                    .correlatedBy(runId.toString())
                     .occurredAt(clock.instant())
                     .build());
         }
 
         return ResponseEntity.ok(Map.of(
-                "runId", result.runId() == null ? "" : result.runId().toString(),
+                "runId", runId == null ? "" : runId.toString(),
                 "status", result.status(),
                 "differenceCount", result.differenceCount(),
                 "conflictCount", result.conflictCount(),
@@ -178,6 +180,8 @@ public class PosSyncRunController {
             @NotNull UUID installationId, @NotNull String providerType) {}
 
     /**
+     * One row of the difference report, as the API exposes it.
+     *
      * @param authority who owns this field. A {@code HORECAOS} authority with a
      *                  recommended action of {@code IGNORE} is the ordinary case
      *                  and the important one: the provider disagrees, and the
@@ -186,11 +190,11 @@ public class PosSyncRunController {
     public record DifferenceView(
             String entityType,
             String externalEntityId,
-            UUID horecaosEntityId,
+            @Nullable UUID horecaosEntityId,
             String category,
-            String fieldPath,
-            String currentValue,
-            String importedValue,
+            @Nullable String fieldPath,
+            @Nullable String currentValue,
+            @Nullable String importedValue,
             String authority,
             String severity,
             String recommendedAction) {}

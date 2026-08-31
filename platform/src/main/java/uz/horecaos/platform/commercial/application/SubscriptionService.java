@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -67,7 +68,12 @@ public class SubscriptionService {
      */
     @Transactional
     public UUID start(
-            UUID tenantId, UUID planVersionId, Integer trialDays, ActorRef actor, String reason, String correlationId) {
+            UUID tenantId,
+            UUID planVersionId,
+            @Nullable Integer trialDays,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
         PlanVersion version = plans.findVersion(planVersionId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such plan version"));
@@ -146,8 +152,8 @@ public class SubscriptionService {
             UUID tenantId,
             SubscriptionStatus to,
             long expectedVersion,
-            String suspensionReason,
-            Instant cancelAt,
+            @Nullable String suspensionReason,
+            @Nullable Instant cancelAt,
             ActorRef actor,
             String reason,
             String correlationId) {
@@ -222,8 +228,8 @@ public class SubscriptionService {
     public UUID override(
             UUID tenantId,
             String entitlementKey,
-            Long integerValue,
-            Boolean booleanValue,
+            @Nullable Long integerValue,
+            @Nullable Boolean booleanValue,
             Instant validUntil,
             ActorRef requester,
             String approvedBy,

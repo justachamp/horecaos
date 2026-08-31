@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -217,7 +218,7 @@ class AuditImmutabilityTests {
                 .isEqualTo("MIGRATION");
     }
 
-    private AuditFact fact(String actionCode, String reason) {
+    private AuditFact fact(String actionCode, @Nullable String reason) {
         return AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user("operator-1", "Operator One"))
                 .at(ResourceScope.tenant(TENANT))

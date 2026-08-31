@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -193,6 +194,8 @@ public class StorefrontPaymentController {
     // ------------------------------------------------------------------ payloads
 
     /**
+     * The customer's choice of checkout surface and the context Click needs for it.
+     *
      * @param presentation  which surface to produce. Defaults to a payment link,
      *                      which is the only one both providers can build
      * @param returnUrl     where Click sends the browser afterwards. Honoured on
@@ -226,6 +229,8 @@ public class StorefrontPaymentController {
     }
 
     /**
+     * The checkout surface handed back to the customer.
+     *
      * @param merchantTransId the identifier the provider's callback will carry —
      *                        Click's {@code merchant_trans_id}, Payme's
      *                        {@code account.order_id}. Opaque and non-sequential,
@@ -241,9 +246,9 @@ public class StorefrontPaymentController {
             String merchantTransId,
             String provider,
             String presentation,
-            String checkoutUrl,
-            String qrPayload,
-            Instant expiresAt,
+            @Nullable String checkoutUrl,
+            @Nullable String qrPayload,
+            @Nullable Instant expiresAt,
             long amountMinor,
             String currency,
             boolean rePresented,

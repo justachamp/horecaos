@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -347,7 +348,7 @@ public class DayCloseService {
                 line.finalAmountMinor());
     }
 
-    private static Integer elapsed(Instant from, Instant to) {
+    private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {
         return from == null || to == null
                 ? null
                 : (int) Duration.between(from, to).toSeconds();
@@ -395,3 +396,4 @@ public class DayCloseService {
     public record CloseResult(
             UUID runId, int ordersWritten, int linesWritten, int refundsWritten, List<Divergence> divergences) {}
 }
+

@@ -2,6 +2,7 @@ package uz.horecaos.platform.telemetry.domain;
 
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The rule that makes thirty days derived rather than picked (ADR 0045).
@@ -102,12 +103,15 @@ public final class TrackRetentionFloor {
     }
 
     /**
+     * One configured retention value, judged against the calendar behind it.
+     *
      * @param explanation null when the value is fine; otherwise the sentence a
      *                    startup failure or a report prints, written so the
      *                    reader learns why the floor exists rather than only that
      *                    it was breached
      */
-    public record Verdict(String origin, int retentionDays, int floorDays, Outcome outcome, String explanation) {
+    public record Verdict(
+            String origin, int retentionDays, int floorDays, Outcome outcome, @Nullable String explanation) {
 
         public boolean isProblem() {
             return outcome != Outcome.WITHIN_FLOOR;

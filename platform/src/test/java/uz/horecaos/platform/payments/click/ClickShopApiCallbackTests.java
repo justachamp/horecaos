@@ -471,9 +471,11 @@ class ClickShopApiCallbackTests {
 
         MerchantApiCall submitted = transport.calls().getFirst();
         assertThat(submitted.path()).isEqualTo("/payment/ofd_data/submit_items");
+        Map<String, Object> submittedBody =
+                Objects.requireNonNull(submitted.body(), "submit_items must always carry a body");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = Objects.requireNonNull(
-                (List<Map<String, Object>>) submitted.body().get("items"),
+                (List<Map<String, Object>>) submittedBody.get("items"),
                 "submit_items must always carry an items array");
         // Two units at 400 som: the line total is 800 som, which is 80,000 tiyin.
         // Click's Price is the line total and Payme's price is the unit price — the

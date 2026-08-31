@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.commercial.api.CommercialConfigurationKeys;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
@@ -44,8 +45,11 @@ class EnforcementCeilingKeyTests {
         assertThat(CommercialConfigurationKeys.ENFORCEMENT_CEILING.defaultValue())
                 .isEqualTo(EnforcementMode.METER_ONLY.name());
         assertThat(EnforcementMode.valueOf(
-                                ConfigurationKeys.require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
-                                        .defaultValue()
+                                Objects.requireNonNull(
+                                                ConfigurationKeys.require(
+                                                                CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
+                                                        .defaultValue(),
+                                                "the registry declares a default for this key")
                                         .toString())
                         .canRefuse())
                 .as("a default that could refuse would enforce limits nobody has approved")

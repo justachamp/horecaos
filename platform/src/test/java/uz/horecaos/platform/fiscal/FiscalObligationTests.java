@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -436,7 +437,7 @@ class FiscalObligationTests {
         return rows.getFirst();
     }
 
-    private NewFiscalDocument newDocument(UUID orderId, FiscalDocumentState state, UUID entityId) {
+    private NewFiscalDocument newDocument(UUID orderId, FiscalDocumentState state, @Nullable UUID entityId) {
         return new NewFiscalDocument(
                 UUID.randomUUID(),
                 TENANT,
@@ -474,12 +475,18 @@ class FiscalObligationTests {
                 .update();
     }
 
-    private UUID completedOrder(String seed, String providerType, String intentStatus, Instant closedAt) {
+    private UUID completedOrder(
+            String seed, @Nullable String providerType, @Nullable String intentStatus, Instant closedAt) {
         UUID orderId = order(seed, providerType, "COMPLETED", intentStatus, closedAt);
         return orderId;
     }
 
-    private UUID order(String seed, String providerType, String status, String intentStatus, Instant closedAt) {
+    private UUID order(
+            String seed,
+            @Nullable String providerType,
+            String status,
+            @Nullable String intentStatus,
+            Instant closedAt) {
         UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes(StandardCharsets.UTF_8));
         UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
         UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
@@ -561,8 +568,8 @@ class FiscalObligationTests {
             UUID orderId,
             String tender,
             String methodCode,
-            String providerType,
-            String status,
+            @Nullable String providerType,
+            @Nullable String status,
             Instant at) {
         boolean settled = !("PENDING".equals(status) || "AUTHORIZING".equals(status));
         jdbc.sql("""
@@ -614,7 +621,7 @@ class FiscalObligationTests {
                 .param("o", orderId)
                 .query(UUID.class)
                 .optional()
-                .orElse(null);
+                .orElseThrow(() -> new IllegalStateException("no payment intent seeded for order " + orderId));
     }
 
     private void seedTenancy() {

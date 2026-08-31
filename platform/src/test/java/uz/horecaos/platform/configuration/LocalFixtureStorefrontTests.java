@@ -32,6 +32,11 @@ class LocalFixtureStorefrontTests {
             + "10000000-0000-0000-0000-000000000002/locations/"
             + "10000000-0000-0000-0000-000000000003";
 
+    // Populated by @DynamicPropertySource, a static hook Spring's test runner
+    // guarantees runs before context startup and every test method -- earlier
+    // than any field initializer NullAway would otherwise accept, and a
+    // sequencing contract it has no visibility into.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle database;
 
     @BeforeAll

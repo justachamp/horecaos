@@ -166,6 +166,14 @@ public class CachedBodyRequestFilter extends OncePerRequestFilter {
                 public int read() {
                     return buffered.read();
                 }
+
+                // Without this, InputStream's default multi-byte read calls
+                // read() once per byte, which is the slow path for every framework
+                // reader that requests a buffer at a time rather than one byte.
+                @Override
+                public int read(byte[] b, int off, int len) {
+                    return buffered.read(b, off, len);
+                }
             };
         }
 

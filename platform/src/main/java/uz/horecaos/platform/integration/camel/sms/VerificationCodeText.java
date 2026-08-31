@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.sms;
 
 import java.time.Duration;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The sentence a customer reads, in the language they chose.
@@ -28,7 +29,7 @@ final class VerificationCodeText {
 
     private VerificationCodeText() {}
 
-    static String render(String code, Duration validFor, String locale) {
+    static String render(String code, Duration validFor, @Nullable String locale) {
         long minutes = Math.max(1, validFor.toMinutes());
         return switch (language(locale)) {
             case "ru" -> "HorecaOS: kod %s. Deystvitelen %d min. Nikomu ego ne soobshchayte.".formatted(code, minutes);
@@ -46,7 +47,7 @@ final class VerificationCodeText {
      * <p>{@code ru-RU} and {@code ru} must render the same sentence, and a locale
      * arrives from a customer profile rather than from a fixed list.
      */
-    private static String language(String locale) {
+    private static String language(@Nullable String locale) {
         if (locale == null || locale.isBlank()) {
             return "";
         }

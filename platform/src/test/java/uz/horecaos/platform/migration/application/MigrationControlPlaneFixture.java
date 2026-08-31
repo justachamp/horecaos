@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -226,7 +227,8 @@ abstract class MigrationControlPlaneFixture {
 
     // ------------------------------------------------------------- shorthands
 
-    protected UUID openScope(MigrationCapability capability, UUID brandId, UUID locationId) {
+    protected UUID openScope(
+            MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
         return programs.openScope(
                         programId,
                         new OpenScopeCommand(
@@ -364,7 +366,16 @@ abstract class MigrationControlPlaneFixture {
 
         // No current actor: this fixture exercises grants, and a null actor
         // means the platform-admin bypass cannot fire and mask a missing grant.
-        return new JdbcAuthorizationService(jdbc, clock, () -> null);
+        // CurrentActor#get() is declared @NonNull by design (see
+        // JdbcAuthorizationServiceTests' SettableActor, which documents that the
+        // one production implementation throws rather than returns null); this
+        // fixture deliberately returns null anyway to exercise
+        // JdbcAuthorizationService's own defensive null-check on that value
+        // without changing that production code. NullAway cannot know this
+        // contract violation is intentional.
+        @SuppressWarnings("NullAway")
+        CurrentActor noActor = () -> null;
+        return new JdbcAuthorizationService(jdbc, clock, noActor);
     }
 
     /** Lets a test move time forward without sleeping. */

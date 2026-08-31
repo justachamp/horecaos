@@ -511,7 +511,12 @@ public class CustomerVerificationService {
     }
 
     private AuditFact fact(
-            String action, UUID tenantId, UUID brandId, UUID targetId, Map<String, Object> changes, Instant now) {
+            String action,
+            UUID tenantId,
+            @Nullable UUID brandId,
+            UUID targetId,
+            Map<String, Object> changes,
+            Instant now) {
 
         // No reason string, because there is no operator to have one: the actor is
         // the storefront acting for somebody who is not yet anybody. AuditFact
@@ -577,6 +582,8 @@ public class CustomerVerificationService {
     }
 
     /**
+     * The account a grant was redeemed for.
+     *
      * @param created true when this sign-in brought the account into existence,
      *                which is when a storefront should ask for consent rather than
      *                assume it

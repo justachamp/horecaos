@@ -3,6 +3,7 @@ package uz.horecaos.platform.commercial.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /** What one tenant is on right now (ADR 0021). */
 public record Subscription(
@@ -11,14 +12,14 @@ public record Subscription(
         UUID planVersionId,
         SubscriptionStatus status,
         Instant startAt,
-        Instant trialEndAt,
+        @Nullable Instant trialEndAt,
         Instant currentPeriodStart,
         Instant currentPeriodEnd,
-        Instant cancelAt,
-        Instant suspendedAt,
-        String suspensionReason,
-        Instant endedAt,
-        String externalBillingReference,
+        @Nullable Instant cancelAt,
+        @Nullable Instant suspendedAt,
+        @Nullable String suspensionReason,
+        @Nullable Instant endedAt,
+        @Nullable String externalBillingReference,
         long version) {
 
     public Subscription {

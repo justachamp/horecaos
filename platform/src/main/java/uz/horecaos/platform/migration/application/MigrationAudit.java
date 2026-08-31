@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.application;
 
 import java.time.Clock;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
@@ -120,9 +121,12 @@ class MigrationAudit {
      * that branch, and recording it at tenant level would hide which of a
      * network's forty locations cut over.
      */
-    static ResourceScope scopeOf(UUID tenantId, UUID brandId, UUID locationId) {
+    static ResourceScope scopeOf(UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
         if (locationId != null) {
-            return ResourceScope.location(tenantId, brandId, locationId);
+            // ck_scope_narrowing: a scope narrowed to a location always names the
+            // location's brand too, so this is never actually null here.
+            return ResourceScope.location(
+                    tenantId, Objects.requireNonNull(brandId, "A location scope names its brand"), locationId);
         }
         if (brandId != null) {
             return ResourceScope.brand(tenantId, brandId);

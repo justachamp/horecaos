@@ -32,6 +32,8 @@ public final class ExportStateMachine {
     }
 
     /**
+     * Rejects a transition the state machine does not allow.
+     *
      * @throws IllegalStateException naming both states, because a transition
      *                               rejection that does not say what was refused
      *                               is a log line somebody has to reproduce

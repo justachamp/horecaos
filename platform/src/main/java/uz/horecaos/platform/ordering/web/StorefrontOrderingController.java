@@ -12,7 +12,9 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -361,8 +363,9 @@ public class StorefrontOrderingController {
         // transaction and is here because the command has nowhere to carry an
         // owner yet.
         UUID accountId = accountId(tenantId, brandId);
-        carts.view(tenantId, brandId, accountId, body.cartId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such cart"));
+        if (carts.view(tenantId, brandId, accountId, body.cartId()).isEmpty()) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such cart");
+        }
 
         var result = checkout.checkout(new CheckoutService.CheckoutCommand(
                 tenantId,
@@ -380,19 +383,25 @@ public class StorefrontOrderingController {
 
         if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
             // A settled business answer, and a conflict rather than a fault: the
-            // request was well-formed and the world moved underneath it.
+            // request was well-formed and the world moved underneath it. A
+            // rejected result always carries its code and detail (or falls back to
+            // the code); NullAway cannot see that outcome-conditioned guarantee.
+            String rejectionCode = Objects.requireNonNull(result.rejectionCode(), "a rejection always names a code");
             throw new ApiException(
-                    errorCodeFor(result.rejectionCode()),
-                    result.rejectionDetail() == null ? result.rejectionCode() : result.rejectionDetail(),
+                    errorCodeFor(rejectionCode),
+                    result.rejectionDetail() == null ? rejectionCode : result.rejectionDetail(),
                     java.util.Map.of(
-                            "reason", result.rejectionCode(),
+                            "reason", rejectionCode,
                             "unavailableItems", result.unavailableItems(),
                             "warnings", result.warnings()));
         }
+        // CREATED and REPLAYED both name a real order; only REJECTED, handled
+        // above, leaves these null.
         return ResponseEntity.ok(new CheckoutResponse(
-                result.orderId(),
-                result.publicOrderNumber(),
-                result.status().name(),
+                Objects.requireNonNull(result.orderId(), "a non-rejected checkout always names an order"),
+                Objects.requireNonNull(result.publicOrderNumber(), "a non-rejected checkout always names an order"),
+                Objects.requireNonNull(result.status(), "a non-rejected checkout always has a status")
+                        .name(),
                 result.orderVersion(),
                 result.outcome().name(),
                 result.warnings()));
@@ -472,9 +481,9 @@ public class StorefrontOrderingController {
             jakarta.servlet.http.HttpServletRequest request) {
 
         UUID accountId = accountId(tenantId, brandId);
-        orderQuery
-                .detailForCustomer(tenantId, orderId, accountId, null)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+        if (orderQuery.detailForCustomer(tenantId, orderId, accountId, null).isEmpty()) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
+        }
 
         try {
             long expected = AggregateVersion.requireIfMatch(request);
@@ -612,10 +621,10 @@ public class StorefrontOrderingController {
     }
 
     /**
+     * A request to check out one cart.
+     *
      * @param cartVersion ADR 0031's expected version, so a checkout cannot be
      *                    built on a basket edited on another device
-     */
-    /**
      * @param paymentMethodCode how this order will be paid (ADR 0013, ADR 0046).
      *                          <strong>Required.</strong> It was optional, and the
      *                          consequence was not that the order went unpaid — it
@@ -650,6 +659,8 @@ public class StorefrontOrderingController {
     public record CancelRequest(@NotBlank @Size(max = 64) String reasonCode) {}
 
     /**
+     * The cart as it stands right now.
+     *
      * @param fulfillmentMode how the order leaves the branch. On the response
      *        because it is the server's fact and the client was guessing it: a
      *        cart is bound to its mode for its whole life, and a client that
@@ -666,8 +677,8 @@ public class StorefrontOrderingController {
             String currency,
             String fulfillmentMode,
             int version,
-            UUID quoteId,
-            String contextHash,
+            @Nullable UUID quoteId,
+            @Nullable String contextHash,
             Instant expiresAt,
             List<CartLineResponse> lines) {
 
@@ -702,13 +713,19 @@ public class StorefrontOrderingController {
     }
 
     /**
+     * One cart line.
+     *
      * @param hasCustomerNote whether a note exists, never the note itself. The
      *                        text is personal data and is revealed only through
      *                        the endpoint that records a purpose for it
      */
     public record CartLineResponse(String lineKey, UUID variantId, int quantity, boolean hasCustomerNote) {}
 
-    /** @param addressId the customer's own saved address id, never the address */
+    /**
+     * The destination just set on this cart.
+     *
+     * @param addressId the customer's own saved address id, never the address
+     */
     public record DestinationResponse(UUID cartId, UUID addressId) {}
 
     /**
@@ -756,7 +773,11 @@ public class StorefrontOrderingController {
             long totalMinor,
             Instant expiresAt) {}
 
-    /** @param warnings platform gaps that apply to this order, such as an unwired payments port */
+    /**
+     * The result of a checkout attempt.
+     *
+     * @param warnings platform gaps that apply to this order, such as an unwired payments port
+     */
     public record CheckoutResponse(
             UUID orderId,
             String publicOrderNumber,
@@ -775,7 +796,7 @@ public class StorefrontOrderingController {
             long totalMinor,
             int version,
             Instant createdAt,
-            Instant confirmedAt,
+            @Nullable Instant confirmedAt,
             List<OrderLineResponse> lines,
             List<String> warnings) {
 
@@ -847,7 +868,7 @@ public class StorefrontOrderingController {
             String fulfillmentStatus,
             String currency,
             long totalMinor,
-            Instant promisedAt,
+            @Nullable Instant promisedAt,
             int version,
             Instant placedAt) {
 

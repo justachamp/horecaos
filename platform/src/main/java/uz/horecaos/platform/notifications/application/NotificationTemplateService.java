@@ -65,11 +65,11 @@ public class NotificationTemplateService {
     @Transactional
     public UUID createTemplate(
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String templateKey,
             NotificationClass notificationClass,
             NotificationChannel channel,
-            String consentPurpose) {
+            @Nullable String consentPurpose) {
 
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
             throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
@@ -113,7 +113,7 @@ public class NotificationTemplateService {
         // Read for its side effect: a template id from another tenant must not be
         // given a version here, and the composite foreign key alone would let the
         // insert through on a matching id.
-        var unused = templates
+        var _ = templates
                 .template(tenantId, templateId)
                 .orElseThrow(
                         () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
@@ -213,13 +213,17 @@ public class NotificationTemplateService {
             UUID tenantId, UUID brandId, String templateKey, NotificationChannel channel, MessageLocale locale) {
 
         Optional<TemplateRow> template = templates.activeTemplate(tenantId, brandId, templateKey, channel.name());
-        if (template.isEmpty() || template.get().activeVersion() == null) {
+        if (template.isEmpty()) {
+            return Resolution.noTemplate();
+        }
+        TemplateRow row = template.get();
+        Integer activeVersion = row.activeVersion();
+        if (activeVersion == null) {
             return Resolution.noTemplate();
         }
 
-        TemplateRow row = template.get();
         return templates
-                .version(tenantId, row.id(), row.activeVersion(), locale.tag())
+                .version(tenantId, row.id(), activeVersion, locale.tag())
                 .filter(version -> "ACTIVE".equals(version.status()))
                 .map(version -> Resolution.found(row, version))
                 .orElseGet(Resolution::noLocale);
@@ -300,3 +304,4 @@ public class NotificationTemplateService {
         }
     }
 }
+

@@ -313,15 +313,33 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             return store.findQuoteSnapshot(command.tenantId(), quote.quoteId())
                     .orElseThrow(() -> new IllegalStateException("Quote vanished mid-transaction"));
         } catch (PricingEngine.UnpricedItemException unpriced) {
-            throw new PricingRefusedException("ITEM_NOT_PRICED", unpriced.priceableId(), unpriced.getMessage());
+            // Every one of these five exception types always constructs its
+            // message from a non-null string concatenation or formatted string
+            // (see their constructors), so getMessage() is never actually null;
+            // the fallback only guards the checker's more conservative view of
+            // Throwable#getMessage() rather than a real possibility here.
+            throw new PricingRefusedException(
+                    "ITEM_NOT_PRICED",
+                    unpriced.priceableId(),
+                    Objects.requireNonNullElse(unpriced.getMessage(), "ITEM_NOT_PRICED"));
         } catch (NoPublishedMenuException noMenu) {
-            throw new PricingRefusedException("NO_PUBLISHED_MENU", command.brandId(), noMenu.getMessage());
+            throw new PricingRefusedException(
+                    "NO_PUBLISHED_MENU",
+                    command.brandId(),
+                    Objects.requireNonNullElse(noMenu.getMessage(), "NO_PUBLISHED_MENU"));
         } catch (NoPriceBookException noBook) {
-            throw new PricingRefusedException("NO_PRICE_BOOK", command.locationId(), noBook.getMessage());
+            throw new PricingRefusedException(
+                    "NO_PRICE_BOOK",
+                    command.locationId(),
+                    Objects.requireNonNullElse(noBook.getMessage(), "NO_PRICE_BOOK"));
         } catch (NoTaxProfileException noTax) {
-            throw new PricingRefusedException("NO_TAX_PROFILE", command.brandId(), noTax.getMessage());
+            throw new PricingRefusedException(
+                    "NO_TAX_PROFILE", command.brandId(), Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
         } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            throw new PricingRefusedException("UNSUPPORTED_TAX_MODE", command.brandId(), unsupported.getMessage());
+            throw new PricingRefusedException(
+                    "UNSUPPORTED_TAX_MODE",
+                    command.brandId(),
+                    Objects.requireNonNullElse(unsupported.getMessage(), "UNSUPPORTED_TAX_MODE"));
         }
     }
 

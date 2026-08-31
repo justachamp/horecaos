@@ -129,11 +129,11 @@ public interface VerificationCodeTransport {
             return new Outcome(Status.ACCEPTED, null);
         }
 
-        public static Outcome refused(String reasonCode) {
+        public static Outcome refused(@Nullable String reasonCode) {
             return new Outcome(Status.REFUSED, reasonCode);
         }
 
-        public static Outcome unavailable(String reasonCode) {
+        public static Outcome unavailable(@Nullable String reasonCode) {
             return new Outcome(Status.UNAVAILABLE, reasonCode);
         }
     }

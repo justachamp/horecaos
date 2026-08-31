@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.settlement;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -140,9 +141,11 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
      * {@link EntitlementBenefit#PERCENT} refuses to be created without it.
      */
     private static long perUseMaximum(JdbcRemedyStore.EntitlementRow entitlement) {
+        // amountMinor is set exactly for FIXED_AMOUNT; maximumMinor is required
+        // for every other benefit (PERCENT refuses to be created without one).
         return entitlement.benefit() == EntitlementBenefit.FIXED_AMOUNT
-                ? entitlement.amountMinor()
-                : entitlement.maximumMinor();
+                ? Objects.requireNonNull(entitlement.amountMinor())
+                : Objects.requireNonNull(entitlement.maximumMinor());
     }
 
     private static GrantedEntitlement toGranted(JdbcRemedyStore.EntitlementRow row) {

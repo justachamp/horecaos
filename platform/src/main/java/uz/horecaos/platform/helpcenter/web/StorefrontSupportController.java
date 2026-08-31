@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -79,7 +80,11 @@ public class StorefrontSupportController {
                 .body(body);
     }
 
-    /** @param code the authoring handle, carried so a deep link can name a section. */
+    /**
+     * One FAQ category, as shown on the storefront.
+     *
+     * @param code the authoring handle, carried so a deep link can name a section.
+     */
     public record FaqResponse(UUID categoryId, String code, String name, List<FaqEntryResponse> entries) {
 
         static FaqResponse of(FaqCategory category) {
@@ -98,8 +103,12 @@ public class StorefrontSupportController {
         }
     }
 
-    /** @param imageUrl null unless an operator overrode the platform's own artwork. */
-    public record SocialLinkResponse(UUID linkId, String platform, String url, String imageUrl) {
+    /**
+     * A brand's social or external link, as shown on the storefront.
+     *
+     * @param imageUrl null unless an operator overrode the platform's own artwork.
+     */
+    public record SocialLinkResponse(UUID linkId, String platform, String url, @Nullable String imageUrl) {
 
         static SocialLinkResponse of(SocialLink link) {
             return new SocialLinkResponse(link.linkId(), link.platform(), link.url(), link.imageUrl());

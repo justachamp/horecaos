@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -55,7 +56,13 @@ public class JdbcAudienceStore {
     // ------------------------------------------------------------- audiences
 
     public void insertAudience(
-            UUID id, UUID tenantId, UUID brandId, String name, String description, UUID createdBy, Instant now) {
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            @Nullable String description,
+            UUID createdBy,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -218,7 +225,7 @@ public class JdbcAudienceStore {
             int definitionVersion,
             String channel,
             String consentPurpose,
-            Instant metricWatermarkAt,
+            @Nullable Instant metricWatermarkAt,
             int metricDefinitionVersion,
             UUID builtBy,
             Instant now) {
@@ -255,7 +262,7 @@ public class JdbcAudienceStore {
      * get it" has no answer anywhere for exactly the people who need it answered.
      */
     public void recordMember(
-            UUID snapshotId, UUID tenantId, UUID accountId, RefusalReason exclusion, CandidateRow metrics) {
+            UUID snapshotId, UUID tenantId, UUID accountId, @Nullable RefusalReason exclusion, CandidateRow metrics) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("snapshotId", snapshotId);
@@ -330,7 +337,7 @@ public class JdbcAudienceStore {
      * and a skipped row here is a customer the campaign silently never reached.
      */
     public List<SnapshotMemberRow> includedMembersAfter(
-            UUID tenantId, UUID snapshotId, UUID afterAccountId, int limit) {
+            UUID tenantId, UUID snapshotId, @Nullable UUID afterAccountId, int limit) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -458,15 +465,15 @@ public class JdbcAudienceStore {
                 .update();
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    private List<String> textValues(Array array) throws SQLException {
+    private @Nullable List<String> textValues(@Nullable Array array) throws SQLException {
         if (array == null) {
             return null;
         }
@@ -491,7 +498,7 @@ public class JdbcAudienceStore {
             Integer daysSinceLastOrder,
             String accountStatus,
             UUID mergedIntoAccountId,
-            Instant anonymizedAt) {
+            @Nullable Instant anonymizedAt) {
 
         /** ADR 0044's first subtraction: not active, merged away, or anonymised. */
         public boolean isReachableAccount() {
@@ -510,9 +517,9 @@ public class JdbcAudienceStore {
             String status,
             int candidateCount,
             int memberCount,
-            Instant metricWatermarkAt,
+            @Nullable Instant metricWatermarkAt,
             int metricDefinitionVersion,
-            Instant membersPurgedAt) {}
+            @Nullable Instant membersPurgedAt) {}
 
     public record SnapshotMemberRow(UUID customerAccountId, String localeAtEvaluation) {}
 }

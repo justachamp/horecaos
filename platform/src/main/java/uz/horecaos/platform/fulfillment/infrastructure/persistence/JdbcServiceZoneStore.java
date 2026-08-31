@@ -426,7 +426,11 @@ public class JdbcServiceZoneStore {
         }
     }
 
-    /** @param bound zero means the brand has drawn no catchment, so there is no guard */
+    /**
+     * Whether a brand-level catchment guard applies, and whether this point clears it.
+     *
+     * @param bound zero means the brand has drawn no catchment, so there is no guard
+     */
     public record CatchmentCheck(long bound, long covering) {
 
         public boolean guardApplies() {

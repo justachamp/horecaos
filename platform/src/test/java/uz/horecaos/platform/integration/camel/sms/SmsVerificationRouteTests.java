@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class SmsVerificationRouteTests {
     private static final UUID INSTALLATION = UUID.randomUUID();
     private static final String CODE = "482913";
 
-    private CamelContext camel;
+    private @Nullable CamelContext camel;
 
     @AfterEach
     void stopCamel() {
@@ -216,7 +217,7 @@ class SmsVerificationRouteTests {
 
         @Override
         public Optional<BindingRef> primaryBinding(
-                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return Optional.of(new BindingRef(
                     UUID.randomUUID(),
                     INSTALLATION,
@@ -228,7 +229,8 @@ class SmsVerificationRouteTests {
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+        public List<BindingRef> candidateBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return List.of();
         }
 

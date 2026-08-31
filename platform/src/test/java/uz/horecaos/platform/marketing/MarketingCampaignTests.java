@@ -7,11 +7,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -88,9 +89,6 @@ class MarketingCampaignTests {
     private static final Instant LATE_EVENING = Instant.parse("2026-08-22T17:30:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private ObjectMapper objectMapper;
@@ -104,7 +102,13 @@ class MarketingCampaignTests {
     private CustomerProfileService profiles;
     private ConsentService consent;
     private RecordingAuditRecorder audit;
-    private FakeCampaignMessagePort port;
+
+    /**
+     * Null between {@link #truncate} clearing it and {@link #wire} rebuilding it,
+     * so a fresh fixture starts empty for the next test. Every test-body read goes
+     * through {@link #port()}, which asserts it has been wired by then.
+     */
+    private @Nullable FakeCampaignMessagePort port;
 
     private AudienceService audiences;
     private CampaignService campaigns;
@@ -120,9 +124,6 @@ class MarketingCampaignTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for marketing campaign tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -187,6 +188,11 @@ class MarketingCampaignTests {
         suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
     }
 
+    /** The wired fake, which every {@code @BeforeEach} guarantees is set before a test body runs. */
+    private FakeCampaignMessagePort port() {
+        return Objects.requireNonNull(port, "wire() must run before a test reads the port");
+    }
+
     // ------------------------------------------------------------- the model
 
     @Test
@@ -213,7 +219,7 @@ class MarketingCampaignTests {
         });
         // Recorded, not dropped. The row is the answer to "why did this customer
         // not get it", which is the question a tenant actually asks.
-        assertThat(port.sent()).isEmpty();
+        assertThat(port().sent()).isEmpty();
     }
 
     @Test
@@ -293,7 +299,7 @@ class MarketingCampaignTests {
             assertThat(row.status()).isEqualTo(CampaignStatus.HALTED_BUDGET);
             assertThat(row.reservedCostMinor()).isLessThanOrEqualTo(row.costCeilingMinor());
         });
-        assertThat(port.sent()).isEmpty();
+        assertThat(port().sent()).isEmpty();
     }
 
     @Test
@@ -321,7 +327,7 @@ class MarketingCampaignTests {
                 NOW);
         assertThat(replay).isEqualTo(JdbcCampaignStore.BatchClaim.ALREADY_CLAIMED);
 
-        assertThat(port.distinctMessages()).isEqualTo(1);
+        assertThat(port().distinctMessages()).isEqualTo(1);
         assertThat(campaignStore.recipientCount(TENANT, campaign)).isEqualTo(1);
     }
 
@@ -555,7 +561,7 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID campaign = readyCampaign(10_000_000L);
-        port.unwire();
+        port().unwire();
 
         // Discovered before anything is claimed. A campaign that expands forty
         // thousand recipients against an unwired path has spent an approval and
@@ -786,18 +792,17 @@ class MarketingCampaignTests {
         port = null;
     }
 
-    /** Collects facts so a test can assert one was written, without a database. */
+    /**
+     * A no-op stand-in for the ADR 0027 audit trail.
+     *
+     * <p>These tests assert on database state and API/domain behaviour rather than
+     * on what was written to the audit trail, so nothing here needs to be kept.
+     */
     private static final class RecordingAuditRecorder implements AuditRecorder {
-
-        private final List<AuditFact> facts = new ArrayList<>();
 
         @Override
         public void record(AuditFact fact) {
-            facts.add(fact);
-        }
-
-        List<AuditFact> facts() {
-            return List.copyOf(facts);
+            // Not inspected by these tests.
         }
     }
 }

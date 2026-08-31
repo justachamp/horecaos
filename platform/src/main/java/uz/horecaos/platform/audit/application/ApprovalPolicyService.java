@@ -219,7 +219,9 @@ public class ApprovalPolicyService {
 
         recordSupersessions(command, policyId, actionCode, scope, superseded, now);
 
-        return read(scope.tenantId(), policyId).orElseThrow();
+        // requireTenantOwnedScope above rejected PLATFORM, so ResourceScope's own
+        // constructor invariant guarantees tenantId is set for every scope type left.
+        return read(Objects.requireNonNull(scope.tenantId()), policyId).orElseThrow();
     }
 
     /**

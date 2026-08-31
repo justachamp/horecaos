@@ -78,6 +78,8 @@ public final class QuoteScoring {
     private QuoteScoring() {}
 
     /**
+     * Ranks every configured partner for one plan, from its quotes and the pickup plan.
+     *
      * @param partners the branch's bindings in the order ADR 0026 resolved them,
      *                 narrowest first. That order is the tie-break of last resort
      *                 and the whole answer when nothing could be quoted
@@ -152,8 +154,8 @@ public final class QuoteScoring {
     private static final Comparator<ScoredPartner> RANKING = Comparator.comparing(
                     (ScoredPartner scored) -> !scored.eligible())
             .thenComparing(scored -> scored.quote() == null || !scored.quote().priced())
-            .thenComparing(ScoredPartner::priceOrMax)
-            .thenComparing(ScoredPartner::pickupEtaOrMax)
+            .thenComparingLong(ScoredPartner::priceOrMax)
+            .thenComparingLong(ScoredPartner::pickupEtaOrMax)
             .thenComparingInt(ScoredPartner::configuredPosition)
             .thenComparing(scored -> scored.partner().bindingId());
 

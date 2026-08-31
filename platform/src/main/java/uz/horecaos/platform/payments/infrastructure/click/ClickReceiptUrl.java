@@ -49,7 +49,7 @@ public final class ClickReceiptUrl {
     private ClickReceiptUrl() {}
 
     /**
-     * Parses Click's {@code qrCodeURL} into the evidence a fiscal document stores.
+     * Parses Click's {@code qrCodeUrl} into the evidence a fiscal document stores.
      *
      * <p>The returned evidence's {@code registeredAt} is when the receipt says it
      * was issued, parsed from the URL's {@code c} parameter, or {@code observedAt}

@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -47,9 +48,6 @@ class FailureOperationsServiceTests {
     private static final String EVIDENCE = "recon-2026-08-20-17";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private FailureOperationsService operations;
@@ -62,9 +60,6 @@ class FailureOperationsServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -479,7 +474,9 @@ class FailureOperationsServiceTests {
 
     private static UUID requestIdFrom(Throwable refusal) {
         assertThat(refusal).isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
-        return ((FailureOperationsService.SecondApproverRequiredException) refusal).approvalRequestId();
+        return Objects.requireNonNull(
+                ((FailureOperationsService.SecondApproverRequiredException) refusal).approvalRequestId(),
+                "a SecondApproverRequiredException always names the request it is waiting on");
     }
 
     @Test

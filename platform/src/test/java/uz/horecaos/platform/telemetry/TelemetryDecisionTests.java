@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -192,9 +193,9 @@ class TelemetryDecisionTests {
         // "acc" and "batteryPercent" are the fields somebody would be tempted to
         // add to save a read.
         assertThat(List.of(RealtimeSignal.class.getRecordComponents()))
-                .noneMatch(component -> component.getName().toLowerCase().contains("battery")
-                        || component.getName().toLowerCase().contains("accuracy")
-                        || component.getName().toLowerCase().contains("speed"));
+                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("battery")
+                        || component.getName().toLowerCase(Locale.ROOT).contains("accuracy")
+                        || component.getName().toLowerCase(Locale.ROOT).contains("speed"));
     }
 
     @Test
@@ -204,9 +205,9 @@ class TelemetryDecisionTests {
         // worse than nothing: it looks like a position, it is treated as one, and
         // the courier it sends somebody to is a kilometre away.
         assertThat(List.of(CoarseCourier.class.getRecordComponents()))
-                .noneMatch(component -> component.getName().toLowerCase().contains("lat")
-                        || component.getName().toLowerCase().contains("lon")
-                        || component.getName().toLowerCase().contains("geohash"));
+                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("lat")
+                        || component.getName().toLowerCase(Locale.ROOT).contains("lon")
+                        || component.getName().toLowerCase(Locale.ROOT).contains("geohash"));
     }
 
     // ------------------------------------------------------------------- the map rules

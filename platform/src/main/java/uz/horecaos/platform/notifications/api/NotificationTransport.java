@@ -1,6 +1,7 @@
 package uz.horecaos.platform.notifications.api;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The seam between this module and the provider (ADR 0020, ADR 0007).
@@ -34,7 +35,11 @@ public interface NotificationTransport {
      * would leave every uncertain message stuck in uncertainty forever.
      */
     DispatchOutcome reconcile(
-            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey);
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String providerIdempotencyKey);
 
     /**
      * Whether a real adapter is present for a channel.

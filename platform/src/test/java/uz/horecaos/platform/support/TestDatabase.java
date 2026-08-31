@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -211,7 +212,7 @@ public final class TestDatabase {
 
         private final String databaseName;
         private final AtomicBoolean closed = new AtomicBoolean();
-        private volatile DataSource dataSource;
+        private volatile @Nullable DataSource dataSource;
 
         private Handle(String databaseName) {
             this.databaseName = databaseName;

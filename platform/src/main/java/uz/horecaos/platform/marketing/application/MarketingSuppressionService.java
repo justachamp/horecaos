@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -64,10 +65,10 @@ public class MarketingSuppressionService {
             UUID tenantId,
             UUID brandId,
             UUID accountId,
-            MarketingChannel channel,
+            @Nullable MarketingChannel channel,
             SuppressionReason reason,
             String actorType,
-            UUID actorId,
+            @Nullable UUID actorId,
             ActorRef actor,
             String statedReason,
             String correlationId) {

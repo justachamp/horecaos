@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -77,7 +78,7 @@ class NotificationAdapterSelectionTests {
         return new ProviderInstallationLookup() {
             @Override
             public Optional<BindingRef> primaryBinding(
-                    UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                    UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
                 return Optional.of(new BindingRef(
                         UUID.randomUUID(),
                         INSTALLATION,
@@ -90,7 +91,7 @@ class NotificationAdapterSelectionTests {
 
             @Override
             public List<BindingRef> candidateBindings(
-                    UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                    UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
                 return List.of();
             }
 

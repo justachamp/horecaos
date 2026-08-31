@@ -128,8 +128,8 @@ public class CartService {
             UUID locationId,
             String channelCode,
             FulfillmentMode fulfillmentMode,
-            UUID customerAccountId,
-            String guestReferenceHash) {
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash) {
 
         SalesChannel channel = channels.byCode(tenantId, channelCode)
                 .orElseThrow(() -> new CartRefusedException(
@@ -151,7 +151,12 @@ public class CartService {
         Serviceability decision =
                 serviceability.resolve(tenantId, brandId, locationId, channel.id(), fulfillmentMode, now);
         if (!decision.available()) {
-            throw new CartRefusedException("NOT_SERVICEABLE", decision.reason().name());
+            // Serviceability's own compact constructor guarantees a reason whenever
+            // it is unavailable; NullAway cannot see that cross-field invariant.
+            throw new CartRefusedException(
+                    "NOT_SERVICEABLE",
+                    Objects.requireNonNull(decision.reason(), "An unavailable location must say why")
+                            .name());
         }
 
         String currency = tenancy.defaultCurrency(tenantId)
@@ -220,7 +225,7 @@ public class CartService {
             UUID variantId,
             int quantity,
             List<UUID> modifierOptionIds,
-            String customerNote) {
+            @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
@@ -346,7 +351,11 @@ public class CartService {
         }
 
         Instant now = clock.instant();
-        DeliveryDestination destination = saved.destination();
+        // saved.located() above is exactly this guarantee: a located address
+        // always carries a destination. NullAway cannot see across the two calls,
+        // so the invariant is restated here rather than silently re-typed away.
+        DeliveryDestination destination =
+                Objects.requireNonNull(saved.destination(), "A located address has a destination");
         String note = command.deliveryNote() == null || command.deliveryNote().isBlank()
                 // The address's own standing instruction when this order does not
                 // override it. A customer who wrote "ring the top bell" once should

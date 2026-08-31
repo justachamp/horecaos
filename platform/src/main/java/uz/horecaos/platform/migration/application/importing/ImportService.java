@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -224,7 +225,11 @@ public class ImportService {
                 return null;
             });
             if (spec.hasWatermark()) {
-                String seen = record.text(spec.watermarkColumn());
+                // hasWatermark() is exactly "watermarkColumn() != null", but that
+                // characteristic-predicate link is invisible to NullAway across the
+                // two calls.
+                String watermarkColumn = Objects.requireNonNull(spec.watermarkColumn(), "hasWatermark() said so");
+                String seen = record.text(watermarkColumn);
                 if (seen != null) {
                     lastWatermark = seen;
                 }
@@ -242,16 +247,21 @@ public class ImportService {
         // that is what being caught up means — and the flag is sticky, so a
         // catch-up that reported it would permanently mark a backfill finished
         // that may have covered a fraction of the table.
+        // SourcePage's own invariant (see its constructor) guarantees a non-null
+        // next key for any page holding at least one row, and this page reached
+        // here past the isEmpty() return above.
+        String nextKey = Objects.requireNonNull(page.nextKey(), "A non-empty page always carries a next key");
+
         advance(
                 tenantId,
                 run,
                 cursor,
-                page.nextKey(),
+                nextKey,
                 lastWatermark,
                 cursor.rowsCommitted() + tally.imported,
                 run.runType() != RunType.CATCH_UP && page.exhausted());
 
-        checkpointRun(tenantId, run, page.nextKey(), lastWatermark, tally);
+        checkpointRun(tenantId, run, nextKey, lastWatermark, tally);
 
         return new PageOutcome(
                 entityType,
@@ -260,7 +270,7 @@ public class ImportService {
                 tally.updated,
                 tally.skipped,
                 tally.quarantined,
-                page.nextKey(),
+                nextKey,
                 page.exhausted());
     }
 
@@ -448,7 +458,8 @@ public class ImportService {
         }
     }
 
-    private void checkpointRun(UUID tenantId, RunRow run, String nextKey, String watermark, Tally tally) {
+    private void checkpointRun(
+            UUID tenantId, RunRow run, String nextKey, @Nullable String watermark, Tally tally) {
         Counters before = run.counters();
         Counters totals = new Counters(
                 before.scanned() + tally.scanned(),

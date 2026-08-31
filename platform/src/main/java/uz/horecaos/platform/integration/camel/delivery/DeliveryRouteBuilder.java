@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.delivery;
 
 import java.time.Duration;
 import org.apache.camel.builder.RouteBuilder;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -59,9 +60,9 @@ public class DeliveryRouteBuilder extends RouteBuilder {
                 // outage. DeliveryCircuitBreakers keys a breaker per partner.
                 .process(processor::invoke)
                 .choice()
-                .when(exchange -> outcome(exchange) != null && outcome(exchange).requiresReconciliation())
+                .when(DeliveryRouteBuilder::requiresReconciliation)
                 .to(RECONCILE_ENDPOINT)
-                .when(exchange -> outcome(exchange) != null && outcome(exchange).mayRetryDirectly())
+                .when(DeliveryRouteBuilder::mayRetryDirectly)
                 .process(processor::scheduleRetry)
                 .end()
                 .process(processor::recordOutcome);
@@ -80,8 +81,18 @@ public class DeliveryRouteBuilder extends RouteBuilder {
                 .process(processor::reconcile);
     }
 
-    private static ProviderOutcome outcome(org.apache.camel.Exchange exchange) {
+    private static @Nullable ProviderOutcome outcome(org.apache.camel.Exchange exchange) {
         return exchange.getIn().getHeader(OUTCOME_HEADER, ProviderOutcome.class);
+    }
+
+    private static boolean requiresReconciliation(org.apache.camel.Exchange exchange) {
+        ProviderOutcome outcome = outcome(exchange);
+        return outcome != null && outcome.requiresReconciliation();
+    }
+
+    private static boolean mayRetryDirectly(org.apache.camel.Exchange exchange) {
+        ProviderOutcome outcome = outcome(exchange);
+        return outcome != null && outcome.mayRetryDirectly();
     }
 
     /** Kept so the MDC key used by the processor and the route cannot drift apart. */

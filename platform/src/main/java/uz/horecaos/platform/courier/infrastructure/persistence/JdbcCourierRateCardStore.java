@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.courier.domain.RateCard;
@@ -36,8 +37,8 @@ public class JdbcCourierRateCardStore {
             UUID id,
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
-            UUID courierTypeId,
+            @Nullable UUID locationId,
+            @Nullable UUID courierTypeId,
             String code,
             int cardVersion,
             String currency) {
