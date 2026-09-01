@@ -29,6 +29,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
@@ -155,7 +156,8 @@ class NotificationDeliveryTests {
         FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
 
         JdbcCustomerStore customerStore = new JdbcCustomerStore(jdbc);
-        profiles = new CustomerProfileService(customerStore, protection, objectMapper, clock);
+        profiles = new CustomerProfileService(
+                customerStore, protection, objectMapper, clock, new JdbcAuditRecorder(jdbc, objectMapper));
         consent = new ConsentService(customerStore, clock);
         RecipientContactDirectory contacts = new RecipientContactService(customerStore, protection);
 

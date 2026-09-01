@@ -259,7 +259,8 @@ class OrderAmendmentAndOutcomeTests {
         orderStateWith = store -> new OrderStateService(
                 store, serviceability, inventoryProcess, policies, settlementPlanner, auditRecorder, published, clock);
         orderState = orderStateWith.apply(orderStore);
-        orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper);
+        orderQuery = new OrderQueryService(
+                orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper, auditRecorder, clock);
         reasons = new OrderOutcomeReasonService(reasonStore, clock);
         outcomes = new OrderOutcomeService(orderState, reasons, orderStore, protection, objectMapper);
         // The real adapter, against the same database: the export guard is only

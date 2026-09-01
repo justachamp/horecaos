@@ -516,7 +516,14 @@ public class OperationsOrderController {
 
         return ResponseEntity.ok(new NoteResponse(
                 lineId,
-                orderQuery.revealLineNote(tenantId, orderId, lineId, purpose).orElse(null)));
+                orderQuery
+                        .revealLineNote(
+                                tenantId,
+                                orderId,
+                                lineId,
+                                purpose,
+                                currentActor.get().subject())
+                        .orElse(null)));
     }
 
     @GetMapping("/{orderId}/customer/phone")
@@ -537,8 +544,10 @@ public class OperationsOrderController {
 
         requireOrderAtLocation(tenantId, orderId, locationId);
 
-        return ResponseEntity.ok(new PhoneRevealResponse(
-                orderQuery.revealCustomerPhone(tenantId, orderId, purpose).orElse(null)));
+        return ResponseEntity.ok(new PhoneRevealResponse(orderQuery
+                .revealCustomerPhone(
+                        tenantId, orderId, purpose, currentActor.get().subject())
+                .orElse(null)));
     }
 
     @GetMapping("/{orderId}/customer/address")
@@ -563,7 +572,8 @@ public class OperationsOrderController {
         // latitude/longitude, and there is no null coordinate honest enough to
         // stand in for "no address on file" — 0,0 is a real point.
         return ResponseEntity.ok(AddressResponse.of(orderQuery
-                .revealCustomerAddress(tenantId, orderId, purpose)
+                .revealCustomerAddress(
+                        tenantId, orderId, purpose, currentActor.get().subject())
                 .orElseThrow(
                         () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No address on file for this order"))));
     }

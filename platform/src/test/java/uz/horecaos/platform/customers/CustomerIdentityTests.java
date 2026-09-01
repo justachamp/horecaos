@@ -19,7 +19,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
@@ -52,9 +55,16 @@ class CustomerIdentityTests {
     private static final Instant NOW = Instant.parse("2026-08-21T12:00:00Z");
     private static final Instant POLICY_EFFECTIVE_FROM = Instant.parse("2026-08-20T00:00:00Z");
 
+    /** A support agent's own identity, standing in for {@code CustomerController}'s {@code currentActor}. */
+    private static final ActorRef STAFF_ACTOR = ActorRef.user("support-1", null);
+
+    /** {@code StorefrontCustomerController}'s own actor for a customer's self-service reveal. */
+    private static final ActorRef SELF_SERVICE_ACTOR = ActorRef.service("storefront-profile");
+
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
+    private ObjectMapper objectMapper;
     private JdbcCustomerStore store;
     private CustomerIdentityService identity;
     private CustomerProfileService profiles;
@@ -83,6 +93,7 @@ class CustomerIdentityTests {
                         + "customer.customer_accounts CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE audit.audit_events CASCADE").update();
         insertTenant(TENANT, "tenant-shared", CustomerIdentityPolicy.TENANT_SHARED);
         insertTenant(OTHER_TENANT, "tenant-isolated", CustomerIdentityPolicy.BRAND_ISOLATED);
 
@@ -99,8 +110,9 @@ class CustomerIdentityTests {
                                 ::get,
                         clock),
                 "local"));
+        objectMapper = JsonMapper.builder().build();
         profiles = new CustomerProfileService(
-                store, protection, JsonMapper.builder().build(), clock);
+                store, protection, objectMapper, clock, new JdbcAuditRecorder(jdbc, objectMapper));
         consent = new ConsentService(store, clock);
     }
 
@@ -401,14 +413,14 @@ class CustomerIdentityTests {
                 .single();
         assertThat(stored).doesNotContain("998901112233");
 
-        assertThat(profiles.revealContactPoints(TENANT, account.account().accountId(), "support-view"))
+        assertThat(profiles.revealContactPoints(TENANT, account.account().accountId(), "support-view", STAFF_ACTOR))
                 .singleElement()
                 .satisfies(contact -> assertThat(contact.value()).isEqualTo("+998901112233"));
 
         // Another tenant cannot even load the row: the tenant predicate is in the
         // query, so the read returns nothing before decryption is attempted.
         // (The key binding itself is exercised by ciphertextIsBoundToItsRow.)
-        assertThat(profiles.revealContactPoints(OTHER_TENANT, account.account().accountId(), "probe"))
+        assertThat(profiles.revealContactPoints(OTHER_TENANT, account.account().accountId(), "probe", STAFF_ACTOR))
                 .isEmpty();
     }
 
@@ -432,7 +444,7 @@ class CustomerIdentityTests {
                 .update();
 
         assertThat(catchThrowable(() ->
-                        profiles.revealContactPoints(TENANT, account.account().accountId(), "probe")))
+                        profiles.revealContactPoints(TENANT, account.account().accountId(), "probe", STAFF_ACTOR)))
                 .isInstanceOf(FieldProtection.ProtectionIntegrityException.class);
     }
 
@@ -465,7 +477,7 @@ class CustomerIdentityTests {
                 .single();
         assertThat(stored).doesNotContain("Amir Temur");
 
-        assertThat(profiles.revealAddresses(TENANT, account.account().accountId(), "dispatch"))
+        assertThat(profiles.revealAddresses(TENANT, account.account().accountId(), "dispatch", STAFF_ACTOR))
                 .singleElement()
                 .satisfies(address -> {
                     assertThat(address.fields().line1()).isEqualTo("Amir Temur ko'chasi 12");
@@ -510,7 +522,7 @@ class CustomerIdentityTests {
         assertThat(stored).doesNotContain("Ko'k darvoza");
         assertThat(stored).doesNotContain("Chilonzor");
 
-        assertThat(profiles.revealAddresses(TENANT, account.account().accountId(), "dispatch"))
+        assertThat(profiles.revealAddresses(TENANT, account.account().accountId(), "dispatch", STAFF_ACTOR))
                 .singleElement()
                 .satisfies(address -> {
                     // Separately addressable rather than flattened into a line:
@@ -564,7 +576,7 @@ class CustomerIdentityTests {
         // Both have a null coordinate pair. Without the source, a backfill
         // selecting on "latitude IS NULL" would re-query the landmark address on
         // every run for the life of the account and never resolve it.
-        assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch"))
+        assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch", STAFF_ACTOR))
                 .allSatisfy(address -> assertThat(address.latitude()).isNull());
 
         assertThat(store.addressesAwaitingGeocoding(TENANT, 100))
@@ -605,7 +617,8 @@ class CustomerIdentityTests {
                         TENANT, accountId, "D", fields, null, 41.3, 69.2, CoordinateSource.LEGACY_UNSOURCED)))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch")).isEmpty();
+        assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch", STAFF_ACTOR))
+                .isEmpty();
     }
 
     @Test
@@ -739,8 +752,9 @@ class CustomerIdentityTests {
 
         profiles.archiveAddress(TENANT, accountId, addressId, 1);
 
-        assertThat(profiles.revealAddresses(TENANT, accountId, "self-service")).isEmpty();
-        assertThat(profiles.revealAddress(TENANT, accountId, addressId, "self-service"))
+        assertThat(profiles.revealAddresses(TENANT, accountId, "self-service", SELF_SERVICE_ACTOR))
+                .isEmpty();
+        assertThat(profiles.revealAddress(TENANT, accountId, addressId, "self-service", SELF_SERVICE_ACTOR))
                 .isEmpty();
         assertThat(store.addressesAwaitingGeocoding(TENANT, 100)).doesNotContain(addressId);
         // And the row is still there, which is the whole difference between an
@@ -799,12 +813,127 @@ class CustomerIdentityTests {
                 null,
                 CoordinateSource.LANDMARK_ONLY);
 
-        assertThat(profiles.revealAddress(TENANT, mine, addressId, "self-service"))
+        assertThat(profiles.revealAddress(TENANT, mine, addressId, "self-service", SELF_SERVICE_ACTOR))
                 .as("empty before anything is decrypted, so no purpose is recorded against a row "
                         + "the caller had no business reading")
                 .isEmpty();
-        assertThat(profiles.revealAddress(TENANT, theirs, addressId, "self-service"))
+        assertThat(auditFactCount("customer.address.revealed"))
+                .as("nothing was decrypted for the wrong-owner attempt, so nothing is recorded yet")
+                .isZero();
+
+        assertThat(profiles.revealAddress(TENANT, theirs, addressId, "self-service", SELF_SERVICE_ACTOR))
                 .isPresent();
+        assertThat(auditFactCount("customer.address.revealed"))
+                .as("the second call actually decrypted its owner's own address")
+                .isEqualTo(1);
+    }
+
+    /**
+     * ADR 0027: every PII reveal on {@code CustomerProfileService} must leave
+     * behind the fact that it happened, naming who and why — the same property
+     * {@code CourierTrackRevealServiceTest}'s {@code aRevealIsAlwaysAnswerable}
+     * proves for the telemetry reveal, and {@code
+     * OrderQueryServiceTest}'s three reveal-audit tests prove for orders. Each
+     * test below proves both halves: the value still comes back decrypted, and
+     * a record of the reveal exists that an investigation could find months
+     * later.
+     */
+    @Test
+    @DisplayName("revealing a contact point leaves an ADR 0027 audit fact naming the staff actor")
+    void revealingContactPointsIsAudited() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-audit-contact");
+        UUID accountId = account.account().accountId();
+        profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "support-view", STAFF_ACTOR))
+                .as("the audit fix must not stop the reveal from returning the decrypted value")
+                .singleElement()
+                .satisfies(contact -> assertThat(contact.value()).isEqualTo("+998901112233"));
+
+        assertThat(auditFact("customer.contact.revealed", accountId))
+                .as("\"who read this customer's contacts, and why\" must have an answer years later")
+                .isEqualTo("support-1|support-view|customer.pii.reveal|1");
+    }
+
+    @Test
+    @DisplayName("revealing addresses leaves one ADR 0027 audit fact for the whole call, staff side")
+    void revealingAddressesIsAuditedForStaff() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-audit-address");
+        UUID accountId = account.account().accountId();
+        profiles.addAddress(
+                TENANT,
+                accountId,
+                "Home",
+                new AddressFields("Amir Temur 12", null, "Toshkent", "Yunusobod", null, null, null, null, null),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
+
+        assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch", STAFF_ACTOR))
+                .hasSize(1);
+
+        assertThat(auditFact("customer.address.revealed", accountId))
+                .isEqualTo("support-1|dispatch|customer.pii.reveal|1");
+    }
+
+    @Test
+    @DisplayName("a customer's self-service address reveal is audited without claiming a staff capability")
+    void revealingAddressesIsAuditedForSelfService() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-audit-self-service");
+        UUID accountId = account.account().accountId();
+        profiles.addAddress(
+                TENANT,
+                accountId,
+                "Home",
+                new AddressFields("Amir Temur 12", null, "Toshkent", "Yunusobod", null, null, null, null, null),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
+
+        assertThat(profiles.revealAddresses(TENANT, accountId, "self-service", SELF_SERVICE_ACTOR))
+                .hasSize(1);
+
+        // No usingCapability: StorefrontCustomerController authorises this call by
+        // account ownership, never by a CUSTOMER_PII_REVEAL grant, so recording
+        // one would claim a check that never happened.
+        assertThat(jdbc.sql("""
+                        SELECT actor_type, actor_subject, reason, capability_used
+                        FROM audit.audit_events
+                        WHERE action_code = 'customer.address.revealed' AND target_id = :id
+                        """)
+                        .param("id", accountId)
+                        .query((rs, rowNum) -> rs.getString("actor_type") + "|" + rs.getString("actor_subject") + "|"
+                                + rs.getString("reason") + "|" + rs.getString("capability_used"))
+                        .single())
+                .isEqualTo("SERVICE|storefront-profile|self-service|null");
+    }
+
+    /**
+     * The one audit fact a reveal action code left for one account, as a single
+     * pipe-joined row — actor, reason, capability, and the revealed count.
+     * {@code .single()} also proves there is exactly one: neither zero (the gap
+     * this suite closes) nor duplicated.
+     */
+    private String auditFact(String actionCode, UUID accountId) {
+        return jdbc.sql("""
+                        SELECT actor_subject || '|' || reason || '|' || capability_used || '|'
+                                || (change_document ->> 'revealedCount')
+                        FROM audit.audit_events
+                        WHERE action_code = :code AND target_id = :accountId
+                        """)
+                .param("code", actionCode)
+                .param("accountId", accountId)
+                .query(String.class)
+                .single();
+    }
+
+    private long auditFactCount(String actionCode) {
+        return jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = :code")
+                .param("code", actionCode)
+                .query(Long.class)
+                .single();
     }
 
     private String ciphertextOf(UUID addressId) {
