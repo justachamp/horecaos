@@ -25,7 +25,6 @@ export const uzLatn: Messages = {
   'shell.signedInAs': 'Kirgan foydalanuvchi',
   'shell.unknownOperator': 'Noma’lum foydalanuvchi',
   'shell.signOut': 'Chiqish',
-  'shell.signIn': 'Kirish',
   'shell.locale': 'Til',
 
   'locale.ru': 'Русский',
@@ -35,12 +34,13 @@ export const uzLatn: Messages = {
   'auth.starting': 'Kirilmoqda',
   'auth.signed-in': 'Kirdingiz',
   'auth.signed-out': 'Kirmagansiz',
-  'auth.unavailable': 'Kirish mavjud emas',
 
-  'state.unavailable.title': 'Kirish mavjud emas',
-  'state.unavailable.body':
-    'HorecaOS realm javob bermadi. Hisobingizda muammo yo‘q. Autentifikatsiya tiklangach qayta urinib ko‘ring.',
-  'state.unavailable.retry': 'Qayta urinish',
+  'login.title': 'Kirish',
+  'login.username': 'Foydalanuvchi nomi yoki email',
+  'login.password': 'Parol',
+  'login.submit': 'Kirish',
+  'login.submitting': 'Kirilmoqda…',
+  'login.invalidCredentials': 'Foydalanuvchi nomi yoki parol noto‘g‘ri.',
 
   'state.denied.title': 'Bu bo‘limga ruxsatingiz yo‘q',
   'state.denied.body':
@@ -83,6 +83,8 @@ export const uzLatn: Messages = {
   'error.PRICE_CHANGED': 'Ekran ochiq turganda narx o‘zgardi. Tekshirib, qayta tasdiqlang.',
   'error.UNSUPPORTED_MEDIA_TYPE': 'Bunday fayl turi qabul qilinmaydi.',
   'error.RATE_LIMIT_EXCEEDED': 'So‘rovlar juda ko‘p. Biroz kutib, qayta urinib ko‘ring.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'Bu hisobga kirishdan oldin yana bir qadam kerak. Platforma administratoriga murojaat qiling.',
   'error.INTERNAL_ERROR': 'Platforma tomonida xatolik yuz berdi. U qayd etildi.',
   'error.NETWORK_UNREACHABLE': 'Platformaga ulanib bo‘lmadi.',
   'error.UNRECOGNISED_ERROR_RESPONSE': 'Platforma bu panel tushunmaydigan javob qaytardi.',

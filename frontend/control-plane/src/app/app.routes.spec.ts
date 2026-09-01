@@ -30,12 +30,12 @@ describe('routes', () => {
     expect(shell?.canActivate).toHaveLength(1);
   });
 
-  it('leaves the unavailable state outside the guard', () => {
-    // Guarding it would send a visitor into a redirect loop against a realm
-    // that is exactly the thing that is not answering.
-    const unavailable = routes.find((route) => route.path === 'unavailable');
-    expect(unavailable).toBeDefined();
-    expect(unavailable?.canActivate).toBeUndefined();
+  it('leaves the login page outside the guard', () => {
+    // Guarding the page that signs somebody in would refuse to render it to
+    // exactly the visitor it exists for (ADR 0062).
+    const login = routes.find((route) => route.path === 'login');
+    expect(login).toBeDefined();
+    expect(login?.canActivate).toBeUndefined();
   });
 
   it('declares a capability for every section that is not the overview', () => {

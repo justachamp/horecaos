@@ -93,6 +93,20 @@ public enum ErrorCode {
 
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
+    /**
+     * ADR 0062: a staff sign-in presented credentials Keycloak accepted, but
+     * refuses the direct grant because a required action is outstanding — an
+     * unconfigured account, an expired temporary password, and the like.
+     *
+     * <p>Deliberately distinct from {@link #UNAUTHENTICATED}, and this is the
+     * one exception the ADR carves into an otherwise uniform "invalid
+     * credentials" failure: a wrong password and an unknown username answer
+     * identically to avoid user enumeration, but an account that legitimately
+     * needs one more step deserves to be told so, because the remediation is
+     * completely different — finish account setup, not retype a password.
+     */
+    ACCOUNT_ACTION_REQUIRED(HttpStatus.UNAUTHORIZED, "Account action required"),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 
     private final HttpStatus status;

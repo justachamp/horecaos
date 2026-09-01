@@ -22,7 +22,6 @@
     "@angular/router": "^22.1.0",
     "@ibm/plex-mono": "^2.5.0",
     "@ibm/plex-sans": "^1.1.0",
-    "angular-auth-oidc-client": "^22.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

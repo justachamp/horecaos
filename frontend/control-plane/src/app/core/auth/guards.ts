@@ -8,27 +8,17 @@ import { SessionContextService } from './session-context.service';
 /**
  * No route in this console is reachable without a session.
  *
- * A signed-out visitor is sent to Keycloak rather than to a local sign-in
- * page: there is no local sign-in page, and inventing one that immediately
- * redirects is a screen whose only content is a flicker.
+ * A signed-out visitor is sent to this console's own `/login` (ADR 0062),
+ * not to Keycloak: the browser never talks to Keycloak at all any more, so
+ * there is nothing to redirect to and nothing that can race a document
+ * navigation the way the old Authorization Code redirect could. A `UrlTree`
+ * is therefore always safe to return here, unlike the old guard's `false`.
  */
 export const authGuard: CanActivateFn = (): boolean | UrlTree => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  switch (auth.status()) {
-    case 'signed-in':
-      return true;
-    case 'unavailable':
-      // The realm is not answering. Route to the state that says so, rather
-      // than to a redirect that will also fail and lose the address bar.
-      return router.parseUrl('/unavailable');
-    default:
-      auth.signIn();
-      // False rather than a redirect: the browser is already navigating away
-      // to Keycloak, and starting a second navigation races it.
-      return false;
-  }
+  return auth.status() === 'signed-in' ? true : router.parseUrl('/login');
 };
 
 /**

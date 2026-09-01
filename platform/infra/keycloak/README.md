@@ -14,6 +14,37 @@ sitting idle in a scheduled job.
 Neither holds `manage-realm`, `realm-admin`, `manage-clients`, or
 `impersonation`.
 
+## Staff sign-in (ADR 0062)
+
+`horecaos-staff-login` is a third confidential client, and deliberately not a
+service account: `serviceAccountsEnabled` is `false`, because it never acts as
+itself. It exists so the platform backend — and only the backend — can run the
+OAuth2 direct grant on behalf of a real signed-in staff member:
+`frontend/control-plane` and `frontend/operations` each render their own
+sign-in page, POST a username and password to the platform, and the platform
+exchanges them with Keycloak on this client. Neither app ever holds this
+secret or talks to Keycloak directly.
+
+It replaces the two public redirect clients this realm used to carry,
+`horecaos-operations` and `horecaos-control-plane` (Authorization Code + PKCE,
+ADR 0003/ADR 0035) — both retired from this file along with the redirect flow
+they served. A fresh import never creates them at all; a realm that already
+imported the old file still carries them until an operator removes them live
+(`docs/runbooks/production-setup.md`'s "Production hardening" section still
+names them for a redirect-URI step this decision made moot — it needs its own
+update to retire that step and add this client's secret to the rotation list
+below, not done here).
+
+Same secrets discipline as the two service accounts above: the value in this
+file is a development placeholder, `docker compose`'s `openbao-seed` seeds the
+matching value at `horecaos/local/identity_admin/keycloak/staff-login-secret`,
+and both must stay in sync (see "Secrets" below). Locally, `docker compose up`
+only creates this client on a *fresh* realm import; a checkout with an
+already-running Keycloak from before this client existed needs
+`infra/keycloak/create-staff-login-client.sh` once to catch up — the same
+situation `create-local-dev-client.sh` and `create-local-web-client.sh` solve
+for their own additions.
+
 ## Verified, not assumed
 
 Checked against Keycloak 26.7 on 2026-08-21:

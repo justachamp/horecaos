@@ -64,6 +64,8 @@ export const ApiErrorCode = {
   PRICE_CHANGED: 'PRICE_CHANGED',
   UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  /** ADR 0062: a staff sign-in's credentials were correct but a required action stands in the way. */
+  ACCOUNT_ACTION_REQUIRED: 'ACCOUNT_ACTION_REQUIRED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   /** Not from the server. The request never reached it. */
   NETWORK_UNREACHABLE: 'NETWORK_UNREACHABLE',

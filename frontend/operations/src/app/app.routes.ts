@@ -12,17 +12,17 @@ import { NAV_ITEMS } from './shell/navigation';
  * specification is more useful to the next developer than a screen half-built
  * against it.
  *
- * Everything except the callback is behind {@link authGuard}. The guard proves
+ * Everything except `/login` is behind {@link authGuard}. The guard proves
  * somebody is signed in; it never decides what they may do. Authorization is the
  * server's (ADR 0025).
  */
 export const routes: Routes = [
   {
-    path: 'auth/callback',
-    // Outside the shell and outside the guard. Guarding the route that completes
-    // the login is a redirect loop.
-    loadComponent: () =>
-      import('./features/auth-callback/auth-callback-page').then((m) => m.AuthCallbackPage),
+    path: 'login',
+    // Outside the shell and outside the guard (ADR 0062): guarding the page
+    // that signs somebody in would refuse to render it to exactly the
+    // visitor it exists for.
+    loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
     path: '',

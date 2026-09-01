@@ -158,6 +158,13 @@ services:
           value=development-only-not-a-secret-provisioning
         bao kv put horecaos/local/identity_admin/keycloak/reader-secret \
           value=development-only-not-a-secret-reader
+        # ADR 0062: horecaos-staff-login, the confidential direct-grant client
+        # the backend alone uses to exchange staff credentials with Keycloak.
+        # Same reconciliation requirement as the two secrets above -- this
+        # value must equal the realm import's fallback for that client, or a
+        # checkout on the "environment"/OpenBao default path signs in nobody.
+        bao kv put horecaos/local/identity_admin/keycloak/staff-login-secret \
+          value=development-only-not-a-secret-staff-login
         # These two close a gap docs/development.md's own documented dev loop
         # falls into: running `make run` with HORECAOS_SECRETS_PROVIDER=openbao
         # (.env.example's own recommended way to exercise the OpenBao path

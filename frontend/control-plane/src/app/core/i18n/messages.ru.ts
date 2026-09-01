@@ -25,7 +25,6 @@ export const ru: Messages = {
   'shell.signedInAs': 'Вы вошли как',
   'shell.unknownOperator': 'Неизвестный пользователь',
   'shell.signOut': 'Выйти',
-  'shell.signIn': 'Войти',
   'shell.locale': 'Язык',
 
   'locale.ru': 'Русский',
@@ -35,12 +34,13 @@ export const ru: Messages = {
   'auth.starting': 'Вход',
   'auth.signed-in': 'Вы вошли',
   'auth.signed-out': 'Вы не вошли',
-  'auth.unavailable': 'Вход недоступен',
 
-  'state.unavailable.title': 'Вход недоступен',
-  'state.unavailable.body':
-    'Realm HorecaOS не отвечает. С вашей учётной записью всё в порядке. Повторите попытку, когда сервис аутентификации вернётся.',
-  'state.unavailable.retry': 'Повторить',
+  'login.title': 'Вход',
+  'login.username': 'Имя пользователя или email',
+  'login.password': 'Пароль',
+  'login.submit': 'Войти',
+  'login.submitting': 'Выполняется вход…',
+  'login.invalidCredentials': 'Неверное имя пользователя или пароль.',
 
   'state.denied.title': 'У вас нет доступа к этому разделу',
   'state.denied.body':
@@ -83,6 +83,8 @@ export const ru: Messages = {
   'error.PRICE_CHANGED': 'Цена изменилась, пока экран был открыт. Проверьте и подтвердите снова.',
   'error.UNSUPPORTED_MEDIA_TYPE': 'Такой тип файла не принимается.',
   'error.RATE_LIMIT_EXCEEDED': 'Слишком много запросов. Подождите и повторите.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'Для входа в эту учётную запись нужен ещё один шаг. Обратитесь к администратору платформы.',
   'error.INTERNAL_ERROR': 'Сбой на стороне платформы. Он зафиксирован.',
   'error.NETWORK_UNREACHABLE': 'Платформа недоступна.',
   'error.UNRECOGNISED_ERROR_RESPONSE': 'Платформа ответила так, как эта панель не понимает.',

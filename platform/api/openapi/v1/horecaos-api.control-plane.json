@@ -3058,6 +3058,66 @@
         },
         "type" : "object"
       },
+      "StaffLogoutRequest" : {
+        "properties" : {
+          "refreshToken" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "StaffRefreshRequest" : {
+        "properties" : {
+          "refreshToken" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "StaffSessionResponse" : {
+        "properties" : {
+          "accessToken" : {
+            "type" : "string"
+          },
+          "accessTokenExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "refreshToken" : {
+            "type" : "string"
+          },
+          "refreshTokenExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tokenType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StaffSignInRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "username" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "username" ],
+        "type" : "object"
+      },
       "StepView" : {
         "properties" : {
           "attemptCount" : {
@@ -3413,6 +3473,89 @@
         },
         "summary" : "Raise a control-band tier escalation",
         "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/auth/sessions" : {
+      "post" : {
+        "description" : "Exchanges a username and password with Keycloak over the OAuth2 direct grant on the backend's own confidential client; the browser never talks to Keycloak. Wrong password and unknown username answer identically to avoid user enumeration.",
+        "operationId" : "signInControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffSignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign in to the control plane",
+        "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/control-plane/auth/sessions/current" : {
+      "delete" : {
+        "description" : "Revokes the refresh token at Keycloak. Always succeeds from the caller's point of view, whatever Keycloak answers.",
+        "operationId" : "signOutControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffLogoutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign out of the control plane",
+        "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/control-plane/auth/sessions/refresh" : {
+      "post" : {
+        "description" : "Proxies the refresh grant.",
+        "operationId" : "refreshControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffRefreshRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Refresh a control-plane session",
+        "tags" : [ "Staff sign-in" ]
       }
     },
     "/api/v1/control-plane/grants" : {
@@ -8664,6 +8807,9 @@
   }, {
     "description" : "The YAML flow documents the conversations engine executes",
     "name" : "Conversation flows"
+  }, {
+    "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
+    "name" : "Staff sign-in"
   }, {
     "description" : "Control-plane alerts raised from outside the Java process",
     "name" : "SaaS control plane"
