@@ -23,6 +23,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'shell.group.business': 'Muassasa',
   'shell.nav.today': 'Bugun',
   'shell.nav.orders': 'Buyurtmalar',
+  'shell.nav.inbox': 'Suhbatlar',
   'shell.nav.kitchen': 'Oshxona',
   'shell.nav.delivery': 'Yetkazib berish',
   'shell.nav.couriers': 'Kuryerlar',
@@ -174,6 +175,41 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.queue.empty.attention': 'Hammasi joyida',
   'orders.queue.denied': 'Ushbu filial buyurtmalariga kirish yoʻq',
   'orders.queue.error.retry': 'Qayta urinish',
+
+  'inbox.title': 'Suhbatlar',
+  'inbox.denied': 'Ushbu brend suhbatlariga ruxsat yoʻq',
+  'inbox.list.empty': 'Hozircha suhbatlar yoʻq',
+
+  'inbox.column.channel': 'Kanal',
+  'inbox.column.customer': 'Mijoz',
+  'inbox.column.state': 'Holat',
+  'inbox.column.lastActivity': 'Oxirgi faollik',
+
+  'inbox.customer.linked': 'Mijoz bogʻlangan',
+  'inbox.customer.unlinked': 'Bogʻlanmagan',
+  'inbox.needsReply': 'javob kerak',
+
+  'inbox.state.IDLE': 'Kutmoqda',
+  'inbox.state.FLOW_ACTIVE': 'Bot javob bermoqda',
+  'inbox.state.HANDED_TO_OPERATOR': 'Operatorda',
+  'inbox.state.CLOSED': 'Yopilgan',
+
+  'inbox.channel.TELEGRAM': 'Telegram',
+
+  'inbox.detail.assignedTo': 'Biriktirilgan: {operator}',
+  'inbox.detail.history': 'Tarix',
+  'inbox.detail.history.empty': 'Hozircha xabarlar yoʻq',
+
+  'inbox.action.takeover': 'Oʻz zimmasiga olish',
+  'inbox.action.returnToFlow': 'Oqimga qaytarish',
+  'inbox.action.close': 'Yopish',
+
+  'inbox.reply.placeholder': 'Javob yozing',
+  'inbox.reply.send': 'Yuborish',
+
+  'inbox.message.author.customer': 'Mijoz',
+  'inbox.message.author.operator': 'Operator',
+  'inbox.message.author.flow': 'Bot',
 
   'auth.signingIn': 'Kirish',
   'auth.signingIn.detail': 'Hisob provayderidan qaytmoqda.',

@@ -72,7 +72,7 @@ public final class FlowDocumentValidator {
             case InputToFieldBlock inputToField -> List.of(inputToField.next());
             case DelayBlock delay -> List.of(delay.next());
             case ConditionBlock condition -> List.of(condition.whenTrue(), condition.whenFalse());
-            case OperatorHandoffBlock ignored -> List.of();
+            case OperatorHandoffBlock handoff -> handoff.next() == null ? List.of() : List.of(handoff.next());
         };
     }
 

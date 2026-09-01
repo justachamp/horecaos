@@ -53,7 +53,8 @@ describe('Shell', () => {
 
   it('renders every navigation entry', () => {
     const items = fixture.nativeElement.querySelectorAll('.rail__item');
-    expect(items.length).toBe(11);
+    // Twelve since ADR 0059 stage 2 added the inbox entry to the Service group.
+    expect(items.length).toBe(12);
   });
 
   it('hides the late indicator when nothing is late', () => {

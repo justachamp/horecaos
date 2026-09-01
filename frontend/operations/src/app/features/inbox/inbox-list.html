@@ -1,0 +1,107 @@
+<div class="inbox-list">
+  <div class="inbox-list__toolbar">
+    <div class="inbox-list__status">
+      @if (formatUpdatedAt(); as stamp) {
+        <span
+          class="inbox-list__stamp q-caption q-tnum"
+          [class.inbox-list__stamp--pulse]="refreshing()"
+        >
+          {{ stamp }}
+        </span>
+      }
+      <button
+        type="button"
+        class="inbox-list__refresh"
+        (click)="manualRefresh()"
+        [attr.aria-label]="'orders.queue.refresh' | t"
+        [attr.title]="'orders.queue.refresh' | t"
+      >
+        <span aria-hidden="true">⟳</span>
+      </button>
+    </div>
+  </div>
+
+  @if (lastError(); as error) {
+    <div class="inbox-list__error-band" role="alert">
+      <span class="q-body-sm">{{ errorMessage(error) }}</span>
+      <span class="inbox-list__error-ref q-mono q-caption">{{ errorReference(error) }}</span>
+      <button type="button" class="inbox-list__error-retry q-body-sm" (click)="manualRefresh()">
+        {{ 'orders.queue.error.retry' | t }}
+      </button>
+    </div>
+  }
+
+  <div class="inbox-list__table-wrap" data-testid="inbox-table-wrap">
+    @if (!firstLoadComplete()) {
+      <div
+        class="inbox-list__skeleton"
+        [attr.aria-label]="'orders.queue.loading' | t"
+        data-testid="inbox-skeleton"
+      >
+        @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+          <div class="inbox-list__skeleton-row"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="inbox-list__denied" data-testid="inbox-denied">
+        <p class="q-body-sm">{{ 'inbox.denied' | t }}</p>
+      </div>
+    } @else {
+      <table class="inbox-list__table">
+        <thead>
+          <tr>
+            <th class="inbox-list__rail-col" aria-hidden="true"></th>
+            <th>{{ 'inbox.column.channel' | t }}</th>
+            <th>{{ 'inbox.column.customer' | t }}</th>
+            <th>{{ 'inbox.column.state' | t }}</th>
+            <th>{{ 'inbox.column.lastActivity' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.conversationId) {
+            <tr
+              class="conversation-row"
+              [class.conversation-row--attention]="row.needsReply"
+              tabindex="0"
+              data-testid="conversation-row"
+              (click)="openConversation(row.conversationId)"
+              (keydown.enter)="openConversation(row.conversationId)"
+            >
+              <td
+                class="inbox-list__rail-col"
+                [class.inbox-list__rail--attention]="row.needsReply"
+              ></td>
+              <td>{{ channelLabel(row.channel) }}</td>
+              <td>
+                @if (row.customerAccountId) {
+                  <span class="q-body-sm">{{ 'inbox.customer.linked' | t }}</span>
+                } @else {
+                  <span class="q-caption inbox-list__no-customer">{{
+                    'inbox.customer.unlinked' | t
+                  }}</span>
+                }
+              </td>
+              <td>
+                <span class="status-badge" [class.status-badge--attention]="row.needsReply">
+                  {{ stateLabel(row.state) }}
+                </span>
+                @if (row.needsReply) {
+                  <span class="q-caption inbox-list__attention-caption">{{
+                    'inbox.needsReply' | t
+                  }}</span>
+                }
+              </td>
+              <td class="q-tnum">{{ formatActivity(row) }}</td>
+            </tr>
+          } @empty {
+            <tr class="inbox-list__empty-row">
+              <td colspan="5">
+                <p class="q-body-sm" data-testid="inbox-empty">{{ emptyMessage() }}</p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

@@ -237,6 +237,67 @@ class FlowDocumentParserAndValidatorTests {
     }
 
     @Test
+    @DisplayName("an operator-handoff block's optional next is parsed and validated like any other transition")
+    void operatorHandoffNextIsParsedAndValidated() {
+        FlowDocument document = FlowDocumentParser.parse("""
+                flowKey: with-return
+                name: With return
+                startState: greeting
+                states:
+                  greeting:
+                    type: operator-handoff
+                    message: "Connecting you to a team member."
+                    next: welcome_back
+                  welcome_back:
+                    type: message
+                    text: "Thanks for your patience!"
+                """);
+        FlowDocumentValidator.validate(document);
+
+        OperatorHandoffBlock handoff =
+                (OperatorHandoffBlock) document.state("greeting").orElseThrow().block();
+        assertThat(handoff.next()).isEqualTo("welcome_back");
+    }
+
+    @Test
+    @DisplayName("an operator-handoff block with no next parses to a genuinely terminal block")
+    void operatorHandoffWithNoNextIsTerminal() {
+        FlowDocument document = FlowDocumentParser.parse("""
+                flowKey: no-return
+                name: No return
+                startState: greeting
+                states:
+                  greeting:
+                    type: operator-handoff
+                    message: "A person will take it from here."
+                """);
+        FlowDocumentValidator.validate(document);
+
+        OperatorHandoffBlock handoff =
+                (OperatorHandoffBlock) document.state("greeting").orElseThrow().block();
+        assertThat(handoff.next()).isNull();
+    }
+
+    @Test
+    @DisplayName("an operator-handoff block's next naming a state that does not exist is rejected")
+    void operatorHandoffNextTargetMustExist() {
+        FlowDocument document = FlowDocumentParser.parse("""
+                flowKey: bad
+                name: Bad
+                startState: greeting
+                states:
+                  greeting:
+                    type: operator-handoff
+                    next: nowhere
+                """);
+
+        assertThatThrownBy(() -> FlowDocumentValidator.validate(document))
+                .isInstanceOf(FlowDocumentException.class)
+                .hasMessageContaining("nowhere")
+                .hasMessageContaining("not a declared state");
+    }
+
+    @Test
     @DisplayName("template rendering substitutes a known variable and leaves an unknown one verbatim")
     void templateRendering() {
         assertThat(FlowTemplate.render("Order at {{storefrontUrl}}!", java.util.Map.of("storefrontUrl", "https://x")))

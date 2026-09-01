@@ -100,6 +100,10 @@ public enum PlatformRole {
                     // ADR 0059: publishing the brand's flow documents — YAML is the only
                     // authoring surface, and this is the one capability that gates it.
                     CONVERSATION_FLOW_MANAGE,
+                    // ADR 0059 stage 2: the operator inbox — see
+                    // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
+                    // this and why.
+                    CONVERSATION_INBOX_MANAGE,
                     // ADR 0044: the second signature on a send, and the power to lift a
                     // suppression. Both are deliberately away from whoever writes the
                     // campaign — the approver must not be the author, and a marketer who
@@ -240,6 +244,10 @@ public enum PlatformRole {
                     // signature, so shutting them out of the console would leave those
                     // requests with no one able to reach them.
                     APPROVAL_DECIDE,
+                    // ADR 0059 stage 2: the operator inbox — see
+                    // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
+                    // this and why.
+                    CONVERSATION_INBOX_MANAGE,
                     // ADR 0042: taking a courier on, and checking their self-employment
                     // registration is current. The reveal of the registration number
                     // itself is not here; it is granted per person with a purpose.
@@ -484,6 +492,11 @@ public enum PlatformRole {
                     COURIER_DUTY_MANAGE,
                     CUSTOMER_READ,
                     CUSTOMER_PII_REVEAL,
+                    // ADR 0059 stage 2: the operator inbox — see
+                    // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
+                    // this and why, including the scope caveat that applies to this role
+                    // in particular.
+                    CONVERSATION_INBOX_MANAGE,
                     INTEGRATION_FAILURE_READ,
                     REPORTING_READ,
                     // ADR 0060: the no-POS design center. A branch manager approves,

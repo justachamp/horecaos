@@ -1,0 +1,141 @@
+<div class="pane" data-testid="inbox-detail-pane">
+  @if (notice(); as text) {
+    <div class="pane__notice-band" role="status" data-testid="inbox-detail-notice">
+      <span class="q-body-sm">{{ text }}</span>
+      <button
+        type="button"
+        class="pane__notice-dismiss"
+        (click)="dismissNotice()"
+        [attr.aria-label]="'orders.detail.close' | t"
+      >
+        ×
+      </button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div
+      class="pane__skeleton"
+      [attr.aria-label]="'orders.detail.loading' | t"
+      data-testid="inbox-detail-loading"
+    >
+      @for (i of [1, 2, 3]; track i) {
+        <div class="pane__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <p class="q-body-sm pane__state" data-testid="inbox-detail-denied">{{ 'inbox.denied' | t }}</p>
+  } @else if (notFound()) {
+    <p class="q-body-sm pane__state" data-testid="inbox-detail-not-found">
+      {{ 'error.RESOURCE_NOT_FOUND' | t }}
+    </p>
+  } @else if (lastError(); as error) {
+    <div class="pane__state" data-testid="inbox-detail-error">
+      <p class="q-body-sm">{{ errorMessage(error) }}</p>
+      <button type="button" class="pane__retry" (click)="manualRetry()">
+        {{ 'orders.queue.error.retry' | t }}
+      </button>
+    </div>
+  } @else if (conversation(); as detail) {
+    <header class="pane__header">
+      <div class="pane__header-row">
+        <span class="q-emphasis">{{ channelLabel(detail.channel) }}</span>
+        <span class="status-badge">{{ stateLabel(detail.state) }}</span>
+      </div>
+      @if (detail.assignedTo) {
+        <p class="q-caption pane__assigned">
+          {{ 'inbox.detail.assignedTo' | t: { operator: detail.assignedTo } }}
+        </p>
+      }
+      <p class="q-caption">
+        @if (detail.customerAccountId) {
+          {{ 'inbox.customer.linked' | t }}
+        } @else {
+          {{ 'inbox.customer.unlinked' | t }}
+        }
+      </p>
+
+      <div class="pane__actions">
+        @if (canTakeOver()) {
+          <button
+            type="button"
+            class="pane__primary-action"
+            [disabled]="busy()"
+            (click)="takeover()"
+            data-testid="inbox-detail-takeover"
+          >
+            {{ 'inbox.action.takeover' | t }}
+          </button>
+        }
+        @if (canReturnToFlow()) {
+          <button
+            type="button"
+            class="pane__secondary-action"
+            [disabled]="busy()"
+            (click)="returnToFlow()"
+            data-testid="inbox-detail-return"
+          >
+            {{ 'inbox.action.returnToFlow' | t }}
+          </button>
+        }
+        @if (canClose()) {
+          <button
+            type="button"
+            class="pane__secondary-action"
+            [disabled]="busy()"
+            (click)="close()"
+            data-testid="inbox-detail-close"
+          >
+            {{ 'inbox.action.close' | t }}
+          </button>
+        }
+      </div>
+    </header>
+
+    <section class="pane__section" [attr.aria-label]="'inbox.detail.history' | t">
+      @if (messages().length === 0) {
+        <p class="q-body-sm pane__state-inline">{{ 'inbox.detail.history.empty' | t }}</p>
+      } @else {
+        <ol class="pane__history" data-testid="inbox-detail-history">
+          @for (message of messages(); track message.messageId) {
+            <li
+              class="pane__message"
+              [class.pane__message--inbound]="message.direction === 'INBOUND'"
+              [class.pane__message--operator]="message.direction === 'OPERATOR'"
+              [attr.data-testid]="'inbox-message-' + message.direction"
+            >
+              <div class="pane__message-meta q-caption">
+                <span>{{ messageAuthorLabel(message) | t }}</span>
+                <span>{{ formatOccurredAt(message.occurredAt) }}</span>
+              </div>
+              <p class="q-body-sm pane__message-body">{{ message.body }}</p>
+            </li>
+          }
+        </ol>
+      }
+    </section>
+
+    @if (canReply()) {
+      <div class="pane__reply">
+        <textarea
+          class="pane__reply-input"
+          rows="2"
+          [value]="replyDraft()"
+          (input)="updateReplyDraft($any($event.target).value)"
+          [attr.placeholder]="'inbox.reply.placeholder' | t"
+          [disabled]="busy()"
+          data-testid="inbox-reply-input"
+        ></textarea>
+        <button
+          type="button"
+          class="pane__primary-action"
+          [disabled]="busy() || replyDraft().trim().length === 0"
+          (click)="sendReply()"
+          data-testid="inbox-reply-send"
+        >
+          {{ 'inbox.reply.send' | t }}
+        </button>
+      </div>
+    }
+  }
+</div>

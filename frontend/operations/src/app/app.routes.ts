@@ -58,6 +58,19 @@ export const routes: Routes = [
           },
         ],
       },
+      {
+        path: 'inbox',
+        loadComponent: () => import('./features/inbox/inbox-page').then((m) => m.InboxPage),
+        children: [
+          // Docks beside the list rather than replacing it — same reasoning
+          // as the order board's own detail child route.
+          {
+            path: ':conversationId',
+            loadComponent: () =>
+              import('./features/inbox/inbox-detail-pane').then((m) => m.InboxDetailPane),
+          },
+        ],
+      },
       ...placeholderRoutes(),
       // Unknown paths land on Today rather than on a 404. There is no such thing
       // as a deleted page in this console — only one that has not been built —
@@ -72,7 +85,7 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders']);
+  const built = new Set(['/today', '/orders', '/inbox']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

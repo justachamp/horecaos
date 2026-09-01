@@ -105,6 +105,19 @@ class ConversationEngine implements ConversationInboundPort {
             // underneath an answer already waiting on the customer.
             return;
         }
+        if (conversation.state() == ConversationState.HANDED_TO_OPERATOR) {
+            // ADR 0059 stage 2: "the engine must stop answering" a parked
+            // conversation is a real invariant, not just "no active run to
+            // advance" — a bare /start has no active run either (the run
+            // that parked it already ended), so without this check it would
+            // silently start a brand-new flow underneath an operator who has
+            // already taken this conversation over. Recorded like any other
+            // stray inbound message instead, so the operator sees the
+            // attempt rather than the flow quietly restarting.
+            messages.record(
+                    channel.tenantId(), conversation.id(), ConversationMessageStore.Direction.INBOUND, null, "/start");
+            return;
+        }
 
         FlowDocument document = FlowDocumentParser.parse(activeDoc.get().documentYaml());
         FlowRunRepository.Row run;
@@ -128,6 +141,13 @@ class ConversationEngine implements ConversationInboundPort {
     public void handleText(ConversationChannelRef channel, String text) {
         Active active = activeInputAwaitingRun(channel);
         if (active == null || !(active.state.block() instanceof InputToFieldBlock inputToField)) {
+            // No run is actually waiting on text right now — a parked
+            // (HANDED_TO_OPERATOR) or closed conversation, a run mid-delay,
+            // or one waiting on a button tap instead. ADR 0059 stage 2: the
+            // engine still stays quiet (nothing sent), but the message must
+            // still land in history so the inbox — not silence — is what the
+            // customer's next message actually reaches.
+            recordStrayInbound(channel, text);
             return;
         }
         boolean advanced = runs.advance(
@@ -165,6 +185,10 @@ class ConversationEngine implements ConversationInboundPort {
     public void handleButtonTap(ConversationChannelRef channel, String buttonKey) {
         Active active = activeInputAwaitingRun(channel);
         if (active == null || !(active.state.block() instanceof ButtonsBlock buttons)) {
+            // Same reasoning as handleText's fallback: no run is waiting on a
+            // tap right now, but the tap is still a customer signal the
+            // inbox must be able to see.
+            recordStrayInbound(channel, "[" + buttonKey + "]");
             return;
         }
         FlowButton tapped = buttons.buttons().stream()
@@ -173,7 +197,9 @@ class ConversationEngine implements ConversationInboundPort {
                 .orElse(null);
         if (tapped == null) {
             // A stale tap on a superseded run, or a key that no longer
-            // matches this block — no-op, per this port's own contract.
+            // matches this block — still worth recording (see above), but
+            // not a no-op the port's contract lets a caller ignore.
+            recordStrayInbound(channel, "[" + buttonKey + "]");
             return;
         }
         // FlowDocumentValidator guarantees a CALLBACK button always carries
@@ -205,6 +231,28 @@ class ConversationEngine implements ConversationInboundPort {
                 targetState,
                 active.run.version() + 1,
                 active.captured);
+    }
+
+    // ------------------------------------------------------- return to flow
+
+    /**
+     * Continues a run {@code ConversationInboxService} has just reactivated
+     * from a {@code HANDED_TO_OPERATOR} operator-handoff block's {@code
+     * next} — the return-to-flow counterpart of {@link #resumeDelayed}.
+     * Called only after the caller has already flipped the conversation to
+     * {@code FLOW_ACTIVE} and won {@link FlowRunRepository#reactivate}'s own
+     * CAS, so every send here is exactly as safe as any other step of {@link
+     * #execute}.
+     */
+    void continueFlow(
+            ConversationChannelRef channel,
+            UUID conversationId,
+            UUID runId,
+            FlowDocument document,
+            String stateId,
+            long runVersion,
+            Map<String, String> captured) {
+        execute(channel, conversationId, runId, document, stateId, runVersion, captured);
     }
 
     // -------------------------------------------------------------- resume
@@ -368,6 +416,36 @@ class ConversationEngine implements ConversationInboundPort {
         Map<String, String> variables = new LinkedHashMap<>(captured);
         variables.put(STOREFRONT_URL_VARIABLE, storefrontUrl);
         return variables;
+    }
+
+    /**
+     * Records an inbound message the engine has nothing to do with right now
+     * (ADR 0059 stage 2) — a parked, closed, or between-runs conversation, or
+     * one whose active run is not currently waiting on this kind of input.
+     * Reopens a {@code CLOSED} conversation to {@code HANDED_TO_OPERATOR}
+     * rather than leaving a customer's new message sitting against a thread
+     * staff have already closed and have no reason to look at again; a
+     * conversation already {@code HANDED_TO_OPERATOR} needs no state change,
+     * since it already reads as needing attention, and one still {@code
+     * FLOW_ACTIVE} is left exactly as is — the run may simply be waiting on
+     * something else (a delay, a different button), and the inbox's own
+     * needs-reply computation is what surfaces this message either way.
+     *
+     * <p>A channel identity with no conversation row at all (never reached
+     * {@link #handleStart} or a customer link) has nothing to record against
+     * and is left as the silent no-op it always was.
+     */
+    private void recordStrayInbound(ConversationChannelRef channel, String body) {
+        Optional<ConversationRepository.Row> conversationOpt =
+                conversations.find(channel.tenantId(), channel.brandId(), channel.channel(), channel.externalChatId());
+        if (conversationOpt.isEmpty()) {
+            return;
+        }
+        ConversationRepository.Row conversation = conversationOpt.get();
+        messages.record(channel.tenantId(), conversation.id(), ConversationMessageStore.Direction.INBOUND, null, body);
+        if (conversation.state() == ConversationState.CLOSED) {
+            conversations.updateState(channel.tenantId(), conversation.id(), ConversationState.HANDED_TO_OPERATOR);
+        }
     }
 
     /** The run, its document, its current state, and its captured fields — resolved once for a text/tap handler. */

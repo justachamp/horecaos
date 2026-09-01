@@ -33,6 +33,7 @@ export const messagesEn = {
   'shell.group.business': 'Business',
   'shell.nav.today': 'Today',
   'shell.nav.orders': 'Orders',
+  'shell.nav.inbox': 'Inbox',
   'shell.nav.kitchen': 'Kitchen',
   'shell.nav.delivery': 'Delivery',
   'shell.nav.couriers': 'Couriers',
@@ -184,6 +185,41 @@ export const messagesEn = {
   'orders.queue.empty.attention': 'All clear',
   'orders.queue.denied': "No access to this branch's orders",
   'orders.queue.error.retry': 'Retry',
+
+  'inbox.title': 'Inbox',
+  'inbox.denied': 'No access to this brand’s conversations',
+  'inbox.list.empty': 'No conversations yet',
+
+  'inbox.column.channel': 'Channel',
+  'inbox.column.customer': 'Customer',
+  'inbox.column.state': 'State',
+  'inbox.column.lastActivity': 'Last activity',
+
+  'inbox.customer.linked': 'Linked customer',
+  'inbox.customer.unlinked': 'Not linked',
+  'inbox.needsReply': 'needs reply',
+
+  'inbox.state.IDLE': 'Idle',
+  'inbox.state.FLOW_ACTIVE': 'Flow active',
+  'inbox.state.HANDED_TO_OPERATOR': 'With operator',
+  'inbox.state.CLOSED': 'Closed',
+
+  'inbox.channel.TELEGRAM': 'Telegram',
+
+  'inbox.detail.assignedTo': 'Assigned to {operator}',
+  'inbox.detail.history': 'History',
+  'inbox.detail.history.empty': 'No messages yet',
+
+  'inbox.action.takeover': 'Take over',
+  'inbox.action.returnToFlow': 'Return to flow',
+  'inbox.action.close': 'Close',
+
+  'inbox.reply.placeholder': 'Type a reply',
+  'inbox.reply.send': 'Send',
+
+  'inbox.message.author.customer': 'Customer',
+  'inbox.message.author.operator': 'Operator',
+  'inbox.message.author.flow': 'Flow',
 
   'auth.signingIn': 'Signing in',
   'auth.signingIn.detail': 'Returning from the identity provider.',

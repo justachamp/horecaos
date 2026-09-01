@@ -44,6 +44,17 @@ export const NAVIGATION: readonly NavGroup[] = [
         spec: 'operations-spec/orders.md',
       },
       {
+        path: '/inbox',
+        label: 'shell.nav.inbox',
+        // No shared count service exists yet for the inbox the way OrderCounts
+        // exists for orders — see inbox-list.ts's own doc for why the row's
+        // own needsReply flag carries this weight in the list instead, and
+        // ConversationInboxService's own doc on this being a deliberate v1
+        // scope decision.
+        badge: null,
+        spec: null,
+      },
+      {
         path: '/kitchen',
         label: 'shell.nav.kitchen',
         badge: null,

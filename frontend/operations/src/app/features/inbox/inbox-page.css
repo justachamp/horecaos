@@ -1,0 +1,59 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* Grid, not flex — see `orders-page.css`'s identical comment on why the dock's
+ * width must be fixed rather than content-derived. */
+.inbox {
+  display: grid;
+  grid-template-columns: 1fr 0;
+  height: 100%;
+  min-width: 0;
+}
+
+.inbox--docked {
+  grid-template-columns: minmax(0, 1fr) 420px;
+}
+
+.queue {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.queue__head {
+  flex-shrink: 0;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+}
+
+.queue__head h1 {
+  margin: 0;
+}
+
+.queue__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--q-canvas);
+}
+
+.dock {
+  border-left: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.inbox:not(.inbox--docked) .dock {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .inbox--docked {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 38%);
+  }
+}
