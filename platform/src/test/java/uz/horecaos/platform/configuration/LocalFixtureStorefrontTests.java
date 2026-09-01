@@ -56,6 +56,12 @@ class LocalFixtureStorefrontTests {
         registry.add("spring.datasource.password", database::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // Ephemeral, like ClickFakeProviderRoundTripTests: the local profile's
+        // fixed 18089 default exists for `make run` + tools/seed-payments to
+        // agree, but two test JVMs (parallel forks, sibling worktree verifies,
+        // or a developer's running `make run`) racing one fixed port is a
+        // context-load failure that reads as five errored tests.
+        registry.add("horecaos.fake-providers.click.port", () -> "0");
     }
 
     @Autowired
