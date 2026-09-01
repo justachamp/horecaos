@@ -188,6 +188,63 @@ public class TelegramCustomerLinkService {
         return bindingId;
     }
 
+    /**
+     * The import counterpart to {@link #link} (ADR 0059 stage 3): a chat
+     * already known to this exact bot through a SendPulse contact-export row,
+     * rather than one that just completed the {@code /start} handshake.
+     *
+     * <p>Idempotent the same way {@link #link} is — by customer account, not
+     * by chat — which is deliberate rather than a gap: the caller ({@code
+     * SendPulseContactImportRowService}) has already resolved "does this chat
+     * already belong to a customer account" through {@link
+     * TelegramBindingStore#customerAccountFor} before ever reaching this
+     * method, so a genuinely new chat reaches here holding a
+     * {@code customerAccountId} that cannot yet have an active binding except
+     * through a race this check still catches. {@code ux_telegram_binding_chat}
+     * remains the chat-level backstop either way.
+     *
+     * @param subscribed the row's interpreted SendPulse subscription status,
+     *                   passed straight to {@link CustomerProviderBindingSync#onCustomerBindingImported}
+     * @param importedBySubject the Keycloak subject who ran the import — the
+     *                   audit actor, unlike {@link #link}'s own binding
+     *                   creation where the customer is necessarily the actor
+     */
+    @Transactional
+    public UUID importLink(
+            UUID tenantId,
+            UUID installationId,
+            UUID brandId,
+            UUID customerAccountId,
+            long chatId,
+            long telegramUserId,
+            boolean subscribed,
+            String importedBySubject,
+            Instant now) {
+        Optional<UUID> existing = endpointSync.activeBindingFor(tenantId, customerAccountId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        UUID bindingId = bindings.createBinding(
+                tenantId, installationId, brandId, null, chatId, null, telegramUserId, "CUSTOMER");
+        endpointSync.onCustomerBindingImported(tenantId, bindingId, customerAccountId, subscribed, now);
+
+        // ADR 0026: binding activation is an ADR 0027 audit fact, same as
+        // link()'s own — the actor here is the operator who ran the import,
+        // since an imported chat never completed a handshake of its own to
+        // name the customer as the actor.
+        audit.record(AuditFact.of("integration.telegram_customer_binding_imported", AuditClass.SECURITY)
+                .by(ActorRef.user(importedBySubject, null))
+                .at(ResourceScope.tenant(tenantId))
+                .target("IntegrationBinding", bindingId)
+                .because("SendPulse contact export import")
+                .correlatedBy(bindingId.toString())
+                .occurredAt(now)
+                .build());
+
+        return bindingId;
+    }
+
     /** The customer's own active binding, if linked — what a storefront status call answers with. */
     public Optional<UUID> activeBinding(UUID tenantId, UUID customerAccountId) {
         return endpointSync.activeBindingFor(tenantId, customerAccountId);

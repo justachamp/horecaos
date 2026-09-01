@@ -1579,6 +1579,28 @@
         },
         "type" : "object"
       },
+      "ImportRequest" : {
+        "properties" : {
+          "content" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "fileName" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "format" : {
+            "enum" : [ "CSV", "JSON" ],
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "content", "fileName", "format", "installationId" ],
+        "type" : "object"
+      },
       "InboxFailureDetail" : {
         "properties" : {
           "aggregateId" : {
@@ -2752,6 +2774,32 @@
         },
         "type" : "object"
       },
+      "RowEntry" : {
+        "properties" : {
+          "chatId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "rejectReason" : {
+            "type" : "string"
+          },
+          "rowNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "subscribed" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "RuleRequest" : {
         "properties" : {
           "closesAt" : {
@@ -2780,6 +2828,39 @@
           }
         },
         "required" : [ "rules" ],
+        "type" : "object"
+      },
+      "RunCounts" : {
+        "properties" : {
+          "createdCustomer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "matchedCustomer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skippedAlreadyLinked" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "subscribed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unsubscribed" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "RunSummary" : {
@@ -2813,6 +2894,27 @@
             "type" : "string"
           },
           "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SendPulseImportReport" : {
+        "properties" : {
+          "counts" : {
+            "$ref" : "#/components/schemas/RunCounts"
+          },
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RowEntry"
+            },
+            "type" : "array"
+          },
+          "runId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -8272,6 +8374,108 @@
         "tags" : [ "Sales channels" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports" : {
+      "post" : {
+        "description" : "Parses the export and reports, per row, what it would do (or, when dryRun=false, what it did): a matched or newly created customer account, a bound Telegram chat, an imported consent decision — or a rejection with a reason. Idempotent: importing the same file twice writes nothing new for a row already imported.",
+        "operationId" : "importContacts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "dryRun",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SendPulseImportReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import a SendPulse contact export",
+        "tags" : [ "SendPulse contact import" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}" : {
+      "get" : {
+        "description" : "The same report the run's own POST response returned, re-readable afterward without re-parsing the file.",
+        "operationId" : "report",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 500,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SendPulseImportReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Re-read a past import run's report",
+        "tags" : [ "SendPulse contact import" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/subscription" : {
       "get" : {
         "operationId" : "subscription",
@@ -8400,6 +8604,9 @@
   }, {
     "description" : "Versioned distance bands and peak-hour rules",
     "name" : "Delivery tariffs"
+  }, {
+    "description" : "ADR 0059 stage 3: the SendPulse exit's contact export",
+    "name" : "SendPulse contact import"
   }, {
     "description" : "Exports to a point of sale, and the ones a person has to settle",
     "name" : "POS order exports"

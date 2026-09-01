@@ -506,6 +506,23 @@ public enum Capability {
      */
     CUSTOMER_PII_REVEAL("customer.pii.reveal", "customer", "pii-reveal"),
 
+    /**
+     * ADR 0059 stage 3: importing a SendPulse contact export — creating or
+     * matching customer accounts in bulk, binding their Telegram chats, and
+     * recording consent provenance for every row in one call.
+     *
+     * <p>Its own capability rather than {@link #CUSTOMER_MANAGE}, and held
+     * only by {@link PlatformRole#TENANT_OWNER} — see that constant's own
+     * comment. A bulk write of customer accounts and consent decisions from
+     * an external, about-to-be-retired vendor is the same weight class as
+     * {@link #AUDIENCE_EXPORT} ("an unrestricted download of the customer
+     * base is how a tenant's list ends up on a competitor's desk"): this is
+     * the write-side mirror of that risk, and a tenant administrator who can
+     * manage individual customers does not automatically get to bulk-create
+     * thousands of them from a file with an invented consent record attached.
+     */
+    CUSTOMER_IMPORT("customer.import", "customer", "import"),
+
     INTEGRATION_INSTALLATION_MANAGE("integration.installation.manage", "integration", "installation.manage"),
     INTEGRATION_BINDING_ACTIVATE("integration.binding.activate", "integration", "binding.activate"),
 

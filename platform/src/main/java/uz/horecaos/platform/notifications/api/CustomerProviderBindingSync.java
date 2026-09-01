@@ -29,6 +29,28 @@ public interface CustomerProviderBindingSync {
     void onCustomerBindingLinked(UUID tenantId, UUID providerBindingId, UUID customerAccountId, Instant now);
 
     /**
+     * The import counterpart to {@link #onCustomerBindingLinked} (ADR 0059
+     * stage 3): the same endpoint materialization, plus an explicit TELEGRAM
+     * preference for every class that respects one — set once, honestly,
+     * rather than left to default. A live {@code /start} handshake never sets
+     * one at link time and relies on absence meaning enabled; an import is
+     * different, because its {@code subscribed} flag is provenance the
+     * platform is choosing to trust from a source that is about to be
+     * retired, not something the customer told this platform directly, and
+     * the choice deserves a row rather than a silent default in either
+     * direction.
+     *
+     * @param subscribed true writes TELEGRAM enabled for every {@link
+     *                   uz.horecaos.platform.notifications.domain.NotificationClass}
+     *                   that respects a preference; false writes it disabled
+     *                   for the same set — the identical set {@link
+     *                   #onProviderBindingRetired} already flips off, reused
+     *                   rather than duplicated
+     */
+    void onCustomerBindingImported(
+            UUID tenantId, UUID providerBindingId, UUID customerAccountId, boolean subscribed, Instant now);
+
+    /**
      * A provider binding retired, for any audience. Retires its endpoint row
      * so a fresh lookup stops finding it {@code ACTIVE} — the mechanism
      * behind {@code NO_RECIPIENT_ENDPOINT} for a customer whose link died

@@ -496,6 +496,13 @@ export interface GrantView {
   status?: string;
 }
 
+export interface ImportRequest {
+  content: string;
+  fileName: string;
+  format: "CSV" | "JSON";
+  installationId: string;
+}
+
 export interface InboxFailureDetail {
   aggregateId?: string;
   aggregateType?: string;
@@ -873,6 +880,15 @@ export interface ResolvedEntitlement {
   source?: string;
 }
 
+export interface RowEntry {
+  chatId?: number;
+  customerAccountId?: string;
+  outcome?: string;
+  rejectReason?: string;
+  rowNumber?: number;
+  subscribed?: boolean;
+}
+
 export interface RuleRequest {
   closesAt: string;
   dayOfWeek?: number;
@@ -881,6 +897,16 @@ export interface RuleRequest {
 
 export interface RulesRequest {
   rules: Array<RuleRequest>;
+}
+
+export interface RunCounts {
+  createdCustomer?: number;
+  matchedCustomer?: number;
+  rejected?: number;
+  skippedAlreadyLinked?: number;
+  subscribed?: number;
+  total?: number;
+  unsubscribed?: number;
 }
 
 export interface RunSummary {
@@ -895,6 +921,13 @@ export interface ScheduleView {
   acceptsScheduledOrders?: boolean;
   id?: string;
   name?: string;
+}
+
+export interface SendPulseImportReport {
+  counts?: RunCounts;
+  dryRun?: boolean;
+  rows?: Array<RowEntry>;
+  runId?: string;
 }
 
 export interface ServiceZoneControllerBindLocationRequest {
@@ -1154,6 +1187,8 @@ export interface Operations {
   "replaceLocations": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/locations"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: LocationSetRequest }; responses: { "200": unknown } };
   "matrices": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/matrices"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": ChannelMatrices } };
   "replacePaymentMethods": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/payment-methods"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: boolean } }; responses: { "200": unknown } };
+  "importContacts": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: ImportRequest }; responses: { "200": SendPulseImportReport } };
+  "report": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": SendPulseImportReport } };
   "subscription": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/subscription"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SubscriptionResponse } };
   "usage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<UsageResponse> } };
 }

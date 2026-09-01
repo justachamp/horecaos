@@ -143,6 +143,38 @@ public class CustomerIdentityService implements CustomerDirectory {
         store.upsertBrandProfile(UUID.randomUUID(), tenantId, brandId, accountId, clock.instant());
     }
 
+    /**
+     * Creates an account with no Keycloak principal link at all (ADR 0059
+     * stage 3: the SendPulse contact-export import).
+     *
+     * <p>Every other creation path in this class exists because a subject
+     * signed in; an imported contact never does, and a contact whose export
+     * row carries no phone number gives {@link CustomerImportDirectoryService}
+     * nothing an ADR 0015 identity resolution could ever match on either. The
+     * account this method creates is reachable only through the ADR 0058
+     * Telegram binding the import creates alongside it — the same
+     * "channel-identity-only" account the record's own Decision section
+     * names as the deliberate alternative to reporting a phone-less contact
+     * as needs-attention.
+     *
+     * <p>Still governed by the tenant's identity policy, for the same reason
+     * {@link #create} is: the partition an account is created in must not
+     * silently change later, whether the account came from a sign-in or an
+     * import.
+     */
+    @Transactional
+    public CustomerAccountRef createAccountWithoutPrincipal(UUID tenantId, UUID brandId) {
+        Instant now = clock.instant();
+        ResolvedIdentityPolicy resolved = policies.policyFor(tenantId, now);
+        UUID partition = resolved.mode().partitionFor(brandId);
+
+        UUID accountId = UUID.randomUUID();
+        store.insertAccount(accountId, tenantId, partition, resolved.version(), now);
+        ensureBrandProfile(tenantId, brandId, accountId);
+        log.info("Created channel-only customer account {} in tenant {} (no principal link)", accountId, tenantId);
+        return new CustomerAccountRef(accountId, tenantId);
+    }
+
     /** Reads an account without creating one. */
     @Override
     @Transactional(readOnly = true)

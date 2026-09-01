@@ -47,6 +47,23 @@ public class CustomerProviderBindingSyncService implements CustomerProviderBindi
 
     @Override
     @Transactional
+    public void onCustomerBindingImported(
+            UUID tenantId, UUID providerBindingId, UUID customerAccountId, boolean subscribed, Instant now) {
+        notifications.ensureCustomerProviderBindingEndpoint(tenantId, providerBindingId, customerAccountId, now);
+        for (NotificationClass notificationClass : PREFERENCE_RESPECTING_CLASSES) {
+            preferences.set(
+                    tenantId, customerAccountId, null, notificationClass, NotificationChannel.TELEGRAM, subscribed);
+        }
+        log.info(
+                "Synced TELEGRAM preference {} for customer {} in tenant {} from an import binding {}",
+                subscribed ? "on" : "off",
+                customerAccountId,
+                tenantId,
+                providerBindingId);
+    }
+
+    @Override
+    @Transactional
     public void onProviderBindingRetired(UUID tenantId, UUID providerBindingId, String reason, Instant now) {
         Optional<EndpointRow> endpoint = notifications.findByProviderBinding(tenantId, providerBindingId);
         if (endpoint.isEmpty()) {

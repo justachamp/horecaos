@@ -117,6 +117,10 @@ public enum PlatformRole {
                     // additionally need CUSTOMER_PII_REVEAL with a stated purpose, so
                     // this alone yields metrics and pseudonymous ids.
                     AUDIENCE_EXPORT,
+                    // ADR 0059 stage 3: the SendPulse contact-export import — see
+                    // Capability.CUSTOMER_IMPORT's own comment for why this is the
+                    // write-side mirror of AUDIENCE_EXPORT and held here alone.
+                    CUSTOMER_IMPORT,
                     // ADR 0046: what a point is worth, and how long it lasts. A currency
                     // decision rather than an operational one.
                     LOYALTY_POLICY_MANAGE,
