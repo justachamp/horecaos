@@ -9,6 +9,7 @@ import { CustomerOtp } from '../../core/session/customer-otp';
 import { FavouritesService } from '../../services/favourites.service';
 import { AvatarService } from '../../services/avatar.service';
 import { TelegramWebappService } from '../../services/telegram-webapp.service';
+import { TelegramLinkService } from '../../services/telegram-link.service';
 import packageJson from '../../../../package.json';
 
 interface UserProfile {
@@ -56,6 +57,7 @@ export class ProfileComponent implements OnInit {
   private readonly otp = inject(CustomerOtp);
   private readonly favourites = inject(FavouritesService);
   private readonly avatars = inject(AvatarService);
+  private readonly telegramLink = inject(TelegramLinkService);
 
   constructor(
     private router: Router
@@ -108,6 +110,7 @@ export class ProfileComponent implements OnInit {
     // The next customer on this handset must not inherit this one's list.
     this.favourites.forget();
     this.avatars.forget();
+    this.telegramLink.forget();
     this.user.set(null);
     this.isAuthorized.set(false);
     this.otp.signOut().finally(() => {

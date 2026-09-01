@@ -36,6 +36,7 @@ export class ProfileMenuComponent implements OnInit {
     { id: 'locations', labelKey: 'profile.locations', route: '/locations/list', authorizedOnly: true },
     { id: 'language', labelKey: 'profile.language', route: '/profile/language' },
     { id: 'theme', labelKey: 'profile.theme', isTheme: true },
+    { id: 'telegram', labelKey: 'profile.telegram', route: '/profile/telegram', authorizedOnly: true },
     { id: 'support', labelKey: 'profile.support', route: '/profile/support' },
     { id: 'logout', labelKey: 'profile.logout', isLogout: true }
   ];
