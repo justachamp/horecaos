@@ -137,3 +137,90 @@ jobs:
         run: |
           npm ci
           npm run build --if-present
+
+  # ADR 0061: CI's job ends here — building and publishing pinned images.
+  # There is no deploy step in this workflow and no SSH access from CI to
+  # any host. A devops engineer pulls these tags by hand, following
+  # platform/docs/runbooks/production-setup.md; an optional later step in
+  # that runbook covers installing a CI deploy key if the owner ever wants
+  # this job followed by an automatic deploy, but nothing here assumes that
+  # will happen.
+  #
+  # Runs only on a push to main, after lint/verify/frontend-build succeed
+  # (or were legitimately skipped by the path filter — a frontend-only merge
+  # still needs verify's own jar, so this job's own path filter down in
+  # `changes` intentionally does not narrow platform out; every push to main
+  # rebuilds every image, because a stale image nobody rebuilt is worse than
+  # a few redundant minutes of CI, and the git-sha tag makes every build
+  # traceable to the exact commit either way).
+  publish-images:
+    name: Publish images (${{ matrix.image.name }})
+    needs: [changes, lint, verify, frontend-build]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' && github.event_name == 'push' &&
+      needs.changes.result == 'success' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.verify.result == 'success' || needs.verify.result == 'skipped') &&
+      (needs.frontend-build.result == 'success' || needs.frontend-build.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          # Backend, built from the platform/ context so each Dockerfile's
+          # relative COPYs (src/, infra/backup/, etc.) resolve the same way
+          # they do for a developer running `docker build` locally.
+          - { name: horecaos-platform, context: platform, dockerfile: platform/Dockerfile }
+          - { name: horecaos-platform-migrate, context: platform, dockerfile: platform/infra/production/migrate/Dockerfile }
+          - { name: horecaos-platform-ops, context: platform, dockerfile: platform/infra/production/ops/Dockerfile }
+          - { name: horecaos-postgres-postgis, context: platform/infra/postgres, dockerfile: platform/infra/postgres/Dockerfile }
+          # Frontends — one image per app, per deploy/compose.production.yml's
+          # own note on why they are not baked into the edge image.
+          - { name: horecaos-storefront, context: frontend/storefront, dockerfile: frontend/storefront/Dockerfile }
+          - { name: horecaos-control-plane, context: frontend/control-plane, dockerfile: frontend/control-plane/Dockerfile }
+          - { name: horecaos-operations, context: frontend/operations, dockerfile: frontend/operations/Dockerfile }
+    env:
+      # ghcr.io is the recommendation (ADR 0061 leaves registry choice an
+      # open input; ghcr costs nothing extra with the existing GitHub and
+      # needs only the workflow-scoped GITHUB_TOKEN below, no separate
+      # secret to provision). Overriding this ONE repository variable —
+      # Settings -> Secrets and variables -> Actions -> Variables ->
+      # HORECAOS_REGISTRY — is the whole of "publish somewhere else"; a
+      # non-ghcr registry also needs its own login credentials, which this
+      # job does not provide, so switching registries means adding a login
+      # step here too.
+      REGISTRY: ${{ vars.HORECAOS_REGISTRY || format('ghcr.io/{0}', github.repository) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        if: startsWith(env.REGISTRY, 'ghcr.io')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ matrix.image.name }}:${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ matrix.image.name }}:main
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}

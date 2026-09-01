@@ -1,0 +1,19 @@
+# Override applied ONLY by deploy/local-smoke.sh, on top of
+# deploy/compose.production.yml, never against a real host.
+#
+# The one thing production must never share with anything else on the
+# machine it runs on — ports 80/443 — is exactly the one thing a laptop
+# already has bound to a dozen other things. This file remaps the edge to
+# non-standard ports and nothing else: every other service, network, volume,
+# healthcheck and hardening rule is the unmodified production definition,
+# which is the entire point of the exercise (deploy/README.md, "What the
+# local proof actually proves").
+#
+# Compose replaces array-valued keys on merge rather than appending, so this
+# entirely supersedes the base file's `ports:` list for `edge` — 80/443 are
+# not also published.
+
+services:
+  edge:
+    ports:
+      - "18443:18443"

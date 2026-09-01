@@ -1,0 +1,828 @@
+# HorecaOS — production stack, portable by construction (ADR 0061).
+#
+# What this file is, and what it is not
+# --------------------------------------
+# This is the ONE compose definition that runs on the Sarkor colocation box,
+# on a staging VM at a different provider (aHOST/UzCloud), and — for proof
+# only, never for real traffic — on a developer's own laptop via
+# `deploy/local-smoke.sh`. ADR 0061's whole portability claim rests on that
+# sentence being true: nothing in this file names a hosting provider, a
+# managed queue, a provider IAM system, or a cloud-specific storage API.
+# Every value that legitimately differs between Sarkor, a staging VM, and a
+# laptop lives in one env file (`deploy/env.template` and its filled
+# examples) — never in this file.
+#
+# This file pulls PINNED IMAGES. It contains no `build:` block anywhere.
+# CI builds every image this file references, tags it with the release git
+# SHA, and pushes it to the registry (see `.github/workflows/ci.yml`,
+# job `publish-images`). A devops engineer never builds an image on the
+# server — `docker compose pull` is the only way an image reaches this host.
+# That is deliberate: nobody with server access has, or needs, a copy of the
+# source tree's build toolchain, and a pull is auditable by tag in a way a
+# local build is not.
+#
+# `docker compose` with no `-f` reads `compose.yaml` in the current
+# directory. This file lives under `deploy/` specifically so an operator
+# cannot `cd deploy && docker compose up` by habit and get this by accident;
+# every invocation names it explicitly. See `deploy/README.md` for the
+# invocation this repository actually uses.
+#
+# Relationship to platform/compose.production.yaml
+# --------------------------------------------------
+# `platform/compose.production.yaml` is an earlier, still-valid production
+# stack built for ADR 0023/0028/0034 that clones the repository onto the
+# server and builds every image there over SSH. It is not superseded and not
+# deleted by this file — it remains a documented alternative for an operator
+# who prefers to build from source on the box. ADR 0061 chooses the
+# registry-pull model below as the one the production-setup runbook
+# (`platform/docs/runbooks/production-setup.md`) walks a devops engineer
+# through, because it needs no repository checkout, no Maven toolchain, and
+# no SSH access for CI — see that ADR's "Open inputs" for why. The two files
+# share the same hardening posture (read this header's list below) and the
+# same secret-delivery design (ADR 0028, OpenBao + agent) because both are
+# correct answers to the same constraints; they differ only in who builds
+# the image and how it reaches the host.
+#
+# What this file enforces
+# -----------------------
+#   restart policies      every long-running service comes back by itself
+#   health checks         every service, including the ones dependents wait on
+#   dependency ordering   `service_healthy`, not `service_started`, wherever the
+#                         dependent would misbehave against a half-started one
+#   resource limits       one runaway container cannot take the host with it
+#   log rotation          bounded per container; see the logging anchor below
+#   no published ports    except 80/443 on the edge; the database, Kafka,
+#                         object store, and secrets manager are not reachable
+#                         from outside the host
+#   no baked credentials  every secret arrives at runtime; see `secrets:` below
+#   no provider primitives  every image is a generic OCI image on a generic
+#                         Linux host; nothing here calls a cloud API
+#
+# Usage is in platform/docs/runbooks/production-setup.md. Do not improvise
+# against this file.
+
+name: horecaos-production
+
+# 20 MB x 5 files per service is a hard ceiling that stays reasonable to
+# reason about as services are added — see platform/compose.production.yaml's
+# own note on why this is per-container rather than a daemon-wide default.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+# Applied to every service except the two PostgreSQL databases, which need
+# CAP_SETUID/CAP_SETGID for the official image's own startup `gosu` step.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Edge
+  # ---------------------------------------------------------------------------
+
+  edge:
+    # The only service with a published port. Caddy for automatic Let's
+    # Encrypt TLS with no cron job and no renewal that silently lapses — the
+    # single most common self-inflicted outage on a deployment like this one.
+    # An nginx + certbot alternative is possible (nginx as reverse proxy,
+    # certbot as a sidecar renewing into a shared volume) and was rejected
+    # only because it is more moving parts for the same outcome on a box with
+    # one operator; revisit if this deployment ever needs an nginx-specific
+    # module Caddy has no equivalent for.
+    image: caddy:2.10-alpine
+    <<: *hardening
+    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      HORECAOS_API_ORIGIN: ${HORECAOS_API_ORIGIN:?set the public API origin, for example https://api.horecaos.uz}
+      HORECAOS_AUTH_ORIGIN: ${HORECAOS_AUTH_ORIGIN:?set the public auth origin, for example https://auth.horecaos.uz}
+      HORECAOS_MEDIA_ORIGIN: ${HORECAOS_MEDIA_ORIGIN:?set the public media origin, for example https://media.horecaos.uz}
+      HORECAOS_STOREFRONT_ORIGIN: ${HORECAOS_STOREFRONT_ORIGIN:?set the public storefront origin, for example https://horecaos.uz}
+      HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN:?set the public operations console origin, for example https://operations.horecaos.uz}
+      HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN:?set the public control-plane origin, for example https://admin.horecaos.uz}
+      HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
+      # Empty in production. `deploy/local-smoke.sh` sets this to `internal`
+      # so Caddy issues from its own internal CA instead of asking Let's
+      # Encrypt for a certificate for a hostname the public internet cannot
+      # reach — see the Caddyfile's use of this value.
+      HORECAOS_TLS_MODE: ${HORECAOS_TLS_MODE:-}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-data:/data
+      - edge-config:/config
+    networks:
+      public:
+        aliases:
+          # Same reasoning as platform/compose.production.yaml: the
+          # application validates JWTs against the *public* issuer URL and
+          # has to resolve it without depending on the colocation router
+          # hairpinning NAT back to this host.
+          - ${HORECAOS_API_HOSTNAME:?set the API hostname without a scheme}
+          - ${HORECAOS_AUTH_HOSTNAME:?set the auth hostname without a scheme}
+          - ${HORECAOS_MEDIA_HOSTNAME:?set the media hostname without a scheme}
+      media: {}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # Frontends — static bundles behind the edge
+  # ---------------------------------------------------------------------------
+  #
+  # Choice: SEPARATE images, not baked into the edge image. Each Angular app
+  # already builds as a self-contained static bundle behind a tiny
+  # nginx + envsubst runtime-config layer (`frontend/storefront/Dockerfile`
+  # is the pattern this follows; `frontend/control-plane/Dockerfile` and
+  # `frontend/operations/Dockerfile` are new, built the same way for this
+  # ADR). Baking the three bundles into the Caddy image was the alternative
+  # and was rejected: Caddy has no built-in `envsubst`, so runtime
+  # tenant/environment configuration (storefront's `config.json`,
+  # control-plane's `config.js`) would need a Caddy plugin or an init
+  # container writing into a shared volume before Caddy starts — more moving
+  # parts than three small, independently-tagged, independently-rollback-able
+  # images. It also keeps the edge image a plain upstream `caddy:2.10-alpine`
+  # pull with nothing baked in, which is one less thing to rebuild when only
+  # a frontend release changes.
+
+  storefront-web:
+    # Not `<<: *hardening`, deliberately — same exception `platform-db` and
+    # `keycloak-db` above already make and explain: the upstream `nginx`
+    # image's own entrypoint chowns its cache directories to the `nginx`
+    # user and its master process setuid/setgid's into it for every worker,
+    # on every start, which needs CAP_CHOWN/CAP_SETUID/CAP_SETGID — dropping
+    # ALL and adding back the three or four capabilities nginx's own
+    # entrypoint happens to need is less honest than not dropping them,
+    # since the next nginx base image update is free to need one more this
+    # file did not anticipate. `no-new-privileges` alone still blocks the
+    # one thing that matters most (a compromised process escalating via a
+    # setuid binary), same as the two databases.
+    #
+    # Also not `read_only: true`, unlike platform-app: this container's own
+    # entrypoint writes the runtime config file (config.json/config.js)
+    # into the same directory the static bundle was COPYed into at build
+    # time — a read-only root would need a tmpfs at that exact path, which
+    # would hide the baked-in bundle under an empty mount instead of
+    # allowing the write.
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${HORECAOS_REGISTRY:?set the registry+namespace, e.g. ghcr.io/justachamp/horecaos}/horecaos-storefront:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
+    environment:
+      APP_API_BASE_URL: ${HORECAOS_STOREFRONT_API_BASE_URL:-/api/v1}
+      APP_TENANT_ID: ${HORECAOS_STOREFRONT_TENANT_ID:?set the pilot tenant id this storefront build serves}
+      APP_BRAND_ID: ${HORECAOS_STOREFRONT_BRAND_ID:?set the pilot brand id}
+      APP_DEFAULT_LOCATION_ID: ${HORECAOS_STOREFRONT_LOCATION_ID:?set the pilot location id}
+      APP_CHANNEL: STOREFRONT
+      APP_YANDEX_MAPS_API_KEY: ${HORECAOS_YANDEX_MAPS_API_KEY:-}
+      TZ: Asia/Tashkent
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  control-plane-web:
+    # See storefront-web's comment above — same reasoning applies verbatim.
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${HORECAOS_REGISTRY}/horecaos-control-plane:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
+    environment:
+      APP_API_BASE_URL: ${HORECAOS_API_ORIGIN}
+      APP_ISSUER_URL: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      APP_CLIENT_ID: horecaos-control-plane
+      APP_DISPLAY_TIME_ZONE: Asia/Tashkent
+      TZ: Asia/Tashkent
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  operations-web:
+    # No runtime environment block: unlike the other two, `environment.ts` is
+    # baked at build time (see `frontend/operations/src/environments/`).
+    # That is a genuine asymmetry in this codebase today, not a decision made
+    # for this ADR — recorded in the production-setup runbook and in this
+    # task's final report as a follow-up, because it means promoting this
+    # app to a new domain needs a rebuild, not a redeploy.
+    # See storefront-web's comment above — same reasoning applies verbatim,
+    # even though this service writes no runtime config file itself: nginx's
+    # own stock entrypoint still chowns its temp directories at every start.
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${HORECAOS_REGISTRY}/horecaos-operations:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
+    environment:
+      TZ: Asia/Tashkent
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+
+  platform-app:
+    image: ${HORECAOS_REGISTRY}/horecaos-platform:${HORECAOS_IMAGE_TAG:?set the release tag, normally the short git sha}
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    environment:
+      # The migration job owns schema changes, not the application. Flyway on
+      # every replica during a deploy is a race with no lock behind it, and
+      # even on a single-replica deployment it means a rollback to an older
+      # image cannot start without first arguing with the schema history.
+      SPRING_FLYWAY_ENABLED: "false"
+      SPRING_PROFILES_ACTIVE: production
+      HORECAOS_ENVIRONMENT: ${HORECAOS_ENVIRONMENT:-production}
+
+      HORECAOS_DB_URL: jdbc:postgresql://platform-db:5432/horecaos
+      HORECAOS_DB_USERNAME: horecaos_app
+      # HORECAOS_DB_PASSWORD arrives from the OpenBao agent through
+      # /run/bao/horecaos.env at container start. See infra/openbao/agent.hcl.
+      HORECAOS_DB_MAX_POOL_SIZE: ${HORECAOS_DB_MAX_POOL_SIZE:-20}
+      HORECAOS_DB_MIN_IDLE: ${HORECAOS_DB_MIN_IDLE:-4}
+
+      HORECAOS_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+      HORECAOS_OIDC_ISSUER_URI: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      HORECAOS_OIDC_AUDIENCE: horecaos-api
+      HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
+      HORECAOS_KEYCLOAK_REALM: horecaos
+
+      HORECAOS_SECRETS_PROVIDER: openbao
+      HORECAOS_OPENBAO_URL: http://openbao:8200
+      HORECAOS_OPENBAO_MOUNT: horecaos
+
+      # The public origin, not the internal Docker hostname — see
+      # platform/compose.production.yaml's own long comment on why: a
+      # presigned URL is handed to a browser, and the presigner and the
+      # browser must agree on which host the signature was computed for.
+      HORECAOS_MEDIA_ENDPOINT: ${HORECAOS_MEDIA_ORIGIN}
+      HORECAOS_MEDIA_BUCKET: ${HORECAOS_MEDIA_BUCKET:-horecaos-media}
+      HORECAOS_MEDIA_REGION: ${HORECAOS_MEDIA_REGION:-us-east-1}
+      HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
+      HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-secret-key
+      HORECAOS_HANDOVER_PEPPER_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:handover-pepper
+
+      HORECAOS_API_DOCS_ENABLED: "false"
+      HORECAOS_SWAGGER_UI_ENABLED: "false"
+
+      TZ: Asia/Tashkent
+    volumes:
+      - bao-runtime:/run/bao:ro
+    networks:
+      - public
+      - core
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      edge:
+        condition: service_started
+      openbao-agent:
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: ${HORECAOS_APP_CPU_LIMIT:-4.0}
+          memory: ${HORECAOS_APP_MEMORY_LIMIT:-2G}
+        reservations:
+          memory: ${HORECAOS_APP_MEMORY_RESERVATION:-1G}
+
+  platform-migrate:
+    # ADR 0023's one-shot migration job. Flyway forward-only, never `clean`.
+    profiles: ["migrate"]
+    image: ${HORECAOS_REGISTRY}/horecaos-platform-migrate:${HORECAOS_IMAGE_TAG:-latest}
+    <<: *hardening
+    restart: "no"
+    environment:
+      FLYWAY_URL: jdbc:postgresql://platform-db:5432/horecaos
+      FLYWAY_USER: horecaos_migrator
+      # Handed in by the runbook from the operator's own authenticated
+      # OpenBao session; empty by default so `ps`/`logs` are never blocked by
+      # a `:?` only this one job needs.
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:-}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_DEFAULT_SCHEMA: public
+      FLYWAY_CONNECT_RETRIES: "10"
+      FLYWAY_CLEAN_DISABLED: "true"
+      FLYWAY_OUT_OF_ORDER: "false"
+      FLYWAY_BASELINE_ON_MIGRATE: "false"
+      FLYWAY_VALIDATE_ON_MIGRATE: "true"
+    networks:
+      - core
+    depends_on:
+      platform-db:
+        condition: service_healthy
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Data
+  # ---------------------------------------------------------------------------
+
+  platform-db:
+    image: ${HORECAOS_REGISTRY}/horecaos-postgres-postgis:${HORECAOS_POSTGRES_IMAGE_TAG:-18}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 512mb
+    environment:
+      POSTGRES_DB: horecaos
+      # The migration role. It owns every object and is the only role that
+      # can change the schema. The application connects as `horecaos_app`,
+      # created by the init script below, holding only what the migrations
+      # grant it by name.
+      POSTGRES_USER: horecaos_migrator
+      POSTGRES_PASSWORD_FILE: /run/secrets/platform-db-migrator-password
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: Asia/Tashkent
+      PGTZ: Asia/Tashkent
+    secrets:
+      - platform-db-migrator-password
+      - platform-db-app-password
+    volumes:
+      - platform-db-data:/var/lib/postgresql/18/docker
+      - ./infra/postgres-init:/docker-entrypoint-initdb.d:ro
+    command:
+      # Tuned for a 16 GB host with PostgreSQL as the largest consumer.
+      # Override via env vars for a differently-sized box (staging, or a
+      # smaller Sarkor refresh) rather than editing this file — see
+      # deploy/env.template's "Sizing" section.
+      - postgres
+      - -c
+      - shared_buffers=${HORECAOS_DB_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${HORECAOS_DB_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - work_mem=${HORECAOS_DB_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${HORECAOS_DB_MAINTENANCE_WORK_MEM:-256MB}
+      - -c
+      - max_connections=${HORECAOS_DB_MAX_CONNECTIONS:-100}
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - min_wal_size=256MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - log_lock_waits=on
+      - -c
+      - log_checkpoints=on
+      - -c
+      - log_line_prefix=%m [%p] %q%u@%d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U horecaos_migrator -d horecaos"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: ${HORECAOS_DB_CPU_LIMIT:-4.0}
+          memory: ${HORECAOS_DB_MEMORY_LIMIT:-4G}
+        reservations:
+          memory: ${HORECAOS_DB_MEMORY_RESERVATION:-2G}
+
+  keycloak-db:
+    image: postgres:18.4-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD_FILE: /run/secrets/keycloak-db-password
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: Asia/Tashkent
+    secrets:
+      - keycloak-db-password
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  kafka:
+    image: apache/kafka:4.3.1
+    <<: *hardening
+    restart: unless-stopped
+    hostname: kafka
+    environment:
+      CLUSTER_ID: ${HORECAOS_KAFKA_CLUSTER_ID:?generate once with kafka-storage.sh random-uuid and keep it forever}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # No EXTERNAL listener — the only client is on the compose network.
+      KAFKA_LISTENERS: INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # One broker means one replica — stated so a green cluster is never
+      # read as a redundant one. The outbox in PostgreSQL (ADR 0004) is what
+      # makes losing this container's volume survivable.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 8589934592
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+      TZ: Asia/Tashkent
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  minio:
+    # S3-compatible, never S3-specific (AGENTS.md's S3 rules): this is the
+    # phase-one implementation of the same interface a hyperscaler's object
+    # store provides in the scaling phase, satisfying ADR 0061's "no
+    # provider primitives" requirement for media storage on the pilot box.
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    <<: *hardening
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9090"]
+    environment:
+      MINIO_ROOT_USER: ${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio-root-password
+      MINIO_BROWSER: "off"
+      TZ: Asia/Tashkent
+    secrets:
+      - minio-root-password
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - core
+      - media
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  # ---------------------------------------------------------------------------
+  # Identity
+  # ---------------------------------------------------------------------------
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    <<: *hardening
+    restart: unless-stopped
+    # `start`, not `start-dev`, and no `--import-realm`: importing on every
+    # boot would let a realm file in the repository overwrite production
+    # configuration changed through the admin console, silently, on a
+    # restart nobody associated with a configuration change. The realm is
+    # imported once, by hand, during first boot; after that Keycloak's own
+    # database is the truth.
+    entrypoint: ["/bin/bash", "/opt/horecaos/kc-entrypoint.sh"]
+    command: ["start"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HOSTNAME: ${HORECAOS_AUTH_ORIGIN}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      TZ: Asia/Tashkent
+    secrets:
+      - keycloak-db-password
+    volumes:
+      - ./infra/keycloak/entrypoint.sh:/opt/horecaos/kc-entrypoint.sh:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+    networks:
+      - public
+      - core
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Secrets
+  # ---------------------------------------------------------------------------
+
+  openbao:
+    image: openbao/openbao:2.4.1
+    restart: unless-stopped
+    <<: *hardening
+    user: "100:1000"
+    command: ["server", "-config=/openbao/config/config.hcl"]
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      TZ: Asia/Tashkent
+    volumes:
+      - ./infra/openbao/config.hcl:/openbao/config/config.hcl:ro
+      - openbao-data:/openbao/file
+    healthcheck:
+      test: ["CMD-SHELL", "bao status > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - core
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  openbao-agent:
+    image: openbao/openbao:2.4.1
+    <<: *hardening
+    restart: unless-stopped
+    user: "100:10001"
+    command: ["agent", "-config=/openbao/config/agent.hcl"]
+    environment:
+      BAO_ADDR: http://openbao:8200
+      TZ: Asia/Tashkent
+    secrets:
+      - openbao-role-id
+      - openbao-secret-id
+    volumes:
+      - ./infra/openbao/agent.hcl:/openbao/config/agent.hcl:ro
+      - bao-runtime:/run/bao
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/bao/token && test -s /run/bao/horecaos.env"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - core
+    depends_on:
+      openbao:
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # Recovery
+  # ---------------------------------------------------------------------------
+
+  autoheal:
+    # sha256:31f580... is willfarrell/autoheal:1.2.0 as of 2026-08-24 — pinned
+    # by digest because this container holds the Docker socket. See
+    # platform/compose.production.yaml's own long comment on the trade this
+    # accepts and when to revisit it (a second operator or a paging rotation).
+    image: willfarrell/autoheal:1.2.0@sha256:31f580ef0279eaced5b38d631b08c474d70d8403c1c2fdd6ddcf2e879d5f3f7c
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "15"
+      AUTOHEAL_START_PERIOD: "180"
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "60"
+      TZ: Asia/Tashkent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - core
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+  # ---------------------------------------------------------------------------
+  # Operator tooling
+  # ---------------------------------------------------------------------------
+
+  ops:
+    # Not a service: a shell with pg_dump, psql, mc and openssl on the same
+    # networks as the stack, pulled rather than built (same "CI builds,
+    # devops pulls" rule as everything else) so the backup and restore
+    # procedures are one command each with no dependency on what happens to
+    # be installed on the host.
+    #
+    # `docker compose -f deploy/compose.production.yml run --rm ops <command>`
+    profiles: ["ops"]
+    image: ${HORECAOS_REGISTRY}/horecaos-platform-ops:${HORECAOS_IMAGE_TAG:-latest}
+    <<: *hardening
+    restart: "no"
+    user: "0:10001"
+    environment:
+      HORECAOS_BACKUP_BUCKET: ${HORECAOS_BACKUP_BUCKET:-horecaos-backups}
+      HORECAOS_BACKUP_S3_ENDPOINT: ${HORECAOS_BACKUP_S3_ENDPOINT:-http://minio:9000}
+      HORECAOS_BACKUP_RETENTION_DAYS: ${HORECAOS_BACKUP_RETENTION_DAYS:-30}
+      HORECAOS_BACKUP_OFFSITE_ENDPOINT: ${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-}
+      HORECAOS_BACKUP_OFFSITE_BUCKET: ${HORECAOS_BACKUP_OFFSITE_BUCKET:-}
+      BAO_ADDR: http://openbao:8200
+      TZ: Asia/Tashkent
+    volumes:
+      - bao-runtime:/run/bao:ro
+    networks:
+      - core
+      - public
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+
+# -----------------------------------------------------------------------------
+# Secrets
+# -----------------------------------------------------------------------------
+#
+# Every entry points at a file under HORECAOS_SECRET_DIR, a tmpfs the
+# production-setup runbook creates at deploy time — RAM, mode 0700, owned by
+# root — and fills by reading OpenBao with the operator's own authenticated
+# session. Nothing here is in the repository, nothing survives a reboot, and
+# nothing is in an image. See platform/infra/production/README.md's secret
+# delivery diagram, which applies unchanged to this file.
+secrets:
+  platform-db-migrator-password:
+    file: ${HORECAOS_SECRET_DIR:?run the production-setup runbook, which sets this}/platform-db-migrator-password
+  platform-db-app-password:
+    file: ${HORECAOS_SECRET_DIR}/platform-db-app-password
+  keycloak-db-password:
+    file: ${HORECAOS_SECRET_DIR}/keycloak-db-password
+  minio-root-password:
+    file: ${HORECAOS_SECRET_DIR}/minio-root-password
+  openbao-role-id:
+    file: ${HORECAOS_SECRET_DIR}/openbao-role-id
+  openbao-secret-id:
+    file: ${HORECAOS_SECRET_DIR}/openbao-secret-id
+
+
+networks:
+  public:
+    driver: bridge
+  core:
+    driver: bridge
+    internal: true
+  media:
+    driver: bridge
+    internal: true
+
+
+volumes:
+  platform-db-data:
+  keycloak-db-data:
+  kafka-data:
+  minio-data:
+  openbao-data:
+  edge-data:
+  edge-config:
+  bao-runtime:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=100,gid=10001,mode=0750,size=1m"

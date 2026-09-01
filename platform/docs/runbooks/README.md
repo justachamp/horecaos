@@ -19,6 +19,7 @@ That shapes them more than any style guide would.
 | Runbook | When |
 |---|---|
 | [alerts.md](alerts.md) | **Start here when something woke you.** Every alert, its tier, and the one runbook that answers it |
+| [production-setup.md](production-setup.md) | Bare OS to a running platform — first-time setup by a devops engineer with no server access for CI or the assistant (ADR 0061) |
 | [deploy.md](deploy.md) | Shipping a release, bootstrapping a host, rolling back, and everything that goes wrong in between |
 | [restore.md](restore.md) | The database is gone, corrupted, or a migration has to be undone |
 | [postgresql-down.md](postgresql-down.md) | Night alert: the database is not answering while the host is |

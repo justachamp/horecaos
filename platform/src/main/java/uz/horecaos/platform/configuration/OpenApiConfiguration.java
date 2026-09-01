@@ -9,10 +9,24 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springdoc.core.providers.ObjectMapperProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * {@code @ConditionalOnProperty} matches springdoc's own gate on {@code springdoc.api-docs.enabled}
+ * (see {@code application.yml}, and {@code HORECAOS_API_DOCS_ENABLED} in the production compose
+ * files): with it {@code false}, springdoc's autoconfiguration never creates an {@link
+ * ObjectMapperProvider} bean, and this class's {@code modelResolver} bean unconditionally required
+ * one — an {@code UnsatisfiedDependencyException} that failed the whole application context, found
+ * by the ADR 0061 production deployment wave's own local proof (compose.production.yml sets
+ * exactly {@code HORECAOS_API_DOCS_ENABLED=false}, deliberately, to keep the contract off a
+ * public host — see that file's own comment). {@code matchIfMissing = true} preserves the current
+ * default-enabled behaviour everywhere the property is unset, which is every profile except
+ * production.
+ */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "springdoc.api-docs", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OpenApiConfiguration {
 
     static final String BEARER_SECURITY_SCHEME = "bearerAuth";
