@@ -26,13 +26,33 @@
   blocks, inventory's `ITEM_86D`, integration dead letters and POS export stalls
   (V0104), onboarding's stuck-run sweeper, and the ops band escalation endpoint —
   gated behind `telegram.operations_alerts.enabled`; ADR 0060's interactive bot
-  rides the same bindings. Not built: customer 1:1 linking (the customer half of
-  stage 2), a real platform-owned binding model (a PLATFORM-audience digest binding
-  still lives under one tenant row with no dedicated provisioning flow), fulfillment
-  triggers, the provider circuit breaker's OPEN-transition hook (platform-scoped;
-  nothing publishes it yet), and tenant-language configuration beyond the one
-  configured default. Bot topology is decided (bot-per-brand): the decision section
-  records it.
+  rides the same bindings. Stage 2's customer half landed with wave 7:
+  `TelegramCustomerLinkService` links a customer's own chat to the bot via a
+  `/start` deep-link code minted from their ADR 0051 session or a verified Mini
+  App `initData` handshake (`TelegramMiniAppInitDataVerifier`, Telegram's
+  official HMAC-SHA-256 construction), either way producing a CUSTOMER-audience
+  binding and a `recipient_endpoints` row carrying `customer_account_id` (V0107
+  widens the audience and `ck_endpoint_owner` constraints V0100/V0103
+  pre-announced). Order-confirmed/rejected and the fiscal receipt's OFD link on
+  issuance route to TELEGRAM instead of SMS when linked, entitled
+  (`telegram.customer_notifications.enabled`, safe default TRUE), and not
+  preference-refused — decided once at intent creation
+  (`CustomerTelegramChannelRouter`), so a link that dies before delivery
+  suppresses honestly rather than silently falling back; a customer-binding 403
+  retires the binding and flips the customer's TELEGRAM preference off
+  (`CustomerProviderBindingSync`). Storefront endpoints live under
+  `StorefrontTelegramLinkController`; the existing ADR 0020 preference endpoints
+  already generalize to TELEGRAM unchanged. Not built: customer notifications
+  beyond order-confirmed/rejected and the fiscal receipt
+  (payment-status-with-retry-link, refund/remedy, loyalty movements named in
+  Context), bot-per-brand as a schema fact (installations remain tenant-scoped;
+  the customer link resolves the tenant's installation, not a brand-specific
+  one), a real platform-owned binding model (a PLATFORM-audience digest binding
+  still lives under one tenant row with no dedicated provisioning flow),
+  fulfillment triggers, the provider circuit breaker's OPEN-transition hook
+  (platform-scoped; nothing publishes it yet), and tenant-language configuration
+  beyond the one configured default. Bot topology is decided (bot-per-brand):
+  the decision section records it.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed the channel and the per-surface scope), Claude
