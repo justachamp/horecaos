@@ -54,13 +54,18 @@
   delivery window and a block-rate guard that pauses the campaign and alerts an
   operator once recipients start blocking the bot (a 403 stays consent
   revocation, and now also counts) — see ADR 0044's status line for the
-  campaign-side inventory. Not built: an HTTP endpoint to rotate an
-  installation's secret reference in place (the runbook's step 9 falls back to
-  SQL — a flagged gap); any second channel adapter;
+  campaign-side inventory. Wave 13 closed two of the named gaps:
+  `ProviderInstallationController` exposes a rotate-secret endpoint
+  (`POST .../integrations/{installationId}/secret-rotations`) that verifies the
+  new reference resolves and its token passes a live Bot API `getMe` before
+  writing anything, making the cutover runbook's step 9 SQL fallback
+  emergency-only; and `ConversationRetentionSweeper` enforces
+  `retention_months`, hard-deleting expired messages and fully-aged-out CLOSED
+  conversations with their flow runs (`ConversationRetentionSweeperTests`,
+  against a genuinely advanced clock). Not built: any second channel adapter;
   captured-input routing into customer data or a governed fact store beyond this
   module's own encrypted `flow_runs` blob (`helpcenter` still has no owning ADR);
-  ADR 0029 retention/erasure enforcement past the recorded `retention_months`
-  column; chat-scale envelope-encryption volume sizing (dev-scale only, the
+  chat-scale envelope-encryption volume sizing (dev-scale only, the
   record's own named pre-work); and a needs-attention count badge on the inbox nav
   entry (no counts service exists for it yet).
 - Date proposed: 2026-08-30

@@ -18,8 +18,13 @@
   and fires a real operations alert when recipients start blocking — covered end
   to end by `CampaignBroadcastIntegrationTest`. Telegram launch is
   entitlement-gated (`telegram.broadcasts.enabled`, opt-in). SMS, EMAIL, and PUSH
-  still have no adapter; no endpoint resumes a paused campaign yet, and messages
-  suppressed during a pause are not retried after one. Nothing schedules the
+  still have no adapter. A campaign paused by the block-rate guard can be resumed
+  (wave 13): `POST .../campaigns/{campaignId}/resumptions` returns it to
+  `SENDING`, re-checks the Telegram broadcasts entitlement, resets the guard's
+  blocked-recipient counter so it measures the resumed run, and reports how many
+  messages the pause suppressed with `CAMPAIGN_NOT_SENDING` — which are not
+  retried — covered by `CampaignBroadcastIntegrationTest`,
+  `MarketingCampaignTests` and `OperationsMarketingResumeEndpointTests`. Nothing schedules the
   projection sweep, the retention jobs or the erasure path either — the
   expansion scheduler is the module's only `@Scheduled` method, so the
   five-minute staleness budget still has no runner. Also not built: the
