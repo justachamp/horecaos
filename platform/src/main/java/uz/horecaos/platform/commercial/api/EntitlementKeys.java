@@ -163,6 +163,26 @@ public final class EntitlementKeys {
             .describedAs("Whether the Telegram staff bot accepts callback taps and typed commands for this tenant.")
             .build();
 
+    /**
+     * ADR 0058 stage 2's customer half: whether a customer's own linked 1:1
+     * chat may receive transactional notifications on TELEGRAM in place of
+     * SMS. {@code safeDefault(FALSE)}, matching {@link #TELEGRAM_DIGESTS_ENABLED}
+     * rather than {@link #TELEGRAM_OPERATIONS_ALERTS_ENABLED}'s open default:
+     * a customer channel is a new surface a tenant opts into, not continuity
+     * a tenant already depends on the way a bound operations chat is — the
+     * distinction both existing keys' own doc comments already draw. Gating
+     * routing only, never linking itself: a customer may still link and
+     * unlink their chat, and toggle their own preference, with this entitlement
+     * off — what it withholds is the switch from SMS to TELEGRAM on send.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED = EntitlementKey.feature(
+                    "telegram.customer_notifications.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("notifications")
+            .describedAs(
+                    "Whether a customer's linked Telegram chat may receive transactional notifications (ADR 0058).")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -178,7 +198,8 @@ public final class EntitlementKeys {
             ANALYTICS_ADVANCED_ENABLED,
             TELEGRAM_DIGESTS_ENABLED,
             TELEGRAM_OPERATIONS_ALERTS_ENABLED,
-            TELEGRAM_BOT_INTERACTIVE_ENABLED));
+            TELEGRAM_BOT_INTERACTIVE_ENABLED,
+            TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED));
 
     private EntitlementKeys() {}
 

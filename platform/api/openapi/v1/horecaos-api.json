@@ -2346,6 +2346,25 @@
         },
         "type" : "object"
       },
+      "CustomerTelegramLinkCodeResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "deepLink" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerTelegramLinkStatusResponse" : {
+        "properties" : {
+          "linked" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CutoverDecisionRequest" : {
         "properties" : {
           "approvalRequestId" : {
@@ -4769,6 +4788,16 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "MiniAppLinkRequest" : {
+        "properties" : {
+          "initData" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "initData" ],
         "type" : "object"
       },
       "MoveLocationRequest" : {
@@ -20081,6 +20110,154 @@
         "tags" : [ "Storefront support" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link" : {
+      "delete" : {
+        "description" : "Retires the binding and its endpoint. Unlinking what was never linked is the state this call asked for, so it always succeeds.",
+        "operationId" : "unlink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unlink the customer's Telegram chat",
+        "tags" : [ "Customer Telegram linking" ]
+      },
+      "get" : {
+        "operationId" : "status",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerTelegramLinkStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this account currently has a linked Telegram chat",
+        "tags" : [ "Customer Telegram linking" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link-codes" : {
+      "post" : {
+        "description" : "Open the returned link (or send \"/start <code>\" to the bot directly) to link this brand's bot to your account. The code expires shortly and is single-use; opening it links immediately, with no further confirmation.",
+        "operationId" : "issueCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerTelegramLinkCodeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mint a Telegram deep-link code",
+        "tags" : [ "Customer Telegram linking" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-link" : {
+      "post" : {
+        "description" : "Verifies window.Telegram.WebApp.initData against the brand bot's own token (HMAC-SHA-256, Telegram's official construction) and links immediately — no /start, no code, no second round trip.",
+        "operationId" : "linkViaMiniApp",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MiniAppLinkRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerTelegramLinkStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Link via a verified Telegram Mini App session",
+        "tags" : [ "Customer Telegram linking" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
         "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
@@ -25423,6 +25600,9 @@
   }, {
     "description" : "Customer accounts, contact details, addresses, and consent",
     "name" : "Customers"
+  }, {
+    "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
+    "name" : "Customer Telegram linking"
   }, {
     "description" : "Engagements, shift approval, settlement, and delivery cost",
     "name" : "Courier operations"

@@ -229,10 +229,26 @@ public class NotificationEligibilityService {
                 throw new IllegalStateException(
                         "Operations alert %s was created without a resolved endpoint".formatted(row.id()));
             }
+        } else if (channel == NotificationChannel.TELEGRAM) {
+            // ADR 0058 stage 2: a customer's own binding, not an ADR 0015
+            // contact point — resolved from the endpoint
+            // CustomerProviderBindingSyncService materialized at link time,
+            // never from RecipientContactDirectory (which knows PHONE/EMAIL
+            // only; NotificationChannel.TELEGRAM.contactMethod() is null).
+            // Empty here is the honest "unlinked mid-flight" case: the
+            // channel was chosen as TELEGRAM when this intent was created,
+            // and the link retired (403, or the customer's own unlink) before
+            // this row was evaluated.
+            UUID customerAccount = Objects.requireNonNull(
+                    accountId, "customer-audience message reached endpoint resolution without an account");
+            Optional<UUID> endpoint = notifications.activeCustomerTelegramEndpointId(row.tenantId(), customerAccount);
+            if (endpoint.isEmpty()) {
+                return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
+            }
+            endpointId = endpoint.get();
         } else {
-            // Reachable only for a wired channel (the isWired() check above), and
-            // every wired customer channel names a contact method; TELEGRAM's
-            // operations audience never reaches this branch.
+            // Reachable only for a wired, non-Telegram channel, and every
+            // such customer channel names a contact method.
             var contactMethod = Objects.requireNonNull(
                     channel.contactMethod(), () -> channel + " is wired but names no contact method");
             UUID customerAccount = Objects.requireNonNull(

@@ -436,6 +436,117 @@ public class JdbcNotificationStore {
     }
 
     /**
+     * {@link #ensureProviderBindingEndpoint}'s customer-owned twin (ADR 0058
+     * stage 2, V0107): the endpoint standing for a customer's own linked 1:1
+     * chat, with {@code customer_account_id} set — the one shape {@code
+     * ck_endpoint_owner} admits a {@code PROVIDER_BINDING} endpoint carrying
+     * an account. Called exactly once, at link time
+     * ({@code CustomerProviderBindingSyncService#onCustomerBindingLinked}),
+     * unlike the operations twin's lazy on-first-fan-out creation — the
+     * linking handshake already knows the account, so there is nothing to
+     * defer.
+     */
+    public UUID ensureCustomerProviderBindingEndpoint(
+            UUID tenantId, UUID providerBindingId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, customer_account_id, endpoint_type, provider_binding_id, status,
+                    created_at, updated_at)
+                VALUES (:id, :tenantId, :accountId, 'PROVIDER_BINDING', :bindingId, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, provider_binding_id) WHERE provider_binding_id IS NOT NULL
+                DO UPDATE SET customer_account_id = excluded.customer_account_id, updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .param("bindingId", providerBindingId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * The endpoint standing for one provider binding, however it is owned —
+     * used by binding retirement to learn whether the retiring binding was a
+     * customer's own before deciding whether to sync a preference (ADR 0058:
+     * "for a customer 1:1 binding, a 403 is consent revocation in effect").
+     */
+    public Optional<EndpointRow> findByProviderBinding(UUID tenantId, UUID providerBindingId) {
+        return jdbc.sql("""
+                SELECT id, customer_account_id, endpoint_type, contact_point_id,
+                       operations_endpoint_reference, provider_binding_id, normalized_hash,
+                       verification_status, status
+                FROM notifications.recipient_endpoints
+                WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", providerBindingId)
+                .query(JdbcNotificationStore::endpointRow)
+                .optional();
+    }
+
+    /**
+     * The customer's own active linked-chat endpoint, if any — what {@code
+     * NotificationEligibilityService} resolves a TELEGRAM customer-audience
+     * message's recipient from, and what a channel-routing decision asks to
+     * learn whether an active link exists at all. Empty once the underlying
+     * binding retires and {@link #retireEndpoint} runs — the mechanism behind
+     * an honest {@code NO_RECIPIENT_ENDPOINT} for a link that died between
+     * intent creation and delivery.
+     */
+    public Optional<UUID> activeCustomerTelegramEndpointId(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                SELECT id FROM notifications.recipient_endpoints
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND provider_binding_id IS NOT NULL AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /**
+     * The same row {@link #activeCustomerTelegramEndpointId} finds, naming
+     * the ADR 0026 binding behind it instead of the endpoint — what {@code
+     * CustomerProviderBindingSync#activeBindingFor} answers for a storefront
+     * status/unlink call, which needs the binding id to retire, not the
+     * endpoint id.
+     */
+    public Optional<UUID> activeCustomerProviderBindingId(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                SELECT provider_binding_id FROM notifications.recipient_endpoints
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND provider_binding_id IS NOT NULL AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /**
+     * Retires an endpoint so a fresh lookup stops finding it — called on
+     * ADR 0026 binding retirement, any audience, by {@link
+     * CustomerProviderBindingSync#onProviderBindingRetired}'s implementation.
+     * Idempotent: a duplicate retirement (a redelivered webhook, ADR 0032's
+     * at-least-once guarantee) finds nothing left to update and changes
+     * nothing.
+     */
+    public void retireEndpoint(UUID tenantId, UUID endpointId, Instant now) {
+        jdbc.sql("""
+                UPDATE notifications.recipient_endpoints
+                SET status = 'RETIRED', version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("id", endpointId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /**
      * Whether an older, still-in-flight message is queued ahead of this one for
      * the same recipient endpoint (ADR 0058's per-chat FIFO rule).
      *

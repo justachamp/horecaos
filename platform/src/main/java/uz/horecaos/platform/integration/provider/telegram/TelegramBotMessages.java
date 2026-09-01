@@ -77,6 +77,26 @@ public final class TelegramBotMessages {
                 "Linked. You can now approve or reject orders and use the bot's typed commands.");
     }
 
+    // ---------------------------------------- ADR 0058 stage 2 customer linking
+
+    /**
+     * Deliberately one language, the same choice {@link #invalidOrExpiredCode}
+     * and {@link #staffLinkInvalidOrExpiredCode} make: the failure carries no
+     * resolved account or tenant to pick a language from, since the code
+     * never resolved to one.
+     */
+    static String customerLinkInvalidOrExpiredCode() {
+        return "This link is invalid or has expired. Go back to the app and try again.";
+    }
+
+    static String customerLinked(String locale) {
+        return pick(
+                locale,
+                "Ulandi. Endi buyurtma holatlari va kvitansiyalar shu yerga keladi.",
+                "Готово. Теперь статусы заказов и чеки будут приходить сюда.",
+                "Linked. Your order updates and receipts will arrive here.");
+    }
+
     // -------------------------------------------------- ADR 0060 §2 the buttons
 
     public static String approveButtonLabel(String locale) {

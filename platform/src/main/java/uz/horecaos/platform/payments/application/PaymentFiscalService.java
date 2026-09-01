@@ -9,8 +9,10 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.payments.api.FiscalDocumentIssued;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReason;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
@@ -41,11 +43,14 @@ public class PaymentFiscalService {
 
     private final JdbcFiscalDocumentStore documents;
     private final Map<PaymentProviderType, FiscalReceiptPort> receiptPorts;
+    private final ApplicationEventPublisher events;
 
-    public PaymentFiscalService(JdbcFiscalDocumentStore documents, List<FiscalReceiptPort> ports) {
+    public PaymentFiscalService(
+            JdbcFiscalDocumentStore documents, List<FiscalReceiptPort> ports, ApplicationEventPublisher events) {
         this.documents = documents;
         this.receiptPorts = ports.stream()
                 .collect(java.util.stream.Collectors.toMap(FiscalReceiptPort::providerType, port -> port));
+        this.events = events;
     }
 
     /**
@@ -132,7 +137,7 @@ public class PaymentFiscalService {
         switch (submission.classification()) {
             case SUCCESS -> {
                 if (submission.status() == FiscalStatus.ISSUED) {
-                    documents.recordEvidence(
+                    boolean wroteEvidence = documents.recordEvidence(
                             document.tenantId(),
                             document.id(),
                             FiscalStatus.ISSUED,
@@ -140,6 +145,9 @@ public class PaymentFiscalService {
                             submission.evidence(),
                             null,
                             submission.submittedAt());
+                    if (wroteEvidence) {
+                        publishIssued(document.tenantId(), document.orderId(), document.id(), submission.submittedAt());
+                    }
                 } else {
                     documents.recordSubmission(
                             document.tenantId(),
@@ -198,7 +206,13 @@ public class PaymentFiscalService {
             FiscalDocument.FiscalEvidence evidence,
             String protectedResponseReference,
             Instant issuedAt) {
-        return documents.recordEvidence(
+        // Read first for the order id the event needs: recordEvidence is an
+        // UPDATE and returns only whether it wrote, not the row, and a
+        // guarded-against-overwrite ISSUED document is exactly the row this
+        // read must still find so the event still gets its orderId even
+        // though nothing was written.
+        Optional<FiscalDocument> before = documents.find(tenantId, documentId);
+        boolean wrote = documents.recordEvidence(
                 tenantId,
                 documentId,
                 FiscalStatus.ISSUED,
@@ -206,6 +220,20 @@ public class PaymentFiscalService {
                 evidence,
                 protectedResponseReference,
                 issuedAt);
+        if (wrote) {
+            before.ifPresent(document -> publishIssued(tenantId, document.orderId(), documentId, issuedAt));
+        }
+        return wrote;
+    }
+
+    /**
+     * Publishes the customer-facing ISSUED fact (ADR 0058: "a legal
+     * artifact, not a courtesy"), in-process, same shape as {@code
+     * fiscal.api.FiscalDocumentBlocked} — see {@link FiscalDocumentIssued}'s
+     * own javadoc for why the OFD link never travels on it.
+     */
+    private void publishIssued(UUID tenantId, UUID orderId, UUID documentId, Instant now) {
+        events.publishEvent(new FiscalDocumentIssued(UUID.randomUUID(), tenantId, orderId, documentId, now));
     }
 
     /** Every fiscal document for an order. Plural, deliberately: see the store. */

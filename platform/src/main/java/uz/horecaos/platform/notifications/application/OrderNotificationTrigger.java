@@ -22,6 +22,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
+import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 
@@ -39,6 +40,17 @@ import uz.horecaos.platform.ordering.api.OrderingEvent;
  * notification problem must not fail — or reverse — a confirmation the restaurant
  * has already made. A template lookup inside the confirming transaction would do
  * precisely that.
+ *
+ * <p>One bounded exception, added by ADR 0058 stage 2: which channel the
+ * intent is created for. Unlike consent/templates/locale/recipient, the
+ * channel cannot be deferred to the worker — {@code
+ * NotificationEligibilityService} resolves a recipient <em>for the channel
+ * the row already names</em>, so "SMS or Telegram" has to be decided before
+ * the row exists, not after. {@link CustomerTelegramChannelRouter} is that
+ * one extra read, and it is written to fail open: any problem answers with
+ * the configured default channel rather than propagating into this
+ * transaction, so the "must not fail a confirmation" rule above still holds
+ * for everything this class does.
  *
  * <p>Confirmation and rejection only. {@code OrderReceived} could reasonably
  * produce a "we have your order" message and does not here:
@@ -70,14 +82,18 @@ public class OrderNotificationTrigger {
 
     private final JdbcNotificationStore notifications;
     private final OperationsAlertFanoutService operationsAlerts;
+    private final OrderDirectory orders;
+    private final CustomerTelegramChannelRouter channelRouter;
     private final ObjectMapper objectMapper;
     private final Clock clock;
-    private final NotificationChannel channel;
+    private final NotificationChannel defaultChannel;
     private final Duration expiry;
 
     public OrderNotificationTrigger(
             JdbcNotificationStore notifications,
             OperationsAlertFanoutService operationsAlerts,
+            OrderDirectory orders,
+            CustomerTelegramChannelRouter channelRouter,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.order-channel:SMS}") String channel,
@@ -87,9 +103,11 @@ public class OrderNotificationTrigger {
             @Value("${horecaos.notifications.order-expiry:PT6H}") Duration expiry) {
         this.notifications = notifications;
         this.operationsAlerts = operationsAlerts;
+        this.orders = orders;
+        this.channelRouter = channelRouter;
         this.objectMapper = objectMapper;
         this.clock = clock;
-        this.channel = NotificationChannel.valueOf(channel);
+        this.defaultChannel = NotificationChannel.valueOf(channel);
         this.expiry = expiry;
     }
 
@@ -145,6 +163,16 @@ public class OrderNotificationTrigger {
 
         Instant now = clock.instant();
         UUID tenantId = event.tenantId().value();
+
+        // Best-effort and read-only: a guest order (or an order this read
+        // cannot see, which does not happen for an event this transaction
+        // just produced) simply routes to the default channel below, the same
+        // as before this class read anything about the customer at all.
+        UUID customerAccountId = orders.summary(tenantId, event.orderId())
+                .map(OrderDirectory.OrderSummary::customerAccountId)
+                .orElse(null);
+        NotificationChannel channel = channelRouter.resolve(
+                tenantId, brandId, customerAccountId, NotificationClass.TRANSACTIONAL_REQUIRED, defaultChannel);
 
         // Keyed on the subject rather than the event id. A replayed OrderConfirmed
         // carries a fresh event id, and keying on that would send the customer a
