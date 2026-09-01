@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, input, signal, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import type { MenuItem, MenuItemVariant } from '../../types/home.types';
 import { FEATURES } from '../../core/config/features';
+import { Session } from '../../core/auth/session';
 
 @Component({
   selector: 'app-food-card',
@@ -27,6 +28,8 @@ export class FoodCardComponent {
 
   private readonly translate = inject(TranslateService);
   private readonly favourites = inject(FavouritesService);
+  private readonly session = inject(Session);
+  private readonly router = inject(Router);
   readonly cart = inject(UiCartService);
 
   /** First active variant id for cart API (fallback: menu item id) */
@@ -84,6 +87,14 @@ export class FoodCardComponent {
     event.stopPropagation();
     event.preventDefault();
     if (!this.favouritesEnabled || this.favouriting()) return;
+    // Favourites is ownership-authorised (/me/favourites) and there is no
+    // guest state for a heart -- unlike browsing, which is the point of this
+    // card. Sent to sign in rather than let the optimistic flip below get
+    // reverted a moment later by a 401 nobody explained.
+    if (!this.session.isAuthenticated()) {
+      this.router.navigate(['/auth/login']).catch(() => {});
+      return;
+    }
     const id = this.item().id;
     this.favouriting.set(true);
     // Optimistic: the heart flips at once and is put back if the platform
@@ -102,6 +113,14 @@ export class FoodCardComponent {
     event.stopPropagation();
     const vid = this.variantId();
     if (!vid || this.cart.updating()) return;
+    // The platform has no anonymous-cart capability: POST /carts requires a
+    // session (see app.routes.ts's own comment on /cart). Caught here, at
+    // the actual point of intent, rather than letting the first line an
+    // anonymous visitor adds come back 401.
+    if (!this.session.isAuthenticated()) {
+      this.router.navigate(['/auth/login']).catch(() => {});
+      return;
+    }
     const run = (): void => {
       const line = this.cartLine();
       if (line) {

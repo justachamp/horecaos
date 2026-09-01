@@ -8,20 +8,30 @@ import { ProfileInviteComponent } from './profile-invite/profile-invite';
 import { ProfileDetailsComponent } from './profile-details/profile-details';
 import { ProfileTelegramComponent } from './profile-telegram/profile-telegram';
 import { favouritesEnabledGuard } from '../../guards/features.guard';
+import { authGuard } from '../../guards/auth.guard';
 
 export const PROFILE_ROUTES: Routes = [
   {
     path: '',
     component: ProfileComponent
   },
+  // Account-only: ProfileDetailsComponent reads and writes /me
+  // unconditionally and has no guest state to fall back to (unlike
+  // ProfileComponent itself, or profile-telegram's own needsSignIn prompt),
+  // so an anonymous visit is refused at the route rather than left to 401.
   {
     path: 'details',
-    component: ProfileDetailsComponent
+    component: ProfileDetailsComponent,
+    canActivate: [authGuard]
   },
+  // Gated the same way: favourites is a customer's own list at /me/favourites,
+  // ownership-authorised and not on the public browse surface. The profile
+  // menu already hides this link for a guest (ProfileMenuComponent's
+  // authorizedOnly); this is what stops reaching it by a direct URL instead.
   {
     path: 'favorites',
     component: ProfileFavoritesComponent,
-    canActivate: [favouritesEnabledGuard]
+    canActivate: [authGuard, favouritesEnabledGuard]
   },
   {
     path: 'locations',

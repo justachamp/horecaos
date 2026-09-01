@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, from, switchMap } from 'rxjs';
 import { CartHintBadgeComponent } from '../../shared/cart-hint-badge/cart-hint-badge.component';
 import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.component';
@@ -20,6 +20,7 @@ import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { FEATURES } from '../../core/config/features';
+import { Session } from '../../core/auth/session';
 
 export interface ProductVariantDisplay {
   id: string;
@@ -79,6 +80,8 @@ export class ProductComponent {
   private readonly langService = inject(LangService);
   private readonly translate = inject(TranslateService);
   private readonly favourites = inject(FavouritesService);
+  private readonly session = inject(Session);
+  private readonly router = inject(Router);
   readonly cartService = inject(UiCartService);
 
   /** Gates the favourites heart until the backend exists. See `FEATURES`. */
@@ -204,7 +207,11 @@ export class ProductComponent {
   });
 
   constructor() {
-    if (!this.cartService.cartData()) {
+    // Mirrors BottomNavComponent's own guard: an anonymous visitor can never
+    // hold a cart (see increaseVariant above), so there is nothing this read
+    // could find but a stray local cart id from a previous session -- and
+    // asking for it anyway would only 401.
+    if (!this.cartService.cartData() && this.session.isAuthenticated()) {
       void this.cartService.load();
     }
 
@@ -317,6 +324,12 @@ export class ProductComponent {
    */
   increaseVariant(variantId: string): void {
     if (!variantId || this.cartService.updating() || !this.modifiersValid()) return;
+    // No anonymous cart on the platform: POST /carts requires a session. See
+    // app.routes.ts's comment on /cart for the other half of this boundary.
+    if (!this.session.isAuthenticated()) {
+      this.router.navigate(['/auth/login']).catch(() => {});
+      return;
+    }
     const selection = this.flattenedSelection();
     const run = (): void => {
       const line = this.cartService
@@ -354,6 +367,13 @@ export class ProductComponent {
       event.preventDefault();
     }
     if (!this.favouritesEnabled || this.favouriting()) return;
+    // Ownership-authorised (/me/favourites); no guest state for a heart, so
+    // an anonymous tap goes to sign-in rather than an optimistic flip that a
+    // 401 immediately reverts.
+    if (!this.session.isAuthenticated()) {
+      this.router.navigate(['/auth/login']).catch(() => {});
+      return;
+    }
     const item = this.rawItem();
     if (!item) return;
     this.favouriting.set(true);
