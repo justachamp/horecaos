@@ -475,10 +475,12 @@ The checked-in realm carries three things that must not survive into
 production, found by reading `platform/infra/keycloak/realm/horecaos-realm.json`
 directly rather than assumed:
 
-**1. `horecaos-operations` and `horecaos-control-plane` only know `localhost`
-redirect URIs and web origins.** Add the real ones and remove the dev ones —
-from the Keycloak admin console (`Clients` → each client → `Access settings`)
-or the Admin REST API:
+**1. The retired public redirect clients must not exist.** ADR 0062 (wave 18)
+replaced the browser-redirect sign-in with the backend-validated direct grant on
+`horecaos-staff-login`; `horecaos-operations` and `horecaos-control-plane` are
+gone from the realm file, and a realm imported fresh from it never has them. If
+this realm was imported from an OLDER file (or upgraded in place), delete both
+— from the admin console (`Clients` → each → delete) or the Admin REST API:
 
 ```bash
 read -rsp 'Keycloak bootstrap admin password: ' KC_ADMIN_PASSWORD; echo
@@ -486,22 +488,20 @@ token="$(curl -sf -X POST https://auth.horecaos.uz/realms/master/protocol/openid
   -d "client_id=admin-cli&grant_type=password&username=admin&password=${KC_ADMIN_PASSWORD}" \
   | jq -r .access_token)"
 
-for pair in "horecaos-operations:https://operations.horecaos.uz" "horecaos-control-plane:https://admin.horecaos.uz"; do
-  client="${pair%%:*}"; origin="${pair##*:}"
+for client in horecaos-operations horecaos-control-plane; do
   id="$(curl -sf -H "Authorization: Bearer ${token}" \
-    "https://auth.horecaos.uz/admin/realms/horecaos/clients?clientId=${client}" | jq -r '.[0].id')"
-  curl -sf -X PUT -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' \
-    "https://auth.horecaos.uz/admin/realms/horecaos/clients/${id}" \
-    -d "{\"redirectUris\":[\"${origin}/auth/callback\",\"${origin}/\"],\"webOrigins\":[\"${origin}\"]}"
+    "https://auth.horecaos.uz/admin/realms/horecaos/clients?clientId=${client}" | jq -r '.[0].id // empty')"
+  [ -n "${id}" ] && curl -sf -X DELETE -H "Authorization: Bearer ${token}" \
+    "https://auth.horecaos.uz/admin/realms/horecaos/clients/${id}" && echo "deleted ${client}"
 done
 unset KC_ADMIN_PASSWORD
 ```
 
-**Check:** `curl ... /clients?clientId=horecaos-operations | jq .[0].redirectUris`
-no longer contains `http://localhost:4200/...`.
+**Check:** `curl ... /clients?clientId=horecaos-operations` answers `[]`.
 
-**2. `horecaos-provisioning` and `horecaos-identity-reader` hold the fallback
-secret `development-only-not-a-secret-*` from the import file.** Rotate both
+**2. `horecaos-provisioning`, `horecaos-identity-reader`, and
+`horecaos-staff-login` (ADR 0062's direct-grant client) hold fallback secrets
+from the import file.** Rotate both
 — Keycloak generates the replacement with its own CSPRNG, so no human types
 or sees the value:
 
@@ -516,7 +516,7 @@ KC=http://keycloak:8080
 token="$(printf 'client_id=admin-cli&grant_type=password&username=admin&password=%s' \
       "${KC_ADMIN_PASSWORD}" \
     | curl -sf -X POST "${KC}/realms/master/protocol/openid-connect/token" -d @- | jq -r .access_token)"
-for pair in horecaos-provisioning:provisioning-secret horecaos-identity-reader:reader-secret; do
+for pair in horecaos-provisioning:provisioning-secret horecaos-identity-reader:reader-secret horecaos-staff-login:staff-login-secret; do
     client="${pair%%:*}"; slot="${pair##*:}"
     id="$(curl -sf -H "Authorization: Bearer ${token}" \
         "${KC}/admin/realms/horecaos/clients?clientId=${client}" | jq -r '.[0].id')"
