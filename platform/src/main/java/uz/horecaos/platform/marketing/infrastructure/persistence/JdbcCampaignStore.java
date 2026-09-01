@@ -77,7 +77,7 @@ public class JdbcCampaignStore {
                        estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
                        reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
                        benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
-                       blocked_count, version
+                       blocked_count, paused_at, version
                   FROM marketing.campaigns
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -149,12 +149,38 @@ public class JdbcCampaignStore {
     public boolean pauseForBlockRate(UUID tenantId, UUID campaignId, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.campaigns
-                   SET status = 'PAUSED', halted_reason = :reason, version = version + 1, updated_at = :now
+                   SET status = 'PAUSED', halted_reason = :reason, paused_at = :now,
+                       version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'SENDING'
                 """)
                         .param("tenantId", tenantId)
                         .param("id", campaignId)
                         .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Un-pauses a campaign the block-rate guard stopped: {@code PAUSED -> SENDING}.
+     *
+     * <p>Resets {@code blocked_count} to zero and clears {@code paused_at} in the
+     * same statement. The guard measures the run it is watching right now, not
+     * the run before it: carrying the old count forward would let a campaign
+     * that was paused once at the threshold pause again on its very next
+     * blocked recipient, which defeats the point of resuming at all. {@code
+     * from = 'PAUSED'} in the predicate rather than checked in Java, the same
+     * discipline every other transition here follows.
+     */
+    public boolean resume(UUID tenantId, UUID campaignId, Instant now) {
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET status = 'SENDING', blocked_count = 0, paused_at = NULL,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'PAUSED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
                         .param("now", utc(now))
                         .update()
                 == 1;
@@ -198,12 +224,19 @@ public class JdbcCampaignStore {
                 == 1;
     }
 
-    /** A halt carries the reason in the same statement that stops the campaign. */
+    /**
+     * A halt carries the reason in the same statement that stops the campaign.
+     *
+     * <p>Clears {@code paused_at} unconditionally: a halt from {@code PAUSED}
+     * (an operator's own word overriding the guard) ends the campaign for
+     * good, and a stale pause timestamp on a terminal row is a fact nothing
+     * ever reads again, only a trap for the next person who does.
+     */
     public boolean halt(
             UUID tenantId, UUID campaignId, CampaignStatus from, CampaignStatus to, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.campaigns
-                   SET status = :to, halted_reason = :reason, completed_at = :now,
+                   SET status = :to, halted_reason = :reason, completed_at = :now, paused_at = NULL,
                        version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
@@ -530,6 +563,7 @@ public class JdbcCampaignStore {
                 row.getObject("created_by", UUID.class),
                 row.getObject("approved_by", UUID.class),
                 row.getInt("blocked_count"),
+                instant(row.getObject("paused_at", OffsetDateTime.class)),
                 row.getInt("version"));
     }
 
@@ -586,6 +620,7 @@ public class JdbcCampaignStore {
             UUID createdBy,
             UUID approvedBy,
             int blockedCount,
+            @Nullable Instant pausedAt,
             int version) {}
 
     /** A campaign identity without its whole row — what a cross-tenant sweep reads. */

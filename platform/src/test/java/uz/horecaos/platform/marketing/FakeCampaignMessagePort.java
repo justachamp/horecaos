@@ -1,5 +1,6 @@
 package uz.horecaos.platform.marketing;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,9 +29,16 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final Map<String, String> bodies = new LinkedHashMap<>();
     private boolean wired = true;
     private OptionalDouble ratePerSecond = OptionalDouble.empty();
+    private int suppressedForNotSending;
 
     FakeCampaignMessagePort withBody(String locale, String body) {
         bodies.put(locale, body);
+        return this;
+    }
+
+    /** What {@link #countSuppressedForNotSending} answers from now on, regardless of {@code since}. */
+    FakeCampaignMessagePort withSuppressedForNotSending(int count) {
+        suppressedForNotSending = count;
         return this;
     }
 
@@ -58,6 +66,11 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     @Override
     public OptionalDouble campaignRatePerSecond(String channel) {
         return ratePerSecond;
+    }
+
+    @Override
+    public int countSuppressedForNotSending(UUID tenantId, UUID campaignId, Instant since) {
+        return suppressedForNotSending;
     }
 
     void unwire() {

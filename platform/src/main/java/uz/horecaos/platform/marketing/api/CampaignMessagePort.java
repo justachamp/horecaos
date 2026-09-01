@@ -98,6 +98,22 @@ public interface CampaignMessagePort {
     OptionalDouble campaignRatePerSecond(String channel);
 
     /**
+     * How many of this campaign's messages were suppressed because the
+     * campaign itself was not sending — the reason ADR 0020's own eligibility
+     * check writes for a message that reaches the front of the queue behind a
+     * paused (or otherwise stopped) campaign.
+     *
+     * <p>What a resume reports the pause cost: these are not retried, and
+     * {@code CampaignService#resume} never asks for them to be — resuming only
+     * reopens expansion and delivery for whatever has not yet been decided.
+     *
+     * @param since only a suppression at or after this instant counts, so a
+     *              campaign paused, resumed, and paused again reports what its
+     *              current pause cost rather than its whole history
+     */
+    int countSuppressedForNotSending(UUID tenantId, UUID campaignId, Instant since);
+
+    /**
      * One campaign message, described without describing a person.
      *
      * @param scheduledAt when the message becomes eligible. Set to the next open

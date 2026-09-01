@@ -1303,6 +1303,10 @@ export interface ResourceScope {
   type?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
 }
 
+export interface ResumeResponse {
+  suppressedDuringPause?: number;
+}
+
 export interface ResumeScopeRequest {
   expectedVersion?: number;
   reason: string;
@@ -1841,7 +1845,7 @@ export interface Operations {
   "cutOver": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: CutoverDecisionRequest }; responses: { "200": ScopeView } };
   "refuseCutover": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover-refusals"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: CutoverDecisionRequest }; responses: { "200": CutoverDecisionView } };
   "backlog": { method: "GET"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/quarantine"; request: { parameters: { path: { scopeId: string }; query: { tenantId: string } } }; responses: { "200": QuarantineBacklogView } };
-  "resume_1": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: ResumeScopeRequest }; responses: { "200": ScopeView } };
+  "resume_2": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: ResumeScopeRequest }; responses: { "200": ScopeView } };
   "rollBack": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/rollbacks"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: RollbackScopeRequest }; responses: { "200": ScopeView } };
   "start_1": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/runs"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: StartRunRequest }; responses: { "200": MigrationRunView } };
   "suspend_1": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/suspensions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: SuspendScopeRequest }; responses: { "200": ScopeView } };
@@ -1850,7 +1854,7 @@ export interface Operations {
   "sessionContext": { method: "GET"; path: "/api/v1/session/context"; request: { parameters: { query: { tenantId?: string } } }; responses: { "200": CapabilityView } };
   "issue_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/integrations/telegram/link-codes"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: string } } }; responses: { "200": {  } } };
   "open_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CourierDutyControllerOpenRequest }; responses: { "200": DutySessionResponse } };
-  "resume": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions/{sessionId}/break-endings"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "resume_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions/{sessionId}/break-endings"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } } }; responses: { "200": unknown } };
   "suspend": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions/{sessionId}/breaks"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions/{sessionId}/closures"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } }; body: CloseRequest }; responses: { "200": unknown } };
   "observations": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/telemetry/observations"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ObservationBatchRequest }; responses: { "200": IngestResponse } };
@@ -1911,6 +1915,7 @@ export interface Operations {
   "halt": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/halts"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": unknown } };
   "launch": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/launches"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
   "recipients": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/recipients"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<RecipientResponse> } };
+  "resume": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/resumptions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": ResumeResponse } };
   "submit": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
   "suppress": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SuppressionRequest }; responses: { "200": SuppressionResponse } };
   "list": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TemplateResponse> } };

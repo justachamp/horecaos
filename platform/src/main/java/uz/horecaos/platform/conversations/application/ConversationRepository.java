@@ -209,6 +209,61 @@ class ConversationRepository {
                 .update();
     }
 
+    /**
+     * Claims up to {@code batchSize} {@code CLOSED} conversations whose own
+     * retention window has passed and that carry no live message — {@code
+     * ConversationRetentionSweeper}'s own candidate set, before it deletes
+     * anything.
+     *
+     * <p>{@code FOR UPDATE SKIP LOCKED} holds each row for the rest of the
+     * caller's transaction: the message-emptiness check here and the actual
+     * deletes the sweeper issues next must see the same set, not one a
+     * concurrent inbound message (which reopens a {@code CLOSED} conversation
+     * to {@code HANDED_TO_OPERATOR} — see {@code ConversationEngine}) could
+     * have changed in between.
+     */
+    List<Ref> claimClosedAndExpired(Instant now, int batchSize) {
+        return jdbc.sql("""
+                SELECT c.id, c.tenant_id
+                  FROM conversations.conversations c
+                 WHERE c.state = 'CLOSED'
+                   AND c.updated_at < (CAST(:now AS timestamptz) - (c.retention_months * INTERVAL '1 month'))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM conversations.conversation_messages m
+                        WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id
+                   )
+                 ORDER BY c.updated_at
+                 LIMIT :batchSize
+                 FOR UPDATE OF c SKIP LOCKED
+                """)
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
+                .query((row, number) ->
+                        new Ref(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * Deletes exactly the conversations {@link #claimClosedAndExpired}
+     * claimed. The caller has already deleted their {@code flow_runs} first
+     * ({@code fk_flow_run_conversation} has no cascade): a conversation this
+     * sweep is allowed to remove has no active run by construction (closing a
+     * conversation always ends its run first — see {@code
+     * ConversationInboxService#close}), so nothing here is destroying live
+     * work, only history the sweep's own claim already proved has aged out.
+     */
+    int deleteByIds(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        return jdbc.sql("DELETE FROM conversations.conversations WHERE id = ANY(:ids)")
+                .param("ids", ids.toArray(UUID[]::new))
+                .update();
+    }
+
+    /** A conversation identity without its whole row — what a cross-tenant sweep claims. */
+    record Ref(UUID tenantId, UUID conversationId) {}
+
     private static Row map(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         java.sql.Timestamp lastReadAt = row.getTimestamp("last_read_at");
         return new Row(

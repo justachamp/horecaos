@@ -317,14 +317,35 @@ bao kv put horecaos/production/provider_notification/tenant-<id>/telegram-bot \
   value="<the new BotFather token>"
 ```
 
-**Known gap, named rather than hidden:** there is no HTTP endpoint that
-rotates an existing installation's `secret_reference` in place —
-`ProviderInstallationController`'s only write is the initial `POST` at
-creation. The secret reference string itself does not need to change (only
-the value behind it does, which is the entire point of ADR 0028's
-reference/value split), so this step is a pure secrets-manager write with no
-database write at all — **unless** the reference string is being changed too
-(e.g. a fresh installation row for a re-provisioned bot), in which case:
+Then, if (and only if) the reference **string** itself is also changing — a
+fresh installation row for a re-provisioned bot, not an ordinary rotation —
+point the installation at it through `ProviderInstallationController`'s own
+rotate-secret endpoint, wave 13's fix for this step's former gap:
+
+```bash
+curl -fsS -X POST \
+  -H "Authorization: Bearer <a token holding INTEGRATION_INSTALLATION_MANAGE>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: sendpulse-cutover-<installationId>-rotate-1" \
+  "https://<control-plane-host>/api/v1/control-plane/tenants/<tenantId>/integrations/<installationId>/secret-rotations" \
+  -d '{"newSecretReference": "<new reference string>", "reason": "BotFather rotation, sendpulse-cutover step 9"}'
+```
+
+The endpoint does the verification this runbook used to ask a human to do by
+hand, in the order that keeps a bad write from ever happening: it resolves
+the new reference through the same `SecretResolver` the application uses,
+then calls the Bot API's `getMe` with the resolved token through the same
+`TelegramBotApiClient` a real send would use. Either failure — a reference
+that does not resolve, or a token Telegram rejects — answers `422
+UNPROCESSABLE_STATE` and changes nothing in `integration.installations`; only
+a real, live, working token reaches the database. A `200` response repeats
+the old and new reference strings and the bot's own `username` from `getMe`,
+so you can confirm it named the account you expected before moving on. The
+ADR 0027 audit fact it writes carries the old and new reference **names**
+only, never the token value, the same discipline this whole step follows.
+
+**Emergency-only SQL fallback**, if the endpoint is unreachable and the
+rotation cannot wait:
 
 ```bash
 qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c "UPDATE integration.installations
@@ -334,8 +355,10 @@ qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c "UPDATE integrat
 
 **Never with SQL for anything but the reference string itself** — the same
 rule `dead-letter-decision.md` states for its own domain: a hand-edited row
-has no audit trail, and this one at least should be rare (most rotations
-reuse the existing reference and touch only the secrets manager, above).
+has no audit trail and, unlike the endpoint above, verifies nothing before
+it writes. Reach for it only when the endpoint itself is the thing that is
+down; a rotation that only needs the ordinary secrets-manager write above
+never touches SQL at all.
 
 **Check:**
 
@@ -343,10 +366,12 @@ reuse the existing reference and touch only the secrets manager, above).
 curl -fsS "https://api.telegram.org/bot<the new token>/getMe"
 ```
 
-`ok: true`, and the application's own next outbound send to this bot
-(step 10) is proof the resolver picked up the new value — `OpenBaoSecretResolver`
-caches for a TTL, so a send attempted immediately after this step may still
-be using the cached old value; wait out the cache TTL or restart the
+`ok: true` — already proven by the endpoint's own response above when that
+path was used, and worth confirming again by hand when the SQL fallback was.
+The application's own next outbound send to this bot (step 10) is further
+proof the resolver picked up the new value — `OpenBaoSecretResolver` caches
+for a TTL, so a send attempted immediately after this step may still be
+using the cached old value; wait out the cache TTL or restart the
 application process if step 10 needs to run right away.
 
 **Rollback:** none possible past step 8 — see that step's own note. If the

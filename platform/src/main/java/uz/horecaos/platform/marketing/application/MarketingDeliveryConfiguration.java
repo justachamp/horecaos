@@ -1,5 +1,6 @@
 package uz.horecaos.platform.marketing.application;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.UUID;
@@ -74,6 +75,13 @@ public class MarketingDeliveryConfiguration {
             @Override
             public OptionalDouble campaignRatePerSecond(String channel) {
                 return OptionalDouble.empty();
+            }
+
+            @Override
+            public int countSuppressedForNotSending(UUID tenantId, UUID campaignId, Instant since) {
+                // No delivery adapter means no message was ever created, so
+                // nothing was ever suppressed either.
+                return 0;
             }
         };
     }

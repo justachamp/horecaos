@@ -6,11 +6,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,8 +28,16 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.iam.api.secrets.SecretResolver;
+import uz.horecaos.platform.iam.api.secrets.SecretValue;
+import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
+import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup.InstallationSnapshot;
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
+import uz.horecaos.platform.integration.provider.telegram.TelegramCallResult;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -49,23 +59,35 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @Tag(name = "Provider integrations", description = "POS, payment, delivery, and notification accounts")
 public class ProviderInstallationController {
 
+    /** The one provider type wave 13's rotate-secret verification speaks. */
+    private static final String TELEGRAM_BOT_API = "TELEGRAM_BOT_API";
+
     private final JdbcClient jdbc;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final java.time.Clock clock;
     private final ProviderCapabilityReconciliationService reconciliation;
+    private final ProviderInstallationLookup installations;
+    private final SecretResolver secrets;
+    private final TelegramBotApiClient telegramBotApi;
 
     public ProviderInstallationController(
             JdbcClient jdbc,
             AuditRecorder audit,
             CurrentActor currentActor,
             java.time.Clock clock,
-            ProviderCapabilityReconciliationService reconciliation) {
+            ProviderCapabilityReconciliationService reconciliation,
+            ProviderInstallationLookup installations,
+            SecretResolver secrets,
+            TelegramBotApiClient telegramBotApi) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.currentActor = currentActor;
         this.clock = clock;
         this.reconciliation = reconciliation;
+        this.installations = installations;
+        this.secrets = secrets;
+        this.telegramBotApi = telegramBotApi;
     }
 
     @GetMapping
@@ -221,6 +243,128 @@ public class ProviderInstallationController {
                         "capabilities", result.capabilities()),
                 Capability.INTEGRATION_INSTALLATION_MANAGE);
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/{installationId}/secret-rotations")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Point an installation's secret reference at a rotated credential",
+            description = "ADR 0028: the database stores a reference, never a value, so this only "
+                    + "ever changes which reference is on file — the docs/runbooks/sendpulse-cutover.md "
+                    + "step 9 gap. Verified before it is written: the new reference must resolve "
+                    + "through the ADR 0028 secret manager, and (Telegram bot installations only, "
+                    + "today's one caller) the resolved token must pass a live getMe. Either failure "
+                    + "changes nothing.")
+    public ResponseEntity<RotateSecretResponse> rotateSecret(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @Valid @RequestBody RotateSecretRequest request) {
+
+        InstallationSnapshot installation = installations
+                .installation(tenantId, installationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available"));
+
+        if (!TELEGRAM_BOT_API.equals(installation.providerType())) {
+            // Every other provider type is a real gap, named rather than
+            // guessed at: nothing today gives this endpoint a harmless
+            // authenticated call for SMS or payment providers, the same
+            // absence ProviderCapabilityReconciliationService's own doc
+            // comment records for its non-POS preflight.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Secret rotation verification is wired for TELEGRAM_BOT_API installations only, not "
+                            + installation.providerType());
+        }
+
+        SecretReference reference;
+        try {
+            reference = SecretReference.parse(request.newSecretReference());
+        } catch (IllegalArgumentException malformed) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Malformed secret reference: " + malformed.getMessage());
+        }
+
+        SecretValue credential;
+        try {
+            // Fresh, not cached: this reference was likely never resolved
+            // before (the whole reason a rotation is in flight), and even
+            // when it was, only a fresh read proves the manager holds the
+            // rotated value right now.
+            credential = secrets.resolveFresh(reference);
+        } catch (RuntimeException unresolved) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "The new secret reference does not resolve: " + unresolved.getMessage());
+        }
+
+        TelegramCallResult result = telegramBotApi.getMe(
+                new ProviderCall(installation.baseUrl(), credential.reveal(), null, Duration.ofSeconds(15)));
+
+        if (!(result instanceof TelegramCallResult.Success success)) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE, "Telegram rejected the new token: " + describe(result));
+        }
+
+        String oldReference = installation.secretReference();
+        int changed = jdbc.sql("""
+                UPDATE integration.installations
+                   SET secret_reference = :newReference, version = version + 1, updated_at = :now
+                 WHERE id = :id AND tenant_id = :tenantId AND secret_reference = :oldReference
+                """)
+                .param("newReference", reference.toString())
+                .param("id", installationId)
+                .param("tenantId", tenantId)
+                .param("oldReference", oldReference)
+                .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                .update();
+
+        if (changed == 0) {
+            // Another caller rotated (or otherwise touched) this installation's
+            // reference between the read above and this write — the getMe
+            // verification is now stale evidence for a row that has moved on.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This installation's secret reference changed while the new one was being verified");
+        }
+
+        Object usernameValue = success.result().get("username");
+        String botUsername = usernameValue == null ? null : String.valueOf(usernameValue);
+
+        record(
+                tenantId,
+                "integration.installation_secret_rotated",
+                installationId,
+                request.reason(),
+                // Reference NAMES only, per ADR 0028 discipline — never the
+                // token they point at, which never reaches this class at all
+                // beyond the one getMe call above. Named "reference", not
+                // "secretReference": ChangeDocuments#isProtected redacts any
+                // changed()-map key containing "secret" by name regardless of
+                // what the value actually is, and the whole point here is that
+                // an ADR 0028 reference is exactly the kind of value that is
+                // safe to keep visible in the audit trail.
+                Map.of(
+                        "oldReference",
+                        oldReference,
+                        "newReference",
+                        reference.toString(),
+                        "botUsername",
+                        botUsername == null ? "" : botUsername),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
+
+        return ResponseEntity.ok(
+                new RotateSecretResponse(installationId, oldReference, reference.toString(), botUsername));
+    }
+
+    private static String describe(TelegramCallResult result) {
+        return switch (result) {
+            case TelegramCallResult.Success ignored -> "unreachable";
+            case TelegramCallResult.Retryable retryable -> retryable.errorCode() + ": " + retryable.detail();
+            case TelegramCallResult.Uncertain uncertain -> uncertain.errorCode() + ": " + uncertain.detail();
+            case TelegramCallResult.BusinessRejected rejected -> rejected.errorCode() + ": " + rejected.detail();
+            case TelegramCallResult.BindingRetirement retirement -> retirement.reason() + ": " + retirement.detail();
+            case TelegramCallResult.ChatMigrated ignored -> "unexpected chat migration answer from getMe";
+        };
     }
 
     @PostMapping("/{installationId}/bindings/{bindingId}/activate")
@@ -391,6 +535,25 @@ public class ProviderInstallationController {
             @NotNull List<String> primaryCapabilities) {}
 
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
+
+    /**
+     * @param newSecretReference an ADR 0028 reference — never a value. Usually
+     *                           the installation's existing reference string
+     *                           unchanged (only the value behind it rotated,
+     *                           out of band, in the secrets manager); a
+     *                           different string here is the re-provisioned-bot
+     *                           case the runbook's own step 9 names
+     */
+    public record RotateSecretRequest(
+            @NotBlank @Size(max = 512) String newSecretReference,
+            @NotBlank @Size(max = 1000) String reason) {}
+
+    /** Reference strings only, per ADR 0028 — never a secret value. */
+    public record RotateSecretResponse(
+            UUID installationId,
+            String oldSecretReference,
+            String newSecretReference,
+            @Nullable String botUsername) {}
 
     private record InstallationActivationGate(
             String status, String connectionStatus, boolean hasUnverifiedCapability) {}

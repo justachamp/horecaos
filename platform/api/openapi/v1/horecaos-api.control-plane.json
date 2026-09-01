@@ -2774,6 +2774,40 @@
         },
         "type" : "object"
       },
+      "RotateSecretRequest" : {
+        "properties" : {
+          "newSecretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "newSecretReference", "reason" ],
+        "type" : "object"
+      },
+      "RotateSecretResponse" : {
+        "properties" : {
+          "botUsername" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "newSecretReference" : {
+            "type" : "string"
+          },
+          "oldSecretReference" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RowEntry" : {
         "properties" : {
           "chatId" : {
@@ -7043,6 +7077,53 @@
           }
         },
         "summary" : "Reconcile an installation's declared capabilities",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file — the docs/runbooks/sendpulse-cutover.md step 9 gap. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
+        "operationId" : "rotateSecret",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Point an installation's secret reference at a rotated credential",
         "tags" : [ "Provider integrations" ]
       }
     },

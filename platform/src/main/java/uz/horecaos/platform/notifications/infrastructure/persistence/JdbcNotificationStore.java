@@ -126,6 +126,30 @@ public class JdbcNotificationStore {
     }
 
     /**
+     * How many messages about one subject were suppressed for one reason, at
+     * or after {@code since}.
+     *
+     * <p>{@code CampaignMessagePort#countSuppressedForNotSending}'s
+     * implementation: a resume asks this once, not per message, so an
+     * aggregate count is what belongs here rather than a list this caller
+     * would only measure the size of.
+     */
+    public int countSuppressed(UUID tenantId, String subjectType, UUID subjectId, String reason, Instant since) {
+        return jdbc.sql("""
+                SELECT count(*) FROM notifications.notifications
+                 WHERE tenant_id = :tenantId AND subject_type = :subjectType AND subject_id = :subjectId
+                   AND status = 'SUPPRESSED' AND suppression_reason = :reason AND terminal_at >= :since
+                """)
+                .param("tenantId", tenantId)
+                .param("subjectType", subjectType)
+                .param("subjectId", subjectId)
+                .param("reason", reason)
+                .param("since", utc(since))
+                .query(Integer.class)
+                .single();
+    }
+
+    /**
      * Claims due work for one worker.
      *
      * <p>{@code FOR UPDATE SKIP LOCKED} so several nodes share the queue instead of
