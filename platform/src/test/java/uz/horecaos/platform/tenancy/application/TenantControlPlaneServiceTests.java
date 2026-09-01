@@ -16,6 +16,7 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
+import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateBrandCommand;
@@ -94,6 +95,75 @@ class TenantControlPlaneServiceTests {
         });
     }
 
+    @Test
+    void findsATenantBySlugOrAnswersEmpty() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        TenantControlPlaneService service = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> platformAdmin);
+
+        var tenant = service.createTenant(new CreateTenantCommand(
+                "horecaos", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
+
+        assertThat(service.findTenantBySlug("horecaos"))
+                .as("a provisioning tool re-running against a known slug must recover the same id")
+                .get()
+                .extracting(TenantControlPlaneService.TenantView::id)
+                .isEqualTo(tenant.id());
+        assertThat(service.findTenantBySlug("no-such-tenant")).isEmpty();
+    }
+
+    @Test
+    void activatesADraftBrandAndLocationAndIsIdempotent() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        TenantControlPlaneService service = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> platformAdmin);
+
+        var tenant = service.createTenant(new CreateTenantCommand(
+                "horecaos-2", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
+        var brand = service.createBrand(
+                new TenantId(tenant.id()), new CreateBrandCommand("BRAND_A", "brand-a2", "Brand A"));
+        var location = service.createLocation(
+                new TenantId(tenant.id()),
+                new BrandId(brand.id()),
+                new CreateLocationCommand("LOC_A", "loc-a2", "Location A", "Asia/Tashkent"));
+
+        assertThat(brand.status())
+                .as("BRANDS_AND_LOCATIONS_VALIDATE only checks existence, so nothing else in "
+                        + "onboarding ever moves a brand out of DRAFT")
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.DRAFT);
+
+        var activatedBrand = service.activateBrand(new TenantId(tenant.id()), new BrandId(brand.id()));
+        assertThat(activatedBrand.status()).isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+
+        var activatedLocation = service.activateLocation(
+                new TenantId(tenant.id()), new BrandId(brand.id()), new LocationId(location.id()));
+        assertThat(activatedLocation.status())
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+
+        // Idempotent: a reconciling caller must be able to activate an
+        // already-ACTIVE brand/location again without the domain's own
+        // requireStatus(DRAFT, SUSPENDED) guard throwing.
+        assertThat(service.activateBrand(new TenantId(tenant.id()), new BrandId(brand.id()))
+                        .status())
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+        assertThat(service.activateLocation(
+                                new TenantId(tenant.id()), new BrandId(brand.id()), new LocationId(location.id()))
+                        .status())
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+    }
+
     private static final class InMemoryStore implements TenantControlPlaneStore {
 
         private final Map<TenantId, Tenant> tenants = new LinkedHashMap<>();
@@ -114,6 +184,13 @@ class TenantControlPlaneServiceTests {
         @Override
         public Optional<Tenant> findTenant(TenantId tenantId) {
             return Optional.ofNullable(tenants.get(tenantId));
+        }
+
+        @Override
+        public Optional<Tenant> findTenantBySlug(Slug slug) {
+            return tenants.values().stream()
+                    .filter(tenant -> tenant.slug().equals(slug))
+                    .findFirst();
         }
 
         @Override
@@ -156,6 +233,14 @@ class TenantControlPlaneServiceTests {
                     .toList();
         }
 
+        /**
+         * Same reasoning as {@link #updateLocationPlace}: the aggregate held here
+         * is the instance the service just mutated, so the write is already
+         * visible.
+         */
+        @Override
+        public void updateBrandStatus(Brand brand) {}
+
         @Override
         public boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug) {
             return locations.stream()
@@ -176,6 +261,10 @@ class TenantControlPlaneServiceTests {
          */
         @Override
         public void updateLocationPlace(Location location) {}
+
+        /** Same reasoning as {@link #updateLocationPlace}. */
+        @Override
+        public void updateLocationStatus(Location location) {}
 
         @Override
         public List<Location> findLocations(Brand brand) {

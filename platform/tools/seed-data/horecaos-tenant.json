@@ -1,0 +1,240 @@
+{
+  "_comment": "Declarative demo data for the HorecaOS platform's own production tenant. Consumed by tools/seed-horecaos-tenant — see docs/runbooks/seed-horecaos-tenant.md. All names/addresses are plausible placeholders for a working demo, not the real company's registered legal or tax details; the runbook explains what a human must still supply for genuine billing.",
+
+  "tenant": {
+    "slug": "horecaos",
+    "legalName": "HorecaOS Restaurants MChJ",
+    "displayName": "HorecaOS",
+    "defaultCurrency": "UZS",
+    "defaultTimezone": "Asia/Tashkent",
+    "customerIdentityMode": "TENANT_SHARED",
+    "ownerEmail": "owner@horecaos.uz"
+  },
+
+  "brand": {
+    "code": "HORECAOS",
+    "slug": "horecaos",
+    "displayName": "HorecaOS Restaurant"
+  },
+
+  "locations": [
+    {
+      "code": "CHILONZOR",
+      "slug": "chilonzor",
+      "displayName": "HorecaOS — Chilonzor",
+      "timezone": "Asia/Tashkent",
+      "addressLine": "Bunyodkor shoh ko'chasi 1",
+      "district": "Chilonzor",
+      "city": "Tashkent",
+      "landmark": "Chilonzor metro bekati yaqinida",
+      "contactPhone": "+998711234567",
+      "latitude": 41.2856,
+      "longitude": 69.2034
+    },
+    {
+      "code": "YUNUSABAD",
+      "slug": "yunusabad",
+      "displayName": "HorecaOS — Yunusabad",
+      "timezone": "Asia/Tashkent",
+      "addressLine": "Amir Temur shoh ko'chasi 108",
+      "district": "Yunusabad",
+      "city": "Tashkent",
+      "landmark": "Yunusabad tumani hokimligi yaqinida",
+      "contactPhone": "+998711234568",
+      "latitude": 41.3486,
+      "longitude": 69.2886
+    }
+  ],
+
+  "legalEntity": {
+    "code": "HORECAOSLLC",
+    "legalName": "HorecaOS Restaurants MChJ",
+    "tin": "301234567",
+    "vatRegistered": true
+  },
+
+  "catalog": {
+    "code": "MAIN-MENU",
+    "name": "Main menu",
+    "primaryLocale": "uz"
+  },
+
+  "priceBook": {
+    "name": "Standard price book",
+    "currency": "UZS",
+    "priority": 100
+  },
+
+  "taxProfile": {
+    "jurisdictionCode": "UZ",
+    "mode": "INCLUSIVE",
+    "rateBasisPoints": 1200
+  },
+
+  "channel": {
+    "code": "STOREFRONT",
+    "paymentMethods": { "CASH": true },
+    "fulfillmentModes": { "PICKUP": true, "DELIVERY": true }
+  },
+
+  "serviceSchedule": {
+    "name": "Standard hours",
+    "acceptsScheduledOrders": false,
+    "rules": [
+      { "dayOfWeek": 1, "opensAt": "09:00:00", "closesAt": "23:00:00" },
+      { "dayOfWeek": 2, "opensAt": "09:00:00", "closesAt": "23:00:00" },
+      { "dayOfWeek": 3, "opensAt": "09:00:00", "closesAt": "23:00:00" },
+      { "dayOfWeek": 4, "opensAt": "09:00:00", "closesAt": "23:00:00" },
+      { "dayOfWeek": 5, "opensAt": "09:00:00", "closesAt": "23:00:00" },
+      { "dayOfWeek": 6, "opensAt": "09:00:00", "closesAt": "23:59:59" },
+      { "dayOfWeek": 7, "opensAt": "09:00:00", "closesAt": "23:59:59" }
+    ]
+  },
+
+  "delivery": {
+    "tariff": {
+      "code": "STANDARD",
+      "name": "Standard delivery tariff",
+      "currency": "UZS",
+      "feeSource": "TARIFF",
+      "distanceMode": "RADIUS",
+      "roadFactorBasisPoints": 10000,
+      "maxDistanceMeters": 8000,
+      "minFeeMinor": 8000,
+      "maxFeeMinor": 40000,
+      "distanceAccrual": "STARTED_KILOMETRE",
+      "feeRoundingStepMinor": 500,
+      "feeRoundingRule": "HALF_UP",
+      "bands": [
+        { "fromMeters": 0, "toMeters": 8000, "baseMinor": 8000, "perKmMinor": 3000 }
+      ]
+    },
+    "zoneRadiusMeters": 6000
+  },
+
+  "categories": [
+    { "code": "MAINS", "sortOrder": 0, "names": {
+        "uz": "Asosiy taomlar", "ru": "Основные блюда", "en": "Main dishes" } },
+    { "code": "SHASHLIK", "sortOrder": 1, "names": {
+        "uz": "Shashlik", "ru": "Шашлык", "en": "Shashlik & Grill" } },
+    { "code": "STARTERS", "sortOrder": 2, "names": {
+        "uz": "Salatlar va boshlang'ich taomlar", "ru": "Салаты и закуски", "en": "Salads & Starters" } },
+    { "code": "DRINKS", "sortOrder": 3, "names": {
+        "uz": "Ichimliklar", "ru": "Напитки", "en": "Drinks" } }
+  ],
+
+  "products": [
+    {
+      "code": "OSH-PLOV", "category": "MAINS", "unitCode": "PORTION", "sortOrder": 0, "priceMinor": 38000,
+      "names": {
+        "uz": { "name": "Toshkent oshi", "description": "An'anaviy Toshkentcha palov, qo'y go'shti va sabzi bilan" },
+        "ru": { "name": "Ташкентский плов", "description": "Традиционный ташкентский плов с бараниной и морковью" },
+        "en": { "name": "Tashkent plov", "description": "Traditional Tashkent-style plov with lamb and carrots" }
+      }
+    },
+    {
+      "code": "LAGMON", "category": "MAINS", "unitCode": "PORTION", "sortOrder": 1, "priceMinor": 32000,
+      "names": {
+        "uz": { "name": "Lag'mon", "description": "Qo'lda tortilgan xamir, go'sht va sabzavotlar bilan" },
+        "ru": { "name": "Лагман", "description": "Вытянутая вручную лапша с мясом и овощами" },
+        "en": { "name": "Lagman", "description": "Hand-pulled noodles with meat and vegetables" }
+      }
+    },
+    {
+      "code": "MANTI", "category": "MAINS", "unitCode": "PORTION", "sortOrder": 2, "priceMinor": 30000,
+      "names": {
+        "uz": { "name": "Manti", "description": "Bug'da pishirilgan, qiyma go'shtli xamir cho'ntaklari" },
+        "ru": { "name": "Манты", "description": "Паровые пельмени с мясной начинкой" },
+        "en": { "name": "Manti", "description": "Steamed dumplings filled with seasoned minced meat" }
+      }
+    },
+    {
+      "code": "SHASH-LAMB", "category": "SHASHLIK", "unitCode": "SKEWER", "sortOrder": 0, "priceMinor": 28000,
+      "names": {
+        "uz": { "name": "Qo'y go'shtidan shashlik", "description": "Ko'mirda pishirilgan, marinadlangan qo'y go'shti" },
+        "ru": { "name": "Шашлык из баранины", "description": "Маринованная баранина на углях" },
+        "en": { "name": "Lamb shashlik", "description": "Marinated lamb skewers grilled over charcoal" }
+      }
+    },
+    {
+      "code": "SHASH-BEEF", "category": "SHASHLIK", "unitCode": "SKEWER", "sortOrder": 1, "priceMinor": 26000,
+      "names": {
+        "uz": { "name": "Mol go'shtidan shashlik", "description": "Ko'mirda pishirilgan, marinadlangan mol go'shti" },
+        "ru": { "name": "Шашлык из говядины", "description": "Маринованная говядина на углях" },
+        "en": { "name": "Beef shashlik", "description": "Marinated beef skewers grilled over charcoal" }
+      }
+    },
+    {
+      "code": "SHASH-CHICK", "category": "SHASHLIK", "unitCode": "SKEWER", "sortOrder": 2, "priceMinor": 22000,
+      "names": {
+        "uz": { "name": "Tovuq shashlik", "description": "Ko'mirda pishirilgan, marinadlangan tovuq go'shti" },
+        "ru": { "name": "Куриный шашлык", "description": "Маринованное куриное филе на углях" },
+        "en": { "name": "Chicken shashlik", "description": "Marinated chicken skewers grilled over charcoal" }
+      }
+    },
+    {
+      "code": "SHASH-LULA", "category": "SHASHLIK", "unitCode": "SKEWER", "sortOrder": 3, "priceMinor": 24000,
+      "names": {
+        "uz": { "name": "Lulakabob", "description": "Ko'mirda pishirilgan qiyma go'shtli kabob" },
+        "ru": { "name": "Люля-кебаб", "description": "Кебаб из рубленого мяса на углях" },
+        "en": { "name": "Lyulya kebab", "description": "Grilled minced-meat kebab" }
+      }
+    },
+    {
+      "code": "SOMSA-GOSHT", "category": "STARTERS", "unitCode": "PIECE", "sortOrder": 0, "priceMinor": 12000,
+      "names": {
+        "uz": { "name": "Go'shtli somsa", "description": "Tandirda pishirilgan, mayda to'g'ralgan go'sht va piyoz bilan" },
+        "ru": { "name": "Самса с мясом", "description": "Самса из тандыра с рубленым мясом и луком" },
+        "en": { "name": "Meat somsa", "description": "Tandoor-baked pastry filled with diced meat and onion" }
+      }
+    },
+    {
+      "code": "SALAD-ACHICHUK", "category": "STARTERS", "unitCode": "PORTION", "sortOrder": 1, "priceMinor": 15000,
+      "names": {
+        "uz": { "name": "Achchiq-chuchuk salati", "description": "Pomidor, piyoz va ko'katlardan tayyorlangan yangi salat" },
+        "ru": { "name": "Салат Аччик-чучук", "description": "Свежий салат из помидоров, лука и зелени" },
+        "en": { "name": "Achichuk salad", "description": "Fresh tomato, onion and herb salad" }
+      }
+    },
+    {
+      "code": "SALAD-VINEGRET", "category": "STARTERS", "unitCode": "PORTION", "sortOrder": 2, "priceMinor": 14000,
+      "names": {
+        "uz": { "name": "Vinegret salati", "description": "Lavlagi, kartoshka va no'xat bilan tayyorlangan salat" },
+        "ru": { "name": "Салат винегрет", "description": "Салат из свёклы, картофеля и горошка" },
+        "en": { "name": "Vinaigrette salad", "description": "Beetroot, potato and pea salad" }
+      }
+    },
+    {
+      "code": "NON", "category": "STARTERS", "unitCode": "PIECE", "sortOrder": 3, "priceMinor": 6000,
+      "names": {
+        "uz": { "name": "Issiq non", "description": "Tandirda pishirilgan an'anaviy o'zbek noni" },
+        "ru": { "name": "Горячая лепёшка", "description": "Традиционная узбекская лепёшка из тандыра" },
+        "en": { "name": "Fresh non bread", "description": "Traditional Uzbek tandoor-baked bread" }
+      }
+    },
+    {
+      "code": "TEA-GREEN", "category": "DRINKS", "unitCode": "POT", "sortOrder": 0, "priceMinor": 8000,
+      "names": {
+        "uz": { "name": "Ko'k choy", "description": "An'anaviy choynakda tortilgan ko'k choy" },
+        "ru": { "name": "Зелёный чай", "description": "Зелёный чай в традиционном чайнике" },
+        "en": { "name": "Green tea (pot)", "description": "Green tea served in a traditional teapot" }
+      }
+    },
+    {
+      "code": "COMPOTE", "category": "DRINKS", "unitCode": "GLASS", "sortOrder": 1, "priceMinor": 9000,
+      "names": {
+        "uz": { "name": "Kompot", "description": "Mavsumiy mevalardan tayyorlangan uy sharbati" },
+        "ru": { "name": "Компот", "description": "Домашний компот из сезонных фруктов" },
+        "en": { "name": "Compote", "description": "House-made stewed fruit drink" }
+      }
+    },
+    {
+      "code": "COLA", "category": "DRINKS", "unitCode": "GLASS", "sortOrder": 2, "priceMinor": 10000,
+      "names": {
+        "uz": { "name": "Gazlangan ichimlik", "description": "Sovutilgan gazlangan ichimlik" },
+        "ru": { "name": "Газированный напиток", "description": "Охлаждённый газированный напиток" },
+        "en": { "name": "Soft drink", "description": "Chilled carbonated soft drink" }
+      }
+    }
+  ]
+}

@@ -20,6 +20,18 @@ public interface TenantControlPlaneStore {
 
     Optional<Tenant> findTenant(TenantId tenantId);
 
+    /**
+     * The tenant holding this slug, if any.
+     *
+     * <p>Slugs are the one tenant identifier a caller can know before the tenant
+     * does: a provisioning tool choosing a fixed, human-legible slug (rather than
+     * inventing a fresh one per run) has no id to look up by until this exists.
+     * {@link #tenantSlugExists(Slug)} only ever answered "yes" or "no" — enough to
+     * refuse a duplicate create, not enough for a caller to discover what the
+     * duplicate already is and reconcile against it instead.
+     */
+    Optional<Tenant> findTenantBySlug(Slug slug);
+
     void linkKeycloakOrganization(Tenant tenant);
 
     void insertCustomerIdentityPolicy(CustomerIdentityPolicy policy);
@@ -45,6 +57,9 @@ public interface TenantControlPlaneStore {
 
     List<Brand> findBrands(TenantId tenantId);
 
+    /** Persists the brand's current status (activate/suspend/archive). */
+    void updateBrandStatus(Brand brand);
+
     boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug);
 
     void insertLocation(Location location);
@@ -56,6 +71,9 @@ public interface TenantControlPlaneStore {
      * and it must not carry that branch's identity columns along with it.
      */
     void updateLocationPlace(Location location);
+
+    /** Persists the location's current status (activate/suspend/archive). */
+    void updateLocationStatus(Location location);
 
     List<Location> findLocations(Brand brand);
 }

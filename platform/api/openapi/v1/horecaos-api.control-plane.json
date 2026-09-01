@@ -3289,6 +3289,31 @@
         "required" : [ "fromTime", "toTime" ],
         "type" : "object"
       },
+      "TranslateRequest" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "entityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entityType" : {
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          },
+          "locale" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "name" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "entityId", "entityType", "locale", "name" ],
+        "type" : "object"
+      },
       "UsageResponse" : {
         "properties" : {
           "adjustedQuantity" : {
@@ -3975,6 +4000,34 @@
         "tags" : [ "SaaS control plane" ]
       }
     },
+    "/api/v1/control-plane/tenants/by-slug/{slug}" : {
+      "get" : {
+        "description" : "Platform-admin only. The lookup a provisioning tool needs before a tenant's id is known: given a fixed, chosen slug, whether a previous run already created this tenant, and what its id is. Answers 404 rather than an empty result, because a slug names at most one tenant.",
+        "operationId" : "getTenantBySlug",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find a tenant by slug",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}" : {
       "get" : {
         "description" : "Requires platform access or membership in the tenant organization.",
@@ -4409,6 +4462,43 @@
           }
         },
         "summary" : "Create a brand within a tenant",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate" : {
+      "post" : {
+        "description" : "A brand is created DRAFT and nothing else in this codebase moves it to ACTIVE — onboarding readiness checks that a brand exists, not its status, so a tenant can reach ACTIVE with a brand still DRAFT. Several customer-facing reads require ACTIVE explicitly (pickup-location discovery among them). Idempotent: a no-op when already ACTIVE.",
+        "operationId" : "activateBrand",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a brand",
         "tags" : [ "SaaS control plane" ]
       }
     },
@@ -5146,6 +5236,46 @@
         "tags" : [ "Catalog publication" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/translations" : {
+      "put" : {
+        "description" : "Every create endpoint above takes exactly one locale up front; this is the only way to add a further one — uz/ru/en for the same product, say — afterwards. Upsert on (entity, locale): calling it again with the same pair replaces the text rather than adding a second row. The entity must already exist in this brand; a fee (ADR 0038) has no translations and is not a valid target.",
+        "operationId" : "setTranslation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TranslateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set one entity's name and description in one locale",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/fiscal-classification" : {
       "put" : {
         "description" : "ИКПУ/MXIK, package code, fiscal unit and fiscal name. All four are required by Click and Payme alike; publication reports a gap in any of them rather than refusing the menu, while ADR 0038's coverage tooling is still being built.",
@@ -5722,6 +5852,51 @@
           }
         },
         "summary" : "Create a location owned by exactly one brand",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/activate" : {
+      "post" : {
+        "description" : "Same gap as brand activation, one level down: a location is created DRAFT and nothing else in this codebase moves it to ACTIVE. Idempotent: a no-op when already ACTIVE.",
+        "operationId" : "activateLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a location",
         "tags" : [ "SaaS control plane" ]
       }
     },

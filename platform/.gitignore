@@ -60,3 +60,8 @@ dist/
 
 # Control-band sample history is runtime state, not repository content
 ops/state/
+
+# tools/seed-horecaos-tenant's own idempotency bookkeeping — the ids it
+# created for a specific environment (local/staging/production), not
+# repository content
+tools/seed-data/.state/

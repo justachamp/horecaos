@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
@@ -29,6 +30,8 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -180,6 +183,33 @@ public class CatalogAuthoringController {
                 request.classification(),
                 actorId());
         return ResponseEntity.ok(new IdResponse(optionId));
+    }
+
+    @PutMapping("/translations")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Set one entity's name and description in one locale",
+            description = "Every create endpoint above takes exactly one locale up front; this is "
+                    + "the only way to add a further one — uz/ru/en for the same product, say — "
+                    + "afterwards. Upsert on (entity, locale): calling it again with the same pair "
+                    + "replaces the text rather than adding a second row. The entity must already "
+                    + "exist in this brand; a fee (ADR 0038) has no translations and is not a valid "
+                    + "target.")
+    public ResponseEntity<Void> setTranslation(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody TranslateRequest request) {
+        try {
+            authoring.translate(
+                    tenantId,
+                    brandId,
+                    request.entityType(),
+                    request.entityId(),
+                    request.locale(),
+                    request.name(),
+                    request.description());
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/variants/{variantId}/fiscal-classification")
@@ -432,6 +462,21 @@ public class CatalogAuthoringController {
                     ageRestrictionYears);
         }
     }
+
+    /**
+     * One entity's name and description in one locale.
+     *
+     * @param entityType the six catalog entities that carry translations. Not
+     *                   {@code FEE}: a fee reaches a receipt through
+     *                   classification, never through the storefront menu, and
+     *                   never had a name to translate
+     */
+    public record TranslateRequest(
+            @NotNull EntityType entityType,
+            @NotNull UUID entityId,
+            @NotBlank String locale,
+            @NotBlank String name,
+            @Nullable String description) {}
 
     public record CreateCategoryRequest(
             @Nullable UUID parentCategoryId,

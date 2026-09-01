@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -153,6 +154,29 @@ public class TenantControlPlaneService {
         return toView(tenant, identityMode);
     }
 
+    /**
+     * Finds a tenant by its slug, platform-admin only.
+     *
+     * <p>Exists for idempotent provisioning tooling: a script driving a fixed,
+     * known slug (never a fresh random one) has to be able to discover whether a
+     * previous run already created it, and reconcile against that tenant's real
+     * id, rather than either guessing an id or attempting a second {@code
+     * createTenant} that only ever answers "slug is already in use" with nothing
+     * to recover from it. Platform-admin only, unlike {@link #getTenant}, because
+     * there is no tenant-scoped path variable here to check organization
+     * membership against — a caller who does not yet know the id cannot prove
+     * membership by it.
+     */
+    @Transactional(readOnly = true)
+    public Optional<TenantView> findTenantBySlug(String slug) {
+        accessPolicy.requirePlatformAdministrator();
+        return store.findTenantBySlug(new Slug(slug)).map(tenant -> {
+            CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenant.id(), clock.instant())
+                    .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
+            return toView(tenant, identityMode);
+        });
+    }
+
     @Transactional
     public TenantView linkKeycloakOrganization(TenantId tenantId, String organizationId) {
         Tenant tenant = requireTenant(tenantId);
@@ -209,6 +233,41 @@ public class TenantControlPlaneService {
                         brand.slug().value(),
                         "status",
                         brand.status().name()));
+        return toView(brand);
+    }
+
+    /**
+     * Activates a brand created {@link Brand#draft brand}, idempotently.
+     *
+     * <p>Nothing in this codebase moved a brand out of {@code DRAFT} before
+     * this existed — creation always leaves one there, and DRAFT is exactly
+     * what {@code JdbcStorefrontPickupLocationStore.nearestTo} and any future
+     * ADR 0025-gated read that checks {@code status = 'ACTIVE'} were already
+     * written to require. A brand's own onboarding readiness
+     * ({@code BRANDS_AND_LOCATIONS_VALIDATE}) checks only that a brand and a
+     * location exist, not their status, so a tenant could reach {@code ACTIVE}
+     * with a brand no customer-facing discovery query would ever surface.
+     * Idempotent (a no-op when already {@code ACTIVE}) because provisioning
+     * tooling that reconciles an existing brand must not fail calling this a
+     * second time.
+     */
+    @Transactional
+    public BrandView activateBrand(TenantId tenantId, BrandId brandId) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(tenant, Capability.BRAND_WRITE, ResourceScope.tenant(tenantId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        if (brand.status() == OperatingUnitStatus.ACTIVE) {
+            return toView(brand);
+        }
+        brand.activate();
+        store.updateBrandStatus(brand);
+        recordAudit(
+                "brand.activated",
+                ResourceScope.tenant(tenantId.value()),
+                "Brand",
+                brandId.value(),
+                "Control-plane brand activation",
+                Map.of("status", brand.status().name()));
         return toView(brand);
     }
 
@@ -317,6 +376,39 @@ public class TenantControlPlaneService {
                 "Control-plane location address and point",
                 audited);
 
+        return toView(location);
+    }
+
+    /**
+     * Activates a location created {@link Location#draft draft}, idempotently.
+     *
+     * <p>Same gap as {@link #activateBrand}, one level down: creation always
+     * leaves a location {@code DRAFT}, and pickup-location discovery
+     * (`JdbcStorefrontPickupLocationStore.nearestTo`) requires {@code ACTIVE}.
+     * A no-op when already {@code ACTIVE}, for the same reconciliation reason.
+     */
+    @Transactional
+    public LocationView activateLocation(TenantId tenantId, BrandId brandId, LocationId locationId) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.LOCATION_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        Location location = store.findLocations(brand).stream()
+                .filter(candidate -> candidate.id().equals(locationId))
+                .findFirst()
+                .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
+        if (location.status() == OperatingUnitStatus.ACTIVE) {
+            return toView(location);
+        }
+        location.activate();
+        store.updateLocationStatus(location);
+        recordAudit(
+                "location.activated",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Location",
+                locationId.value(),
+                "Control-plane location activation",
+                Map.of("status", location.status().name()));
         return toView(location);
     }
 
