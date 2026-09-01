@@ -58,9 +58,12 @@ public class SchedulingConfiguration {
      * emitDayCloseDigests}), and {@code OnboardingStuckRunAlertSweeper.sweepOnce},
      * the control-plane sibling of the onboarding stuck-run alert. ADR 0059
      * stage 1 added one more: {@code FlowRunResumeSweeper.sweepOnce}, the
-     * single sweeper a flow's delay block needs to resume.
+     * single sweeper a flow's delay block needs to resume. ADR 0059 stage 4
+     * added one more still: {@code CampaignExpansionScheduler.sweepOnce}, the
+     * caller {@code CampaignSendService#expandNextBatch} names but never had —
+     * without it a started campaign expanded nothing, forever.
      */
-    static final int DEFAULT_POOL_SIZE = 38;
+    static final int DEFAULT_POOL_SIZE = 39;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

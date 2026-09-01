@@ -99,15 +99,16 @@ public class CampaignSendService {
         if (!campaign.status().isExpanding()) {
             return BatchOutcome.notSending(campaign.status());
         }
-        if (!messages.isWired()) {
-            // Read before anything is claimed. A campaign that expands forty
-            // thousand recipients against an unwired delivery path has spent an
-            // approval and produced nothing.
-            throw new IllegalStateException("No ADR 0020 delivery path is wired; a campaign cannot expand into one");
-        }
 
         Instant now = clock.instant();
         MarketingChannel channel = MarketingChannel.valueOf(campaign.channel());
+        if (!messages.isWired(channel.name())) {
+            // Read before anything is claimed. A campaign that expands forty
+            // thousand recipients against an unwired delivery path has spent an
+            // approval and produced nothing.
+            throw new IllegalStateException(
+                    "No ADR 0020 delivery path is wired for %s; a campaign cannot expand into one".formatted(channel));
+        }
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, campaign.brandId());
 
         UUID cursor = campaigns.lastRecipientAccountId(tenantId, campaignId).orElse(null);

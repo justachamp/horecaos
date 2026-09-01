@@ -20,7 +20,7 @@ public interface OperationsSubscriptionDirectory {
      * as a {@code provider_binding_id} — what
      * {@code notifications.recipient_endpoints.provider_binding_id} names.
      */
-    List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass);
+    List<UUID> subscribedBindings(UUID tenantId, UUID brandId, @Nullable UUID locationId, String eventClass);
 
     /**
      * Every {@code OPERATIONS}-audience binding subscribed to {@code eventClass}

@@ -43,7 +43,7 @@ public interface OperationsAlertPort {
     void fanOut(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String eventClass,
             String templateKey,
             String subjectType,

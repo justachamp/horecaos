@@ -81,6 +81,7 @@ import uz.horecaos.platform.inventory.application.StockAvailabilityPortAdapter;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.notifications.api.CustomerAlertPort;
 import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
+import uz.horecaos.platform.notifications.application.CampaignBlockRateMonitor;
 import uz.horecaos.platform.notifications.application.CustomerAlertFanoutService;
 import uz.horecaos.platform.notifications.application.CustomerProviderBindingSyncService;
 import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
@@ -262,11 +263,12 @@ class TelegramInteractiveBotIntegrationTest {
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
         NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
-        // NotificationEligibilityService.evaluate reads OrderDirectory.summary
-        // even for an OPERATIONS_ALERT-class intent (it throws if the order is
-        // not visible to the tenant, per its own comment) — unlike counts(),
-        // this is not a default method, so the bot's own no-summary stub will
-        // not do here.
+        // NotificationEligibilityService.evaluate best-effort resolves
+        // OrderDirectory.summary for an OPERATIONS_ALERT-class intent too — its
+        // own comment explains why it is no longer required to succeed for one —
+        // and the order-confirmed alert this trigger fans out still wants
+        // orderNumber/amount rendered when it does, so the stub still publishes
+        // one.
         StubOrderDirectory orderSummaries = new StubOrderDirectory();
         orderSummaries.publish(new OrderDirectory.OrderSummary(
                 orderId, tenant, brand, location, "A-1", null, "guest", "AWAITING_APPROVAL", "UZS", 50_000L, 1));
@@ -277,20 +279,10 @@ class TelegramInteractiveBotIntegrationTest {
                 new NoOpContactDirectory(),
                 orderSummaries,
                 transport,
+                new AlwaysSendingCampaignFeedback(),
                 objectMapper,
                 clock,
                 "en");
-        NotificationDispatchService dispatch = new NotificationDispatchService(
-                notifications,
-                templateStore,
-                new NoOpContactDirectory(),
-                transport,
-                objectMapper,
-                clock,
-                8,
-                Duration.ofSeconds(30));
-        NotificationWorker worker =
-                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         OperationsAlertFanoutService fanout = new OperationsAlertFanoutService(
                 new uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory(
                         new TelegramBindingStore(jdbc, clock, audit)),
@@ -298,6 +290,18 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                new NoOpContactDirectory(),
+                transport,
+                new CampaignBlockRateMonitor(new AlwaysSendingCampaignFeedback(), fanout, new SimpleMeterRegistry()),
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+        NotificationWorker worker =
+                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         CustomerTelegramChannelRouter channelRouter =
                 new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
         OrderNotificationTrigger trigger = new OrderNotificationTrigger(
@@ -515,20 +519,10 @@ class TelegramInteractiveBotIntegrationTest {
                 new NoOpContactDirectory(),
                 orderSummaries,
                 transport,
+                new AlwaysSendingCampaignFeedback(),
                 objectMapper,
                 clock,
                 "en");
-        NotificationDispatchService dispatch = new NotificationDispatchService(
-                notifications,
-                templateStore,
-                new NoOpContactDirectory(),
-                transport,
-                objectMapper,
-                clock,
-                8,
-                Duration.ofSeconds(30));
-        NotificationWorker worker =
-                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         OperationsAlertFanoutService opsFanout = new OperationsAlertFanoutService(
                 new uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory(
                         new TelegramBindingStore(jdbc, clock, audit)),
@@ -536,6 +530,18 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                new NoOpContactDirectory(),
+                transport,
+                new CampaignBlockRateMonitor(new AlwaysSendingCampaignFeedback(), opsFanout, new SimpleMeterRegistry()),
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+        NotificationWorker worker =
+                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
 
         CustomerTelegramChannelRouter channelRouter =
                 new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());

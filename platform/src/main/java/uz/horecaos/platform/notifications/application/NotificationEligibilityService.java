@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactEndpoint;
+import uz.horecaos.platform.marketing.api.CampaignFeedbackPort;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
@@ -69,6 +71,7 @@ public class NotificationEligibilityService {
     private final RecipientContactDirectory contacts;
     private final OrderDirectory orders;
     private final NotificationTransport transport;
+    private final CampaignFeedbackPort campaignFeedback;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final MessageLocale operationsGroupLocale;
@@ -80,6 +83,7 @@ public class NotificationEligibilityService {
             RecipientContactDirectory contacts,
             OrderDirectory orders,
             NotificationTransport transport,
+            CampaignFeedbackPort campaignFeedback,
             ObjectMapper objectMapper,
             Clock clock,
             // ADR 0058: "a group's language follows tenant configuration". No
@@ -94,6 +98,7 @@ public class NotificationEligibilityService {
         this.contacts = contacts;
         this.orders = orders;
         this.transport = transport;
+        this.campaignFeedback = campaignFeedback;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.operationsGroupLocale = MessageLocale.of(operationsGroupLocale);
@@ -124,15 +129,15 @@ public class NotificationEligibilityService {
             return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
         }
 
-        Optional<OrderSummary> order = orders.summary(row.tenantId(), row.subjectId());
-        if (order.isEmpty()) {
-            // The order that caused this message is not visible to this tenant.
-            // That is not a suppression — nothing was decided about a customer —
-            // it is a data fault worth an operator's attention.
-            throw new IllegalStateException(
-                    "Notification %s names an order this tenant does not own".formatted(row.id()));
+        // ADR 0059 stage 4: checked before anything else about this row, so an
+        // operator's pause (or the block-rate guard's own) reaches every campaign
+        // message already sitting on a future pacing slot, not only the batches
+        // CampaignSendService has not yet expanded.
+        boolean campaignAudience = notificationClass == NotificationClass.MARKETING
+                && CampaignTelegramDeliveryService.CAMPAIGN_SUBJECT_TYPE.equals(row.subjectType());
+        if (campaignAudience && !campaignFeedback.isSending(row.tenantId(), row.subjectId())) {
+            return suppress(row, SuppressionReason.CAMPAIGN_NOT_SENDING, now);
         }
-        OrderSummary summary = order.get();
 
         // ADR 0020: "operations alerts target authorized groups... never a
         // customer. It has no consent to check because there is no data subject
@@ -140,13 +145,48 @@ public class NotificationEligibilityService {
         // about a customer's own contact; an operations-audience message has
         // neither and must not go near either directory.
         boolean operationsAudience = notificationClass == NotificationClass.OPERATIONS_ALERT;
+        // A campaign message (or any future caller shaped like one) already
+        // resolved its own account at creation — CampaignTelegramDeliveryService
+        // sets recipient_account_id from the audience snapshot, because there is
+        // no order to resolve it from. Every existing caller leaves this null and
+        // is resolved from the order below, as ADR 0020 always has.
+        boolean accountPreResolved = row.recipientAccountId() != null;
+        // Only a message that is actually about an order requires one to exist.
+        // Operations alerts and campaign messages both name their own subject
+        // without needing OrderDirectory at all — an inventory 86'd alert names a
+        // variant, a digest names a synthetic period id, a campaign names itself —
+        // and asking it "does this order belong to this tenant" for a subject that
+        // was never an order is the wrong question, not a data fault. The lookup
+        // still runs for both: OrderNotificationTrigger's own operations alerts
+        // genuinely do name a real order and still want orderNumber/amount
+        // rendered, so this simply finds nothing for the subjects that never were
+        // one rather than skipping the read outright.
+        boolean requiresOrder = !operationsAudience && !accountPreResolved;
+        Optional<OrderSummary> order = orders.summary(row.tenantId(), row.subjectId());
+        if (order.isEmpty() && requiresOrder) {
+            // The order that caused this message is not visible to this tenant.
+            // That is not a suppression — nothing was decided about a customer —
+            // it is a data fault worth an operator's attention.
+            throw new IllegalStateException(
+                    "Notification %s names an order this tenant does not own".formatted(row.id()));
+        }
+        OrderSummary summary = order.orElse(null);
 
         UUID accountId = null;
         MessageLocale locale;
         if (operationsAudience) {
             locale = operationsGroupLocale;
+        } else if (accountPreResolved) {
+            accountId = Objects.requireNonNull(row.recipientAccountId(), "accountPreResolved guarantees this");
+            locale = contacts.preferredLocale(row.tenantId(), accountId)
+                    .flatMap(MessageLocale::parse)
+                    .orElse(MessageLocale.FALLBACK);
         } else {
-            UUID resolvedAccount = summary.customerAccountId();
+            // requiresOrder was true and order was not empty, or evaluate() would
+            // already have thrown above.
+            UUID resolvedAccount = Objects.requireNonNull(
+                            summary, "an order-derived message resolves a summary or throws")
+                    .customerAccountId();
             if (resolvedAccount == null) {
                 // A guest order has no ADR 0015 account, so there is no contact to
                 // resolve and no consent record to read. The first slice takes
@@ -294,19 +334,25 @@ public class NotificationEligibilityService {
      *
      * <p>Two sources, both already free of personal data. What the triggering event
      * carried is on the row — a rejection reason code lives on {@code OrderRejected}
-     * and nowhere else — and what the order carries is read here. Nothing else may
-     * write this map: the ADR 0032 classification test already forbids protected
-     * values on an event payload, and the order summary is a deliberately narrow
-     * port for the same reason.
+     * and nowhere else — and what the order carries is read here, when there is one.
+     * Nothing else may write this map: the ADR 0032 classification test already
+     * forbids protected values on an event payload, and the order summary is a
+     * deliberately narrow port for the same reason.
+     *
+     * @param order null for a message that never named an order — an operations
+     *              alert about something else, or a campaign message, whose only
+     *              variables are whatever the row already carries
      */
-    private Map<String, String> variablesFor(NotificationRow row, OrderSummary order) {
+    private Map<String, String> variablesFor(NotificationRow row, @Nullable OrderSummary order) {
         Map<String, String> variables = new LinkedHashMap<>();
         if (row.variablesJson() != null && !row.variablesJson().isBlank()) {
             variables.putAll(objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE));
         }
-        variables.put("orderNumber", order.publicOrderNumber() == null ? "" : order.publicOrderNumber());
-        variables.put("amount", MoneyText.format(order.totalMinor(), order.currency()));
-        variables.put("currency", order.currency() == null ? "" : order.currency());
+        if (order != null) {
+            variables.put("orderNumber", order.publicOrderNumber() == null ? "" : order.publicOrderNumber());
+            variables.put("amount", MoneyText.format(order.totalMinor(), order.currency()));
+            variables.put("currency", order.currency() == null ? "" : order.currency());
+        }
         return variables;
     }
 

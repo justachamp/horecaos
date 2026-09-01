@@ -1,6 +1,7 @@
 package uz.horecaos.platform.marketing.application;
 
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -66,8 +67,13 @@ public class MarketingDeliveryConfiguration {
             }
 
             @Override
-            public boolean isWired() {
+            public boolean isWired(String channel) {
                 return false;
+            }
+
+            @Override
+            public OptionalDouble campaignRatePerSecond(String channel) {
+                return OptionalDouble.empty();
             }
         };
     }

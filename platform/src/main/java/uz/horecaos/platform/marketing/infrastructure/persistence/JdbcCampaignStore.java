@@ -74,9 +74,10 @@ public class JdbcCampaignStore {
                 SELECT id, tenant_id, brand_id, name, channel, consent_purpose, status,
                        audience_id, audience_snapshot_id, template_key, timezone,
                        recipient_cap, estimated_recipients, estimated_cost_low_minor,
-                       estimated_cost_high_minor, cost_ceiling_minor, reserved_cost_minor,
-                       spent_cost_minor, reserved_recipients, currency, benefit_offer_id,
-                       loyalty_accrual_rule_id, created_by, approved_by, version
+                       estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
+                       reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
+                       benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
+                       blocked_count, version
                   FROM marketing.campaigns
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -84,6 +85,91 @@ public class JdbcCampaignStore {
                 .param("id", campaignId)
                 .query(JdbcCampaignStore::campaignRow)
                 .optional();
+    }
+
+    /**
+     * Every campaign currently {@code SENDING}, across every tenant.
+     *
+     * <p>{@code CampaignExpansionScheduler}'s own sweep — infrastructure walking
+     * {@code ix_campaigns_sending}, the same cross-tenant-by-design shape {@code
+     * OrderDirectory#ordersNearingApprovalDeadline} already gives {@code
+     * ApprovalDeadlineWarningSweeper}. Sending is a small, transient fraction of
+     * every campaign a tenant has ever run, so the partial index this reads stays
+     * small regardless of history.
+     */
+    public List<CampaignRef> sendingCampaigns(int limit) {
+        return jdbc.sql("""
+                SELECT id, tenant_id FROM marketing.campaigns
+                 WHERE status = 'SENDING'
+                 ORDER BY started_at NULLS LAST
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((ResultSet row, int number) ->
+                        new CampaignRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * Counts one more blocked recipient, atomically.
+     *
+     * <p>A plain conditional {@code UPDATE ... RETURNING}, not a read-then-write:
+     * the row lock it takes is what makes two dispatch workers' 403s at the same
+     * instant add up to two rather than collapse into one.
+     *
+     * @return the new total, or empty when the campaign does not belong to this
+     *         tenant — a data fault the caller (the delivery worker) logs rather
+     *         than throws over, the same posture {@link #recordSpend} takes
+     */
+    public Optional<Integer> incrementBlockedCount(UUID tenantId, UUID campaignId, Instant now) {
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET blocked_count = blocked_count + 1, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id
+                RETURNING blocked_count
+                """)
+                .param("tenantId", tenantId)
+                .param("id", campaignId)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
+     * Stops a campaign at the block-rate guard's word: {@code SENDING -> PAUSED},
+     * {@link uz.horecaos.platform.marketing.domain.CampaignStatus}'s own resumable
+     * stop, not a terminal halt.
+     *
+     * <p>{@code from = 'SENDING'} in the predicate rather than read-then-write, so
+     * of several dispatch workers independently crossing the threshold at once,
+     * exactly one flips the row and every other finds it already {@code PAUSED} —
+     * which is how the caller knows to raise the operator alert once rather than
+     * once per straggling recipient.
+     */
+    public boolean pauseForBlockRate(UUID tenantId, UUID campaignId, String reason, Instant now) {
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET status = 'PAUSED', halted_reason = :reason, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SENDING'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Recipients actually queued for send so far — the block-rate guard's
+     * percentage denominator, read live rather than kept as a second counter so
+     * it can never drift from the rows it describes. {@code QUEUED} and {@code
+     * DEFERRED} both represent a message that was handed to ADR 0020; {@code
+     * PENDING} and {@code REFUSED} never were.
+     */
+    public int attemptedRecipientCount(UUID tenantId, UUID campaignId) {
+        Map<String, Integer> counts = recipientCounts(tenantId, campaignId);
+        return counts.getOrDefault("QUEUED", 0) + counts.getOrDefault("DEFERRED", 0);
     }
 
     /**
@@ -138,6 +224,7 @@ public class JdbcCampaignStore {
             int recipients,
             @Nullable Long costLowMinor,
             @Nullable Long costHighMinor,
+            @Nullable Long estimatedDeliverySeconds,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -146,6 +233,7 @@ public class JdbcCampaignStore {
         parameters.put("recipients", recipients);
         parameters.put("low", costLowMinor);
         parameters.put("high", costHighMinor);
+        parameters.put("deliverySeconds", estimatedDeliverySeconds);
         parameters.put("now", utc(now));
 
         jdbc.sql("""
@@ -154,6 +242,7 @@ public class JdbcCampaignStore {
                        estimated_recipients = :recipients,
                        estimated_cost_low_minor = :low,
                        estimated_cost_high_minor = :high,
+                       estimated_delivery_seconds = :deliverySeconds,
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
@@ -430,6 +519,7 @@ public class JdbcCampaignStore {
                 row.getObject("estimated_recipients", Integer.class),
                 row.getObject("estimated_cost_low_minor", Long.class),
                 row.getObject("estimated_cost_high_minor", Long.class),
+                row.getObject("estimated_delivery_seconds", Long.class),
                 row.getObject("cost_ceiling_minor", Long.class),
                 row.getLong("reserved_cost_minor"),
                 row.getLong("spent_cost_minor"),
@@ -439,6 +529,7 @@ public class JdbcCampaignStore {
                 row.getObject("loyalty_accrual_rule_id", UUID.class),
                 row.getObject("created_by", UUID.class),
                 row.getObject("approved_by", UUID.class),
+                row.getInt("blocked_count"),
                 row.getInt("version"));
     }
 
@@ -460,7 +551,7 @@ public class JdbcCampaignStore {
             UUID audienceId,
             String templateKey,
             int recipientCap,
-            Long costCeilingMinor,
+            @Nullable Long costCeilingMinor,
             String currency,
             String timezone,
             @Nullable UUID benefitOfferId,
@@ -484,7 +575,8 @@ public class JdbcCampaignStore {
             Integer estimatedRecipients,
             Long estimatedCostLowMinor,
             Long estimatedCostHighMinor,
-            Long costCeilingMinor,
+            @Nullable Long estimatedDeliverySeconds,
+            @Nullable Long costCeilingMinor,
             long reservedCostMinor,
             long spentCostMinor,
             int reservedRecipients,
@@ -493,7 +585,11 @@ public class JdbcCampaignStore {
             UUID loyaltyAccrualRuleId,
             UUID createdBy,
             UUID approvedBy,
+            int blockedCount,
             int version) {}
+
+    /** A campaign identity without its whole row — what a cross-tenant sweep reads. */
+    public record CampaignRef(UUID tenantId, UUID campaignId) {}
 
     public record RecipientRow(
             UUID customerAccountId,

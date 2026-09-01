@@ -72,7 +72,7 @@ public class OperationsAlertFanoutService implements OperationsAlertPort {
     public void fanOut(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String eventClass,
             String templateKey,
             String subjectType,

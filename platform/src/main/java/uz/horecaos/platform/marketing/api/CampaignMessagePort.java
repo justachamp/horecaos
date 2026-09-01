@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing.api;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -63,13 +64,38 @@ public interface CampaignMessagePort {
     Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel);
 
     /**
-     * Whether a real delivery path is present.
+     * Whether a real delivery path is present for {@code channel}.
      *
      * <p>Read before a send starts rather than discovered halfway through it. A
      * campaign that expands forty thousand recipients against an unwired port has
      * spent an approval and produced nothing.
+     *
+     * <p>Per channel rather than a single flag: {@code notifications} implements
+     * this port for TELEGRAM only (ADR 0059 stage 4) and ADR 0044's own rollout
+     * takes SMS and push later, against a different adapter or a different
+     * release of this one. A blanket "is anything wired" would let an SMS
+     * campaign expand the moment Telegram alone is wired, spending an approval
+     * on a channel that still has no adapter.
+     *
+     * @param channel one of {@link uz.horecaos.platform.marketing.domain.MarketingChannel}'s
+     *                names, exactly as {@link #templateBodies} already takes it
      */
-    boolean isWired();
+    boolean isWired(String channel);
+
+    /**
+     * The messages-per-second ceiling the delivery worker paces this channel's
+     * campaign sends to, or empty when the channel has no such ceiling.
+     *
+     * <p>Read once, at {@code CampaignService#prepare}, so the estimated
+     * delivery window an approver sees is computed against the same rate the
+     * send will actually be paced at (ADR 0059 stage 4: "estimated delivery
+     * window, not a promise"). Empty rather than a very large number for a
+     * channel with no per-provider throughput ceiling of this kind — SMS and
+     * push go through a gateway with its own limits, not this one's per-bot
+     * concern, and reporting a number here would be a promise about a channel
+     * this method knows nothing about.
+     */
+    OptionalDouble campaignRatePerSecond(String channel);
 
     /**
      * One campaign message, described without describing a person.

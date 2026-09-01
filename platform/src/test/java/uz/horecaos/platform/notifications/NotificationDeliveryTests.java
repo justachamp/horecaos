@@ -50,6 +50,7 @@ import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
+import uz.horecaos.platform.notifications.application.CampaignBlockRateMonitor;
 import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
@@ -185,14 +186,6 @@ class NotificationDeliveryTests {
         orders.publish(new OrderDirectory.OrderSummary(
                 orderId, TENANT, BRAND, LOCATION, "A-17", accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
 
-        NotificationEligibilityService eligibility = new NotificationEligibilityService(
-                notifications, templates, consent, contacts, orders, transport, objectMapper, clock, "ru");
-        NotificationDispatchService dispatch = new NotificationDispatchService(
-                notifications, templateStore, contacts, transport, objectMapper, clock, 8, Duration.ofSeconds(30));
-
-        worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
-        queries = new NotificationQueryService(notifications, clock);
-        preferences = new NotificationPreferenceService(notifications, clock);
         // No Telegram binding exists in this SMS-focused suite, so the ADR 0058
         // fan-out this trigger also performs has nothing to fan out to; a
         // directory that always answers empty makes that a true no-op rather
@@ -203,6 +196,37 @@ class NotificationDeliveryTests {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
+        // No campaign in this suite, so the ADR 0059 stage 4 block-rate guard
+        // never has anything to ask about; see AlwaysSendingCampaignFeedback's
+        // own doc comment.
+        CampaignBlockRateMonitor campaignBlockRate = new CampaignBlockRateMonitor(
+                new AlwaysSendingCampaignFeedback(), operationsAlerts, new SimpleMeterRegistry());
+
+        NotificationEligibilityService eligibility = new NotificationEligibilityService(
+                notifications,
+                templates,
+                consent,
+                contacts,
+                orders,
+                transport,
+                new AlwaysSendingCampaignFeedback(),
+                objectMapper,
+                clock,
+                "ru");
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                contacts,
+                transport,
+                campaignBlockRate,
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+
+        worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
+        queries = new NotificationQueryService(notifications, clock);
+        preferences = new NotificationPreferenceService(notifications, clock);
         CustomerTelegramChannelRouter channelRouter =
                 new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
         trigger = new OrderNotificationTrigger(
@@ -915,7 +939,8 @@ class NotificationDeliveryTests {
     private static final class NoTelegramBindings implements OperationsSubscriptionDirectory {
 
         @Override
-        public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass) {
+        public List<UUID> subscribedBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String eventClass) {
             return List.of();
         }
 

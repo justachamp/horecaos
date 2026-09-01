@@ -165,7 +165,7 @@ public class TelegramBindingStore {
      * plus its brand's flat (no-location) bindings, matching
      * {@link ProviderInstallationLookup}'s own scope resolution.
      */
-    public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass) {
+    public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, @Nullable UUID locationId, String eventClass) {
         return jdbc.sql("""
                 SELECT b.id
                   FROM integration.bindings b

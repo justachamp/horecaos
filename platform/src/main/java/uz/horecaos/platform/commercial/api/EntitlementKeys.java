@@ -204,6 +204,28 @@ public final class EntitlementKeys {
             .describedAs("Whether the conversations flow engine may run for this tenant's Telegram brand bots.")
             .build();
 
+    /**
+     * ADR 0059 stage 4: whether an ADR 0044 campaign may launch on the TELEGRAM
+     * channel at all. {@code safeDefault(Boolean.FALSE)}, matching {@link
+     * #TELEGRAM_DIGESTS_ENABLED} and {@link #TELEGRAM_CONVERSATIONS_ENABLED}
+     * rather than {@link #TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED}: a broadcast
+     * is not a message the customer's own order caused, it is a resellable,
+     * risk-bearing product capability — every recipient's own send still costs
+     * this tenant's bot some of Telegram's block-rate tolerance — so a tenant
+     * that has never been sold this product must not have a marketer's first
+     * campaign land on a live bot nobody agreed to pay for. Checked once, at
+     * {@code CampaignService#start}, via {@link EntitlementService#requireFeature}:
+     * launching a campaign is the "activation" that method's own contract
+     * describes, not a background fan-out {@link #featureEnabled} would silently
+     * skip.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_BROADCASTS_ENABLED = EntitlementKey.feature(
+                    "telegram.broadcasts.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("notifications")
+            .describedAs("Whether an ADR 0044 campaign may launch on the TELEGRAM channel (ADR 0059 stage 4).")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -221,7 +243,8 @@ public final class EntitlementKeys {
             TELEGRAM_OPERATIONS_ALERTS_ENABLED,
             TELEGRAM_BOT_INTERACTIVE_ENABLED,
             TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED,
-            TELEGRAM_CONVERSATIONS_ENABLED));
+            TELEGRAM_CONVERSATIONS_ENABLED,
+            TELEGRAM_BROADCASTS_ENABLED));
 
     private EntitlementKeys() {}
 
