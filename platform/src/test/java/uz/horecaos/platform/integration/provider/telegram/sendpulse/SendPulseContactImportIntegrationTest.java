@@ -144,7 +144,8 @@ class SendPulseContactImportIntegrationTest {
         customerStore = new JdbcCustomerStore(jdbc);
         CustomerIdentityService identity =
                 new CustomerIdentityService(customerStore, new ConfiguredCustomerPolicyLookup(jdbc), clock);
-        CustomerProfileService profiles = new CustomerProfileService(customerStore, protection, objectMapper, clock);
+        CustomerProfileService profiles =
+                new CustomerProfileService(customerStore, protection, objectMapper, clock, audit);
         consent = new ConsentService(customerStore, clock);
         CustomerImportDirectory customerImports = new CustomerImportDirectoryService(identity, profiles, consent);
 

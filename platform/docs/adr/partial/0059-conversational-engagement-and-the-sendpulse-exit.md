@@ -31,8 +31,25 @@
   dropped, and a message on a closed conversation reopens it to the operator. The
   operations app's `/inbox` screen lists, reads, replies, takes over, returns, and
   closes, polling on the order board's own cadence per the recorded Elixir
-  deferral. Not built: SendPulse contact export and the webhook/token-rotation
-  cutover (stage 3); broadcasts (stage 4); any second channel adapter;
+  deferral. Stage 3 (wave 11) adds the SendPulse contact-export import and the
+  cutover runbook: `SendPulseContactFileParser` tolerantly reads a CSV/JSON
+  bot-audience export; the import turns it into real customers
+  (`CustomerImportDirectory`, a new customers.api seam — phone-matched or
+  channel-only, never a parallel contact store), real CUSTOMER-audience Telegram
+  bindings (`TelegramCustomerLinkService.importLink`, reusing the wave-7
+  handshake's own persistence), and real ADR 0020 consent (source `IMPORT`,
+  brand-scoped, explicit both directions — an unrecognized subscription status
+  rejects the row, never defaults); `SendPulseContactImportController` exposes it
+  capability-gated (`CUSTOMER_IMPORT`, tenant-owner only) with a required dry run
+  and an exact re-readable per-row report (V0111), idempotent by chat and by
+  phone — proven by re-import-is-a-no-op and by a real notification reaching an
+  imported subscribed contact while an unsubscribed one is suppressed.
+  `docs/runbooks/sendpulse-cutover.md` is the ordered, per-bot,
+  reversible-until-BotFather-rotation procedure, naming the mid-flow-state loss
+  and the owner-only steps; executing it awaits the owner's SendPulse access.
+  Not built: an HTTP endpoint to rotate an installation's secret reference in
+  place (the runbook's step 9 falls back to SQL — a flagged gap); broadcasts
+  (stage 4); any second channel adapter;
   captured-input routing into customer data or a governed fact store beyond this
   module's own encrypted `flow_runs` blob (`helpcenter` still has no owning ADR);
   ADR 0029 retention/erasure enforcement past the recorded `retention_months`
