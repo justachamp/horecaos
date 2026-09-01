@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -26,6 +27,11 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.commercial.api.EntitlementKey;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
+import uz.horecaos.platform.commercial.api.LimitCheck;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.ConsentService.Decision;
 import uz.horecaos.platform.customers.application.ConsentService.Source;
@@ -40,6 +46,7 @@ import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtectio
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.marketing.application.AudienceService;
 import uz.horecaos.platform.marketing.application.CampaignCostEstimator;
+import uz.horecaos.platform.marketing.application.CampaignExpansionScheduler;
 import uz.horecaos.platform.marketing.application.CampaignSendService;
 import uz.horecaos.platform.marketing.application.CampaignService;
 import uz.horecaos.platform.marketing.application.CustomerMetricProjectionService;
@@ -58,6 +65,8 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignSto
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * The ADR 0044 slice against a real PostgreSQL.
@@ -182,7 +191,8 @@ class MarketingCampaignTests {
 
         projection = new CustomerMetricProjectionService(metricStore, clock);
         audiences = new AudienceService(audienceStore, metricStore, engagementStore, eligibility, audit, clock);
-        campaigns = new CampaignService(campaignStore, engagementStore, audiences, estimator, port, audit, clock);
+        campaigns = new CampaignService(
+                campaignStore, engagementStore, audiences, estimator, port, audit, new AlwaysEntitledService(), clock);
         sends = new CampaignSendService(
                 campaignStore, audienceStore, engagementStore, eligibility, estimator, port, clock, 100);
         suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
@@ -606,6 +616,136 @@ class MarketingCampaignTests {
                 .isTrue();
     }
 
+    // ---------------------------------------------------- ADR 0059 stage 4
+
+    @Test
+    @DisplayName("the estimated delivery window divides the reach by the channel's configured pacing rate")
+    void estimatedDeliveryWindowDividesReachByRate() {
+        for (int index = 0; index < 3; index++) {
+            UUID account = customer("+99890666000" + index, "ru", true);
+            // MESSAGING_APP consent is recorded and read under "TELEGRAM" — see
+            // MarketingEligibility#consentChannel's own doc comment.
+            grantConsent(account, "TELEGRAM");
+        }
+        projection.backfill(TENANT, BRAND);
+        port().withRatePerSecond(2.0);
+
+        UUID campaign = draftTelegramCampaign();
+        var estimate = campaigns.prepare(TENANT, campaign, author, "corr");
+
+        assertThat(estimate.memberCount()).isEqualTo(3);
+        // 3 recipients paced at 2 per second: ceil(3 / 2) = 2 seconds. A planning
+        // number, not a promise — quiet hours and the block-rate guard can both
+        // make the real send take longer, which is why it is stored rather than
+        // only returned: an approver reads it from the campaign afterwards too.
+        assertThat(estimate.estimatedDeliverySeconds()).isEqualTo(2L);
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().estimatedDeliverySeconds())
+                .isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("a channel with no configured pacing rate reports no delivery window")
+    void noConfiguredRateMeansNoEstimatedWindow() {
+        UUID account = customer("+998906660009", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+        priceSegmentsAt(100L);
+
+        // SMS: port() reports no campaignRatePerSecond for it, unlike MESSAGING_APP.
+        UUID campaign = draftCampaign(10_000_000L);
+        var estimate = campaigns.prepare(TENANT, campaign, author, "corr");
+
+        assertThat(estimate.estimatedDeliverySeconds()).isNull();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().estimatedDeliverySeconds())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("a Telegram campaign cannot launch without the broadcasts entitlement")
+    void telegramLaunchIsRefusedWithoutTheEntitlement() {
+        UUID campaign = draftTelegramCampaign();
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+
+        CampaignService gatedCampaigns = new CampaignService(
+                campaignStore,
+                engagementStore,
+                audiences,
+                new CampaignCostEstimator(),
+                port(),
+                audit,
+                new RefusingEntitledService(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        ApiException failure = catchThrowableOfType(() -> gatedCampaigns.start(TENANT, campaign), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.ENTITLEMENT_REQUIRED);
+        assertThat(failure.properties())
+                .containsEntry("entitlementKey", EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED.code());
+        // Refused, not silently left where it was: the campaign is still exactly
+        // where approve() left it, so a later launch with the entitlement granted
+        // needs no re-approval.
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.APPROVED);
+    }
+
+    @Test
+    @DisplayName("the expansion scheduler keeps a sending campaign expanding until it is done")
+    void theExpansionSchedulerDrivesACampaignToCompletion() {
+        UUID account = customer("+998900000009", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+        priceSegmentsAt(100L);
+
+        // Two campaigns, so the sweep also proves it is cross-tenant-shaped
+        // rather than hard-wired to one — CampaignSendService#expandNextBatch
+        // itself is what CampaignExpansionScheduler is the missing caller of.
+        UUID first = readyCampaign(10_000_000L);
+        UUID second = readyCampaign(10_000_000L);
+
+        var scheduler = new CampaignExpansionScheduler(campaignStore, sends, 50);
+
+        // First pass: both campaigns still have members to expand.
+        assertThat(scheduler.runOnce()).isEqualTo(2);
+        assertThat(campaignStore.recipientCount(TENANT, first)).isEqualTo(1);
+        assertThat(campaignStore.recipientCount(TENANT, second)).isEqualTo(1);
+        assertThat(campaignStore.find(TENANT, first).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
+
+        // Second pass: expandNextBatch finds no more members and completes both.
+        assertThat(scheduler.runOnce()).isEqualTo(2);
+        assertThat(campaignStore.find(TENANT, first).orElseThrow().status()).isEqualTo(CampaignStatus.SENT);
+        assertThat(campaignStore.find(TENANT, second).orElseThrow().status()).isEqualTo(CampaignStatus.SENT);
+
+        // Third pass: nothing left SENDING, so the sweep finds nothing to do.
+        assertThat(scheduler.runOnce()).isZero();
+    }
+
+    @Test
+    @DisplayName("an entitled tenant's Telegram campaign launches normally")
+    void telegramLaunchSucceedsWhenEntitled() {
+        UUID campaign = draftTelegramCampaign();
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+
+        assertThat(campaigns.start(TENANT, campaign)).isTrue();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private UUID readyCampaign(long ceilingMinor) {
@@ -636,6 +776,25 @@ class MarketingCampaignTests {
                 "MARKETING_PROMOTION",
                 100,
                 ceilingMinor,
+                "UZS",
+                null,
+                null,
+                UUID.fromString(author.subject()));
+    }
+
+    /** MESSAGING_APP carries no marginal money, so its ceiling may be null. */
+    private UUID draftTelegramCampaign() {
+        UUID audience = everybodyRegistered();
+        return campaigns.create(
+                TENANT,
+                BRAND,
+                "Telegram broadcast " + UUID.randomUUID(),
+                MarketingChannel.MESSAGING_APP,
+                PURPOSE,
+                audience,
+                "MARKETING_PROMOTION",
+                100,
+                null,
                 "UZS",
                 null,
                 null,
@@ -712,12 +871,17 @@ class MarketingCampaignTests {
     }
 
     private void grantConsent(UUID accountId) {
+        grantConsent(accountId, "SMS");
+    }
+
+    /** Consent is per channel (ADR 0015): granting SMS does not grant MESSAGING_APP. */
+    private void grantConsent(UUID accountId, String channel) {
         consent.record(
                 TENANT,
                 accountId,
                 BRAND,
                 PURPOSE,
-                "SMS",
+                channel,
                 Decision.GRANTED,
                 "v1",
                 Source.STOREFRONT,
@@ -803,6 +967,35 @@ class MarketingCampaignTests {
         @Override
         public void record(AuditFact fact) {
             // Not inspected by these tests.
+        }
+    }
+
+    /** The one call {@link #telegramLaunchIsRefusedWithoutTheEntitlement} exercises. */
+    private static final class RefusingEntitledService implements EntitlementService {
+
+        @Override
+        public EntitlementSnapshot snapshot(UUID tenantId) {
+            return new EntitlementSnapshot(tenantId, null, Map.of(), Instant.now());
+        }
+
+        @Override
+        public LimitCheck check(UUID tenantId, EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("Not exercised by this test");
+        }
+
+        @Override
+        public LimitCheck require(UUID tenantId, EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("Not exercised by this test");
+        }
+
+        @Override
+        public boolean featureEnabled(UUID tenantId, EntitlementKey<Boolean> key) {
+            return false;
+        }
+
+        @Override
+        public void requireFeature(UUID tenantId, EntitlementKey<Boolean> key) {
+            throw ApiException.entitlementRequired(key.code());
         }
     }
 }

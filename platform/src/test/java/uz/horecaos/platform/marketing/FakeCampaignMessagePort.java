@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 
@@ -26,9 +27,15 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final List<MarketingMessage> sent = new ArrayList<>();
     private final Map<String, String> bodies = new LinkedHashMap<>();
     private boolean wired = true;
+    private OptionalDouble ratePerSecond = OptionalDouble.empty();
 
     FakeCampaignMessagePort withBody(String locale, String body) {
         bodies.put(locale, body);
+        return this;
+    }
+
+    FakeCampaignMessagePort withRatePerSecond(double rate) {
+        ratePerSecond = OptionalDouble.of(rate);
         return this;
     }
 
@@ -44,8 +51,13 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     }
 
     @Override
-    public boolean isWired() {
+    public boolean isWired(String channel) {
         return wired;
+    }
+
+    @Override
+    public OptionalDouble campaignRatePerSecond(String channel) {
+        return ratePerSecond;
     }
 
     void unwire() {

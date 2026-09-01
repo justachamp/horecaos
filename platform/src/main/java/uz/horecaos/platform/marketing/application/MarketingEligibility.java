@@ -82,7 +82,7 @@ public class MarketingEligibility {
             return Optional.of(RefusalReason.ACCOUNT_NOT_ACTIVE);
         }
 
-        boolean granted = consent.consentFor(tenantId, accountId, brandId, consentPurpose, channel.name())
+        boolean granted = consent.consentFor(tenantId, accountId, brandId, consentPurpose, consentChannel(channel))
                 .map(ConsentDirectory.ConsentState::granted)
                 .orElse(false);
         if (!granted) {
@@ -114,6 +114,33 @@ public class MarketingEligibility {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * The ADR 0015 consent channel string {@code channel} reads and writes
+     * under — never simply {@code channel.name()} (ADR 0059 stage 4).
+     *
+     * <p>Consent is evaluated twice on the same basis, per ADR 0044: once here
+     * at snapshot build, and again at send by {@code
+     * NotificationEligibilityService}, which resolves its own {@code
+     * notifications.domain.NotificationChannel} and checks consent under
+     * <em>its</em> name. For SMS, EMAIL, and PUSH the two enums happen to share
+     * a spelling, so the mismatch was invisible; {@link MarketingChannel
+     * #MESSAGING_APP} and {@code NotificationChannel.TELEGRAM} do not, and a
+     * customer's Telegram consent — recorded once, under ADR 0020's own
+     * "TELEGRAM" — would never be found by a snapshot check still asking for
+     * "MESSAGING_APP". Marketing does not import the notifications enum (ADR
+     * 0044 is explicit that it never will); this is the one place that
+     * translation has to happen, spelled out rather than left for the two
+     * modules to agree on a string by convention.
+     */
+    private static String consentChannel(MarketingChannel channel) {
+        return switch (channel) {
+            case SMS -> "SMS";
+            case EMAIL -> "EMAIL";
+            case PUSH -> "PUSH";
+            case MESSAGING_APP -> "TELEGRAM";
+        };
     }
 
     /**

@@ -63,6 +63,7 @@ public class NotificationDispatchService {
     private final JdbcTemplateStore templates;
     private final RecipientContactDirectory contacts;
     private final NotificationTransport transport;
+    private final CampaignBlockRateMonitor campaignBlockRate;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int maximumAttempts;
@@ -73,6 +74,7 @@ public class NotificationDispatchService {
             JdbcTemplateStore templates,
             RecipientContactDirectory contacts,
             NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.max-attempts:8}") int maximumAttempts,
@@ -81,6 +83,7 @@ public class NotificationDispatchService {
         this.templates = templates;
         this.contacts = contacts;
         this.transport = transport;
+        this.campaignBlockRate = campaignBlockRate;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.maximumAttempts = maximumAttempts;
@@ -294,6 +297,12 @@ public class NotificationDispatchService {
                         now,
                         outcome.errorCode(),
                         now);
+                // ADR 0059 stage 4: a no-op for anything that is not a campaign
+                // message whose Telegram binding just retired. Called after the
+                // row is settled, not before, so the guard's own read of "how
+                // many recipients has this campaign attempted" already counts
+                // this one as queued.
+                campaignBlockRate.onRejected(row, outcome, now);
             }
             case RETRYABLE -> {
                 notifications.settleAttempt(

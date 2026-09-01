@@ -193,7 +193,8 @@ class DigestEntitlementGateTests {
     private static final class FakeSubscriptions implements OperationsSubscriptionDirectory {
 
         @Override
-        public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass) {
+        public List<UUID> subscribedBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String eventClass) {
             throw new UnsupportedOperationException("Not used by the 15-minute digest path");
         }
 

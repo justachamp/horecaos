@@ -3131,6 +3131,10 @@
           "currency" : {
             "type" : "string"
           },
+          "estimatedDeliverySeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "members" : {
             "format" : "int32",
             "type" : "integer"
@@ -24489,6 +24493,44 @@
           }
         },
         "summary" : "Stop a running campaign",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/launches" : {
+      "post" : {
+        "description" : "Nothing reaches SENDING except from an approval. A TELEGRAM campaign additionally needs the ADR 0059 stage 4 broadcasts entitlement, refused here as ENTITLEMENT_REQUIRED rather than discovered silently three steps later when the delivery worker finds no wired path.",
+        "operationId" : "launch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open the send",
         "tags" : [ "Marketing" ]
       }
     },

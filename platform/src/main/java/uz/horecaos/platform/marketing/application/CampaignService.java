@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
@@ -48,6 +51,7 @@ public class CampaignService {
     private final CampaignCostEstimator estimator;
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
+    private final EntitlementService entitlements;
     private final Clock clock;
 
     public CampaignService(
@@ -57,6 +61,7 @@ public class CampaignService {
             CampaignCostEstimator estimator,
             CampaignMessagePort messages,
             AuditRecorder audit,
+            EntitlementService entitlements,
             Clock clock) {
         this.campaigns = campaigns;
         this.engagement = engagement;
@@ -64,6 +69,7 @@ public class CampaignService {
         this.estimator = estimator;
         this.messages = messages;
         this.audit = audit;
+        this.entitlements = entitlements;
         this.clock = clock;
     }
 
@@ -89,7 +95,7 @@ public class CampaignService {
             UUID audienceId,
             String templateKey,
             int recipientCap,
-            Long costCeilingMinor,
+            @Nullable Long costCeilingMinor,
             String currency,
             @Nullable UUID benefitOfferId,
             @Nullable UUID loyaltyAccrualRuleId,
@@ -160,6 +166,16 @@ public class CampaignService {
         Optional<CampaignCostEstimator.Estimate> cost = estimator.estimate(
                 channel, bodies, localeCounts, policy.smsPricePerSegmentMinor(), campaign.currency());
 
+        // ADR 0059 stage 4: "estimated delivery window, not a promise", computed
+        // at the same moment as the cost estimate and against the same rate the
+        // send will actually be paced at. Empty for a channel notifications
+        // reports no pacing ceiling for — nothing paces SMS/EMAIL/PUSH sends
+        // today, so null is the honest answer rather than zero, which would read
+        // as "instant".
+        OptionalDouble rate = messages.campaignRatePerSecond(channel.name());
+        Long estimatedDeliverySeconds =
+                rate.isPresent() ? (long) Math.ceil(snapshot.memberCount() / rate.getAsDouble()) : null;
+
         campaigns.recordEstimate(
                 tenantId,
                 campaignId,
@@ -167,6 +183,7 @@ public class CampaignService {
                 snapshot.memberCount(),
                 cost.map(CampaignCostEstimator.Estimate::lowMinor).orElse(null),
                 cost.map(CampaignCostEstimator.Estimate::highMinor).orElse(null),
+                estimatedDeliverySeconds,
                 clock.instant());
 
         return new Estimate(
@@ -175,7 +192,8 @@ public class CampaignService {
                 snapshot.candidateCount(),
                 cost.map(CampaignCostEstimator.Estimate::lowMinor).orElse(null),
                 cost.map(CampaignCostEstimator.Estimate::highMinor).orElse(null),
-                campaign.currency());
+                campaign.currency(),
+                estimatedDeliverySeconds);
     }
 
     @Transactional
@@ -236,10 +254,23 @@ public class CampaignService {
         return approved;
     }
 
-    /** Opens the send. Nothing reaches {@code SENDING} except from an approval. */
+    /**
+     * Opens the send. Nothing reaches {@code SENDING} except from an approval.
+     *
+     * <p>The one place ADR 0059 stage 4's Telegram entitlement is checked. A
+     * campaign may be authored, estimated, reviewed, and approved for a tenant
+     * whose plan does not include broadcasts — none of that spends anything —
+     * but launching is the "activation" {@link
+     * EntitlementService#requireFeature}'s own contract describes, so it is
+     * refused here rather than discovered as a silent {@code isWired(channel) ==
+     * false} refusal three steps later in {@code CampaignSendService}.
+     */
     @Transactional
     public boolean start(UUID tenantId, UUID campaignId) {
         CampaignRow campaign = require(tenantId, campaignId);
+        if (MarketingChannel.valueOf(campaign.channel()) == MarketingChannel.MESSAGING_APP) {
+            entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+        }
         if (!campaign.status().canTransitionTo(CampaignStatus.SENDING)) {
             return false;
         }
@@ -297,6 +328,10 @@ public class CampaignService {
      * @param lowMinor null when the cost is not knowable — no active template, or no
      *                 configured price per segment. Null rather than zero, because
      *                 zero passes every ceiling check there is
+     * @param estimatedDeliverySeconds a planning number, not a promise: quiet
+     *                                 hours and the block-rate guard can both
+     *                                 make the real send take longer. Null for a
+     *                                 channel with no configured pacing ceiling
      */
     public record Estimate(
             UUID snapshotId,
@@ -304,5 +339,6 @@ public class CampaignService {
             int candidateCount,
             @Nullable Long lowMinor,
             @Nullable Long highMinor,
-            String currency) {}
+            String currency,
+            @Nullable Long estimatedDeliverySeconds) {}
 }

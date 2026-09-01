@@ -149,7 +149,8 @@ public class OperationsMarketingController {
                 estimate.candidateCount(),
                 estimate.lowMinor(),
                 estimate.highMinor(),
-                estimate.currency()));
+                estimate.currency(),
+                estimate.estimatedDeliverySeconds()));
     }
 
     @PostMapping("/campaigns/{campaignId}/submissions")
@@ -190,6 +191,25 @@ public class OperationsMarketingController {
                     ErrorCode.RESOURCE_CONFLICT,
                     "This campaign is not awaiting review, or you are its author: an approval "
                             + "has to come from somebody other than the person who wrote it");
+        }
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/campaigns/{campaignId}/launches")
+    @RequiresCapability(value = Capability.CAMPAIGN_APPROVE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Open the send",
+            description = "Nothing reaches SENDING except from an approval. A TELEGRAM campaign "
+                    + "additionally needs the ADR 0059 stage 4 broadcasts entitlement, refused "
+                    + "here as ENTITLEMENT_REQUIRED rather than discovered silently three steps "
+                    + "later when the delivery worker finds no wired path.")
+    public ResponseEntity<Void> launch(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
+
+        if (!campaigns.start(tenantId, campaignId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This campaign is not approved or scheduled, so there is nothing to launch");
         }
         return ResponseEntity.accepted().build();
     }
@@ -356,7 +376,8 @@ public class OperationsMarketingController {
             int candidates,
             @Nullable Long costLowMinor,
             @Nullable Long costHighMinor,
-            String currency) {}
+            String currency,
+            @Nullable Long estimatedDeliverySeconds) {}
 
     public record RecipientResponse(
             UUID customerAccountId,

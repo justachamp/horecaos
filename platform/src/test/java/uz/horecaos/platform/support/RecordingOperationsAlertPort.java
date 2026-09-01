@@ -24,7 +24,7 @@ public final class RecordingOperationsAlertPort implements OperationsAlertPort {
     public void fanOut(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String eventClass,
             String templateKey,
             String subjectType,
@@ -54,7 +54,7 @@ public final class RecordingOperationsAlertPort implements OperationsAlertPort {
     public record Call(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String eventClass,
             String templateKey,
             String subjectType,

@@ -30,5 +30,14 @@ public enum SuppressionReason {
     NO_TEMPLATE_FOR_LOCALE,
 
     /** The channel has no adapter in this release. */
-    CHANNEL_NOT_AVAILABLE
+    CHANNEL_NOT_AVAILABLE,
+
+    /**
+     * ADR 0044/0059: the ADR 0044 campaign this message belongs to is no longer
+     * {@code SENDING} — paused by the block-rate guard, halted, or cancelled —
+     * by the time this row reached the front of the queue. Checked at
+     * eligibility so an operator's pause stops every message already scheduled
+     * for a future pacing slot, not only batches not yet expanded.
+     */
+    CAMPAIGN_NOT_SENDING
 }

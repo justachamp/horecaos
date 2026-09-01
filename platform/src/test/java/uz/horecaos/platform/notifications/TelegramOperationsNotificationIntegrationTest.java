@@ -59,6 +59,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateDedupSto
 import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateHandler;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup;
 import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
+import uz.horecaos.platform.notifications.application.CampaignBlockRateMonitor;
 import uz.horecaos.platform.notifications.application.CustomerProviderBindingSyncService;
 import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
@@ -254,12 +255,10 @@ class TelegramOperationsNotificationIntegrationTest {
                 contacts,
                 orders,
                 transport,
+                new AlwaysSendingCampaignFeedback(),
                 objectMapper,
                 clock,
                 "ru");
-        NotificationDispatchService dispatch = new NotificationDispatchService(
-                notifications, templateStore, contacts, transport, objectMapper, clock, 8, Duration.ofSeconds(30));
-        worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
 
         OperationsAlertFanoutService fanout = new OperationsAlertFanoutService(
                 new TelegramOperationsSubscriptionDirectory(bindingStore),
@@ -267,6 +266,17 @@ class TelegramOperationsNotificationIntegrationTest {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                contacts,
+                transport,
+                new CampaignBlockRateMonitor(new AlwaysSendingCampaignFeedback(), fanout, new SimpleMeterRegistry()),
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+        worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         CustomerTelegramChannelRouter channelRouter =
                 new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
         trigger = new OrderNotificationTrigger(
