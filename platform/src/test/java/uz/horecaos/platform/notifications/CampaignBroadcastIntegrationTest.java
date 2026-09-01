@@ -472,6 +472,120 @@ class CampaignBroadcastIntegrationTest {
                 .isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName(
+            "resuming a paused campaign reports what the pause cost, keeps delivering, and the guard can pause it again")
+    void aResumedCampaignKeepsGoingAndTheGuardCanPauseItAgain() {
+        UUID untouched = customer();
+        grantConsent(untouched);
+        long untouchedChat = linkCustomer(untouched);
+
+        UUID blockedFirst = customer();
+        grantConsent(blockedFirst);
+        long blockedFirstChat = linkCustomer(blockedFirst);
+
+        UUID blockedSecond = customer();
+        grantConsent(blockedSecond);
+        long blockedSecondChat = linkCustomer(blockedSecond);
+
+        UUID pausedAfter = customer();
+        grantConsent(pausedAfter);
+        long pausedAfterChat = linkCustomer(pausedAfter);
+
+        UUID blockedThird = customer();
+        grantConsent(blockedThird);
+        long blockedThirdChat = linkCustomer(blockedThird);
+
+        UUID blockedFourth = customer();
+        grantConsent(blockedFourth);
+        long blockedFourthChat = linkCustomer(blockedFourth);
+
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = audiences.define(
+                TENANT,
+                BRAND,
+                "Everybody " + UUID.randomUUID(),
+                null,
+                List.of(AudiencePredicate.numeric(
+                        PredicateType.ORDER_COUNT, PredicateOperator.AT_MOST, 1_000_000L, null)),
+                UUID.fromString(author.subject()),
+                "corr");
+
+        UUID campaignId = readyTelegramCampaign(audience);
+        var outcome = sends.expandNextBatch(TENANT, campaignId);
+        assertThat(outcome.queued()).isEqualTo(6);
+
+        for (UUID account : List.of(untouched, blockedFirst, blockedSecond, pausedAfter, blockedThird, blockedFourth)) {
+            quiesce(notificationIdFor(campaignId, account));
+        }
+
+        // -------------------------------------------------------- two blocks pause it
+        bot.kick(blockedFirstChat, false);
+        makeDue(notificationIdFor(campaignId, blockedFirst));
+        worker.drain();
+        bot.kick(blockedSecondChat, false);
+        makeDue(notificationIdFor(campaignId, blockedSecond));
+        worker.drain();
+
+        assertThat(campaignStore.find(TENANT, campaignId).orElseThrow().status())
+                .isEqualTo(CampaignStatus.PAUSED);
+        assertThat(campaignStore.find(TENANT, campaignId).orElseThrow().blockedCount())
+                .isEqualTo(2);
+
+        // pausedAfter's message was already paced before the pause landed; it is
+        // exactly the cost a resume has to report rather than retry.
+        UUID pausedAfterNotification = notificationIdFor(campaignId, pausedAfter);
+        makeDue(pausedAfterNotification);
+        worker.drain();
+        assertThat(statusOf(pausedAfterNotification)).isEqualTo("SUPPRESSED");
+        assertThat(suppressionReasonOf(pausedAfterNotification)).isEqualTo("CAMPAIGN_NOT_SENDING");
+
+        // ------------------------------------------------------------------ resume
+        var resumeOutcome =
+                campaigns.resume(TENANT, campaignId, approver, "Investigated; template was not spam", "corr");
+
+        assertThat(resumeOutcome.resumed()).isTrue();
+        assertThat(resumeOutcome.suppressedDuringPause())
+                .as("exactly the one message the pause suppressed, not a cumulative count")
+                .isEqualTo(1);
+
+        var resumed = campaignStore.find(TENANT, campaignId).orElseThrow();
+        assertThat(resumed.status()).isEqualTo(CampaignStatus.SENDING);
+        assertThat(resumed.blockedCount())
+                .as("the guard measures the resumed run, not the run before it")
+                .isZero();
+
+        // pausedAfter is NOT retried: resuming reopens delivery, it does not
+        // requeue what CAMPAIGN_NOT_SENDING already decided.
+        assertThat(bot.messagesSentTo(pausedAfterChat)).isEmpty();
+
+        // ---------------------------------------------------- delivery continues
+        UUID untouchedNotification = notificationIdFor(campaignId, untouched);
+        makeDue(untouchedNotification);
+        worker.drain();
+        assertThat(statusOf(untouchedNotification)).isEqualTo("DELIVERED");
+        assertThat(bot.messagesSentTo(untouchedChat)).hasSize(1);
+
+        // ------------------------------------------------- the guard works again
+        bot.kick(blockedThirdChat, false);
+        makeDue(notificationIdFor(campaignId, blockedThird));
+        worker.drain();
+        assertThat(campaignStore.find(TENANT, campaignId).orElseThrow().status())
+                .as("one block after resuming, under the reset threshold, does not re-pause")
+                .isEqualTo(CampaignStatus.SENDING);
+
+        bot.kick(blockedFourthChat, false);
+        makeDue(notificationIdFor(campaignId, blockedFourth));
+        worker.drain();
+
+        var rePaused = campaignStore.find(TENANT, campaignId).orElseThrow();
+        assertThat(rePaused.status())
+                .as("the reset counter crosses the threshold again on its own two blocks")
+                .isEqualTo(CampaignStatus.PAUSED);
+        assertThat(rePaused.blockedCount()).isEqualTo(2);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private static final long OPERATIONS_CHAT_ID = 900_001;

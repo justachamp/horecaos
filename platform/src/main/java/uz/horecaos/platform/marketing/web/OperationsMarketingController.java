@@ -235,6 +235,29 @@ public class OperationsMarketingController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/campaigns/{campaignId}/resumptions")
+    @RequiresCapability(value = Capability.CAMPAIGN_APPROVE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Resume a campaign the block-rate guard paused",
+            description = "SENDING again, so expansion and delivery continue. Nothing already "
+                    + "suppressed with CAMPAIGN_NOT_SENDING while the campaign sat paused is "
+                    + "retried; the response reports how many that was, so the operator knows "
+                    + "what the pause cost before resuming. A TELEGRAM campaign re-checks the "
+                    + "ADR 0059 stage 4 broadcasts entitlement, the same as launching.")
+    public ResponseEntity<ResumeResponse> resume(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID campaignId,
+            @Valid @RequestBody ReasonRequest body) {
+
+        var outcome = campaigns.resume(tenantId, campaignId, actor(), body.reason(), correlationId());
+        if (!outcome.resumed()) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This campaign is not paused, so there is nothing to resume");
+        }
+        return ResponseEntity.ok(new ResumeResponse(outcome.suppressedDuringPause()));
+    }
+
     @GetMapping("/campaigns/{campaignId}/recipients")
     @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
     @Operation(
@@ -378,6 +401,9 @@ public class OperationsMarketingController {
             @Nullable Long costHighMinor,
             String currency,
             @Nullable Long estimatedDeliverySeconds) {}
+
+    /** @param suppressedDuringPause what the pause cost: messages CAMPAIGN_NOT_SENDING will not retry */
+    public record ResumeResponse(int suppressedDuringPause) {}
 
     public record RecipientResponse(
             UUID customerAccountId,

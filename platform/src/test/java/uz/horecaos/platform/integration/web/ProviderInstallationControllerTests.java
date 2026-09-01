@@ -8,8 +8,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -22,7 +24,10 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
+import uz.horecaos.platform.integration.api.provider.BindingRef;
+import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -42,6 +47,26 @@ class ProviderInstallationControllerTests {
 
         @Override
         public SecretValue resolveFresh(SecretReference reference) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+    };
+
+    /** Neither test in this class reaches the rotate-secret path. */
+    private static final ProviderInstallationLookup UNUSED_INSTALLATIONS = new ProviderInstallationLookup() {
+        @Override
+        public Optional<BindingRef> primaryBinding(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public List<BindingRef> candidateBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
             throw new UnsupportedOperationException("not exercised by these tests");
         }
     };
@@ -85,8 +110,13 @@ class ProviderInstallationControllerTests {
                 // Neither test here calls the capability-reconciliation endpoint, so
                 // this is a real but idle collaborator rather than a stand-in for one:
                 // an empty catalogue and a resolver that is never asked to resolve.
-                new ProviderCapabilityReconciliationService(
-                        jdbc, List.of(), UNUSED_SECRETS, new ObjectMapper(), CLOCK));
+                new ProviderCapabilityReconciliationService(jdbc, List.of(), UNUSED_SECRETS, new ObjectMapper(), CLOCK),
+                // Same posture as the two collaborators above: neither test here
+                // calls the rotate-secret endpoint, so these are real but idle
+                // rather than stand-ins for one.
+                UNUSED_INSTALLATIONS,
+                UNUSED_SECRETS,
+                new TelegramBotApiClient(new ObjectMapper()));
     }
 
     @Test

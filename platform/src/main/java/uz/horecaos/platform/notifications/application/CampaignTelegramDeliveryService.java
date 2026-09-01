@@ -17,6 +17,7 @@ import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.domain.SuppressionReason;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
@@ -167,5 +168,11 @@ public class CampaignTelegramDeliveryService implements CampaignMessagePort {
         return MESSAGING_APP_CHANNEL.equals(channel)
                 ? pacer.ratePerSecond(NotificationChannel.TELEGRAM.name())
                 : OptionalDouble.empty();
+    }
+
+    @Override
+    public int countSuppressedForNotSending(UUID tenantId, UUID campaignId, Instant since) {
+        return notifications.countSuppressed(
+                tenantId, CAMPAIGN_SUBJECT_TYPE, campaignId, SuppressionReason.CAMPAIGN_NOT_SENDING.name(), since);
     }
 }

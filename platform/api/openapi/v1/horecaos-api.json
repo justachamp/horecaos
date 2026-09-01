@@ -8024,6 +8024,15 @@
         },
         "type" : "object"
       },
+      "ResumeResponse" : {
+        "properties" : {
+          "suppressedDuringPause" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ResumeScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
@@ -8245,6 +8254,40 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "RotateSecretRequest" : {
+        "properties" : {
+          "newSecretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "newSecretReference", "reason" ],
+        "type" : "object"
+      },
+      "RotateSecretResponse" : {
+        "properties" : {
+          "botUsername" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "newSecretReference" : {
+            "type" : "string"
+          },
+          "oldSecretReference" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "RotationRequest" : {
@@ -14022,6 +14065,53 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file — the docs/runbooks/sendpulse-cutover.md step 9 gap. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
+        "operationId" : "rotateSecret",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Point an installation's secret reference at a rotated credential",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
         "operationId" : "list_5",
@@ -14420,7 +14510,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/resume" : {
       "post" : {
         "description" : "Completed steps are never reset; a retry reconciles external work.",
-        "operationId" : "resume_2",
+        "operationId" : "resume_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18672,7 +18762,7 @@
     },
     "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions" : {
       "post" : {
-        "operationId" : "resume_1",
+        "operationId" : "resume_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "scopeId",
@@ -21161,7 +21251,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions/{sessionId}/break-endings" : {
       "post" : {
-        "operationId" : "resume",
+        "operationId" : "resume_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24589,6 +24679,61 @@
           }
         },
         "summary" : "Per-recipient outcomes, including everybody who was refused",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/resumptions" : {
+      "post" : {
+        "description" : "SENDING again, so expansion and delivery continue. Nothing already suppressed with CAMPAIGN_NOT_SENDING while the campaign sat paused is retried; the response reports how many that was, so the operator knows what the pause cost before resuming. A TELEGRAM campaign re-checks the ADR 0059 stage 4 broadcasts entitlement, the same as launching.",
+        "operationId" : "resume",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OperationsMarketingControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResumeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resume a campaign the block-rate guard paused",
         "tags" : [ "Marketing" ]
       }
     },

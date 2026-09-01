@@ -746,6 +746,67 @@ class MarketingCampaignTests {
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
     }
 
+    @Test
+    @DisplayName("resume is refused from anything but PAUSED, and changes nothing")
+    void resumeIsRefusedFromANonPausedState() {
+        UUID campaign = launchedTelegramCampaign();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
+
+        var outcome = campaigns.resume(TENANT, campaign, approver, "Nothing to resume", "corr");
+
+        assertThat(outcome.resumed()).isFalse();
+        assertThat(outcome.suppressedDuringPause()).isZero();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status())
+                .as("a refused resume must leave the campaign exactly where it was")
+                .isEqualTo(CampaignStatus.SENDING);
+    }
+
+    @Test
+    @DisplayName("resume returns a paused campaign to SENDING, reports the pause's cost, and resets the block counter")
+    void resumeReturnsToSendingAndResetsTheBlockCounter() {
+        UUID campaign = launchedTelegramCampaign();
+        pauseDirectly(campaign, 2);
+        port().withSuppressedForNotSending(3);
+
+        var outcome = campaigns.resume(TENANT, campaign, approver, "Root cause fixed", "corr");
+
+        assertThat(outcome.resumed()).isTrue();
+        assertThat(outcome.suppressedDuringPause())
+                .as("what the pause cost: CAMPAIGN_NOT_SENDING suppressions are never retried")
+                .isEqualTo(3);
+
+        var resumed = campaignStore.find(TENANT, campaign).orElseThrow();
+        assertThat(resumed.status()).isEqualTo(CampaignStatus.SENDING);
+        assertThat(resumed.blockedCount())
+                .as("the guard measures the resumed run, not the run before it")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("resume re-checks the Telegram broadcasts entitlement, the same as launching")
+    void resumeRechecksTheTelegramEntitlement() {
+        UUID campaign = launchedTelegramCampaign();
+        pauseDirectly(campaign, 2);
+
+        CampaignService gatedCampaigns = new CampaignService(
+                campaignStore,
+                engagementStore,
+                audiences,
+                new CampaignCostEstimator(),
+                port(),
+                audit,
+                new RefusingEntitledService(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        ApiException failure = catchThrowableOfType(
+                () -> gatedCampaigns.resume(TENANT, campaign, approver, "Trying anyway", "corr"), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.ENTITLEMENT_REQUIRED);
+        // Refused, not silently left half-resumed: still PAUSED for a later
+        // resume once the entitlement is restored.
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.PAUSED);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private UUID readyCampaign(long ceilingMinor) {
@@ -762,6 +823,43 @@ class MarketingCampaignTests {
                 "corr");
         campaigns.start(TENANT, campaign);
         return campaign;
+    }
+
+    /** Approved, launched, and SENDING — a Telegram campaign a test can then pause directly. */
+    private UUID launchedTelegramCampaign() {
+        UUID campaign = draftTelegramCampaign();
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+        assertThat(campaigns.start(TENANT, campaign)).isTrue();
+        return campaign;
+    }
+
+    /**
+     * Forces {@code SENDING -> PAUSED} the way only {@code
+     * CampaignFeedbackService} (a different module) actually does, so a resume
+     * test does not have to drag in the whole ADR 0020 delivery path just to
+     * reach the one state it needs to start from.
+     */
+    private void pauseDirectly(UUID campaignId, int blockedCount) {
+        jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET status = 'PAUSED', blocked_count = :blockedCount, paused_at = :now,
+                       halted_reason = 'test fixture pause', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("blockedCount", blockedCount)
+                .param("now", OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC))
+                .param("tenantId", TENANT)
+                .param("id", campaignId)
+                .update();
     }
 
     private UUID draftCampaign(long ceilingMinor) {

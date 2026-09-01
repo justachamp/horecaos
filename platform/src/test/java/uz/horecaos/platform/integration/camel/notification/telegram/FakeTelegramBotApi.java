@@ -57,6 +57,7 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     // opt-in setter rather than a fixed default.
     private volatile @Nullable String botUsername;
     private final AtomicLong getMeCalls = new AtomicLong();
+    private volatile boolean tokenRevoked;
 
     private FakeTelegramBotApi(HttpServer server) {
         this.server = server;
@@ -103,6 +104,18 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     /** How many times {@code getMe} has actually been called — what a caching resolver's own test asserts against. */
     public long getMeCallCount() {
         return getMeCalls.get();
+    }
+
+    /**
+     * Every Bot API call answers real Telegram's own {@code 401 Unauthorized}
+     * from now on, whatever token the URL path carries — this fake never reads
+     * the token out of the path (it has one socket, one scenario), so
+     * revocation is global rather than per-token. What a secret-rotation
+     * verification test needs: a token the manager resolves to but Telegram
+     * itself refuses.
+     */
+    public void revokeToken() {
+        tokenRevoked = true;
     }
 
     public void setChatMemberStatus(String status) {
@@ -164,6 +177,11 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         String path = exchange.getRequestURI().getPath();
         String method = path.substring(path.lastIndexOf('/') + 1);
         Map<String, Object> body = readBody(exchange);
+
+        if (tokenRevoked) {
+            respond(exchange, 401, errorBody(401, "Unauthorized"));
+            return;
+        }
 
         switch (method) {
             case "sendMessage" -> handleSendOrEdit(exchange, body, false);

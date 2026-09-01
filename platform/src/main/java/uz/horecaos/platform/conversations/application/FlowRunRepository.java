@@ -214,6 +214,25 @@ class FlowRunRepository {
                 == 1;
     }
 
+    /**
+     * Deletes every run belonging to these conversations — {@code
+     * ConversationRetentionSweeper}'s own cleanup, called before it deletes
+     * the conversations themselves ({@code fk_flow_run_conversation} carries
+     * no cascade). Safe by construction: a conversation this sweep is allowed
+     * to remove is {@code CLOSED}, and closing always ends any {@code ACTIVE}
+     * run first (see {@code ConversationInboxService#close}), so every run
+     * this deletes is already {@code COMPLETED}, {@code HANDED_TO_OPERATOR},
+     * or {@code ABANDONED} — history, never work in flight.
+     */
+    int deleteForConversations(List<UUID> conversationIds) {
+        if (conversationIds.isEmpty()) {
+            return 0;
+        }
+        return jdbc.sql("DELETE FROM conversations.flow_runs WHERE conversation_id = ANY(:ids)")
+                .param("ids", conversationIds.toArray(UUID[]::new))
+                .update();
+    }
+
     Map<String, String> capturedFields(UUID tenantId, Row run) {
         if (run.capturedFieldsProtected() == null) {
             return Map.of();

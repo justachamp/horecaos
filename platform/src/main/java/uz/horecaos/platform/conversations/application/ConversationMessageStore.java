@@ -48,13 +48,20 @@ class ConversationMessageStore {
         this.protection = protection;
     }
 
-    /** Records an INBOUND or OUTBOUND message — never OPERATOR; see {@link #recordOperatorReply}. */
-    void record(UUID tenantId, UUID conversationId, Direction direction, @Nullable String blockId, String body) {
+    /**
+     * Records an INBOUND or OUTBOUND message — never OPERATOR; see {@link
+     * #recordOperatorReply}.
+     *
+     * @return the row just written, the same shape {@link #recordOperatorReply}
+     *         already returns; every existing caller discards it, and {@code
+     *         ConversationRetentionSweeperTests} is the first that needs the id
+     */
+    Row record(UUID tenantId, UUID conversationId, Direction direction, @Nullable String blockId, String body) {
         if (direction == Direction.OPERATOR) {
             throw new IllegalArgumentException(
                     "An OPERATOR message needs an acting principal — use recordOperatorReply");
         }
-        insert(tenantId, conversationId, direction, blockId, null, body);
+        return insert(tenantId, conversationId, direction, blockId, null, body);
     }
 
     /**
@@ -137,6 +144,42 @@ class ConversationMessageStore {
                 .query(String.class)
                 .optional()
                 .map(Direction::valueOf);
+    }
+
+    /**
+     * Hard-deletes messages older than the owning conversation's own {@code
+     * retention_months} — the ADR 0029 gap V0108's own comment named:
+     * "enforcement... is a named ADR 0029 gap, not built by this stage."
+     *
+     * <p>Batch-limited and lock-skipping, the same discipline {@code
+     * JdbcCampaignStore#claimBatch} and {@code JdbcNotificationStore#claimDue}
+     * already use for a bounded, concurrency-safe scan: {@code FOR UPDATE OF m
+     * SKIP LOCKED} names only the message row to lock, not the conversation it
+     * joins against, so this sweep never contends with an ordinary write to an
+     * unrelated conversation.
+     *
+     * @return how many messages were deleted this call — never content, only
+     *         the count, per this sweep's own logging discipline
+     */
+    int deleteExpired(Instant now, int batchSize) {
+        return jdbc.sql("""
+                WITH doomed AS (
+                    SELECT m.id
+                      FROM conversations.conversation_messages m
+                      JOIN conversations.conversations c
+                        ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+                     WHERE m.occurred_at < (CAST(:now AS timestamptz) - (c.retention_months * INTERVAL '1 month'))
+                     ORDER BY m.occurred_at
+                     LIMIT :batchSize
+                     FOR UPDATE OF m SKIP LOCKED
+                )
+                DELETE FROM conversations.conversation_messages m
+                 USING doomed
+                 WHERE m.id = doomed.id
+                """)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .param("batchSize", batchSize)
+                .update();
     }
 
     private static Row mapRow(java.sql.ResultSet row, UUID tenantId, FieldProtection protection)

@@ -61,9 +61,13 @@ public class SchedulingConfiguration {
      * single sweeper a flow's delay block needs to resume. ADR 0059 stage 4
      * added one more still: {@code CampaignExpansionScheduler.sweepOnce}, the
      * caller {@code CampaignSendService#expandNextBatch} names but never had —
-     * without it a started campaign expanded nothing, forever.
+     * without it a started campaign expanded nothing, forever. Wave 13 added
+     * the last one so far: {@code ConversationRetentionSweeper.sweepOnce},
+     * enforcing {@code conversations.conversations.retention_months} — a
+     * column that had existed since ADR 0059 stage 1 with nothing behind it,
+     * recorded then as a named ADR 0029 gap rather than built.
      */
-    static final int DEFAULT_POOL_SIZE = 39;
+    static final int DEFAULT_POOL_SIZE = 40;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

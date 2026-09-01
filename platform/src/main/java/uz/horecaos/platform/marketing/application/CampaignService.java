@@ -312,6 +312,69 @@ public class CampaignService {
         return halted;
     }
 
+    /**
+     * Un-pauses a campaign the block-rate guard stopped: {@code PAUSED ->
+     * SENDING}, so expansion and delivery continue.
+     *
+     * <p>Nothing already suppressed with {@code CAMPAIGN_NOT_SENDING} while the
+     * campaign sat paused is retried — that message already reached the front
+     * of the ADR 0020 queue, found the campaign not sending, and was recorded
+     * as such, and this method's own transition happens after the fact. What
+     * it can and does report is how many that was, so the operator resuming
+     * the campaign knows what the pause cost before they press the button.
+     *
+     * <p>The same Telegram entitlement {@link #start} checks, for the same
+     * reason: a tenant whose plan lost {@code telegram.broadcasts.enabled}
+     * between pause and resume must not have that broadcast quietly continue.
+     *
+     * <p>The block-rate guard's own counter resets to zero on resume ({@link
+     * JdbcCampaignStore#resume}) — a deliberate choice, not an oversight. The
+     * guard measures the run it is watching, and carrying a stale count
+     * forward would let a resumed campaign re-cross the threshold on its very
+     * first new block, which defeats the point of resuming at all.
+     *
+     * @return {@link ResumeOutcome#resumed()} false when the campaign was not
+     *         {@code PAUSED} — a refusal rather than an error, the same
+     *         posture {@link #halt} takes
+     */
+    @Transactional
+    public ResumeOutcome resume(UUID tenantId, UUID campaignId, ActorRef actor, String reason, String correlationId) {
+        CampaignRow campaign = require(tenantId, campaignId);
+        if (MarketingChannel.valueOf(campaign.channel()) == MarketingChannel.MESSAGING_APP) {
+            entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+        }
+        if (campaign.status() != CampaignStatus.PAUSED) {
+            return ResumeOutcome.refused();
+        }
+
+        Instant now = clock.instant();
+        // Read before the transition below clears it: the boundary a resumed
+        // campaign's own suppression count is measured from. Epoch is the
+        // honest fallback for a row this pause did not itself set (there is
+        // none in the code path that reaches PAUSED today, which always goes
+        // through JdbcCampaignStore#pauseForBlockRate) — reporting the whole
+        // history is more honest than reporting zero for an unknown boundary.
+        Instant pausedSince = campaign.pausedAt() == null ? Instant.EPOCH : campaign.pausedAt();
+        int suppressed = messages.countSuppressedForNotSending(tenantId, campaignId, pausedSince);
+        boolean resumed = campaigns.resume(tenantId, campaignId, now);
+
+        audit.record(AuditFact.of("MARKETING_CAMPAIGN_RESUMED", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.brand(tenantId, campaign.brandId()))
+                .target("MarketingCampaign", campaignId)
+                .targetVersion((long) campaign.version())
+                .outcome(resumed ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
+                .because(reason)
+                .changed(
+                        Map.of("blockedCountBeforeReset", campaign.blockedCount(), "suppressedDuringPause", suppressed))
+                .usingCapability("campaign.approve")
+                .correlatedBy(correlationId)
+                .occurredAt(now)
+                .build());
+
+        return new ResumeOutcome(resumed, suppressed);
+    }
+
     public CampaignRow require(UUID tenantId, UUID campaignId) {
         return campaigns
                 .find(tenantId, campaignId)
@@ -341,4 +404,17 @@ public class CampaignService {
             @Nullable Long highMinor,
             String currency,
             @Nullable Long estimatedDeliverySeconds) {}
+
+    /**
+     * What a resume did.
+     *
+     * @param suppressedDuringPause how many messages the pause itself cost —
+     *                              zero and meaningless when {@link #resumed}
+     *                              is false, since nothing was measured
+     */
+    public record ResumeOutcome(boolean resumed, int suppressedDuringPause) {
+        static ResumeOutcome refused() {
+            return new ResumeOutcome(false, 0);
+        }
+    }
 }
