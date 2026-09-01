@@ -37,6 +37,8 @@ import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.Locati
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.TenantView;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 @RestController
@@ -77,6 +79,19 @@ public class TenantControlPlaneController {
         return service.getTenant(new TenantId(tenantId));
     }
 
+    @GetMapping("/by-slug/{slug}")
+    @RequiresCapability(value = Capability.TENANT_READ, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Find a tenant by slug",
+            description = "Platform-admin only. The lookup a provisioning tool needs before a "
+                    + "tenant's id is known: given a fixed, chosen slug, whether a previous run "
+                    + "already created this tenant, and what its id is. Answers 404 rather than an "
+                    + "empty result, because a slug names at most one tenant.")
+    TenantView getTenantBySlug(@PathVariable String slug) {
+        return service.findTenantBySlug(slug)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No tenant with slug " + slug));
+    }
+
     @PutMapping("/{tenantId}/identity/keycloak-organization")
     @RequiresCapability(value = Capability.TENANT_WRITE, mutating = true)
     @Operation(
@@ -106,6 +121,19 @@ public class TenantControlPlaneController {
     @Operation(summary = "List brands within a tenant")
     List<BrandView> getBrands(@PathVariable UUID tenantId) {
         return service.getBrands(new TenantId(tenantId));
+    }
+
+    @PostMapping("/{tenantId}/brands/{brandId}/activate")
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Activate a brand",
+            description = "A brand is created DRAFT and nothing else in this codebase moves it to "
+                    + "ACTIVE — onboarding readiness checks that a brand exists, not its status, so "
+                    + "a tenant can reach ACTIVE with a brand still DRAFT. Several customer-facing "
+                    + "reads require ACTIVE explicitly (pickup-location discovery among them). "
+                    + "Idempotent: a no-op when already ACTIVE.")
+    BrandView activateBrand(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return service.activateBrand(new TenantId(tenantId), new BrandId(brandId));
     }
 
     @PostMapping("/{tenantId}/brands/{brandId}/locations")
@@ -161,6 +189,18 @@ public class TenantControlPlaneController {
                         request.latitude(),
                         request.longitude(),
                         request.coordinateSource()));
+    }
+
+    @PostMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/activate")
+    @RequiresCapability(value = Capability.LOCATION_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Activate a location",
+            description = "Same gap as brand activation, one level down: a location is created "
+                    + "DRAFT and nothing else in this codebase moves it to ACTIVE. Idempotent: a "
+                    + "no-op when already ACTIVE.")
+    LocationView activateLocation(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return service.activateLocation(new TenantId(tenantId), new BrandId(brandId), new LocationId(locationId));
     }
 
     /**

@@ -1,0 +1,806 @@
+#!/usr/bin/env bash
+#
+# Seeds HorecaOS's own production tenant — "the horecaos tenant, with brands,
+# locations, menu and catalog... to see how our platform works" (the owner's
+# own words) — entirely through the real HTTP control-plane and storefront
+# APIs, the same class of tool as tools/proving-run and built from it: no
+# Flyway migration, no direct SQL, no fixture shortcut. A V-migration would
+# bake this tenant's data into every database this platform ever spins up
+# (every testcontainer, staging, all of them) and would bypass the
+# maker-checker/audit onboarding path (ADR 0008, ADR 0027) the platform
+# deliberately made SQL-free; this script drives that same path instead, the
+# way a human operator or a future onboarding UI would.
+#
+# See docs/runbooks/seed-horecaos-tenant.md for when to run this, what
+# credentials it needs, what it creates, and how to verify it worked.
+#
+# What this does, phase by phase:
+#   1. Resolves a platform-admin bearer token (below: "Credentials").
+#   2. Creates the tenant/brand/locations via the control-plane API — or, if
+#      the slug already exists, finds them and reuses their real ids
+#      (GET .../tenants/by-slug/{slug}, a small new endpoint this tool needed;
+#      see the runbook's "Backend changes" note) — and activates the brand
+#      and each location (also new: nothing in this codebase moved either out
+#      of DRAFT before, which silently kept every tenant off pickup-location
+#      discovery; see the runbook).
+#   3. Starts (or resumes) ADR 0008's onboarding run: owner link/invite,
+#      the platform's default configuration.
+#   4. Registers HorecaOS's own legal entity and assigns it as each
+#      location's seller — required for PAYMENT_CONFIGURATION_VALIDATE even
+#      when the only payment method is cash.
+#   5. Authors the catalog over HTTP (CatalogAuthoringController): a catalog,
+#      four categories, and the products in seed-data — with uz/ru/en names
+#      via a new translations endpoint this tool needed (see the runbook).
+#   6. Prices everything (ADR 0018/0036): a price book, a VAT profile,
+#      variant prices, activation.
+#   7. Configures delivery serviceability (ADR 0037): a tariff and one
+#      circle zone per location, so the storefront's delivery-fee endpoint
+#      resolves a real fee, not just a refusal.
+#   8. Configures the STOREFRONT sales channel (cash payment, pickup and
+#      delivery fulfilment) and a wide-open service schedule per location.
+#   9. Publishes the catalog (ADR 0016) — the step that makes the menu live
+#      on the anonymous storefront endpoints.
+#  10. Resumes and activates the onboarding run (ADR 0027/0050).
+#  11. Verifies the storefront answers: the published menu, pickup-location
+#      discovery, delivery-fee and serviceability resolution.
+#
+# What this deliberately does NOT do: install a payment provider. CLICK/Payme
+# need a real merchant account and a real secret (ADR 0028's whole point is
+# that a script must never hold one), so the seeded channel accepts cash
+# only — enough to clear PAYMENT_CONFIGURATION_VALIDATE and reach ACTIVE. A
+# human adds a real provider through the same control-plane UI/API later,
+# exactly as docs/runbooks/production-setup.md already expects for any
+# tenant's payment setup.
+#
+# Idempotency (safe to re-run):
+#   - Tenant/brand/locations/legal-entity: rediscovered every run through
+#     real GET/list endpoints (by slug, by code) — never re-created, and a
+#     location's address/coordinates are always re-asserted (PUT is
+#     idempotent by nature there).
+#   - Catalog/categories/products/price book/delivery tariff/zones/service
+#     schedule: none of these have a list-by-code HTTP endpoint to
+#     rediscover them by (a real, separate gap — see the runbook), so this
+#     script remembers the ids it created in a small local state file
+#     (seed-data/.state/<slug>.<api-host-hash>.json, gitignored) and SKIPS
+#     re-creating anything already recorded there. First run creates; every
+#     later run against the same state file is a fast no-op for these
+#     resources. Losing the state file on an environment that already has
+#     this tenant's catalog is a real limitation, not silently handled —
+#     the script refuses to guess and tells you what it found instead (see
+#     the runbook's "If the state file is lost" section).
+#   - Channel configuration, service-bindings, and catalog publication are
+#     always re-asserted (each is a natural-key PUT, or — for publish — a
+#     deliberately repeatable action): every run leaves them freshly
+#     reconciled, never duplicated.
+#   - Onboarding resume/activate: skipped entirely once the tenant is
+#     already ACTIVE (checked first); attempted only while it is not, so a
+#     reconcile run against an already-live tenant never depends on the
+#     onboarding scheduler ticking at all.
+#
+# Usage:
+#   tools/seed-horecaos-tenant
+#
+# Credentials (env, all optional except where noted):
+#   HORECAOS_API_URL                        base URL, default http://localhost:8080
+#   HORECAOS_SEED_DATA_FILE                  default tools/seed-data/horecaos-tenant.json
+#   HORECAOS_SEED_STATE_FILE                 default tools/seed-data/.state/<slug>.<api-host-hash>.json
+#   HORECAOS_SEED_LOG                        default a timestamped file under /tmp
+#
+#   Exactly one of:
+#     HORECAOS_SEED_PLATFORM_ADMIN_TOKEN     a bearer token, used as-is — the
+#                                             production/staging path: obtain
+#                                             it however that deployment's
+#                                             identity setup allows and pass
+#                                             it in
+#   or, for local/dev use, a password grant — the same mechanics
+#   tools/proving-run's kc_token() uses, generalised to any client:
+#     HORECAOS_KEYCLOAK_URL                  default http://localhost:8081
+#     HORECAOS_KEYCLOAK_REALM                default horecaos
+#     HORECAOS_KEYCLOAK_CLIENT_ID            default horecaos-local-dev
+#     HORECAOS_KEYCLOAK_CLIENT_SECRET        the local-dev client's secret
+#     HORECAOS_SEED_PLATFORM_ADMIN_USERNAME  a realm user holding the
+#                                             horecaos-api platform-admin role
+#     HORECAOS_SEED_PLATFORM_ADMIN_PASSWORD
+#
+# This script never authenticates as the tenant owner and never touches the
+# owner's Keycloak password: PLATFORM_ADMIN's role bundle already holds every
+# capability this seed needs (ADR 0025 scopes cover downwards — a
+# PLATFORM-scope grant satisfies any narrower TENANT/BRAND/LOCATION-scoped
+# check), so every write below runs as the platform admin, exactly like
+# tools/proving-run's own tenant/brand/location creation in its phase 2. The
+# owner is still linked/invited by the real onboarding workflow (from
+# tenant.ownerEmail in the data file), so a real person can sign in and
+# manage this tenant afterwards — this script simply never needs to be that
+# person.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+API="${HORECAOS_API_URL:-http://localhost:8080}"
+DATA_FILE="${HORECAOS_SEED_DATA_FILE:-${SCRIPT_DIR}/seed-data/horecaos-tenant.json}"
+
+RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="${HORECAOS_SEED_LOG:-/tmp/horecaos-seed-horecaos-tenant-${RUN_STAMP}.log}"
+: > "${LOG_FILE}"
+
+# ---------------------------------------------------------------------------
+# Small library (same shape as tools/proving-run's)
+# ---------------------------------------------------------------------------
+
+section() {
+  echo | tee -a "${LOG_FILE}"
+  echo "==================================================================" | tee -a "${LOG_FILE}"
+  echo "== $1" | tee -a "${LOG_FILE}"
+  echo "==================================================================" | tee -a "${LOG_FILE}"
+}
+
+log() { echo "-- $1" | tee -a "${LOG_FILE}"; }
+evidence() { echo "   EVIDENCE: $1" | tee -a "${LOG_FILE}"; }
+
+fail() {
+  echo | tee -a "${LOG_FILE}"
+  echo "!! FAILED: $1" | tee -a "${LOG_FILE}"
+  exit 1
+}
+
+idemp() { uuidgen; }
+
+[ -f "${DATA_FILE}" ] || fail "seed data file not found: ${DATA_FILE}"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+
+# dval JQ_EXPR -> a scalar from the data file, raw (unquoted)
+dval() { jq -r "$1" "${DATA_FILE}"; }
+# dobj JQ_EXPR -> a compact JSON fragment from the data file
+dobj() { jq -c "$1" "${DATA_FILE}"; }
+
+# req METHOD URL EXPECTED_STATUS [curl-args...]
+# Fails loudly with the full response body on an unexpected status; prints
+# the body to stdout on success so callers can capture it with $(...).
+req() {
+  local method="$1" url="$2" expected="$3"
+  shift 3
+  local response status body
+  response="$(curl -sS -w '\n%{http_code}' -X "${method}" "${url}" "$@")"
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  if [ "${status}" != "${expected}" ]; then
+    {
+      echo "!! ${method} ${url} -> HTTP ${status}, expected ${expected}"
+      echo "!! Response body:"
+      echo "${body}" | (jq . 2>/dev/null || cat)
+    } | tee -a "${LOG_FILE}" >&2
+    exit 1
+  fi
+  echo "${body}"
+}
+
+# lookup METHOD URL OK NOTFOUND [curl-args...]
+# Prints the body and returns 0 when status==OK; returns 1 (prints nothing)
+# when status==NOTFOUND; fails loudly on any other status. The idempotency
+# primitive: "does this already exist" without treating "no" as an error.
+lookup() {
+  local method="$1" url="$2" ok="$3" notfound="$4"
+  shift 4
+  local response status body
+  response="$(curl -sS -w '\n%{http_code}' -X "${method}" "${url}" "$@")"
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  if [ "${status}" = "${ok}" ]; then
+    echo "${body}"
+    return 0
+  elif [ "${status}" = "${notfound}" ]; then
+    return 1
+  fi
+  {
+    echo "!! ${method} ${url} -> HTTP ${status}, expected ${ok} or ${notfound}"
+    echo "!! Response body:"
+    echo "${body}" | (jq . 2>/dev/null || cat)
+  } | tee -a "${LOG_FILE}" >&2
+  exit 1
+}
+
+# The JWT's own "sub" claim, for the actor-attribution fields ServiceZone/
+# DeliveryTariff authoring ask for explicitly (every other endpoint below
+# resolves the actor from the token itself, server-side).
+jwt_subject() {
+  local token="$1" payload pad
+  payload="$(echo "${token}" | cut -d. -f2 | tr '_-' '/+')"
+  pad=$(( (4 - ${#payload} % 4) % 4 ))
+  payload="${payload}$(printf '%.0s=' $(seq 1 "${pad}" 2>/dev/null || true))"
+  echo "${payload}" | base64 -d 2>/dev/null | jq -r .sub
+}
+
+# ---------------------------------------------------------------------------
+# State file: the ids this script created that no HTTP GET can rediscover
+# ---------------------------------------------------------------------------
+
+TENANT_SLUG="$(dval .tenant.slug)"
+STATE_DIR="${SCRIPT_DIR}/seed-data/.state"
+mkdir -p "${STATE_DIR}"
+API_HASH="$(printf '%s' "${API}" | shasum -a 256 2>/dev/null | cut -c1-12 || printf '%s' "${API}" | md5 | cut -c1-12)"
+STATE_FILE="${HORECAOS_SEED_STATE_FILE:-${STATE_DIR}/${TENANT_SLUG}.${API_HASH}.json}"
+
+if [ ! -f "${STATE_FILE}" ]; then
+  echo '{}' > "${STATE_FILE}"
+fi
+EXISTING_STATE_API="$(jq -r '.apiUrl // empty' "${STATE_FILE}")"
+if [ -n "${EXISTING_STATE_API}" ] && [ "${EXISTING_STATE_API}" != "${API}" ]; then
+  fail "state file ${STATE_FILE} was recorded against ${EXISTING_STATE_API}, not ${API} — refusing to reuse another environment's state. Pass HORECAOS_SEED_STATE_FILE explicitly if this is deliberate."
+fi
+
+# sset JQ_PATH VALUE -> writes VALUE (a string) at JQ_PATH in the state file
+sset() {
+  local path="$1" value="$2" tmp
+  tmp="$(mktemp)"
+  jq --arg v "${value}" "${path} = \$v" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
+}
+# sget JQ_PATH -> the value at JQ_PATH, or empty
+sget() { jq -r "${1} // empty" "${STATE_FILE}"; }
+
+sset '.apiUrl' "${API}"
+sset '.tenantSlug' "${TENANT_SLUG}"
+
+# ---------------------------------------------------------------------------
+# Phase 1: platform-admin credentials
+# ---------------------------------------------------------------------------
+
+section "Phase 1: platform-admin credentials"
+
+if [ -n "${HORECAOS_SEED_PLATFORM_ADMIN_TOKEN:-}" ]; then
+  ADMIN_TOKEN="${HORECAOS_SEED_PLATFORM_ADMIN_TOKEN}"
+  evidence "using HORECAOS_SEED_PLATFORM_ADMIN_TOKEN supplied directly"
+else
+  KC="${HORECAOS_KEYCLOAK_URL:-http://localhost:8081}"
+  KC_REALM="${HORECAOS_KEYCLOAK_REALM:-horecaos}"
+  KC_CLIENT_ID="${HORECAOS_KEYCLOAK_CLIENT_ID:-horecaos-local-dev}"
+  KC_CLIENT_SECRET="${HORECAOS_KEYCLOAK_CLIENT_SECRET:-}"
+  ADMIN_USERNAME="${HORECAOS_SEED_PLATFORM_ADMIN_USERNAME:-}"
+  ADMIN_PASSWORD="${HORECAOS_SEED_PLATFORM_ADMIN_PASSWORD:-}"
+
+  [ -n "${ADMIN_USERNAME}" ] && [ -n "${ADMIN_PASSWORD}" ] || fail \
+    "Set HORECAOS_SEED_PLATFORM_ADMIN_TOKEN, or HORECAOS_SEED_PLATFORM_ADMIN_USERNAME + HORECAOS_SEED_PLATFORM_ADMIN_PASSWORD (and HORECAOS_KEYCLOAK_CLIENT_SECRET, if the client needs one) for a password-grant token. See docs/runbooks/seed-horecaos-tenant.md."
+
+  ADMIN_TOKEN="$(curl -sS -X POST "${KC}/realms/${KC_REALM}/protocol/openid-connect/token" \
+    -d "client_id=${KC_CLIENT_ID}" \
+    ${KC_CLIENT_SECRET:+-d "client_secret=${KC_CLIENT_SECRET}"} \
+    -d "grant_type=password" -d "username=${ADMIN_USERNAME}" -d "password=${ADMIN_PASSWORD}" \
+    | jq -r .access_token)"
+  [ -n "${ADMIN_TOKEN}" ] && [ "${ADMIN_TOKEN}" != "null" ] || fail "could not acquire a platform-admin token via password grant as ${ADMIN_USERNAME}"
+  evidence "platform-admin token acquired via password grant as ${ADMIN_USERNAME}"
+fi
+
+ADMIN_SUBJECT="$(jwt_subject "${ADMIN_TOKEN}")"
+[ -n "${ADMIN_SUBJECT}" ] && [ "${ADMIN_SUBJECT}" != "null" ] || fail "could not read a 'sub' claim from the platform-admin token"
+evidence "platform-admin subject: ${ADMIN_SUBJECT}"
+
+AUTH_HEADER="Authorization: Bearer ${ADMIN_TOKEN}"
+JSON_HEADER="Content-Type: application/json"
+
+# ---------------------------------------------------------------------------
+# Phase 2: tenant, brand, locations
+# ---------------------------------------------------------------------------
+
+section "Phase 2: tenant, brand, locations"
+
+CP="${API}/api/v1/control-plane"
+
+if TENANT_JSON="$(lookup GET "${CP}/tenants/by-slug/${TENANT_SLUG}" 200 404 -H "${AUTH_HEADER}")"; then
+  TENANT_ID="$(echo "${TENANT_JSON}" | jq -r .id)"
+  evidence "tenant ${TENANT_SLUG} already exists: ${TENANT_ID} (status=$(echo "${TENANT_JSON}" | jq -r .status)) — reusing"
+else
+  TENANT_JSON="$(req POST "${CP}/tenants" 201 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.tenant | {slug, legalName, displayName, defaultCurrency, defaultTimezone, customerIdentityMode}')")"
+  TENANT_ID="$(echo "${TENANT_JSON}" | jq -r .id)"
+  evidence "tenant ${TENANT_SLUG} created: ${TENANT_ID}"
+fi
+
+BRAND_CODE="$(dval .brand.code)"
+BRANDS_JSON="$(req GET "${CP}/tenants/${TENANT_ID}/brands" 200 -H "${AUTH_HEADER}")"
+BRAND_ID="$(echo "${BRANDS_JSON}" | jq -r --arg c "${BRAND_CODE}" '.[] | select(.code==$c) | .id')"
+if [ -z "${BRAND_ID}" ]; then
+  BRAND_JSON="$(req POST "${CP}/tenants/${TENANT_ID}/brands" 201 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.brand')")"
+  BRAND_ID="$(echo "${BRAND_JSON}" | jq -r .id)"
+  evidence "brand ${BRAND_CODE} created: ${BRAND_ID}"
+else
+  evidence "brand ${BRAND_CODE} already exists: ${BRAND_ID} — reusing"
+fi
+
+# A brand is created DRAFT and nothing else in the platform moves it to
+# ACTIVE (a real gap this seed found — see the runbook's "Backend changes"
+# note). Pickup-location discovery and other customer-facing reads require
+# it. Idempotent: a no-op when already ACTIVE, so safe every run.
+req POST "${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/activate" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" > /dev/null
+evidence "brand ${BRAND_CODE} ACTIVE"
+
+LOCATIONS_JSON="$(req GET "${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations" 200 -H "${AUTH_HEADER}")"
+LOCATION_COUNT="$(dval '.locations | length')"
+declare -a LOCATION_CODES=()
+for i in $(seq 0 $((LOCATION_COUNT - 1))); do
+  LOC="$(dobj ".locations[${i}]")"
+  LOC_CODE="$(echo "${LOC}" | jq -r .code)"
+  LOCATION_CODES+=("${LOC_CODE}")
+
+  LOCATION_ID="$(echo "${LOCATIONS_JSON}" | jq -r --arg c "${LOC_CODE}" '.[] | select(.code==$c) | .id')"
+  if [ -z "${LOCATION_ID}" ]; then
+    LOCATION_JSON="$(req POST "${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations" 201 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(echo "${LOC}" | jq -c '{code, slug, displayName, timezone}')")"
+    LOCATION_ID="$(echo "${LOCATION_JSON}" | jq -r .id)"
+    evidence "location ${LOC_CODE} created: ${LOCATION_ID}"
+  else
+    evidence "location ${LOC_CODE} already exists: ${LOCATION_ID} — reusing"
+  fi
+
+  # Always re-asserted: idempotent by nature (a whole-object PUT), and it is
+  # exactly the kind of drift (a corrected address, a re-pinned point) an
+  # operator would want reconciled on every run rather than only the first.
+  req PUT "${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/place" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(echo "${LOC}" | jq -c '{addressLine, district, city, landmark, contactPhone, latitude, longitude, coordinateSource:"MERCHANT_PIN"}')" > /dev/null
+  evidence "location ${LOC_CODE} place reconciled (${LOC_CODE})"
+
+  # Same DRAFT gap as the brand, one level down. Idempotent: a no-op when
+  # already ACTIVE.
+  req POST "${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/activate" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" > /dev/null
+  evidence "location ${LOC_CODE} ACTIVE"
+
+  sset ".locationIds[\"${LOC_CODE}\"]" "${LOCATION_ID}"
+done
+
+# ---------------------------------------------------------------------------
+# Phase 3: onboarding run (start once; reused every later run)
+# ---------------------------------------------------------------------------
+
+section "Phase 3: onboarding run"
+
+run_current() { lookup GET "${CP}/tenants/${TENANT_ID}/onboarding-runs/current" 200 404 -H "${AUTH_HEADER}"; }
+run_view() { req GET "${CP}/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}" 200 -H "${AUTH_HEADER}"; }
+
+wait_for_run_status() {
+  local wanted="$1" timeout="${2:-90}" elapsed=0 status view
+  while [ "${elapsed}" -lt "${timeout}" ]; do
+    view="$(run_view)"
+    status="$(echo "${view}" | jq -r .run.status)"
+    if echo "${wanted}" | tr ',' '\n' | grep -qx "${status}"; then
+      echo "${view}"
+      return 0
+    fi
+    sleep 4
+    elapsed=$((elapsed + 4))
+  done
+  echo "${view}" | tee -a "${LOG_FILE}"
+  fail "onboarding run ${RUN_ID} did not reach status [${wanted}] within ${timeout}s (last seen: ${status})"
+}
+
+if RUN_JSON="$(run_current)"; then
+  RUN_ID="$(echo "${RUN_JSON}" | jq -r .run.id)"
+  evidence "onboarding run already exists: ${RUN_ID} (status=$(echo "${RUN_JSON}" | jq -r .run.status)) — reusing"
+else
+  OWNER_EMAIL="$(dval .tenant.ownerEmail)"
+  RUN_START_JSON="$(req POST "${CP}/tenants/${TENANT_ID}/onboarding-runs" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg email "${OWNER_EMAIL}" '{ownerEmail:$email}')")"
+  RUN_ID="$(echo "${RUN_START_JSON}" | jq -r .runId)"
+  evidence "onboarding run ${RUN_ID} started, owner email ${OWNER_EMAIL} (default template resolved automatically)"
+
+  log "waiting for TENANT_OWNER_LINK_OR_INVITE"
+  OWNER_SUBJECT="" ELAPSED=0
+  while [ "${ELAPSED}" -lt 60 ]; do
+    VIEW="$(run_view)"
+    STEP="$(echo "${VIEW}" | jq -r '.steps[] | select(.stepKey=="TENANT_OWNER_LINK_OR_INVITE")')"
+    if [ "$(echo "${STEP}" | jq -r .status)" = "COMPLETED" ]; then
+      OWNER_SUBJECT="$(echo "${STEP}" | jq -r .externalReference)"
+      break
+    fi
+    sleep 4
+    ELAPSED=$((ELAPSED + 4))
+  done
+  [ -n "${OWNER_SUBJECT}" ] && [ "${OWNER_SUBJECT}" != "null" ] || fail "TENANT_OWNER_LINK_OR_INVITE never completed"
+  evidence "owner ${OWNER_EMAIL} linked/invited, Keycloak subject ${OWNER_SUBJECT} (this script never signs in as them)"
+
+  log "waiting for DEFAULT_CONFIGURATION_APPLY"
+  ELAPSED=0 APPLIED=""
+  while [ "${ELAPSED}" -lt 60 ]; do
+    VIEW="$(run_view)"
+    STEP="$(echo "${VIEW}" | jq -r '.steps[] | select(.stepKey=="DEFAULT_CONFIGURATION_APPLY")')"
+    if [ "$(echo "${STEP}" | jq -r .status)" = "COMPLETED" ]; then
+      APPLIED="true"
+      break
+    fi
+    sleep 4
+    ELAPSED=$((ELAPSED + 4))
+  done
+  [ "${APPLIED}" = "true" ] || fail "DEFAULT_CONFIGURATION_APPLY never completed"
+  evidence "platform default configuration applied"
+fi
+
+# ---------------------------------------------------------------------------
+# Phase 4: legal entity, rediscovered by code
+# ---------------------------------------------------------------------------
+
+section "Phase 4: legal entity"
+
+LE_CODE="$(dval .legalEntity.code)"
+LEGAL_ENTITIES_JSON="$(req GET "${CP}/tenants/${TENANT_ID}/legal-entities" 200 -H "${AUTH_HEADER}")"
+LEGAL_ENTITY_ID="$(echo "${LEGAL_ENTITIES_JSON}" | jq -r --arg c "${LE_CODE}" '.[] | select(.code==$c) | .id')"
+
+if [ -z "${LEGAL_ENTITY_ID}" ]; then
+  LE_JSON="$(req POST "${CP}/tenants/${TENANT_ID}/legal-entities" 201 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.legalEntity')")"
+  LEGAL_ENTITY_ID="$(echo "${LE_JSON}" | jq -r .id)"
+  LE_VERSION="$(echo "${LE_JSON}" | jq -r .version)"
+  req POST "${CP}/tenants/${TENANT_ID}/legal-entities/${LEGAL_ENTITY_ID}/activate?expectedVersion=${LE_VERSION}" 200 -H "${AUTH_HEADER}" -H "Idempotency-Key: $(idemp)" > /dev/null
+  evidence "legal entity ${LE_CODE} registered and activated: ${LEGAL_ENTITY_ID}"
+else
+  evidence "legal entity ${LE_CODE} already exists: ${LEGAL_ENTITY_ID} — reusing"
+fi
+
+TODAY="$(date +%Y-%m-%d)"
+for LOC_CODE in "${LOCATION_CODES[@]}"; do
+  LOCATION_ID="$(sget ".locationIds[\"${LOC_CODE}\"]")"
+  HISTORY_JSON="$(req GET "${CP}/tenants/${TENANT_ID}/legal-entities/brands/${BRAND_ID}/locations/${LOCATION_ID}/assignments" 200 -H "${AUTH_HEADER}")"
+  OPEN_ASSIGNMENT="$(echo "${HISTORY_JSON}" | jq -r --arg le "${LEGAL_ENTITY_ID}" \
+    '[.[] | select(.legalEntityId==$le and .effectiveUntil==null)] | length')"
+  if [ "${OPEN_ASSIGNMENT}" = "0" ]; then
+    req POST "${CP}/tenants/${TENANT_ID}/legal-entities/${LEGAL_ENTITY_ID}/assignments" 201 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --arg b "${BRAND_ID}" --arg l "${LOCATION_ID}" --arg d "${TODAY}" '{brandId:$b, locationId:$l, effectiveFrom:$d}')" > /dev/null
+    evidence "legal entity assigned as seller of location ${LOC_CODE}"
+  else
+    evidence "legal entity already assigned as seller of location ${LOC_CODE} — reusing"
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Phase 5: catalog, categories, products (skip once recorded in state)
+# ---------------------------------------------------------------------------
+
+section "Phase 5: catalog authoring"
+
+CAT_BASE="${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog"
+PRIMARY_LOCALE="$(dval .catalog.primaryLocale)"
+
+CATALOG_ID="$(sget '.catalogId')"
+if [ -z "${CATALOG_ID}" ]; then
+  CATALOG_JSON="$(req POST "${CAT_BASE}/catalogs" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -c --arg locale "${PRIMARY_LOCALE}" '.catalog | {code, name, locale: $locale}' "${DATA_FILE}")")"
+  CATALOG_ID="$(echo "${CATALOG_JSON}" | jq -r .id)"
+  sset '.catalogId' "${CATALOG_ID}"
+  evidence "catalog created: ${CATALOG_ID}"
+else
+  evidence "catalog already recorded in state: ${CATALOG_ID} — skipping creation"
+fi
+
+CATEGORY_COUNT="$(dval '.categories | length')"
+for i in $(seq 0 $((CATEGORY_COUNT - 1))); do
+  CAT="$(dobj ".categories[${i}]")"
+  CAT_CODE="$(echo "${CAT}" | jq -r .code)"
+  CATEGORY_ID="$(sget ".categoryIds[\"${CAT_CODE}\"]")"
+  if [ -n "${CATEGORY_ID}" ]; then
+    log "category ${CAT_CODE} already recorded (${CATEGORY_ID}) — skipping"
+    continue
+  fi
+
+  NAME="$(echo "${CAT}" | jq -r --arg l "${PRIMARY_LOCALE}" '.names[$l]')"
+  SORT="$(echo "${CAT}" | jq -r .sortOrder)"
+  CATEGORY_JSON="$(req POST "${CAT_BASE}/catalogs/${CATALOG_ID}/categories" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg code "${CAT_CODE}" --arg name "${NAME}" --arg locale "${PRIMARY_LOCALE}" --argjson sort "${SORT}" \
+        '{code:$code, name:$name, locale:$locale, sortOrder:$sort}')")"
+  CATEGORY_ID="$(echo "${CATEGORY_JSON}" | jq -r .id)"
+  sset ".categoryIds[\"${CAT_CODE}\"]" "${CATEGORY_ID}"
+  evidence "category ${CAT_CODE} created: ${CATEGORY_ID}"
+
+  for LOCALE in $(echo "${CAT}" | jq -r '.names | keys[]'); do
+    [ "${LOCALE}" = "${PRIMARY_LOCALE}" ] && continue
+    TNAME="$(echo "${CAT}" | jq -r --arg l "${LOCALE}" '.names[$l]')"
+    req PUT "${CAT_BASE}/translations" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --arg t "CATEGORY" --arg id "${CATEGORY_ID}" --arg l "${LOCALE}" --arg n "${TNAME}" \
+          '{entityType:$t, entityId:$id, locale:$l, name:$n}')" > /dev/null
+  done
+done
+evidence "categories reconciled: $(dval '.categories | length') in seed data"
+
+PRODUCT_COUNT="$(dval '.products | length')"
+for i in $(seq 0 $((PRODUCT_COUNT - 1))); do
+  PROD="$(dobj ".products[${i}]")"
+  CODE="$(echo "${PROD}" | jq -r .code)"
+
+  PRODUCT_ID="$(sget ".productIds[\"${CODE}\"].productId")"
+  if [ -n "${PRODUCT_ID}" ]; then
+    log "product ${CODE} already recorded (${PRODUCT_ID}) — skipping"
+    continue
+  fi
+
+  NAME="$(echo "${PROD}" | jq -r --arg l "${PRIMARY_LOCALE}" '.names[$l].name')"
+  DESC="$(echo "${PROD}" | jq -r --arg l "${PRIMARY_LOCALE}" '.names[$l].description')"
+  UNIT="$(echo "${PROD}" | jq -r .unitCode)"
+  PROD_JSON="$(req POST "${CAT_BASE}/catalogs/${CATALOG_ID}/products" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg code "${CODE}" --arg name "${NAME}" --arg desc "${DESC}" --arg locale "${PRIMARY_LOCALE}" --arg sku "${CODE}" --arg unit "${UNIT}" \
+        '{code:$code, name:$name, description:$desc, locale:$locale, sku:$sku, unitCode:$unit}')")"
+  PRODUCT_ID="$(echo "${PROD_JSON}" | jq -r .productId)"
+  VARIANT_ID="$(echo "${PROD_JSON}" | jq -r .defaultVariantId)"
+  sset ".productIds[\"${CODE}\"].productId" "${PRODUCT_ID}"
+  sset ".productIds[\"${CODE}\"].variantId" "${VARIANT_ID}"
+  evidence "product ${CODE} created: product=${PRODUCT_ID} variant=${VARIANT_ID}"
+
+  CATEGORY_CODE="$(echo "${PROD}" | jq -r .category)"
+  CATEGORY_ID="$(sget ".categoryIds[\"${CATEGORY_CODE}\"]")"
+  SORT="$(echo "${PROD}" | jq -r .sortOrder)"
+  req PUT "${CAT_BASE}/categories/${CATEGORY_ID}/products/${PRODUCT_ID}" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --argjson sort "${SORT}" '{sortOrder:$sort}')" > /dev/null
+
+  for LOCALE in $(echo "${PROD}" | jq -r '.names | keys[]'); do
+    [ "${LOCALE}" = "${PRIMARY_LOCALE}" ] && continue
+    TNAME="$(echo "${PROD}" | jq -r --arg l "${LOCALE}" '.names[$l].name')"
+    TDESC="$(echo "${PROD}" | jq -r --arg l "${LOCALE}" '.names[$l].description')"
+    req PUT "${CAT_BASE}/translations" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --arg t "PRODUCT" --arg id "${PRODUCT_ID}" --arg l "${LOCALE}" --arg n "${TNAME}" --arg d "${TDESC}" \
+          '{entityType:$t, entityId:$id, locale:$l, name:$n, description:$d}')" > /dev/null
+  done
+
+  # Listed and marked available at every location (ADR 0017) — the new
+  # product must be orderable everywhere the menu is served, not only where
+  # it happened to be authored.
+  for LOC_CODE in "${LOCATION_CODES[@]}"; do
+    LOCATION_ID="$(sget ".locationIds[\"${LOC_CODE}\"]")"
+    req PUT "${CAT_BASE}/variants/${VARIANT_ID}/location-offerings/${LOCATION_ID}" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d '{"status":"AVAILABLE","fulfillmentModes":["PICKUP","DELIVERY"]}' > /dev/null
+    req POST "${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/inventory/stock-items" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --arg v "${VARIANT_ID}" '{variantId:$v, trackingMode:"BINARY"}')" > /dev/null
+    req PUT "${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/inventory/variants/${VARIANT_ID}/availability" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d '{"available":true,"reasonCode":"seed-horecaos-tenant"}' > /dev/null
+  done
+done
+evidence "products reconciled: ${PRODUCT_COUNT} in seed data"
+
+# ---------------------------------------------------------------------------
+# Phase 6: pricing (skip once recorded in state)
+# ---------------------------------------------------------------------------
+
+section "Phase 6: pricing"
+
+PB_BASE="${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing"
+PRICE_BOOK_ID="$(sget '.priceBookId')"
+
+if [ -z "${PRICE_BOOK_ID}" ]; then
+  PB_JSON="$(req POST "${PB_BASE}/price-books" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.priceBook')")"
+  PRICE_BOOK_ID="$(echo "${PB_JSON}" | jq -r .priceBookId)"
+  sset '.priceBookId' "${PRICE_BOOK_ID}"
+
+  PB_ASSIGN_JSON="$(req PUT "${PB_BASE}/price-books/${PRICE_BOOK_ID}/assignments/brand" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d '{"priority":100}')"
+  PB_VERSION="$(echo "${PB_ASSIGN_JSON}" | jq -r .version)"
+
+  for i in $(seq 0 $((PRODUCT_COUNT - 1))); do
+    PROD="$(dobj ".products[${i}]")"
+    CODE="$(echo "${PROD}" | jq -r .code)"
+    PRICE="$(echo "${PROD}" | jq -r .priceMinor)"
+    VARIANT_ID="$(sget ".productIds[\"${CODE}\"].variantId")"
+    PB_PRICE_JSON="$(req PUT "${PB_BASE}/price-books/${PRICE_BOOK_ID}/variant-prices/${VARIANT_ID}" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --argjson a "${PRICE}" '{amountMinor:$a}')")"
+    PB_VERSION="$(echo "${PB_PRICE_JSON}" | jq -r .version)"
+  done
+  evidence "priced ${PRODUCT_COUNT} variants in UZS (VAT-inclusive)"
+
+  req PUT "${PB_BASE}/tax-profiles/$(dval .taxProfile.jurisdictionCode)" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.taxProfile | {mode, rateBasisPoints}')" > /dev/null
+  evidence "tax profile $(dval .taxProfile.jurisdictionCode) set: $(dval .taxProfile.rateBasisPoints) bp inclusive"
+
+  PB_ACT="$(req POST "${PB_BASE}/price-books/${PRICE_BOOK_ID}/activation" 200 -H "${AUTH_HEADER}" -H "If-Match: ${PB_VERSION}" -H "Idempotency-Key: $(idemp)")"
+  evidence "price book ${PRICE_BOOK_ID} ACTIVE: $(echo "${PB_ACT}" | jq -c '{status,currency,priority}')"
+else
+  evidence "price book already recorded in state: ${PRICE_BOOK_ID} — skipping authoring"
+fi
+
+# ---------------------------------------------------------------------------
+# Phase 7: delivery tariff and zones (skip once recorded in state)
+# ---------------------------------------------------------------------------
+
+section "Phase 7: delivery serviceability"
+
+DELIVERY_BASE="${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}"
+TARIFF_ID="$(sget '.deliveryTariffId')"
+
+if [ -z "${TARIFF_ID}" ]; then
+  TARIFF_JSON="$(req POST "${DELIVERY_BASE}/delivery-tariffs" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.delivery.tariff | {code, name, brandDefault:true}')")"
+  TARIFF_ID="$(echo "${TARIFF_JSON}" | jq -r .tariffId)"
+  sset '.deliveryTariffId' "${TARIFF_ID}"
+
+  DRAFT_JSON="$(req POST "${DELIVERY_BASE}/delivery-tariffs/${TARIFF_ID}/versions" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -c --arg actor "${ADMIN_SUBJECT}" \
+        '.delivery.tariff | {currency, feeSource, distanceMode, roadFactorBasisPoints, maxDistanceMeters, minFeeMinor, maxFeeMinor, distanceAccrual, feeRoundingStepMinor, feeRoundingRule, bands, actorId: $actor}' "${DATA_FILE}")")"
+  TARIFF_VERSION="$(echo "${DRAFT_JSON}" | jq -r .version)"
+  req POST "${DELIVERY_BASE}/delivery-tariffs/${TARIFF_ID}/versions/${TARIFF_VERSION}/activate" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg actor "${ADMIN_SUBJECT}" '{actorId:$actor}')" > /dev/null
+  evidence "delivery tariff $(dval .delivery.tariff.code) ACTIVE: ${TARIFF_ID} v${TARIFF_VERSION}"
+else
+  evidence "delivery tariff already recorded in state: ${TARIFF_ID} — skipping authoring"
+fi
+
+RADIUS="$(dval .delivery.zoneRadiusMeters)"
+for LOC_CODE in "${LOCATION_CODES[@]}"; do
+  ZONE_ID="$(sget ".deliveryZoneIds[\"${LOC_CODE}\"]")"
+  if [ -n "${ZONE_ID}" ]; then
+    log "delivery zone for ${LOC_CODE} already recorded (${ZONE_ID}) — skipping"
+    continue
+  fi
+  LOCATION_ID="$(sget ".locationIds[\"${LOC_CODE}\"]")"
+
+  ZONE_JSON="$(req POST "${DELIVERY_BASE}/service-zones" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg code "${LOC_CODE}-DELIVERY" \
+        --arg ru "Зона доставки HorecaOS — ${LOC_CODE}" \
+        --arg uz "HorecaOS yetkazib berish zonasi — ${LOC_CODE}" \
+        --arg en "HorecaOS delivery zone — ${LOC_CODE}" \
+        '{role:"DELIVERY", code:$code, displayNameRu:$ru, displayNameUz:$uz, displayNameEn:$en}')")"
+  ZONE_ID="$(echo "${ZONE_JSON}" | jq -r .zoneId)"
+
+  ZONE_DRAFT_JSON="$(req POST "${DELIVERY_BASE}/service-zones/${ZONE_ID}/versions" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg loc "${LOCATION_ID}" --argjson radius "${RADIUS}" --arg currency "$(dval .delivery.tariff.currency)" \
+        --arg tariff "${TARIFF_ID}" --arg actor "${ADMIN_SUBJECT}" \
+        '{circle:{originLocationId:$loc, radiusMeters:$radius}, priority:100, currency:$currency, deliveryTariffId:$tariff, actorId:$actor}')")"
+  ZONE_VERSION="$(echo "${ZONE_DRAFT_JSON}" | jq -r .version)"
+
+  req POST "${DELIVERY_BASE}/service-zones/${ZONE_ID}/versions/${ZONE_VERSION}/activate" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg actor "${ADMIN_SUBJECT}" '{actorId:$actor}')" > /dev/null
+  req POST "${DELIVERY_BASE}/service-zones/${ZONE_ID}/locations" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(jq -n --arg l "${LOCATION_ID}" '{locationId:$l}')" > /dev/null
+
+  sset ".deliveryZoneIds[\"${LOC_CODE}\"]" "${ZONE_ID}"
+  evidence "delivery zone for ${LOC_CODE} ACTIVE and bound: ${ZONE_ID} (${RADIUS}m radius)"
+done
+
+# ---------------------------------------------------------------------------
+# Phase 8: sales channel (always reconciled)
+# ---------------------------------------------------------------------------
+
+section "Phase 8: sales channel"
+
+CHANNEL_CODE="$(dval .channel.code)"
+CHANNELS_JSON="$(req GET "${CP}/tenants/${TENANT_ID}/sales-channels" 200 -H "${AUTH_HEADER}")"
+CHANNEL_ID="$(echo "${CHANNELS_JSON}" | jq -r --arg c "${CHANNEL_CODE}" '.[] | select(.code==$c) | .id')"
+[ -n "${CHANNEL_ID}" ] && [ "${CHANNEL_ID}" != "null" ] || fail "no ${CHANNEL_CODE} channel found — StorefrontChannelSeeder should have created one on TenantCreated"
+CHANNEL_VERSION="$(echo "${CHANNELS_JSON}" | jq -r --arg c "${CHANNEL_CODE}" '.[] | select(.code==$c) | .version')"
+
+req PUT "${CP}/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/payment-methods?expectedVersion=${CHANNEL_VERSION}" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+  -d "$(dobj '.channel.paymentMethods')" > /dev/null
+CHANNEL_VERSION=$((CHANNEL_VERSION + 1))
+req PUT "${CP}/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/fulfillment-modes?expectedVersion=${CHANNEL_VERSION}" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+  -d "$(dobj '.channel.fulfillmentModes')" > /dev/null
+CHANNEL_VERSION=$((CHANNEL_VERSION + 1))
+
+LOCATION_IDS_JSON="[]"
+for LOC_CODE in "${LOCATION_CODES[@]}"; do
+  LOC_ID_FOR_CHANNEL="$(sget ".locationIds[\"${LOC_CODE}\"]")"
+  LOCATION_IDS_JSON="$(echo "${LOCATION_IDS_JSON}" | jq -c --arg l "${LOC_ID_FOR_CHANNEL}" '. + [$l]')"
+done
+req PUT "${CP}/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/locations?expectedVersion=${CHANNEL_VERSION}" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --argjson ids "${LOCATION_IDS_JSON}" '{locationIds:$ids}')" > /dev/null
+evidence "${CHANNEL_CODE} channel reconciled: $(dobj '.channel.paymentMethods'), $(dobj '.channel.fulfillmentModes'), bound to ${#LOCATION_CODES[@]} location(s)"
+
+# ---------------------------------------------------------------------------
+# Phase 9: service schedule (create once) and bindings (always reconciled)
+# ---------------------------------------------------------------------------
+
+section "Phase 9: service schedule"
+
+SCHEDULE_BASE="${CP}/tenants/${TENANT_ID}/brands/${BRAND_ID}/service-schedules"
+SCHEDULE_ID="$(sget '.serviceScheduleId')"
+if [ -z "${SCHEDULE_ID}" ]; then
+  SCHED_JSON="$(req POST "${SCHEDULE_BASE}" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d "$(dobj '.serviceSchedule')")"
+  SCHEDULE_ID="$(echo "${SCHED_JSON}" | jq -r .id)"
+  sset '.serviceScheduleId' "${SCHEDULE_ID}"
+  evidence "service schedule created: ${SCHEDULE_ID}"
+else
+  evidence "service schedule already recorded in state: ${SCHEDULE_ID} — skipping creation"
+fi
+
+for LOC_CODE in "${LOCATION_CODES[@]}"; do
+  LOCATION_ID="$(sget ".locationIds[\"${LOC_CODE}\"]")"
+  for MODE in PICKUP DELIVERY; do
+    req PUT "${API}/api/v1/operations/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/service-bindings" 204 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+      -d "$(jq -n --arg s "${SCHEDULE_ID}" --arg m "${MODE}" '{fulfillmentMode:$m, scheduleId:$s}')" > /dev/null
+  done
+done
+evidence "schedule bound to ${#LOCATION_CODES[@]} location(s) for PICKUP and DELIVERY"
+
+# ---------------------------------------------------------------------------
+# Phase 10: publish (always — a fresh snapshot every run)
+# ---------------------------------------------------------------------------
+
+section "Phase 10: catalog publication"
+
+PUB_JSON="$(req POST "${CAT_BASE}/catalogs/${CATALOG_ID}/publications?channel=${CHANNEL_CODE}" 200 -H "${AUTH_HEADER}" -H "Idempotency-Key: $(idemp)")"
+PUB_STATUS="$(echo "${PUB_JSON}" | jq -r .status)"
+[ "${PUB_STATUS}" = "PUBLISHED" ] || fail "catalog publication did not succeed: ${PUB_JSON}"
+evidence "catalog PUBLISHED on ${CHANNEL_CODE} (publicationId=$(echo "${PUB_JSON}" | jq -r .publicationId)); findings: $(echo "${PUB_JSON}" | jq -c '.validation.findings')"
+
+# ---------------------------------------------------------------------------
+# Phase 11: resume and activate
+# ---------------------------------------------------------------------------
+
+section "Phase 11: onboarding resume and activation"
+
+TENANT_STATUS="$(req GET "${CP}/tenants/${TENANT_ID}" 200 -H "${AUTH_HEADER}" | jq -r .status)"
+if [ "${TENANT_STATUS}" = "ACTIVE" ]; then
+  # Already fully onboarded — resume/activate are documented as safe to call
+  # again ("activating twice produces one transition"), but there is no
+  # reason to call either on a tenant already at rest, and skipping means a
+  # reconcile run never depends on the run-status scheduler ticking at all.
+  evidence "tenant already ACTIVE — skipping onboarding resume/activation entirely"
+else
+  req POST "${CP}/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/resume" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d '{"reason":"tools/seed-horecaos-tenant: configuration reconciled"}' > /dev/null
+
+  VIEW="$(wait_for_run_status "READY,FAILED" 120)"
+  echo "${VIEW}" | jq . >> "${LOG_FILE}"
+  RUN_STATUS="$(echo "${VIEW}" | jq -r .run.status)"
+  if [ "${RUN_STATUS}" != "READY" ]; then
+    fail "onboarding run did not reach READY: $(echo "${VIEW}" | jq -c '[.steps[] | select(.status=="FAILED") | {stepKey, errorCode, lastError}]')"
+  fi
+  evidence "onboarding run ${RUN_ID} is READY"
+
+  ACTIVATE_JSON="$(req POST "${CP}/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/activate" 200 -H "${AUTH_HEADER}" -H "${JSON_HEADER}" -H "Idempotency-Key: $(idemp)" \
+    -d '{"reason":"tools/seed-horecaos-tenant"}')"
+  [ "$(echo "${ACTIVATE_JSON}" | jq -r .activated)" = "true" ] || fail "activation did not succeed: ${ACTIVATE_JSON}"
+  evidence "tenant activation outcome: $(echo "${ACTIVATE_JSON}" | jq -r .outcome)"
+  TENANT_STATUS="$(req GET "${CP}/tenants/${TENANT_ID}" 200 -H "${AUTH_HEADER}" | jq -r .status)"
+fi
+[ "${TENANT_STATUS}" = "ACTIVE" ] || fail "tenant status is ${TENANT_STATUS}, expected ACTIVE"
+evidence "tenant ${TENANT_ID} is ACTIVE"
+
+# ---------------------------------------------------------------------------
+# Phase 12: verify the anonymous storefront answers
+# ---------------------------------------------------------------------------
+
+section "Phase 12: storefront verification"
+
+FIRST_LOCATION_CODE="${LOCATION_CODES[0]}"
+FIRST_LOCATION_ID="$(sget ".locationIds[\"${FIRST_LOCATION_CODE}\"]")"
+FIRST_LOCATION_LAT="$(dval ".locations[] | select(.code==\"${FIRST_LOCATION_CODE}\") | .latitude")"
+FIRST_LOCATION_LON="$(dval ".locations[] | select(.code==\"${FIRST_LOCATION_CODE}\") | .longitude")"
+
+SF="${API}/api/v1/storefront/tenants/${TENANT_ID}/brands/${BRAND_ID}"
+
+MENU_JSON="$(req GET "${SF}/locations/${FIRST_LOCATION_ID}/menu?locale=uz&channel=${CHANNEL_CODE}" 200)"
+MENU_ITEM_COUNT="$(echo "${MENU_JSON}" | jq '.products | length')"
+[ "${MENU_ITEM_COUNT}" -ge 1 ] || fail "the published menu at ${FIRST_LOCATION_CODE} has no products"
+evidence "GET .../menu?locale=uz -> ${MENU_ITEM_COUNT} products, e.g. $(echo "${MENU_JSON}" | jq -c '.products[0] | {code,name,variants: (.variants | map({sku,amountMinor}))}')"
+
+PICKUP_JSON="$(req GET "${API}/api/v1/storefront/pickup-locations?lat=${FIRST_LOCATION_LAT}&lon=${FIRST_LOCATION_LON}&limit=20" 200)"
+PICKUP_COUNT="$(echo "${PICKUP_JSON}" | jq '.locations | length')"
+OUR_LOCATION_LISTED="$(echo "${PICKUP_JSON}" | jq -r --arg id "${FIRST_LOCATION_ID}" '[.locations[] | select(.locationId==$id)] | length')"
+[ "${OUR_LOCATION_LISTED}" -ge 1 ] || fail "pickup-locations near ${FIRST_LOCATION_CODE}'s own point did not list ${FIRST_LOCATION_CODE} (${FIRST_LOCATION_ID}) among ${PICKUP_COUNT} result(s)"
+evidence "GET .../pickup-locations near ${FIRST_LOCATION_CODE} -> ${PICKUP_COUNT} branch(es) listed, including ${FIRST_LOCATION_CODE} itself"
+
+FEE_JSON="$(req GET "${SF}/locations/${FIRST_LOCATION_ID}/delivery-fee?lat=${FIRST_LOCATION_LAT}&lon=${FIRST_LOCATION_LON}&currency=UZS" 200)"
+evidence "GET .../delivery-fee at the branch's own point -> $(echo "${FEE_JSON}" | jq -c .)"
+
+SERVICEABILITY_PICKUP_JSON="$(req GET "${SF}/locations/${FIRST_LOCATION_ID}/serviceability?channel=${CHANNEL_CODE}&mode=PICKUP" 200)"
+evidence "GET .../serviceability?mode=PICKUP -> $(echo "${SERVICEABILITY_PICKUP_JSON}" | jq -c .)"
+
+SERVICEABILITY_DELIVERY_JSON="$(req GET "${SF}/locations/${FIRST_LOCATION_ID}/serviceability?channel=${CHANNEL_CODE}&mode=DELIVERY" 200)"
+evidence "GET .../serviceability?mode=DELIVERY -> $(echo "${SERVICEABILITY_DELIVERY_JSON}" | jq -c .)"
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+section "Summary"
+
+cat <<SUMMARY | tee -a "${LOG_FILE}"
+tenant:          ${TENANT_ID} (${TENANT_SLUG}) — ${TENANT_STATUS}
+brand:           ${BRAND_ID} (${BRAND_CODE})
+locations:       ${#LOCATION_CODES[@]} (${LOCATION_CODES[*]})
+onboarding run:  ${RUN_ID} — READY, activated
+legal entity:    ${LEGAL_ENTITY_ID}
+catalog:         ${CATALOG_ID}, ${PRODUCT_COUNT} products, publication PUBLISHED
+price book:      ${PRICE_BOOK_ID}
+delivery tariff: ${TARIFF_ID}
+menu at ${FIRST_LOCATION_CODE}: ${MENU_ITEM_COUNT} products, ${PICKUP_COUNT} pickup branch(es) nearby
+
+State file:      ${STATE_FILE}
+Full log:        ${LOG_FILE}
+SUMMARY
+
+log "Seed complete."

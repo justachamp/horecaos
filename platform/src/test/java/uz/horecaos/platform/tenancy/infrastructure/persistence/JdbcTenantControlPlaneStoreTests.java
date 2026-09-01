@@ -104,6 +104,13 @@ class JdbcTenantControlPlaneStoreTests {
                 .get()
                 .extracting(saved -> saved.keycloakOrganizationId().orElseThrow())
                 .isEqualTo("keycloak-organization-a");
+        assertThat(store.findTenantBySlug(tenant.slug()))
+                .as("idempotent provisioning tooling looks a tenant up by its fixed slug, not a "
+                        + "freshly-generated id it does not have yet")
+                .get()
+                .extracting(Tenant::id)
+                .isEqualTo(tenant.id());
+        assertThat(store.findTenantBySlug(new Slug("no-such-tenant"))).isEmpty();
         assertThat(store.findCurrentCustomerIdentityMode(tenant.id(), NOW))
                 .contains(CustomerIdentityMode.TENANT_SHARED);
         assertThat(store.findBrands(tenant.id()))
@@ -352,6 +359,55 @@ class JdbcTenantControlPlaneStoreTests {
                         .param("brandId", brand.id().value())
                         .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void persistsBrandAndLocationActivation() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120290", "tenant-activation");
+        store.insertTenant(tenant);
+
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120291")),
+                tenant.id(),
+                "BRAND_ACT",
+                new Slug("brand-act"),
+                "Brand Activation");
+        store.insertBrand(brand);
+
+        Location location = Location.draft(
+                new LocationId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120292")),
+                tenant.id(),
+                brand.id(),
+                "LOC_ACT",
+                new Slug("loc-act"),
+                "Location Activation",
+                ZoneId.of("Asia/Tashkent"));
+        store.insertLocation(location);
+
+        assertThat(store.findBrand(tenant.id(), brand.id()))
+                .get()
+                .extracting(Brand::status)
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.DRAFT);
+        assertThat(store.findLocations(brand))
+                .singleElement()
+                .extracting(Location::status)
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.DRAFT);
+
+        brand.activate();
+        store.updateBrandStatus(brand);
+        location.activate();
+        store.updateLocationStatus(location);
+
+        assertThat(store.findBrand(tenant.id(), brand.id()))
+                .as("pickup-location discovery and other reads require ACTIVE explicitly, so the "
+                        + "write must actually reach the row, not just the in-memory aggregate")
+                .get()
+                .extracting(Brand::status)
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+        assertThat(store.findLocations(brand))
+                .singleElement()
+                .extracting(Location::status)
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
     }
 
     private static Tenant tenant(String id, String slug) {

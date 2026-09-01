@@ -85,6 +85,19 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     }
 
     @Override
+    public Optional<Tenant> findTenantBySlug(Slug slug) {
+        return jdbc.sql("""
+                        SELECT id, slug, legal_name, display_name, default_currency,
+                               default_timezone, keycloak_organization_id, status
+                        FROM tenant.tenants
+                        WHERE slug = :slug
+                        """)
+                .param("slug", slug.value())
+                .query(JdbcTenantControlPlaneStore::mapTenant)
+                .optional();
+    }
+
+    @Override
     public void linkKeycloakOrganization(Tenant tenant) {
         String organizationId = tenant.keycloakOrganizationId().orElseThrow();
         int updated = jdbc.sql("""
@@ -211,6 +224,19 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     }
 
     @Override
+    public void updateBrandStatus(Brand brand) {
+        jdbc.sql("""
+                        UPDATE tenant.brands
+                        SET status = :status, updated_at = now(), version = version + 1
+                        WHERE id = :id AND tenant_id = :tenantId
+                        """)
+                .param("id", brand.id().value())
+                .param("tenantId", brand.tenantId().value())
+                .param("status", brand.status().name())
+                .update();
+    }
+
+    @Override
     public boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug) {
         return jdbc.sql("""
                         SELECT EXISTS (
@@ -279,6 +305,19 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("id", location.id().value())
                 .param("tenantId", location.tenantId().value())
                 .params(placeParams(location.place()))
+                .update();
+    }
+
+    @Override
+    public void updateLocationStatus(Location location) {
+        jdbc.sql("""
+                        UPDATE tenant.locations
+                        SET status = :status, updated_at = now(), version = version + 1
+                        WHERE id = :id AND tenant_id = :tenantId
+                        """)
+                .param("id", location.id().value())
+                .param("tenantId", location.tenantId().value())
+                .param("status", location.status().name())
                 .update();
     }
 
