@@ -113,6 +113,10 @@ horecaos:
     base-url: ${HORECAOS_KEYCLOAK_BASE_URL:http://localhost:8081}
     realm: ${HORECAOS_KEYCLOAK_REALM:horecaos}
     provisioning-client-id: ${HORECAOS_KEYCLOAK_PROVISIONING_CLIENT_ID:horecaos-provisioning}
+    # ADR 0062: the confidential direct-grant client the backend alone uses to
+    # exchange staff credentials with Keycloak. Same base-url/realm as above --
+    # this is not a second Keycloak, just a second client on it.
+    staff-login-client-id: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_ID:horecaos-staff-login}
   iam:
     # ADR 0025 fresh-deployment bootstrap (PlatformAdminBootstrapReconciler).
     # A comma-separated list of Keycloak subject ids that must hold the

@@ -6,11 +6,11 @@ import {
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
-import { authInterceptor } from 'angular-auth-oidc-client';
 
 import { routes } from './app.routes';
+import { bearerTokenInterceptor } from './core/api/bearer-token.interceptor';
 import { correlationIdInterceptor } from './core/api/correlation-id.interceptor';
-import { provideHorecaOSAuth } from './core/auth/auth.providers';
+import { Auth } from './core/auth/auth';
 import { I18n } from './core/i18n/i18n';
 
 export const appConfig: ApplicationConfig = {
@@ -30,14 +30,24 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withInterceptors([
         // Order matters. The correlation id goes on first so that it is present
-        // on requests the auth interceptor may fail or retry.
+        // on every request, including one the bearer interceptor sends with no
+        // token because there is not one yet.
         correlationIdInterceptor,
-        // Attaches the bearer, and only to the origins listed in `secureRoutes`.
-        authInterceptor(),
+        bearerTokenInterceptor,
       ]),
     ),
 
-    provideHorecaOSAuth(),
+    /**
+     * `Auth.initialise()` completes before the first route is resolved, so
+     * the guard reads a settled status rather than doing async work of its
+     * own. Before ADR 0062 this was `provideHorecaOSAuth()` plus whatever the
+     * OIDC library's own bootstrap needed; `initialise()` now makes no
+     * network call and always settles to `signed-out` — a fresh load never
+     * has a session to restore (tokens are in-memory only, ADR 0035).
+     */
+    provideAppInitializer(() => {
+      inject(Auth).initialise();
+    }),
 
     // The stored locale is applied to <html lang> before the first paint.
     // Getting this wrong is not cosmetic: `lang` is what a screen reader uses to

@@ -28,7 +28,6 @@ export const en = {
   'shell.signedInAs': 'Signed in as',
   'shell.unknownOperator': 'Unknown operator',
   'shell.signOut': 'Sign out',
-  'shell.signIn': 'Sign in',
   'shell.locale': 'Language',
 
   'locale.ru': 'Русский',
@@ -38,12 +37,19 @@ export const en = {
   'auth.starting': 'Signing in',
   'auth.signed-in': 'Signed in',
   'auth.signed-out': 'Signed out',
-  'auth.unavailable': 'Sign-in unavailable',
 
-  'state.unavailable.title': 'Sign-in is unavailable',
-  'state.unavailable.body':
-    'The HorecaOS realm did not answer. Nothing is wrong with your account. Try again once identity is back.',
-  'state.unavailable.retry': 'Try again',
+  'login.title': 'Sign in',
+  'login.username': 'Username or email',
+  'login.password': 'Password',
+  'login.submit': 'Sign in',
+  'login.submitting': 'Signing in…',
+  // Deliberately not error.UNAUTHENTICATED's own text ("Your session has
+  // ended. Sign in again.") — that copy is written for an expired bearer on
+  // an already-signed-in screen, and showing it under a login form implies a
+  // session that never existed. The platform answers a wrong password and an
+  // unknown username identically with that same code (ADR 0062), so this
+  // wording is deliberately as uninformative about which one happened.
+  'login.invalidCredentials': 'Incorrect username or password.',
 
   'state.denied.title': 'You do not have access to this section',
   'state.denied.body':
@@ -86,6 +92,8 @@ export const en = {
   'error.PRICE_CHANGED': 'The price changed while this was open. Check it and confirm again.',
   'error.UNSUPPORTED_MEDIA_TYPE': 'That file type is not accepted.',
   'error.RATE_LIMIT_EXCEEDED': 'Too many requests. Wait a moment and try again.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'This account needs one more step before it can sign in. Contact a platform administrator.',
   'error.INTERNAL_ERROR': 'Something failed on the platform. It has been recorded.',
   'error.NETWORK_UNREACHABLE': 'The platform could not be reached.',
   'error.UNRECOGNISED_ERROR_RESPONSE': 'The platform answered in a way this console did not understand.',

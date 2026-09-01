@@ -2918,6 +2918,27 @@ export interface SseEmitter {
   timeout?: number;
 }
 
+export interface StaffLogoutRequest {
+  refreshToken: string;
+}
+
+export interface StaffRefreshRequest {
+  refreshToken: string;
+}
+
+export interface StaffSessionResponse {
+  accessToken?: string;
+  accessTokenExpiresAt?: string;
+  refreshToken?: string;
+  refreshTokenExpiresAt?: string;
+  tokenType?: string;
+}
+
+export interface StaffSignInRequest {
+  password: string;
+  username: string;
+}
+
 export interface StartRunRequest {
   reason: string;
   runType: "BACKFILL" | "CATCH_UP" | "REMEDIATION" | "RECONCILIATION";
@@ -3302,6 +3323,9 @@ export interface ZoneView {
 
 export interface Operations {
   "raiseControlBandEscalation": { method: "POST"; path: "/api/v1/control-plane/alerts/control-band-escalations"; request: { parameters: Record<string, never>; body: ControlBandEscalationRequest }; responses: { "200": unknown } };
+  "signInControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
+  "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
+  "refreshControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
   "list_9": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
@@ -3427,6 +3451,9 @@ export interface Operations {
   "startBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_2": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
+  "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
+  "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
+  "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
   "list_12": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
   "detail_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationDetailResponse } };
   "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };

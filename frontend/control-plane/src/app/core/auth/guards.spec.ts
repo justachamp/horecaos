@@ -1,7 +1,12 @@
-import { ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree, provideRouter } from '@angular/router';
+import {
+  ActivatedRouteSnapshot,
+  RouterStateSnapshot,
+  UrlTree,
+  provideRouter,
+} from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { AuthService, AuthStatus } from './auth.service';
 import { authGuard, requiresCapability } from './guards';
@@ -15,7 +20,6 @@ const STATE = {} as RouterStateSnapshot;
 class FakeAuth {
   readonly state = signal<AuthStatus>('signed-out');
   readonly status = this.state.asReadonly();
-  readonly signIn = vi.fn();
 }
 
 class FakeSession {
@@ -49,25 +53,18 @@ describe('authGuard', () => {
     expect(run()).toBe(true);
   });
 
-  it('starts the Keycloak redirect for a signed-out visitor', () => {
+  it("sends a signed-out visitor to this console's own /login (ADR 0062)", () => {
     auth.state.set('signed-out');
-    expect(run()).toBe(false);
-    expect(auth.signIn).toHaveBeenCalledOnce();
-  });
-
-  it('does not start a second navigation while the browser is leaving', () => {
-    // False, never a UrlTree: a router navigation started here would race the
-    // redirect to Keycloak, and which one wins depends on timing.
-    auth.state.set('starting');
-    expect(run()).toBe(false);
-  });
-
-  it('routes to the unavailable state instead of retrying a realm that is down', () => {
-    auth.state.set('unavailable');
     const result = run();
     expect(result).toBeInstanceOf(UrlTree);
-    expect(String(result)).toBe('/unavailable');
-    expect(auth.signIn).not.toHaveBeenCalled();
+    expect(String(result)).toBe('/login');
+  });
+
+  it('also sends a not-yet-settled visitor to /login rather than waiting', () => {
+    auth.state.set('starting');
+    const result = run();
+    expect(result).toBeInstanceOf(UrlTree);
+    expect(String(result)).toBe('/login');
   });
 });
 
@@ -83,8 +80,7 @@ describe('requiresCapability', () => {
 
   function run(...required: Capability[]): boolean | UrlTree {
     return TestBed.runInInjectionContext(() => requiresCapability(...required)(ROUTE, STATE)) as
-      | boolean
-      | UrlTree;
+      boolean | UrlTree;
   }
 
   it('admits a principal holding the capability', () => {

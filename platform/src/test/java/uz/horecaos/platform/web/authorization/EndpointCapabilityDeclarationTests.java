@@ -81,7 +81,8 @@ class EndpointCapabilityDeclarationTests {
         for (Method handler : mutatingHandlers()) {
             if (isProviderCallback(handler)
                     || isGuestBearerEndpoint(handler)
-                    || isPreAccountIdentityEndpoint(handler)) {
+                    || isPreAccountIdentityEndpoint(handler)
+                    || isStaffAuthEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -128,7 +129,8 @@ class EndpointCapabilityDeclarationTests {
         for (Method handler : mutatingHandlers()) {
             if (isProviderCallback(handler)
                     || isGuestBearerEndpoint(handler)
-                    || isPreAccountIdentityEndpoint(handler)) {
+                    || isPreAccountIdentityEndpoint(handler)
+                    || isStaffAuthEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -279,6 +281,52 @@ class EndpointCapabilityDeclarationTests {
         return path.equals(base + "/verification-challenges")
                 || path.equals(base + "/verification-challenges/{challengeId}/attempts")
                 || path.equals(base + "/sessions");
+    }
+
+    /**
+     * ADR 0062: the six endpoints that sign a staff member in, refresh their
+     * session, and sign them out — two apiece, one prefix per staff app
+     * ({@link uz.horecaos.platform.iam.web.StaffSessionController}'s own doc
+     * explains why one shared path was not available here).
+     *
+     * <p>None of the four authorization strategies this test otherwise
+     * requires describes any of the three. {@code @RequiresCapability} and
+     * {@code @CourierSelfAuthorized} presuppose a signed-in staff or courier
+     * principal, which sign-in and refresh exist to produce and cannot
+     * therefore already hold; {@code @CustomerOwned} and
+     * {@code @PartnerBound} are the wrong principal model entirely. What
+     * authorises sign-in is the credentials themselves, checked against
+     * Keycloak; what authorises refresh and sign-out is possession of the
+     * refresh token carried in the request body — deliberately not a bearer,
+     * because refresh has to keep working once the access token has already
+     * expired. {@code SecurityConfiguration} permits exactly these six paths
+     * unauthenticated, with the same reasoning spelled out per path.
+     *
+     * <p>Replay protection is exempted for the same reason it is on the
+     * customer identity endpoints below: sign-in and refresh each mint a
+     * fresh Keycloak session on every call by design, so there is no single
+     * effect a repeated request could duplicate the way a payment or an
+     * order can; ADR 0033 rate-limits sign-in instead, which is the control
+     * that actually matters for a credential-guessing surface. Sign-out is
+     * naturally idempotent — Keycloak's own revocation endpoint answers 200
+     * whether or not the token was still live, verified live against the dev
+     * realm (see {@code StaffDirectGrantClient}) — so a second call changes
+     * nothing to replay.
+     *
+     * <p>Matched on exact paths rather than a prefix, for the reason every
+     * other exemption here gives: the next endpoint added under
+     * {@code .../auth/} is not quietly exempted along with these six.
+     */
+    private static boolean isStaffAuthEndpoint(Method handler) {
+        String path = pathOf(handler);
+        for (String prefix : new String[] {"/api/v1/control-plane/auth", "/api/v1/operations/auth"}) {
+            if (path.equals(prefix + "/sessions")
+                    || path.equals(prefix + "/sessions/refresh")
+                    || path.equals(prefix + "/sessions/current")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

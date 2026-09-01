@@ -5,17 +5,16 @@ import { ConsoleShell } from './layout/console-shell';
 import { Overview } from './features/overview/overview';
 
 /**
- * Two real sections, and the two states that are not sections.
+ * Two real sections, and the one state that is not a section.
  *
- * `/unavailable` sits outside the shell and outside the auth guard, because it
- * exists precisely for the case where authentication cannot happen; guarding
- * it would send a visitor into a redirect loop against a realm that is down.
+ * `/login` sits outside the shell and outside {@link authGuard} for the same
+ * reason it exists at all (ADR 0062): guarding the page that signs somebody
+ * in would refuse to render it to exactly the visitor it is for.
  */
 export const routes: Routes = [
   {
-    path: 'unavailable',
-    loadComponent: () =>
-      import('./features/states/sign-in-unavailable').then((m) => m.SignInUnavailable),
+    path: 'login',
+    loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
     path: '',

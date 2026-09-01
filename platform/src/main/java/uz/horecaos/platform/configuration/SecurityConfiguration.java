@@ -203,6 +203,35 @@ public class SecurityConfiguration {
                         // manual investigation.
                         .requestMatchers(HttpMethod.POST, "/providers/click/*/prepare", "/providers/click/*/complete")
                         .permitAll()
+                        // ADR 0062: staff sign in on a first-party page instead of a
+                        // Keycloak redirect, and the backend takes the credentials to
+                        // Keycloak on the caller's behalf. Sign-in is unavoidably
+                        // unauthenticated for the same reason the storefront's
+                        // verification-challenge endpoints above are: there is no
+                        // token yet to authenticate with. Refresh and sign-out are
+                        // listed here too, and deliberately not left to fall under
+                        // anyRequest().authenticated() the way an ordinary mutation
+                        // would: both are authorised by possession of the refresh
+                        // token carried in the request body, not by a bearer, because
+                        // the refresh endpoint's whole purpose is to work once the
+                        // access token has already expired — requiring a still-valid
+                        // bearer to call it would defeat it. Each of the six paths
+                        // below is StaffSessionController's own comment on why it is
+                        // safe to leave open; POST for sign-in and refresh, DELETE for
+                        // sign-out, one prefix per staff app so each keeps its own
+                        // ADR 0057 OpenAPI surface group and generated client.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/auth/sessions",
+                                "/api/v1/control-plane/auth/sessions/refresh",
+                                "/api/v1/operations/auth/sessions",
+                                "/api/v1/operations/auth/sessions/refresh")
+                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/control-plane/auth/sessions/current",
+                                "/api/v1/operations/auth/sessions/current")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .oauth2ResourceServer(resourceServer ->

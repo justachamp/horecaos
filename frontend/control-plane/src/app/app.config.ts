@@ -7,7 +7,6 @@ import {
 } from '@angular/core';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
-import { OAuthStorage, provideOAuthClient } from 'angular-oauth2-oidc';
 
 import { routes } from './app.routes';
 import {
@@ -17,8 +16,6 @@ import {
 } from './core/api/interceptors';
 import { AccessTokenSource } from './core/auth/access-token-source';
 import { AuthService } from './core/auth/auth.service';
-import { InMemoryOAuthStorage } from './core/auth/in-memory-oauth-storage';
-import { SessionContextService } from './core/auth/session-context.service';
 import { APP_CONFIG, resolveAppConfig } from './core/config/app-config';
 
 export const appConfig: ApplicationConfig = {
@@ -40,37 +37,39 @@ export const appConfig: ApplicationConfig = {
      */
     provideHttpClient(
       withFetch(),
-      withInterceptors([correlationIdInterceptor, bearerTokenInterceptor, problemDetailsInterceptor]),
+      withInterceptors([
+        correlationIdInterceptor,
+        bearerTokenInterceptor,
+        problemDetailsInterceptor,
+      ]),
     ),
 
     { provide: APP_CONFIG, useFactory: () => resolveAppConfig() },
 
-    provideOAuthClient(),
-    { provide: OAuthStorage, useClass: InMemoryOAuthStorage },
     { provide: AccessTokenSource, useExisting: AuthService },
 
     /**
-     * Authentication completes before the first route is resolved.
-     *
-     * The guards read a status signal rather than doing async work of their
-     * own, which keeps a guard synchronous and keeps the "am I signed in"
-     * question from being asked concurrently by three routes at once.
+     * `AuthService.initialise()` completes before the first route is
+     * resolved, so the guard reads a settled status signal rather than doing
+     * async work of its own. Before ADR 0062 this was the step that finished
+     * a Keycloak redirect and could itself fail; `initialise()` now makes no
+     * network call and always settles to `signed-out` — a fresh load never
+     * has a session to restore (tokens are in-memory only, ADR 0035) — so
+     * this stays for the ordering guarantee alone. `session.load()` runs from
+     * here only when there already is a session to describe, which after ADR
+     * 0062 is never on a cold start; {@link SignInPage} calls it itself once
+     * sign-in succeeds, the same "rail cannot render without it" reasoning
+     * this used to apply after a redirect completed.
      */
     provideAppInitializer(() => {
-      // Both injections happen before the first await. An `inject()` after one
+      // The injection happens before the first await. An `inject()` after one
       // runs outside the injection context and fails with NG0203, which is a
       // runtime error in a code path that only executes at start-up — so it
       // reaches production looking like a blank page.
       const auth = inject(AuthService);
-      const session = inject(SessionContextService);
 
       return (async () => {
-        if ((await auth.initialise()) === 'signed-in') {
-          // The rail cannot be rendered without knowing what the operator may
-          // reach, so this is awaited rather than left to resolve later and
-          // rearrange the navigation under the pointer.
-          await session.load();
-        }
+        await auth.initialise();
       })();
     }),
   ],

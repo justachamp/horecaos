@@ -24,7 +24,7 @@ plumbing.
 | Design tokens, vendored and applied | `src/tokens.css`, verified in a browser |
 | Shell — rail, top bar, always-visible late count, F2 | Built |
 | Routing — two real routes, eleven honest placeholders | Built |
-| Authentication — Authorization Code + PKCE against Keycloak | Built, partly unverifiable — see below |
+| Authentication — first-party sign-in page, backend exchanges credentials with Keycloak | Built and verified live |
 | API client — Problem Details, idempotency, `If-Match`, cursor pages | Built and tested |
 | Localisation — runtime switching, build-time completeness | Built and tested |
 | Money and time formatting | Built and tested |
@@ -60,54 +60,55 @@ npm run format     # Prettier
 ```
 
 `npm start` uses `src/environments/environment.development.ts`, which points at
-the platform on `localhost:8080` and Keycloak on `localhost:8081` — the defaults
-in the platform repository's `application.yml`. Both come up with that
-repository's docker compose.
+the platform on `localhost:8080` — the default in the platform repository's
+`application.yml`. That repository's docker compose brings it up, and Keycloak
+alongside it; this application itself never talks to Keycloak (ADR 0062).
 
-**Without Keycloak running, the application redirects to the issuer and stops
-there.** That is correct behaviour, not a failure: there are no routes outside
-the guard except the login callback.
+**Without the platform reachable, the sign-in page's submit fails with a
+Problem Details error** — `NETWORK_UNREACHABLE`, shown inline under the form.
+That is correct behaviour, not a failure: `/login` itself renders regardless,
+because unlike the redirect flow it replaces there is nothing upstream of it
+that has to answer first.
 
 ---
 
 ## Authentication
 
-Authorization Code with PKCE against the HorecaOS realm (ADR 0003, ADR 0035), via
-`angular-auth-oidc-client`.
+Staff sign in on this application's own `/login` page (ADR 0062). The operator's
+password never leaves this origin: submitting POSTs a username and password to
+the platform's own `POST /api/v1/operations/auth/sessions`, which runs the
+OAuth2 direct grant against Keycloak on the backend, over a confidential client
+(`horecaos-staff-login`) this bundle never sees. This application does not hold
+a Keycloak issuer, a client id, or a redirect URI — there is nothing left in
+`src/environments/` to hold — and it does not depend on `angular-auth-oidc-client`,
+which is gone along with the redirect flow and the `/auth/callback` route that
+used to complete it (the one the owner reported broken in practice, and the
+proximate reason ADR 0062 exists).
 
-**Tokens are never persisted.** `SplitSecurityStorage` keeps the access token,
-the refresh token, the id token and the user claims in a closure, and writes only
-the redirect state — the PKCE verifier, the CSRF `state`, the id-token nonce — to
-`sessionStorage`, because the code flow navigates the whole document away and
-back and cannot complete without them. None of that is a bearer credential.
+**Tokens are never persisted.** `StaffTokenStore` keeps the access and refresh
+tokens in a closure that dies with the page — nothing survives in
+`sessionStorage` any more either, because there is no redirect handshake left
+that needs to survive a document navigation.
 
-The cost is stated rather than hidden: **a page refresh drops the session.** Where
-Keycloak's SSO cookie is alive the re-redirect is invisible; where it is not, the
-operator sees a login screen mid-shift. That is the price of not leaving a bearer
-token in a browser store.
+The cost is stated rather than hidden: **a page refresh drops the session.**
+Before ADR 0062, Keycloak's SSO cookie sometimes made the redirect back
+invisible; there is no cookie and no redirect to ride along with any more, so
+every refresh is a sign-in. `Auth` proactively refreshes the access token a
+minute before it expires (`bearer-token.interceptor.ts` attaches whatever is
+current), so a session survives as long as the tab stays open.
 
-### What could not be verified here
+### Verified live against the dev realm
 
-The realm is not reachable from this repository, and these five things are
-asserted in `src/app/core/auth/auth.providers.ts` and proven nowhere. The first
-person with a running Keycloak should check them by hand:
-
-1. A client `horecaos-operations` exists in realm `horecaos` and is a **public** client.
-2. PKCE `S256` is **required** on it, not merely permitted.
-3. `http://localhost:4200/auth/callback` and the production callback are
-   allowlisted **exactly**. No wildcards — a wildcard redirect URI is an open
-   redirect.
-4. An audience mapper puts the platform API into the token's `aud`, which is what
-   Spring Security validates.
-5. Refresh tokens are enabled for the client, since silent renew uses them rather
-   than an iframe.
-
-What *was* verified in a browser, against a stub discovery endpoint: the guard
-redirects an unauthenticated operator to the issuer with `response_type=code`,
-`code_challenge_method=S256`, a real `code_challenge`, `state` and `nonce`, and
-the exact redirect URI; the deep link is preserved across the redirect; and
-`sessionStorage` afterwards contains the verifier, state and nonce and **no
-token**, while `localStorage` contains only the locale preference.
+Unlike the flow this replaces, the exchange was checked directly against a
+running Keycloak (2026-09-01), not asserted and left for the next person: a
+password grant on `horecaos-staff-login` returns a real token pair; a wrong
+password and an unknown username both answer `invalid_grant` /
+`"Invalid user credentials"` — indistinguishable, including for an account
+Keycloak's own brute-force protection has since locked; an account with a
+required action answers `invalid_grant` / `"Account is not fully set up"`; the
+refresh grant, the RFC 7009 revocation endpoint, and revoking an already-dead
+token all behave as this application's `Auth` assumes. See the platform
+repository's ADR 0062 implementation notes for the full transcript.
 
 ### Authorization
 
@@ -238,20 +239,21 @@ src/
   app/
     core/
       api/                   ADR 0031 conventions and the one HTTP seam
-      auth/                  PKCE configuration, the guard, token storage
+      auth/                  the sign-in exchange, the guard, token storage
       i18n/                  catalogues, runtime switching, the `t` pipe
       format/                money and time
     shell/                   rail, top bar, the counters shown everywhere
     features/
       today/                 the landing route
       orders/                the docked-detail layout, with no board in it
-      auth-callback/         the Keycloak redirect target
+      auth/                  the first-party sign-in page (ADR 0062)
       not-built/             the honest empty route
 ```
 
 ## Related documents in the qoida-platform repository
 
 - `docs/adr/0003` — identity and access
+- `docs/adr/0062` — staff sign in inside the platform
 - `docs/adr/0025` — capabilities and scopes
 - `docs/adr/0029` — personal data
 - `docs/adr/0031` — HTTP API conventions

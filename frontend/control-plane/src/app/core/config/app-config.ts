@@ -6,18 +6,14 @@ import { InjectionToken } from '@angular/core';
  * Read at runtime from `public/config.js` rather than baked in at build time.
  * One artifact is promoted from staging to production unchanged; a build-time
  * environment file means the thing tested in staging is not the thing that
- * ships, and the difference is exactly the Keycloak issuer, which is the field
- * most likely to be wrong.
+ * ships. There used to be a second field here, the Keycloak issuer, and it was
+ * the one most likely to be wrong — ADR 0062 removes it along with the redirect
+ * flow it configured: this console no longer talks to Keycloak at all, and
+ * `apiBaseUrl` is the only thing left that differs between environments.
  */
 export interface AppConfig {
   /** Origin of the platform API, no trailing slash. Same origin in production. */
   readonly apiBaseUrl: string;
-
-  /** Keycloak realm issuer, e.g. https://auth.horecaos.uz/realms/horecaos. */
-  readonly issuerUrl: string;
-
-  /** Public client identifier. A public client holds no secret (ADR 0003). */
-  readonly clientId: string;
 
   /**
    * The timezone every instant in this console is rendered in. Staff work to
@@ -41,12 +37,12 @@ interface ConfiguredWindow {
  */
 const DEVELOPMENT_DEFAULTS: AppConfig = {
   apiBaseUrl: 'http://localhost:8080',
-  issuerUrl: 'http://localhost:8081/realms/horecaos',
-  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 
-export function resolveAppConfig(host: ConfiguredWindow = globalThis as ConfiguredWindow): AppConfig {
+export function resolveAppConfig(
+  host: ConfiguredWindow = globalThis as ConfiguredWindow,
+): AppConfig {
   const supplied = host.horecaosControlPlaneConfig ?? {};
   const resolved: AppConfig = { ...DEVELOPMENT_DEFAULTS, ...supplied };
 

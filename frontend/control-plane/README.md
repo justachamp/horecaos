@@ -23,10 +23,11 @@ npm run build      # production bundle into dist/
 npm test           # vitest, single run
 ```
 
-`npm start` expects the platform API at `http://localhost:8080` and Keycloak at
-`http://localhost:8081/realms/horecaos`. Without Keycloak the application starts
-and shows its sign-in-unavailable state rather than a blank page — which is
-also what it does in a real outage, and is worth seeing once.
+`npm start` expects the platform API at `http://localhost:8080`. This
+application no longer talks to Keycloak at all (ADR 0062): a signed-out visitor
+lands on this console's own `/login`, and if the platform itself is
+unreachable the submit fails inline with a Problem Details error rather than
+the application showing nothing.
 
 ### Configuration
 
@@ -37,13 +38,15 @@ unchanged:
 ```js
 window.horecaosControlPlaneConfig = {
   apiBaseUrl: 'https://api.horecaos.uz',
-  issuerUrl: 'https://auth.horecaos.uz/realms/horecaos',
-  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 ```
 
-Nothing secret goes in it. The OAuth client is public and holds no credential.
+Nothing secret goes in it — there is nothing secret to put in it. The Keycloak
+issuer and client id that used to live here are gone along with the redirect
+flow they configured: the platform backend is the only thing that resolves a
+Keycloak issuer now, over a confidential client (`horecaos-staff-login`) this
+bundle never sees (ADR 0028).
 
 ## What is built
 
@@ -57,12 +60,15 @@ which is throwaway React, is read and never imported.
 system's token sheet, with a header saying so. IBM Plex Sans and IBM Plex Mono
 are self-hosted through `@fontsource` rather than fetched from a font CDN.
 
-**Authentication.** Authorization Code with PKCE against the HorecaOS realm
-([ADR 0003], [ADR 0035]). Tokens live in memory; only the PKCE verifier and the
-nonce go to `sessionStorage`, because they are written before the browser
-navigates to Keycloak and read after it comes back, and a value kept in memory
-across that boundary is a value that is gone. See
-`src/app/core/auth/in-memory-oauth-storage.ts`.
+**Authentication.** A first-party `/login` page ([ADR 0062], amending [ADR 0003]
+and [ADR 0035]'s redirect mechanics). The operator's password never leaves this
+origin: submitting POSTs it to the platform's own
+`POST /api/v1/control-plane/auth/sessions`, which runs the OAuth2 direct grant
+against Keycloak on the backend. Tokens live in memory only, in
+`src/app/core/auth/staff-token-store.ts` — there is no PKCE verifier or nonce to
+keep in `sessionStorage` any more, because the browser never navigates to
+Keycloak at all. `AuthService` proactively refreshes the access token a minute
+before it expires.
 
 **Authorization, as an affordance.** `GET /api/v1/session/context` returns the
 principal's capabilities; the rail hides what they cannot reach and a route
@@ -99,9 +105,10 @@ wrong language without anyone noticing. Angular's `$localize` was not used: it
 produces one bundle per locale and cannot switch without a reload, and this is a
 console two people share.
 
-**Tests.** 62 of them, over the shell, the guards, the API client, the money
-formatter, the catalogues and the route table. Not coverage theatre — every one
-of them fails for a reason somebody would otherwise debug.
+**Tests.** 78 of them, over the shell, the guards, the sign-in page, the auth
+service, the API client, the money formatter, the catalogues and the route
+table. Not coverage theatre — every one of them fails for a reason somebody
+would otherwise debug.
 
 ## What is deliberately absent
 
@@ -125,9 +132,11 @@ of them fails for a reason somebody would otherwise debug.
 - **Tenant selection.** The console is HorecaOS staff at platform scope; a tenant
   picker belongs with the first screen that needs one.
 - **Cross-tab refresh coordination.** [ADR 0035] wants proactive refresh
-  coordinated across tabs. What is here is the library's automatic silent
-  refresh, per tab. Two tabs will refresh independently, which works and is
-  wasteful.
+  coordinated across tabs. What is here is `AuthService`'s own scheduled
+  refresh, per tab and independent of any other. Two tabs will refresh
+  independently, which works and is wasteful — and, since ADR 0062 also
+  retires the Keycloak SSO cookie that used to make sign-in on a second tab
+  invisible, two tabs are now also two separate sign-ins.
 - **A `sync-tokens` drift check in CI.** There is no CI here yet. `npm run
   check:tokens` exists and compares the vendored sheet against the source of
   record when this repository sits beside the platform one; it is the thing CI
@@ -139,18 +148,22 @@ of them fails for a reason somebody would otherwise debug.
   edit to a vendored copy is a defect rather than a customisation. This
   application does not invent a distribution mechanism of its own.
 
-## What could not be verified here
+## Verified live against the dev realm
 
-**Keycloak.** No realm is reachable from the machine this was written on, so the
-PKCE round trip has never run end to end. What is verified is everything up to
-the redirect and everything after the token exists: the configuration, the
-storage partition, the guards, and the token's path onto a request. What is not:
-that the realm has a `horecaos-control-plane` public client, that
-`http://localhost:4200/` and the production origin are exact allowlisted
-redirect URIs, that the `organization` claim is in the access token, and that
-the refresh grant works with `offline_access`. Each of those is a realm
-configuration question, and the first person with a running Keycloak should walk
-through them before trusting the sign-in path.
+Unlike the redirect flow this replaced — whose PKCE round trip this repository
+could never run end to end, because no realm was reachable from the machine it
+was written on — the ADR 0062 exchange was checked directly against a running
+Keycloak (2026-09-01): a password grant on the backend's `horecaos-staff-login`
+confidential client returns a real token pair; a wrong password and an unknown
+username both answer identically; an account with a required action answers
+distinguishably; the refresh grant and the RFC 7009 revocation endpoint behave
+as `AuthService` assumes; and a Keycloak-locked account (its own brute-force
+protection, after repeated failures) is indistinguishable from a wrong
+password, confirming the platform's uniform-failure design is not just a
+choice but matches what Keycloak itself is willing to reveal. See the platform
+repository's ADR 0062 implementation notes for the full transcript.
+
+## What could not be verified here
 
 **The live shell.** The unit tests assert the rail, its capability filtering, the
 operator name, the language switch and the timezone. A screenshot of the
@@ -167,5 +180,7 @@ is an untracked directory from the platform repository's point of view, and that
 is intended.
 
 [ADR 0003]: ../../docs/adr/built/0003-keycloak-tenant-authorization.md
+[ADR 0028]: ../../docs/adr/partial/0028-secrets-management-and-credential-lifecycle.md
 [ADR 0031]: ../../docs/adr/built/0031-http-api-conventions.md
 [ADR 0035]: ../../docs/adr/partial/0035-angular-frontend-platform-and-design-system-adoption.md
+[ADR 0062]: ../../docs/adr/not-started/0062-staff-sign-in-happens-inside-the-platform.md

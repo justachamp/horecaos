@@ -206,11 +206,12 @@ export const messagesRu: MessageCatalogue = {
   'inbox.message.author.operator': 'Оператор',
   'inbox.message.author.flow': 'Бот',
 
-  'auth.signingIn': 'Вход',
-  'auth.signingIn.detail': 'Возврат от поставщика учётных записей.',
-  'auth.failed': 'Вход не завершён',
-  'auth.failed.detail': 'Поставщик учётных записей не вернул рабочую сессию.',
-  'auth.retry': 'Повторить',
+  'login.title': 'Вход',
+  'login.username': 'Имя пользователя или email',
+  'login.password': 'Пароль',
+  'login.submit': 'Войти',
+  'login.submitting': 'Выполняется вход…',
+  'login.invalidCredentials': 'Неверное имя пользователя или пароль.',
 
   'notBuilt.title': 'Ещё не построено',
   'notBuilt.body': 'Раздел описан, но экранов пока нет. Спецификация: {spec}.',
@@ -223,6 +224,8 @@ export const messagesRu: MessageCatalogue = {
   'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'Запрос ещё обрабатывается.',
   'error.RESOURCE_NOT_FOUND': 'Этого больше нет.',
   'error.RATE_LIMIT_EXCEEDED': 'Слишком много запросов. Подождите.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'Для входа в эту учётную запись нужен ещё один шаг. Обратитесь к администратору платформы.',
   'error.unknown': 'Что-то пошло не так. Ссылка {correlationId}.',
   'error.unknown.noReference': 'Что-то пошло не так.',
 };

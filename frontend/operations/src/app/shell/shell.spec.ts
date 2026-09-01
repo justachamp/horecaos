@@ -1,13 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { signal } from '@angular/core';
 
 import { Shell } from './shell';
 import { ServiceStatus } from './service-status';
+import { Auth } from '../core/auth/auth';
 import { I18n } from '../core/i18n/i18n';
+
+class FakeAuth {
+  readonly displayName = signal<string | null>(null);
+  readonly subject = signal<string | null>('operator-1');
+  readonly logout = vi.fn().mockReturnValue(of(null));
+}
 
 /**
  * The shell's three load-bearing behaviours, each of which is a design decision
@@ -24,18 +30,7 @@ describe('Shell', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [Shell],
-      providers: [
-        provideRouter([]),
-        {
-          provide: OidcSecurityService,
-          useValue: {
-            authenticated: signal({ isAuthenticated: true, allConfigsAuthenticated: [] }),
-            userData: signal({ userData: { sub: 'operator-1' } }),
-            logoff: () => of(null),
-            getAccessToken: () => of(''),
-          },
-        },
-      ],
+      providers: [provideRouter([]), { provide: Auth, useValue: new FakeAuth() }],
     }).compileComponents();
 
     TestBed.inject(I18n).setLocale('en');

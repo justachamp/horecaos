@@ -6,14 +6,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AccessTokenSource } from '../auth/access-token-source';
 import { APP_CONFIG, AppConfig } from '../config/app-config';
 import { ApiClient } from './api-client';
-import { bearerTokenInterceptor, correlationIdInterceptor, problemDetailsInterceptor } from './interceptors';
+import {
+  bearerTokenInterceptor,
+  correlationIdInterceptor,
+  problemDetailsInterceptor,
+} from './interceptors';
 import { Page } from './page';
 import { ApiError } from './problem';
 
 const CONFIG: AppConfig = {
   apiBaseUrl: 'https://api.test.horecaos.uz',
-  issuerUrl: 'https://auth.test.horecaos.uz/realms/horecaos',
-  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 
@@ -35,7 +37,11 @@ describe('ApiClient', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(
-          withInterceptors([correlationIdInterceptor, bearerTokenInterceptor, problemDetailsInterceptor]),
+          withInterceptors([
+            correlationIdInterceptor,
+            bearerTokenInterceptor,
+            problemDetailsInterceptor,
+          ]),
         ),
         provideHttpClientTesting(),
         { provide: APP_CONFIG, useValue: CONFIG },
@@ -76,7 +82,9 @@ describe('ApiClient', () => {
       api.post('/api/v1/control-plane/tenants', {}).subscribe();
       api.post('/api/v1/control-plane/tenants', {}).subscribe();
 
-      const [first, second] = http.match('https://api.test.horecaos.uz/api/v1/control-plane/tenants');
+      const [first, second] = http.match(
+        'https://api.test.horecaos.uz/api/v1/control-plane/tenants',
+      );
       expect(first.request.headers.get('Idempotency-Key')).not.toBe(
         second.request.headers.get('Idempotency-Key'),
       );
@@ -104,18 +112,20 @@ describe('ApiClient', () => {
 
   describe('optimistic concurrency', () => {
     it('sends the expected version as a weak validator the server parses', () => {
-      api
-        .put('/api/v1/control-plane/tenants/t-1/place', {}, { expectedVersion: 7 })
-        .subscribe();
+      api.put('/api/v1/control-plane/tenants/t-1/place', {}, { expectedVersion: 7 }).subscribe();
 
-      const request = http.expectOne('https://api.test.horecaos.uz/api/v1/control-plane/tenants/t-1/place');
+      const request = http.expectOne(
+        'https://api.test.horecaos.uz/api/v1/control-plane/tenants/t-1/place',
+      );
       expect(request.request.headers.get('If-Match')).toBe('W/"7"');
       request.flush({});
     });
 
     it('omits If-Match when the caller has no version, rather than inventing one', () => {
       api.put('/api/v1/control-plane/tenants/t-1/place', {}).subscribe();
-      const request = http.expectOne('https://api.test.horecaos.uz/api/v1/control-plane/tenants/t-1/place');
+      const request = http.expectOne(
+        'https://api.test.horecaos.uz/api/v1/control-plane/tenants/t-1/place',
+      );
       expect(request.request.headers.has('If-Match')).toBe(false);
       request.flush({});
     });
@@ -143,7 +153,8 @@ describe('ApiClient', () => {
       );
 
       const request = http.expectOne(
-        (candidate) => candidate.url === 'https://api.test.horecaos.uz/api/v1/control-plane/tenants',
+        (candidate) =>
+          candidate.url === 'https://api.test.horecaos.uz/api/v1/control-plane/tenants',
       );
       expect(request.request.params.get('cursor')).toBe('opaque');
       expect(request.request.params.get('limit')).toBe('25');
@@ -157,7 +168,8 @@ describe('ApiClient', () => {
     it('omits the cursor on the first page instead of sending an empty one', () => {
       api.getPage('/api/v1/control-plane/tenants').subscribe();
       const request = http.expectOne(
-        (candidate) => candidate.url === 'https://api.test.horecaos.uz/api/v1/control-plane/tenants',
+        (candidate) =>
+          candidate.url === 'https://api.test.horecaos.uz/api/v1/control-plane/tenants',
       );
       expect(request.request.params.has('cursor')).toBe(false);
       request.flush({ items: [], nextCursor: null });
@@ -179,7 +191,11 @@ describe('ApiClient', () => {
           code: 'INSUFFICIENT_CAPABILITY',
           correlationId: '01J8ABCDEF',
         },
-        { status: 403, statusText: 'Forbidden', headers: { 'Content-Type': 'application/problem+json' } },
+        {
+          status: 403,
+          statusText: 'Forbidden',
+          headers: { 'Content-Type': 'application/problem+json' },
+        },
       );
 
       const error = await failure;
@@ -200,7 +216,11 @@ describe('ApiClient', () => {
           code: 'VALIDATION_FAILED',
           errors: [{ field: 'slug', code: 'MUST_MATCH_PATTERN' }],
         },
-        { status: 400, statusText: 'Bad Request', headers: { 'Content-Type': 'application/problem+json' } },
+        {
+          status: 400,
+          statusText: 'Bad Request',
+          headers: { 'Content-Type': 'application/problem+json' },
+        },
       );
 
       expect((await failure).fieldErrors[0]?.field).toBe('slug');

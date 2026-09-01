@@ -211,11 +211,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'inbox.message.author.operator': 'Operator',
   'inbox.message.author.flow': 'Bot',
 
-  'auth.signingIn': 'Kirish',
-  'auth.signingIn.detail': 'Hisob provayderidan qaytmoqda.',
-  'auth.failed': 'Kirish yakunlanmadi',
-  'auth.failed.detail': 'Hisob provayderi ishlaydigan sessiya qaytarmadi.',
-  'auth.retry': 'Qayta urinish',
+  'login.title': 'Kirish',
+  'login.username': 'Foydalanuvchi nomi yoki email',
+  'login.password': 'Parol',
+  'login.submit': 'Kirish',
+  'login.submitting': 'Kirilmoqda…',
+  'login.invalidCredentials': 'Foydalanuvchi nomi yoki parol notoʻgʻri.',
 
   'notBuilt.title': 'Hali qurilmagan',
   'notBuilt.body': 'Boʻlim tavsiflangan, lekin ekranlar yoʻq. Spetsifikatsiya: {spec}.',
@@ -228,6 +229,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'Soʻrov hali bajarilmoqda.',
   'error.RESOURCE_NOT_FOUND': 'Bu endi mavjud emas.',
   'error.RATE_LIMIT_EXCEEDED': 'Soʻrovlar juda koʻp. Biroz kuting.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'Bu hisobga kirishdan oldin yana bir qadam kerak. Platforma administratoriga murojaat qiling.',
   'error.unknown': 'Nimadir notoʻgʻri ketdi. Havola {correlationId}.',
   'error.unknown.noReference': 'Nimadir notoʻgʻri ketdi.',
 };

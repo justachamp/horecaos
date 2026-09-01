@@ -978,6 +978,27 @@ export interface SortOrderRequest {
   sortOrder?: number;
 }
 
+export interface StaffLogoutRequest {
+  refreshToken: string;
+}
+
+export interface StaffRefreshRequest {
+  refreshToken: string;
+}
+
+export interface StaffSessionResponse {
+  accessToken?: string;
+  accessTokenExpiresAt?: string;
+  refreshToken?: string;
+  refreshTokenExpiresAt?: string;
+  tokenType?: string;
+}
+
+export interface StaffSignInRequest {
+  password: string;
+  username: string;
+}
+
 export interface StepView {
   attemptCount?: number;
   detail?: string;
@@ -1096,6 +1117,9 @@ export interface ZoneView {
 
 export interface Operations {
   "raiseControlBandEscalation": { method: "POST"; path: "/api/v1/control-plane/alerts/control-band-escalations"; request: { parameters: Record<string, never>; body: ControlBandEscalationRequest }; responses: { "200": unknown } };
+  "signInControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
+  "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
+  "refreshControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
   "list_6": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };

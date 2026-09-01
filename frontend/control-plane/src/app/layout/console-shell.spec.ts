@@ -12,8 +12,6 @@ import { ConsoleShell } from './console-shell';
 
 const CONFIG: AppConfig = {
   apiBaseUrl: 'https://api.test.horecaos.uz',
-  issuerUrl: 'https://auth.test.horecaos.uz/realms/horecaos',
-  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 
@@ -76,13 +74,17 @@ describe('ConsoleShell', () => {
 
   it('never renders a section the console has no screen for', () => {
     // Onboarding is declared in SECTIONS with its capability but has no route.
-    session.held.set(new Set<string>(['TENANT_READ', 'TENANT_ONBOARDING_MANAGE', 'PLATFORM_ADMIN']));
+    session.held.set(
+      new Set<string>(['TENANT_READ', 'TENANT_ONBOARDING_MANAGE', 'PLATFORM_ADMIN']),
+    );
     fixture.detectChanges();
     expect(railLabels()).not.toContain('Подключение');
   });
 
   it('names the operator in the rail', () => {
-    expect(fixture.nativeElement.querySelector('.rail-name').textContent.trim()).toBe('Aziza Karimova');
+    expect(fixture.nativeElement.querySelector('.rail-name').textContent.trim()).toBe(
+      'Aziza Karimova',
+    );
   });
 
   it('falls back to a placeholder rather than an empty line when there is no name', () => {
@@ -114,7 +116,9 @@ describe('ConsoleShell', () => {
       vi.setSystemTime(new Date('2026-12-31T20:00:00Z'));
       const shell = TestBed.createComponent(ConsoleShell);
       shell.detectChanges();
-      expect(shell.nativeElement.querySelector('.topbar-right').textContent).toContain('01.01.2027');
+      expect(shell.nativeElement.querySelector('.topbar-right').textContent).toContain(
+        '01.01.2027',
+      );
     } finally {
       vi.useRealTimers();
     }

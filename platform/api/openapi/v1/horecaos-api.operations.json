@@ -4933,6 +4933,66 @@
         },
         "type" : "object"
       },
+      "StaffLogoutRequest" : {
+        "properties" : {
+          "refreshToken" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "StaffRefreshRequest" : {
+        "properties" : {
+          "refreshToken" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "StaffSessionResponse" : {
+        "properties" : {
+          "accessToken" : {
+            "type" : "string"
+          },
+          "accessTokenExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "refreshToken" : {
+            "type" : "string"
+          },
+          "refreshTokenExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tokenType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StaffSignInRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "username" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "username" ],
+        "type" : "object"
+      },
       "StartRunRequest" : {
         "properties" : {
           "reason" : {
@@ -5867,6 +5927,89 @@
         },
         "summary" : "Close my shift",
         "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/operations/auth/sessions" : {
+      "post" : {
+        "description" : "Exchanges a username and password with Keycloak over the OAuth2 direct grant on the backend's own confidential client; the browser never talks to Keycloak. Wrong password and unknown username answer identically to avoid user enumeration.",
+        "operationId" : "signInOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffSignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign in to operations",
+        "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/operations/auth/sessions/current" : {
+      "delete" : {
+        "description" : "Revokes the refresh token at Keycloak. Always succeeds from the caller's point of view, whatever Keycloak answers.",
+        "operationId" : "signOutOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffLogoutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign out of operations",
+        "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/operations/auth/sessions/refresh" : {
+      "post" : {
+        "description" : "Proxies the refresh grant.",
+        "operationId" : "refreshOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffRefreshRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Refresh an operations session",
+        "tags" : [ "Staff sign-in" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
@@ -14289,6 +14432,9 @@
   }, {
     "description" : "Presigned upload lifecycle for catalog and brand imagery",
     "name" : "Media"
+  }, {
+    "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
+    "name" : "Staff sign-in"
   }, {
     "description" : "The dispatcher's live map, and the audited track reveal",
     "name" : "Courier positions"

@@ -56,6 +56,15 @@ sync (the seed wrote `local-provisioning-secret` while the realm fell back to
 login fail on a stock `docker compose up`. If you ever change one, change the
 other in the same commit.
 
+`horecaos-staff-login` (ADR 0062) follows the identical pattern under the same
+path, one key over — `horecaos/local/identity_admin/keycloak/staff-login-secret`
+— even though it is not a service account (see `infra/keycloak/README.md`,
+"Staff sign-in"). If your Keycloak container was already running before this client
+existed in the realm file, `docker compose up` will not have created it: run
+`infra/keycloak/create-staff-login-client.sh` once to catch up, the same way a
+stack predating `horecaos-local-dev`/`horecaos-local-web` needs their own
+creation scripts run by hand.
+
 To run the application itself against this stack with secrets resolved from
 OpenBao rather than the `environment` provider default, copy `.env.example` to
 `.env`, export it (`set -a && source .env && set +a`), and run `make run`. Only

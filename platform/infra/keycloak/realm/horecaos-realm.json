@@ -415,70 +415,17 @@
       }
     },
     {
-      "clientId": "horecaos-operations",
-      "name": "horecaos-operations",
-      "description": "Staff console public OIDC client for frontend/operations (ADR 0003, ADR 0035). Public client, Authorization Code + PKCE S256 only, no secret.",
+      "clientId": "horecaos-staff-login",
+      "name": "horecaos-staff-login",
+      "description": "ADR 0062: the confidential client the platform backend alone uses to exchange staff credentials with Keycloak over the OAuth2 direct grant. Neither staff SPA ever talks to Keycloak or holds this secret; the backend POSTs username+password to /realms/horecaos/protocol/openid-connect/token on this client and hands the resulting tokens to the browser. Replaces the two public redirect clients this realm used to carry for frontend/operations and frontend/control-plane (ADR 0003, ADR 0035) -- their Authorization Code + PKCE flow is retired along with them. The secret in the import file is a DEVELOPMENT PLACEHOLDER -- rotate it after import (docs/runbooks/deploy.md), the same as horecaos-provisioning and horecaos-identity-reader above.",
       "enabled": true,
       "protocol": "openid-connect",
-      "publicClient": true,
-      "standardFlowEnabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": [
-        "http://localhost:4200/auth/callback"
-      ],
-      "webOrigins": [
-        "http://localhost:4200"
-      ],
-      "attributes": {
-        "pkce.code.challenge.method": "S256"
-      },
-      "defaultClientScopes": [
-        "basic",
-        "profile",
-        "email",
-        "roles",
-        "web-origins",
-        "acr"
-      ],
-      "optionalClientScopes": [
-        "organization"
-      ],
-      "protocolMappers": [
-        {
-          "name": "horecaos-api-audience",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "consentRequired": false,
-          "config": {
-            "included.client.audience": "horecaos-api",
-            "id.token.claim": "false",
-            "access.token.claim": "true"
-          }
-        }
-      ]
-    },
-    {
-      "clientId": "horecaos-control-plane",
-      "name": "horecaos-control-plane",
-      "description": "Staff console public OIDC client for frontend/control-plane (ADR 0003, ADR 0035). Public client, Authorization Code + PKCE S256 only, no secret. Carries offline_access so the library's refresh grant (see auth.config.ts) has a scope to request.",
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": true,
-      "standardFlowEnabled": true,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "redirectUris": [
-        "http://localhost:4300/"
-      ],
-      "webOrigins": [
-        "http://localhost:4300"
-      ],
-      "attributes": {
-        "pkce.code.challenge.method": "S256"
-      },
+      "secret": "${HORECAOS_KEYCLOAK_STAFF_LOGIN_SECRET:development-only-not-a-secret-staff-login}",
       "defaultClientScopes": [
         "basic",
         "profile",

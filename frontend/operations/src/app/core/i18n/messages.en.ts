@@ -221,11 +221,17 @@ export const messagesEn = {
   'inbox.message.author.operator': 'Operator',
   'inbox.message.author.flow': 'Flow',
 
-  'auth.signingIn': 'Signing in',
-  'auth.signingIn.detail': 'Returning from the identity provider.',
-  'auth.failed': 'Sign-in did not complete',
-  'auth.failed.detail': 'The identity provider did not return a usable session.',
-  'auth.retry': 'Try again',
+  'login.title': 'Sign in',
+  'login.username': 'Username or email',
+  'login.password': 'Password',
+  'login.submit': 'Sign in',
+  'login.submitting': 'Signing in…',
+  // Deliberately not error.UNAUTHENTICATED's own text ("The session has
+  // ended. Sign in again.") — that copy is written for an expired bearer on
+  // an already-signed-in screen, and showing it under a login form implies a
+  // session that never existed. The platform answers a wrong password and an
+  // unknown username identically with that same code (ADR 0062).
+  'login.invalidCredentials': 'Incorrect username or password.',
 
   'notBuilt.title': 'Not built yet',
   'notBuilt.body':
@@ -239,6 +245,8 @@ export const messagesEn = {
   'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'That request is still being processed.',
   'error.RESOURCE_NOT_FOUND': 'That no longer exists.',
   'error.RATE_LIMIT_EXCEEDED': 'Too many requests. Wait a moment.',
+  'error.ACCOUNT_ACTION_REQUIRED':
+    'This account needs one more step before it can sign in. Contact a platform administrator.',
   'error.unknown': 'Something went wrong. Reference {correlationId}.',
   'error.unknown.noReference': 'Something went wrong.',
 } as const;
