@@ -1,11 +1,13 @@
 package uz.horecaos.platform.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -182,6 +185,60 @@ class LocalFixtureStorefrontTests {
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.detail").value("This brand has no published menu"));
+    }
+
+    @Test
+    void unmappedRouteAnswersWithProblemDetailsNotResourceNotFound() throws Exception {
+        // ADR 0031's residual gap: no controller, no static resource, nothing at
+        // this path at all. Spring resolves this through the resource handler
+        // mapping's own NoResourceFoundException, which — before
+        // GlobalApiErrorHandler.handleNoResourceFoundException existed — fell to
+        // the base class's plain RFC 9457 shape: about:blank type, no `code`.
+        // Authenticated on purpose: SecurityConfiguration's anyRequest().authenticated()
+        // answers an anonymous hit to this same path with 401 before the request
+        // ever reaches MVC dispatch, which would prove nothing about this handler.
+        String responseBody = mvc.perform(get("/api/v1/operations/this-route-does-not-exist")
+                        .with(jwt().jwt(builder -> builder.subject("some-staff-member"))))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.type").value("https://docs.horecaos.uz/problems/route-not-found"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // ROUTE_NOT_FOUND, not RESOURCE_NOT_FOUND: this path never existed, and
+        // conflating "no such route" with "no such entity at a real route" would
+        // tell a client to check an id that was never the problem.
+        assertThat(responseBody).doesNotContain("RESOURCE_NOT_FOUND").doesNotContain("\"timestamp\"");
+    }
+
+    @Test
+    void unacceptableAcceptHeaderAnswersWithProblemDetails() throws Exception {
+        // Every response this API returns is JSON (ADR 0031). A caller asking
+        // for anything else finds out from Problem Details rather than the base
+        // class's about:blank shape.
+        mvc.perform(get("/api/v1/storefront/pickup-locations?lat=41.311341&lon=69.282722")
+                        .accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable())
+                .andExpect(jsonPath("$.type").value("https://docs.horecaos.uz/problems/not-acceptable"))
+                .andExpect(jsonPath("$.status").value(406))
+                .andExpect(jsonPath("$.code").value("NOT_ACCEPTABLE"));
+    }
+
+    @Test
+    void missingGuestTokenHeaderAnswersWithProblemDetails() throws Exception {
+        // QrEntryController's bill read requires X-Dine-In-Token with no default
+        // (ADR 0047) -- MissingRequestHeaderException, a ServletRequestBindingException
+        // Spring MVC raises before the controller method ever runs. The path itself
+        // is permitAll (SecurityConfiguration), so no principal is needed to reach it.
+        mvc.perform(get("/api/v1/storefront/dine-in/sessions/" + UUID.randomUUID()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("X-Dine-In-Token"))
+                .andExpect(jsonPath("$.errors[0].code").value("REQUIRED"));
     }
 
     /** Avoids contacting Keycloak; the requests above are deliberately public. */

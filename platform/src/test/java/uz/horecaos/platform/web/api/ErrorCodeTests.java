@@ -58,4 +58,21 @@ class ErrorCodeTests {
                 .containsEntry("expectedVersion", 3L)
                 .containsEntry("currentVersion", 5L);
     }
+
+    @Test
+    void routeNotFoundIsDistinctFromResourceNotFound() {
+        // ADR 0031's residual gap: an unmapped path and a missing entity are
+        // different failures with different remediation, and must not share a
+        // code -- see ROUTE_NOT_FOUND's own javadoc for the reasoning.
+        assertThat(ErrorCode.ROUTE_NOT_FOUND).isNotEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(ErrorCode.ROUTE_NOT_FOUND.typeUri()).isNotEqualTo(ErrorCode.RESOURCE_NOT_FOUND.typeUri());
+        assertThat(ErrorCode.ROUTE_NOT_FOUND.status().value()).isEqualTo(404);
+        assertThat(ErrorCode.ROUTE_NOT_FOUND.typeUri()).endsWith("route-not-found");
+    }
+
+    @Test
+    void notAcceptableReportsA406() {
+        assertThat(ErrorCode.NOT_ACCEPTABLE.status().value()).isEqualTo(406);
+        assertThat(ErrorCode.NOT_ACCEPTABLE.typeUri()).endsWith("not-acceptable");
+    }
 }
