@@ -8,13 +8,21 @@
   ADR 0030 policy, the campaign state machine with four-eyes approval and a
   reserved-cost ceiling, segment-aware cost estimation, and batched idempotent
   expansion, covered by `MarketingCampaignTests` and `EngagementPolicyTests`.
-  **No campaign can send.** Nothing implements `marketing.api.CampaignMessagePort`
-  — `notifications` supplies no adapter, so `MarketingDeliveryConfiguration`'s
-  stand-in answers `isWired() == false` and `CampaignSendService` refuses to
-  expand before claiming anything; outside tests, expansion into ADR 0020 intents
-  has never happened. Nothing schedules the projection sweep, the retention jobs
-  or the erasure path either: the `marketing` module carries no `@Scheduled`
-  method, so the five-minute staleness budget has no runner. Also not built: the
+  A campaign can now send over TELEGRAM (wave 12): `notifications`'s
+  `CampaignTelegramDeliveryService` implements `marketing.api.CampaignMessagePort`,
+  expansion runs on the new `CampaignExpansionScheduler` (this module's first
+  `@Scheduled` method), delivery is paced under the bot's per-brand ceiling
+  (`CampaignPacer`, default 10/s of the shared ~30/s), a stored estimated delivery
+  window replaces a promise, and a block-rate guard
+  (`CampaignBlockRateMonitor`/`CampaignFeedbackPort`) pauses `SENDING → PAUSED`
+  and fires a real operations alert when recipients start blocking — covered end
+  to end by `CampaignBroadcastIntegrationTest`. Telegram launch is
+  entitlement-gated (`telegram.broadcasts.enabled`, opt-in). SMS, EMAIL, and PUSH
+  still have no adapter; no endpoint resumes a paused campaign yet, and messages
+  suppressed during a pause are not retried after one. Nothing schedules the
+  projection sweep, the retention jobs or the erasure path either — the
+  expansion scheduler is the module's only `@Scheduled` method, so the
+  five-minute staleness budget still has no runner. Also not built: the
   four triggers and coded grant minting (`pricing.benefit_grants` does not exist),
   merchandising slots, attribution links, referral edges, reviews, the incremental
   inbox fold behind the projection, and the legacy `ratings` migration. The quiet

@@ -47,9 +47,16 @@
   `docs/runbooks/sendpulse-cutover.md` is the ordered, per-bot,
   reversible-until-BotFather-rotation procedure, naming the mid-flow-state loss
   and the owner-only steps; executing it awaits the owner's SendPulse access.
-  Not built: an HTTP endpoint to rotate an installation's secret reference in
-  place (the runbook's step 9 falls back to SQL — a flagged gap); broadcasts
-  (stage 4); any second channel adapter;
+  Stage 4 (wave 12) is built: broadcasts run as ADR 0044 campaigns over this
+  channel — `CampaignTelegramDeliveryService` implements the campaign port as
+  ordinary ADR 0020 MARKETING intents, paced at a configurable rate (default
+  10/s) well under the Bot API's shared per-bot ceiling, with a stored estimated
+  delivery window and a block-rate guard that pauses the campaign and alerts an
+  operator once recipients start blocking the bot (a 403 stays consent
+  revocation, and now also counts) — see ADR 0044's status line for the
+  campaign-side inventory. Not built: an HTTP endpoint to rotate an
+  installation's secret reference in place (the runbook's step 9 falls back to
+  SQL — a flagged gap); any second channel adapter;
   captured-input routing into customer data or a governed fact store beyond this
   module's own encrypted `flow_runs` blob (`helpcenter` still has no owning ADR);
   ADR 0029 retention/erasure enforcement past the recorded `retention_months`

@@ -193,6 +193,24 @@ class SendPulseContactImportIntegrationTest {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
         templates = new NotificationTemplateService(templateStore, objectMapper, clock);
         orderSummaries = new StubOrderDirectory();
+        // This import path exercises no campaigns; the feedback port always
+        // answers "sending" and the block monitor never has anything to count.
+        uz.horecaos.platform.marketing.api.CampaignFeedbackPort campaignFeedback =
+                new uz.horecaos.platform.marketing.api.CampaignFeedbackPort() {
+                    @Override
+                    public boolean isSending(java.util.UUID tenantId, java.util.UUID campaignId) {
+                        return true;
+                    }
+
+                    @Override
+                    public BlockOutcome recordBlocked(
+                            java.util.UUID tenantId,
+                            java.util.UUID campaignId,
+                            java.util.UUID customerAccountId,
+                            java.time.Instant now) {
+                        return new BlockOutcome(0, 0, false);
+                    }
+                };
         eligibility = new NotificationEligibilityService(
                 notifications,
                 templates,
@@ -200,6 +218,7 @@ class SendPulseContactImportIntegrationTest {
                 new NoOpContactDirectory(),
                 orderSummaries,
                 transport,
+                campaignFeedback,
                 objectMapper,
                 clock,
                 "en");
@@ -208,6 +227,20 @@ class SendPulseContactImportIntegrationTest {
                 templateStore,
                 new NoOpContactDirectory(),
                 transport,
+                new uz.horecaos.platform.notifications.application.CampaignBlockRateMonitor(
+                        campaignFeedback,
+                        (tenantId,
+                                brandId,
+                                locationId,
+                                eventClass,
+                                templateKey,
+                                subjectType,
+                                subjectId,
+                                triggerEventId,
+                                idempotencyKeyBase,
+                                triggerVariables,
+                                expiry) -> {},
+                        new SimpleMeterRegistry()),
                 objectMapper,
                 clock,
                 8,
