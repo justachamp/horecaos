@@ -8,9 +8,13 @@
   the handler extends `ResponseEntityExceptionHandler`, so Spring MVC's own
   binding and content-negotiation failures (a missing request parameter, a
   non-UUID path segment) render ADR 0031 Problem Details instead of the servlet
-  container's default error body; the rarer framework exceptions still answering
-  the base class's plain RFC 9457 shape without this platform's `code` extension
-  are a flagged follow-up — with
+  container's default error body; the rarer framework exceptions are covered too
+  (wave 22): an unmapped route (`ROUTE_NOT_FOUND`, deliberately distinct from
+  the entity-level `RESOURCE_NOT_FOUND`), an unacceptable `Accept` header, a
+  missing required header, and the two conversion/serialization failures that
+  signal a server defect all carry this platform's `code` extension, while
+  multipart, method-validation, and `NoHandlerFoundException` stay uncovered
+  because nothing in this application can reach them — with
   `TenantApiErrorHandler` reduced to tenancy-only mappings; `IdempotencyService`,
   `IdempotencyInterceptor`, `CachedBodyRequestFilter` and `IdempotencyPurgeJob` over V0006
   (scoped to caller and resource by V0047); `AggregateVersion` for `ETag`/`If-Match` and

@@ -1,11 +1,19 @@
 # ADR 0062: Staff sign in inside the platform — the backend validates credentials with Keycloak
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. Today both staff apps
-  redirect to Keycloak's own login page (the flow ADR 0035 carried forward from
-  ADR 0022), and the operations app's redirect callback is broken in practice
-  (reported by the owner 2026-09-02; never diagnosed — this record retires the
-  flow instead).
+- Implementation status: Built — both staff apps sign in on their own page
+  (wave 18); the backend exchanges credentials with Keycloak's direct grant on
+  the `horecaos-staff-login` confidential client, refresh and sign-out proxy
+  through the backend, failures are uniform (wrong password, unknown user, and
+  a brute-force-locked account answer identically — verified against live
+  Keycloak, which itself cannot distinguish them), a required action answers
+  `ACCOUNT_ACTION_REQUIRED`, and sign-in is ADR 0033 rate-limited. The public
+  redirect clients are gone from the realm file and their callback code is
+  deleted; the production runbook's hardening step deletes them from an
+  older-imported live realm and rotates the staff-login secret. Proven by the
+  full curl matrix and a real-browser pass against the dev realm, plus
+  `StaffAuthServiceTests`/`StaffDirectGrantClientTests`/`StaffSessionControllerTests`
+  and both apps' suites.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed the in-platform login and the backend-validates

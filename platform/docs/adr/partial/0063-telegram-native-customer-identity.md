@@ -1,9 +1,18 @@
 # ADR 0063: Telegram-native customer identity — Gateway OTP and share-contact sign-in
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. It builds on ADR 0015's
-  verification challenges, ADR 0051's customer sessions, and the wave-7/8 Telegram
-  machinery (brand bots, pending-link codes, update handling).
+- Implementation status: Partial — both features are built and
+  exit-criteria-tested end to end against real PostgreSQL with
+  `FakeTelegramBotApi`/`FakeTelegramGateway` (wave 20): the Gateway client with
+  its delivery-policy seam in the verification send path (Gateway first when
+  configured, SMS fallback, cost recorded on the challenge row — V0117), and
+  share-contact sign-in (AUTH-kind pending codes — V0118, own-contact and
+  phone-pattern checks, account convergence with the OTP path through one
+  phone-hash resolution, ADR 0051 session claimed by a single conditional
+  update, the wave-7 binding created in the same stroke, storefront "Continue
+  with Telegram" polling the code). Not Built because the record's own open
+  inputs stand: no real Gateway token exists (ships configured-off — SMS-only
+  in practice), and the default phone pattern awaits the owner's review.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed both features and the phone-regex gate),
