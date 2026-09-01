@@ -5,7 +5,7 @@ first (section 10); a runbook that has only ever been read is not proven.
 
 **Written for a devops engineer with no access to this conversation, no
 Claude session, and — per [ADR
-0061](../adr/not-started/0061-production-deployment-pilot-on-owned-hardware-portable-by-construction.md)'s
+0061](../adr/partial/0061-production-deployment-pilot-on-owned-hardware-portable-by-construction.md)'s
 Open Inputs — no standing SSH relationship with anyone who does.** CI builds
 and publishes pinned images; it never deploys them. Every command below is
 something you run yourself, on the box, as the person who holds it. Where a

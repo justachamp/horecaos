@@ -1,11 +1,25 @@
 # ADR 0061: Production runs on owned hardware first — and stays portable by construction
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. The dev/test phase it builds
-  on is done (the proving run passes end to end against the compose stack), ADR 0056's
-  RLS backstop and ADR 0023's nine observability items are the named prerequisites
-  this record sequences, and nothing production-shaped exists yet: no environment, no
-  pipeline, no public endpoint.
+- Implementation status: Partial — the repo-side artifacts are built and locally
+  proven (wave 16): `deploy/compose.production.yml` (pinned images, Caddy edge with
+  automatic TLS, three frontend containers, resource limits, hardening),
+  `deploy/env.template` as the one per-environment artifact with a filled
+  different-provider staging example, CI's `publish-images` job (seven images,
+  git-SHA + rolling tags to ghcr, registry overridable by one variable — no deploy
+  step by design), and `docs/runbooks/production-setup.md`, the bare-OS-to-running
+  procedure the owner's devops executes without assistant or CI access. All of it
+  verified end to end by `deploy/local-smoke.sh`: the real production compose on a
+  fresh volume under an isolated project boots, migrates, imports the realm, serves
+  all three frontends, and keeps docs/metrics unexposed — a run that caught and
+  fixed a genuine boot-blocker (`OpenApiConfiguration` under disabled api-docs) and
+  an issuer mismatch in the operations app. Realm hardening steps (localhost
+  redirect URIs, shipped fallback secrets) are found and written into the runbook.
+  Not built: the Sarkor box itself, a real registry push, staging on a second
+  provider, WAL archiving (only nightly logical dumps are scripted), ADR 0023's
+  observability items, ADR 0056's RLS backstop, the pilot tenant, and the SendPulse
+  cutover; `deploy/README.md` carries the explicit cannot-verify-without-the-server
+  risk register for devops's first run.
 - Date proposed: 2026-09-01
 - Date decided: 2026-09-01
 - Deciders: platform owner (hosting, budget, and SLO decisions — see Decision),
