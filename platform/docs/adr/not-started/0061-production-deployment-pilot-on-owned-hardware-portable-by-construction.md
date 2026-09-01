@@ -13,9 +13,14 @@
   in-country provider landscape, 2026-09-01)
 - Depends on: 0023, 0028, 0052, 0054, 0055, 0056, 0057
 - Supersedes / Superseded by: —
-- Open inputs: the Sarkor server's specs, OS, public IP and access; DNS control for
+- Open inputs: the Sarkor server's specs, OS and public IP; DNS control for
   `horecaos.uz`; the container registry choice; production Click/Payme credentials
   and the production bot token (each needed at its own step, none needed to start).
+  Owner-decided 2026-09-01: there is NO direct server access for the assistant or
+  CI initially — the owner's devops engineer executes a production setup runbook
+  covering everything from bare OS to running platform; CI-driven deploy becomes
+  possible only if and when devops installs a deploy key, and the runbook carries
+  both the manual upgrade procedure and that optional step.
 
 ## Context
 
