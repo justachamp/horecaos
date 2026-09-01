@@ -46,6 +46,7 @@ import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver
 import uz.horecaos.platform.integration.camel.notification.telegram.FakeTelegramBotApi;
 import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
 import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
+import uz.horecaos.platform.integration.provider.telegram.TelegramAuthLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
@@ -158,6 +159,8 @@ class WelcomeFlowIntegrationTest {
                 new TelegramLinkService(jdbc, clock, Duration.ofMinutes(15)),
                 staffLinks,
                 customerLinks,
+                new TelegramAuthLinkService(jdbc, clock, Duration.ofMinutes(15)),
+                new uz.horecaos.platform.customers.NoOpCustomerTelegramSignIn(),
                 new TelegramRightsVerifier(botApiClient),
                 bindings,
                 actionTokens,
@@ -175,7 +178,9 @@ class WelcomeFlowIntegrationTest {
                 "en",
                 engine,
                 new TelegramInstallationBrandLookup(jdbc),
-                new TelegramUpdateDedupStore(jdbc, clock));
+                new TelegramUpdateDedupStore(jdbc, clock),
+                new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
+                "^\\+?998\\d{9}$");
     }
 
     // The welcome series itself, reproduced from the ADR's observed SendPulse

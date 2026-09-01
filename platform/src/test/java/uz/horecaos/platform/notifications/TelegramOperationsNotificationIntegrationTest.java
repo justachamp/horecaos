@@ -45,6 +45,7 @@ import uz.horecaos.platform.integration.camel.notification.telegram.TelegramCirc
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
 import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
+import uz.horecaos.platform.integration.provider.telegram.TelegramAuthLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
@@ -195,6 +196,8 @@ class TelegramOperationsNotificationIntegrationTest {
                 links,
                 staffLinks,
                 customerLinks,
+                new TelegramAuthLinkService(jdbc, clock, Duration.ofMinutes(15)),
+                new uz.horecaos.platform.customers.NoOpCustomerTelegramSignIn(),
                 rights,
                 bindingStore,
                 actionTokens,
@@ -212,7 +215,9 @@ class TelegramOperationsNotificationIntegrationTest {
                 "ru",
                 new NoOpConversationInboundPort(),
                 new TelegramInstallationBrandLookup(jdbc),
-                new TelegramUpdateDedupStore(jdbc, clock));
+                new TelegramUpdateDedupStore(jdbc, clock),
+                new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
+                "^\\+?998\\d{9}$");
 
         JdbcProviderInstallationLookup installationLookup = new JdbcProviderInstallationLookup(jdbc, clock);
         NotificationGateway gateway = new NotificationGateway(

@@ -30,6 +30,7 @@ import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
+import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayClient;
 
 /**
  * The route's policy, end to end, from the port a customer's code leaves through
@@ -150,7 +151,7 @@ class SmsVerificationRouteTests {
         camel = new DefaultCamelContext();
         camel.start();
         try (ProducerTemplate producer = camel.createProducerTemplate()) {
-            VerificationCodeTransport transport = new CamelVerificationCodeTransport(producer);
+            VerificationCodeTransport transport = new CamelVerificationCodeTransport(producer, unconfiguredGateway());
 
             Outcome outcome = transport.send(message());
 
@@ -180,7 +181,22 @@ class SmsVerificationRouteTests {
         camel = new DefaultCamelContext();
         camel.addRoutes(new SmsRouteBuilder(processor));
         camel.start();
-        return new CamelVerificationCodeTransport(camel.createProducerTemplate());
+        return new CamelVerificationCodeTransport(camel.createProducerTemplate(), unconfiguredGateway());
+    }
+
+    /**
+     * Every test in this class exercises the SMS path specifically, so Telegram
+     * Gateway is left unconfigured throughout — the same "ships configured-off"
+     * state ADR 0063 describes for a deployment that has not obtained a Gateway
+     * token yet. The Gateway-first policy itself is
+     * {@code TelegramGatewayVerificationDeliveryTests}'s own subject.
+     */
+    private static TelegramGatewayClient unconfiguredGateway() {
+        return new TelegramGatewayClient(
+                new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier()),
+                fixedResolver(),
+                "https://gateway.telegram.org",
+                "");
     }
 
     private static VerificationMessage message() {

@@ -75,6 +75,56 @@
           'common.termsOfService' | t
         }}</a>
       </p>
+
+      @if (telegramCode(); as code) {
+        <div class="mt-5 rounded-xl border border-zinc-700/80 px-4 py-4">
+          <a
+            [href]="code.deepLink"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-center gap-2 rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+          >
+            {{ 'auth.telegramOpenInTelegram' | t }}
+          </a>
+          <p class="mt-3 text-center text-xs text-zinc-400">{{ 'auth.telegramExpiryNotice' | t }}</p>
+          <div class="flex items-center justify-center gap-2 py-2">
+            <span class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+            <span class="text-xs text-zinc-400">{{ 'auth.telegramWaiting' | t }}</span>
+          </div>
+          @if (telegramError()) {
+            <p class="text-center text-sm text-red-400">{{ telegramError() }}</p>
+          }
+          <button
+            type="button"
+            (click)="cancelTelegramSignIn()"
+            class="w-full text-center text-xs font-medium text-jizbiz-accent transition-opacity hover:opacity-90"
+          >
+            {{ 'auth.telegramCancel' | t }}
+          </button>
+        </div>
+      } @else {
+        <div class="mt-5 flex items-center gap-3 text-zinc-500">
+          <span class="h-px flex-1 bg-zinc-700"></span>
+          <span class="text-xs uppercase">{{ 'auth.orDivider' | t }}</span>
+          <span class="h-px flex-1 bg-zinc-700"></span>
+        </div>
+        @if (telegramError()) {
+          <p class="mt-2 text-center text-sm text-red-400">{{ telegramError() }}</p>
+        }
+        <button
+          type="button"
+          (click)="continueWithTelegram()"
+          [disabled]="telegramMinting()"
+          class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 py-3.5 text-base font-semibold text-jizbiz-text transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          @if (telegramMinting()) {
+            <span
+              class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-text border-t-transparent"
+            ></span>
+          }
+          {{ 'auth.continueWithTelegram' | t }}
+        </button>
+      }
     </div>
   </div>
 

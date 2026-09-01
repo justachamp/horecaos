@@ -9068,6 +9068,39 @@
         },
         "type" : "object"
       },
+      "SignInCodeResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "deepLink" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SignInPollResponse" : {
+        "properties" : {
+          "accountCreated" : {
+            "type" : "boolean"
+          },
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "token" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "SignInRequest" : {
         "properties" : {
           "grant" : {
@@ -21438,7 +21471,7 @@
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link-codes" : {
       "post" : {
         "description" : "Open the returned link (or send \"/start <code>\" to the bot directly) to link this brand's bot to your account. The code expires shortly and is single-use; opening it links immediately, with no further confirmation.",
-        "operationId" : "issueCode",
+        "operationId" : "issueCode_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21517,6 +21550,87 @@
         },
         "summary" : "Link via a verified Telegram Mini App session",
         "tags" : [ "Customer Telegram linking" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes" : {
+      "post" : {
+        "description" : "Open the returned deep link (or send it to the bot as \"/start <code>\") to continue in Telegram. The code expires shortly and is single-use.",
+        "operationId" : "issueCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInCodeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mint a Telegram sign-in code",
+        "tags" : [ "Telegram sign-in" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes/{code}" : {
+      "get" : {
+        "description" : "PENDING until the bot's request_contact handshake redeems the code, then SIGNED_IN with a session bearer -- returned once, exactly as POST .../identity/sessions returns one, just arriving through a poll instead of a request/response round trip.",
+        "operationId" : "poll",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInPollResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Poll a Telegram sign-in code",
+        "tags" : [ "Telegram sign-in" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
@@ -26969,6 +27083,9 @@
   }, {
     "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
     "name" : "Staff sign-in"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
   }, {
     "description" : "Server-Sent Events for the live operations surfaces",
     "name" : "Operational streams"

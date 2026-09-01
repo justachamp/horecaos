@@ -106,12 +106,39 @@ public interface VerificationCodeTransport {
     /**
      * What came back.
      *
+     * <p>ADR 0063 widens this with which delivery provider actually carried the
+     * code, and what that carriage cost — recorded by {@code CustomerVerificationService}
+     * on the challenge row the moment it sees {@code ACCEPTED}, the way SMS
+     * delivery is now recorded too. All four are null for every {@code REFUSED}
+     * or {@code UNAVAILABLE} outcome, and for an {@code ACCEPTED} one from a
+     * transport that predates this widening — nothing requires a caller to fill
+     * them in, and {@link #accepted()} still exists for exactly that caller.
+     *
      * @param reasonCode a provider or adapter code, safe to log and to return as
      *                   an ADR 0031 problem property. Never a provider message
      *                   body: gateways are known to echo the request — which here
      *                   is the number and the code — back inside an error
+     * @param deliveryChannel which provider actually sent it — {@code "SMS"} or
+     *                   {@code "TELEGRAM_GATEWAY"} — or null when the outcome is
+     *                   not {@code ACCEPTED}, or the caller does not track this
+     * @param providerMessageId the provider's own opaque reference for this send,
+     *                   or null when the provider gave none
+     * @param costMinor  integer minor units, never a float (CLAUDE.md), or null
+     *                   when the provider reported no cost
+     * @param costCurrencyCode ISO 4217, paired with {@code costMinor} — both null
+     *                   or both present
      */
-    record Outcome(Status status, @Nullable String reasonCode) {
+    record Outcome(
+            Status status,
+            @Nullable String reasonCode,
+            @Nullable String deliveryChannel,
+            @Nullable String providerMessageId,
+            @Nullable Long costMinor,
+            @Nullable String costCurrencyCode) {
+
+        public Outcome(Status status, @Nullable String reasonCode) {
+            this(status, reasonCode, null, null, null, null);
+        }
 
         public enum Status {
 
@@ -127,6 +154,15 @@ public interface VerificationCodeTransport {
 
         public static Outcome accepted() {
             return new Outcome(Status.ACCEPTED, null);
+        }
+
+        /** {@link #accepted()}, naming which provider carried it and at what cost (ADR 0063). */
+        public static Outcome accepted(
+                String deliveryChannel,
+                @Nullable String providerMessageId,
+                @Nullable Long costMinor,
+                @Nullable String costCurrencyCode) {
+            return new Outcome(Status.ACCEPTED, null, deliveryChannel, providerMessageId, costMinor, costCurrencyCode);
         }
 
         public static Outcome refused(@Nullable String reasonCode) {

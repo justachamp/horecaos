@@ -56,8 +56,16 @@
       "unavailable": "Вход сейчас недоступен.",
       "codeRejected": "Неверный код.",
       "codeRejectedWithTries": "Неверный код. Осталось попыток: {{count}}.",
-      "challengeOver": "Срок действия кода истёк. Запросите новый."
-    }
+      "challengeOver": "Срок действия кода истёк. Запросите новый.",
+      "telegramExpired": "Срок действия ссылки для входа через Telegram истёк. Попробуйте снова.",
+      "telegramUnavailable": "Вход через Telegram сейчас недоступен."
+    },
+    "orDivider": "или",
+    "continueWithTelegram": "Продолжить через Telegram",
+    "telegramOpenInTelegram": "Открыть в Telegram",
+    "telegramWaiting": "Ожидаем подтверждения в Telegram…",
+    "telegramExpiryNotice": "Ссылка одноразовая и скоро истечёт — откройте её сейчас.",
+    "telegramCancel": "Войти по номеру телефона"
   },
   "home": {
     "delivery": "Доставка",
