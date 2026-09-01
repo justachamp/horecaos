@@ -1,6 +1,8 @@
 package uz.horecaos.platform.configuration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -107,6 +109,73 @@ class LocalFixtureStorefrontTests {
         // to render. The dispatch half is the dispatcherTypeMatchers line in
         // SecurityConfiguration.
         mvc.perform(get(LOCATION_PATH + "/menu?locale=uz")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void missingChannelAnswersWithProblemDetailsNotTheContainerDefault() throws Exception {
+        // MissingServletRequestParameterException is raised by Spring MVC's own
+        // argument resolution, before any controller method runs, so no
+        // @ExceptionHandler in this codebase used to see it. It fell all the way
+        // to DefaultHandlerExceptionResolver, which renders the servlet
+        // container's default error body — {"timestamp":...,"status":400,
+        // "error":"Bad Request","path":...} — instead of this platform's ADR
+        // 0031 Problem Details. GlobalApiErrorHandler now extends
+        // ResponseEntityExceptionHandler and overrides
+        // handleMissingServletRequestParameter to close exactly this gap.
+        String responseBody = mvc.perform(get(LOCATION_PATH + "/menu?locale=uz"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.type").value("https://docs.horecaos.uz/problems/validation-failed"))
+                .andExpect(jsonPath("$.title").value("Request validation failed"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.detail").value("Required request parameter 'channel' is not present"))
+                .andExpect(jsonPath("$.errors[0].field").value("channel"))
+                .andExpect(jsonPath("$.errors[0].code").value("REQUIRED"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // The old container default shape must be gone, not merely unasserted.
+        assertThat(responseBody).doesNotContain("\"timestamp\"").doesNotContain("\"error\":\"Bad Request\"");
+    }
+
+    @Test
+    void nonUuidPathSegmentAnswersWithProblemDetails() throws Exception {
+        // The other classic framework binding failure alongside a missing
+        // parameter: a {tenantId} path segment that does not parse as a UUID.
+        // MethodArgumentTypeMismatchException is a TypeMismatchException, caught
+        // by the same override that handles conversion failures in general.
+        String path = "/api/v1/storefront/tenants/not-a-uuid/brands/"
+                + "10000000-0000-0000-0000-000000000002/locations/"
+                + "10000000-0000-0000-0000-000000000003/menu?locale=uz&channel=STOREFRONT";
+
+        mvc.perform(get(path))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("tenantId"))
+                .andExpect(jsonPath("$.errors[0].code").value("MALFORMED"));
+    }
+
+    @Test
+    void fixturelessTenantWithValidParametersAnswersNotFoundAsProblemDetails() throws Exception {
+        // Valid UUIDs, a valid channel and locale, but a tenant/brand/location
+        // this fixture never published. StorefrontCatalogQuery.menuFor already
+        // returns Optional.empty() for an unknown (tenantId, brandId, channel),
+        // and the controller maps that to ApiException(RESOURCE_NOT_FOUND) —
+        // this pins that the fixtureless path was already contract-shaped before
+        // this change, distinct from the framework-level bug this change fixes.
+        String path = "/api/v1/storefront/tenants/"
+                + "20000000-0000-0000-0000-000000000001/brands/"
+                + "20000000-0000-0000-0000-000000000002/locations/"
+                + "20000000-0000-0000-0000-000000000003/menu?locale=uz&channel=STOREFRONT";
+
+        mvc.perform(get(path))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.detail").value("This brand has no published menu"));
     }
 
     /** Avoids contacting Keycloak; the requests above are deliberately public. */

@@ -77,6 +77,9 @@ public enum ErrorCode {
 
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported media type"),
 
+    /** The path matched a real endpoint, but not with this HTTP method. */
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "Method not allowed"),
+
     /**
      * ADR 0045: the request is well formed and names real things, and the state
      * it arrived into refuses it.
