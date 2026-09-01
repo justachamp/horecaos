@@ -96,7 +96,34 @@ public enum ErrorCode {
 
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
+
+    /**
+     * ADR 0031's residual gap: the request matched no route at all — a
+     * mistyped path, an integration calling an endpoint that moved or was
+     * never built, a client probing by hand.
+     *
+     * <p>Deliberately distinct from {@link #RESOURCE_NOT_FOUND}, which every
+     * existing use names a specific entity that was looked for at a route
+     * that does exist and was not there (an order, a shift, an account) —
+     * see the {@code orElseThrow(RESOURCE_NOT_FOUND)} call sites across the
+     * codebase. Answering an unmapped path with that code would tell a
+     * client "this order does not exist" about a URL that was never a route,
+     * which is a different failure with a different fix: check the id
+     * against check the path. {@code RESOURCE_NOT_FOUND}'s own type URI and
+     * title ("Resource not found") already commit to the entity reading, so
+     * reusing it here would conflate the two rather than merely stretch one.
+     */
+    ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "No such route"),
+
+    /**
+     * The caller's {@code Accept} header rules out every representation this
+     * endpoint can produce. Every response this API returns is JSON (ADR
+     * 0031), so this is the mirror of {@link #UNSUPPORTED_MEDIA_TYPE}: that
+     * one is the request body's {@code Content-Type}, this one is the
+     * response's negotiated type.
+     */
+    NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE, "Not acceptable");
 
     private final HttpStatus status;
     private final String title;

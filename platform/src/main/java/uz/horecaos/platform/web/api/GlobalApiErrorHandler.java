@@ -4,6 +4,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -12,15 +13,20 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 
 /**
@@ -107,6 +113,46 @@ public class GlobalApiErrorHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * A required {@code @RequestHeader} was not present, or another binding
+     * failure Spring MVC raises as a bare {@link ServletRequestBindingException}
+     * rather than one of the more specific subtypes already overridden above.
+     *
+     * <p>Several endpoints declare a required header with no default and no
+     * {@code required = false}: the ADR 0031 {@code Idempotency-Key} on
+     * mutations across {@code StorefrontOrderingController},
+     * {@code StorefrontPaymentController}, {@code MigrationRunController} and
+     * {@code MigrationScopeController}, and the ADR 0047 guest token
+     * {@code QrEntryController} resolves a dine-in session by. A caller that
+     * omits one used to fall through to the container's default error body —
+     * see the class javadoc — exactly the gap this override closes.
+     *
+     * <p>{@link MissingRequestHeaderException} is named specifically because
+     * it is the reachable case above; it carries the header name, so the
+     * response reads like every other missing-value failure rather than a
+     * generic sentence. Anything else that reaches this method (a malformed
+     * matrix variable, a missing cookie) still gets a registered code and the
+     * exception's own message, which Spring generates from the parameter it
+     * was resolving rather than from request content.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleServletRequestBindingException(
+            ServletRequestBindingException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        if (exception instanceof MissingRequestHeaderException missingHeader) {
+            String header = missingHeader.getHeaderName();
+            ApiProblem.FieldError error = new ApiProblem.FieldError(
+                    header, "REQUIRED", "Required request header '" + header + "' is missing");
+            ProblemDetail problem = ApiProblem.withFieldErrors(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Required request header '" + header + "' is not present",
+                    List.of(error));
+            return handleExceptionInternal(exception, problem, headers, status, request);
+        }
+        ProblemDetail problem =
+                ApiProblem.of(ErrorCode.VALIDATION_FAILED, detailOrTitle(ErrorCode.VALIDATION_FAILED, exception));
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    /**
      * A path or query value could not be converted to the type the handler
      * declares — the other classic alongside a missing parameter: a non-UUID
      * segment in a {@code {tenantId}} path variable.
@@ -148,6 +194,44 @@ public class GlobalApiErrorHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(exception, problem, headers, status, request);
     }
 
+    /**
+     * Jackson failed to serialize the response body — a getter that throws, a
+     * type with no usable writer, a serializer bug. The caller's request was
+     * never wrong; this is the server's own defect, hence 500 rather than
+     * 400, and the same {@code INTERNAL_ERROR} code every other unexpected
+     * server failure in this handler resolves to.
+     *
+     * <p>The exception's own message can quote the offending type and field
+     * path, so — like {@link #conflict(DataIntegrityViolationException)}'s
+     * handling — it is logged rather than returned; ADR 0031 keeps {@code
+     * detail} free of internal identifiers.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleHttpMessageNotWritable(
+            HttpMessageNotWritableException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        log.error("Failed to write the response body", exception);
+        ProblemDetail problem =
+                ApiProblem.of(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred while preparing the response");
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    /**
+     * A registered {@code Converter} or {@code PropertyEditor} failed while
+     * converting a request value — distinct from {@link #handleTypeMismatch},
+     * which is the value itself being unparseable (a client mistake, 400).
+     * This is the conversion mechanism itself misbehaving, so it is answered
+     * as a server defect at 500, and the exception is logged rather than
+     * returned for the same reason as {@link #handleHttpMessageNotWritable}.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleConversionNotSupported(
+            ConversionNotSupportedException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        log.error("A registered converter failed unexpectedly", exception);
+        ProblemDetail problem =
+                ApiProblem.of(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred while processing this request");
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
     /** Overrides the base class for the same ambiguous-mapping reason as {@link #handleMethodArgumentNotValid}. */
     @Override
     protected @Nullable ResponseEntity<Object> handleHttpMediaTypeNotSupported(
@@ -156,6 +240,23 @@ public class GlobalApiErrorHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request) {
         ProblemDetail problem = ApiProblem.of(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "Only application/json is accepted");
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    /**
+     * The endpoint cannot produce any representation the caller's {@code
+     * Accept} header allows. Every response this API returns is JSON (ADR
+     * 0031); this is the negotiated-response mirror of {@link
+     * #handleHttpMediaTypeNotSupported}, which is the request body's own
+     * {@code Content-Type}.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleHttpMediaTypeNotAcceptable(
+            HttpMediaTypeNotAcceptableException exception,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        ProblemDetail problem = ApiProblem.of(ErrorCode.NOT_ACCEPTABLE, "This endpoint returns application/json only");
         return handleExceptionInternal(exception, problem, headers, status, request);
     }
 
@@ -176,6 +277,34 @@ public class GlobalApiErrorHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ApiProblem.of(
                 ErrorCode.METHOD_NOT_ALLOWED,
                 "Method '" + exception.getMethod() + "' is not supported on this resource");
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    /**
+     * No route matches this request at all — a mistyped path, an
+     * integration calling an endpoint that moved or was never built, a
+     * client probing by hand.
+     *
+     * <p>This is the ADR 0031 residual gap: with static resource handling on
+     * its default configuration (which this application never turns off —
+     * neither {@code spring.web.resources.add-mappings} nor a custom {@code
+     * WebMvcConfigurer} resource registration appears anywhere in it), Spring
+     * resolves every unmapped path through the resource handler mapping,
+     * which throws this exception rather than {@link
+     * org.springframework.web.servlet.NoHandlerFoundException} — the base
+     * class maps both, but only this one is reachable here, confirmed by a
+     * MockMvc hit to a garbage path in {@code LocalFixtureStorefrontTests}.
+     * {@code NoHandlerFoundException} is therefore left unoverridden rather
+     * than given dead code to maintain.
+     *
+     * <p>Answered with {@link ErrorCode#ROUTE_NOT_FOUND}, not {@link
+     * ErrorCode#RESOURCE_NOT_FOUND} — see that code's own javadoc for why the
+     * two must not collapse into one.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleNoResourceFoundException(
+            NoResourceFoundException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail problem = ApiProblem.of(ErrorCode.ROUTE_NOT_FOUND, "No route matches this request");
         return handleExceptionInternal(exception, problem, headers, status, request);
     }
 
