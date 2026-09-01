@@ -42,6 +42,7 @@
         <springdoc.version>3.0.3</springdoc.version>
         <json-schema-validator.version>1.5.8</json-schema-validator.version>
         <aws-sdk.version>2.54.1</aws-sdk.version>
+        <commons-csv.version>1.12.0</commons-csv.version>
     </properties>
 
     <dependencies>
@@ -219,6 +220,17 @@
                  governed by spring-boot-starter-parent's own dependency management. -->
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
+        </dependency>
+        <dependency>
+            <!-- ADR 0059 stage 3: parses a SendPulse CSV contact export. Naive
+                 comma-splitting breaks on the quoted commas a real export's
+                 name/tag columns carry; hand-rolling RFC 4180 quoting is
+                 exactly the kind of parser bug this dependency exists to
+                 avoid. Not in spring-boot-starter-parent's dependency
+                 management, so pinned explicitly. -->
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
         </dependency>
     </dependencies>
 
