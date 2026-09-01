@@ -401,7 +401,14 @@ class CartCheckoutAndOrderTests {
                 published,
                 clock,
                 200_000L);
-        orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper);
+        orderQuery = new OrderQueryService(
+                orderStore,
+                processStore,
+                UNWIRED_PAYMENTS,
+                protection,
+                objectMapper,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock);
         // The real ADR 0024 gate over the real scope table, not a stub that agrees
         // with itself. No scope row is seeded, so every checkout below runs through
         // the "no scope registered" branch — which is the branch that decides
@@ -1514,7 +1521,7 @@ class CartCheckoutAndOrderTests {
         // note merely copied across would be unreadable here. Reading it back
         // proves it was re-encrypted for the order line rather than pasted.
         assertThat(detail.lines().getFirst().line().hasNote()).isTrue();
-        assertThat(orderQuery.revealLineNote(TENANT, orderIdOf(result), lineId, "KITCHEN_TICKET"))
+        assertThat(orderQuery.revealLineNote(TENANT, orderIdOf(result), lineId, "KITCHEN_TICKET", "support-1"))
                 .contains("No onions, ring the top bell");
     }
 
@@ -2175,7 +2182,11 @@ class CartCheckoutAndOrderTests {
         assertThat(customer.hasAddress()).isFalse();
         assertThat(customer.hasDeliveryInstructions()).isFalse();
 
-        assertThat(orderQuery.revealCustomerAddress(TENANT, orderId, "TEST")).isEmpty();
+        assertThat(orderQuery.revealCustomerAddress(TENANT, orderId, "TEST", "support-1"))
+                .isEmpty();
+        assertThat(auditFactCount("order.customer_address.revealed"))
+                .as("nothing was decrypted, so there is nothing to record a purpose against")
+                .isZero();
     }
 
     @Test
@@ -2202,7 +2213,7 @@ class CartCheckoutAndOrderTests {
     void revealingThePhoneReturnsTheWholeNumber() {
         UUID orderId = orderIdOf(placeDeliveryOrder("reveal-phone"));
 
-        assertThat(orderQuery.revealCustomerPhone(TENANT, orderId, "CUSTOMER_CALLED_IN"))
+        assertThat(orderQuery.revealCustomerPhone(TENANT, orderId, "CUSTOMER_CALLED_IN", "support-1"))
                 .contains("+998901112233");
     }
 
@@ -2212,7 +2223,7 @@ class CartCheckoutAndOrderTests {
         UUID orderId = orderIdOf(placeDeliveryOrder("reveal-address"));
 
         var revealed = orderQuery
-                .revealCustomerAddress(TENANT, orderId, "COURIER_HANDOFF")
+                .revealCustomerAddress(TENANT, orderId, "COURIER_HANDOFF", "support-1")
                 .orElseThrow();
         var address = revealed.address();
 
@@ -2226,6 +2237,118 @@ class CartCheckoutAndOrderTests {
         assertThat(address.latitude()).isEqualTo(41.311081);
         assertThat(address.longitude()).isEqualTo(69.240562);
         assertThat(revealed.deliveryInstructions()).isEqualTo("Ring the top bell");
+    }
+
+    /**
+     * ADR 0027: {@code OrderQueryService}'s three PII reveals must each leave
+     * behind the fact that they happened, naming who and why — the same
+     * property {@code CourierTrackRevealServiceTest}'s
+     * {@code aRevealIsAlwaysAnswerable} proves for the telemetry reveal. Each
+     * test below proves both halves: the value still comes back decrypted, and
+     * a record of the reveal exists that an investigation could find months
+     * later.
+     */
+    @Test
+    @DisplayName("revealing the phone leaves an ADR 0027 audit fact naming the actor and the reason")
+    void revealingThePhoneIsAudited() {
+        UUID orderId = orderIdOf(placeDeliveryOrder("reveal-phone-audit"));
+
+        assertThat(orderQuery.revealCustomerPhone(TENANT, orderId, "CUSTOMER_CALLED_IN", "support-1"))
+                .as("the audit fix must not stop the reveal from returning the decrypted value")
+                .contains("+998901112233");
+
+        assertThat(auditFact("order.customer_phone.revealed"))
+                .as("\"who read this customer's phone, and why\" must have an answer years later")
+                .isEqualTo("support-1|CUSTOMER_CALLED_IN|customer.pii.reveal|" + orderId);
+    }
+
+    @Test
+    @DisplayName("revealing the address leaves one ADR 0027 audit fact for the whole call")
+    void revealingTheAddressIsAudited() {
+        UUID orderId = orderIdOf(placeDeliveryOrder("reveal-address-audit"));
+
+        assertThat(orderQuery.revealCustomerAddress(TENANT, orderId, "COURIER_HANDOFF", "support-1"))
+                .as("the audit fix must not stop the reveal from returning the decrypted value")
+                .isPresent();
+
+        // One fact for the address and the instructions together, matching
+        // CourierTrackRevealService's one-fact-per-call convention rather than
+        // one row per encrypted field.
+        assertThat(auditFact("order.customer_address.revealed"))
+                .isEqualTo("support-1|COURIER_HANDOFF|customer.pii.reveal|" + orderId);
+    }
+
+    @Test
+    @DisplayName("revealing a line note leaves an ADR 0027 audit fact")
+    void revealingALineNoteIsAudited() {
+        var cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                2,
+                List.of(),
+                "No onions, ring the top bell"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-note-audit")));
+        UUID orderId = orderIdOf(result);
+        UUID lineId = orderQuery
+                .detail(TENANT, orderId)
+                .orElseThrow()
+                .lines()
+                .getFirst()
+                .line()
+                .lineId();
+
+        assertThat(orderQuery.revealLineNote(TENANT, orderId, lineId, "KITCHEN_TICKET", "support-1"))
+                .as("the audit fix must not stop the reveal from returning the decrypted value")
+                .contains("No onions, ring the top bell");
+
+        assertThat(auditFact("order.line_note.revealed"))
+                .isEqualTo("support-1|KITCHEN_TICKET|customer.pii.reveal|" + orderId);
+    }
+
+    @Test
+    @DisplayName("a line with no note leaves no audit fact behind")
+    void revealingAnAbsentLineNoteIsNotAudited() {
+        UUID orderId = orderIdOf(placeOrder("no-note-audit"));
+        UUID lineId = orderQuery
+                .detail(TENANT, orderId)
+                .orElseThrow()
+                .lines()
+                .getFirst()
+                .line()
+                .lineId();
+
+        assertThat(orderQuery.revealLineNote(TENANT, orderId, lineId, "KITCHEN_TICKET", "support-1"))
+                .isEmpty();
+        assertThat(auditFactCount("order.line_note.revealed"))
+                .as("nothing was decrypted, so there is nothing to record a purpose against")
+                .isZero();
+    }
+
+    /**
+     * The one audit fact a reveal action code left behind, as a single
+     * pipe-joined row — actor, reason, capability, and the order it names.
+     * {@code .single()} also proves there is exactly one: neither zero (the
+     * gap this suite closes) nor duplicated.
+     */
+    private String auditFact(String actionCode) {
+        return jdbc.sql("""
+                        SELECT actor_subject || '|' || reason || '|' || capability_used || '|' || target_id
+                        FROM audit.audit_events WHERE action_code = :code
+                        """).param("code", actionCode).query(String.class).single();
+    }
+
+    private long auditFactCount(String actionCode) {
+        return jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = :code")
+                .param("code", actionCode)
+                .query(Long.class)
+                .single();
     }
 
     // ----------------------------------------- operations read models (counts)

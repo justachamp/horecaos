@@ -159,8 +159,10 @@ class MarketingCampaignTests {
     private void wire(Instant moment) {
         Clock clock = Clock.fixed(moment, ZoneOffset.UTC);
 
+        audit = new RecordingAuditRecorder();
+
         JdbcCustomerStore customerStore = new JdbcCustomerStore(jdbc);
-        profiles = new CustomerProfileService(customerStore, protection, objectMapper, clock);
+        profiles = new CustomerProfileService(customerStore, protection, objectMapper, clock, audit);
         consent = new ConsentService(customerStore, clock);
         RecipientContactService contacts = new RecipientContactService(customerStore, protection);
 
@@ -168,8 +170,6 @@ class MarketingCampaignTests {
         campaignStore = new JdbcCampaignStore(jdbc);
         engagementStore = new JdbcEngagementStore(jdbc);
         metricStore = new JdbcCustomerMetricStore(jdbc);
-
-        audit = new RecordingAuditRecorder();
         if (port == null) {
             port = new FakeCampaignMessagePort()
                     .withBody("ru", "Скидка для вас, {{name}}!")

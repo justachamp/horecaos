@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +13,12 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.api.OrderCounts;
@@ -65,36 +72,61 @@ public class OrderQueryService implements OrderCountsQuery {
     private final PaymentIntentPort payments;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
+    private final AuditRecorder audit;
+    private final Clock clock;
 
     public OrderQueryService(
             JdbcOrderStore orders,
             JdbcOrderProcessStore processes,
             PaymentIntentPort payments,
             FieldProtection protection,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AuditRecorder audit,
+            Clock clock) {
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
         this.protection = protection;
         this.objectMapper = objectMapper;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     /**
-     * Reveals one line's customer note (ADR 0029).
+     * Reveals one line's customer note (ADR 0029, ADR 0027).
      *
      * <p>Separate from reading the order, and requiring a stated purpose, because
      * "no onions, ring the top bell" is the customer's own words about themselves.
      * A kitchen ticket needs it; an order list does not, and rendering it
      * everywhere would put personal data on every screen in the branch.
+     *
+     * <p>The audit fact is written before the decrypt, in the same transaction,
+     * exactly as {@code CourierTrackRevealService} does it — so a decryption
+     * failure cannot leave a reveal that happened with no record of it. Nothing
+     * is written for a line that carries no note: there is no reveal to record a
+     * purpose against.
+     *
+     * @param purpose      recorded as an audit fact (ADR 0027)
+     * @param actorSubject the caller's own identity, recorded as the audit
+     *                     actor — never a value taken from the request body
      */
-    @Transactional(readOnly = true)
-    public Optional<String> revealLineNote(UUID tenantId, UUID orderId, UUID lineId, String purpose) {
+    @Transactional
+    public Optional<String> revealLineNote(
+            UUID tenantId, UUID orderId, UUID lineId, String purpose, String actorSubject) {
         return orders.lineNote(tenantId, orderId, lineId)
-                .map(stored -> protection.reveal(
-                        tenantId,
-                        ProtectedValue.deserialize(stored),
-                        new FieldProtection.RecordRef(ORDER_LINE_TABLE, NOTE_COLUMN, lineId),
-                        purpose));
+                .flatMap(stored -> orders.find(tenantId, orderId).map(order -> {
+                    recordReveal(
+                            "order.line_note.revealed",
+                            order,
+                            purpose,
+                            actorSubject,
+                            Map.of("lineId", lineId.toString()));
+                    return protection.reveal(
+                            tenantId,
+                            ProtectedValue.deserialize(stored),
+                            new FieldProtection.RecordRef(ORDER_LINE_TABLE, NOTE_COLUMN, lineId),
+                            purpose);
+                }));
     }
 
     @Transactional(readOnly = true)
@@ -177,7 +209,7 @@ public class OrderQueryService implements OrderCountsQuery {
     }
 
     /**
-     * Reveals the customer's phone in full (ADR 0029, orders.md §1.5).
+     * Reveals the customer's phone in full (ADR 0029, ADR 0027, orders.md §1.5).
      *
      * <p>Separate from {@link #detail}, and requiring a stated purpose, for the
      * same reason {@link #revealLineNote} is separate from reading the order:
@@ -186,23 +218,32 @@ public class OrderQueryService implements OrderCountsQuery {
      * trail. Copy-to-clipboard of the phone counts as a reveal (orders.md
      * §1.5) and calls this endpoint rather than copying an already-decrypted
      * value.
+     *
+     * <p>The audit fact is written before the decrypt, in the same
+     * transaction — see {@link #revealLineNote}'s doc comment for why.
+     *
+     * @param purpose      recorded as an audit fact (ADR 0027)
+     * @param actorSubject the caller's own identity, recorded as the audit actor
      */
-    @Transactional(readOnly = true)
-    public Optional<String> revealCustomerPhone(UUID tenantId, UUID orderId, String purpose) {
+    @Transactional
+    public Optional<String> revealCustomerPhone(UUID tenantId, UUID orderId, String purpose, String actorSubject) {
         return orders.customerSnapshot(tenantId, orderId)
                 .filter(row -> row.contactEncrypted() != null)
-                .map(row -> protection.reveal(
-                        tenantId,
-                        // The filter above already required this non-null; NullAway
-                        // cannot see that guarantee across the two lambdas.
-                        ProtectedValue.deserialize(
-                                Objects.requireNonNull(row.contactEncrypted(), "filtered for non-null above")),
-                        new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_CONTACT_COLUMN, orderId),
-                        purpose));
+                .flatMap(row -> orders.find(tenantId, orderId).map(order -> {
+                    recordReveal("order.customer_phone.revealed", order, purpose, actorSubject, Map.of());
+                    return protection.reveal(
+                            tenantId,
+                            // The filter above already required this non-null; NullAway
+                            // cannot see that guarantee across the two lambdas.
+                            ProtectedValue.deserialize(
+                                    Objects.requireNonNull(row.contactEncrypted(), "filtered for non-null above")),
+                            new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_CONTACT_COLUMN, orderId),
+                            purpose);
+                }));
     }
 
     /**
-     * Reveals the delivery address and instructions in full (ADR 0029,
+     * Reveals the delivery address and instructions in full (ADR 0029, ADR 0027,
      * orders.md §1.5, §3.6, §3.8).
      *
      * <p>The stored document is the structured {@link DeliveryDestination}
@@ -210,30 +251,70 @@ public class OrderQueryService implements OrderCountsQuery {
      * coordinate together, never a single address line — decrypted and parsed
      * back into the same shape rather than handed back as a JSON blob the
      * caller has to know the schema of by convention.
+     *
+     * <p>One audit fact for the whole call, written before either the address or
+     * the instructions is decrypted — see {@link #revealLineNote}'s doc comment
+     * for why.
+     *
+     * @param purpose      recorded as an audit fact (ADR 0027)
+     * @param actorSubject the caller's own identity, recorded as the audit actor
      */
-    @Transactional(readOnly = true)
-    public Optional<CustomerAddressReveal> revealCustomerAddress(UUID tenantId, UUID orderId, String purpose) {
+    @Transactional
+    public Optional<CustomerAddressReveal> revealCustomerAddress(
+            UUID tenantId, UUID orderId, String purpose, String actorSubject) {
         return orders.customerSnapshot(tenantId, orderId).flatMap(row -> {
             if (row.addressEncrypted() == null) {
                 return Optional.empty();
             }
-            String addressDocument = protection.reveal(
-                    tenantId,
-                    ProtectedValue.deserialize(row.addressEncrypted()),
-                    new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_ADDRESS_COLUMN, orderId),
-                    purpose);
-            DeliveryDestination address = objectMapper.readValue(addressDocument, DeliveryDestination.class);
+            // Bound to a local now that the null check has passed; NullAway
+            // cannot see the guarantee across the nested lambda below.
+            String addressEncrypted = Objects.requireNonNull(row.addressEncrypted(), "checked non-null above");
+            return orders.find(tenantId, orderId).map(order -> {
+                recordReveal("order.customer_address.revealed", order, purpose, actorSubject, Map.of());
 
-            String instructions = row.deliveryInstructionsEncrypted() == null
-                    ? null
-                    : protection.reveal(
-                            tenantId,
-                            ProtectedValue.deserialize(row.deliveryInstructionsEncrypted()),
-                            new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_INSTRUCTIONS_COLUMN, orderId),
-                            purpose);
+                String addressDocument = protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(addressEncrypted),
+                        new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_ADDRESS_COLUMN, orderId),
+                        purpose);
+                DeliveryDestination address = objectMapper.readValue(addressDocument, DeliveryDestination.class);
 
-            return Optional.of(new CustomerAddressReveal(address, instructions));
+                String instructions = row.deliveryInstructionsEncrypted() == null
+                        ? null
+                        : protection.reveal(
+                                tenantId,
+                                ProtectedValue.deserialize(row.deliveryInstructionsEncrypted()),
+                                new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_INSTRUCTIONS_COLUMN, orderId),
+                                purpose);
+
+                return new CustomerAddressReveal(address, instructions);
+            });
         });
+    }
+
+    /**
+     * Records the ADR 0027 evidence for a customer-PII reveal, in the same
+     * transaction as the decrypt that follows it.
+     *
+     * <p>{@code ordering.order} is the target for every one of these facts,
+     * matching {@code OrderStateService} and {@code OrderAmendmentService}'s own
+     * {@code recordAudit} helpers — an operator or an auditor searching this
+     * order's history finds a reveal exactly where every other action on it
+     * lives, with what was revealed (a line id, or nothing beyond the order
+     * itself) in the change document rather than in a second target type.
+     */
+    private void recordReveal(
+            String actionCode, OrderRow order, String purpose, String actorSubject, Map<String, Object> changed) {
+        audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(order.tenantId(), order.brandId(), order.locationId()))
+                .target("ordering.order", order.orderId())
+                .because(purpose)
+                .usingCapability(Capability.CUSTOMER_PII_REVEAL.code())
+                .changed(changed)
+                .correlatedBy(order.orderId().toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     /** The board's tab badges for one location, one aggregate (orders.md §2.3). */

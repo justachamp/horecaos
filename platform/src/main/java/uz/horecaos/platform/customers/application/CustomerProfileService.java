@@ -4,14 +4,21 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -37,13 +44,19 @@ public class CustomerProfileService {
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final AuditRecorder audit;
 
     public CustomerProfileService(
-            JdbcCustomerStore store, FieldProtection protection, ObjectMapper objectMapper, Clock clock) {
+            JdbcCustomerStore store,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit) {
         this.store = store;
         this.protection = protection;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.audit = audit;
     }
 
     /**
@@ -92,13 +105,24 @@ public class CustomerProfileService {
     /**
      * Reveals a contact value.
      *
+     * <p>One audit fact per call, written before any value is decrypted —
+     * {@code CourierTrackRevealService}'s ordering, so a decryption failure
+     * cannot leave a reveal that happened with no record of it. Written even
+     * when the account holds no contact points: the attempt at this scope,
+     * under this purpose, is what {@code revealedCount: 0} answers for.
+     *
      * @param purpose recorded as an audit fact. The difference between an agent
      *                viewing one customer and exporting fifty thousand is exactly
      *                what this parameter exists to capture
+     * @param actor   who is revealing — the platform user behind a staff call,
+     *                or the storefront service acting for the customer viewing
+     *                their own record
      */
-    @Transactional(readOnly = true)
-    public List<RevealedContact> revealContactPoints(UUID tenantId, UUID accountId, String purpose) {
-        return store.contactPoints(tenantId, accountId).stream()
+    @Transactional
+    public List<RevealedContact> revealContactPoints(UUID tenantId, UUID accountId, String purpose, ActorRef actor) {
+        List<JdbcCustomerStore.ContactPointRow> rows = store.contactPoints(tenantId, accountId);
+        recordReveal("customer.contact.revealed", tenantId, accountId, purpose, actor, rows.size());
+        return rows.stream()
                 .map(row -> new RevealedContact(
                         row.id(),
                         ContactType.valueOf(row.type()),
@@ -226,11 +250,22 @@ public class CustomerProfileService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public List<RevealedAddress> revealAddresses(UUID tenantId, UUID accountId, String purpose) {
-        return store.addresses(tenantId, accountId).stream()
-                .map(row -> reveal(tenantId, row, purpose))
-                .toList();
+    /**
+     * Reveals every one of an account's addresses.
+     *
+     * <p>One audit fact per call, written before any address is decrypted —
+     * see {@link #revealContactPoints}'s doc comment for why, and written even
+     * when the account holds none: {@code revealedCount: 0} is still an
+     * answerable "who asked, and when".
+     *
+     * @param purpose recorded as an audit fact (ADR 0027)
+     * @param actor   who is revealing — see {@link #revealContactPoints}
+     */
+    @Transactional
+    public List<RevealedAddress> revealAddresses(UUID tenantId, UUID accountId, String purpose, ActorRef actor) {
+        List<JdbcCustomerStore.AddressRow> rows = store.addresses(tenantId, accountId);
+        recordReveal("customer.address.revealed", tenantId, accountId, purpose, actor, rows.size());
+        return rows.stream().map(row -> reveal(tenantId, row, purpose)).toList();
     }
 
     /**
@@ -240,10 +275,20 @@ public class CustomerProfileService {
      * out, so an id belonging to somebody else is empty before anything is
      * decrypted — the reveal is not attempted at all, and therefore nothing is
      * recorded against a purpose for a row the caller had no business reading.
+     * The one audit fact this call can produce is written only once that
+     * predicate has already matched, before the row is decrypted — the same
+     * ordering {@link #revealAddresses} uses, at the cardinality of one.
+     *
+     * @param purpose recorded as an audit fact (ADR 0027)
+     * @param actor   who is revealing — see {@link #revealContactPoints}
      */
-    @Transactional(readOnly = true)
-    public Optional<RevealedAddress> revealAddress(UUID tenantId, UUID accountId, UUID addressId, String purpose) {
-        return store.address(tenantId, accountId, addressId).map(row -> reveal(tenantId, row, purpose));
+    @Transactional
+    public Optional<RevealedAddress> revealAddress(
+            UUID tenantId, UUID accountId, UUID addressId, String purpose, ActorRef actor) {
+        return store.address(tenantId, accountId, addressId).map(row -> {
+            recordReveal("customer.address.revealed", tenantId, accountId, purpose, actor, 1);
+            return reveal(tenantId, row, purpose);
+        });
     }
 
     /**
@@ -386,6 +431,41 @@ public class CustomerProfileService {
 
     private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    /**
+     * Records the ADR 0027 evidence for a customer-PII reveal, in the same
+     * transaction as the decrypt it precedes.
+     *
+     * <p>{@code revealedCount} rather than {@code addressesRevealed} or
+     * {@code contactPointsRevealed}: {@link uz.horecaos.platform.audit.domain.ChangeDocuments}
+     * redacts any change-document field whose name merely contains a protected
+     * term such as "address", and a count sitting behind {@code [redacted]}
+     * would defeat its own point. The action code already says what kind of
+     * PII this was.
+     *
+     * <p>{@code CUSTOMER_PII_REVEAL} is recorded as the capability used only
+     * for a {@link ActorRef.Type#USER} actor — a staff call that
+     * {@code CustomerController} actually gated on it. The storefront's
+     * self-service reveal ({@code StorefrontCustomerController}) holds no such
+     * grant; it is authorised by account ownership, not by a capability, and
+     * recording one it never checked would misstate how the call was
+     * authorised.
+     */
+    private void recordReveal(
+            String actionCode, UUID tenantId, UUID accountId, String purpose, ActorRef actor, int revealedCount) {
+        AuditFact.Builder fact = AuditFact.of(actionCode, AuditClass.SECURITY)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("customer_account", accountId)
+                .because(purpose)
+                .changed(Map.of("revealedCount", revealedCount))
+                .correlatedBy(accountId.toString())
+                .occurredAt(clock.instant());
+        if (actor.type() == ActorRef.Type.USER) {
+            fact.usingCapability(Capability.CUSTOMER_PII_REVEAL.code());
+        }
+        audit.record(fact.build());
     }
 
     private RevealedAddress reveal(UUID tenantId, JdbcCustomerStore.AddressRow row, String purpose) {

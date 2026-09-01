@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerOwned;
@@ -106,6 +107,18 @@ public class StorefrontCustomerController {
      * nothing that anybody asks it.
      */
     private static final String SELF_SERVICE_PURPOSE = "CUSTOMER_SELF_SERVICE";
+
+    /**
+     * The ADR 0027 actor behind every self-service reveal below.
+     *
+     * <p>A service actor, as {@code CustomerSessionService} and {@code
+     * CustomerVerificationService} record for the same storefront: there is no
+     * operator here, and this endpoint is authorised by account ownership
+     * ({@link CustomerOwned}), not by a capability grant a platform user holds.
+     * Recording {@link ActorRef.Type#USER} would claim a grant that was never
+     * checked.
+     */
+    private static final ActorRef SELF_SERVICE_ACTOR = ActorRef.service("storefront-profile");
 
     private final CustomerProfileService profiles;
     private final CurrentCustomer currentCustomer;
@@ -198,9 +211,10 @@ public class StorefrontCustomerController {
     public ResponseEntity<List<AddressResponse>> addresses(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
         UUID accountId = accountId(tenantId, brandId);
-        return ResponseEntity.ok(profiles.revealAddresses(tenantId, accountId, SELF_SERVICE_PURPOSE).stream()
-                .map(AddressResponse::of)
-                .toList());
+        return ResponseEntity.ok(
+                profiles.revealAddresses(tenantId, accountId, SELF_SERVICE_PURPOSE, SELF_SERVICE_ACTOR).stream()
+                        .map(AddressResponse::of)
+                        .toList());
     }
 
     @GetMapping("/addresses/{addressId}")
@@ -214,7 +228,8 @@ public class StorefrontCustomerController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID addressId) {
 
         UUID accountId = accountId(tenantId, brandId);
-        RevealedAddress address = profiles.revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
+        RevealedAddress address = profiles.revealAddress(
+                        tenantId, accountId, addressId, SELF_SERVICE_PURPOSE, SELF_SERVICE_ACTOR)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such address"));
 
         return ResponseEntity.ok()
@@ -253,7 +268,8 @@ public class StorefrontCustomerController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, rejected.getMessage());
         }
 
-        RevealedAddress saved = profiles.revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
+        RevealedAddress saved = profiles.revealAddress(
+                        tenantId, accountId, addressId, SELF_SERVICE_PURPOSE, SELF_SERVICE_ACTOR)
                 .orElseThrow(
                         () -> new IllegalStateException("An address just written is not readable by its own account"));
 

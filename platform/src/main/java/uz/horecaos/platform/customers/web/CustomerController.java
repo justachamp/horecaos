@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
@@ -114,7 +115,8 @@ public class CustomerController {
             description = "Requires a stated purpose, recorded as an audit fact.")
     public ResponseEntity<List<CustomerProfileService.RevealedContact>> contacts(
             @PathVariable UUID tenantId, @PathVariable UUID accountId, @RequestParam @NotBlank String purpose) {
-        return ResponseEntity.ok(profiles.revealContactPoints(tenantId, accountId, purpose));
+        return ResponseEntity.ok(profiles.revealContactPoints(
+                tenantId, accountId, purpose, ActorRef.user(currentActor.get().subject(), null)));
     }
 
     @PostMapping("/{accountId}/addresses")
@@ -148,7 +150,8 @@ public class CustomerController {
     @Operation(summary = "Reveal decrypted addresses")
     public ResponseEntity<List<CustomerProfileService.RevealedAddress>> addresses(
             @PathVariable UUID tenantId, @PathVariable UUID accountId, @RequestParam @NotBlank String purpose) {
-        return ResponseEntity.ok(profiles.revealAddresses(tenantId, accountId, purpose));
+        return ResponseEntity.ok(profiles.revealAddresses(
+                tenantId, accountId, purpose, ActorRef.user(currentActor.get().subject(), null)));
     }
 
     @PostMapping("/{accountId}/consent-decisions")
