@@ -993,6 +993,17 @@ public enum Capability {
     PARTNER_INVOICE_MANAGE("partner.invoice.manage", "partner", "invoice.manage"),
 
     /**
+     * ADR 0059: authoring the next version of a brand's flow document, and
+     * activating it. YAML is the only authoring surface — this is what gates
+     * the control-plane endpoint that accepts it, in the {@link
+     * #APPROVAL_POLICY_MANAGE}/{@code ApprovalPolicyController} genre:
+     * versioned, never edited in place, and this capability alone (not
+     * {@link #CUSTOMER_READ} or any other) decides who may publish a flow
+     * that answers a customer before a person ever reads what it captured.
+     */
+    CONVERSATION_FLOW_MANAGE("conversation.flow.manage", "conversation-flow", "manage"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

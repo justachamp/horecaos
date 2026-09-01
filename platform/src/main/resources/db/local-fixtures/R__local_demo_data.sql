@@ -546,13 +546,62 @@ INSERT INTO commercial.plan_versions (
 
 INSERT INTO commercial.plan_entitlements (
     plan_version_id, entitlement_key, value_type, boolean_value, enforcement_mode, reset_period
-) VALUES (
-    '10000000-0000-0000-0000-000000000051', 'telegram.digests.enabled', 'BOOLEAN', true, 'METER_ONLY', 'NONE'
-) ON CONFLICT DO NOTHING;
+) VALUES
+    ('10000000-0000-0000-0000-000000000051', 'telegram.digests.enabled', 'BOOLEAN', true, 'METER_ONLY', 'NONE'),
+    -- ADR 0059: without this the fixture tenant's brand bot would answer
+    -- every /start with silence, on a fresh laptop, for the same reason the
+    -- digests row above exists — telegram.conversations.enabled defaults
+    -- FALSE (EntitlementKeys' own safeDefault).
+    ('10000000-0000-0000-0000-000000000051', 'telegram.conversations.enabled', 'BOOLEAN', true, 'METER_ONLY', 'NONE')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO commercial.subscriptions (
     id, tenant_id, plan_version_id, status, start_at, current_period_start, current_period_end, version
 ) VALUES (
     '10000000-0000-0000-0000-000000000052', '10000000-0000-0000-0000-000000000001',
     '10000000-0000-0000-0000-000000000051', 'ACTIVE', now(), now(), now() + interval '100 years', 0
+) ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Conversations: the welcome series, reproduced from the observed SendPulse
+-- flow (ADR 0059 stage 1) — a real YAML resource, active for the fixture
+-- brand, exactly what a fresh laptop's Telegram bot answers a bare /start
+-- with once a bot installation is configured for it (see
+-- docs/local-fixtures.md for that manual step; a real bot token is not
+-- something this fixture can seed).
+-- ---------------------------------------------------------------------------
+
+INSERT INTO conversations.flow_documents (
+    id, tenant_id, brand_id, flow_key, version, document_yaml, is_active, description, authored_by
+) VALUES (
+    '10000000-0000-0000-0000-000000000053',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'welcome-series', 1,
+    $yaml$
+flowKey: welcome-series
+name: Welcome series
+startState: greeting
+states:
+  greeting:
+    type: buttons
+    text: "Welcome to HorecaOS Local Cafe! Tap Order to browse the menu, or tell us what you think."
+    buttons:
+      - label: "Order now"
+        kind: url
+        url: "{{storefrontUrl}}"
+      - label: "Leave feedback"
+        kind: callback
+        key: feedback
+        next: awaiting_feedback
+  awaiting_feedback:
+    type: input-to-field
+    prompt: "Please type your feedback and send it as a message."
+    field: feedback
+    next: thank_you
+  thank_you:
+    type: message
+    text: "Thank you for your feedback! We appreciate you taking the time to share it."
+$yaml$,
+    true, 'Welcome series (local fixture, ADR 0059 stage 1)', 'local-fixture'
 ) ON CONFLICT DO NOTHING;

@@ -184,6 +184,26 @@ public final class EntitlementKeys {
                     "Whether a customer's linked Telegram chat may receive transactional notifications (ADR 0058).")
             .build();
 
+    /**
+     * ADR 0059: whether the conversations engine may run flows for this
+     * tenant's brand bots at all — the resellable SendPulse-replacement
+     * product itself, not a channel add-on to it. {@code safeDefault(FALSE)},
+     * matching {@link #TELEGRAM_DIGESTS_ENABLED}'s reasoning rather than
+     * {@link #TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED}'s: a tenant that has
+     * never been sold this product must not have every brand bot answering
+     * {@code /start} with a flow nobody at that tenant configured or agreed
+     * to pay for. Gates {@link uz.horecaos.platform.iam.api.Capability
+     * #CONVERSATION_FLOW_MANAGE}'s own authoring surface not at all —
+     * authoring a flow is always allowed; this key gates the engine actually
+     * running one against a live chat.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_CONVERSATIONS_ENABLED = EntitlementKey.feature(
+                    "telegram.conversations.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("conversations")
+            .describedAs("Whether the conversations flow engine may run for this tenant's Telegram brand bots.")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -200,7 +220,8 @@ public final class EntitlementKeys {
             TELEGRAM_DIGESTS_ENABLED,
             TELEGRAM_OPERATIONS_ALERTS_ENABLED,
             TELEGRAM_BOT_INTERACTIVE_ENABLED,
-            TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED));
+            TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED,
+            TELEGRAM_CONVERSATIONS_ENABLED));
 
     private EntitlementKeys() {}
 

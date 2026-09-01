@@ -291,6 +291,29 @@
         },
         "type" : "object"
       },
+      "AuthorFlowDocumentRequest" : {
+        "properties" : {
+          "activate" : {
+            "type" : "boolean"
+          },
+          "description" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "documentYaml" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "documentYaml", "reason" ],
+        "type" : "object"
+      },
       "AuthorPolicyRequest" : {
         "properties" : {
           "actionCode" : {
@@ -1448,6 +1471,38 @@
             "maxLength" : 32,
             "minLength" : 0,
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FlowDocumentResponse" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "authoredBy" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "documentYaml" : {
+            "type" : "string"
+          },
+          "flowKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -3663,7 +3718,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "responses" : {
           "200" : {
             "content" : {
@@ -3866,7 +3921,7 @@
       },
       "post" : {
         "description" : "Never an edit. The previous open version is closed at the instant this one starts, so what an earlier approver was shown stays readable and the version snapshotted onto their request still means what it said.",
-        "operationId" : "author_1",
+        "operationId" : "author_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -5057,6 +5112,100 @@
         },
         "summary" : "Set whether a location sells a variant",
         "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
+      "get" : {
+        "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
+        "operationId" : "list_7",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FlowDocumentResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a brand's flow documents",
+        "tags" : [ "Conversation flows" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}" : {
+      "post" : {
+        "description" : "Never an edit — always the next version. When activate is true, the previously active version for this flowKey is deactivated in the same transaction the new one activates in, so a reader never observes zero or two active versions. A malformed or invalid document (unknown block type, a transition naming a state that does not exist, a cycle with no exit) is refused whole, with every problem named.",
+        "operationId" : "author_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "flowKey",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuthorFlowDocumentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FlowDocumentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version of a flow document",
+        "tags" : [ "Conversation flows" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
@@ -8227,6 +8376,9 @@
   }, {
     "description" : "Immutable security and business evidence",
     "name" : "Audit"
+  }, {
+    "description" : "The YAML flow documents the conversations engine executes",
+    "name" : "Conversation flows"
   }, {
     "description" : "Control-plane alerts raised from outside the Java process",
     "name" : "SaaS control plane"

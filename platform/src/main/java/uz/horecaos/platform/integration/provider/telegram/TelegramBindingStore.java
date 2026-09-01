@@ -275,6 +275,27 @@ public class TelegramBindingStore {
                 .optional();
     }
 
+    /**
+     * The customer account already linked to this chat, if any (ADR 0058's
+     * handshake, ADR 0059's conversations engine reading it). Scoped to
+     * {@code CUSTOMER}-audience bindings only — an operations group's chat id
+     * is never a customer's.
+     */
+    public Optional<UUID> customerAccountFor(UUID tenantId, long chatId) {
+        return jdbc.sql("""
+                SELECT re.customer_account_id
+                FROM integration.telegram_bindings tb
+                JOIN notifications.recipient_endpoints re
+                  ON re.tenant_id = tb.tenant_id AND re.provider_binding_id = tb.binding_id
+                WHERE tb.tenant_id = :tenantId AND tb.chat_id = :chatId AND tb.audience = 'CUSTOMER'
+                  AND tb.retired_at IS NULL AND re.customer_account_id IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("chatId", chatId)
+                .query(UUID.class)
+                .optional();
+    }
+
     /** The chat a binding currently points at, for the adapter to call the Bot API with. */
     public Optional<ChatRef> chatFor(UUID tenantId, UUID bindingId) {
         return jdbc.sql("""
