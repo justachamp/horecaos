@@ -65,10 +65,12 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramInstallationBrandLookup;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramRightsVerifier;
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateDedupStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateHandler;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup.WebhookInstallation;
@@ -138,6 +140,15 @@ class TelegramInteractiveBotIntegrationTest {
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
+    // ADR 0032/0059: TelegramUpdateHandler now deduplicates by (installation,
+    // update_id) before anything else runs, so every fixture update needs a
+    // genuinely fresh id — reusing a literal the way earlier fixtures did is
+    // exactly the redelivery this handler is now built to recognise and
+    // drop. Static because the update-building helpers below are static;
+    // monotonically increasing across the whole class run is still a fresh
+    // id for every call, which is all dedup needs.
+    private static final java.util.concurrent.atomic.AtomicLong nextUpdateId =
+            new java.util.concurrent.atomic.AtomicLong(1);
     private ObjectMapper objectMapper;
     private Clock clock;
     private FakeTelegramBotApi bot;
@@ -220,7 +231,10 @@ class TelegramInteractiveBotIntegrationTest {
                 secretResolver(),
                 audit,
                 clock,
-                "en");
+                "en",
+                new NoOpConversationInboundPort(),
+                new TelegramInstallationBrandLookup(jdbc),
+                new TelegramUpdateDedupStore(jdbc, clock));
     }
 
     @Test
@@ -736,7 +750,7 @@ class TelegramInteractiveBotIntegrationTest {
     private static Map<String, Object> privateLinkUpdate(String code, long userId) {
         return Map.of(
                 "update_id",
-                1,
+                nextUpdateId.getAndIncrement(),
                 "message",
                 Map.of(
                         "text", "/link " + code,
@@ -747,7 +761,7 @@ class TelegramInteractiveBotIntegrationTest {
     private static Map<String, Object> privateStartUpdate(String code, long userId) {
         return Map.of(
                 "update_id",
-                1,
+                nextUpdateId.getAndIncrement(),
                 "message",
                 Map.of(
                         "text", "/start " + code,
@@ -758,7 +772,7 @@ class TelegramInteractiveBotIntegrationTest {
     private static Map<String, Object> privateCommandUpdate(String text, long userId) {
         return Map.of(
                 "update_id",
-                1,
+                nextUpdateId.getAndIncrement(),
                 "message",
                 Map.of(
                         "text", text,
@@ -781,7 +795,7 @@ class TelegramInteractiveBotIntegrationTest {
         }
         return Map.of(
                 "update_id",
-                2,
+                nextUpdateId.getAndIncrement(),
                 "callback_query",
                 Map.of(
                         "id", callbackQueryId,
@@ -1166,6 +1180,25 @@ class TelegramInteractiveBotIntegrationTest {
         public Optional<String> preferredLocale(UUID tenantId, UUID accountId) {
             return Optional.empty();
         }
+    }
+
+    /** ADR 0059's conversations engine, unexercised by this ADR 0060 bot-mechanism suite. */
+    private static final class NoOpConversationInboundPort
+            implements uz.horecaos.platform.conversations.api.ConversationInboundPort {
+        @Override
+        public boolean hasActiveFlow(UUID tenantId, UUID brandId) {
+            return false;
+        }
+
+        @Override
+        public void handleStart(uz.horecaos.platform.conversations.api.ConversationChannelRef channel) {}
+
+        @Override
+        public void handleText(uz.horecaos.platform.conversations.api.ConversationChannelRef channel, String text) {}
+
+        @Override
+        public void handleButtonTap(
+                uz.horecaos.platform.conversations.api.ConversationChannelRef channel, String buttonKey) {}
     }
 
     private static final class NoSummaryOrderDirectory implements OrderDirectory {

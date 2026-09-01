@@ -19,6 +19,7 @@ class ModularArchitectureTests {
             "catalog",
             "commercial",
             "configuration",
+            "conversations",
             "courier",
             "customers",
             "dinein",

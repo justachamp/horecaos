@@ -49,11 +49,13 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramInstallationBrandLookup;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory;
 import uz.horecaos.platform.integration.provider.telegram.TelegramRightsVerifier;
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateDedupStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateHandler;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup;
 import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
@@ -106,6 +108,11 @@ class TelegramOperationsNotificationIntegrationTest {
     private FakeTelegramBotApi bot;
     private CamelContext camel;
     private JdbcClient jdbc;
+    // ADR 0032/0059: TelegramUpdateHandler now deduplicates by (installation,
+    // update_id) before anything else runs; several tests here send more than
+    // one update to the same installation, so each fixture update needs a
+    // genuinely fresh id rather than a reused literal.
+    private final java.util.concurrent.atomic.AtomicLong nextUpdateId = new java.util.concurrent.atomic.AtomicLong(1);
     private JdbcNotificationStore notifications;
     private NotificationWorker worker;
     private OrderNotificationTrigger trigger;
@@ -201,7 +208,10 @@ class TelegramOperationsNotificationIntegrationTest {
                 secrets,
                 audit,
                 clock,
-                "ru");
+                "ru",
+                new NoOpConversationInboundPort(),
+                new TelegramInstallationBrandLookup(jdbc),
+                new TelegramUpdateDedupStore(jdbc, clock));
 
         JdbcProviderInstallationLookup installationLookup = new JdbcProviderInstallationLookup(jdbc, clock);
         NotificationGateway gateway = new NotificationGateway(
@@ -392,7 +402,7 @@ class TelegramOperationsNotificationIntegrationTest {
         message.put("text", "/start " + code);
 
         Map<String, Object> update = new LinkedHashMap<>();
-        update.put("update_id", 1);
+        update.put("update_id", nextUpdateId.getAndIncrement());
         update.put("message", message);
         return update;
     }
@@ -463,7 +473,7 @@ class TelegramOperationsNotificationIntegrationTest {
         }
 
         Map<String, Object> update = new LinkedHashMap<>();
-        update.put("update_id", 1);
+        update.put("update_id", nextUpdateId.getAndIncrement());
         update.put("message", message);
         return update;
     }
@@ -675,6 +685,29 @@ class TelegramOperationsNotificationIntegrationTest {
         public Optional<String> preferredLocale(UUID tenantId, UUID accountId) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * ADR 0059's conversations engine, unexercised by this ADR 0058
+     * operations-delivery suite — a stub that does nothing proves the
+     * Telegram operations path never depends on it.
+     */
+    private static final class NoOpConversationInboundPort
+            implements uz.horecaos.platform.conversations.api.ConversationInboundPort {
+        @Override
+        public boolean hasActiveFlow(UUID tenantId, UUID brandId) {
+            return false;
+        }
+
+        @Override
+        public void handleStart(uz.horecaos.platform.conversations.api.ConversationChannelRef channel) {}
+
+        @Override
+        public void handleText(uz.horecaos.platform.conversations.api.ConversationChannelRef channel, String text) {}
+
+        @Override
+        public void handleButtonTap(
+                uz.horecaos.platform.conversations.api.ConversationChannelRef channel, String buttonKey) {}
     }
 
     private static final class StubOrderDirectory implements OrderDirectory {

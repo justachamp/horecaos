@@ -97,6 +97,9 @@ public enum PlatformRole {
                     // is the policy's required_approver_capability, checked per request,
                     // and never one the owner raised themselves.
                     APPROVAL_DECIDE,
+                    // ADR 0059: publishing the brand's flow documents — YAML is the only
+                    // authoring surface, and this is the one capability that gates it.
+                    CONVERSATION_FLOW_MANAGE,
                     // ADR 0044: the second signature on a send, and the power to lift a
                     // suppression. Both are deliberately away from whoever writes the
                     // campaign — the approver must not be the author, and a marketer who

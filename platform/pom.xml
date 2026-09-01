@@ -210,6 +210,16 @@
             <version>${json-schema-validator.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- ADR 0059: parses the conversations module's flow YAML documents.
+                 Already on the runtime classpath transitively (Spring Boot's own
+                 application.yml processing pulls it in); declared explicitly here
+                 because this module depends on it directly rather than only
+                 benefiting from another dependency's transitive pull. Version
+                 governed by spring-boot-starter-parent's own dependency management. -->
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>

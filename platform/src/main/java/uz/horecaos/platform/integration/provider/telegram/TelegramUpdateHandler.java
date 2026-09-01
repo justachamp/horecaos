@@ -20,6 +20,10 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.catalog.api.StopListPort;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.conversations.api.ChannelKind;
+import uz.horecaos.platform.conversations.api.ConversationCallbackToken;
+import uz.horecaos.platform.conversations.api.ConversationChannelRef;
+import uz.horecaos.platform.conversations.api.ConversationInboundPort;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -97,6 +101,9 @@ public class TelegramUpdateHandler {
     private final AuditRecorder audit;
     private final Clock clock;
     private final String defaultLocale;
+    private final ConversationInboundPort conversations;
+    private final TelegramInstallationBrandLookup installationBrands;
+    private final TelegramUpdateDedupStore dedup;
 
     public TelegramUpdateHandler(
             TelegramLinkService links,
@@ -116,7 +123,10 @@ public class TelegramUpdateHandler {
             SecretResolver secrets,
             AuditRecorder audit,
             Clock clock,
-            @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale) {
+            @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale,
+            ConversationInboundPort conversations,
+            TelegramInstallationBrandLookup installationBrands,
+            TelegramUpdateDedupStore dedup) {
         this.links = links;
         this.staffLinks = staffLinks;
         this.customerLinks = customerLinks;
@@ -135,6 +145,24 @@ public class TelegramUpdateHandler {
         this.audit = audit;
         this.clock = clock;
         this.defaultLocale = defaultLocale;
+        this.conversations = conversations;
+        this.installationBrands = installationBrands;
+        this.dedup = dedup;
+    }
+
+    /**
+     * @return true the first time this update's {@code update_id} is seen for
+     *         this installation; false on a redelivery, which the caller must
+     *         not act on again (ADR 0032)
+     */
+    private boolean isNewUpdate(WebhookInstallation installation, Map<String, Object> update) {
+        if (!(update.get("update_id") instanceof Number updateIdNumber)) {
+            // Every real Bot API update carries one; its absence only happens
+            // in a hand-built fixture that does not exercise dedup, and
+            // proceeding rather than dropping keeps that fixture working.
+            return true;
+        }
+        return dedup.recordIfNew(installation.tenantId(), installation.installationId(), updateIdNumber.longValue());
     }
 
     /**
@@ -143,6 +171,16 @@ public class TelegramUpdateHandler {
      * @param update the parsed Bot API {@code Update} object
      */
     public void handle(WebhookInstallation installation, Map<String, Object> update) {
+        if (!isNewUpdate(installation, update)) {
+            // ADR 0032: a redelivered update_id — a webhook retry, or the
+            // local long-polling consumer racing a slow ack — must not run
+            // any of this again. Checked before anything else, including the
+            // secret-token-authenticated installation's own tenant, so a
+            // duplicate never reaches a handshake, a typed command, or the
+            // conversations engine a second time.
+            return;
+        }
+
         if (update.get("callback_query") instanceof Map<?, ?> rawCallback) {
             handleCallbackQuery(installation, asMap(rawCallback));
             return;
@@ -158,10 +196,6 @@ public class TelegramUpdateHandler {
         if (!(textObject instanceof String text)) {
             return;
         }
-        ParsedCommand parsed = parseCommand(text);
-        if (parsed == null) {
-            return;
-        }
 
         Object chatObject = message.get("chat");
         if (!(chatObject instanceof Map<?, ?> chat) || !(chat.get("id") instanceof Number chatIdNumber)) {
@@ -174,6 +208,19 @@ public class TelegramUpdateHandler {
         boolean anonymousGroupAdmin = message.get("sender_chat") != null;
 
         ProviderCall call = resolveCall(installation);
+
+        ParsedCommand parsed = parseCommand(text);
+        if (parsed == null) {
+            // Not a command at all — ordinary free text. ADR 0059 precedence
+            // tier 4: only a private chat, only when entitled and an active
+            // flow run is actually waiting on text, does anything happen;
+            // every group chat and every other case is exactly today's
+            // silent no-op, unchanged.
+            if ("private".equals(chatType) && fromUserId != 0L) {
+                handlePrivateFreeText(installation, chatId, text);
+            }
+            return;
+        }
 
         if ("private".equals(chatType)) {
             handlePrivateMessage(installation, call, chatId, topicId, fromUserId, parsed);
@@ -246,6 +293,17 @@ public class TelegramUpdateHandler {
                 ? id.longValue()
                 : 0L;
         if (fromUserId == 0L) {
+            return;
+        }
+
+        // ADR 0059 precedence: a flow button's callback_data lives in its own
+        // cvb: namespace, provably disjoint from every BotActionTokenStore-
+        // minted token (see ConversationCallbackToken's own doc) — checked
+        // first so a flow tap is never misresolved as an unrecognised order-
+        // decision/tenant-select token further down.
+        Optional<String> conversationButtonKey = ConversationCallbackToken.unwrap(token);
+        if (conversationButtonKey.isPresent()) {
+            handleConversationButtonTap(installation, chatId, conversationButtonKey.get());
             return;
         }
 
@@ -641,6 +699,88 @@ public class TelegramUpdateHandler {
         log.info("Linked Telegram account {} to principal in tenant {} via staff /link", fromUserId, link.tenantId());
     }
 
+    // ------------------------------------------------------ conversations engine
+
+    /**
+     * ADR 0059 precedence tier 4: a bare {@code /start} — private chat, no
+     * payload — is offered to the flow engine. No-ops (nothing sent, no
+     * conversation row created) unless the tenant is entitled and an active
+     * welcome flow exists for the resolved brand; either gate failing leaves
+     * this exactly the silent no-op {@code handleCustomerLink} always gave a
+     * bare {@code /start}.
+     */
+    private void handleBareStart(WebhookInstallation installation, long chatId) {
+        if (!entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
+            return;
+        }
+        Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
+        if (brandId.isEmpty()) {
+            return;
+        }
+        conversations.handleStart(channelRef(installation, brandId.get(), chatId));
+    }
+
+    /**
+     * ADR 0059 precedence tier 4: ordinary free text in a private chat.
+     * No-ops unless entitled, a brand resolves, and that brand has an active
+     * flow — {@link ConversationInboundPort#handleText} itself further no-ops
+     * unless this exact channel identity has a run actually waiting on text,
+     * which is the common case for most free text and is where today's
+     * unchanged silence ultimately comes from.
+     */
+    private void handlePrivateFreeText(WebhookInstallation installation, long chatId, String text) {
+        if (!entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
+            return;
+        }
+        Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
+        if (brandId.isEmpty() || !conversations.hasActiveFlow(installation.tenantId(), brandId.get())) {
+            return;
+        }
+        conversations.handleText(channelRef(installation, brandId.get(), chatId), text);
+    }
+
+    /**
+     * A tap on a flow-rendered button, already unwrapped of {@link
+     * ConversationCallbackToken}'s namespace by the caller. Same gates as
+     * {@link #handlePrivateFreeText}; a stale tap on a superseded run is a
+     * no-op inside the engine itself.
+     */
+    private void handleConversationButtonTap(WebhookInstallation installation, long chatId, String buttonKey) {
+        if (!entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
+            return;
+        }
+        Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
+        if (brandId.isEmpty()) {
+            return;
+        }
+        conversations.handleButtonTap(channelRef(installation, brandId.get(), chatId), buttonKey);
+    }
+
+    /**
+     * Which brand's flow answers this chat (ADR 0059, V0108): an already-
+     * bound chat (a group link, a prior customer {@code /start <code>})
+     * resolves from that binding first; a chat that has never bound anything
+     * falls back to the installation's own configured brand — ADR 0058's
+     * bot-per-brand topology, decided but still not a schema fact end to end.
+     */
+    private Optional<UUID> resolveBrandForChat(WebhookInstallation installation, long chatId) {
+        return bindings.scopeForChat(installation.tenantId(), chatId, null)
+                .map(TelegramBindingStore.BindingScope::brandId)
+                .or(() -> installationBrands.brandFor(installation.installationId()));
+    }
+
+    private ConversationChannelRef channelRef(WebhookInstallation installation, UUID brandId, long chatId) {
+        UUID customerAccountId =
+                bindings.customerAccountFor(installation.tenantId(), chatId).orElse(null);
+        return new ConversationChannelRef(
+                installation.tenantId(),
+                brandId,
+                installation.installationId(),
+                ChannelKind.TELEGRAM,
+                chatId,
+                customerAccountId);
+    }
+
     // ----------------------------------------------------------- customer link
 
     /**
@@ -654,9 +794,12 @@ public class TelegramUpdateHandler {
             WebhookInstallation installation, ProviderCall call, long chatId, long fromUserId, String code) {
         if (code.isEmpty()) {
             // A bare /start, with no payload — somebody opened the bot
-            // directly rather than through a storefront deep link. Not an
-            // error and not actionable either; the bot has nothing to say
-            // that would not be a guess at what the customer wanted.
+            // directly rather than through a storefront deep link. ADR 0059
+            // precedence tier 4: this is exactly the case the conversations
+            // engine answers, when the tenant is entitled and an active flow
+            // exists for the brand; otherwise handleStart no-ops and this
+            // stays the silent no-op it always was.
+            handleBareStart(installation, chatId);
             return;
         }
         Optional<PendingCustomerLink> pending = customerLinks.resolve(code);

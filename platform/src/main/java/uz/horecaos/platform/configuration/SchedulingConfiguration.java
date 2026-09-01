@@ -56,9 +56,11 @@ public class SchedulingConfiguration {
      * production caller for), {@code DigestScheduler}'s three cadences
      * ({@code emitFifteenMinuteDigests}, {@code emitHalfDayDigests}, {@code
      * emitDayCloseDigests}), and {@code OnboardingStuckRunAlertSweeper.sweepOnce},
-     * the control-plane sibling of the onboarding stuck-run alert.
+     * the control-plane sibling of the onboarding stuck-run alert. ADR 0059
+     * stage 1 added one more: {@code FlowRunResumeSweeper.sweepOnce}, the
+     * single sweeper a flow's delay block needs to resume.
      */
-    static final int DEFAULT_POOL_SIZE = 37;
+    static final int DEFAULT_POOL_SIZE = 38;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
