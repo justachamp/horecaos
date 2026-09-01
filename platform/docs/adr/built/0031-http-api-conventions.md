@@ -2,8 +2,15 @@
 
 - Decision status: Accepted
 - Implementation status: Built — every convention is implemented and enforced in
-  `uz.horecaos.platform.web`: `ErrorCode` (eighteen codes), `ApiProblem` and
-  `GlobalApiErrorHandler` for Problem Details across all surfaces, with
+  `uz.horecaos.platform.web`: `ErrorCode` (the enum is the authoritative count —
+  a hand-written number here went stale twice), `ApiProblem` and
+  `GlobalApiErrorHandler` for Problem Details across all surfaces — since wave 17
+  the handler extends `ResponseEntityExceptionHandler`, so Spring MVC's own
+  binding and content-negotiation failures (a missing request parameter, a
+  non-UUID path segment) render ADR 0031 Problem Details instead of the servlet
+  container's default error body; the rarer framework exceptions still answering
+  the base class's plain RFC 9457 shape without this platform's `code` extension
+  are a flagged follow-up — with
   `TenantApiErrorHandler` reduced to tenancy-only mappings; `IdempotencyService`,
   `IdempotencyInterceptor`, `CachedBodyRequestFilter` and `IdempotencyPurgeJob` over V0006
   (scoped to caller and resource by V0047); `AggregateVersion` for `ETag`/`If-Match` and
