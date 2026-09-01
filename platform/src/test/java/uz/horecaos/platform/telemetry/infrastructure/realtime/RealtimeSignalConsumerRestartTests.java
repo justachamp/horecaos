@@ -56,7 +56,20 @@ class RealtimeSignalConsumerRestartTests {
 
         local.start();
 
-        awaitUntil(() -> local.attempts.get() >= 2);
+        // attempts and consumer are two independent fields, written in that
+        // order on the worker thread but with no happens-before edge between
+        // them for a third thread reading each separately: attempts reaches 2
+        // the instant the second createConsumer() call starts — before the
+        // mock consumer is even built, let alone assigned to the volatile
+        // `consumer` field that isRunning() reads. Awaiting attempts alone
+        // and then asserting isRunning() once, un-retried, raced that gap.
+        // The gap is nanoseconds at typical scheduling granularity, which is
+        // why this only ever failed under CPU load: a starved worker thread
+        // can be preempted inside it for long enough that the test's single,
+        // immediately-following check catches consumer still null. Awaiting
+        // both conditions together closes the gap deterministically instead
+        // of widening a sleep to make the race less likely.
+        awaitUntil(() -> local.attempts.get() >= 2 && local.isRunning());
         assertThat(local.isRunning())
                 .as("a transient broker failure must not disable realtime push for the life of " + "the process")
                 .isTrue();
