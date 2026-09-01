@@ -28,6 +28,7 @@ import { TelegramWebappService } from '../../services/telegram-webapp.service';
 import { hardReloadTelegramEntryPage } from '../../utils/telegram-entry-reload';
 import type { CustomerUiResponse, MenuItem, PopularCategory } from '../../types/home.types';
 import { FEATURES } from '../../core/config/features';
+import { Session } from '../../core/auth/session';
 
 @Component({
   selector: 'app-home',
@@ -46,6 +47,7 @@ export class HomeComponent implements OnInit {
   protected readonly telegramWebapp = inject(TelegramWebappService);
   private readonly translate = inject(TranslateService);
   private readonly profile = inject(CustomerProfileService);
+  private readonly session = inject(Session);
   private readonly injector = inject(Injector);
 
   private readonly menuSection = viewChild<ElementRef<HTMLElement>>('menuSection');
@@ -110,6 +112,18 @@ export class HomeComponent implements OnInit {
       })
       .catch(() => this.error.set(this.translate.get('errors.generic')))
       .finally(() => this.loading.set(false));
+
+    // Everything below this line is the customer's own state -- a basket, a
+    // favourites list, an account -- and the platform has no anonymous form
+    // of any of it (none of /carts, /me/favourites, /me is in
+    // SecurityConfiguration's permitAll list). An anonymous visitor cannot
+    // hold any of them, so asking would only spend a request on a 401 the
+    // interceptor quietly swallows. Guarded the same way BottomNavComponent
+    // already guards its own cart read.
+    if (!this.session.isAuthenticated()) {
+      return;
+    }
+
     void this.cartService.load();
     // The hearts on the food cards read this, so it has to be loaded before
     // they are drawn or every card starts unmarked and flickers. Skipped

@@ -21,7 +21,18 @@ import { SearchComponent } from './pages/search/search.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
-  { path: 'home', component: HomeComponent, canActivate: [authGuard] },
+  // Public: the pre-account browse surface (ADR 0016). Home reads the
+  // published menu unauthenticated, the same way the platform serves it --
+  // see SecurityConfiguration's storefront GET permitAll list. `category`,
+  // `product/:id` and `search` below are the same menu document read three
+  // other ways and were never gated to begin with.
+  { path: 'home', component: HomeComponent },
+  // Gated: checkout. The platform has no anonymous-cart capability -- POST
+  // /carts is not in SecurityConfiguration's permitAll list, so a basket
+  // cannot exist without a session. UiCartService.add (see food-card and
+  // product) is the second, earlier half of this boundary: it sends an
+  // anonymous visitor here to sign in before the first line is even
+  // attempted, rather than letting the write 401.
   {
     path: 'cart',
     loadChildren: () => import('./pages/cart/cart.module').then((m) => m.CartModule),
@@ -36,6 +47,9 @@ export const routes: Routes = [
       { path: 'code', component: AuthCodeComponent },
     ],
   },
+  // Gated: this is the customer's own saved-address book (/me/addresses),
+  // not the branch-discovery surface -- unrelated to the public
+  // pickup-locations endpoint and personal data either way.
   {
     path: 'locations',
     component: LocationsComponent,
@@ -48,6 +62,8 @@ export const routes: Routes = [
       { path: 'permission', component: LocationsPermissionComponent },
     ],
   },
+  // Gated: a customer's own order history, ownership-authorised the same
+  // way /me is.
   {
     path: 'orders',
     component: OrdersComponent,
@@ -60,12 +76,22 @@ export const routes: Routes = [
       { path: 'detail/:id', component: OrderDetailComponent },
     ],
   },
+  // Public at the top level: ProfileComponent already renders a signed-out
+  // state (a "Sign in" affordance in place of account data -- see
+  // isAuthorized() in profile.component.ts) rather than assuming a session.
+  // The account-only screens under it (details, favorites) are individually
+  // gated in profile.routes.ts; language/faq/support/telegram are not,
+  // because they are either not personal (language, faq, support read the
+  // brand's own public content) or already session-optional in place
+  // (telegram's own needsSignIn prompt).
   {
     path: 'profile',
     loadChildren: () => import('./pages/profile/profile.module').then((m) => m.ProfileModule),
   },
   { path: 'category', component: CategoryItemsComponent },
-  { path: 'search', component: SearchComponent, canActivate: [authGuard] },
+  // Client-side search over the already-loaded menu (MenuService.search) --
+  // no platform endpoint of its own, so nothing here needs a session either.
+  { path: 'search', component: SearchComponent },
   { path: 'product/:id', component: ProductComponent },
   { path: 'terms', component: TermsOfConditionsComponent },
   { path: '**', redirectTo: 'home' },
