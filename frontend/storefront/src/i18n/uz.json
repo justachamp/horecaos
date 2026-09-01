@@ -56,8 +56,16 @@
       "unavailable": "Hozir tizimga kirish mumkin emas.",
       "codeRejected": "Kod noto'g'ri.",
       "codeRejectedWithTries": "Kod noto'g'ri. {{count}} ta urinish qoldi.",
-      "challengeOver": "Kod muddati tugadi. Yangi kod so'rang."
-    }
+      "challengeOver": "Kod muddati tugadi. Yangi kod so'rang.",
+      "telegramExpired": "Telegram orqali kirish havolasi eskirdi. Qayta urinib ko'ring.",
+      "telegramUnavailable": "Telegram orqali kirish hozircha mavjud emas."
+    },
+    "orDivider": "yoki",
+    "continueWithTelegram": "Telegram orqali davom etish",
+    "telegramOpenInTelegram": "Telegram'da ochish",
+    "telegramWaiting": "Telegram'da tasdiqlashingiz kutilmoqda…",
+    "telegramExpiryNotice": "Havola bir martalik va tez orada eskiradi — darhol oching.",
+    "telegramCancel": "Telefon raqami bilan kirish"
   },
   "home": {
     "delivery": "Yetkazib berish",

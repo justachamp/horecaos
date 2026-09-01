@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ import uz.horecaos.platform.conversations.api.ChannelKind;
 import uz.horecaos.platform.conversations.api.ConversationCallbackToken;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
 import uz.horecaos.platform.conversations.api.ConversationInboundPort;
+import uz.horecaos.platform.customers.api.CustomerTelegramSignIn;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -32,6 +34,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
+import uz.horecaos.platform.integration.provider.telegram.TelegramAuthLinkService.PendingAuthLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService.PendingCustomerLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService.PendingLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService.PendingStaffLink;
@@ -39,6 +42,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkServi
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup.WebhookInstallation;
 import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
  * Everything an authenticated Telegram update may cause.
@@ -70,6 +74,23 @@ public class TelegramUpdateHandler {
     /** ADR 0058 stage 2: the customer 1:1 deep-link handshake, private chat only. */
     private static final String START_COMMAND = "start";
 
+    /**
+     * ADR 0063: the prefix that tells {@code /start <payload>} apart from a
+     * wave-7 customer link code. Chosen at mint time by {@link TelegramAuthLinkService#issueCode}'s
+     * caller (the storefront controller builds {@code auth_<code>}), never by
+     * anything about the code's own random bytes, so the two families are
+     * disjoint by construction rather than by probability.
+     */
+    private static final String AUTH_CODE_PREFIX = "auth_";
+
+    private static final String AUTH_CONTACT_OPERATION = "integration.telegram.auth.contact";
+
+    /** ADR 0033: bounds one chat repeatedly sharing/re-sharing a contact against the same or different codes. */
+    private static final RateLimiter.Policy AUTH_CONTACT_PER_CHAT = RateLimiter.Policy.strictPerMinute(5);
+
+    /** ADR 0033: bounds one code being hammered with contact shares (own or forwarded) from elsewhere. */
+    private static final RateLimiter.Policy AUTH_CONTACT_PER_CODE = RateLimiter.Policy.strictPerMinute(5);
+
     private static final String STOP_LIST_COMMAND = "86";
     private static final String STATS_COMMAND = "stats";
     private static final Set<String> TYPED_COMMANDS = Set.of(STOP_LIST_COMMAND, STATS_COMMAND);
@@ -86,6 +107,8 @@ public class TelegramUpdateHandler {
     private final TelegramLinkService links;
     private final TelegramStaffLinkService staffLinks;
     private final TelegramCustomerLinkService customerLinks;
+    private final TelegramAuthLinkService authLinks;
+    private final CustomerTelegramSignIn telegramSignIn;
     private final TelegramRightsVerifier rights;
     private final TelegramBindingStore bindings;
     private final BotActionTokenStore actionTokens;
@@ -104,11 +127,15 @@ public class TelegramUpdateHandler {
     private final ConversationInboundPort conversations;
     private final TelegramInstallationBrandLookup installationBrands;
     private final TelegramUpdateDedupStore dedup;
+    private final RateLimiter rateLimiter;
+    private final Pattern authAllowedPhonePattern;
 
     public TelegramUpdateHandler(
             TelegramLinkService links,
             TelegramStaffLinkService staffLinks,
             TelegramCustomerLinkService customerLinks,
+            TelegramAuthLinkService authLinks,
+            CustomerTelegramSignIn telegramSignIn,
             TelegramRightsVerifier rights,
             TelegramBindingStore bindings,
             BotActionTokenStore actionTokens,
@@ -126,10 +153,17 @@ public class TelegramUpdateHandler {
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale,
             ConversationInboundPort conversations,
             TelegramInstallationBrandLookup installationBrands,
-            TelegramUpdateDedupStore dedup) {
+            TelegramUpdateDedupStore dedup,
+            RateLimiter rateLimiter,
+            // ADR 0063's own open input: the owner's final allowed-phone pattern.
+            // Defaults to the ADR's own default, an Uzbek mobile in E.164.
+            @Value("${horecaos.customers.telegram-auth.phone-pattern:^\\+?998\\d{9}$}")
+                    String authAllowedPhonePattern) {
         this.links = links;
         this.staffLinks = staffLinks;
         this.customerLinks = customerLinks;
+        this.authLinks = authLinks;
+        this.telegramSignIn = telegramSignIn;
         this.rights = rights;
         this.bindings = bindings;
         this.actionTokens = actionTokens;
@@ -148,6 +182,8 @@ public class TelegramUpdateHandler {
         this.conversations = conversations;
         this.installationBrands = installationBrands;
         this.dedup = dedup;
+        this.rateLimiter = rateLimiter;
+        this.authAllowedPhonePattern = Pattern.compile(authAllowedPhonePattern);
     }
 
     /**
@@ -191,6 +227,16 @@ public class TelegramUpdateHandler {
             return;
         }
         Map<String, Object> message = asMap(rawMessage);
+
+        // ADR 0063: a share-contact message carries no "text" at all, so it must
+        // be checked before the text-only branch below would otherwise silently
+        // drop it. Precedence-safe: every other message this handler has ever
+        // acted on carries "text" and never "contact", so this is purely
+        // additive.
+        if (message.get("contact") instanceof Map<?, ?> rawContact) {
+            handleContactShare(installation, asMap(rawContact), message);
+            return;
+        }
 
         Object textObject = message.get("text");
         if (!(textObject instanceof String text)) {
@@ -802,6 +848,13 @@ public class TelegramUpdateHandler {
             handleBareStart(installation, chatId);
             return;
         }
+        if (code.startsWith(AUTH_CODE_PREFIX)) {
+            // ADR 0063: a different handshake sharing the same /start command,
+            // told apart by a prefix this platform alone controls — see
+            // AUTH_CODE_PREFIX's own doc.
+            handleAuthLinkStart(installation, call, chatId, code.substring(AUTH_CODE_PREFIX.length()));
+            return;
+        }
         Optional<PendingCustomerLink> pending = customerLinks.resolve(code);
         if (pending.isEmpty()) {
             bots.sendMessage(call, chatId, null, TelegramBotMessages.customerLinkInvalidOrExpiredCode());
@@ -838,6 +891,175 @@ public class TelegramUpdateHandler {
                 "Linked Telegram chat {} to customer account {} in tenant {} via /start",
                 chatId,
                 link.customerAccountId(),
+                link.tenantId());
+    }
+
+    // --------------------------------------------------- ADR 0063 auth sign-in
+
+    /**
+     * {@code /start auth_<code>}: the storefront's "Continue with Telegram"
+     * deep link. Answers with the one-button {@code request_contact} keyboard
+     * and remembers this chat as the one that code is now waiting on — see
+     * {@link TelegramAuthLinkService#beginAwaitingContact}'s own doc for why
+     * that has to be server-side state rather than something carried on the
+     * button itself.
+     */
+    private void handleAuthLinkStart(WebhookInstallation installation, ProviderCall call, long chatId, String code) {
+        if (code.isEmpty()) {
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.authLinkInvalidOrExpiredCode());
+            return;
+        }
+        Optional<PendingAuthLink> pending = authLinks.resolve(code);
+        if (pending.isEmpty()) {
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.authLinkInvalidOrExpiredCode());
+            return;
+        }
+        PendingAuthLink link = pending.get();
+        if (!link.tenantId().equals(installation.tenantId())) {
+            log.warn(
+                    "Refusing an auth /start code issued for tenant {} against installation {} (tenant {})",
+                    link.tenantId(),
+                    installation.installationId(),
+                    installation.tenantId());
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.authLinkInvalidOrExpiredCode());
+            return;
+        }
+
+        authLinks.beginAwaitingContact(link.tenantId(), link.id(), chatId);
+
+        bots.sendMessage(
+                call,
+                chatId,
+                null,
+                TelegramBotMessages.authRequestContactPrompt(defaultLocale),
+                TelegramReplyKeyboard.requestContact(TelegramBotMessages.authRequestContactButton(defaultLocale)));
+    }
+
+    /**
+     * A {@code contact} message — the answer to {@link #handleAuthLinkStart}'s
+     * keyboard, or possibly nothing this bot is waiting on at all.
+     *
+     * <p>Own-contact and the configured allowed-phone pattern are both checked
+     * before anything is resolved or created, exactly the order ADR 0063
+     * states them in: a forwarded stranger's contact is refused first, and a
+     * non-matching own number is refused second, without either check ever
+     * touching the identity path.
+     */
+    private void handleContactShare(
+            WebhookInstallation installation, Map<String, Object> contact, Map<String, Object> message) {
+        Object chatObject = message.get("chat");
+        if (!(chatObject instanceof Map<?, ?> chat) || !(chat.get("id") instanceof Number chatIdNumber)) {
+            return;
+        }
+        long chatId = chatIdNumber.longValue();
+        long fromUserId = fromUserId(message);
+        if (fromUserId == 0L) {
+            return;
+        }
+
+        Optional<PendingAuthLink> pending = authLinks.resolveAwaitingContact(installation.tenantId(), chatId);
+        if (pending.isEmpty()) {
+            // Nothing this bot asked for. A customer sharing a contact for any
+            // other reason (there is none today, but nothing guarantees a
+            // client never offers the option unprompted) is a silent no-op,
+            // the same answer every other unrecognised input on this bot gets.
+            return;
+        }
+        PendingAuthLink link = pending.get();
+        ProviderCall call = resolveCall(installation);
+
+        RateLimiter.Decision perChat = rateLimiter.check(
+                new RateLimiter.Key(
+                        AUTH_CONTACT_OPERATION, installation.tenantId().toString(), String.valueOf(chatId)),
+                AUTH_CONTACT_PER_CHAT);
+        RateLimiter.Decision perCode = rateLimiter.check(
+                new RateLimiter.Key(
+                        AUTH_CONTACT_OPERATION,
+                        installation.tenantId().toString(),
+                        link.id().toString()),
+                AUTH_CONTACT_PER_CODE);
+        if (!perChat.allowed() || !perCode.allowed()) {
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    TelegramBotMessages.authTooManyAttempts(defaultLocale),
+                    TelegramReplyKeyboard.remove());
+            return;
+        }
+
+        long contactUserId = contact.get("user_id") instanceof Number userIdNumber ? userIdNumber.longValue() : -1L;
+        if (contactUserId != fromUserId) {
+            // ADR 0063: "a forwarded stranger's contact is refused" — Telegram
+            // still sets contact.user_id for a forward when the forwarded
+            // person has one, so this test is exact rather than a heuristic on
+            // absence.
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    TelegramBotMessages.authContactMustBeOwn(defaultLocale),
+                    TelegramReplyKeyboard.remove());
+            return;
+        }
+
+        Object phoneObject = contact.get("phone_number");
+        if (!(phoneObject instanceof String phone) || phone.isBlank()) {
+            return;
+        }
+        // Matched as Telegram sent it — the configured pattern's own leading
+        // "\+?" is what makes a plus optional, the same spelling tolerance
+        // PhoneNumber.requireDeliverableMobile (called inside resolveAccount
+        // below) already gives every other number this platform accepts.
+        if (!authAllowedPhonePattern.matcher(phone).matches()) {
+            // ADR 0063: "a non-matching phone gets a polite refusal naming
+            // nothing" — no mention of the pattern, the number, or why.
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    TelegramBotMessages.authPhoneNotAllowed(defaultLocale),
+                    TelegramReplyKeyboard.remove());
+            return;
+        }
+
+        CustomerTelegramSignIn.Resolved resolved =
+                telegramSignIn.resolveAccount(link.tenantId(), link.brandId(), phone);
+
+        UUID bindingId = customerLinks.link(
+                link.tenantId(),
+                installation.installationId(),
+                link.brandId(),
+                resolved.accountId(),
+                chatId,
+                fromUserId,
+                clock.instant());
+        boolean redeemed =
+                authLinks.redeem(link.tenantId(), link.id(), resolved.accountId(), resolved.created(), bindingId);
+        if (!redeemed) {
+            // ADR 0032: a redelivered update that TelegramUpdateDedupStore's
+            // own check somehow did not catch (or a genuine second contact
+            // share against an already-redeemed code). Either way the account,
+            // contact and binding already exist from the first delivery, so
+            // this is not a failure — just nothing further to do here.
+            log.info("Auth code {} was already redeemed; not redeeming a second time", link.id());
+        }
+
+        audit.record(AuditFact.of("integration.telegram_auth_sign_in_redeemed", AuditClass.SECURITY)
+                .by(ActorRef.user(resolved.accountId().toString(), null))
+                .at(ResourceScope.tenant(link.tenantId()))
+                .target("IntegrationBinding", bindingId)
+                .because("Telegram share-contact sign-in handshake completed")
+                .correlatedBy(link.id().toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        String locale =
+                contacts.preferredLocale(link.tenantId(), resolved.accountId()).orElse(defaultLocale);
+        bots.sendMessage(call, chatId, null, TelegramBotMessages.authLinked(locale), TelegramReplyKeyboard.remove());
+        log.info(
+                "Signed in customer account {} in tenant {} via Telegram share-contact",
+                resolved.accountId(),
                 link.tenantId());
     }
 

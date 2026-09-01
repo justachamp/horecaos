@@ -48,7 +48,11 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
             @Nullable Instant settledAt,
             @Nullable String grantHash,
             @Nullable Instant grantExpiresAt,
-            @Nullable Instant grantRedeemedAt) {
+            @Nullable Instant grantRedeemedAt,
+            @Nullable String deliveryChannel,
+            @Nullable String deliveryProviderMessageId,
+            @Nullable Long deliveryCostMinor,
+            @Nullable String deliveryCostCurrencyCode) {
 
         Row with(ChallengeStatus newStatus, Instant settled) {
             return new Row(
@@ -68,7 +72,40 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
                     settled,
                     grantHash,
                     grantExpiresAt,
-                    grantRedeemedAt);
+                    grantRedeemedAt,
+                    deliveryChannel,
+                    deliveryProviderMessageId,
+                    deliveryCostMinor,
+                    deliveryCostCurrencyCode);
+        }
+
+        Row withDelivery(
+                String channel,
+                @Nullable String providerMessageId,
+                @Nullable Long costMinor,
+                @Nullable String costCurrencyCode) {
+            return new Row(
+                    id,
+                    tenantId,
+                    brandId,
+                    purpose,
+                    contactType,
+                    destinationHash,
+                    destinationValue,
+                    codeHash,
+                    attemptsUsed,
+                    maxAttempts,
+                    status,
+                    issuedAt,
+                    expiresAt,
+                    settledAt,
+                    grantHash,
+                    grantExpiresAt,
+                    grantRedeemedAt,
+                    channel,
+                    providerMessageId,
+                    costMinor,
+                    costCurrencyCode);
         }
     }
 
@@ -98,6 +135,10 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
                         ChallengeStatus.PENDING,
                         challenge.issuedAt(),
                         challenge.expiresAt(),
+                        null,
+                        null,
+                        null,
+                        null,
                         null,
                         null,
                         null,
@@ -156,7 +197,11 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
                 row.settledAt(),
                 row.grantHash(),
                 row.grantExpiresAt(),
-                row.grantRedeemedAt());
+                row.grantRedeemedAt(),
+                row.deliveryChannel(),
+                row.deliveryProviderMessageId(),
+                row.deliveryCostMinor(),
+                row.deliveryCostCurrencyCode());
         rows.put(spent.id(), spent);
 
         return Optional.of(new Attempt(spent.codeHash(), spent.maxAttempts() - spent.attemptsUsed()));
@@ -191,7 +236,11 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
                         now,
                         grantHash,
                         grantExpiresAt,
-                        null));
+                        null,
+                        row.deliveryChannel(),
+                        row.deliveryProviderMessageId(),
+                        row.deliveryCostMinor(),
+                        row.deliveryCostCurrencyCode()));
         return true;
     }
 
@@ -215,6 +264,39 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
         rows.remove(challengeId);
         return true;
     }
+
+    @Override
+    public synchronized void recordDelivery(
+            UUID tenantId,
+            UUID challengeId,
+            String deliveryChannel,
+            @Nullable String providerMessageId,
+            @Nullable Long costMinor,
+            @Nullable String costCurrencyCode,
+            Instant now) {
+        Row row = rows.get(challengeId);
+        if (row != null && row.tenantId().equals(tenantId)) {
+            rows.put(challengeId, row.withDelivery(deliveryChannel, providerMessageId, costMinor, costCurrencyCode));
+        }
+    }
+
+    /** What a test asserts the delivery-policy seam actually recorded. */
+    synchronized Optional<DeliveryRecord> deliveryOf(UUID challengeId) {
+        Row row = rows.get(challengeId);
+        return row == null || row.deliveryChannel() == null
+                ? Optional.empty()
+                : Optional.of(new DeliveryRecord(
+                        row.deliveryChannel(),
+                        row.deliveryProviderMessageId(),
+                        row.deliveryCostMinor(),
+                        row.deliveryCostCurrencyCode()));
+    }
+
+    record DeliveryRecord(
+            String channel,
+            @Nullable String providerMessageId,
+            @Nullable Long costMinor,
+            @Nullable String costCurrencyCode) {}
 
     @Override
     public synchronized Optional<RedeemedGrant> redeemGrant(String grantHash, Instant now) {
@@ -245,7 +327,11 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
                                     row.settledAt(),
                                     row.grantHash(),
                                     row.grantExpiresAt(),
-                                    now));
+                                    now,
+                                    row.deliveryChannel(),
+                                    row.deliveryProviderMessageId(),
+                                    row.deliveryCostMinor(),
+                                    row.deliveryCostCurrencyCode()));
                     return new RedeemedGrant(
                             row.id(),
                             row.tenantId(),

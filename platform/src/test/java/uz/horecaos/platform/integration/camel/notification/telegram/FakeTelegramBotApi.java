@@ -163,6 +163,18 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         return tokens;
     }
 
+    /**
+     * The raw {@code reply_markup} a message currently carries, whatever shape it
+     * is — an {@code inline_keyboard}, a {@code keyboard} (ADR 0063's
+     * {@code request_contact} button), or {@code remove_keyboard} — or null once
+     * nothing is set. {@link #hasKeyboard} and {@link #callbackDataOn} only ever
+     * read the inline shape; this is the general escape hatch a reply-keyboard
+     * test needs instead.
+     */
+    public @Nullable Object replyMarkupOf(long messageId) {
+        return replyMarkupByMessageId.get(messageId);
+    }
+
     /** Every {@code callback_query_id} this fake has acknowledged, in arrival order. */
     public List<String> answeredCallbackQueryIds() {
         return List.copyOf(answeredCallbackQueryIds);

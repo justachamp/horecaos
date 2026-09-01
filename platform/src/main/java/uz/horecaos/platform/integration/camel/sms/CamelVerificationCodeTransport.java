@@ -2,11 +2,14 @@ package uz.horecaos.platform.integration.camel.sms;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayClient;
+import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayVerificationOperation;
 
 /**
  * {@link VerificationCodeTransport} over the ADR 0007 route (ADR 0015, ADR 0020).
@@ -33,6 +36,15 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
  * echoes what it was sent inside an error, and what it was sent is a phone number
  * and a live one-time code, which ADR 0029 keeps out of the ADR 0031 problem
  * document the caller turns this into.
+ *
+ * <p><strong>ADR 0063's delivery-policy seam lives here.</strong> This is the one
+ * place every verification message already funnels through, so it is where "try
+ * Telegram Gateway first, fall back to SMS" is decided rather than a third place
+ * that has to agree with both. The policy: Gateway is attempted only when
+ * {@link TelegramGatewayClient#isConfigured()} — an unconfigured deployment never
+ * pays a network round trip finding that out — and only its <em>refusal</em>
+ * (a business rejection, an unreachable provider, a rate limit) falls through to
+ * SMS; a Gateway {@code SUCCESS} returns immediately and SMS is never asked.
  */
 @Component
 public class CamelVerificationCodeTransport implements VerificationCodeTransport {
@@ -42,10 +54,15 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
     /** The route never started, so no provider was contacted. See the route README. */
     static final String ROUTE_UNAVAILABLE = "SMS_ROUTE_UNAVAILABLE";
 
-    private final ProducerTemplate producer;
+    static final String SMS_CHANNEL = "SMS";
+    static final String TELEGRAM_GATEWAY_CHANNEL = "TELEGRAM_GATEWAY";
 
-    public CamelVerificationCodeTransport(ProducerTemplate producer) {
+    private final ProducerTemplate producer;
+    private final TelegramGatewayClient gateway;
+
+    public CamelVerificationCodeTransport(ProducerTemplate producer, TelegramGatewayClient gateway) {
         this.producer = producer;
+        this.gateway = gateway;
     }
 
     @Override
@@ -57,10 +74,49 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
             return Outcome.refused("CHANNEL_UNSUPPORTED");
         }
 
+        if (gateway.isConfigured()) {
+            Outcome viaGateway = tryGateway(message);
+            if (viaGateway != null) {
+                return viaGateway;
+            }
+            // Fell through: Gateway refused, was unreachable, or answered
+            // uncertainly. SMS is the fallback for exactly this — the challenge,
+            // its attempts and its rate limits are untouched either way.
+        }
+
         SmsVerificationOperation operation = SmsVerificationOperation.send(
                 message, VerificationCodeText.render(message.code(), message.validFor(), message.locale()));
 
         return translate(dispatch(operation));
+    }
+
+    /**
+     * @return the accepted {@link Outcome} when Gateway took the message, or null
+     *         to fall through to SMS
+     */
+    private @Nullable Outcome tryGateway(VerificationMessage message) {
+        ProviderOutcome outcome = gateway.sendVerificationMessage(new TelegramGatewayVerificationOperation(
+                message.tenantId(), message.challengeId(), message.destination(), message.code()));
+
+        if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
+            log.info(
+                    "Telegram Gateway declined verification delivery for challenge {}: {}; falling back to SMS",
+                    message.challengeId(),
+                    outcome.errorCode());
+            return null;
+        }
+
+        Long costMinor = longOrNull(outcome.normalized().get(TelegramGatewayClient.COST_MINOR_KEY));
+        String costCurrency = stringOrNull(outcome.normalized().get(TelegramGatewayClient.COST_CURRENCY_KEY));
+        return Outcome.accepted(TELEGRAM_GATEWAY_CHANNEL, outcome.externalReference(), costMinor, costCurrency);
+    }
+
+    private static @Nullable Long longOrNull(@Nullable Object value) {
+        return value == null ? null : Long.valueOf(String.valueOf(value));
+    }
+
+    private static @Nullable String stringOrNull(@Nullable Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private ProviderOutcome dispatch(SmsVerificationOperation operation) {
@@ -138,7 +194,7 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
     private static Outcome translate(ProviderOutcome outcome) {
         String reason = outcome.errorCode();
         return switch (outcome.status()) {
-            case SUCCESS -> Outcome.accepted();
+            case SUCCESS -> Outcome.accepted(SMS_CHANNEL, outcome.externalReference(), null, null);
             case REJECTED -> Outcome.refused(reason);
             case RETRYABLE, UNCERTAIN -> Outcome.unavailable(reason);
         };

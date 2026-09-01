@@ -181,6 +181,31 @@ class CustomerVerificationTests {
     }
 
     @Test
+    @DisplayName("ADR 0063: which provider delivered the code, and its cost, is recorded on the challenge row")
+    void deliveryChannelAndCostAreRecordedOnTheChallenge() {
+        transport.nextOutcomeIs(Outcome.accepted("TELEGRAM_GATEWAY", "tg-req-1", 3L, "USD"));
+
+        Challenge challenge = verification.issue(TENANT, BRAND, PHONE, CALLER);
+
+        InMemoryVerificationChallengeStore.DeliveryRecord delivery =
+                challenges.deliveryOf(challenge.challengeId()).orElseThrow();
+        assertThat(delivery.channel()).isEqualTo("TELEGRAM_GATEWAY");
+        assertThat(delivery.providerMessageId()).isEqualTo("tg-req-1");
+        assertThat(delivery.costMinor()).isEqualTo(3L);
+        assertThat(delivery.costCurrencyCode()).isEqualTo("USD");
+    }
+
+    @Test
+    @DisplayName("a plain accepted outcome (SMS, or a transport that predates ADR 0063) records no delivery channel")
+    void anOutcomeWithNoChannelRecordsNothing() {
+        transport.nextOutcomeIs(Outcome.accepted());
+
+        Challenge challenge = verification.issue(TENANT, BRAND, PHONE, CALLER);
+
+        assertThat(challenges.deliveryOf(challenge.challengeId())).isEmpty();
+    }
+
+    @Test
     @DisplayName("a code is six digits, zero-padded")
     void codesAreSixDigits() {
         for (int draw = 0; draw < 200; draw++) {
@@ -506,7 +531,7 @@ class CustomerVerificationTests {
         when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
                 .thenReturn(new CustomerIdentityService.Resolution(
                         new CustomerAccountRef(ACCOUNT, TENANT), true, CustomerIdentityPolicy.TENANT_SHARED));
-        when(customers.markContactVerified(any(), any(), anyString(), anyString(), any()))
+        when(customers.markContactVerified(any(), any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(0);
         when(customers.hasPrimaryContact(any(), any(), anyString())).thenReturn(false);
 
@@ -524,6 +549,7 @@ class CustomerVerificationTests {
                         eq(TENANT),
                         eq(ACCOUNT),
                         eq(ContactType.PHONE.name()),
+                        eq("CUSTOMER_VERIFICATION"),
                         // The domain is spelled out rather than read off the enum, so this
                         // pins the value a contact-point lookup will later hash under: if
                         // the two ever drift, a number proved by OTP stops matching the
@@ -542,14 +568,14 @@ class CustomerVerificationTests {
         when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
                 .thenReturn(new CustomerIdentityService.Resolution(
                         new CustomerAccountRef(ACCOUNT, TENANT), false, CustomerIdentityPolicy.TENANT_SHARED));
-        when(customers.markContactVerified(any(), any(), anyString(), anyString(), any()))
+        when(customers.markContactVerified(any(), any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(1);
 
         verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT);
 
         verify(customers, never())
                 .insertVerifiedContactPoint(
-                        any(), any(), any(), anyString(), anyString(), anyString(), anyBoolean(), any());
+                        any(), any(), any(), anyString(), anyString(), anyString(), anyString(), anyBoolean(), any());
     }
 
     @Test
@@ -651,11 +677,17 @@ class CustomerVerificationTests {
     private static final class CapturingTransport implements VerificationCodeTransport {
 
         private final List<VerificationMessage> sent = new ArrayList<>();
+        private Outcome nextOutcome = Outcome.accepted();
 
         @Override
         public Outcome send(VerificationMessage message) {
             sent.add(message);
-            return Outcome.accepted();
+            return nextOutcome;
+        }
+
+        /** ADR 0063: what a real transport's delivery-policy seam would answer next. */
+        void nextOutcomeIs(Outcome outcome) {
+            this.nextOutcome = outcome;
         }
 
         List<VerificationMessage> sent() {

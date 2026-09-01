@@ -65,7 +65,7 @@ public class TelegramBotApiClient {
     }
 
     public TelegramCallResult sendMessage(ProviderCall call, long chatId, @Nullable Integer topicId, String text) {
-        return sendMessage(call, chatId, topicId, text, null);
+        return sendMessage(call, chatId, topicId, text, (TelegramInlineKeyboard) null);
     }
 
     /**
@@ -87,6 +87,24 @@ public class TelegramBotApiClient {
         if (keyboard != null) {
             body.put("reply_markup", keyboard.toApiShape());
         }
+        return call("sendMessage", call, body);
+    }
+
+    /**
+     * @param keyboard the {@code request_contact} reply keyboard (ADR 0063), or
+     *                 {@link TelegramReplyKeyboard#remove()} to clear one — a
+     *                 different Bot API shape from {@link TelegramInlineKeyboard}
+     *                 and never both on the same call
+     */
+    public TelegramCallResult sendMessage(
+            ProviderCall call, long chatId, @Nullable Integer topicId, String text, TelegramReplyKeyboard keyboard) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        if (topicId != null) {
+            body.put("message_thread_id", topicId);
+        }
+        body.put("text", text);
+        body.put("reply_markup", keyboard.toApiShape());
         return call("sendMessage", call, body);
     }
 

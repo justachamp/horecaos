@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.customers.application.VerificationChallengeStore;
@@ -171,6 +172,32 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
                         .param("tenantId", tenantId)
                         .update()
                 == 1;
+    }
+
+    @Override
+    public void recordDelivery(
+            UUID tenantId,
+            UUID challengeId,
+            String deliveryChannel,
+            @Nullable String providerMessageId,
+            @Nullable Long costMinor,
+            @Nullable String costCurrencyCode,
+            Instant now) {
+        jdbc.sql("""
+                UPDATE customer.verification_challenges
+                SET delivery_channel = :deliveryChannel, delivery_provider_message_id = :providerMessageId,
+                    delivery_cost_minor = :costMinor, delivery_cost_currency = :costCurrencyCode,
+                    updated_at = :now
+                WHERE id = :id AND tenant_id = :tenantId
+                """)
+                .param("id", challengeId)
+                .param("tenantId", tenantId)
+                .param("deliveryChannel", deliveryChannel)
+                .param("providerMessageId", providerMessageId)
+                .param("costMinor", costMinor)
+                .param("costCurrencyCode", costCurrencyCode)
+                .param("now", utc(now))
+                .update();
     }
 
     @Override

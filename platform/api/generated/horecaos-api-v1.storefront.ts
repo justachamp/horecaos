@@ -398,6 +398,19 @@ export interface ServiceabilityView {
   reason?: string;
 }
 
+export interface SignInCodeResponse {
+  code?: string;
+  deepLink?: string;
+}
+
+export interface SignInPollResponse {
+  accountCreated?: boolean;
+  accountId?: string;
+  expiresAt?: string;
+  status?: string;
+  token?: string;
+}
+
 export interface SignInRequest {
   grant: string;
 }
@@ -501,8 +514,10 @@ export interface Operations {
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "status": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": CustomerTelegramLinkStatusResponse } };
-  "issueCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": CustomerTelegramLinkCodeResponse } };
+  "issueCode_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": CustomerTelegramLinkCodeResponse } };
   "linkViaMiniApp": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-link"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MiniAppLinkRequest }; responses: { "200": CustomerTelegramLinkStatusResponse } };
+  "issueCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": SignInCodeResponse } };
+  "poll": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes/{code}"; request: { parameters: { path: { brandId: string; code: string; tenantId: string } } }; responses: { "200": SignInPollResponse } };
   "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": unknown } };
 }
 

@@ -222,22 +222,24 @@ public class JdbcCustomerStore {
             UUID tenantId,
             UUID accountId,
             String type,
+            @Nullable String source,
             String normalizedHash,
             String encryptedValue,
             boolean isPrimary,
             Instant verifiedAt) {
         jdbc.sql("""
                 INSERT INTO customer.contact_points (
-                    id, tenant_id, customer_account_id, type, normalized_hash,
+                    id, tenant_id, customer_account_id, type, source, normalized_hash,
                     encrypted_value, verification_status, verified_at, is_primary,
                     created_at, updated_at)
-                VALUES (:id, :tenantId, :accountId, :type, :hash, :encrypted, 'VERIFIED',
+                VALUES (:id, :tenantId, :accountId, :type, :source, :hash, :encrypted, 'VERIFIED',
                     :now, :isPrimary, :now, :now)
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
                 .param("type", type)
+                .param("source", source)
                 .param("hash", normalizedHash)
                 .param("encrypted", encryptedValue)
                 .param("isPrimary", isPrimary)
@@ -257,16 +259,22 @@ public class JdbcCustomerStore {
      *         the number yet
      */
     public int markContactVerified(
-            UUID tenantId, UUID accountId, String type, String normalizedHash, Instant verifiedAt) {
+            UUID tenantId,
+            UUID accountId,
+            String type,
+            @Nullable String source,
+            String normalizedHash,
+            Instant verifiedAt) {
         return jdbc.sql("""
                 UPDATE customer.contact_points
-                SET verification_status = 'VERIFIED', verified_at = :now, updated_at = :now
+                SET verification_status = 'VERIFIED', source = :source, verified_at = :now, updated_at = :now
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                   AND type = :type AND normalized_hash = :hash
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
                 .param("type", type)
+                .param("source", source)
                 .param("hash", normalizedHash)
                 .param("now", OffsetDateTime.ofInstant(verifiedAt, ZoneOffset.UTC))
                 .update();

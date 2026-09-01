@@ -193,6 +193,26 @@ public class SecurityConfiguration {
                                 "/api/v1/storefront/tenants/*/brands/*/identity/verification-challenges/*/attempts",
                                 "/api/v1/storefront/tenants/*/brands/*/identity/sessions")
                         .permitAll()
+                        // ADR 0063: "Continue with Telegram". Unauthenticated for
+                        // exactly the reason the three identity endpoints above
+                        // are: a customer with no account has no token to send,
+                        // and the poll below is what turns a redeemed code into
+                        // one -- there is no earlier point at which a token could
+                        // exist to require. What authorises the poll is
+                        // possession of an unguessable code minted moments
+                        // earlier by this same caller (StorefrontTelegramSignInController's
+                        // own class doc). Listed one method and one pair of paths
+                        // at a time rather than as .../telegram/** for the same
+                        // reason every other permitAll block on this chain is:
+                        // StorefrontTelegramLinkController's own endpoints sit
+                        // under that same prefix and require a customer session
+                        // by design.
+                        .requestMatchers(
+                                HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/telegram/sign-in-codes")
+                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET, "/api/v1/storefront/tenants/*/brands/*/telegram/sign-in-codes/*")
+                        .permitAll()
                         // ADR 0013: Click's SHOP API carries no authentication
                         // header of any kind. The MD5 sign_string over a
                         // secret-prefixed concatenation is the whole of it, and it

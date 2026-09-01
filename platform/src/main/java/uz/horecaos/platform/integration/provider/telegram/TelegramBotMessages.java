@@ -97,6 +97,61 @@ public final class TelegramBotMessages {
                 "Linked. Your order updates and receipts will arrive here.");
     }
 
+    // -------------------------------------------------- ADR 0063 auth sign-in
+
+    static String authLinkInvalidOrExpiredCode() {
+        // One language, the same choice every other invalid/expired-code
+        // message on this bot makes: the failure carries no resolved tenant to
+        // pick a language from.
+        return "This sign-in link is invalid or has expired. Go back to the app and try again.";
+    }
+
+    static String authRequestContactPrompt(String locale) {
+        return pick(
+                locale,
+                "Kirish uchun telefon raqamingizni yuboring.",
+                "Отправьте свой номер телефона, чтобы войти.",
+                "Share your phone number to sign in.");
+    }
+
+    static String authRequestContactButton(String locale) {
+        return pick(locale, "📱 Raqamni yuborish", "📱 Отправить номер", "📱 Share phone number");
+    }
+
+    /** {@code contact.user_id != from.id}: a forwarded stranger's contact, refused by name of nothing. */
+    static String authContactMustBeOwn(String locale) {
+        return pick(
+                locale,
+                "Iltimos, o'zingizning kontaktingizni yuboring (\"📎\" orqali forward qilinganini emas).",
+                "Пожалуйста, отправьте именно свой контакт (не пересланный).",
+                "Please share your own contact, not a forwarded one.");
+    }
+
+    /** The configured allowed-phone pattern refused a number. Names nothing about why (ADR 0063's own gate). */
+    static String authPhoneNotAllowed(String locale) {
+        return pick(
+                locale,
+                "Bu raqam bilan kirib bo'lmaydi.",
+                "С этим номером войти нельзя.",
+                "Sign-in is not available for this number.");
+    }
+
+    static String authTooManyAttempts(String locale) {
+        return pick(
+                locale,
+                "Juda ko'p urinish. Birozdan so'ng qayta urinib ko'ring.",
+                "Слишком много попыток. Повторите чуть позже.",
+                "Too many attempts. Try again shortly.");
+    }
+
+    static String authLinked(String locale) {
+        return pick(
+                locale,
+                "Kirish muvaffaqiyatli. Ilovaga qaytishingiz mumkin.",
+                "Вход выполнен. Вернитесь в приложение.",
+                "You're signed in. Go back to the app.");
+    }
+
     // -------------------------------------------------- ADR 0060 §2 the buttons
 
     public static String approveButtonLabel(String locale) {

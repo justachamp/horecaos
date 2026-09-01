@@ -56,8 +56,16 @@
       "unavailable": "Sign-in is unavailable right now.",
       "codeRejected": "That code is not correct.",
       "codeRejectedWithTries": "That code is not correct. {{count}} attempts left.",
-      "challengeOver": "This code has expired. Request a new one."
-    }
+      "challengeOver": "This code has expired. Request a new one.",
+      "telegramExpired": "This Telegram sign-in link has expired. Try again.",
+      "telegramUnavailable": "Sign-in with Telegram is unavailable right now."
+    },
+    "orDivider": "or",
+    "continueWithTelegram": "Continue with Telegram",
+    "telegramOpenInTelegram": "Open in Telegram",
+    "telegramWaiting": "Waiting for you to confirm in Telegram…",
+    "telegramExpiryNotice": "This link works once and expires soon — open it promptly.",
+    "telegramCancel": "Use phone number instead"
   },
   "home": {
     "delivery": "Delivery",

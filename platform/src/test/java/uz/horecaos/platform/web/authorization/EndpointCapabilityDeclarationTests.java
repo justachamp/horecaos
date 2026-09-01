@@ -81,7 +81,8 @@ class EndpointCapabilityDeclarationTests {
         for (Method handler : mutatingHandlers()) {
             if (isProviderCallback(handler)
                     || isGuestBearerEndpoint(handler)
-                    || isPreAccountIdentityEndpoint(handler)) {
+                    || isPreAccountIdentityEndpoint(handler)
+                    || isPreAccountTelegramSignInEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -128,7 +129,8 @@ class EndpointCapabilityDeclarationTests {
         for (Method handler : mutatingHandlers()) {
             if (isProviderCallback(handler)
                     || isGuestBearerEndpoint(handler)
-                    || isPreAccountIdentityEndpoint(handler)) {
+                    || isPreAccountIdentityEndpoint(handler)
+                    || isPreAccountTelegramSignInEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -279,6 +281,30 @@ class EndpointCapabilityDeclarationTests {
         return path.equals(base + "/verification-challenges")
                 || path.equals(base + "/verification-challenges/{challengeId}/attempts")
                 || path.equals(base + "/sessions");
+    }
+
+    /**
+     * ADR 0063: minting a "Continue with Telegram" sign-in code.
+     *
+     * <p>The identical reasoning {@link #isPreAccountIdentityEndpoint} states, applied
+     * to a second way a customer with no account yet gets one: there is no token to
+     * present, so a capability or {@code @CustomerOwned} would decide nothing, and
+     * {@code IdempotencyInterceptor} scopes a key by the calling subject — of which
+     * there is none — so it would refuse the request before the handler ran, the same
+     * blocker that keeps {@code @Idempotent} off the three endpoints beside this one.
+     *
+     * <p>What authorises the mint is possession of the tenant and brand in the path —
+     * the same standing every other unauthenticated storefront read already has — and
+     * ADR 0033 rate limiting bounds it per caller. Replay is not a hazard here the way
+     * a spent SMS budget is: minting a second code while a first is still outstanding
+     * costs nothing and creates no oracle, so this is not exempted for a weaker reason
+     * than the identity endpoints beside it, only a different flavour of the same one.
+     *
+     * <p>The poll, {@code GET .../sign-in-codes/{code}}, needs no exemption of its own —
+     * a {@code GET} is never a mutating handler in the first place.
+     */
+    private static boolean isPreAccountTelegramSignInEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes");
     }
 
     /**

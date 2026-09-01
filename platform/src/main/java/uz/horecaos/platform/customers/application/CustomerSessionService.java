@@ -95,8 +95,36 @@ public class CustomerSessionService {
     @Transactional
     public Established establish(UUID tenantId, UUID brandId, String grantSecret) {
         Redemption redemption = verification.redeemAsProvenNumber(tenantId, brandId, grantSecret);
-        UUID accountId = redemption.account().accountId();
+        return mint(tenantId, brandId, redemption.account().accountId(), redemption.created());
+    }
 
+    /**
+     * Mints a session for an account this call already knows to be resolved —
+     * ADR 0063's Telegram share-contact path, where the proof is a Telegram
+     * {@code request_contact} share rather than a redeemed verification grant,
+     * so there is no {@link Redemption} to read the account off; the caller
+     * ({@code customers.api.CustomerTelegramSignIn}'s implementation) resolved
+     * one moments earlier through {@code CustomerVerificationService#redeemAsTelegramContact}
+     * and hands it straight in.
+     *
+     * <p>Mints exactly as {@link #establish} does from here on — same token
+     * construction, same one-transaction session row, same audit fact — because
+     * once an account is resolved, a session is a session regardless of which
+     * proof produced it. What differs is entirely upstream of this method.
+     *
+     * <p>Called at most once per sign-in by contract, not by a check this method
+     * makes itself: the caller's own single-claim guard
+     * ({@code integration.telegram_pending_links.auth_session_claimed_at}) is
+     * what makes that true, the same division of responsibility
+     * {@link #establish}'s own grant-is-spent-once guarantee keeps one layer
+     * down, in {@code VerificationChallengeStore.redeemGrant}.
+     */
+    @Transactional
+    public Established establishForAccount(UUID tenantId, UUID brandId, UUID accountId, boolean accountCreated) {
+        return mint(tenantId, brandId, accountId, accountCreated);
+    }
+
+    private Established mint(UUID tenantId, UUID brandId, UUID accountId, boolean accountCreated) {
         UUID partition = customers
                 .account(tenantId, accountId)
                 .orElseThrow(() ->
@@ -120,7 +148,7 @@ public class CustomerSessionService {
                         "accountId",
                         accountId.toString(),
                         "accountCreated",
-                        redemption.created(),
+                        accountCreated,
                         "expiresAt",
                         expiresAt.toString()),
                 now));
@@ -130,7 +158,7 @@ public class CustomerSessionService {
         // ADR 0028).
         log.info("Established customer session {} for account {} in tenant {}", sessionId, accountId, tenantId);
 
-        return new Established(token.plaintext(), expiresAt, accountId, redemption.created());
+        return new Established(token.plaintext(), expiresAt, accountId, accountCreated);
     }
 
     /**

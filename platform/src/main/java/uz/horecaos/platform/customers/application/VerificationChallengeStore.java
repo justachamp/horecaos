@@ -3,6 +3,7 @@ package uz.horecaos.platform.customers.application;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Persistence for verification challenges, stated as a contract rather than as a
@@ -93,6 +94,32 @@ public interface VerificationChallengeStore {
      * @return true when a row was removed
      */
     boolean deleteUnsent(UUID tenantId, UUID challengeId);
+
+    /**
+     * Records which provider actually delivered a challenge's code, and at what
+     * cost (ADR 0063).
+     *
+     * <p>Called once, right after a transport answers {@code ACCEPTED} — never
+     * inside the same conditional-{@code UPDATE} discipline as
+     * {@link #consumeAttempt}/{@link #markVerified}/{@link #redeemGrant}, because
+     * this is bookkeeping rather than a security property: nothing about the
+     * challenge's single-use or single-attempt guarantees depends on it, and a
+     * lost write here would cost an operator a delivery-channel data point, never
+     * a customer a second code.
+     *
+     * @param deliveryChannel   {@code "SMS"} or {@code "TELEGRAM_GATEWAY"}
+     * @param providerMessageId the provider's own opaque reference, or null
+     * @param costMinor         integer minor units, or null when unknown
+     * @param costCurrencyCode  ISO 4217, paired with {@code costMinor}
+     */
+    void recordDelivery(
+            UUID tenantId,
+            UUID challengeId,
+            String deliveryChannel,
+            @Nullable String providerMessageId,
+            @Nullable Long costMinor,
+            @Nullable String costCurrencyCode,
+            Instant now);
 
     /**
      * Redeems a grant, once.

@@ -96,6 +96,12 @@ public class CustomerVerificationService {
 
     private static final String CONTACT_TABLE = "customer.contact_points";
 
+    /** {@code customer.contact_points.source} for a number an SMS or Gateway one-time code proved. */
+    private static final String CUSTOMER_VERIFICATION_SOURCE = "CUSTOMER_VERIFICATION";
+
+    /** {@code customer.contact_points.source} for a number Telegram's own request_contact button attested (ADR 0063). */
+    private static final String TELEGRAM_CONTACT_SOURCE = "TELEGRAM_CONTACT";
+
     /**
      * Per caller rather than per destination, and strict.
      *
@@ -262,6 +268,22 @@ public class CustomerVerificationService {
             withdraw(tenantId, opened, outcome.reasonCode());
             throw unsendable(outcome.reasonCode());
         }
+
+        // ADR 0063: which provider actually carried the code, and what that
+        // carriage cost, recorded on this challenge row the moment delivery is
+        // known -- null-safe, so a transport that predates this widening (or a
+        // test double built before it) simply records nothing, exactly as it
+        // did before this existed.
+        if (outcome.deliveryChannel() != null) {
+            challenges.recordDelivery(
+                    tenantId,
+                    opened.challengeId(),
+                    outcome.deliveryChannel(),
+                    outcome.providerMessageId(),
+                    outcome.costMinor(),
+                    outcome.costCurrencyCode(),
+                    clock.instant());
+        }
     }
 
     /**
@@ -410,6 +432,60 @@ public class CustomerVerificationService {
     }
 
     /**
+     * Resolves-or-creates an account for a phone Telegram itself attested control
+     * of, and records it as a verified contact sourced {@code TELEGRAM_CONTACT}
+     * (ADR 0063).
+     *
+     * <p>There is no grant here, and deliberately so: {@link #redeemAsProvenNumber}
+     * exists because a verification grant is the proof an SMS round trip produces,
+     * and there is no equivalent round trip on this path to produce one from.
+     * {@code TelegramUpdateHandler}'s own-contact check — {@code contact.user_id
+     * == from.id} — already stands in its place before this is ever called:
+     * Telegram itself is attesting that the phone belongs to the account holding
+     * this chat, which is a stronger attestation than an SMS code proves (ADR 0063's
+     * own Context section), not a weaker one.
+     *
+     * <p>Resolution goes through the identical durable path
+     * {@link #redeemAsProvenNumber} uses — {@link CustomerIdentityService#PROVEN_NUMBER_ISSUER}
+     * keyed on the phone's own lookup hash — so a customer who has ever proven this
+     * number by SMS and one who now proves it by Telegram land on the same
+     * account, governed by the same operator-facing {@code UNLINKED} lever.
+     */
+    @Transactional
+    public Redemption redeemAsTelegramContact(UUID tenantId, UUID brandId, String rawPhone) {
+        String destination = deliverableNumber(rawPhone);
+        String destinationHash = protection.lookupHash(tenantId, ContactType.PHONE.lookupDomain(), destination);
+
+        CustomerIdentityService.Resolution resolution =
+                identity.resolve(tenantId, brandId, CustomerIdentityService.PROVEN_NUMBER_ISSUER, destinationHash);
+        UUID accountId = resolution.account().accountId();
+        Instant now = clock.instant();
+
+        int promoted = customers.markContactVerified(
+                tenantId, accountId, ContactType.PHONE.name(), TELEGRAM_CONTACT_SOURCE, destinationHash, now);
+        if (promoted == 0) {
+            insertNewVerifiedContact(
+                    tenantId,
+                    accountId,
+                    ContactType.PHONE.name(),
+                    TELEGRAM_CONTACT_SOURCE,
+                    destinationHash,
+                    destination,
+                    now);
+        }
+
+        audit.record(fact(
+                "CUSTOMER_PRINCIPAL_VERIFIED",
+                tenantId,
+                brandId,
+                accountId,
+                Map.of("source", TELEGRAM_CONTACT_SOURCE, "accountCreated", resolution.created()),
+                now));
+
+        return new Redemption(new CustomerAccountRef(accountId, tenantId), resolution.created());
+    }
+
+    /**
      * @param principalOf which principal the redeemed grant belongs to. A function
      *                    of the redeemed row rather than two parameters, because
      *                    the proven-number path can only answer once the row has
@@ -459,12 +535,16 @@ public class CustomerVerificationService {
     private void attachVerifiedContact(UUID tenantId, UUID accountId, RedeemedGrant redeemed, Instant now) {
 
         int promoted = customers.markContactVerified(
-                tenantId, accountId, redeemed.contactType(), redeemed.destinationHash(), now);
+                tenantId,
+                accountId,
+                redeemed.contactType(),
+                CUSTOMER_VERIFICATION_SOURCE,
+                redeemed.destinationHash(),
+                now);
         if (promoted > 0) {
             return;
         }
 
-        UUID contactId = UUID.randomUUID();
         // Decrypted here and re-protected under the contact point's own record
         // reference. Associated data binds a ciphertext to one row, so the
         // challenge's ciphertext would not open where it is about to be stored.
@@ -475,12 +555,38 @@ public class CustomerVerificationService {
                         VerificationChallengeIssuer.CHALLENGE_TABLE, "destination_encrypted", redeemed.challengeId()),
                 REVEAL_PURPOSE);
 
+        insertNewVerifiedContact(
+                tenantId,
+                accountId,
+                redeemed.contactType(),
+                CUSTOMER_VERIFICATION_SOURCE,
+                redeemed.destinationHash(),
+                destination,
+                now);
+    }
+
+    /**
+     * The half {@link #attachVerifiedContact} and {@link #redeemAsTelegramContact}
+     * share: a brand-new verified {@code contact_points} row, once the caller has
+     * already established (via {@code markContactVerified}) that no existing row
+     * for this account and number could simply be promoted.
+     */
+    private void insertNewVerifiedContact(
+            UUID tenantId,
+            UUID accountId,
+            String contactType,
+            String source,
+            String destinationHash,
+            String destination,
+            Instant now) {
+        UUID contactId = UUID.randomUUID();
         customers.insertVerifiedContactPoint(
                 contactId,
                 tenantId,
                 accountId,
-                redeemed.contactType(),
-                redeemed.destinationHash(),
+                contactType,
+                source,
+                destinationHash,
                 protection
                         .protect(
                                 tenantId,
@@ -488,7 +594,7 @@ public class CustomerVerificationService {
                                 new RecordRef(CONTACT_TABLE, "encrypted_value", contactId),
                                 destination)
                         .serialize(),
-                !customers.hasPrimaryContact(tenantId, accountId, redeemed.contactType()),
+                !customers.hasPrimaryContact(tenantId, accountId, contactType),
                 now);
     }
 
