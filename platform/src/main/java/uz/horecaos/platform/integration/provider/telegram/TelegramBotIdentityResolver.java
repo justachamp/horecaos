@@ -48,7 +48,7 @@ public class TelegramBotIdentityResolver {
                 FROM integration.installations i
                 JOIN integration.provider_environments e ON e.code = i.environment_code
                 WHERE i.tenant_id = :tenantId AND i.provider_category = 'NOTIFICATION'
-                  AND i.provider_type = 'TELEGRAM' AND i.status = 'ACTIVE'
+                  AND i.provider_type = 'TELEGRAM_BOT_API' AND i.status = 'ACTIVE'
                 ORDER BY i.created_at
                 LIMIT 1
                 """)
