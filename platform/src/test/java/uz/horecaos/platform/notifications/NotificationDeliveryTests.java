@@ -50,6 +50,7 @@ import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
+import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
 import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
@@ -202,8 +203,17 @@ class NotificationDeliveryTests {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
+        CustomerTelegramChannelRouter channelRouter =
+                new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
         trigger = new OrderNotificationTrigger(
-                notifications, operationsAlerts, objectMapper, clock, "SMS", Duration.ofHours(6));
+                notifications,
+                operationsAlerts,
+                orders,
+                channelRouter,
+                objectMapper,
+                clock,
+                "SMS",
+                Duration.ofHours(6));
 
         activateConfirmationTemplate();
     }

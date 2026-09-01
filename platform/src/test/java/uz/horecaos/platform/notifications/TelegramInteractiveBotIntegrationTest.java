@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -63,6 +64,7 @@ import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramRightsVerifier;
@@ -75,8 +77,14 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.application.StockAvailabilityPortAdapter;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
+import uz.horecaos.platform.notifications.api.CustomerAlertPort;
+import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
+import uz.horecaos.platform.notifications.application.CustomerAlertFanoutService;
+import uz.horecaos.platform.notifications.application.CustomerProviderBindingSyncService;
+import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
+import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService.Wording;
 import uz.horecaos.platform.notifications.application.NotificationWorker;
@@ -89,8 +97,18 @@ import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
+import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.payments.api.FiscalDocumentIssued;
+import uz.horecaos.platform.payments.application.PaymentFiscalService;
+import uz.horecaos.platform.payments.domain.FiscalDocument;
+import uz.horecaos.platform.payments.domain.FiscalDocumentType;
+import uz.horecaos.platform.payments.domain.FiscalReason;
+import uz.horecaos.platform.payments.domain.FiscalStatus;
+import uz.horecaos.platform.payments.domain.PaymentProviderType;
+import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
+import uz.horecaos.platform.payments.notifications.FiscalCustomerReceiptTrigger;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -126,6 +144,8 @@ class TelegramInteractiveBotIntegrationTest {
     private AuditRecorder audit;
     private AuthorizationService authorization;
     private TelegramStaffLinkService staffLinks;
+    private TelegramCustomerLinkService customerLinks;
+    private CustomerProviderBindingSync bindingSync;
     private BotActionTokenStore actionTokens;
     private FakeOrderDecisionPort orderDecisions;
     private TelegramUpdateHandler updateHandler;
@@ -164,6 +184,11 @@ class TelegramInteractiveBotIntegrationTest {
             throw new UnsupportedOperationException("not exercised by this suite");
         });
         staffLinks = new TelegramStaffLinkService(jdbc, clock, Duration.ofMinutes(15));
+        bindingSync = new CustomerProviderBindingSyncService(
+                new JdbcNotificationStore(jdbc),
+                new NotificationPreferenceService(new JdbcNotificationStore(jdbc), clock));
+        customerLinks = new TelegramCustomerLinkService(
+                jdbc, clock, Duration.ofMinutes(15), new TelegramBindingStore(jdbc, clock, audit), bindingSync, audit);
         actionTokens = new BotActionTokenStore(jdbc, clock);
         orderDecisions = new FakeOrderDecisionPort(audit, clock);
         webhookInstallations = new TelegramWebhookInstallationLookup(jdbc);
@@ -180,6 +205,7 @@ class TelegramInteractiveBotIntegrationTest {
         updateHandler = new TelegramUpdateHandler(
                 new TelegramLinkService(jdbc, clock, Duration.ofMinutes(15)),
                 staffLinks,
+                customerLinks,
                 new TelegramRightsVerifier(new TelegramBotApiClient(objectMapper)),
                 new TelegramBindingStore(jdbc, clock, audit),
                 actionTokens,
@@ -187,6 +213,7 @@ class TelegramInteractiveBotIntegrationTest {
                 authorization,
                 new AlwaysEntitledService(),
                 new NoSummaryOrderDirectory(),
+                new NoOpContactDirectory(),
                 stopList,
                 stockAvailability,
                 new TelegramBotApiClient(objectMapper),
@@ -257,8 +284,10 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
-        OrderNotificationTrigger trigger =
-                new OrderNotificationTrigger(notifications, fanout, objectMapper, clock, "SMS", Duration.ofHours(6));
+        CustomerTelegramChannelRouter channelRouter =
+                new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
+        OrderNotificationTrigger trigger = new OrderNotificationTrigger(
+                notifications, fanout, orderSummaries, channelRouter, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         // Bind the group directly (skips the group /link handshake, which
         // ADR 0058's own suite already covers) and subscribe it to the new
@@ -414,6 +443,277 @@ class TelegramInteractiveBotIntegrationTest {
                 .satisfies(row -> assertThat(row.get("actor_subject")).isEqualTo(staffSubject));
     }
 
+    @Test
+    @DisplayName(
+            "a customer's own linked chat gets order and receipt messages, then a 403 revokes it and the next order falls back to SMS")
+    void customerLinkRoutesAndRevokesOn403() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID brand = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        UUID orderId1 = UUID.randomUUID();
+        UUID orderId2 = UUID.randomUUID();
+        UUID orderId3 = UUID.randomUUID();
+        long customerTelegramUserId = 55_055L;
+
+        seedTenancy(tenant, brand, location, "customer-link-tenant", "CLINK");
+        UUID installationId = seedTelegramInstallation(tenant, "customer-link-bot-env");
+        UUID customerAccountId = seedCustomerAccount(tenant);
+
+        activateTemplate(
+                tenant,
+                brand,
+                OrderNotificationTrigger.ORDER_CONFIRMED,
+                NotificationClass.TRANSACTIONAL_REQUIRED,
+                NotificationChannel.TELEGRAM,
+                "Order confirmed",
+                Map.of());
+        activateTemplate(
+                tenant,
+                brand,
+                FiscalCustomerReceiptTrigger.FISCAL_RECEIPT_ISSUED,
+                NotificationClass.TRANSACTIONAL_REQUIRED,
+                NotificationChannel.TELEGRAM,
+                "Receipt: {{receiptUrl}}",
+                Map.of("receiptUrl", "The OFD receipt link"));
+
+        NotificationGateway gateway = notificationGateway();
+        CamelContext camel = new DefaultCamelContext();
+        camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
+        camel.start();
+        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+
+        JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
+        JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
+        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+
+        StubOrderDirectory orderSummaries = new StubOrderDirectory();
+        orderSummaries.publish(new OrderDirectory.OrderSummary(
+                orderId1, tenant, brand, location, "A-100", customerAccountId, null, "CONFIRMED", "UZS", 100_000L, 1));
+        orderSummaries.publish(new OrderDirectory.OrderSummary(
+                orderId2, tenant, brand, location, "A-200", customerAccountId, null, "CONFIRMED", "UZS", 120_000L, 1));
+        orderSummaries.publish(new OrderDirectory.OrderSummary(
+                orderId3, tenant, brand, location, "A-300", customerAccountId, null, "CONFIRMED", "UZS", 130_000L, 1));
+
+        NotificationEligibilityService eligibility = new NotificationEligibilityService(
+                notifications,
+                templates,
+                (t, a, b, p, c) -> Optional.empty(),
+                new NoOpContactDirectory(),
+                orderSummaries,
+                transport,
+                objectMapper,
+                clock,
+                "en");
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                new NoOpContactDirectory(),
+                transport,
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+        NotificationWorker worker =
+                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
+        OperationsAlertFanoutService opsFanout = new OperationsAlertFanoutService(
+                new uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory(
+                        new TelegramBindingStore(jdbc, clock, audit)),
+                notifications,
+                new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
+                objectMapper,
+                clock);
+
+        CustomerTelegramChannelRouter channelRouter =
+                new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
+        OrderNotificationTrigger orderTrigger = new OrderNotificationTrigger(
+                notifications,
+                opsFanout,
+                orderSummaries,
+                channelRouter,
+                objectMapper,
+                clock,
+                "SMS",
+                Duration.ofHours(6));
+
+        CustomerAlertPort customerAlerts =
+                new CustomerAlertFanoutService(notifications, orderSummaries, channelRouter, objectMapper, "SMS");
+        // A second reader, sharing the same database as the writer below, so
+        // FiscalCustomerReceiptTrigger#onDocumentIssued can look the document
+        // back up without this fixture needing to route a real Spring
+        // ApplicationEvent back into the object that published it.
+        PaymentFiscalService fiscalReader =
+                new PaymentFiscalService(new JdbcFiscalDocumentStore(jdbc), List.of(), event -> {});
+        FiscalCustomerReceiptTrigger fiscalTrigger =
+                new FiscalCustomerReceiptTrigger(customerAlerts, fiscalReader, Duration.ofDays(3));
+        ApplicationEventPublisher events = event -> {
+            if (event instanceof FiscalDocumentIssued issued) {
+                fiscalTrigger.onDocumentIssued(issued);
+            }
+        };
+        PaymentFiscalService fiscalService =
+                new PaymentFiscalService(new JdbcFiscalDocumentStore(jdbc), List.of(), events);
+
+        // The customer mints a deep-link code under their own storefront
+        // session and opens it — /start arrives unprompted, exactly the way
+        // Telegram delivers it the moment a customer taps the link.
+        String code = customerLinks.issueCode(tenant, brand, customerAccountId);
+        updateHandler.handle(installation(installationId, tenant), privateStartUpdate(code, customerTelegramUserId));
+        assertThat(bot.messagesSentTo(customerTelegramUserId)).hasSize(1);
+
+        UUID bindingId = jdbc.sql("""
+                SELECT binding_id FROM integration.telegram_bindings
+                WHERE tenant_id = :tenantId AND chat_id = :chatId AND audience = 'CUSTOMER' AND retired_at IS NULL
+                """)
+                .param("tenantId", tenant)
+                .param("chatId", customerTelegramUserId)
+                .query(UUID.class)
+                .single();
+        Map<String, Object> endpointRow = jdbc.sql("""
+                SELECT customer_account_id, status FROM notifications.recipient_endpoints
+                WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
+                """)
+                .param("tenantId", tenant)
+                .param("bindingId", bindingId)
+                .query()
+                .singleRow();
+        assertThat(endpointRow.get("customer_account_id")).isEqualTo(customerAccountId);
+        assertThat(endpointRow.get("status")).isEqualTo("ACTIVE");
+
+        // An order-confirmed intent for this customer routes to TELEGRAM and
+        // lands in their own 1:1 chat.
+        orderTrigger.onOrderingEvent(new OrderConfirmed(
+                UUID.randomUUID(),
+                new TenantId(tenant),
+                orderId1,
+                clock.instant(),
+                brand,
+                location,
+                "AUTO_CONFIRM",
+                null,
+                clock.instant(),
+                "UZS",
+                100_000L,
+                "CONFIRMED",
+                1));
+        drainUntilQuiet(worker);
+        assertThat(bot.messagesSentTo(customerTelegramUserId)).hasSize(2);
+        assertThat(orderChannel(orderId1, OrderNotificationTrigger.ORDER_CONFIRMED))
+                .isEqualTo("TELEGRAM");
+
+        // The fiscal document behind the same order reaches ISSUED; the
+        // customer gets the OFD link in the same chat — "a legal artifact,
+        // not a courtesy" (ADR 0058). fk_fiscal_document_order needs a real
+        // order row, unlike every other order in this test.
+        seedOrder(tenant, brand, location, orderId1, customerAccountId, 100_000L);
+        UUID documentId = UUID.randomUUID();
+        new JdbcFiscalDocumentStore(jdbc)
+                .insert(new FiscalDocument(
+                        documentId,
+                        tenant,
+                        orderId1,
+                        null,
+                        null,
+                        null,
+                        PaymentProviderType.CLICK,
+                        FiscalDocumentType.SALE,
+                        null,
+                        FiscalStatus.PENDING,
+                        FiscalReason.AWAITING_CAPTURE,
+                        "test",
+                        List.of(),
+                        null,
+                        1,
+                        clock.instant()));
+        boolean issued = fiscalService.attachEvidence(
+                tenant,
+                documentId,
+                new FiscalDocument.FiscalEvidence(
+                        "REC-1", "SIGN-1", "T-1", "R-1", clock.instant(), "https://ofd.soliq.uz/epi?t=1", "0", "OK"),
+                "protected-ref",
+                clock.instant());
+        assertThat(issued).isTrue();
+        drainUntilQuiet(worker);
+        assertThat(lastMessageTo(customerTelegramUserId)).contains("https://ofd.soliq.uz/epi?t=1");
+
+        // The customer blocks the bot. The next send to their chat retires
+        // the binding and — because it is a customer's own — flips the
+        // TELEGRAM preference off too: "a customer-binding 403 is consent
+        // revocation in effect" (ADR 0058).
+        bot.kick(customerTelegramUserId, false);
+        orderTrigger.onOrderingEvent(new OrderConfirmed(
+                UUID.randomUUID(),
+                new TenantId(tenant),
+                orderId2,
+                clock.instant(),
+                brand,
+                location,
+                "AUTO_CONFIRM",
+                null,
+                clock.instant(),
+                "UZS",
+                120_000L,
+                "CONFIRMED",
+                1));
+        drainUntilQuiet(worker);
+
+        Map<String, Object> retiredBinding = jdbc.sql("""
+                SELECT retired_at, retired_reason FROM integration.telegram_bindings
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                """)
+                .param("tenantId", tenant)
+                .param("bindingId", bindingId)
+                .query()
+                .singleRow();
+        assertThat(retiredBinding.get("retired_at")).isNotNull();
+
+        Map<String, Object> retiredEndpoint = jdbc.sql("""
+                SELECT status FROM notifications.recipient_endpoints
+                WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
+                """)
+                .param("tenantId", tenant)
+                .param("bindingId", bindingId)
+                .query()
+                .singleRow();
+        assertThat(retiredEndpoint.get("status")).isEqualTo("RETIRED");
+
+        List<Map<String, Object>> preferenceRows = jdbc.sql("""
+                SELECT notification_class, enabled FROM notifications.notification_preferences
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND channel = 'TELEGRAM'
+                """)
+                .param("tenantId", tenant)
+                .param("accountId", customerAccountId)
+                .query()
+                .listOfRows();
+        assertThat(preferenceRows)
+                .extracting(row -> row.get("notification_class"))
+                .containsExactlyInAnyOrder("TRANSACTIONAL_OPTIONAL", "MARKETING");
+        assertThat(preferenceRows)
+                .allSatisfy(row -> assertThat(row.get("enabled")).isEqualTo(false));
+
+        // The next order-confirmed intent for the same customer, created
+        // after the link is gone, routes to SMS from the moment it is
+        // created — the "next intent falls back" half of this build's
+        // channel-selection design, distinct from the in-flight
+        // NO_RECIPIENT_ENDPOINT suppression an already-TELEGRAM-routed
+        // intent gets when its binding dies mid-flight.
+        orderTrigger.onOrderingEvent(new OrderConfirmed(
+                UUID.randomUUID(),
+                new TenantId(tenant),
+                orderId3,
+                clock.instant(),
+                brand,
+                location,
+                "AUTO_CONFIRM",
+                null,
+                clock.instant(),
+                "UZS",
+                130_000L,
+                "CONFIRMED",
+                1));
+        assertThat(orderChannel(orderId3, OrderNotificationTrigger.ORDER_CONFIRMED))
+                .isEqualTo("SMS");
+    }
+
     // ------------------------------------------------------------------- helpers
 
     /**
@@ -440,6 +740,17 @@ class TelegramInteractiveBotIntegrationTest {
                 "message",
                 Map.of(
                         "text", "/link " + code,
+                        "chat", Map.of("id", userId, "type", "private"),
+                        "from", Map.of("id", userId)));
+    }
+
+    private static Map<String, Object> privateStartUpdate(String code, long userId) {
+        return Map.of(
+                "update_id",
+                1,
+                "message",
+                Map.of(
+                        "text", "/start " + code,
                         "chat", Map.of("id", userId, "type", "private"),
                         "from", Map.of("id", userId)));
     }
@@ -485,6 +796,17 @@ class TelegramInteractiveBotIntegrationTest {
         return messages.get(messages.size() - 1);
     }
 
+    private String orderChannel(UUID orderId, String templateKey) {
+        return jdbc.sql("""
+                SELECT channel FROM notifications.notifications
+                WHERE subject_id = :orderId AND template_key = :templateKey
+                """)
+                .param("orderId", orderId)
+                .param("templateKey", templateKey)
+                .query(String.class)
+                .single();
+    }
+
     private List<Map<String, Object>> auditRowsFor(UUID orderId) {
         return jdbc.sql("""
                 SELECT actor_subject, outcome FROM audit.audit_events
@@ -503,6 +825,7 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramMessageTracker(jdbc, clock),
                 new TelegramCircuitBreakers(new SimpleMeterRegistry(), clock),
                 actionTokens,
+                bindingSync,
                 clock,
                 Duration.ofSeconds(20),
                 Duration.ofHours(6),
@@ -525,6 +848,128 @@ class TelegramInteractiveBotIntegrationTest {
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order needs a decision")));
         int version = templates.addVersion(tenantId, templateId, wordings, Map.of());
         templates.activate(tenantId, templateId, version, "test");
+    }
+
+    /** A generic sibling of {@link #activateAwaitingApprovalTemplate}, for a template that names variables. */
+    private void activateTemplate(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationClass notificationClass,
+            NotificationChannel channel,
+            String body,
+            Map<String, String> declaredVariables) {
+        JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
+        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        UUID templateId = templates.createTemplate(tenantId, brandId, templateKey, notificationClass, channel, null);
+        Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
+        MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, body)));
+        int version = templates.addVersion(tenantId, templateId, wordings, declaredVariables);
+        templates.activate(tenantId, templateId, version, "test");
+    }
+
+    /**
+     * A real {@code ordering.orders} row — needed only for the one order this
+     * suite attaches a real {@code fiscal.fiscal_documents} row to;
+     * {@code fk_fiscal_document_order} enforces it. Every other order in this
+     * suite is a {@link StubOrderDirectory} entry with no backing row, which
+     * is sufficient everywhere {@code OrderDirectory} is the only reader.
+     */
+    private void seedOrder(
+            UUID tenantId, UUID brandId, UUID locationId, UUID orderId, UUID customerAccountId, long totalMinor) {
+        UUID channel = UUID.randomUUID();
+        UUID catalog = UUID.randomUUID();
+        UUID publication = UUID.randomUUID();
+        UUID quote = UUID.randomUUID();
+        UUID cart = UUID.randomUUID();
+
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'WEB', 'WEB', 'Web', 'ACTIVE')
+                """).param("id", channel).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
+                """)
+                .param("id", catalog)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
+                    status, content_hash, activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'WEB', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", publication)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalog)
+                .update();
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency, status,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor,
+                    tax_minor, total_minor, expires_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', 'ACTIVE', :publicationId, 1,
+                    'hash', :totalMinor, 0, :totalMinor, now() + interval '1 day')
+                """)
+                .param("id", quote)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("publicationId", publication)
+                .param("totalMinor", totalMinor)
+                .update();
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    customer_account_id, fulfillment_mode, currency, status, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, expires_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :channelId,
+                    :accountId, 'DELIVERY', 'UZS', 'CHECKOUT_IN_PROGRESS', :quoteId, 'hash', :publicationId,
+                    now() + interval '1 day')
+                """)
+                .param("id", cart)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("channelId", channel)
+                .param("accountId", customerAccountId)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .update();
+        jdbc.sql("""
+                INSERT INTO ordering.orders (
+                    id, public_order_number, tenant_id, brand_id, location_id, channel_id,
+                    channel_code_snapshot, customer_account_id, fulfillment_mode,
+                    acceptance_mode_snapshot, approval_channel_snapshot, status, currency,
+                    subtotal_minor, tax_minor, total_minor, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key,
+                    confirmed_at)
+                VALUES (
+                    :id, 'A-CUST', :tenantId, :brandId, :locationId, :channelId, 'WEB', :accountId,
+                    'DELIVERY', 'AUTO_CONFIRM', 'NONE', 'CONFIRMED', 'UZS', :totalMinor, 0, :totalMinor,
+                    :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey, now())
+                """)
+                .param("id", orderId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("channelId", channel)
+                .param("accountId", customerAccountId)
+                .param("totalMinor", totalMinor)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .param("cartId", cart)
+                .param("idempotencyKey", UUID.randomUUID().toString())
+                .update();
+    }
+
+    private UUID seedCustomerAccount(UUID tenantId) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("INSERT INTO customer.customer_accounts (id, tenant_id) VALUES (:id, :tenantId)")
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .update();
+        return id;
     }
 
     private SecretResolver secretResolver() {
@@ -669,8 +1114,19 @@ class TelegramInteractiveBotIntegrationTest {
                 .update();
         jdbc.sql("TRUNCATE TABLE notifications.delivery_status_events, notifications.delivery_attempts, "
                         + "notifications.notifications, notifications.recipient_endpoints, "
+                        + "notifications.notification_preferences, "
                         + "notifications.template_versions, notifications.templates CASCADE")
                 .update();
+        // payments.fiscal_documents is a compatibility view over the real
+        // table (V0039 moved it to fiscal.fiscal_documents); TRUNCATE targets
+        // the real table.
+        jdbc.sql("TRUNCATE TABLE fiscal.fiscal_documents CASCADE").update();
+        // seedOrder's own prerequisite chain, for the one order this suite
+        // attaches a real fiscal document to.
+        jdbc.sql("TRUNCATE TABLE ordering.orders, ordering.carts, pricing.quotes, "
+                        + "catalog.publications, tenant.sales_channels CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE integration.binding_capabilities, integration.bindings, "
                         + "integration.installations, integration.provider_environments CASCADE")
                 .update();

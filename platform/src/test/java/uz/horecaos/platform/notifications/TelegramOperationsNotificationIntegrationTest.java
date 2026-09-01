@@ -48,6 +48,7 @@ import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory;
@@ -55,8 +56,12 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramRightsVerifier
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateHandler;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup;
+import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
+import uz.horecaos.platform.notifications.application.CustomerProviderBindingSyncService;
+import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
+import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService.Wording;
 import uz.horecaos.platform.notifications.application.NotificationWorker;
@@ -105,6 +110,8 @@ class TelegramOperationsNotificationIntegrationTest {
     private NotificationWorker worker;
     private OrderNotificationTrigger trigger;
     private TelegramLinkService links;
+    private TelegramCustomerLinkService customerLinks;
+    private CustomerProviderBindingSync bindingSync;
     private TelegramUpdateHandler updateHandler;
     private TelegramBindingStore bindingStore;
     private TelegramWebhookInstallationLookup webhookInstallations;
@@ -172,9 +179,14 @@ class TelegramOperationsNotificationIntegrationTest {
                 new AlwaysEntitledService(),
                 new NoOpOrderDecisionPort(),
                 clock);
+        bindingSync = new CustomerProviderBindingSyncService(
+                notifications, new NotificationPreferenceService(notifications, clock));
+        customerLinks =
+                new TelegramCustomerLinkService(jdbc, clock, Duration.ofMinutes(15), bindingStore, bindingSync, audit);
         updateHandler = new TelegramUpdateHandler(
                 links,
                 staffLinks,
+                customerLinks,
                 rights,
                 bindingStore,
                 actionTokens,
@@ -182,6 +194,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 authorization,
                 new AlwaysEntitledService(),
                 new StubOrderDirectory(),
+                new NoOpContactDirectory(),
                 new NoOpStopListPort(),
                 new NoOpStockAvailabilityPort(),
                 botApiClient,
@@ -199,6 +212,7 @@ class TelegramOperationsNotificationIntegrationTest {
                         tracker,
                         new TelegramCircuitBreakers(new SimpleMeterRegistry(), clock),
                         actionTokens,
+                        bindingSync,
                         clock,
                         Duration.ofSeconds(20),
                         Duration.ofHours(6),
@@ -243,7 +257,10 @@ class TelegramOperationsNotificationIntegrationTest {
                 new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
                 objectMapper,
                 clock);
-        trigger = new OrderNotificationTrigger(notifications, fanout, objectMapper, clock, "SMS", Duration.ofHours(6));
+        CustomerTelegramChannelRouter channelRouter =
+                new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
+        trigger = new OrderNotificationTrigger(
+                notifications, fanout, orders, channelRouter, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         activateTelegramTemplate();
     }
@@ -325,6 +342,68 @@ class TelegramOperationsNotificationIntegrationTest {
         assertThat(bot.messagesSentTo(chatTwoNew)).anyMatch(text -> text.contains("A-3"));
         // Nothing further ever reached the pre-migration chat id.
         assertThat(bot.messagesSentTo(chatTwoOld)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a customer's /start deep-link code expires and is single-use")
+    void customerLinkCodeExpiresAndIsSingleUse() {
+        UUID customerAccountId = seedCustomerAccount(TENANT);
+        long telegramUserId = 909_909L;
+
+        String expired = customerLinks.issueCode(TENANT, BRAND, customerAccountId);
+        clock.advance(Duration.ofMinutes(16));
+        updateHandler.handle(
+                webhookInstallations.find(installationId).orElseThrow(), startUpdate(expired, telegramUserId));
+
+        // Refused politely, and nothing was linked — the same
+        // not-found-for-everything-wrong answer every /link-family
+        // handshake in this codebase gives.
+        assertThat(customerLinks.activeBinding(TENANT, customerAccountId)).isEmpty();
+        assertThat(bot.messagesSentTo(telegramUserId)).hasSize(1);
+        assertThat(bot.messagesSentTo(telegramUserId).get(0)).doesNotContain("Linked");
+
+        // A fresh code, redeemed once, links.
+        String code = customerLinks.issueCode(TENANT, BRAND, customerAccountId);
+        updateHandler.handle(
+                webhookInstallations.find(installationId).orElseThrow(), startUpdate(code, telegramUserId));
+        assertThat(customerLinks.activeBinding(TENANT, customerAccountId)).isPresent();
+        UUID bindingId = customerLinks.activeBinding(TENANT, customerAccountId).orElseThrow();
+        assertThat(bot.messagesSentTo(telegramUserId)).hasSize(2);
+
+        // The same code redeemed a second time (a duplicate webhook
+        // delivery, ADR 0032's at-least-once guarantee, or a customer
+        // tapping the link twice) finds it already consumed: answered the
+        // same "invalid or expired" way, and the binding it already created
+        // stands rather than a second one appearing.
+        updateHandler.handle(
+                webhookInstallations.find(installationId).orElseThrow(), startUpdate(code, telegramUserId));
+        assertThat(bot.messagesSentTo(telegramUserId)).hasSize(3);
+        assertThat(bot.messagesSentTo(telegramUserId).get(2)).doesNotContain("Linked");
+        assertThat(customerLinks.activeBinding(TENANT, customerAccountId)).contains(bindingId);
+    }
+
+    private Map<String, Object> startUpdate(String code, long userId) {
+        Map<String, Object> chat = Map.of("id", userId, "type", "private");
+        Map<String, Object> from = Map.of("id", userId);
+
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("chat", chat);
+        message.put("from", from);
+        message.put("text", "/start " + code);
+
+        Map<String, Object> update = new LinkedHashMap<>();
+        update.put("update_id", 1);
+        update.put("message", message);
+        return update;
+    }
+
+    private UUID seedCustomerAccount(UUID tenantId) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("INSERT INTO customer.customer_accounts (id, tenant_id) VALUES (:id, :tenantId)")
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .update();
+        return id;
     }
 
     @Test

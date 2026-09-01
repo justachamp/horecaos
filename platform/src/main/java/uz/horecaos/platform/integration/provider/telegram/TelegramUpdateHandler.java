@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.catalog.api.StopListPort;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
@@ -27,6 +28,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
+import uz.horecaos.platform.integration.provider.telegram.TelegramCustomerLinkService.PendingCustomerLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService.PendingLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService.PendingStaffLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService.TenantLink;
@@ -44,7 +46,15 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
  * Approve/Reject button (resolved through {@link BotCallbackAuthorizer}, the
  * one place capability enforcement actually happens on this boundary), and
  * two typed commands, {@code /86} and {@code /stats}, usable in a 1:1 chat or
- * a bound group.
+ * a bound group. ADR 0058 stage 2 adds a third private-chat handshake, {@code
+ * /start <code>} — the Bot API's own deep-link command, arriving unprompted
+ * the moment a customer opens {@code https://t.me/<bot>?start=<code>} — which
+ * links the chat to a customer account rather than a staff principal (see
+ * {@link TelegramCustomerLinkService}). A customer may also link without ever
+ * sending a Telegram message at all, through a verified Mini App {@code
+ * initData} payload presented directly to a storefront endpoint; that path
+ * calls {@link TelegramCustomerLinkService#link} the same way this class's
+ * {@code /start} handler does, and never reaches this class.
  */
 @Service
 public class TelegramUpdateHandler {
@@ -52,6 +62,10 @@ public class TelegramUpdateHandler {
     private static final Logger log = LoggerFactory.getLogger(TelegramUpdateHandler.class);
 
     private static final String LINK_COMMAND = "link";
+
+    /** ADR 0058 stage 2: the customer 1:1 deep-link handshake, private chat only. */
+    private static final String START_COMMAND = "start";
+
     private static final String STOP_LIST_COMMAND = "86";
     private static final String STATS_COMMAND = "stats";
     private static final Set<String> TYPED_COMMANDS = Set.of(STOP_LIST_COMMAND, STATS_COMMAND);
@@ -67,6 +81,7 @@ public class TelegramUpdateHandler {
 
     private final TelegramLinkService links;
     private final TelegramStaffLinkService staffLinks;
+    private final TelegramCustomerLinkService customerLinks;
     private final TelegramRightsVerifier rights;
     private final TelegramBindingStore bindings;
     private final BotActionTokenStore actionTokens;
@@ -74,6 +89,7 @@ public class TelegramUpdateHandler {
     private final AuthorizationService authorization;
     private final EntitlementService entitlements;
     private final OrderDirectory orderDirectory;
+    private final RecipientContactDirectory contacts;
     private final StopListPort stopList;
     private final StockAvailabilityPort stockAvailability;
     private final TelegramBotApiClient bots;
@@ -85,6 +101,7 @@ public class TelegramUpdateHandler {
     public TelegramUpdateHandler(
             TelegramLinkService links,
             TelegramStaffLinkService staffLinks,
+            TelegramCustomerLinkService customerLinks,
             TelegramRightsVerifier rights,
             TelegramBindingStore bindings,
             BotActionTokenStore actionTokens,
@@ -92,6 +109,7 @@ public class TelegramUpdateHandler {
             AuthorizationService authorization,
             EntitlementService entitlements,
             OrderDirectory orderDirectory,
+            RecipientContactDirectory contacts,
             StopListPort stopList,
             StockAvailabilityPort stockAvailability,
             TelegramBotApiClient bots,
@@ -101,6 +119,7 @@ public class TelegramUpdateHandler {
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale) {
         this.links = links;
         this.staffLinks = staffLinks;
+        this.customerLinks = customerLinks;
         this.rights = rights;
         this.bindings = bindings;
         this.actionTokens = actionTokens;
@@ -108,6 +127,7 @@ public class TelegramUpdateHandler {
         this.authorization = authorization;
         this.entitlements = entitlements;
         this.orderDirectory = orderDirectory;
+        this.contacts = contacts;
         this.stopList = stopList;
         this.stockAvailability = stockAvailability;
         this.bots = bots;
@@ -322,6 +342,10 @@ public class TelegramUpdateHandler {
             ParsedCommand parsed) {
         if (LINK_COMMAND.equals(parsed.command())) {
             handleStaffLink(installation, call, chatId, fromUserId, parsed.argument());
+            return;
+        }
+        if (START_COMMAND.equals(parsed.command())) {
+            handleCustomerLink(installation, call, chatId, fromUserId, parsed.argument());
             return;
         }
         if (!TYPED_COMMANDS.contains(parsed.command())) {
@@ -615,6 +639,63 @@ public class TelegramUpdateHandler {
 
         bots.sendMessage(call, chatId, null, TelegramBotMessages.staffLinked(defaultLocale));
         log.info("Linked Telegram account {} to principal in tenant {} via staff /link", fromUserId, link.tenantId());
+    }
+
+    // ----------------------------------------------------------- customer link
+
+    /**
+     * ADR 0058 stage 2: {@code /start <code>} in a private chat, the deep link
+     * behind {@code https://t.me/<bot>?start=<code>}. Telegram sends this
+     * automatically the moment a customer opens the link, so this is the
+     * whole handshake on the bot side — no second message from the customer,
+     * unlike staff's typed {@code /link <code>}.
+     */
+    private void handleCustomerLink(
+            WebhookInstallation installation, ProviderCall call, long chatId, long fromUserId, String code) {
+        if (code.isEmpty()) {
+            // A bare /start, with no payload — somebody opened the bot
+            // directly rather than through a storefront deep link. Not an
+            // error and not actionable either; the bot has nothing to say
+            // that would not be a guess at what the customer wanted.
+            return;
+        }
+        Optional<PendingCustomerLink> pending = customerLinks.resolve(code);
+        if (pending.isEmpty()) {
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.customerLinkInvalidOrExpiredCode());
+            return;
+        }
+        PendingCustomerLink link = pending.get();
+        if (!link.tenantId().equals(installation.tenantId())) {
+            // Same refusal every /link-family handshake gives a cross-tenant
+            // code: this webhook's tenant, established by the secret-token
+            // check, is the only one it may ever write for.
+            log.warn(
+                    "Refusing a customer /start code issued for tenant {} against installation {} (tenant {})",
+                    link.tenantId(),
+                    installation.installationId(),
+                    installation.tenantId());
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.customerLinkInvalidOrExpiredCode());
+            return;
+        }
+
+        UUID bindingId = customerLinks.link(
+                link.tenantId(),
+                installation.installationId(),
+                link.brandId(),
+                link.customerAccountId(),
+                chatId,
+                fromUserId,
+                clock.instant());
+        customerLinks.consume(link.tenantId(), link.id(), bindingId);
+
+        String locale = contacts.preferredLocale(link.tenantId(), link.customerAccountId())
+                .orElse(defaultLocale);
+        bots.sendMessage(call, chatId, null, TelegramBotMessages.customerLinked(locale));
+        log.info(
+                "Linked Telegram chat {} to customer account {} in tenant {} via /start",
+                chatId,
+                link.customerAccountId(),
+                link.tenantId());
     }
 
     // -------------------------------------------------------------- group link

@@ -68,8 +68,13 @@ public class TelegramLinkService {
     /**
      * Looks up an unconsumed, unexpired code. A group-message handler calls this
      * before it does anything else with a {@code /link} command; anything else —
-     * expired, already consumed, never issued — is one answer: not found, so the
-     * bot's refusal cannot be used to enumerate which codes exist.
+     * expired, already consumed, never issued, or (since V0107) issued for the
+     * CUSTOMER audience's own {@code /start} handshake instead — is one answer:
+     * not found, so the bot's refusal cannot be used to enumerate which codes
+     * exist. The audience filter matters now that the table holds both shapes:
+     * without it, a customer's deep-link code pasted into a group by mistake
+     * would resolve here with a null {@code requested_by_principal_id}, which
+     * {@link TelegramUpdateHandler#handleGroupLink} cannot audit against.
      */
     @Transactional(readOnly = true)
     public Optional<PendingLink> resolve(String code) {
@@ -78,6 +83,7 @@ public class TelegramLinkService {
                 SELECT id, tenant_id, brand_id, location_id, requested_by_principal_id
                 FROM integration.telegram_pending_links
                 WHERE code = :code AND consumed_at IS NULL AND expires_at > :now
+                  AND audience IN ('OPERATIONS', 'PLATFORM')
                 """)
                 .param("code", code)
                 .param("now", utc(now))

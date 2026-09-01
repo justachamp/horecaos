@@ -124,7 +124,7 @@ class PartnerFiscalizationBridgeTests {
         ClickFiscalAdapter click = new ClickFiscalAdapter(
                 new ClickMerchantApi(refusingTransport(), CLOCK), new JdbcPaymentAttemptStore(jdbc), CLOCK);
         PaymeFiscalAdapter payme = new PaymeFiscalAdapter(intents, CLOCK);
-        fiscalService = new PaymentFiscalService(documents, List.of(click, payme));
+        fiscalService = new PaymentFiscalService(documents, List.of(click, payme), event -> {});
     }
 
     // -----------------------------------------------------------------------

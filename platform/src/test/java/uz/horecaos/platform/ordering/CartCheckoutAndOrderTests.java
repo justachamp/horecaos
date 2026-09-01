@@ -1257,7 +1257,7 @@ class CartCheckoutAndOrderTests {
                 sellers,
                 bindings,
                 calendar,
-                new PaymentFiscalService(fiscalStore, List.of()),
+                new PaymentFiscalService(fiscalStore, List.of(), event -> {}),
                 clock);
     }
 

@@ -27,6 +27,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramInlineKeyboard
 import uz.horecaos.platform.integration.provider.telegram.TelegramInlineKeyboard.Button;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker.Tracked;
+import uz.horecaos.platform.notifications.api.CustomerProviderBindingSync;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 
@@ -74,6 +75,7 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
     private final TelegramMessageTracker tracker;
     private final TelegramCircuitBreakers breakers;
     private final BotActionTokenStore actionTokens;
+    private final CustomerProviderBindingSync endpointSync;
     private final Clock clock;
     private final Duration chatLeaseDuration;
     private final Duration decisionTokenTtl;
@@ -86,6 +88,7 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             TelegramMessageTracker tracker,
             TelegramCircuitBreakers breakers,
             BotActionTokenStore actionTokens,
+            CustomerProviderBindingSync endpointSync,
             Clock clock,
             @Value("${horecaos.notifications.telegram.chat-lease:PT20S}") Duration chatLeaseDuration,
             @Value("${horecaos.notifications.telegram.decision-token-ttl:PT6H}") Duration decisionTokenTtl,
@@ -96,10 +99,24 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
         this.tracker = tracker;
         this.breakers = breakers;
         this.actionTokens = actionTokens;
+        this.endpointSync = endpointSync;
         this.clock = clock;
         this.chatLeaseDuration = chatLeaseDuration;
         this.decisionTokenTtl = decisionTokenTtl;
         this.buttonLocale = buttonLocale;
+    }
+
+    /**
+     * Retires the binding and syncs {@code notifications} state to match
+     * (ADR 0058 stage 2): the endpoint stops being found {@code ACTIVE}, and
+     * — when this was a customer's own 1:1 binding — their TELEGRAM
+     * preference flips off, since "a customer-binding 403 is consent
+     * revocation in effect". A no-op past the endpoint retirement for an
+     * OPERATIONS or PLATFORM binding.
+     */
+    private void retire(UUID tenantId, UUID bindingId, String reason) {
+        bindings.retire(tenantId, bindingId, reason);
+        endpointSync.onProviderBindingRetired(tenantId, bindingId, reason, clock.instant());
     }
 
     /**
@@ -268,7 +285,7 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                         Map.of("providerStatus", "EDITED"), String.valueOf(tracked.telegramMessageId())));
             }
             case TelegramCallResult.BindingRetirement retirement -> {
-                bindings.retire(dispatch.tenantId(), bindingId, retirement.reason());
+                retire(dispatch.tenantId(), bindingId, retirement.reason());
                 tracker.supersede(dispatch.tenantId(), tracked.id());
                 yield Optional.of(
                         ProviderOutcome.rejected("BINDING_RETIRED_" + retirement.reason(), retirement.detail()));
@@ -334,7 +351,7 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                 yield ProviderOutcome.success(Map.of("providerStatus", "SENT"), String.valueOf(messageId));
             }
             case TelegramCallResult.BindingRetirement retirement -> {
-                bindings.retire(dispatch.tenantId(), bindingId, retirement.reason());
+                retire(dispatch.tenantId(), bindingId, retirement.reason());
                 yield ProviderOutcome.rejected("BINDING_RETIRED_" + retirement.reason(), retirement.detail());
             }
             case TelegramCallResult.BusinessRejected rejected ->

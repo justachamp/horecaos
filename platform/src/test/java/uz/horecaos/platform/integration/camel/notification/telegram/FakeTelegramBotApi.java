@@ -51,6 +51,12 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     private final Map<Long, Long> pendingMigrations = new ConcurrentHashMap<>();
     private volatile String chatMemberStatus = "administrator";
     private final AtomicBoolean canManageTopics = new AtomicBoolean(true);
+    // Absent by default: the group-link and staff-link handshakes' getMe
+    // calls never read a username, only the numeric id. ADR 0058 stage 2's
+    // customer deep link is the first caller that needs one, hence the
+    // opt-in setter rather than a fixed default.
+    private volatile @Nullable String botUsername;
+    private final AtomicLong getMeCalls = new AtomicLong();
 
     private FakeTelegramBotApi(HttpServer server) {
         this.server = server;
@@ -87,6 +93,16 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     /** The next send to {@code oldChatId} answers {@code migrate_to_chat_id}; every send after that succeeds under {@code newChatId}. */
     public void migrateOnNextSend(long oldChatId, long newChatId) {
         pendingMigrations.put(oldChatId, newChatId);
+    }
+
+    /** {@code getMe}'s {@code username} field from now on — absent (as real Telegram never is) until set. */
+    public void setBotUsername(String username) {
+        this.botUsername = username;
+    }
+
+    /** How many times {@code getMe} has actually been called — what a caching resolver's own test asserts against. */
+    public long getMeCallCount() {
+        return getMeCalls.get();
     }
 
     public void setChatMemberStatus(String status) {
@@ -154,8 +170,18 @@ public final class FakeTelegramBotApi implements AutoCloseable {
             case "editMessageText" -> handleSendOrEdit(exchange, body, true);
             case "editMessageReplyMarkup" -> handleReplyMarkupEdit(exchange, body);
             case "answerCallbackQuery" -> handleAnswerCallbackQuery(exchange, body);
-            case "getMe" ->
-                respondOk(exchange, Map.of("id", BOT_USER_ID, "is_bot", true, "first_name", "HorecaOS Ops"));
+            case "getMe" -> {
+                getMeCalls.incrementAndGet();
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("id", BOT_USER_ID);
+                result.put("is_bot", true);
+                result.put("first_name", "HorecaOS Ops");
+                String username = botUsername;
+                if (username != null) {
+                    result.put("username", username);
+                }
+                respondOk(exchange, result);
+            }
             case "getChatMember" ->
                 respondOk(exchange, Map.of("status", chatMemberStatus, "can_manage_topics", canManageTopics.get()));
             case "getUpdates" -> respondOk(exchange, List.of());
