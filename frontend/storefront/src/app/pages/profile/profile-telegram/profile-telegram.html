@@ -1,0 +1,125 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-3">
+      <button
+        type="button"
+        appBack="/profile"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <h1 class="text-center text-xl font-bold text-jizbiz-text">{{ 'profile.telegramTitle' | t }}</h1>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    } @else if (needsSignIn()) {
+      <div class="rounded-xl border border-zinc-700/80 px-4 py-6 text-center">
+        <p class="mb-4 text-sm text-zinc-400">{{ 'profile.telegramSignInRequired' | t }}</p>
+        <a
+          routerLink="/auth/login"
+          class="inline-block rounded-xl bg-jizbiz-accent px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          {{ 'auth.login' | t }}
+        </a>
+      </div>
+    } @else if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">{{ error() }}</p>
+    } @else if (linked()) {
+      <div class="rounded-xl border border-zinc-700/80 px-4 py-5">
+        <div class="flex items-center gap-3">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <p class="flex-1 text-sm font-medium text-jizbiz-text">{{ 'profile.telegramLinked' | t }}</p>
+        </div>
+
+        @if (!confirmingUnlink()) {
+          <button
+            type="button"
+            (click)="requestUnlink()"
+            class="mt-4 w-full rounded-xl border border-red-500/40 py-2.5 text-sm font-semibold text-red-400 transition-opacity hover:opacity-90"
+          >
+            {{ 'profile.telegramUnlink' | t }}
+          </button>
+        } @else {
+          <div class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+            <p class="text-center text-sm text-red-300">{{ 'profile.telegramUnlinkConfirm' | t }}</p>
+            @if (unlinkError()) {
+              <p class="mt-2 text-center text-xs text-red-400">{{ unlinkError() }}</p>
+            }
+            <div class="mt-3 flex gap-2">
+              <button
+                type="button"
+                (click)="cancelUnlink()"
+                [disabled]="unlinking()"
+                class="flex-1 rounded-xl border border-zinc-600 py-2.5 text-sm font-medium text-zinc-300 transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {{ 'common.close' | t }}
+              </button>
+              <button
+                type="button"
+                (click)="confirmUnlink()"
+                [disabled]="unlinking()"
+                class="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {{ unlinking() ? ('common.loading' | t) : ('profile.telegramUnlink' | t) }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="rounded-xl border border-zinc-700/80 px-4 py-5">
+        <p class="text-sm text-zinc-400">{{ 'profile.telegramBenefit' | t }}</p>
+
+        @if (pendingCode(); as code) {
+          <div class="mt-4 flex flex-col gap-3">
+            <a
+              [href]="code.deepLink"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center justify-center gap-2 rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+            >
+              {{ 'profile.telegramOpenInTelegram' | t }}
+            </a>
+            <p class="text-center text-xs text-zinc-400">{{ 'profile.telegramExpiryNotice' | t }}</p>
+            <div class="flex items-center justify-center gap-2 py-1">
+              <span class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+              <span class="text-xs text-zinc-400">{{ 'profile.telegramWaiting' | t }}</span>
+            </div>
+            <button
+              type="button"
+              (click)="connect()"
+              [disabled]="minting()"
+              class="text-center text-xs font-medium text-jizbiz-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {{ 'profile.telegramNoConfirmation' | t }} {{ 'profile.telegramGetNewLink' | t }}
+            </button>
+          </div>
+        } @else {
+          <button
+            type="button"
+            (click)="connect()"
+            [disabled]="minting()"
+            class="mt-4 w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+          >
+            {{ minting() ? ('profile.telegramConnecting' | t) : ('profile.telegramConnect' | t) }}
+          </button>
+        }
+
+        @if (mintError()) {
+          <p class="mt-3 text-center text-sm text-red-400">{{ mintError() }}</p>
+        }
+      </div>
+    }
+  </div>
+</div>
