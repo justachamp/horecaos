@@ -1,9 +1,30 @@
 # ADR 0059: Conversations belong to the platform — flows, contacts, and the operator inbox
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. It builds on ADR 0058's
-  Telegram plumbing (bot installations, chat bindings, inbound authentication, the
-  customer linking handshake), which is itself Not started.
+- Implementation status: Partial — stage 1 built and provable end to end (wave 8):
+  `FlowDocumentParser`/`FlowDocumentValidator` reject a malformed or invalid flow
+  document at authoring time (unknown block type, missing transition target,
+  cycle-without-exit); `FlowDocumentController` publishes versioned YAML behind the
+  `CONVERSATION_FLOW_MANAGE` capability; `ConversationEngine` executes all six block
+  types with idempotent, CAS-guarded transitions (`WelcomeFlowIntegrationTest`,
+  hand-wired against real PostgreSQL); the observed welcome series is seeded as the
+  first real flow document; `TelegramUpdateHandler` routes a bare `/start`, free
+  text, and flow-button taps to the engine strictly behind the existing `/link` and
+  `/start <code>` handshakes, entitlement-gated behind
+  `telegram.conversations.enabled` (safe default FALSE); durable per-installation
+  `update_id` dedup closes a platform-wide at-least-once gap in the webhook entry
+  point; a delay block resumes via `FlowRunResumeSweeper`; an operator-handoff
+  block parks a conversation in `HANDED_TO_OPERATOR` and the engine stops answering
+  it. Flow sends go through the Bot API client and per-chat lease directly, not the
+  notifications dispatch pipeline — a documented trade-off (a failed flow send is a
+  log line, not a retried attempt row). Not built: the operator inbox that lists and
+  returns a handed-off conversation (stage 2); SendPulse contact export and the
+  webhook/token-rotation cutover (stage 3); broadcasts (stage 4); any second channel
+  adapter; captured-input routing into customer data or a governed fact store beyond
+  this module's own encrypted `flow_runs` blob (`helpcenter` still has no owning
+  ADR); ADR 0029 retention/erasure enforcement past the recorded `retention_months`
+  column; and chat-scale envelope-encryption volume sizing (dev-scale only, the
+  record's own named pre-work).
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed the feature, the Telegram-first scope, YAML-only
