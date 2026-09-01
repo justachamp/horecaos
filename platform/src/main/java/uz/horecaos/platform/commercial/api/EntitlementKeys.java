@@ -166,18 +166,19 @@ public final class EntitlementKeys {
     /**
      * ADR 0058 stage 2's customer half: whether a customer's own linked 1:1
      * chat may receive transactional notifications on TELEGRAM in place of
-     * SMS. {@code safeDefault(FALSE)}, matching {@link #TELEGRAM_DIGESTS_ENABLED}
-     * rather than {@link #TELEGRAM_OPERATIONS_ALERTS_ENABLED}'s open default:
-     * a customer channel is a new surface a tenant opts into, not continuity
-     * a tenant already depends on the way a bound operations chat is — the
-     * distinction both existing keys' own doc comments already draw. Gating
+     * SMS. {@code safeDefault(TRUE)}, the owner's own resolution of ADR
+     * 0058's "entitlement-gated from day one" open input — matching {@link
+     * #TELEGRAM_OPERATIONS_ALERTS_ENABLED}'s open default rather than {@link
+     * #TELEGRAM_DIGESTS_ENABLED}'s: a customer who linked their chat did so
+     * to hear about their own orders, the same "unsubscribed tenant is an
+     * unfinished sale" reasoning that key's own doc comment gives. Gating
      * routing only, never linking itself: a customer may still link and
      * unlink their chat, and toggle their own preference, with this entitlement
      * off — what it withholds is the switch from SMS to TELEGRAM on send.
      */
     public static final EntitlementKey<Boolean> TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED = EntitlementKey.feature(
                     "telegram.customer_notifications.enabled")
-            .safeDefault(Boolean.FALSE)
+            .safeDefault(Boolean.TRUE)
             .ownedBy("notifications")
             .describedAs(
                     "Whether a customer's linked Telegram chat may receive transactional notifications (ADR 0058).")
