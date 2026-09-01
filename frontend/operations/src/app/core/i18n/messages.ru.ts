@@ -20,6 +20,7 @@ export const messagesRu: MessageCatalogue = {
   'shell.group.business': 'Заведение',
   'shell.nav.today': 'Сегодня',
   'shell.nav.orders': 'Заказы',
+  'shell.nav.inbox': 'Чаты',
   'shell.nav.kitchen': 'Кухня',
   'shell.nav.delivery': 'Доставка',
   'shell.nav.couriers': 'Курьеры',
@@ -169,6 +170,41 @@ export const messagesRu: MessageCatalogue = {
   'orders.queue.empty.attention': 'Всё в порядке',
   'orders.queue.denied': 'Нет доступа к заказам этого филиала',
   'orders.queue.error.retry': 'Повторить',
+
+  'inbox.title': 'Чаты',
+  'inbox.denied': 'Нет доступа к чатам этого бренда',
+  'inbox.list.empty': 'Пока нет ни одного чата',
+
+  'inbox.column.channel': 'Канал',
+  'inbox.column.customer': 'Клиент',
+  'inbox.column.state': 'Состояние',
+  'inbox.column.lastActivity': 'Последняя активность',
+
+  'inbox.customer.linked': 'Клиент привязан',
+  'inbox.customer.unlinked': 'Не привязан',
+  'inbox.needsReply': 'нужен ответ',
+
+  'inbox.state.IDLE': 'Ожидание',
+  'inbox.state.FLOW_ACTIVE': 'Ведёт бот',
+  'inbox.state.HANDED_TO_OPERATOR': 'У оператора',
+  'inbox.state.CLOSED': 'Закрыт',
+
+  'inbox.channel.TELEGRAM': 'Telegram',
+
+  'inbox.detail.assignedTo': 'Назначен: {operator}',
+  'inbox.detail.history': 'История',
+  'inbox.detail.history.empty': 'Сообщений пока нет',
+
+  'inbox.action.takeover': 'Взять на себя',
+  'inbox.action.returnToFlow': 'Вернуть в поток',
+  'inbox.action.close': 'Закрыть',
+
+  'inbox.reply.placeholder': 'Введите ответ',
+  'inbox.reply.send': 'Отправить',
+
+  'inbox.message.author.customer': 'Клиент',
+  'inbox.message.author.operator': 'Оператор',
+  'inbox.message.author.flow': 'Бот',
 
   'auth.signingIn': 'Вход',
   'auth.signingIn.detail': 'Возврат от поставщика учётных записей.',

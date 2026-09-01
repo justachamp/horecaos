@@ -60,6 +60,54 @@ class FlowRunRepository {
                 .optional();
     }
 
+    /**
+     * The most recently created run in {@code HANDED_TO_OPERATOR} status for
+     * this conversation, if any — what ADR 0059 stage 2's return-to-flow uses
+     * to find where a parked conversation should resume. A conversation can
+     * accumulate more than one such run over its life (parked, returned,
+     * parked again), so this is the newest one, not the only one.
+     */
+    Optional<Row> mostRecentHandedOff(UUID tenantId, UUID conversationId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, conversation_id, flow_document_id, flow_version, current_state_id,
+                       status, captured_fields_protected, resume_due_at, version
+                FROM conversations.flow_runs
+                WHERE tenant_id = :tenantId AND conversation_id = :conversationId AND status = 'HANDED_TO_OPERATOR'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("conversationId", conversationId)
+                .query(FlowRunRepository::map)
+                .optional();
+    }
+
+    /**
+     * Revives a {@code HANDED_TO_OPERATOR} run back to {@code ACTIVE} at
+     * {@code newStateId} — the return-to-flow counterpart of {@link #end}.
+     * Same CAS discipline as every other transition here: {@code
+     * expectedVersion} must still be current, and this only ever applies to a
+     * run this class itself parked, never one still {@code ACTIVE}.
+     *
+     * @return whether this call won the race
+     */
+    boolean reactivate(UUID tenantId, UUID runId, long expectedVersion, String newStateId) {
+        return jdbc.sql("""
+                UPDATE conversations.flow_runs
+                SET status = 'ACTIVE', current_state_id = :stateId, resume_due_at = NULL,
+                    version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                  AND status = 'HANDED_TO_OPERATOR'
+                """)
+                        .param("stateId", newStateId)
+                        .param("now", utc(clock.instant()))
+                        .param("tenantId", tenantId)
+                        .param("id", runId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
     List<Row> dueForResume(Instant now, int batchSize) {
         return jdbc.sql("""
                 SELECT id, tenant_id, conversation_id, flow_document_id, flow_version, current_state_id,

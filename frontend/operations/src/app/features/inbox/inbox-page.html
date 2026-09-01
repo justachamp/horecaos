@@ -1,0 +1,17 @@
+<div class="inbox" [class.inbox--docked]="docked()">
+  <section class="queue" [attr.aria-label]="'inbox.title' | t">
+    <header class="queue__head">
+      <h1 class="q-subhead">{{ 'inbox.title' | t }}</h1>
+    </header>
+
+    <div class="queue__body" data-testid="inbox-queue-body">
+      <q-inbox-list />
+    </div>
+  </section>
+
+  <!-- Same dock pattern as `orders-page.html` — see its own comment for why
+       the outlet stays mounted rather than behind an @if. -->
+  <aside class="dock" data-testid="inbox-dock" [attr.aria-hidden]="docked() ? null : 'true'">
+    <router-outlet (activate)="docked.set(true)" (deactivate)="docked.set(false)" />
+  </aside>
+</div>

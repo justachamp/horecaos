@@ -103,6 +103,45 @@ export const operationsPaths = {
   location(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}`;
   },
+
+  /**
+   * The operator inbox (ADR 0059 stage 2): a brand's conversations,
+   * needs-attention first. Brand-scoped, not location-scoped — {@code
+   * conversations.conversations} has no location column — so this reads
+   * only `scope.tenantId`/`scope.brandId` out of the `LocationScope` every
+   * other call here takes, the same reuse `ConversationInboxController`'s
+   * own Java doc explains for why the capability check is at `BRAND` scope.
+   * Already on the ADR 0031 prefix — this controller was never on the
+   * legacy `/api/v1/tenants/**` one `orders` predates.
+   */
+  conversations(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/conversations`;
+  },
+
+  /** One conversation's full decrypted history. Returns an `ETag` (the aggregate version). */
+  conversation(scope: LocationScope, conversationId: string): string {
+    return `${this.conversations(scope)}/${encodeURIComponent(conversationId)}`;
+  },
+
+  /** Send a reply as the operator currently holding the conversation. Mutation: key required. */
+  conversationReplies(scope: LocationScope, conversationId: string): string {
+    return `${this.conversation(scope, conversationId)}/replies`;
+  },
+
+  /** Take a FLOW_ACTIVE conversation over from the flow engine. Mutation: key and `If-Match`. */
+  conversationTakeover(scope: LocationScope, conversationId: string): string {
+    return `${this.conversation(scope, conversationId)}/takeover`;
+  },
+
+  /** Return a HANDED_TO_OPERATOR conversation to the flow engine. Mutation: key and `If-Match`. */
+  conversationReturnToFlow(scope: LocationScope, conversationId: string): string {
+    return `${this.conversation(scope, conversationId)}/return-to-flow`;
+  },
+
+  /** Close a conversation. Mutation: key and `If-Match`. */
+  conversationClose(scope: LocationScope, conversationId: string): string {
+    return `${this.conversation(scope, conversationId)}/close`;
+  },
 } as const;
 
 function tenantBrandLocation(scope: LocationScope): string {
@@ -111,4 +150,9 @@ function tenantBrandLocation(scope: LocationScope): string {
     `/brands/${encodeURIComponent(scope.brandId)}` +
     `/locations/${encodeURIComponent(scope.locationId)}`
   );
+}
+
+/** Brand-scoped, no location segment — {@link operationsPaths.conversations} and its children. */
+function tenantBrand(scope: LocationScope): string {
+  return `/tenants/${encodeURIComponent(scope.tenantId)}/brands/${encodeURIComponent(scope.brandId)}`;
 }

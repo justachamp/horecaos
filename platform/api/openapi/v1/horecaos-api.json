@@ -1097,7 +1097,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_RATECARD_MANAGE", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "CONVERSATION_FLOW_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_RATECARD_MANAGE", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -1672,6 +1672,105 @@
           }
         },
         "required" : [ "description", "metricId", "reason", "tier", "unit", "value" ],
+        "type" : "object"
+      },
+      "ConversationDetailResponse" : {
+        "properties" : {
+          "conversation" : {
+            "$ref" : "#/components/schemas/ConversationResponse"
+          },
+          "messages" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConversationMessageResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ConversationMessageResponse" : {
+        "properties" : {
+          "actorPrincipalId" : {
+            "type" : "string"
+          },
+          "blockId" : {
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "messageId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ConversationResponse" : {
+        "properties" : {
+          "assignedTo" : {
+            "type" : "string"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "conversationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ConversationSummaryResponse" : {
+        "properties" : {
+          "channel" : {
+            "type" : "string"
+          },
+          "conversationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastActivityAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "needsReply" : {
+            "type" : "boolean"
+          },
+          "state" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "CostReport" : {
@@ -8387,7 +8486,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_RATECARD_MANAGE", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "CONVERSATION_FLOW_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_RATECARD_MANAGE", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -8501,6 +8600,17 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "SendReplyRequest" : {
+        "properties" : {
+          "body" : {
+            "maxLength" : 4000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "body" ],
         "type" : "object"
       },
       "ServiceStateRequest" : {
@@ -10580,7 +10690,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "responses" : {
           "200" : {
             "content" : {
@@ -11979,7 +12089,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15399,7 +15509,7 @@
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close" : {
       "post" : {
         "description" : "Ends any open break first, so its seconds are not paid.",
-        "operationId" : "close_1",
+        "operationId" : "close_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15457,6 +15567,309 @@
         },
         "summary" : "Close my shift",
         "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
+      "get" : {
+        "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
+        "operationId" : "list_12",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 100,
+            "format" : "int32",
+            "maximum" : 500,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ConversationSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's conversations, needs-attention first",
+        "tags" : [ "Operator inbox" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}" : {
+      "get" : {
+        "description" : "The envelope-decrypted free text is this screen's whole purpose (ADR 0059). The first time a given operator opens a given conversation this way, it writes a conversation.history.read audit fact (ADR 0027); a later poll of an already-open thread by the same operator does not repeat it.",
+        "operationId" : "detail_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One conversation's full decrypted history",
+        "tags" : [ "Operator inbox" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close" : {
+      "post" : {
+        "description" : "Any non-CLOSED state may close. A new inbound message afterward reopens it to HANDED_TO_OPERATOR rather than being answered with silence. Requires If-Match against the conversation's current version.",
+        "operationId" : "close_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reason",
+          "required" : false,
+          "schema" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close a conversation",
+        "tags" : [ "Operator inbox" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/replies" : {
+      "post" : {
+        "description" : "Only a HANDED_TO_OPERATOR conversation may be replied to — take it over first if the flow engine is still answering it. Sent through the same channel gateway the flow engine uses, recorded with an OPERATOR direction and the acting principal, and audited.",
+        "operationId" : "reply",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SendReplyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationMessageResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send a reply as the operator currently holding this conversation",
+        "tags" : [ "Operator inbox" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/return-to-flow" : {
+      "post" : {
+        "description" : "Resumes at the parked handoff block's own next state when the flow document declared one, goes idle rather than replaying the handoff when it did not, or simply resumes waiting for whatever a mid-flow takeover left the customer answering. Requires If-Match against the conversation's current version.",
+        "operationId" : "returnToFlow",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Return a HANDED_TO_OPERATOR conversation to the flow engine",
+        "tags" : [ "Operator inbox" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/takeover" : {
+      "post" : {
+        "description" : "FLOW_ACTIVE -> HANDED_TO_OPERATOR by explicit operator action, before the flow document itself ever reaches an operator-handoff block. The engine stops answering this conversation from this call onward. Requires If-Match against the conversation's current version.",
+        "operationId" : "takeover",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reason",
+          "required" : false,
+          "schema" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a FLOW_ACTIVE conversation over from the flow engine",
+        "tags" : [ "Operator inbox" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity" : {
@@ -25857,6 +26270,9 @@
   }, {
     "description" : "Balances, manual adjustments, and liability",
     "name" : "Loyalty operations"
+  }, {
+    "description" : "Conversation list, history, and takeover/return/close actions",
+    "name" : "Operator inbox"
   }, {
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"

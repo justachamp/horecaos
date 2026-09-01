@@ -1004,6 +1004,35 @@ public enum Capability {
     CONVERSATION_FLOW_MANAGE("conversation.flow.manage", "conversation-flow", "manage"),
 
     /**
+     * ADR 0059 stage 2: the operator inbox — reading a conversation's
+     * decrypted history, replying, taking a conversation over from the flow
+     * engine, returning it, and closing it. Brand scope, because a
+     * conversation belongs to a brand's bot, not to any one location
+     * ({@code conversations.conversations} has no location column at all).
+     *
+     * <p>Held by {@link PlatformRole#TENANT_OWNER}, {@link
+     * PlatformRole#TENANT_ADMIN}, and {@link PlatformRole#LOCATION_MANAGER} —
+     * the intersection of two existing judgments rather than a fresh one:
+     * every role that holds {@code order.approve} (the board's own
+     * floor-staff bar) <em>and</em> every role that holds {@link
+     * #CUSTOMER_PII_REVEAL} (this capability decrypts a customer's own words,
+     * the same class of access). {@code location-staff} holds the former but
+     * not the latter — it holds no customer capability anywhere in its
+     * bundle — and is deliberately excluded here for the same reason.
+     * {@code brand-manager} is the exact scope match but holds neither
+     * {@code order.approve} nor {@code customer.pii.reveal}, and is excluded
+     * too. One caveat worth naming rather than hiding: {@code
+     * location-manager} is normally granted at {@code LOCATION} scope, which
+     * does not on its own satisfy this capability's {@code BRAND}-scope
+     * check ({@link uz.horecaos.platform.iam.api.ResourceScope#covers}
+     * requires an equal-or-broader grant) — a tenant that wants a location
+     * manager to actually use the inbox grants that person's role at
+     * {@code BRAND} scope specifically, which {@code PlatformRole.scopeType}
+     * documents as the normal case, not the only permitted one.
+     */
+    CONVERSATION_INBOX_MANAGE("conversation.inbox.manage", "conversation-inbox", "manage"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

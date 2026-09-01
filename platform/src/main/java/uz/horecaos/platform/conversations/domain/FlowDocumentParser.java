@@ -85,7 +85,8 @@ public final class FlowDocumentParser {
             case InputToFieldBlock.TYPE -> parseInputToField(stateId, block);
             case DelayBlock.TYPE -> parseDelay(stateId, block);
             case ConditionBlock.TYPE -> parseCondition(stateId, block);
-            case OperatorHandoffBlock.TYPE -> new OperatorHandoffBlock(optionalString(block, "message"));
+            case OperatorHandoffBlock.TYPE ->
+                new OperatorHandoffBlock(optionalString(block, "message"), optionalString(block, "next"));
             default ->
                 throw new FlowDocumentException(
                         "State \"%s\" has an unknown block type \"%s\" — expected one of ".formatted(stateId, type)
