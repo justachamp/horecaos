@@ -17,14 +17,28 @@
   block parks a conversation in `HANDED_TO_OPERATOR` and the engine stops answering
   it. Flow sends go through the Bot API client and per-chat lease directly, not the
   notifications dispatch pipeline — a documented trade-off (a failed flow send is a
-  log line, not a retried attempt row). Not built: the operator inbox that lists and
-  returns a handed-off conversation (stage 2); SendPulse contact export and the
-  webhook/token-rotation cutover (stage 3); broadcasts (stage 4); any second channel
-  adapter; captured-input routing into customer data or a governed fact store beyond
-  this module's own encrypted `flow_runs` blob (`helpcenter` still has no owning
-  ADR); ADR 0029 retention/erasure enforcement past the recorded `retention_months`
-  column; and chat-scale envelope-encryption volume sizing (dev-scale only, the
-  record's own named pre-work).
+  log line, not a retried attempt row). Stage 2 (wave 9) adds the operator inbox:
+  `ConversationInboxController` lists a brand's conversations needs-attention-first
+  (no message bodies in list payloads), `ConversationInboxService`'s history read
+  decrypts and writes a `conversation.history.read` ADR 0027 audit fact the first
+  time each operator opens a conversation, and reply/takeover/return-to-flow/close
+  are audited, `If-Match`-guarded mutations behind the new
+  `CONVERSATION_INBOX_MANAGE` capability (brand scope) — proven end to end by
+  `OperatorInboxIntegrationTest` against real PostgreSQL. `OperatorHandoffBlock`
+  gained an optional `next` so return-to-flow resumes past a handoff instead of
+  replaying it, and a stage-1 gap is fixed along the way: inbound messages while
+  parked, mid-flow, or on a closed conversation are recorded rather than silently
+  dropped, and a message on a closed conversation reopens it to the operator. The
+  operations app's `/inbox` screen lists, reads, replies, takes over, returns, and
+  closes, polling on the order board's own cadence per the recorded Elixir
+  deferral. Not built: SendPulse contact export and the webhook/token-rotation
+  cutover (stage 3); broadcasts (stage 4); any second channel adapter;
+  captured-input routing into customer data or a governed fact store beyond this
+  module's own encrypted `flow_runs` blob (`helpcenter` still has no owning ADR);
+  ADR 0029 retention/erasure enforcement past the recorded `retention_months`
+  column; chat-scale envelope-encryption volume sizing (dev-scale only, the
+  record's own named pre-work); and a needs-attention count badge on the inbox nav
+  entry (no counts service exists for it yet).
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed the feature, the Telegram-first scope, YAML-only
