@@ -1,0 +1,175 @@
+<h1 class="q-title">{{ 'settings.salesChannels.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.salesChannels.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <div class="toolbar">
+    <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
+      {{ 'settings.salesChannels.create.action' | t }}
+    </button>
+  </div>
+
+  @if (showCreateForm()) {
+    <div class="create-form">
+      <label class="q-caption" for="new-channel-code">{{
+        'settings.salesChannels.field.code' | t
+      }}</label>
+      <input
+        id="new-channel-code"
+        class="q-body field"
+        type="text"
+        [value]="newCode()"
+        (input)="newCode.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      />
+
+      <label class="q-caption" for="new-channel-type">{{
+        'settings.salesChannels.field.systemType' | t
+      }}</label>
+      <select
+        id="new-channel-type"
+        class="q-body field"
+        [value]="newSystemType()"
+        (change)="newSystemType.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        @for (type of systemTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="new-channel-name">{{
+        'settings.salesChannels.field.displayName' | t
+      }}</label>
+      <input
+        id="new-channel-name"
+        class="q-body field"
+        type="text"
+        [value]="newDisplayName()"
+        (input)="newDisplayName.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      />
+
+      @if (createError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+
+      <div class="create-form__actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="showCreateForm.set(false)"
+          [disabled]="createSubmitting()"
+        >
+          {{ 'settings.salesChannels.create.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="submitCreate()"
+          [disabled]="!canCreate()"
+        >
+          {{
+            createSubmitting()
+              ? ('settings.salesChannels.create.submitting' | t)
+              : ('settings.salesChannels.create.submit' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'settings.salesChannels.field.displayName' | t }}</th>
+        <th class="q-caption">{{ 'settings.salesChannels.field.code' | t }}</th>
+        <th class="q-caption">{{ 'settings.salesChannels.field.systemType' | t }}</th>
+        <th class="q-caption">{{ 'settings.salesChannels.field.status' | t }}</th>
+        <th class="q-caption">{{ 'settings.salesChannels.field.actions' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (channel of channels(); track channel.id) {
+        <tr
+          class="row"
+          [class.row--selected]="selectedChannelId() === channel.id"
+          (click)="selectChannel(channel)"
+        >
+          <td class="q-body-sm">{{ channel.displayName }}</td>
+          <td class="q-body-sm q-mono">{{ channel.code }}</td>
+          <td class="q-body-sm">{{ channel.systemType }}</td>
+          <td class="q-body-sm">
+            <span class="status-badge">{{ channel.status }}</span>
+          </td>
+          <td class="q-body-sm">
+            @if (channel.status !== 'ARCHIVED') {
+              <button
+                type="button"
+                class="q-body-sm link"
+                (click)="$event.stopPropagation(); archiveChannel(channel)"
+              >
+                {{ 'settings.salesChannels.archive.action' | t }}
+              </button>
+            }
+          </td>
+        </tr>
+        @if (selectedChannelId() === channel.id) {
+          <tr class="matrix-row">
+            <td colspan="5">
+              @if (matrixLoading()) {
+                <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+              } @else if (matrixError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              } @else {
+                <div class="matrix">
+                  <div class="matrix__group">
+                    <h3 class="q-caption matrix__label">
+                      {{ 'settings.salesChannels.matrix.paymentMethods' | t }}
+                    </h3>
+                    @for (method of paymentMethods; track method) {
+                      <label class="matrix__cell q-body-sm">
+                        <input
+                          type="checkbox"
+                          [checked]="isPaymentMethodEnabled(method)"
+                          [disabled]="matrixSaving()"
+                          (change)="togglePaymentMethod(channel, method)"
+                        />
+                        {{ method }}
+                      </label>
+                    }
+                  </div>
+                  <div class="matrix__group">
+                    <h3 class="q-caption matrix__label">
+                      {{ 'settings.salesChannels.matrix.fulfillmentModes' | t }}
+                    </h3>
+                    @for (mode of fulfillmentModes; track mode) {
+                      <label class="matrix__cell q-body-sm">
+                        <input
+                          type="checkbox"
+                          [checked]="isFulfillmentModeEnabled(mode)"
+                          [disabled]="matrixSaving()"
+                          (change)="toggleFulfillmentMode(channel, mode)"
+                        />
+                        {{ mode }}
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
+            </td>
+          </tr>
+        }
+      } @empty {
+        <tr>
+          <td class="q-body-sm empty" colspan="5">{{ 'settings.salesChannels.empty' | t }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

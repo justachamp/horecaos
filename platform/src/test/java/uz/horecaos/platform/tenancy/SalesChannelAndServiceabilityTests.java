@@ -377,6 +377,67 @@ class SalesChannelAndServiceabilityTests {
     }
 
     @Test
+    @DisplayName("operations Settings 10.2 can read what the four write-only endpoints already persisted")
+    void theServiceSummaryReadsComposeFromExistingWrites() {
+        // The premise every settings-screen read below depends on: nothing here
+        // is written by this test, only by openForBusiness() in setUp -- these
+        // are additive reads over what the controller's existing PUT/POST
+        // endpoints already write, per LocationServiceOperationsController's own
+        // GET /service-summary doc comment.
+        assertThat(schedules.currentState(TENANT, LOCATION).mode())
+                .as("no manual override has been set")
+                .isEqualTo(ServiceMode.FOLLOW_SCHEDULE);
+
+        var bound = schedules.scheduleFor(TENANT, LOCATION, FulfillmentMode.DELIVERY);
+        assertThat(bound).isPresent();
+        assertThat(bound.get().scheduleId()).isEqualTo(scheduleId);
+        assertThat(bound.get().schedule().rules()).hasSize(7);
+        assertThat(schedules.scheduleFor(TENANT, LOCATION, FulfillmentMode.PICKUP))
+                .as("pickup was never bound in openForBusiness()")
+                .isEmpty();
+
+        assertThat(schedules.schedulesForBrand(TENANT, BRAND))
+                .as("the picker 10.2's Hours tab offers")
+                .singleElement()
+                .satisfies(summary -> {
+                    assertThat(summary.name()).isEqualTo("Standard hours");
+                    assertThat(summary.id()).isEqualTo(scheduleId);
+                    assertThat(summary.boundLocationCount())
+                            .as("exactly the one location openForBusiness() bound")
+                            .isEqualTo(1L);
+                });
+
+        assertThat(schedules.scheduleDetail(TENANT, BRAND, scheduleId))
+                .as("the '\"Standard hours\" is used by N other locations' banner's data")
+                .isPresent()
+                .get()
+                .satisfies(detail -> {
+                    assertThat(detail.name()).isEqualTo("Standard hours");
+                    assertThat(detail.schedule().rules()).hasSize(7);
+                    assertThat(detail.boundLocationCount()).isEqualTo(1L);
+                });
+        assertThat(schedules.scheduleDetail(OTHER_TENANT, OTHER_BRAND, scheduleId))
+                .as("another tenant naming this schedule id must not resolve it")
+                .isEmpty();
+
+        assertThat(schedules.preparationBands(TENANT, LOCATION))
+                .as("none written yet")
+                .isEmpty();
+        schedules.replacePreparationBands(
+                TENANT,
+                BRAND,
+                LOCATION,
+                List.of(new JdbcServiceabilityStore.Band(
+                        FulfillmentMode.DELIVERY, null, LocalTime.of(18, 0), LocalTime.of(21, 0), 25, 1)));
+        assertThat(schedules.preparationBands(TENANT, LOCATION)).singleElement().satisfies(band -> {
+            assertThat(band.durationMinutes()).isEqualTo(25);
+            assertThat(band.mode()).isEqualTo(FulfillmentMode.DELIVERY);
+        });
+
+        assertThat(schedules.openCapacityHolds(TENANT, LOCATION)).isZero();
+    }
+
+    @Test
     @DisplayName("rule 5: a dated exception beats the weekly rule")
     void aDatedExceptionBeatsTheWeeklyRule() {
         schedules.closeForDay(TENANT, BRAND, scheduleId, LocalDate.of(2026, 8, 21), "Navruz", "Public holiday");

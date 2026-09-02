@@ -1,0 +1,257 @@
+<h1 class="q-title">{{ 'settings.fiscalization.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.fiscalization.lead' | t }}</p>
+
+<div class="tabs">
+  <button
+    type="button"
+    class="tab"
+    [class.tab--on]="activeTab() === 'entities'"
+    (click)="selectTab('entities')"
+  >
+    {{ 'settings.fiscalization.tab.entities' | t }}
+  </button>
+  <button
+    type="button"
+    class="tab"
+    [class.tab--on]="activeTab() === 'terminals'"
+    (click)="selectTab('terminals')"
+  >
+    {{ 'settings.fiscalization.tab.terminals' | t }}
+  </button>
+  <button
+    type="button"
+    class="tab"
+    [class.tab--on]="activeTab() === 'classification'"
+    (click)="selectTab('classification')"
+  >
+    {{ 'settings.fiscalization.tab.classification' | t }}
+  </button>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else if (activeTab() === 'entities') {
+  <section>
+    <div class="toolbar">
+      <h2 class="q-subhead">{{ 'settings.fiscalization.entities.title' | t }}</h2>
+      <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
+        {{ 'settings.fiscalization.entities.create.action' | t }}
+      </button>
+    </div>
+
+    @if (showCreateForm()) {
+      <div class="form">
+        <label class="q-caption" for="entity-code">{{
+          'settings.fiscalization.field.code' | t
+        }}</label>
+        <input
+          id="entity-code"
+          class="q-body field"
+          type="text"
+          [value]="newCode()"
+          (input)="newCode.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        <label class="q-caption" for="entity-legal-name">{{
+          'settings.fiscalization.field.legalName' | t
+        }}</label>
+        <input
+          id="entity-legal-name"
+          class="q-body field"
+          type="text"
+          [value]="newLegalName()"
+          (input)="newLegalName.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        <label class="q-caption" for="entity-tin">{{
+          'settings.fiscalization.field.tin' | t
+        }}</label>
+        <input
+          id="entity-tin"
+          class="q-body field"
+          type="text"
+          [value]="newTin()"
+          (input)="newTin.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+          placeholder="123456789"
+        />
+
+        <label class="checkbox q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="newVatRegistered()"
+            (change)="newVatRegistered.set($any($event.target).checked)"
+          />
+          {{ 'settings.fiscalization.field.vatRegistered' | t }}
+        </label>
+
+        @if (createError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="showCreateForm.set(false)"
+            [disabled]="createSubmitting()"
+          >
+            {{ 'settings.fiscalization.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="submitCreate()"
+            [disabled]="!canCreate()"
+          >
+            {{
+              createSubmitting()
+                ? ('settings.fiscalization.entities.create.submitting' | t)
+                : ('settings.fiscalization.entities.create.submit' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.fiscalization.field.legalName' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.field.code' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.field.tin' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.field.vatRegistered' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.field.status' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entity of entities(); track entity.id) {
+          <tr>
+            <td class="q-body-sm">{{ entity.legalName }}</td>
+            <td class="q-body-sm q-mono">{{ entity.code }}</td>
+            <td class="q-body-sm q-mono">{{ entity.tin }}</td>
+            <td class="q-body-sm">
+              {{
+                entity.vatRegistered
+                  ? ('settings.orderPolicy.yes' | t)
+                  : ('settings.orderPolicy.no' | t)
+              }}
+            </td>
+            <td class="q-body-sm">
+              <span class="status-badge">{{ entity.status }}</span>
+            </td>
+            <td class="q-body-sm">
+              @if (entity.status === 'DRAFT' || entity.status === 'SUSPENDED') {
+                <button type="button" class="q-body-sm link" (click)="activate(entity)">
+                  {{ 'settings.fiscalization.entities.activate' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="6">
+              {{ 'settings.fiscalization.entities.empty' | t }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="toolbar">
+      <h2 class="q-subhead">{{ 'settings.fiscalization.assignment.title' | t }}</h2>
+      <button type="button" class="q-body primary" (click)="showAssignForm.set(!showAssignForm())">
+        {{ 'settings.fiscalization.assignment.reregister' | t }}
+      </button>
+    </div>
+
+    @if (activeAssignment(); as active) {
+      <p class="q-body-sm">
+        {{
+          'settings.fiscalization.assignment.active'
+            | t: { name: entityName(active.legalEntityId), date: active.effectiveFrom }
+        }}
+      </p>
+    } @else {
+      <p class="q-body-sm warning">{{ 'settings.fiscalization.assignment.none' | t }}</p>
+    }
+
+    @if (showAssignForm()) {
+      <div class="form">
+        <label class="q-caption" for="assign-entity">{{
+          'settings.fiscalization.assignment.entity' | t
+        }}</label>
+        <select
+          id="assign-entity"
+          class="q-body field"
+          [value]="assignEntityId()"
+          (change)="assignEntityId.set($any($event.target).value)"
+        >
+          <option value="">—</option>
+          @for (entity of entities(); track entity.id) {
+            <option [value]="entity.id">{{ entity.legalName }}</option>
+          }
+        </select>
+
+        <label class="q-caption" for="assign-from">{{
+          'settings.fiscalization.assignment.effectiveFrom' | t
+        }}</label>
+        <input
+          id="assign-from"
+          class="q-body field"
+          type="date"
+          [value]="assignEffectiveFrom()"
+          (input)="assignEffectiveFrom.set($any($event.target).value)"
+        />
+
+        @if (assignError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="showAssignForm.set(false)"
+            [disabled]="assignSubmitting()"
+          >
+            {{ 'settings.fiscalization.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="submitAssign()"
+            [disabled]="!canAssign()"
+          >
+            {{
+              assignSubmitting()
+                ? ('settings.fiscalization.assignment.submitting' | t)
+                : ('settings.fiscalization.assignment.submit' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+} @else if (activeTab() === 'terminals') {
+  <p class="q-body-sm">
+    {{
+      'notBuilt.body'
+        | t: { spec: 'operations-spec/settings.md §10.7 Tab 2 (Фискальные терминалы)' }
+    }}
+  </p>
+} @else {
+  <p class="q-body-sm">
+    {{
+      'notBuilt.body'
+        | t: { spec: 'operations-spec/settings.md §10.7 Tab 3 (Классификация товаров)' }
+    }}
+  </p>
+}

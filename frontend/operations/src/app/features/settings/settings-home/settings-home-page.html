@@ -1,0 +1,21 @@
+<h1 class="q-title">{{ 'settings.home.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.home.lead' | t }}</p>
+
+<div class="notice q-body-sm">{{ 'settings.home.readinessNotBuilt' | t }}</div>
+
+@for (group of groups; track group.label) {
+  <section class="group">
+    <h2 class="q-subhead">{{ group.label | t }}</h2>
+    <div class="group__items">
+      @for (item of group.items; track item.path) {
+        <a class="tile" [routerLink]="item.path">
+          <span class="tile__label q-body">{{ item.label | t }}</span>
+          <span class="tile__description q-body-sm">{{ item.description | t }}</span>
+          @if (!item.builtRoute) {
+            <span class="tile__badge q-caption">{{ 'settings.home.notBuiltBadge' | t }}</span>
+          }
+        </a>
+      }
+    </div>
+  </section>
+}

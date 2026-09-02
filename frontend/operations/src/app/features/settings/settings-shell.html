@@ -1,0 +1,37 @@
+<div class="settings">
+  <nav class="settings__rail" [attr.aria-label]="'settings.nav.title' | t">
+    <h1 class="settings__title q-title">{{ 'settings.nav.title' | t }}</h1>
+
+    @if (location.scope(); as scope) {
+      <div class="settings__scope q-caption">
+        {{ 'settings.scope.editing' | t }}
+        <span class="settings__scope-value q-mono"
+          >{{ scope.brandId }} / {{ scope.locationId }}</span
+        >
+      </div>
+    } @else if (location.denied()) {
+      <div class="settings__scope settings__scope--denied q-caption">
+        {{ 'settings.scope.denied' | t }}
+      </div>
+    }
+
+    @for (group of groups; track group.label) {
+      <div class="settings__group">
+        <h2 class="settings__group-label q-caption">{{ group.label | t }}</h2>
+        @for (item of group.items; track item.path) {
+          <a
+            class="settings__item q-body-sm"
+            [routerLink]="item.path"
+            routerLinkActive="settings__item--on"
+          >
+            {{ item.label | t }}
+          </a>
+        }
+      </div>
+    }
+  </nav>
+
+  <div class="settings__content">
+    <router-outlet />
+  </div>
+</div>

@@ -1,0 +1,161 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 720px;
+}
+
+.toolbar {
+  margin: 20px 0;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.create-form {
+  max-width: 420px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.create-form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.create-form label:first-child {
+  margin-top: 0;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.create-form__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.row {
+  cursor: pointer;
+}
+
+.row td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.row:hover {
+  background: var(--q-surface-1);
+}
+
+.row--selected {
+  background: var(--q-surface-1);
+}
+
+.matrix-row td {
+  padding: 12px 16px 20px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.matrix {
+  display: flex;
+  gap: 40px;
+}
+
+.matrix__label {
+  margin: 0 0 8px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+}
+
+.matrix__cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: 12px;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+  padding: 20px;
+}
+
+.error {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 720px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}

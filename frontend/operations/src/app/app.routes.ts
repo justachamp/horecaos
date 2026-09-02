@@ -71,6 +71,103 @@ export const routes: Routes = [
           },
         ],
       },
+      {
+        // The Settings section (wave 26, ADR 0065): its own shell nests a
+        // second rail (§Navigation groups) beside whichever P-tier screen is
+        // routed under here. Two of its own rail entries — channel-setup and
+        // payment-methods — still resolve to the shared NotBuiltPage below,
+        // the same "omit, do not disable" rule the top-level rail already
+        // follows: a screen with a real backend gap gets an honest page that
+        // names the spec section, not a greyed-out link.
+        path: 'settings',
+        loadComponent: () =>
+          import('./features/settings/settings-shell').then((m) => m.SettingsShell),
+        children: [
+          {
+            path: '',
+            pathMatch: 'full',
+            loadComponent: () =>
+              import('./features/settings/settings-home/settings-home-page').then(
+                (m) => m.SettingsHomePage,
+              ),
+          },
+          {
+            path: 'brand',
+            loadComponent: () =>
+              import('./features/settings/brand-profile/brand-profile-page').then(
+                (m) => m.BrandProfilePage,
+              ),
+          },
+          {
+            path: 'locations',
+            loadComponent: () =>
+              import('./features/settings/locations/locations-page').then((m) => m.LocationsPage),
+            children: [
+              {
+                path: ':locationId',
+                loadComponent: () =>
+                  import('./features/settings/locations/location-detail-pane').then(
+                    (m) => m.LocationDetailPane,
+                  ),
+              },
+            ],
+          },
+          {
+            path: 'sales-channels',
+            loadComponent: () =>
+              import('./features/settings/sales-channels/sales-channels-page').then(
+                (m) => m.SalesChannelsPage,
+              ),
+          },
+          {
+            path: 'channel-setup',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
+          },
+          {
+            path: 'order-policy',
+            loadComponent: () =>
+              import('./features/settings/order-policy/order-policy-page').then(
+                (m) => m.OrderPolicyPage,
+              ),
+          },
+          {
+            path: 'payment-methods',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'operations-spec/settings.md §10.6 (Payment methods)' },
+          },
+          {
+            path: 'fiscalization',
+            loadComponent: () =>
+              import('./features/settings/fiscalization/fiscalization-page').then(
+                (m) => m.FiscalizationPage,
+              ),
+          },
+          {
+            path: 'notifications',
+            loadComponent: () =>
+              import('./features/settings/notifications/notifications-page').then(
+                (m) => m.NotificationsPage,
+              ),
+          },
+          {
+            path: 'integrations',
+            loadComponent: () =>
+              import('./features/settings/integrations/integrations-page').then(
+                (m) => m.IntegrationsPage,
+              ),
+          },
+          {
+            path: 'reference-data',
+            loadComponent: () =>
+              import('./features/settings/reference-data/reference-data-page').then(
+                (m) => m.ReferenceDataPage,
+              ),
+          },
+        ],
+      },
       ...placeholderRoutes(),
       // Unknown paths land on Today rather than on a 404. There is no such thing
       // as a deleted page in this console — only one that has not been built —
@@ -85,7 +182,7 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders', '/inbox']);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

@@ -1,0 +1,114 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 720px;
+}
+
+.card {
+  margin-top: 24px;
+  max-width: 560px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.version-banner {
+  color: var(--q-ink-muted);
+  margin: 0 0 12px;
+}
+
+.fields {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.field dt {
+  color: var(--q-ink-muted);
+  margin-bottom: 2px;
+}
+
+.field dd {
+  margin: 0;
+}
+
+.primary {
+  margin-top: 16px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.form label:first-child {
+  margin-top: 0;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--q-ink);
+}
+
+.form__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
