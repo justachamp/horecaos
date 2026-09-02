@@ -1,12 +1,12 @@
 # ADR 0064: Voice joins the channels — IP telephony, operator presence, and the screen-pop
 
-- Decision status: Proposed — drafted at the owner's direction 2026-09-02 for a
-  later program; the direction is decided ("later we will integrate voice
-  channels"), the shape below awaits the owner's review and the open inputs.
+- Decision status: Accepted — drafted at the owner's direction 2026-09-02 and
+  accepted by the owner the same day, after the provider-neutrality amendment;
+  the open inputs below gate the build's start, not the decision.
 - Implementation status: Not started — this record only.
 - Date proposed: 2026-09-02
-- Date decided: —
-- Deciders: platform owner (direction), Claude (draft architecture)
+- Date decided: 2026-09-02
+- Deciders: platform owner (direction, provider-neutrality, acceptance), Claude (architecture)
 - Depends on: 0004, 0023, 0025, 0026, 0027, 0028, 0029, 0033, 0043, 0059
 - Supersedes / Superseded by: —
 - Open inputs: WHICH provider adapter to build first (the core is
@@ -29,7 +29,7 @@ staff surface, customer identity keyed by phone (ADR 0015), the conversations
 model with an operator inbox (ADR 0059), audit (0027), and the reporting fact
 layer (0043).
 
-## Decision (draft)
+## Decision
 
 - **Telephony is a provider-neutral core behind an adapter family, not a
   switch — and not a single integration.** (Owner-directed 2026-09-02: any
@@ -83,7 +83,7 @@ layer (0043).
 | Telephony-private presence | Would be rebuilt the day chat routing needs it; channel-neutral costs the same now | — |
 | A stats dashboard fed by the PBX directly | Splits reporting truth across systems; ADR 0043 exists precisely to prevent this | Never |
 
-## Implementation checklist (indicative — final at acceptance)
+## Implementation checklist
 
 - [ ] VOICE provider category, installation + secret reference, event ingestion with the inbox/outbox discipline
 - [ ] Operator presence model + operations-app control, audited, readable by adapters
@@ -92,7 +92,7 @@ layer (0043).
 - [ ] Call-to-order provenance
 - [ ] Fake PBX test double in the ADR 0007 genre
 
-## Exit criteria (indicative)
+## Exit criteria
 
 An operator marks themselves on line in the operations app; a real inbound call
 to the pilot tenant pops the caller's card before the operator answers; a missed
