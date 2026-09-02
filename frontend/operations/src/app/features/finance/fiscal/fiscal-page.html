@@ -1,0 +1,200 @@
+<div class="fiscal">
+  <h1 class="q-title">{{ 'finance.fiscal.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'finance.fiscal.lead' | t }}</p>
+
+  <section class="blocked">
+    <div class="toolbar">
+      <h2 class="q-subhead">{{ 'finance.fiscal.blocked.title' | t }}</h2>
+      <select
+        class="q-body field filter"
+        [value]="reasonFilter()"
+        (change)="setReasonFilter($any($event.target).value)"
+      >
+        <option value="">{{ 'finance.fiscal.blocked.filter.all' | t }}</option>
+        @for (reason of reasonCodes; track reason) {
+          <option [value]="reason">{{ reason }}</option>
+        }
+      </select>
+    </div>
+
+    @if (blockedWarning(); as message) {
+      <p class="q-body-sm warning" role="status">{{ message }}</p>
+    }
+
+    @if (blockedLoading()) {
+      <p class="q-body-sm">{{ 'finance.fiscal.loading' | t }}</p>
+    } @else if (blockedDenied()) {
+      <p class="q-body-sm denied">{{ 'finance.scope.denied' | t }}</p>
+    } @else if (blockedError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.fiscal.field.order' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.documentType' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.provider' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.status' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.reason' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.attempts' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.evidence' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.blockedAt' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (document of blocked(); track document.documentId) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ document.orderId }}</td>
+              <td class="q-body-sm">{{ document.documentType }}</td>
+              <td class="q-body-sm">{{ document.providerType }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge">{{ document.status }}</span>
+              </td>
+              <td class="q-body-sm">{{ document.reasonCode }}</td>
+              <td class="q-body-sm q-mono">{{ document.attemptCount }}</td>
+              <td class="q-body-sm">
+                {{
+                  document.hasEvidence
+                    ? ('finance.fiscal.evidence.yes' | t)
+                    : ('finance.fiscal.evidence.no' | t)
+                }}
+              </td>
+              <td class="q-body-sm">{{ document.blockedAt ?? '—' }}</td>
+              <td class="q-body-sm actions">
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="startResolve(document, 'retry')"
+                >
+                  {{ 'finance.fiscal.action.retry' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="startResolve(document, 'unblock')"
+                >
+                  {{ 'finance.fiscal.action.unblock' | t }}
+                </button>
+              </td>
+            </tr>
+            @if (resolvingDocumentId() === document.documentId) {
+              <tr>
+                <td colspan="9">
+                  <div class="form form--inline">
+                    <label class="q-caption" for="resolve-reason">{{
+                      (resolveAction() === 'retry'
+                        ? 'finance.fiscal.action.retry.reason'
+                        : 'finance.fiscal.action.unblock.reason'
+                      ) | t
+                    }}</label>
+                    <input
+                      id="resolve-reason"
+                      class="q-body field"
+                      type="text"
+                      [value]="resolveReason()"
+                      (input)="resolveReason.set($any($event.target).value)"
+                    />
+                    @if (resolveError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                    <div class="form__actions">
+                      <button
+                        type="button"
+                        class="q-body secondary"
+                        (click)="cancelResolve()"
+                        [disabled]="resolveSubmitting()"
+                      >
+                        {{ 'finance.fiscal.cancel' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="q-body primary"
+                        [disabled]="!canSubmitResolve()"
+                        (click)="submitResolve(document)"
+                      >
+                        {{
+                          resolveSubmitting()
+                            ? ('finance.fiscal.submitting' | t)
+                            : resolveAction() === 'retry'
+                              ? ('finance.fiscal.action.retry.submit' | t)
+                              : ('finance.fiscal.action.unblock.submit' | t)
+                        }}
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="9">{{ 'finance.fiscal.blocked.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+
+  <section class="coverage">
+    <h2 class="q-subhead">{{ 'finance.fiscal.coverage.title' | t }}</h2>
+    <p class="q-body-sm lead">{{ 'finance.fiscal.coverage.lead' | t }}</p>
+    <div class="coverage__range">
+      <label class="q-caption" for="coverage-from">{{ 'finance.fiscal.coverage.from' | t }}</label>
+      <input
+        id="coverage-from"
+        class="q-body field"
+        type="date"
+        [value]="coverageFrom()"
+        (input)="coverageFrom.set($any($event.target).value)"
+      />
+      <label class="q-caption" for="coverage-to">{{ 'finance.fiscal.coverage.to' | t }}</label>
+      <input
+        id="coverage-to"
+        class="q-body field"
+        type="date"
+        [value]="coverageTo()"
+        (input)="coverageTo.set($any($event.target).value)"
+      />
+      <button type="button" class="q-body secondary" (click)="reloadCoverage()">
+        {{ 'finance.fiscal.coverage.reload' | t }}
+      </button>
+    </div>
+
+    @if (coverageLoading()) {
+      <p class="q-body-sm">{{ 'finance.fiscal.loading' | t }}</p>
+    } @else if (coverageError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else if (coverage(); as c) {
+      @if (c.warning; as warning) {
+        <p class="q-body-sm warning" role="status">{{ warning }}</p>
+      }
+      <dl class="kv">
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.saleDocuments' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ c.saleDocuments }}</dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.issued' | t }}</dt>
+        <dd class="q-body-sm q-mono">
+          {{ c.issued }} ({{ sharePercent(c.issuedShareBasisPoints) }}%)
+        </dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.notApplicable' | t }}</dt>
+        <dd class="q-body-sm q-mono">
+          {{ c.notApplicable }} ({{ sharePercent(c.notApplicableShareBasisPoints) }}%) —
+          {{ 'finance.fiscal.coverage.notApplicableCash' | t: { count: c.notApplicableCash } }}
+        </dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.unreceipted' | t }}</dt>
+        <dd class="q-body-sm q-mono">
+          {{ c.unreceipted }} ({{ sharePercent(c.unreceiptedShareBasisPoints) }}%)
+        </dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.blocked' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ c.blocked }}</dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.failed' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ c.failed }}</dd>
+        <dt class="q-caption">{{ 'finance.fiscal.coverage.awaitingProvider' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ c.awaitingProvider }}</dd>
+      </dl>
+      @if (c.providerPathIsMinority) {
+        <p class="q-body-sm note">{{ 'finance.fiscal.coverage.providerMinority' | t }}</p>
+      }
+    }
+  </section>
+</div>

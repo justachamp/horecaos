@@ -230,6 +230,24 @@ export const routes: Routes = [
                   ),
               },
             ],
+        // Finance (wave 34, IA §8): only 8.1 Payments & settlements and 8.2
+        // Fiscal receipts are pilot-tier — the IA's own tier legend gives
+        // 8.3-8.6 "Wave 2", the same as the whole of Marketing §6, so this
+        // shell carries two tabs and not six. See `finance-shell.ts`'s own
+        // doc and `operations-spec/finance.md` §0.
+        path: 'finance',
+        loadComponent: () => import('./features/finance/finance-shell').then((m) => m.FinanceShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'payments' },
+          {
+            path: 'payments',
+            loadComponent: () =>
+              import('./features/finance/payments/payments-page').then((m) => m.PaymentsPage),
+          },
+          {
+            path: 'fiscal',
+            loadComponent: () =>
+              import('./features/finance/fiscal/fiscal-page').then((m) => m.FiscalPage),
           },
         ],
       },
@@ -385,6 +403,7 @@ function placeholderRoutes(): Routes {
   ]);
   const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/staff']);
   const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/statistics']);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/finance']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

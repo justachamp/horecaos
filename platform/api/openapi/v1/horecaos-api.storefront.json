@@ -908,48 +908,6 @@
         },
         "type" : "object"
       },
-      "PaymentSessionResponse" : {
-        "properties" : {
-          "amountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "attemptId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "checkoutUrl" : {
-            "type" : "string"
-          },
-          "currency" : {
-            "type" : "string"
-          },
-          "expiresAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "merchantTransId" : {
-            "type" : "string"
-          },
-          "presentation" : {
-            "type" : "string"
-          },
-          "presentationCount" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "provider" : {
-            "type" : "string"
-          },
-          "qrPayload" : {
-            "type" : "string"
-          },
-          "rePresented" : {
-            "type" : "boolean"
-          }
-        },
-        "type" : "object"
-      },
       "PickupLocation" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -1421,6 +1379,48 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontPaymentControllerPaymentSessionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "attemptId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "checkoutUrl" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "merchantTransId" : {
+            "type" : "string"
+          },
+          "presentation" : {
+            "type" : "string"
+          },
+          "presentationCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "qrPayload" : {
+            "type" : "string"
+          },
+          "rePresented" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -3229,7 +3229,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PaymentSessionResponse"
+                  "$ref" : "#/components/schemas/StorefrontPaymentControllerPaymentSessionResponse"
                 }
               }
             },

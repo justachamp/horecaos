@@ -45,6 +45,20 @@ describe('CurrentTenant', () => {
         },
       ],
     } satisfies SessionContext);
+  });
+
+  it('reads activeTenantId even for a purely TENANT-scoped grant', async () => {
+    const promise = tenant.ensureLoaded();
+    http
+      .expectOne(url('/api/v1/session/context'))
+      .flush(
+        context('t1', [
+          {
+            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+            roleCode: 'TENANT_FINANCE',
+          },
+        ]),
+      );
     await promise;
 
     expect(tenant.tenantId()).toBe('t1');
@@ -59,6 +73,7 @@ describe('CurrentTenant', () => {
       activeTenantId: null,
       scopes: [],
     } satisfies SessionContext);
+    http.expectOne(url('/api/v1/session/context')).flush(context(null, []));
     await promise;
 
     expect(tenant.tenantId()).toBeNull();
@@ -85,8 +100,14 @@ describe('CurrentTenant', () => {
       activeTenantId: 't1',
       scopes: [],
     } satisfies SessionContext);
+    http.expectOne(url('/api/v1/session/context')).flush(context('t1', []));
     await Promise.all([first, second]);
 
     await tenant.ensureLoaded();
   });
 });
+
+
+function context(activeTenantId: string | null, scopes: SessionContext['scopes']): SessionContext {
+  return { subject: 'operator-1', activeTenantId, scopes };
+}

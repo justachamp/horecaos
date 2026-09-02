@@ -1,0 +1,36 @@
+.finance-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.finance-shell__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  flex: none;
+}
+
+.finance-shell__tab {
+  padding: 12px 12px 10px;
+  color: var(--q-ink-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.finance-shell__tab:hover {
+  color: var(--q-ink);
+}
+
+.finance-shell__tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+}
+
+.finance-shell__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

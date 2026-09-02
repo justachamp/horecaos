@@ -94,7 +94,7 @@ public class PaymentCheckoutService {
      *                          the two lets anyone probe which order ids exist
      */
     public PaymentSession openOrRePresent(
-            UUID tenantId, UUID orderId, UUID customerAccountId, PresentationRequest request) {
+            UUID tenantId, UUID orderId, @Nullable UUID customerAccountId, PresentationRequest request) {
 
         OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
                 .orElseThrow(() -> new CheckoutRefusedException("ORDER_NOT_FOUND", "No such order"));
