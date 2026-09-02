@@ -6,11 +6,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -22,11 +26,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
+import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -60,9 +66,39 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class PriceAuthoringController {
 
     private final PriceAuthoringService authoring;
+    private final PriceQueryService query;
 
-    public PriceAuthoringController(PriceAuthoringService authoring) {
+    public PriceAuthoringController(PriceAuthoringService authoring, PriceQueryService query) {
         this.authoring = authoring;
+        this.query = query;
+    }
+
+    @GetMapping("/price-books")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "List the brand's price books")
+    public List<PriceBookSummaryResponse> listPriceBooks(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return query.priceBooks(tenantId, brandId).stream()
+                .map(PriceBookSummaryResponse::of)
+                .toList();
+    }
+
+    @GetMapping("/price-books/resolved/prices")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Resolve the price book that applies at a scope, and read current amounts from it",
+            description = "Composes resolvePriceBook and pricesFor with no new SQL: this answers "
+                    + "what a cart would pay right now without pricing an actual cart. A brand with "
+                    + "no price book yet resolves to a null priceBookId and an empty map, a real "
+                    + "displayable state rather than an error.")
+    public ResolvedPricesResponse resolvedPrices(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam(required = false) @Nullable UUID channelId,
+            @RequestParam PriceableType priceableType,
+            @RequestParam @NotEmpty @Size(max = 200) List<UUID> ids) {
+        return ResolvedPricesResponse.of(
+                query.resolvePrices(tenantId, brandId, locationId, channelId, priceableType, Set.copyOf(ids)));
     }
 
     @PostMapping("/price-books")
@@ -318,6 +354,37 @@ public class PriceAuthoringController {
                     book.validUntil(),
                     book.priority(),
                     book.version());
+        }
+    }
+
+    public record PriceBookSummaryResponse(
+            UUID priceBookId,
+            String name,
+            String currency,
+            String status,
+            int priority,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            int version) {
+
+        static PriceBookSummaryResponse of(PriceQueryService.PriceBookSummary summary) {
+            return new PriceBookSummaryResponse(
+                    summary.priceBookId(),
+                    summary.name(),
+                    summary.currency(),
+                    summary.status(),
+                    summary.priority(),
+                    summary.validFrom(),
+                    summary.validUntil(),
+                    summary.version());
+        }
+    }
+
+    public record ResolvedPricesResponse(
+            @Nullable UUID priceBookId, @Nullable String currency, Map<UUID, Long> amountsMinor) {
+
+        static ResolvedPricesResponse of(PriceQueryService.ResolvedPrices resolved) {
+            return new ResolvedPricesResponse(resolved.priceBookId(), resolved.currency(), resolved.amountsMinor());
         }
     }
 

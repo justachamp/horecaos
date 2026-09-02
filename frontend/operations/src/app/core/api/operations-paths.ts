@@ -150,6 +150,57 @@ export const operationsPaths = {
   conversationClose(scope: LocationScope, conversationId: string): string {
     return `${this.conversation(scope, conversationId)}/close`;
   },
+
+  /**
+   * The 86 toggle: register a variant as stocked at this location (waves 6/24,
+   * `InventoryController`). Already on the ADR 0031 prefix.
+   */
+  inventoryStockItems(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/stock-items`;
+  },
+
+  /**
+   * The audited stop/86 toggle, `InventoryService#setAvailabilityAudited`.
+   * Mutation: key required. Takes effect immediately, no republishing
+   * (catalog.md §0's authoring-vs-availability split).
+   */
+  inventoryVariantAvailability(scope: LocationScope, variantId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability`;
+  },
+
+  /** Current binary availability for a set of variants at this location (query param `variantIds`, max 100). */
+  inventoryAvailability(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
+  },
+} as const;
+
+/**
+ * Media upload (ADR 0010, `MediaController`) — tenant-scoped, not brand- or
+ * location-scoped, because a media asset's owner (`MediaOwner.Scope`) is
+ * `TENANT`/`BRAND`/`LOCATION` chosen at upload time, not fixed by the URL. Kept
+ * apart from {@link operationsPaths} because every call here takes a bare
+ * `tenantId`, never a full {@link LocationScope}.
+ */
+export const mediaPaths = {
+  /** Request a presigned upload URL. The client PUTs bytes directly to it. */
+  uploadRequests(tenantId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/media/assets/upload-requests`;
+  },
+
+  /** One asset's status. */
+  asset(tenantId: string, assetId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/media/assets/${encodeURIComponent(assetId)}`;
+  },
+
+  /** Tell the server to re-read the object store and mark the upload complete. */
+  finalize(tenantId: string, assetId: string): string {
+    return `${this.asset(tenantId, assetId)}/finalize`;
+  },
+
+  /** A short-lived signed URL, only for an `AVAILABLE` asset. */
+  downloadUrl(tenantId: string, assetId: string): string {
+    return `${this.asset(tenantId, assetId)}/download-url`;
+  },
 } as const;
 
 function tenantBrandLocation(scope: LocationScope): string {

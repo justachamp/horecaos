@@ -1,0 +1,56 @@
+<div class="menus">
+  <div class="menus__header">
+    <h2 class="q-emphasis">{{ 'catalog.menus.title' | t }}</h2>
+    <p class="q-caption menus__note">{{ 'catalog.menus.channelsNote' | t }}</p>
+  </div>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm menus__status">{{ 'catalog.menus.loading' | t }}</p>
+  } @else if (noLocation()) {
+    <p class="q-body-sm menus__status" data-testid="menus-no-location">
+      {{ 'catalog.menus.noLocation' | t }}
+    </p>
+  } @else if (denied()) {
+    <p class="q-body-sm menus__status" data-testid="menus-denied">
+      {{ 'catalog.menus.denied' | t }}
+    </p>
+  } @else if (rows().length === 0) {
+    <p class="q-body-sm menus__status">{{ 'catalog.menus.empty' | t }}</p>
+  } @else {
+    <table class="menus__table">
+      <thead>
+        <tr>
+          <th>{{ 'catalog.menus.column.product' | t }}</th>
+          <th class="menus__num-col">{{ 'catalog.menus.column.price' | t }}</th>
+          <th>{{ 'catalog.menus.column.status' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.variantId) {
+          <tr>
+            <td>
+              <div>{{ row.productName }}</div>
+              @if (row.category) {
+                <div class="q-caption">{{ row.category }}</div>
+              }
+            </td>
+            <td class="menus__num-col q-mono q-tnum">{{ priceLabel(row.variantId) }}</td>
+            <td>
+              <button
+                type="button"
+                class="menus__cell"
+                [class.menus__cell--available]="row.available"
+                [class.menus__cell--stopped]="!row.available"
+                [disabled]="isBusy(row.variantId)"
+                (click)="toggle(row)"
+                data-testid="menus-cell"
+              >
+                {{ statusLabel(row) }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

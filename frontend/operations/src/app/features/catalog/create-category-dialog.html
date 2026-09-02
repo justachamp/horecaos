@@ -1,0 +1,73 @@
+<div class="dialog__backdrop" data-testid="create-category-dialog">
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'catalog.categories.create' | t"
+  >
+    <h2 class="q-emphasis dialog__title">{{ 'catalog.categories.create' | t }}</h2>
+
+    <label class="dialog__field">
+      <span class="q-body-sm">{{ 'catalog.categories.form.name' | t }}</span>
+      <input
+        type="text"
+        class="dialog__input"
+        [value]="name()"
+        (input)="setName($any($event.target).value)"
+        [attr.aria-invalid]="nameMissing() ? 'true' : null"
+        data-testid="create-category-dialog-name"
+      />
+      @if (nameMissing()) {
+        <span class="q-caption dialog__error">{{ 'catalog.products.create.required' | t }}</span>
+      }
+    </label>
+
+    <label class="dialog__field">
+      <span class="q-body-sm">{{ 'catalog.categories.form.code' | t }}</span>
+      <input
+        type="text"
+        class="dialog__input q-mono"
+        [value]="code()"
+        (input)="setCode($any($event.target).value)"
+        [attr.aria-invalid]="codeMissing() ? 'true' : null"
+        data-testid="create-category-dialog-code"
+      />
+      @if (codeMissing()) {
+        <span class="q-caption dialog__error">{{ 'catalog.products.create.required' | t }}</span>
+      }
+    </label>
+
+    <label class="dialog__field">
+      <span class="q-body-sm">{{ 'catalog.categories.form.parent' | t }}</span>
+      <select
+        class="dialog__input"
+        [value]="parentCategoryId()"
+        (change)="setParent($any($event.target).value)"
+      >
+        <option value="">{{ 'catalog.categories.form.parentNone' | t }}</option>
+        @for (category of categories(); track category.categoryId) {
+          <option [value]="category.categoryId">{{ category.name }}</option>
+        }
+      </select>
+    </label>
+
+    @if (error(); as message) {
+      <div class="dialog__banner" role="alert">{{ message }}</div>
+    }
+
+    <div class="dialog__actions">
+      <button type="button" class="dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'catalog.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy()"
+        data-testid="create-category-dialog-confirm"
+      >
+        {{ 'catalog.categories.create' | t }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -185,6 +185,16 @@ export interface AssignmentRequest {
   validUntil?: string;
 }
 
+export interface AttachMediaRequest {
+  role: string;
+  sortOrder?: number;
+}
+
+export interface AttachedModifierGroupView {
+  groupId?: string;
+  sortOrder?: number;
+}
+
 export interface AttemptResponse {
   acknowledgedAt?: string;
   attemptNumber?: number;
@@ -393,6 +403,23 @@ export interface CashDeclarationRequest {
 
 export interface CatalogAuthoringControllerIdResponse {
   id?: string;
+}
+
+export interface CatalogSummaryResponse {
+  catalogId?: string;
+  code?: string;
+  name?: string;
+  status?: string;
+}
+
+export interface CategorySummaryResponse {
+  categoryId?: string;
+  code?: string;
+  name?: string;
+  parentCategoryId?: string;
+  productCount?: number;
+  sortOrder?: number;
+  status?: string;
 }
 
 export interface ChallengeResponse {
@@ -1116,6 +1143,19 @@ export interface FiscalClassificationRequest {
   packageCode?: string;
 }
 
+export interface FiscalClassificationView {
+  ageRestrictionYears?: number;
+  alcoholByVolumeBp?: number;
+  barcode?: string;
+  excisable?: boolean;
+  fiscalName?: string;
+  fiscalUnitCode?: number;
+  markingRequired?: boolean;
+  markingScheme?: string;
+  mxikCode?: string;
+  packageCode?: string;
+}
+
 export interface FiscalDocumentControllerResolutionRequest {
   reason: string;
 }
@@ -1377,6 +1417,11 @@ export interface LivenessResponse {
   staleAfterSeconds?: number;
 }
 
+export interface LocalizedFields {
+  description?: string;
+  name?: string;
+}
+
 export interface LocationFiscalAssignmentView {
   approvalReference?: string;
   approvedBy?: string;
@@ -1462,6 +1507,12 @@ export interface MatchReport {
 export interface MatchRequest {
   reason: string;
   shipmentsByProviderRef: { [key: string]: string };
+}
+
+export interface MediaRelationView {
+  mediaAssetId?: string;
+  role?: string;
+  sortOrder?: number;
 }
 
 export interface MedianResponse {
@@ -1576,6 +1627,40 @@ export interface MigrationRunView {
 
 export interface MiniAppLinkRequest {
   initData: string;
+}
+
+export interface ModifierGroupDetailResponse {
+  allowSameOptionMultipleTimes?: boolean;
+  code?: string;
+  groupId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  options?: Array<ModifierOptionView>;
+  required?: boolean;
+  translations?: { [key: string]: LocalizedFields };
+}
+
+export interface ModifierGroupSummaryResponse {
+  allowSameOptionMultipleTimes?: boolean;
+  code?: string;
+  groupId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  name?: string;
+  optionCount?: number;
+  required?: boolean;
+  status?: string;
+}
+
+export interface ModifierOptionView {
+  code?: string;
+  fiscal?: FiscalClassificationView;
+  linkedVariantId?: string;
+  maximumQuantity?: number;
+  optionId?: string;
+  sortOrder?: number;
+  status?: string;
+  translations?: { [key: string]: LocalizedFields };
 }
 
 export interface MoveLocationRequest {
@@ -1968,6 +2053,11 @@ export interface PagePolicyResponse {
   nextCursor?: string;
 }
 
+export interface PageProductSummaryResponse {
+  items?: Array<ProductSummaryResponse>;
+  nextCursor?: string;
+}
+
 export interface PageRemedyResponse {
   items?: Array<RemedyResponse>;
   nextCursor?: string;
@@ -2163,6 +2253,17 @@ export interface PriceBookResponse {
   version?: number;
 }
 
+export interface PriceBookSummaryResponse {
+  currency?: string;
+  name?: string;
+  priceBookId?: string;
+  priority?: number;
+  status?: string;
+  validFrom?: string;
+  validUntil?: string;
+  version?: number;
+}
+
 export interface PriceRequest {
   amountMinor?: number;
 }
@@ -2179,9 +2280,33 @@ export interface PricedCartResponse {
   totalMinor?: number;
 }
 
+export interface ProductDetailResponse {
+  catalogIds?: Array<string>;
+  categoryIds?: Array<string>;
+  code?: string;
+  media?: Array<MediaRelationView>;
+  modifierGroups?: Array<AttachedModifierGroupView>;
+  productId?: string;
+  status?: string;
+  translations?: { [key: string]: LocalizedFields };
+  variants?: Array<VariantDetail>;
+  version?: number;
+}
+
 export interface ProductResponse {
   defaultVariantId?: string;
   productId?: string;
+}
+
+export interface ProductSummaryResponse {
+  categoryNames?: Array<string>;
+  code?: string;
+  hasMxik?: boolean;
+  name?: string;
+  productId?: string;
+  status?: string;
+  variantCount?: number;
+  version?: number;
 }
 
 export interface ProfileResponse {
@@ -2543,6 +2668,12 @@ export interface ResolvedEntitlement {
   overageUnitPrice?: ApiMoney;
   resetPeriod?: string;
   source?: string;
+}
+
+export interface ResolvedPricesResponse {
+  amountsMinor?: { [key: string]: number };
+  currency?: string;
+  priceBookId?: string;
 }
 
 export interface ResourceScope {
@@ -3347,6 +3478,18 @@ export interface VariantAvailabilityResponse {
   variantId?: string;
 }
 
+export interface VariantDetail {
+  fiscal?: FiscalClassificationView;
+  isDefault?: boolean;
+  sku?: string;
+  sortOrder?: number;
+  status?: string;
+  translations?: { [key: string]: LocalizedFields };
+  unitCode?: string;
+  variantId?: string;
+  version?: number;
+}
+
 export interface VerifyRequest {
   evidenceMediaId?: string;
   method: string;
@@ -3408,17 +3551,24 @@ export interface Operations {
   "getBrands": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
   "createBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } }; body: CreateOperatingUnitRequest }; responses: { "200": BrandView } };
   "activateBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
+  "catalogs": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CatalogSummaryResponse> } };
   "createCatalog": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCatalogRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
+  "categories": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": Array<CategorySummaryResponse> } };
   "createCategory": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateCategoryRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
+  "products": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageProductSummaryResponse } };
   "createProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateProductRequest }; responses: { "200": ProductResponse } };
   "publish": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/publications"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { channel?: string } } }; responses: { "200": PublicationResponse } };
   "validate": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": ValidationResponse } };
   "placeInCategory": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/categories/{categoryId}/products/{productId}"; request: { parameters: { path: { brandId: string; categoryId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
   "classifyFee": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fees/{feeCode}/fiscal-classification"; request: { parameters: { path: { brandId: string; feeCode: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "variantsAtLocation": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number; locale?: string } } }; responses: { "200": PageVariantAvailabilityResponse } };
+  "attachMedia": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE"; tenantId: string } }; body: AttachMediaRequest }; responses: { "200": unknown } };
+  "modifierGroups": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ModifierGroupSummaryResponse> } };
   "createModifierGroup": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateModifierGroupRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
+  "modifierGroup": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups/{groupId}"; request: { parameters: { path: { brandId: string; groupId: string; tenantId: string } } }; responses: { "200": ModifierGroupDetailResponse } };
   "addModifierOption": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups/{groupId}/options"; request: { parameters: { path: { brandId: string; groupId: string; tenantId: string } }; body: AddModifierOptionRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "classifyModifierOption": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-options/{optionId}/fiscal-classification"; request: { parameters: { path: { brandId: string; optionId: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": unknown } };
+  "product": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductDetailResponse } };
   "attachModifierGroup": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}"; request: { parameters: { path: { brandId: string; groupId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
   "addVariant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/variants"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AddVariantRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "rollback": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/publications/{publicationId}/activate"; request: { parameters: { path: { brandId: string; publicationId: string; tenantId: string } } }; responses: { "200": PublicationResponse } };
@@ -3436,7 +3586,9 @@ export interface Operations {
   "createLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateLocationRequest }; responses: { "200": LocationView } };
   "activateLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/activate"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "describeLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/place"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DescribeLocationRequest }; responses: { "200": LocationView } };
+  "listPriceBooks": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PriceBookSummaryResponse> } };
   "create_7": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreatePriceBookRequest }; responses: { "200": PriceBookResponse } };
+  "resolvedPrices": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/resolved/prices"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channelId?: string; ids: Array<string>; locationId: string; priceableType: "VARIANT" | "MODIFIER_OPTION" } } }; responses: { "200": ResolvedPricesResponse } };
   "read": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "activate_6": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "assignToBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/brand"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
@@ -3482,7 +3634,7 @@ export interface Operations {
   "author": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorRequest }; responses: { "200": AcceptancePolicyResponse } };
   "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_4": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
-  "categories": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
+  "categories_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
   "archive": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };

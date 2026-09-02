@@ -1,0 +1,31 @@
+<div class="catalog-shell">
+  <nav class="catalog-shell__tabs" [attr.aria-label]="'catalog.nav.label' | t">
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/products"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.products' | t }}</a
+    >
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/categories"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.categories' | t }}</a
+    >
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/menus"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.menus' | t }}</a
+    >
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/import"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.import' | t }}</a
+    >
+  </nav>
+  <div class="catalog-shell__body">
+    <router-outlet />
+  </div>
+</div>

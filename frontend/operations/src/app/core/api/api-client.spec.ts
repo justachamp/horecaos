@@ -74,6 +74,14 @@ describe('ApiClient', () => {
       expect(request.request.headers.has('If-Match')).toBe(false);
       request.flush({});
     });
+
+    it('put issues a PUT and still carries the idempotency key — CatalogAuthoringController’s verb of choice', () => {
+      client.put('/api/v1/x', command({ code: 'A' })).subscribe();
+      const request = http.expectOne(url('/api/v1/x'));
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+      request.flush({});
+    });
   });
 
   describe('reads', () => {

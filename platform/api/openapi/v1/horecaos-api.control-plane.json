@@ -225,6 +225,33 @@
         },
         "type" : "object"
       },
+      "AttachMediaRequest" : {
+        "properties" : {
+          "role" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "role" ],
+        "type" : "object"
+      },
+      "AttachedModifierGroupView" : {
+        "properties" : {
+          "groupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "AuditEventView" : {
         "properties" : {
           "actionCode" : {
@@ -484,6 +511,54 @@
         "properties" : {
           "id" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CatalogSummaryResponse" : {
+        "properties" : {
+          "catalogId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CategorySummaryResponse" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parentCategoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
             "type" : "string"
           }
         },
@@ -1486,6 +1561,44 @@
         },
         "type" : "object"
       },
+      "FiscalClassificationView" : {
+        "properties" : {
+          "ageRestrictionYears" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "alcoholByVolumeBp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "barcode" : {
+            "type" : "string"
+          },
+          "excisable" : {
+            "type" : "boolean"
+          },
+          "fiscalName" : {
+            "type" : "string"
+          },
+          "fiscalUnitCode" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "markingRequired" : {
+            "type" : "boolean"
+          },
+          "markingScheme" : {
+            "type" : "string"
+          },
+          "mxikCode" : {
+            "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "FlowDocumentResponse" : {
         "properties" : {
           "active" : {
@@ -1845,6 +1958,17 @@
         "required" : [ "organizationId" ],
         "type" : "object"
       },
+      "LocalizedFields" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationFiscalAssignmentView" : {
         "properties" : {
           "approvalReference" : {
@@ -1953,6 +2077,132 @@
           },
           "timezone" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MediaRelationView" : {
+        "properties" : {
+          "mediaAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModifierGroupDetailResponse" : {
+        "properties" : {
+          "allowSameOptionMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "options" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ModifierOptionView"
+            },
+            "type" : "array"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "translations" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/LocalizedFields"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ModifierGroupSummaryResponse" : {
+        "properties" : {
+          "allowSameOptionMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "optionCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ModifierOptionView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "fiscal" : {
+            "$ref" : "#/components/schemas/FiscalClassificationView"
+          },
+          "linkedVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "translations" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/LocalizedFields"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -2275,6 +2525,20 @@
         },
         "type" : "object"
       },
+      "PageProductSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProductSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageVariantAvailabilityResponse" : {
         "properties" : {
           "items" : {
@@ -2574,10 +2838,101 @@
         },
         "type" : "object"
       },
+      "PriceBookSummaryResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "priceBookId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "PriceRequest" : {
         "properties" : {
           "amountMinor" : {
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ProductDetailResponse" : {
+        "properties" : {
+          "catalogIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "categoryIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "media" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MediaRelationView"
+            },
+            "type" : "array"
+          },
+          "modifierGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AttachedModifierGroupView"
+            },
+            "type" : "array"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "translations" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/LocalizedFields"
+            },
+            "type" : "object"
+          },
+          "variants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VariantDetail"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
             "type" : "integer"
           }
         },
@@ -2592,6 +2947,41 @@
           "productId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ProductSummaryResponse" : {
+        "properties" : {
+          "categoryNames" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "hasMxik" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "variantCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2802,6 +3192,25 @@
             "type" : "string"
           },
           "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ResolvedPricesResponse" : {
+        "properties" : {
+          "amountsMinor" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "priceBookId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -3518,6 +3927,44 @@
           "variantId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "VariantDetail" : {
+        "properties" : {
+          "fiscal" : {
+            "$ref" : "#/components/schemas/FiscalClassificationView"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "translations" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/LocalizedFields"
+            },
+            "type" : "object"
+          },
+          "unitCode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -4723,6 +5170,43 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs" : {
+      "get" : {
+        "operationId" : "catalogs",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CatalogSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the brand's catalogs",
+        "tags" : [ "Catalog reads" ]
+      },
       "post" : {
         "operationId" : "createCatalog",
         "parameters" : [ {
@@ -4769,6 +5253,52 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories" : {
+      "get" : {
+        "description" : "The client builds the tree from each category's parentCategoryId.",
+        "operationId" : "categories",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CategorySummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One catalog's categories, flat",
+        "tags" : [ "Catalog reads" ]
+      },
       "post" : {
         "operationId" : "createCategory",
         "parameters" : [ {
@@ -4823,6 +5353,65 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products" : {
+      "get" : {
+        "description" : "Same Page and keyset-cursor shape variantsAtLocation uses: a short page is the end of the collection, a full one may or may not be.",
+        "operationId" : "products",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageProductSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One catalog's products, cursor-paginated",
+        "tags" : [ "Catalog reads" ]
+      },
       "post" : {
         "description" : "Both together, because a product with no variant cannot be published and would only ever be a half-finished state to come back to.",
         "operationId" : "createProduct",
@@ -5153,7 +5742,109 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}" : {
+      "put" : {
+        "description" : "ADR 0010's presigned-upload flow has always ended with an asset sitting unattached: upload, then finalize to AVAILABLE, and until this endpoint nothing let it reach a product, variant, category, or modifier option. This is that missing last step. It does not itself check that the asset has reached AVAILABLE — CatalogAuthoringService.attachMedia and the store write below it accept any asset id at all, finalized or not — so a caller attaching a still-PENDING_UPLOAD or REJECTED asset succeeds here and the gap surfaces only wherever the media is later rendered.",
+        "operationId" : "attachMedia",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachMediaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Attach a media asset to a catalog entity",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups" : {
+      "get" : {
+        "description" : "Brand-wide, not catalog-scoped: a modifier group carries no catalog id and is shared across every catalog the brand has.",
+        "operationId" : "modifierGroups",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ModifierGroupSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's modifier group library",
+        "tags" : [ "Catalog reads" ]
+      },
       "post" : {
         "description" : "A group whose minimum exceeds the number of options it offers is accepted here and rejected at publication, with the entity path.",
         "operationId" : "createModifierGroup",
@@ -5198,6 +5889,50 @@
         },
         "summary" : "Create a modifier group",
         "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups/{groupId}" : {
+      "get" : {
+        "operationId" : "modifierGroup",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "groupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModifierGroupDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One modifier group's detail, with its options",
+        "tags" : [ "Catalog reads" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups/{groupId}/options" : {
@@ -5300,6 +6035,51 @@
         },
         "summary" : "Classify a modifier option for fiscal purposes",
         "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}" : {
+      "get" : {
+        "description" : "Every locale the product and its variants have a translation in, not only the default — the editor's locale switcher needs to know which locales already have text.",
+        "operationId" : "product",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One product's full detail, for the product editor",
+        "tags" : [ "Catalog reads" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}" : {
@@ -6175,6 +6955,43 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books" : {
+      "get" : {
+        "operationId" : "listPriceBooks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PriceBookSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the brand's price books",
+        "tags" : [ "Price authoring" ]
+      },
       "post" : {
         "description" : "Draft: nothing in it prices anything until it is activated, so a season's prices can be built during service without moving a live one.",
         "operationId" : "create_4",
@@ -6218,6 +7035,80 @@
           }
         },
         "summary" : "Create a draft price book",
+        "tags" : [ "Price authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/resolved/prices" : {
+      "get" : {
+        "description" : "Composes resolvePriceBook and pricesFor with no new SQL: this answers what a cart would pay right now without pricing an actual cart. A brand with no price book yet resolves to a null priceBookId and an empty map, a real displayable state rather than an error.",
+        "operationId" : "resolvedPrices",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "priceableType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "VARIANT", "MODIFIER_OPTION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "ids",
+          "required" : true,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResolvedPricesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve the price book that applies at a scope, and read current amounts from it",
         "tags" : [ "Price authoring" ]
       }
     },
@@ -8253,7 +9144,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories" : {
       "get" : {
         "description" : "Closed and code-owned. Tenant registries drift into dozens of near-duplicates and that is contained rather than prevented: the category is what cross-tenant reporting groups by, and the tenant's own wording is only what the operator picks from.",
-        "operationId" : "categories",
+        "operationId" : "categories_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -9171,6 +10062,9 @@
   }, {
     "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
     "name" : "Onboarding templates"
+  }, {
+    "description" : "Reading back draft catalogs, products, categories, and modifier groups",
+    "name" : "Catalog reads"
   }, {
     "description" : "Immutable security and business evidence",
     "name" : "Audit"

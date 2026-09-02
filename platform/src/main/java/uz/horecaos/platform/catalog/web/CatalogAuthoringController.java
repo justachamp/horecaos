@@ -30,6 +30,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -275,6 +276,36 @@ public class CatalogAuthoringController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/media/{entityType}/{entityId}/{assetId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Attach a media asset to a catalog entity",
+            description = "ADR 0010's presigned-upload flow has always ended with an asset sitting "
+                    + "unattached: upload, then finalize to AVAILABLE, and until this endpoint "
+                    + "nothing let it reach a product, variant, category, or modifier option. This "
+                    + "is that missing last step. It does not itself check that the asset has "
+                    + "reached AVAILABLE — CatalogAuthoringService.attachMedia and the store write "
+                    + "below it accept any asset id at all, finalized or not — so a caller "
+                    + "attaching a still-PENDING_UPLOAD or REJECTED asset succeeds here and the "
+                    + "gap surfaces only wherever the media is later rendered.")
+    public ResponseEntity<Void> attachMedia(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable EntityType entityType,
+            @PathVariable UUID entityId,
+            @PathVariable UUID assetId,
+            @Valid @RequestBody AttachMediaRequest request) {
+        authoring.attachMedia(
+                tenantId,
+                brandId,
+                entityType,
+                entityId,
+                new MediaAssetId(assetId),
+                request.role(),
+                request.sortOrder());
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/categories/{categoryId}/products/{productId}")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Place a product in a category")
@@ -516,6 +547,9 @@ public class CatalogAuthoringController {
     }
 
     public record SortOrderRequest(@PositiveOrZero int sortOrder) {}
+
+    public record AttachMediaRequest(
+            @NotBlank String role, @PositiveOrZero int sortOrder) {}
 
     public record SetOfferingRequest(
             @NotNull OfferingStatus status, @NotNull List<String> fulfillmentModes) {}
