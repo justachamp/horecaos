@@ -1,0 +1,184 @@
+<h1 class="q-title">{{ 'settings.notifications.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.notifications.lead' | t }}</p>
+
+<div class="tabs">
+  <button
+    type="button"
+    class="tab"
+    [class.tab--on]="activeTab() === 'templates'"
+    (click)="selectTab('templates')"
+  >
+    {{ 'settings.notifications.tab.templates' | t }}
+  </button>
+  <button
+    type="button"
+    class="tab"
+    [class.tab--on]="activeTab() === 'routing'"
+    (click)="selectTab('routing')"
+  >
+    {{ 'settings.notifications.tab.routing' | t }}
+  </button>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else if (activeTab() === 'templates') {
+  <div class="toolbar">
+    <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
+      {{ 'settings.notifications.create.action' | t }}
+    </button>
+  </div>
+
+  @if (showCreateForm()) {
+    <div class="form">
+      <label class="q-caption" for="template-key">{{
+        'settings.notifications.field.templateKey' | t
+      }}</label>
+      <input
+        id="template-key"
+        class="q-body field"
+        type="text"
+        [value]="newTemplateKey()"
+        (input)="newTemplateKey.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+        placeholder="CONFIRMED"
+      />
+
+      <label class="q-caption" for="template-class">{{
+        'settings.notifications.field.notificationClass' | t
+      }}</label>
+      <select
+        id="template-class"
+        class="q-body field"
+        [value]="newNotificationClass()"
+        (change)="newNotificationClass.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        @for (option of notificationClasses; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="template-channel">{{
+        'settings.notifications.field.channel' | t
+      }}</label>
+      <select
+        id="template-channel"
+        class="q-body field"
+        [value]="newChannel()"
+        (change)="newChannel.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        @for (option of channels; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="template-body-ru">{{
+        'settings.notifications.field.bodyRu' | t
+      }}</label>
+      <textarea
+        id="template-body-ru"
+        class="q-body field textarea"
+        [value]="newBodyRu()"
+        (input)="newBodyRu.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      ></textarea>
+
+      <label class="q-caption" for="template-body-uz">{{
+        'settings.notifications.field.bodyUz' | t
+      }}</label>
+      <textarea
+        id="template-body-uz"
+        class="q-body field textarea"
+        [value]="newBodyUz()"
+        (input)="newBodyUz.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      ></textarea>
+
+      <label class="q-caption" for="template-body-en">{{
+        'settings.notifications.field.bodyEn' | t
+      }}</label>
+      <textarea
+        id="template-body-en"
+        class="q-body field textarea"
+        [value]="newBodyEn()"
+        (input)="newBodyEn.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      ></textarea>
+
+      <label class="checkbox q-body-sm">
+        <input
+          type="checkbox"
+          [checked]="activateImmediately()"
+          (change)="activateImmediately.set($any($event.target).checked)"
+        />
+        {{ 'settings.notifications.field.activateImmediately' | t }}
+      </label>
+
+      @if (createError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+
+      <div class="form__actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="showCreateForm.set(false)"
+          [disabled]="createSubmitting()"
+        >
+          {{ 'settings.notifications.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="submitCreate()"
+          [disabled]="!canCreate()"
+        >
+          {{
+            createSubmitting()
+              ? ('settings.notifications.create.submitting' | t)
+              : ('settings.notifications.create.submit' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'settings.notifications.field.templateKey' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.field.notificationClass' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.field.channel' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.field.status' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.field.activeVersion' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (template of templates(); track template.id) {
+        <tr>
+          <td class="q-body-sm q-mono">{{ template.templateKey }}</td>
+          <td class="q-body-sm">{{ template.notificationClass }}</td>
+          <td class="q-body-sm">{{ template.channel }}</td>
+          <td class="q-body-sm">
+            <span class="status-badge">{{ template.status }}</span>
+          </td>
+          <td class="q-body-sm q-tnum">{{ template.activeVersion ?? '—' }}</td>
+        </tr>
+      } @empty {
+        <tr>
+          <td class="q-body-sm empty" colspan="5">{{ 'settings.notifications.empty' | t }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+} @else {
+  <p class="q-body-sm">
+    {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.9 Tab 2 (Маршрутизация)' } }}
+  </p>
+}

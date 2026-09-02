@@ -143,6 +143,15 @@ export interface BalanceResponse {
   spendable?: ApiMoney;
 }
 
+export interface BandResponse {
+  dayOfWeek?: number;
+  durationMinutes?: number;
+  endsAt?: string;
+  fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
+  priority?: number;
+  startsAt?: string;
+}
+
 export interface BandsRequest {
   bands: Array<LocationServiceOperationsControllerBandRequest>;
 }
@@ -179,6 +188,15 @@ export interface BlockedWorklistResponse {
 export interface BoardResponse {
   tickets?: Array<TicketResponse>;
   warnings?: Array<string>;
+}
+
+export interface BrandView {
+  code?: string;
+  displayName?: string;
+  id?: string;
+  slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  tenantId?: string;
 }
 
 export interface BucketResponse {
@@ -522,6 +540,13 @@ export interface EvidenceView {
   zoneVersion?: number;
 }
 
+export interface ExceptionResponse {
+  closedAllDay?: boolean;
+  closesAt?: string;
+  date?: string;
+  opensAt?: string;
+}
+
 export interface ExportRequest {
   limit?: number;
   purpose: string;
@@ -668,6 +693,25 @@ export interface LocationServiceOperationsControllerBandRequest {
   startsAt: string;
 }
 
+export interface LocationView {
+  addressLine?: string;
+  brandId?: string;
+  city?: string;
+  code?: string;
+  contactPhone?: string;
+  coordinateSource?: "NOT_GEOCODED" | "GEOCODER" | "MERCHANT_PIN" | "OPERATOR_PIN";
+  displayName?: string;
+  district?: string;
+  id?: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  tenantId?: string;
+  timezone?: string;
+}
+
 export interface LoyaltyOperationsControllerAdjustmentRequest {
   actorSubject: string;
   amountMinor?: number;
@@ -772,6 +816,16 @@ export interface MigrationRunView {
   targetWatermark?: string;
   transformationVersion?: number;
   version?: number;
+}
+
+export interface ModeBindingResponse {
+  acceptsScheduledOrders?: boolean;
+  exceptions?: Array<ExceptionResponse>;
+  fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
+  rules?: Array<RuleResponse>;
+  scheduleId?: string;
+  scheduleName?: string;
+  sharedWithLocationCount?: number;
 }
 
 export interface NoteResponse {
@@ -1437,6 +1491,12 @@ export interface RowResponse {
   values?: { [key: string]: number };
 }
 
+export interface RuleResponse {
+  closesAt?: string;
+  dayOfWeek?: number;
+  opensAt?: string;
+}
+
 export interface RunCountersView {
   created?: number;
   quarantined?: number;
@@ -1490,6 +1550,17 @@ export interface ServiceStateRequest {
   effectiveUntil?: string;
   mode: "FOLLOW_SCHEDULE" | "FORCE_OPEN" | "FORCE_CLOSED";
   note?: string;
+  reasonCode?: string;
+}
+
+export interface ServiceSummaryResponse {
+  bindings?: Array<ModeBindingResponse>;
+  effectiveMode?: string;
+  effectiveUntil?: string;
+  maxConcurrentOrders?: number;
+  mode?: string;
+  openOrderCount?: number;
+  preparationBands?: Array<BandResponse>;
   reasonCode?: string;
 }
 
@@ -1816,16 +1887,21 @@ export interface Operations {
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
-  "list_5": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
+  "list_5": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
+  "get_5": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
+  "list_6": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
   "detail_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationDetailResponse } };
   "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
   "reply": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/replies"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } }; body: SendReplyRequest }; responses: { "200": ConversationMessageResponse } };
   "returnToFlow": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/return-to-flow"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationResponse } };
   "takeover": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/takeover"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
+  "locations": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
+  "profile": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "setCapacity": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CapacityRequest }; responses: { "200": unknown } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };
   "bindSchedule": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindingRequest }; responses: { "200": unknown } };
   "changeServiceState": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-state"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ServiceStateRequest }; responses: { "200": unknown } };
+  "serviceSummary": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-summary"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": ServiceSummaryResponse } };
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
   "suspend_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
   "verify_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/verify"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: VerifyRequest }; responses: { "200": EngagementResponse } };

@@ -1,0 +1,211 @@
+<h1 class="q-title">{{ 'settings.orderPolicy.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.orderPolicy.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.card1.title' | t }}</h2>
+
+    @if (!editing()) {
+      @if (policy(); as current) {
+        <p class="q-caption version-banner">
+          @if (current.isPlatformDefault) {
+            {{ 'settings.orderPolicy.card1.platformDefault' | t }}
+          } @else {
+            {{ 'settings.orderPolicy.card1.version' | t: { version: current.policyVersion } }}
+          }
+        </p>
+        <dl class="fields">
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.orderPolicy.field.mode' | t }}</dt>
+            <dd class="q-body">{{ modeLabel(current.mode) }}</dd>
+          </div>
+          @if (current.mode === 'RESTAURANT_APPROVAL') {
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.orderPolicy.field.approvalChannel' | t }}</dt>
+              <dd class="q-body">{{ approvalChannelLabel(current.approvalChannel) }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.orderPolicy.field.timeoutSeconds' | t }}</dt>
+              <dd class="q-body q-tnum">{{ current.approvalTimeoutSeconds }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.orderPolicy.field.timeoutAction' | t }}</dt>
+              <dd class="q-body">{{ timeoutActionLabel(current.timeoutAction) }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">
+                {{ 'settings.orderPolicy.field.rejectionReasonRequired' | t }}
+              </dt>
+              <dd class="q-body">{{ yesNo(current.rejectionReasonRequired) }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.orderPolicy.field.notifyCustomer' | t }}</dt>
+              <dd class="q-body">{{ yesNo(current.notifyCustomerWhilePending) }}</dd>
+            </div>
+          }
+        </dl>
+        <button type="button" class="q-body primary" (click)="startEditing()">
+          {{ 'settings.orderPolicy.edit' | t }}
+        </button>
+      }
+    } @else {
+      <div class="form">
+        <label class="q-caption" for="policy-mode">{{
+          'settings.orderPolicy.field.mode' | t
+        }}</label>
+        <select
+          id="policy-mode"
+          class="q-body field"
+          [value]="draftMode()"
+          (change)="draftMode.set($any($event.target).value)"
+        >
+          <option value="AUTO_CONFIRM">{{ 'settings.orderPolicy.mode.AUTO_CONFIRM' | t }}</option>
+          <option value="RESTAURANT_APPROVAL">
+            {{ 'settings.orderPolicy.mode.RESTAURANT_APPROVAL' | t }}
+          </option>
+        </select>
+
+        @if (draftMode() === 'RESTAURANT_APPROVAL') {
+          <label class="q-caption" for="policy-approval-channel">{{
+            'settings.orderPolicy.field.approvalChannel' | t
+          }}</label>
+          <select
+            id="policy-approval-channel"
+            class="q-body field"
+            [value]="draftApprovalChannel()"
+            (change)="draftApprovalChannel.set($any($event.target).value)"
+          >
+            <option value="NONE">{{ 'settings.orderPolicy.approvalChannel.NONE' | t }}</option>
+            <option value="HORECAOS_OPERATIONS">
+              {{ 'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS' | t }}
+            </option>
+            <option value="POS">{{ 'settings.orderPolicy.approvalChannel.POS' | t }}</option>
+            <option value="EITHER">{{ 'settings.orderPolicy.approvalChannel.EITHER' | t }}</option>
+          </select>
+
+          <label class="q-caption" for="policy-timeout">{{
+            'settings.orderPolicy.field.timeoutSeconds' | t
+          }}</label>
+          <input
+            id="policy-timeout"
+            class="q-body field"
+            type="number"
+            min="30"
+            max="1800"
+            [value]="draftTimeoutSeconds()"
+            (input)="draftTimeoutSeconds.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-timeout-action">{{
+            'settings.orderPolicy.field.timeoutAction' | t
+          }}</label>
+          <select
+            id="policy-timeout-action"
+            class="q-body field"
+            [value]="draftTimeoutAction()"
+            (change)="draftTimeoutAction.set($any($event.target).value)"
+          >
+            <option value="AUTO_REJECT">
+              {{ 'settings.orderPolicy.timeoutAction.AUTO_REJECT' | t }}
+            </option>
+            <option value="AUTO_CONFIRM">
+              {{ 'settings.orderPolicy.timeoutAction.AUTO_CONFIRM' | t }}
+            </option>
+          </select>
+
+          <label class="checkbox q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draftRejectionReasonRequired()"
+              (change)="draftRejectionReasonRequired.set($any($event.target).checked)"
+            />
+            {{ 'settings.orderPolicy.field.rejectionReasonRequired' | t }}
+          </label>
+          <label class="checkbox q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draftNotifyCustomer()"
+              (change)="draftNotifyCustomer.set($any($event.target).checked)"
+            />
+            {{ 'settings.orderPolicy.field.notifyCustomer' | t }}
+          </label>
+        }
+
+        <label class="q-caption" for="policy-reason">{{
+          'settings.orderPolicy.field.reason' | t
+        }}</label>
+        <input
+          id="policy-reason"
+          class="q-body field"
+          type="text"
+          [value]="draftReason()"
+          (input)="draftReason.set($any($event.target).value)"
+        />
+
+        @if (saveError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditing()"
+            [disabled]="saving()"
+          >
+            {{ 'settings.orderPolicy.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="publish()"
+            [disabled]="!canPublish()"
+          >
+            {{
+              saving()
+                ? ('settings.orderPolicy.publishing' | t)
+                : ('settings.orderPolicy.publish' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.card2.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{
+        'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.3 (Card 2 — Тайминги и SLA)' }
+      }}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.card3.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'settings.orderPolicy.card3.body' | t }}</p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.card4.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.3 (Card 4 — Условия)' } }}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.card5.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{
+        'notBuilt.body'
+          | t: { spec: 'operations-spec/settings.md §10.3 (Card 5 — Оформление заказа оператором)' }
+      }}
+    </p>
+  </section>
+}

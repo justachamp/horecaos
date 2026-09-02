@@ -430,6 +430,33 @@
         },
         "type" : "object"
       },
+      "BandResponse" : {
+        "properties" : {
+          "dayOfWeek" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "durationMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "endsAt" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startsAt" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BandsRequest" : {
         "properties" : {
           "bands" : {
@@ -545,6 +572,32 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "BrandView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1634,6 +1687,24 @@
         },
         "type" : "object"
       },
+      "ExceptionResponse" : {
+        "properties" : {
+          "closedAllDay" : {
+            "type" : "boolean"
+          },
+          "closesAt" : {
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "opensAt" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ExportRequest" : {
         "properties" : {
           "limit" : {
@@ -2104,6 +2175,66 @@
         "required" : [ "endsAt", "startsAt" ],
         "type" : "object"
       },
+      "LocationView" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "contactPhone" : {
+            "type" : "string"
+          },
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "GEOCODER", "MERCHANT_PIN", "OPERATOR_PIN" ],
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LoyaltyOperationsControllerAdjustmentRequest" : {
         "properties" : {
           "actorSubject" : {
@@ -2429,6 +2560,41 @@
           },
           "version" : {
             "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModeBindingResponse" : {
+        "properties" : {
+          "acceptsScheduledOrders" : {
+            "type" : "boolean"
+          },
+          "exceptions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExceptionResponse"
+            },
+            "type" : "array"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "rules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RuleResponse"
+            },
+            "type" : "array"
+          },
+          "scheduleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scheduleName" : {
+            "type" : "string"
+          },
+          "sharedWithLocationCount" : {
+            "format" : "int64",
             "type" : "integer"
           }
         },
@@ -4538,6 +4704,21 @@
         },
         "type" : "object"
       },
+      "RuleResponse" : {
+        "properties" : {
+          "closesAt" : {
+            "type" : "string"
+          },
+          "dayOfWeek" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "opensAt" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RunCountersView" : {
         "properties" : {
           "created" : {
@@ -4716,6 +4897,44 @@
           }
         },
         "required" : [ "mode" ],
+        "type" : "object"
+      },
+      "ServiceSummaryResponse" : {
+        "properties" : {
+          "bindings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ModeBindingResponse"
+            },
+            "type" : "array"
+          },
+          "effectiveMode" : {
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "maxConcurrentOrders" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "openOrderCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "preparationBands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BandResponse"
+            },
+            "type" : "array"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "SessionDetailResponse" : {
@@ -6058,10 +6277,77 @@
         "tags" : [ "Staff sign-in" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands" : {
+      "get" : {
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BrandView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the tenant's brands, for the Settings scope bar's brand picker",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
+      "get" : {
+        "operationId" : "get_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One brand's profile, for the Settings 10.1 screen",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -6361,6 +6647,89 @@
         "tags" : [ "Operator inbox" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations" : {
+      "get" : {
+        "operationId" : "locations",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's locations, for the Settings 10.2 list and the scope bar's location picker",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}" : {
+      "get" : {
+        "operationId" : "profile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The location's own profile, for the Settings 10.2 detail screen",
+        "tags" : [ "Location service operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity" : {
       "put" : {
         "description" : "Advisory at browse and authoritative at checkout, where it is a conditional count inside the transaction rather than a cached number.",
@@ -6550,6 +6919,50 @@
           }
         },
         "summary" : "Close, force open, or return to the schedule",
+        "tags" : [ "Location service operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-summary" : {
+      "get" : {
+        "operationId" : "serviceSummary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ServiceSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Manual override, bound schedules with their grids, preparation bands, and live capacity",
         "tags" : [ "Location service operations" ]
       }
     },
@@ -14539,6 +14952,9 @@
   }, {
     "description" : "Which optional messages a customer receives, per class and channel",
     "name" : "Notification preferences"
+  }, {
+    "description" : "A tenant's own read of its brands (Settings 10.1)",
+    "name" : "Operations brand profile"
   }, {
     "description" : "Plans, subscriptions, overrides, and usage corrections",
     "name" : "Commercial administration"

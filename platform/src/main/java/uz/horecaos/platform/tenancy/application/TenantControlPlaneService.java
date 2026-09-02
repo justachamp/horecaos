@@ -285,6 +285,19 @@ public class TenantControlPlaneService {
                 .toList();
     }
 
+    /**
+     * One brand, for the operations Settings 10.1 profile screen — reads what
+     * {@link #getBrands} already reads, filtered to one, so a screen showing a
+     * single brand's own profile does not have to fetch and discard the rest
+     * of the tenant's brands.
+     */
+    @Transactional(readOnly = true)
+    public BrandView getBrand(TenantId tenantId, BrandId brandId) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantRead(tenant);
+        return toView(requireBrand(tenantId, brandId));
+    }
+
     @Transactional
     public LocationView createLocation(TenantId tenantId, BrandId brandId, CreateLocationCommand command) {
         Objects.requireNonNull(command, "Create location command is required");
@@ -425,6 +438,25 @@ public class TenantControlPlaneService {
         return store.findLocations(brand).stream()
                 .map(TenantControlPlaneService::toView)
                 .toList();
+    }
+
+    /**
+     * One location, for the operations Settings 10.2 detail screen. Same
+     * find-then-filter shape {@link #describeLocation} and {@link
+     * #activateLocation} already use — {@code findLocations} is the only
+     * lookup the store port offers, and a single extra query per location is
+     * not worth widening the port for.
+     */
+    @Transactional(readOnly = true)
+    public LocationView getLocation(TenantId tenantId, BrandId brandId, LocationId locationId) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantRead(tenant);
+        Brand brand = requireBrand(tenantId, brandId);
+        Location location = store.findLocations(brand).stream()
+                .filter(candidate -> candidate.id().equals(locationId))
+                .findFirst()
+                .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
+        return toView(location);
     }
 
     private Tenant requireTenant(TenantId tenantId) {

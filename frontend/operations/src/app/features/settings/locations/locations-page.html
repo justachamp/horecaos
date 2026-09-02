@@ -1,0 +1,47 @@
+<div class="layout" [class.layout--docked]="docked()">
+  <div class="list">
+    <h1 class="q-title">{{ 'settings.locations.title' | t }}</h1>
+    <p class="q-body-sm lead">{{ 'settings.locations.lead' | t }}</p>
+
+    @if (loading()) {
+      <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+    } @else if (denied()) {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    } @else if (loadError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.locations.field.displayName' | t }}</th>
+            <th class="q-caption">{{ 'settings.locations.field.code' | t }}</th>
+            <th class="q-caption">{{ 'settings.locations.field.status' | t }}</th>
+            <th class="q-caption">{{ 'settings.locations.field.city' | t }}</th>
+            <th class="q-caption">{{ 'settings.locations.field.timezone' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (location of locations(); track location.id) {
+            <tr class="row" (click)="openLocation(location)">
+              <td class="q-body-sm">{{ location.displayName }}</td>
+              <td class="q-body-sm q-mono">{{ location.code }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge">{{ location.status }}</span>
+              </td>
+              <td class="q-body-sm">{{ location.city ?? '—' }}</td>
+              <td class="q-body-sm">{{ location.timezone }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">{{ 'settings.locations.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+  <div class="detail">
+    <router-outlet (activate)="onOutletActivate()" (deactivate)="onOutletDeactivate()" />
+  </div>
+</div>

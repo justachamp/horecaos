@@ -204,6 +204,84 @@ public class JdbcServiceabilityStore {
                 .single();
     }
 
+    /**
+     * Every preparation band configured at one location (operations Settings
+     * 10.2 tab 3). Additive alongside {@link #preparationMinutes}, which
+     * resolves the single band that applies right now; this returns the whole
+     * editable set so a screen can show what a person last reviewed before
+     * they replace it with {@code replacePreparationBands}.
+     */
+    public List<Band> preparationBandsFor(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT fulfillment_mode, day_of_week, starts_at, ends_at, duration_minutes, priority
+                FROM tenant.preparation_bands
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                ORDER BY priority DESC, id
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query((row, number) -> new Band(
+                        row.getString("fulfillment_mode") == null
+                                ? null
+                                : FulfillmentMode.valueOf(row.getString("fulfillment_mode")),
+                        (Integer) row.getObject("day_of_week"),
+                        row.getObject("starts_at", LocalTime.class),
+                        row.getObject("ends_at", LocalTime.class),
+                        row.getInt("duration_minutes"),
+                        row.getInt("priority")))
+                .list();
+    }
+
+    /**
+     * A brand's named timetables, each with how many locations currently bind
+     * it (operations Settings 10.2 tab 2's schedule picker and its "used by N
+     * other locations" banner — editing a shared schedule from one branch page
+     * silently changing thirty others is the failure that banner exists to
+     * prevent).
+     */
+    public List<ScheduleSummary> schedulesForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT s.id, s.name, s.accepts_scheduled_orders,
+                       (SELECT count(*) FROM tenant.location_service_bindings b
+                         WHERE b.tenant_id = s.tenant_id AND b.schedule_id = s.id) AS bound_count
+                FROM tenant.service_schedules s
+                WHERE s.tenant_id = :tenantId AND s.brand_id = :brandId
+                ORDER BY s.name
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new ScheduleSummary(
+                        row.getObject("id", UUID.class),
+                        row.getString("name"),
+                        row.getBoolean("accepts_scheduled_orders"),
+                        row.getLong("bound_count")))
+                .list();
+    }
+
+    /** One timetable's name and full weekly grid, read-only, before a person opens the editor. */
+    public Optional<NamedSchedule> scheduleDetail(UUID tenantId, UUID brandId, UUID scheduleId) {
+        record Header(String name, boolean acceptsScheduledOrders, long boundCount) {}
+
+        Optional<Header> header = jdbc.sql("""
+                SELECT s.name, s.accepts_scheduled_orders,
+                       (SELECT count(*) FROM tenant.location_service_bindings b
+                         WHERE b.tenant_id = s.tenant_id AND b.schedule_id = s.id) AS bound_count
+                FROM tenant.service_schedules s
+                WHERE s.id = :scheduleId AND s.tenant_id = :tenantId AND s.brand_id = :brandId
+                """)
+                .param("scheduleId", scheduleId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new Header(
+                        row.getString("name"), row.getBoolean("accepts_scheduled_orders"), row.getLong("bound_count")))
+                .optional();
+
+        return header.map(found -> new NamedSchedule(
+                found.name(),
+                new WeeklySchedule(rulesOf(scheduleId), exceptionsOf(scheduleId), found.acceptsScheduledOrders()),
+                found.boundCount()));
+    }
+
     // ------------------------------------------------------------------ writes
 
     public void insertSchedule(
@@ -524,6 +602,12 @@ public class JdbcServiceabilityStore {
     }
 
     public record BoundSchedule(UUID scheduleId, WeeklySchedule schedule) {}
+
+    /** A brand's timetable, named, for a picker — {@link #scheduleDetail} carries the grid too. */
+    public record ScheduleSummary(UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount) {}
+
+    /** One timetable's name and grid together, read-only. */
+    public record NamedSchedule(String name, WeeklySchedule schedule, long boundLocationCount) {}
 
     public record Band(
             @Nullable FulfillmentMode mode,

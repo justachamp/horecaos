@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -73,6 +74,20 @@ class TenantControlPlaneServiceTests {
                     assertThat(saved.id()).isEqualTo(location.id());
                     assertThat(saved.brandId()).isEqualTo(firstBrand.id());
                 });
+
+        // Operations Settings 10.1/10.2 read one brand or one location rather than the
+        // whole tenant's list — the same rows getBrands/getLocations already found, filtered.
+        assertThat(service.getBrand(new TenantId(tenant.id()), new BrandId(secondBrand.id()))
+                        .id())
+                .isEqualTo(secondBrand.id());
+        assertThat(service.getLocation(
+                                new TenantId(tenant.id()), new BrandId(firstBrand.id()), new LocationId(location.id()))
+                        .id())
+                .isEqualTo(location.id());
+        assertThatThrownBy(() -> service.getLocation(
+                        new TenantId(tenant.id()), new BrandId(secondBrand.id()), new LocationId(location.id())))
+                .as("a location from a different brand must not resolve")
+                .isInstanceOf(TenantResourceNotFoundException.class);
         assertThat(store.identityModes.get(new TenantId(tenant.id()))).isEqualTo(CustomerIdentityMode.TENANT_SHARED);
         assertThat(auditFacts)
                 .as("ADR 0027: every control-plane creation records who caused it and why")

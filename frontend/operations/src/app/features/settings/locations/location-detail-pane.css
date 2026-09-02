@@ -1,0 +1,162 @@
+.pane {
+  border-left: 1px solid var(--q-hairline);
+  padding-left: 24px;
+}
+
+.pane h2 {
+  margin: 0 0 12px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 4px;
+  margin-right: 16px;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.tab--on {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+  font-weight: 600;
+}
+
+.fields {
+  margin: 0 0 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.field dt {
+  color: var(--q-ink-muted);
+  margin-bottom: 2px;
+}
+
+.field dd {
+  margin: 0;
+}
+
+.block {
+  margin-top: 20px;
+}
+
+.block h3 {
+  margin: 0 0 8px;
+}
+
+.schedule {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.shared-note {
+  color: var(--q-warning-text);
+  margin: 2px 0 8px;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.grid td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.form {
+  margin-top: 12px;
+  max-width: 360px;
+}
+
+.form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.form label:first-child {
+  margin-top: 0;
+}
+
+.field.input,
+.field {
+  display: block;
+  width: 100%;
+}
+
+input.field,
+select.field {
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.form__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+}
+
+.error {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  margin-top: 8px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}

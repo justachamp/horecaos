@@ -8,10 +8,15 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,8 +25,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.LocationId;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
 import uz.horecaos.platform.web.api.ApiException;
@@ -49,9 +59,88 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class LocationServiceOperationsController {
 
     private final ServiceScheduleService schedules;
+    private final TenantControlPlaneService tenants;
 
-    public LocationServiceOperationsController(ServiceScheduleService schedules) {
+    public LocationServiceOperationsController(ServiceScheduleService schedules, TenantControlPlaneService tenants) {
         this.schedules = schedules;
+        this.tenants = tenants;
+    }
+
+    @GetMapping
+    @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.LOCATION)
+    @Operation(summary = "The location's own profile, for the Settings 10.2 detail screen")
+    public LocationView profile(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return tenants.getLocation(new TenantId(tenantId), new BrandId(brandId), new LocationId(locationId));
+    }
+
+    /**
+     * Everything the Settings 10.2 "Часы" and "Загрузка и приготовление" tabs
+     * show before a person opens an editor: the manual override (if any), the
+     * timetable bound to each fulfilment mode with its full weekly grid and
+     * dated exceptions, the preparation bands, and how many orders are
+     * currently holding capacity.
+     *
+     * <p>Every write this controller already offered — {@code /service-state},
+     * {@code /capacity}, {@code /service-bindings}, {@code /preparation-bands}
+     * — had no matching read anywhere. A screen that can only ever write is
+     * the write-blind form the operations spec's §1.4 "Loading" state warns
+     * against, so this one read composes what the four writers already
+     * persist rather than adding a new table.
+     */
+    @GetMapping("/service-summary")
+    @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.LOCATION)
+    @Operation(summary = "Manual override, bound schedules with their grids, preparation bands, and live capacity")
+    public ServiceSummaryResponse serviceSummary(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+
+        JdbcServiceabilityStore.ServiceState state = schedules.currentState(tenantId, locationId);
+
+        List<ModeBindingResponse> bindings = new ArrayList<>();
+        for (FulfillmentMode mode : FulfillmentMode.values()) {
+            Optional<JdbcServiceabilityStore.BoundSchedule> bound = schedules.scheduleFor(tenantId, locationId, mode);
+            if (bound.isEmpty()) {
+                continue;
+            }
+            Optional<JdbcServiceabilityStore.NamedSchedule> named =
+                    schedules.scheduleDetail(tenantId, brandId, bound.get().scheduleId());
+            named.ifPresent(schedule -> bindings.add(new ModeBindingResponse(
+                    mode,
+                    bound.get().scheduleId(),
+                    schedule.name(),
+                    schedule.schedule().acceptsScheduledOrders(),
+                    schedule.boundLocationCount(),
+                    schedule.schedule().rules().stream()
+                            .map(rule -> new RuleResponse(rule.dayOfWeek(), rule.opensAt(), rule.closesAt()))
+                            .toList(),
+                    schedule.schedule().exceptions().entrySet().stream()
+                            .map(entry -> new ExceptionResponse(
+                                    entry.getKey(),
+                                    entry.getValue().closedAllDay(),
+                                    entry.getValue().opensAt(),
+                                    entry.getValue().closesAt()))
+                            .toList())));
+        }
+
+        List<BandResponse> bands = schedules.preparationBands(tenantId, locationId).stream()
+                .map(band -> new BandResponse(
+                        band.mode(),
+                        band.dayOfWeek(),
+                        band.startsAt(),
+                        band.endsAt(),
+                        band.durationMinutes(),
+                        band.priority()))
+                .toList();
+
+        return new ServiceSummaryResponse(
+                state.mode().name(),
+                state.effectiveMode(Instant.now()).name(),
+                state.reasonCode(),
+                state.effectiveUntil(),
+                state.maxConcurrentOrders(),
+                schedules.openCapacityHolds(tenantId, locationId),
+                bindings,
+                bands);
     }
 
     @PostMapping("/service-state")
@@ -157,4 +246,40 @@ public class LocationServiceOperationsController {
                     fulfillmentMode, dayOfWeek, startsAt, endsAt, durationMinutes, priority);
         }
     }
+
+    public record ServiceSummaryResponse(
+            String mode,
+            String effectiveMode,
+            @Nullable String reasonCode,
+            @Nullable Instant effectiveUntil,
+            @Nullable Integer maxConcurrentOrders,
+            long openOrderCount,
+            List<ModeBindingResponse> bindings,
+            List<BandResponse> preparationBands) {}
+
+    /** One fulfilment mode's bound timetable, named and with its full grid, read-only. */
+    public record ModeBindingResponse(
+            FulfillmentMode fulfillmentMode,
+            UUID scheduleId,
+            String scheduleName,
+            boolean acceptsScheduledOrders,
+            long sharedWithLocationCount,
+            List<RuleResponse> rules,
+            List<ExceptionResponse> exceptions) {}
+
+    public record RuleResponse(int dayOfWeek, LocalTime opensAt, LocalTime closesAt) {}
+
+    public record ExceptionResponse(
+            LocalDate date,
+            boolean closedAllDay,
+            @Nullable LocalTime opensAt,
+            @Nullable LocalTime closesAt) {}
+
+    public record BandResponse(
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable Integer dayOfWeek,
+            LocalTime startsAt,
+            LocalTime endsAt,
+            int durationMinutes,
+            int priority) {}
 }

@@ -1,0 +1,261 @@
+<h1 class="q-title">{{ 'settings.referenceData.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.referenceData.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <section class="card">
+    <div class="card__header">
+      <h2 class="q-subhead">{{ 'settings.referenceData.cancellation.title' | t }}</h2>
+      <button type="button" class="q-body-sm link" (click)="openCreateForm('CANCELLATION')">
+        {{ 'settings.referenceData.add' | t }}
+      </button>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.stockDisposition' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.liabilityParty' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (reason of cancellationReasons(); track reason.id) {
+          <tr>
+            <td class="q-body-sm">{{ reason.internalName }}</td>
+            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ reason.stockDisposition }}</td>
+            <td class="q-body-sm">{{ reason.liabilityParty }}</td>
+            <td class="q-body-sm">
+              <button type="button" class="q-body-sm link" (click)="archive(reason)">
+                {{ 'settings.referenceData.disable' | t }}
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="5">{{ 'settings.referenceData.empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="card__header">
+      <h2 class="q-subhead">{{ 'settings.referenceData.completion.title' | t }}</h2>
+      <button type="button" class="q-body-sm link" (click)="openCreateForm('COMPLETION')">
+        {{ 'settings.referenceData.add' | t }}
+      </button>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (reason of completionReasons(); track reason.id) {
+          <tr>
+            <td class="q-body-sm">{{ reason.internalName }}</td>
+            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">
+              <button type="button" class="q-body-sm link" (click)="archive(reason)">
+                {{ 'settings.referenceData.disable' | t }}
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="3">{{ 'settings.referenceData.empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (showCreateForm(); as kind) {
+    <div class="backdrop" (click)="showCreateForm.set(null)">
+      <div class="dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">
+          {{
+            kind === 'CANCELLATION'
+              ? ('settings.referenceData.cancellation.add' | t)
+              : ('settings.referenceData.completion.add' | t)
+          }}
+        </h2>
+
+        <label class="q-caption" for="reason-internal-name">{{
+          'settings.referenceData.field.internalName' | t
+        }}</label>
+        <input
+          id="reason-internal-name"
+          class="q-body field"
+          type="text"
+          [value]="newInternalName()"
+          (input)="newInternalName.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        <label class="q-caption" for="reason-category">{{
+          'settings.referenceData.field.systemCategory' | t
+        }}</label>
+        <select
+          id="reason-category"
+          class="q-body field"
+          [value]="newSystemCategory()"
+          (change)="newSystemCategory.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        >
+          @for (
+            category of kind === 'CANCELLATION' ? cancellationCategories() : completionCategories();
+            track category
+          ) {
+            <option [value]="category">{{ category }}</option>
+          }
+        </select>
+
+        <label class="q-caption" for="reason-text-ru">{{
+          'settings.referenceData.field.customerTextRu' | t
+        }}</label>
+        <input
+          id="reason-text-ru"
+          class="q-body field"
+          type="text"
+          [value]="newTextRu()"
+          (input)="newTextRu.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        <label class="q-caption" for="reason-text-uz">{{
+          'settings.referenceData.field.customerTextUz' | t
+        }}</label>
+        <input
+          id="reason-text-uz"
+          class="q-body field"
+          type="text"
+          [value]="newTextUz()"
+          (input)="newTextUz.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        <label class="q-caption" for="reason-text-en">{{
+          'settings.referenceData.field.customerTextEn' | t
+        }}</label>
+        <input
+          id="reason-text-en"
+          class="q-body field"
+          type="text"
+          [value]="newTextEn()"
+          (input)="newTextEn.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+
+        @if (kind === 'CANCELLATION') {
+          <label class="q-caption" for="reason-stock">{{
+            'settings.referenceData.field.stockDisposition' | t
+          }}</label>
+          <select
+            id="reason-stock"
+            class="q-body field"
+            [value]="newStockDisposition()"
+            (change)="newStockDisposition.set($any($event.target).value)"
+          >
+            <option value="RELEASE">RELEASE</option>
+            <option value="RETURN_TO_STOCK">RETURN_TO_STOCK</option>
+            <option value="WRITE_OFF">WRITE_OFF</option>
+            <option value="NO_EFFECT">NO_EFFECT</option>
+          </select>
+
+          <label class="q-caption" for="reason-liability">{{
+            'settings.referenceData.field.liabilityParty' | t
+          }}</label>
+          <select
+            id="reason-liability"
+            class="q-body field"
+            [value]="newLiabilityParty()"
+            (change)="newLiabilityParty.set($any($event.target).value)"
+          >
+            <option value="TENANT">TENANT</option>
+            <option value="CUSTOMER">CUSTOMER</option>
+            <option value="COURIER_PARTNER">COURIER_PARTNER</option>
+            <option value="PLATFORM">PLATFORM</option>
+          </select>
+
+          <label class="q-caption" for="reason-refund">{{
+            'settings.referenceData.field.customerRefund' | t
+          }}</label>
+          <select
+            id="reason-refund"
+            class="q-body field"
+            [value]="newCustomerRefund()"
+            (change)="newCustomerRefund.set($any($event.target).value)"
+          >
+            <option value="FULL">FULL</option>
+            <option value="NONE">NONE</option>
+            <option value="DISCRETIONARY">DISCRETIONARY</option>
+          </select>
+        }
+
+        @if (createError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="dialog__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="showCreateForm.set(null)"
+            [disabled]="createSubmitting()"
+          >
+            {{ 'settings.referenceData.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="submitCreate()"
+            [disabled]="!canCreate()"
+          >
+            {{
+              createSubmitting()
+                ? ('settings.referenceData.creating' | t)
+                : ('settings.referenceData.create' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.referenceData.calendar.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{
+        'notBuilt.body'
+          | t: { spec: 'operations-spec/settings.md §10.10 (Производственный календарь)' }
+      }}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.referenceData.slaBuckets.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.10 (Границы SLA)' } }}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.referenceData.tags.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.10 (Теги филиалов)' } }}
+    </p>
+  </section>
+}

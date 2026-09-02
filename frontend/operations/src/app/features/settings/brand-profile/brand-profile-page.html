@@ -1,0 +1,48 @@
+<h1 class="q-title">{{ 'settings.brandProfile.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.brandProfile.lead' | t }}</p>
+
+@if (loading()) {
+  <div class="skeleton" aria-hidden="true">
+    @for (row of [1, 2, 3, 4]; track row) {
+      <div class="skeleton__row"></div>
+    }
+  </div>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else if (brand(); as value) {
+  <dl class="fields">
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.brandProfile.field.displayName' | t }}</dt>
+      <dd class="q-body">{{ value.displayName }}</dd>
+    </div>
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.brandProfile.field.code' | t }}</dt>
+      <dd class="q-body q-mono">{{ value.code }}</dd>
+    </div>
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.brandProfile.field.slug' | t }}</dt>
+      <dd class="q-body q-mono">{{ value.slug }}</dd>
+    </div>
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.brandProfile.field.status' | t }}</dt>
+      <dd class="q-body">{{ statusLabel(value.status) }}</dd>
+    </div>
+  </dl>
+
+  <p class="q-caption readonly-note">{{ 'settings.brandProfile.readOnlyNote' | t }}</p>
+
+  <div class="gap-panel">
+    <h2 class="q-subhead">{{ 'settings.brandProfile.gap.title' | t }}</h2>
+    <p class="q-body-sm">
+      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.1' } }}
+    </p>
+    <ul class="q-body-sm gap-list">
+      <li>{{ 'settings.brandProfile.gap.legalName' | t }}</li>
+      <li>{{ 'settings.brandProfile.gap.logoBanner' | t }}</li>
+      <li>{{ 'settings.brandProfile.gap.description' | t }}</li>
+      <li>{{ 'settings.brandProfile.gap.contact' | t }}</li>
+    </ul>
+  </div>
+}

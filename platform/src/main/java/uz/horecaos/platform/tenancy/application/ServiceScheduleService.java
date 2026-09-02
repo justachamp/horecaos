@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,42 @@ public class ServiceScheduleService {
         this.currentActor = currentActor;
         this.clock = clock;
     }
+
+    // ------------------------------------------------------------------- reads
+    //
+    // Thin passthroughs to JdbcServiceabilityStore's own read methods (operations
+    // Settings 10.2, ADR 0036). The store's reads were written for the
+    // serviceability resolver and were command-only from an HTTP point of view
+    // until now: nothing let a settings screen show what it is about to replace.
+    // These add no query logic of their own.
+
+    public JdbcServiceabilityStore.ServiceState currentState(UUID tenantId, UUID locationId) {
+        return store.serviceState(tenantId, locationId);
+    }
+
+    public Optional<JdbcServiceabilityStore.BoundSchedule> scheduleFor(
+            UUID tenantId, UUID locationId, FulfillmentMode mode) {
+        return store.scheduleFor(tenantId, locationId, mode);
+    }
+
+    public List<JdbcServiceabilityStore.Band> preparationBands(UUID tenantId, UUID locationId) {
+        return store.preparationBandsFor(tenantId, locationId);
+    }
+
+    public long openCapacityHolds(UUID tenantId, UUID locationId) {
+        return store.openCapacityHolds(tenantId, locationId);
+    }
+
+    public List<JdbcServiceabilityStore.ScheduleSummary> schedulesForBrand(UUID tenantId, UUID brandId) {
+        return store.schedulesForBrand(tenantId, brandId);
+    }
+
+    public Optional<JdbcServiceabilityStore.NamedSchedule> scheduleDetail(
+            UUID tenantId, UUID brandId, UUID scheduleId) {
+        return store.scheduleDetail(tenantId, brandId, scheduleId);
+    }
+
+    // ------------------------------------------------------------------ writes
 
     @Transactional
     public UUID createSchedule(UUID tenantId, UUID brandId, CreateScheduleCommand command) {

@@ -1,0 +1,338 @@
+<div class="pane">
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else if (profile(); as location) {
+    <h2 class="q-title">{{ location.displayName }}</h2>
+
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'basics'"
+        (click)="selectTab('basics')"
+      >
+        {{ 'settings.locations.tab.basics' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'hours'"
+        (click)="selectTab('hours')"
+      >
+        {{ 'settings.locations.tab.hours' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'load'"
+        (click)="selectTab('load')"
+      >
+        {{ 'settings.locations.tab.load' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'fiscal'"
+        (click)="selectTab('fiscal')"
+      >
+        {{ 'settings.locations.tab.fiscal' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'channels'"
+        (click)="selectTab('channels')"
+      >
+        {{ 'settings.locations.tab.channels' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'notifications'"
+        (click)="selectTab('notifications')"
+      >
+        {{ 'settings.locations.tab.notifications' | t }}
+      </button>
+    </div>
+
+    @if (activeTab() === 'basics') {
+      <dl class="fields">
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.code' | t }}</dt>
+          <dd class="q-body q-mono">{{ location.code }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.timezone' | t }}</dt>
+          <dd class="q-body">{{ location.timezone }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.status' | t }}</dt>
+          <dd class="q-body">{{ location.status }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.address' | t }}</dt>
+          <dd class="q-body">{{ location.addressLine ?? '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.city' | t }}</dt>
+          <dd class="q-body">{{ location.city ?? '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.phone' | t }}</dt>
+          <dd class="q-body">{{ location.contactPhone ?? '—' }}</dd>
+        </div>
+      </dl>
+
+      @if (!editingPlace()) {
+        <button type="button" class="q-body primary" (click)="startEditingPlace()">
+          {{ 'settings.locations.edit' | t }}
+        </button>
+      } @else {
+        <div class="form">
+          <label class="q-caption" for="place-address">{{
+            'settings.locations.field.address' | t
+          }}</label>
+          <input
+            id="place-address"
+            class="q-body field"
+            type="text"
+            [value]="draftAddressLine()"
+            (input)="draftAddressLine.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-district">{{
+            'settings.locations.field.district' | t
+          }}</label>
+          <input
+            id="place-district"
+            class="q-body field"
+            type="text"
+            [value]="draftDistrict()"
+            (input)="draftDistrict.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-city">{{
+            'settings.locations.field.city' | t
+          }}</label>
+          <input
+            id="place-city"
+            class="q-body field"
+            type="text"
+            [value]="draftCity()"
+            (input)="draftCity.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-phone">{{
+            'settings.locations.field.phone' | t
+          }}</label>
+          <input
+            id="place-phone"
+            class="q-body field"
+            type="text"
+            [value]="draftContactPhone()"
+            (input)="draftContactPhone.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+            placeholder="+998712000000"
+          />
+
+          @if (placeError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="editingPlace.set(false)"
+              [disabled]="placeSaving()"
+            >
+              {{ 'settings.locations.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="savePlace()"
+              [disabled]="placeSaving()"
+            >
+              {{
+                placeSaving() ? ('settings.locations.saving' | t) : ('settings.locations.save' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      }
+    }
+
+    @if (activeTab() === 'hours' && summary(); as data) {
+      <section class="block">
+        <h3 class="q-subhead">{{ 'settings.locations.hours.stateTitle' | t }}</h3>
+        <p class="q-body">
+          {{ 'settings.locations.hours.currentMode' | t }}:
+          <strong>{{ data.effectiveMode }}</strong>
+        </p>
+        @if (data.reasonCode) {
+          <p class="q-body-sm">{{ data.reasonCode }}</p>
+        }
+        <div class="form">
+          <label class="q-caption" for="state-mode">{{
+            'settings.locations.hours.mode' | t
+          }}</label>
+          <select
+            id="state-mode"
+            class="q-body field"
+            [value]="draftMode()"
+            (change)="draftMode.set($any($event.target).value)"
+          >
+            <option value="FOLLOW_SCHEDULE">FOLLOW_SCHEDULE</option>
+            <option value="FORCE_OPEN">FORCE_OPEN</option>
+            <option value="FORCE_CLOSED">FORCE_CLOSED</option>
+          </select>
+          @if (draftMode() !== 'FOLLOW_SCHEDULE') {
+            <label class="q-caption" for="state-reason">{{
+              'settings.locations.hours.reasonCode' | t
+            }}</label>
+            <input
+              id="state-reason"
+              class="q-body field"
+              type="text"
+              [value]="draftReasonCode()"
+              (input)="draftReasonCode.set($any($event.target).value)"
+            />
+          }
+          @if (stateError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="changeState()"
+              [disabled]="stateSaving()"
+            >
+              {{
+                stateSaving()
+                  ? ('settings.locations.saving' | t)
+                  : ('settings.locations.hours.apply' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'settings.locations.hours.schedulesTitle' | t }}</h3>
+        @for (binding of data.bindings; track binding.fulfillmentMode) {
+          <div class="schedule">
+            <p class="q-body">
+              <strong>{{ binding.fulfillmentMode }}</strong> → {{ binding.scheduleName }}
+            </p>
+            @if (binding.sharedWithLocationCount > 1) {
+              <p class="q-caption shared-note">
+                {{
+                  'settings.locations.hours.shared' | t: { count: binding.sharedWithLocationCount }
+                }}
+              </p>
+            }
+            <table class="grid">
+              <tbody>
+                @for (rule of binding.rules; track rule.dayOfWeek + rule.opensAt) {
+                  <tr>
+                    <td class="q-body-sm q-tnum">{{ rule.dayOfWeek }}</td>
+                    <td class="q-body-sm q-tnum">{{ rule.opensAt }}–{{ rule.closesAt }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @empty {
+          <p class="q-body-sm">{{ 'settings.locations.hours.noBindings' | t }}</p>
+        }
+      </section>
+    }
+
+    @if (activeTab() === 'load' && summary(); as data) {
+      <section class="block">
+        <h3 class="q-subhead">{{ 'settings.locations.load.capacityTitle' | t }}</h3>
+        <p class="q-body">
+          {{
+            'settings.locations.load.occupancy'
+              | t: { open: data.openOrderCount, limit: data.maxConcurrentOrders ?? '∞' }
+          }}
+        </p>
+        <div class="form">
+          <label class="q-caption" for="capacity-input">{{
+            'settings.locations.load.maxConcurrentOrders' | t
+          }}</label>
+          <input
+            id="capacity-input"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftCapacity()"
+            (input)="
+              draftCapacity.set($any($event.target).value ? +$any($event.target).value : null)
+            "
+          />
+          @if (capacityError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="saveCapacity()"
+              [disabled]="capacitySaving()"
+            >
+              {{
+                capacitySaving()
+                  ? ('settings.locations.saving' | t)
+                  : ('settings.locations.save' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'settings.locations.load.bandsTitle' | t }}</h3>
+        <table class="grid">
+          <tbody>
+            @for (band of data.preparationBands; track band.startsAt + band.durationMinutes) {
+              <tr>
+                <td class="q-body-sm">{{ band.fulfillmentMode ?? '—' }}</td>
+                <td class="q-body-sm q-tnum">{{ band.dayOfWeek ?? '—' }}</td>
+                <td class="q-body-sm q-tnum">{{ band.startsAt }}–{{ band.endsAt }}</td>
+                <td class="q-body-sm q-tnum">
+                  {{ band.durationMinutes }} {{ 'settings.locations.load.minutes' | t }}
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="4">
+                  {{ 'settings.locations.load.noBands' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+
+    @if (activeTab() === 'fiscal') {
+      <p class="q-body-sm">{{ 'settings.locations.fiscal.note' | t }}</p>
+    }
+    @if (activeTab() === 'channels') {
+      <p class="q-body-sm">{{ 'settings.locations.channels.note' | t }}</p>
+    }
+    @if (activeTab() === 'notifications') {
+      <p class="q-body-sm">{{ 'settings.locations.notifications.note' | t }}</p>
+    }
+  }
+</div>

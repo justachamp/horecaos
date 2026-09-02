@@ -1,0 +1,72 @@
+.settings {
+  display: flex;
+  align-items: stretch;
+  min-height: 100%;
+}
+
+.settings__rail {
+  width: 240px;
+  flex: none;
+  border-right: 1px solid var(--q-hairline);
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+
+.settings__title {
+  margin: 0 0 16px;
+}
+
+.settings__scope {
+  margin-bottom: 20px;
+  padding: 8px 10px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  word-break: break-all;
+}
+
+.settings__scope-value {
+  display: block;
+  margin-top: 2px;
+}
+
+.settings__scope--denied {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+}
+
+.settings__group {
+  margin-bottom: 20px;
+}
+
+.settings__group-label {
+  margin: 0 0 6px;
+  padding: 0 10px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings__item {
+  display: block;
+  padding: 8px 10px;
+  color: var(--q-ink);
+  text-decoration: none;
+  border-radius: var(--q-radius);
+}
+
+.settings__item:hover {
+  background: var(--q-surface-1);
+}
+
+.settings__item--on {
+  background: var(--q-surface-2);
+  font-weight: 600;
+}
+
+.settings__content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+  overflow-y: auto;
+}

@@ -1,0 +1,164 @@
+<h1 class="q-title">{{ i18n.t('settings.integrations.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('settings.integrations.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ i18n.t('settings.integrations.loading') }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ i18n.t('settings.scope.denied') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="q-subhead">{{ i18n.t('settings.integrations.installations.title') }}</h2>
+      <button type="button" class="q-body primary" (click)="openConnect()">
+        {{ i18n.t('settings.integrations.connect.action') }}
+      </button>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.provider') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.environment') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.status') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.credential') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.lastRotated') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.installations.column.actions') }}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (installation of installations(); track installation.id) {
+          <tr>
+            <td class="q-body-sm">{{ installation.category }} · {{ installation.providerType }}</td>
+            <td class="q-body-sm">{{ installation.environmentCode }}</td>
+            <td class="q-body-sm">
+              <span class="status-badge">{{ statusLabel(installation.status) }}</span>
+            </td>
+            <td class="q-body-sm">{{ credentialLabel(installation.secretReference) }}</td>
+            <td class="q-body-sm">{{ lastRotatedLabel(installation.lastSecretRotatedAt) }}</td>
+            <td class="q-body-sm">
+              <button
+                type="button"
+                class="q-body-sm link"
+                (click)="openRotateInstallation(installation)"
+              >
+                {{ i18n.t('settings.integrations.rotate.installationAction') }}
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="6">
+              {{ i18n.t('settings.integrations.installations.empty') }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="q-subhead">{{ i18n.t('settings.integrations.merchantBindings.title') }}</h2>
+      <button type="button" class="q-body primary" (click)="openRegisterBinding()">
+        {{ i18n.t('settings.integrations.registerBinding.action') }}
+      </button>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.provider') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.account') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.status') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.credential') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.lastRotated') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.merchantBindings.column.actions') }}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (binding of merchantBindings(); track binding.id) {
+          <tr>
+            <td class="q-body-sm">{{ binding.providerType }}</td>
+            <td class="q-body-sm">{{ binding.merchantAccountReference }}</td>
+            <td class="q-body-sm">
+              <span class="status-badge">{{ statusLabel(binding.status) }}</span>
+            </td>
+            <td class="q-body-sm">{{ credentialLabel(binding.secretReference) }}</td>
+            <td class="q-body-sm">{{ lastRotatedLabel(binding.lastSecretRotatedAt) }}</td>
+            <td class="q-body-sm actions">
+              <button type="button" class="q-body-sm link" (click)="openRotateBinding(binding)">
+                {{ i18n.t('settings.integrations.rotate.bindingAction') }}
+              </button>
+              @if (binding.status === 'DRAFT' || binding.status === 'SUSPENDED') {
+                <button type="button" class="q-body-sm link" (click)="archiveBinding(binding)">
+                  {{ i18n.t('settings.integrations.archive.action') }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="6">
+              {{ i18n.t('settings.integrations.merchantBindings.empty') }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}
+
+@if (showConnectPanel()) {
+  <app-connect-provider-panel
+    [providers]="connectFields()"
+    [submitting]="connectSubmitting()"
+    [errorMessage]="connectError()"
+    (connect)="onConnect($event)"
+    (cancel)="showConnectPanel.set(false)"
+  />
+}
+
+@if (showRegisterBindingPanel()) {
+  <app-register-merchant-binding-panel
+    [submitting]="registerSubmitting()"
+    [errorMessage]="registerError()"
+    (register)="onRegisterBinding($event)"
+    (cancel)="showRegisterBindingPanel.set(false)"
+  />
+}
+
+@if (rotating(); as target) {
+  <app-rotate-secret-dialog
+    [unverifiable]="target.kind === 'installation' ? !target.verifiable : true"
+    [submitting]="rotateSubmitting()"
+    [errorMessage]="rotateError()"
+    (confirm)="onRotateConfirm($event)"
+    (cancel)="rotating.set(null)"
+  />
+}
