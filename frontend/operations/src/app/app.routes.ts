@@ -6,11 +6,14 @@ import { NAV_ITEMS } from './shell/navigation';
 /**
  * The routing table.
  *
- * Two real routes and eleven honest empty ones. The empty ones exist because
- * every rail entry must navigate somewhere — a rail item that does nothing when
- * clicked is a bug report — and because a placeholder that names its
- * specification is more useful to the next developer than a screen half-built
- * against it.
+ * Three real routes (Today, Orders, Inbox) plus Catalog's own small tree, and
+ * the rest are honest empty ones. The empty ones exist because every rail
+ * entry must navigate somewhere — a rail item that does nothing when clicked
+ * is a bug report — and because a placeholder that names its specification is
+ * more useful to the next developer than a screen half-built against it. The
+ * same principle applies one level down inside `catalog`'s own children:
+ * `import` is a not-built placeholder for exactly this reason (see its own
+ * comment below), even though `catalog` itself is "built".
  *
  * Everything except `/login` is behind {@link authGuard}. The guard proves
  * somebody is signed in; it never decides what they may do. Authorization is the
@@ -168,6 +171,46 @@ export const routes: Routes = [
           },
         ],
       },
+      {
+        path: 'catalog',
+        loadComponent: () => import('./features/catalog/catalog-shell').then((m) => m.CatalogShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'products' },
+          {
+            path: 'products',
+            loadComponent: () =>
+              import('./features/catalog/products-page').then((m) => m.ProductsPage),
+          },
+          {
+            path: 'categories',
+            loadComponent: () =>
+              import('./features/catalog/categories-page').then((m) => m.CategoriesPage),
+          },
+          {
+            path: 'menus',
+            loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
+          },
+          // catalog.md §4.11 (Excel/POS import): the backend has no import-job
+          // entity at all (ADR 0012, currently scoped to POS sources only) —
+          // a whole missing subsystem, not a small gap, so this stays the
+          // honest not-built page rather than a screen with nothing to call.
+          {
+            path: 'import',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'operations-spec/catalog.md §4.11 (Import: Excel and POS)' },
+          },
+        ],
+      },
+      // The product editor is a *sibling* of `catalog`, not one of its
+      // children — catalog.md §4.2 specifies it as a full page, unlike the
+      // order board's docked detail, so opening it replaces the tabbed shell
+      // (`catalog-shell.ts`) entirely rather than rendering inside it.
+      {
+        path: 'catalog/products/:productId',
+        loadComponent: () =>
+          import('./features/catalog/product-editor-page').then((m) => m.ProductEditorPage),
+      },
       ...placeholderRoutes(),
       // Unknown paths land on Today rather than on a 404. There is no such thing
       // as a deleted page in this console — only one that has not been built —
@@ -182,7 +225,7 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders', '/inbox', '/settings']);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

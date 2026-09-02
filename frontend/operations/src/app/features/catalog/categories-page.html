@@ -1,0 +1,75 @@
+<div class="categories">
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm categories__status">{{ 'catalog.categories.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm categories__status" data-testid="categories-denied">
+      {{ 'catalog.categories.denied' | t }}
+    </p>
+  } @else if (catalogs().length === 0) {
+    <p class="q-body-sm categories__status">{{ 'catalog.categories.noCatalog' | t }}</p>
+  } @else {
+    <div class="categories__layout">
+      <div class="categories__tree">
+        <div class="categories__tree-header">
+          <h2 class="q-emphasis">{{ 'catalog.categories.title' | t }}</h2>
+          <button type="button" (click)="openCreateDialog()" data-testid="categories-create">
+            {{ 'catalog.categories.create' | t }}
+          </button>
+        </div>
+        @if (nodes().length === 0) {
+          <p class="q-body-sm categories__empty">{{ 'catalog.categories.tree.empty' | t }}</p>
+        } @else {
+          <ul class="categories__list">
+            @for (node of nodes(); track node.category.categoryId) {
+              <li>
+                <button
+                  type="button"
+                  class="categories__node"
+                  [class.categories__node--selected]="selectedId() === node.category.categoryId"
+                  [style.paddingLeft.px]="12 + node.depth * 16"
+                  (click)="select(node.category.categoryId)"
+                  data-testid="category-node"
+                >
+                  <span>{{ node.category.name }}</span>
+                  <span class="q-caption categories__count">{{ node.category.productCount }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="categories__detail">
+        @if (selected(); as category) {
+          <h2 class="q-emphasis">{{ category.name }}</h2>
+          <dl class="categories__form">
+            <dt class="q-caption">{{ 'catalog.categories.form.name' | t }}</dt>
+            <dd>{{ category.name }}</dd>
+            <dt class="q-caption">{{ 'catalog.categories.form.code' | t }}</dt>
+            <dd class="q-mono">{{ category.code }}</dd>
+            <dt class="q-caption">{{ 'catalog.categories.form.parent' | t }}</dt>
+            <dd>{{ categoryName(category.parentCategoryId) }}</dd>
+            <dt class="q-caption">{{ 'catalog.categories.form.status' | t }}</dt>
+            <dd>{{ statusLabel(category.status) }}</dd>
+          </dl>
+          <h3 class="q-body-sm categories__products-title">
+            {{ 'catalog.categories.products.title' | t }}
+          </h3>
+          <p class="q-caption">{{ 'catalog.categories.products.empty' | t }}</p>
+        } @else {
+          <p class="q-body-sm categories__empty">{{ 'catalog.categories.selectPrompt' | t }}</p>
+        }
+      </div>
+    </div>
+  }
+
+  @if (createDialogOpen()) {
+    <q-create-category-dialog
+      [categories]="categories()"
+      [busy]="creating()"
+      [error]="createError()"
+      (confirm)="submitCreate($event)"
+      (dismiss)="closeCreateDialog()"
+    />
+  }
+</div>

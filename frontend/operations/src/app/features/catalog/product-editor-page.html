@@ -1,0 +1,493 @@
+@if (loading()) {
+  <p class="q-body-sm editor__status">{{ 'catalog.editor.loading' | t }}</p>
+} @else if (notFound()) {
+  <div class="editor__status">
+    <p class="q-body-sm">{{ 'catalog.editor.notFound' | t }}</p>
+    <a routerLink="/catalog/products">{{ 'catalog.editor.backToList' | t }}</a>
+  </div>
+} @else if (denied()) {
+  <p class="q-body-sm editor__status" data-testid="editor-denied">
+    {{ 'catalog.editor.denied' | t }}
+  </p>
+} @else if (product(); as product) {
+  <div class="editor">
+    <header class="editor__header">
+      <div>
+        <a routerLink="/catalog/products" class="editor__back">{{
+          'catalog.editor.backToList' | t
+        }}</a>
+        <h1 class="q-title editor__name">{{ nameFor(editingLocale()) || product.code }}</h1>
+        <span class="q-mono q-caption">{{ product.code }}</span>
+        <span class="status-badge">{{ statusLabel(product.status) }}</span>
+      </div>
+      <div class="editor__header-actions">
+        @if (saveNotice(); as notice) {
+          <span class="q-caption editor__notice">{{ notice }}</span>
+        }
+        <button
+          type="button"
+          class="editor__publish"
+          (click)="openPublishDialog()"
+          data-testid="editor-publish"
+        >
+          {{ 'catalog.publish.action' | t }}
+        </button>
+      </div>
+    </header>
+
+    <div class="editor__locale-strip">
+      <span class="q-caption">{{ 'catalog.editor.locale.label' | t }}</span>
+      @for (locale of editingLocales; track locale) {
+        <button
+          type="button"
+          class="editor__locale"
+          [class.editor__locale--active]="editingLocale() === locale"
+          (click)="editingLocale.set(locale)"
+        >
+          {{ locale }}
+        </button>
+      }
+    </div>
+
+    <div class="editor__body">
+      <div class="editor__main">
+        <nav class="editor__tabs" role="tablist">
+          @for (tab of tabs; track tab) {
+            <button
+              type="button"
+              class="editor__tab"
+              [class.editor__tab--active]="activeTab() === tab"
+              (click)="selectTab(tab)"
+              [attr.data-testid]="'editor-tab-' + tab"
+            >
+              {{ tabLabel[tab] | t }}
+            </button>
+          }
+        </nav>
+
+        <div class="editor__tab-content">
+          @switch (activeTab()) {
+            @case ('BASIC') {
+              <div class="editor__section">
+                <label class="editor__field">
+                  <span class="q-body-sm">{{ 'catalog.editor.basic.name' | t }}</span>
+                  <input
+                    #nameInput
+                    type="text"
+                    [value]="nameFor(editingLocale())"
+                    data-testid="editor-name"
+                  />
+                </label>
+                <label class="editor__field">
+                  <span class="q-body-sm">{{ 'catalog.editor.basic.description' | t }}</span>
+                  <textarea
+                    #descInput
+                    rows="3"
+                    [value]="descriptionFor(editingLocale())"
+                  ></textarea>
+                </label>
+                <button
+                  type="button"
+                  [disabled]="savingField() === 'translation'"
+                  (click)="saveTranslation(nameInput.value, descInput.value)"
+                  data-testid="editor-save-basic"
+                >
+                  {{
+                    savingField() === 'translation'
+                      ? ('catalog.editor.saving' | t)
+                      : ('catalog.editor.save' | t)
+                  }}
+                </button>
+
+                <dl class="editor__readonly">
+                  <dt class="q-caption">{{ 'catalog.editor.basic.code' | t }}</dt>
+                  <dd class="q-mono">
+                    {{ product.code }}
+                    <span class="q-caption">— {{ 'catalog.editor.basic.codeNote' | t }}</span>
+                  </dd>
+                  <dt class="q-caption">{{ 'catalog.editor.basic.status' | t }}</dt>
+                  <dd>
+                    {{ statusLabel(product.status) }}
+                    <span class="q-caption">— {{ 'catalog.editor.basic.statusNote' | t }}</span>
+                  </dd>
+                  <dt class="q-caption">{{ 'catalog.editor.basic.catalogs' | t }}</dt>
+                  <dd>{{ product.catalogIds.length }}</dd>
+                  <dt class="q-caption">{{ 'catalog.editor.basic.categories' | t }}</dt>
+                  <dd>{{ product.categoryIds.length || '—' }}</dd>
+                  <dt class="q-caption">{{ 'catalog.editor.basic.kitchenDept' | t }}</dt>
+                  <dd class="q-caption">{{ 'catalog.editor.basic.kitchenDeptNote' | t }}</dd>
+                </dl>
+              </div>
+            }
+            @case ('VARIANTS') {
+              <div class="editor__section">
+                <table class="editor__table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'catalog.editor.variants.column.name' | t }}</th>
+                      <th>{{ 'catalog.editor.variants.column.sku' | t }}</th>
+                      <th>{{ 'catalog.editor.variants.column.unit' | t }}</th>
+                      <th>{{ 'catalog.editor.variants.column.default' | t }}</th>
+                      <th>{{ 'catalog.editor.variants.column.price' | t }}</th>
+                      <th>{{ 'catalog.editor.variants.column.status' | t }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (variant of product.variants; track variant.variantId) {
+                      <tr>
+                        <td>{{ variant.translations[editingLocale()]?.name || '—' }}</td>
+                        <td class="q-mono">{{ variant.sku || '—' }}</td>
+                        <td>{{ variant.unitCode }}</td>
+                        <td>{{ variant.isDefault ? '✓' : '' }}</td>
+                        <td class="q-mono q-tnum">
+                          <span
+                            [class.editor__price--missing]="
+                              prices()[variant.variantId] === undefined
+                            "
+                            >{{ priceLabel(variant.variantId) }}</span
+                          >
+                          @if (priceBookId()) {
+                            <input
+                              #priceInput
+                              type="text"
+                              class="editor__price-input"
+                              placeholder="0"
+                              (keydown.enter)="setPrice(variant, priceInput.value)"
+                            />
+                            <button type="button" (click)="setPrice(variant, priceInput.value)">
+                              {{ 'catalog.editor.variants.setPrice' | t }}
+                            </button>
+                          } @else {
+                            <div class="q-caption">
+                              {{ 'catalog.editor.variants.noPriceBook' | t }}
+                            </div>
+                          }
+                        </td>
+                        <td>{{ statusLabel(variant.status) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <button
+                  type="button"
+                  (click)="addVariant()"
+                  [disabled]="savingField() === 'add-variant'"
+                  data-testid="editor-add-variant"
+                >
+                  {{ 'catalog.editor.variants.add' | t }}
+                </button>
+              </div>
+            }
+            @case ('MODIFIERS') {
+              <div class="editor__section editor__modifiers">
+                <div>
+                  <h3 class="q-body-sm">{{ 'catalog.editor.modifiers.attached' | t }}</h3>
+                  @if (product.modifierGroups.length === 0) {
+                    <p class="q-caption">{{ 'catalog.editor.modifiers.empty' | t }}</p>
+                  } @else {
+                    <ul class="editor__chip-list">
+                      @for (attached of product.modifierGroups; track attached.groupId) {
+                        <li class="chip">{{ groupName(attached.groupId) }}</li>
+                      }
+                    </ul>
+                  }
+                </div>
+                <div>
+                  <h3 class="q-body-sm">{{ 'catalog.editor.modifiers.library' | t }}</h3>
+                  @if (modifierLibrary().length === 0) {
+                    <p class="q-caption">{{ 'catalog.editor.modifiers.libraryEmpty' | t }}</p>
+                  }
+                  <ul class="editor__chip-list">
+                    @for (group of modifierLibrary(); track group.groupId) {
+                      <li>
+                        {{ group.name }}
+                        @if (!isAttached(group.groupId)) {
+                          <button
+                            type="button"
+                            (click)="attachGroup(group)"
+                            data-testid="editor-attach-group"
+                          >
+                            {{ 'catalog.editor.modifiers.attach' | t }}
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+
+                  <details class="editor__create-group">
+                    <summary class="q-caption">{{ 'catalog.editor.modifiers.create' | t }}</summary>
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.categories.form.name' | t }}</span>
+                      <input #groupNameInput type="text" data-testid="editor-new-group-name" />
+                    </label>
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.categories.form.code' | t }}</span>
+                      <input
+                        #groupCodeInput
+                        type="text"
+                        class="q-mono"
+                        data-testid="editor-new-group-code"
+                      />
+                    </label>
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.variants.column.name' | t }}</span>
+                      <input
+                        #optionNameInput
+                        type="text"
+                        data-testid="editor-new-group-option-name"
+                      />
+                    </label>
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.variants.column.sku' | t }}</span>
+                      <input
+                        #optionCodeInput
+                        type="text"
+                        class="q-mono"
+                        data-testid="editor-new-group-option-code"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      [disabled]="savingField() === 'create-group'"
+                      (click)="
+                        createModifierGroup(
+                          groupCodeInput.value,
+                          groupNameInput.value,
+                          optionCodeInput.value,
+                          optionNameInput.value
+                        )
+                      "
+                      data-testid="editor-create-group-confirm"
+                    >
+                      {{ 'catalog.editor.modifiers.create' | t }}
+                    </button>
+                  </details>
+                </div>
+              </div>
+            }
+            @case ('PHOTOS') {
+              <div class="editor__section">
+                @if (product.media.length === 0) {
+                  <p class="q-caption">{{ 'catalog.editor.photos.empty' | t }}</p>
+                } @else {
+                  <div class="editor__photo-grid">
+                    @for (item of product.media; track item.mediaAssetId) {
+                      <div class="editor__photo-tile">
+                        <span class="q-caption">{{ photoRoleLabel(item.role) }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+                <input
+                  #fileInput
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  (change)="
+                    $any($event.target).files[0] && uploadPhoto($any($event.target).files[0])
+                  "
+                />
+                <button
+                  type="button"
+                  [disabled]="uploadingPhoto()"
+                  (click)="fileInput.click()"
+                  data-testid="editor-upload-photo"
+                >
+                  {{
+                    uploadingPhoto()
+                      ? ('catalog.editor.photos.uploading' | t)
+                      : ('catalog.editor.photos.upload' | t)
+                  }}
+                </button>
+              </div>
+            }
+            @case ('FISCAL') {
+              <div class="editor__section">
+                <table class="editor__table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'catalog.editor.variants.column.name' | t }}</th>
+                      <th>{{ 'catalog.editor.fiscal.mxik' | t }}</th>
+                      <th>{{ 'catalog.editor.fiscal.packageCode' | t }}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (variant of product.variants; track variant.variantId) {
+                      <tr>
+                        <td>
+                          {{ variant.translations[editingLocale()]?.name || variant.sku || '—' }}
+                        </td>
+                        <td>
+                          <input
+                            #mxikInput
+                            type="text"
+                            class="q-mono"
+                            [value]="variant.fiscal?.mxikCode || ''"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            #pkgInput
+                            type="text"
+                            class="q-mono"
+                            [value]="variant.fiscal?.packageCode || ''"
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            [disabled]="savingField() === 'fiscal:' + variant.variantId"
+                            (click)="
+                              saveFiscal(variant, {
+                                mxikCode: mxikInput.value || null,
+                                packageCode: pkgInput.value || null,
+                                markingRequired: variant.fiscal?.markingRequired ?? false,
+                                excisable: variant.fiscal?.excisable ?? false,
+                              })
+                            "
+                            data-testid="editor-save-fiscal"
+                          >
+                            {{ 'catalog.editor.fiscal.save' | t }}
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <p class="q-caption">{{ 'catalog.editor.fiscal.notBuilt' | t }}</p>
+              </div>
+            }
+            @case ('AVAILABILITY') {
+              <div class="editor__section">
+                @if (availabilityRows().length === 0) {
+                  <p class="q-caption">{{ 'catalog.editor.availability.empty' | t }}</p>
+                } @else {
+                  <table class="editor__table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'catalog.editor.availability.location' | t }}</th>
+                        <th>{{ 'catalog.editor.availability.state' | t }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of availabilityRows(); track row.variantId) {
+                        <tr>
+                          <td>{{ row.productName }}</td>
+                          <td>
+                            <button
+                              type="button"
+                              (click)="toggleAvailability(row)"
+                              data-testid="editor-toggle-availability"
+                            >
+                              {{
+                                row.available
+                                  ? ('catalog.editor.availability.stop' | t)
+                                  : ('catalog.editor.availability.resume' | t)
+                              }}
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </div>
+            }
+            @case ('HISTORY') {
+              <p class="q-caption editor__section">{{ 'catalog.editor.history.notBuilt' | t }}</p>
+            }
+          }
+        </div>
+      </div>
+
+      <aside class="editor__rail">
+        <h3 class="q-body-sm">{{ 'catalog.editor.readiness.title' | t }}</h3>
+        @if (readinessLoading()) {
+          <p class="q-caption">{{ 'catalog.editor.readiness.loading' | t }}</p>
+        } @else if (readiness(); as findings) {
+          @if (blockerCount() === 0 && warningCount() === 0) {
+            <p class="q-caption editor__rail-clean">{{ 'catalog.editor.readiness.clean' | t }}</p>
+          } @else {
+            @if (blockerCount() > 0) {
+              <p class="q-caption editor__rail-blocker">
+                {{ 'catalog.editor.readiness.blockers' | t: { count: blockerCount() } }}
+              </p>
+            }
+            @if (warningCount() > 0) {
+              <p class="q-caption editor__rail-warning">
+                {{ 'catalog.editor.readiness.warnings' | t: { count: warningCount() } }}
+              </p>
+            }
+            <ul class="editor__rail-list">
+              @for (finding of findings; track finding.code + (finding.entityId || '')) {
+                <li class="q-caption">{{ findingLabel(finding) }}</li>
+              }
+            </ul>
+          }
+        }
+      </aside>
+    </div>
+  </div>
+
+  @if (publishDialogOpen()) {
+    <div class="dialog__backdrop" data-testid="publish-dialog">
+      <div class="dialog" role="dialog" aria-modal="true">
+        <h2 class="q-emphasis dialog__title">{{ 'catalog.publish.title' | t }}</h2>
+
+        @if (publishResult(); as result) {
+          <p class="q-body-sm" [class.editor__rail-blocker]="result.status === 'REJECTED'">
+            {{
+              (result.status === 'PUBLISHED'
+                ? 'catalog.publish.result.PUBLISHED'
+                : 'catalog.publish.result.REJECTED'
+              ) | t
+            }}
+          </p>
+          @if (result.validation.findings.length > 0) {
+            <ul class="editor__rail-list">
+              @for (
+                finding of result.validation.findings;
+                track finding.code + (finding.entityId || '')
+              ) {
+                <li class="q-caption">{{ findingLabel(finding) }}</li>
+              }
+            </ul>
+          }
+        } @else {
+          <label class="dialog__field">
+            <span class="q-body-sm">{{ 'catalog.publish.channel' | t }}</span>
+            <input
+              type="text"
+              class="dialog__input q-mono"
+              [value]="publishChannel()"
+              (input)="setPublishChannel($any($event.target).value)"
+            />
+          </label>
+          @if (publishError(); as message) {
+            <div class="dialog__banner" role="alert">{{ message }}</div>
+          }
+        }
+
+        <div class="dialog__actions">
+          <button type="button" class="dialog__dismiss" (click)="closePublishDialog()">
+            {{ 'catalog.publish.close' | t }}
+          </button>
+          @if (!publishResult()) {
+            <button
+              type="button"
+              class="dialog__confirm"
+              [disabled]="publishing()"
+              (click)="publish()"
+              data-testid="publish-confirm"
+            >
+              {{
+                publishing() ? ('catalog.publish.publishing' | t) : ('catalog.publish.confirm' | t)
+              }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+}

@@ -455,6 +455,37 @@ public class JdbcPricingStore {
                 .update();
     }
 
+    /**
+     * A brand's price books, for the price book list screen.
+     *
+     * <p>Ordered by priority then name, the same precedence order {@code
+     * resolvePriceBook} ranks by, so the book that would win resolution reads
+     * first.
+     */
+    public List<PriceBookSummaryRow> priceBooksForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, name, currency, status, valid_from, valid_until, priority, version
+                FROM pricing.price_books
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                ORDER BY priority DESC, name
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new PriceBookSummaryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("name"),
+                        row.getString("currency"),
+                        row.getString("status"),
+                        row.getObject("valid_from", OffsetDateTime.class).toInstant(),
+                        row.getObject("valid_until", OffsetDateTime.class) == null
+                                ? null
+                                : row.getObject("valid_until", OffsetDateTime.class)
+                                        .toInstant(),
+                        row.getInt("priority"),
+                        row.getInt("version")))
+                .list();
+    }
+
     public Optional<PriceBookHeader> findPriceBookHeader(UUID tenantId, UUID brandId, UUID priceBookId) {
         return jdbc.sql("""
                 SELECT id, name, currency, status, valid_from, valid_until, priority, version
@@ -825,6 +856,17 @@ public class JdbcPricingStore {
     public record TaxProfileRow(UUID id, String mode, int rateBasisPoints, int version) {}
 
     public record PriceBookHeader(
+            UUID id,
+            String name,
+            String currency,
+            String status,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            int priority,
+            int version) {}
+
+    /** One row of {@link #priceBooksForBrand}. Same fields as {@link PriceBookHeader}, listed rather than singular. */
+    public record PriceBookSummaryRow(
             UUID id,
             String name,
             String currency,

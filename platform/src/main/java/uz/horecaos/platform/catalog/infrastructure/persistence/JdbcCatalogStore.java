@@ -578,6 +578,20 @@ public class JdbcCatalogStore {
                 > 0;
     }
 
+    /** A brand's catalogs, for the catalog picker (CatalogQueryService). */
+    public List<CatalogRow> catalogsForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, code, status FROM catalog.catalogs
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                ORDER BY code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) ->
+                        new CatalogRow(row.getObject("id", UUID.class), row.getString("code"), row.getString("status")))
+                .list();
+    }
+
     public List<Product> productsInCatalog(UUID tenantId, UUID brandId, UUID catalogId) {
         return jdbc.sql("""
                 SELECT p.* FROM catalog.products p
@@ -592,6 +606,77 @@ public class JdbcCatalogStore {
                 .list();
     }
 
+    /**
+     * A catalog's products, keyset-paginated by product id (CatalogQueryService's
+     * products list). Same shortcut {@link #variantsAtLocation} uses: the cursor is
+     * the last product id of the previous page, since no signed {@code CursorSigner}
+     * bean exists yet (ADR 0031).
+     */
+    public List<ProductRow> productsInCatalogPage(
+            UUID tenantId, UUID brandId, UUID catalogId, @Nullable UUID cursor, int limit) {
+        return jdbc.sql("""
+                SELECT p.id, p.code, p.status, p.version
+                FROM catalog.products p
+                JOIN catalog.catalog_products cp ON cp.product_id = p.id
+                WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND cp.catalog_id = :catalogId
+                  AND (CAST(:cursor AS uuid) IS NULL OR p.id > CAST(:cursor AS uuid))
+                ORDER BY p.id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("cursor", cursor)
+                .param("limit", limit)
+                .query((row, number) -> new ProductRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("code"),
+                        row.getString("status"),
+                        row.getInt("version")))
+                .list();
+    }
+
+    /** One product, for the product editor. Empty when it is not this brand's. */
+    public Optional<Product> productById(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", productId)
+                .query(JdbcCatalogStore::mapProduct)
+                .optional();
+    }
+
+    /** Which catalogs carry this product (a product may sit in more than one). */
+    public List<UUID> catalogsForProduct(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                SELECT catalog_id FROM catalog.catalog_products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
+                ORDER BY catalog_id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .query(UUID.class)
+                .list();
+    }
+
+    /** Which categories this product sits in (a product may sit in more than one). */
+    public List<UUID> categoriesForProduct(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                SELECT category_id FROM catalog.category_products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
+                ORDER BY sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .query(UUID.class)
+                .list();
+    }
+
     public List<Variant> variantsInCatalog(UUID tenantId, UUID brandId, UUID catalogId) {
         return jdbc.sql("""
                 SELECT v.* FROM catalog.variants v
@@ -602,6 +687,20 @@ public class JdbcCatalogStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("catalogId", catalogId)
+                .query(JdbcCatalogStore::mapVariant)
+                .list();
+    }
+
+    /** One product's variants, for the product editor. Same shape as {@link #variantsInCatalog}. */
+    public List<Variant> variantsForProduct(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.variants
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
+                ORDER BY sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
                 .query(JdbcCatalogStore::mapVariant)
                 .list();
     }
@@ -776,6 +875,39 @@ public class JdbcCatalogStore {
     }
 
     /**
+     * A brand's whole modifier group library, for the group library screen.
+     *
+     * <p>Brand-scoped rather than catalog-scoped, unlike {@link #modifierGroupsInCatalog}:
+     * a {@code ModifierGroup} carries no catalog id at all — it is shared across a
+     * brand's catalogs — so joining through product attachment here would wrongly
+     * hide a group nothing has attached to a product yet.
+     */
+    public List<ModifierGroup> modifierGroupsForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                ORDER BY sort_order, code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcCatalogStore::mapModifierGroup)
+                .list();
+    }
+
+    /** One modifier group, for its detail screen. Empty when it is not this brand's. */
+    public Optional<ModifierGroup> modifierGroupById(UUID tenantId, UUID brandId, UUID groupId) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", groupId)
+                .query(JdbcCatalogStore::mapModifierGroup)
+                .optional();
+    }
+
+    /**
      * Which products sit in which category, for the products this catalog
      * actually carries.
      *
@@ -827,6 +959,21 @@ public class JdbcCatalogStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("catalogId", catalogId));
+    }
+
+    /** Which modifier groups one product has attached, with their sort order. */
+    public List<AttachedGroup> modifierGroupsForProduct(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                SELECT modifier_group_id, sort_order FROM catalog.product_modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
+                ORDER BY sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .query((row, number) ->
+                        new AttachedGroup(row.getObject("modifier_group_id", UUID.class), row.getInt("sort_order")))
+                .list();
     }
 
     /**
@@ -890,7 +1037,35 @@ public class JdbcCatalogStore {
                         EntityType.valueOf(row.getString("entity_type")),
                         row.getObject("entity_id", UUID.class),
                         row.getObject("media_asset_id", UUID.class),
-                        row.getString("role")))
+                        row.getString("role"),
+                        row.getInt("sort_order")))
+                .list();
+    }
+
+    /**
+     * Media attached to a specific set of entities, such as a product and its
+     * variants — the product editor's read, which has no use for a brand's other
+     * media the way {@link #mediaRelations} does for a publication snapshot.
+     */
+    public List<MediaRelationRow> mediaRelationsForEntities(UUID tenantId, UUID brandId, Set<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT entity_type, entity_id, media_asset_id, role, sort_order
+                FROM catalog.media_relations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND entity_id = ANY(:entityIds)
+                ORDER BY sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityIds", entityIds.toArray(UUID[]::new))
+                .query((row, number) -> new MediaRelationRow(
+                        EntityType.valueOf(row.getString("entity_type")),
+                        row.getObject("entity_id", UUID.class),
+                        row.getObject("media_asset_id", UUID.class),
+                        row.getString("role"),
+                        row.getInt("sort_order")))
                 .list();
     }
 
@@ -1188,5 +1363,15 @@ public class JdbcCatalogStore {
             String name,
             @Nullable String description) {}
 
-    public record MediaRelationRow(EntityType entityType, UUID entityId, UUID mediaAssetId, String role) {}
+    public record MediaRelationRow(
+            EntityType entityType, UUID entityId, UUID mediaAssetId, String role, int sortOrder) {}
+
+    /** One row of {@link #catalogsForBrand}. */
+    public record CatalogRow(UUID id, String code, String status) {}
+
+    /** One row of {@link #productsInCatalogPage}. */
+    public record ProductRow(UUID id, String code, String status, int version) {}
+
+    /** One row of {@link #modifierGroupsForProduct}: a group a product has attached, and where. */
+    public record AttachedGroup(UUID groupId, int sortOrder) {}
 }

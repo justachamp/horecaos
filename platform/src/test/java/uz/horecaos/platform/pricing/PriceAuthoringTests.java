@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -25,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
+import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.TaxMode;
@@ -62,6 +64,7 @@ class PriceAuthoringTests {
     private JdbcClient jdbc;
     private JdbcPricingStore pricingStore;
     private PriceAuthoringService authoring;
+    private PriceQueryService query;
     private QuoteService quotes;
     private MutableClock clock;
 
@@ -105,6 +108,7 @@ class PriceAuthoringTests {
         CatalogPricingContext catalog = new JdbcCatalogPricingContext(jdbc, "uz");
 
         authoring = new PriceAuthoringService(pricingStore, catalog, channelStore, clock);
+        query = new PriceQueryService(pricingStore, channelStore, clock);
 
         // The real resolver, so a cart travels the production path. Never
         // consulted: every cart here is a collection, and a request with no
@@ -418,6 +422,68 @@ class PriceAuthoringTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("the price book list is ranked by priority then name, and stays within its own brand")
+    void listPriceBooksRanksByPriorityThenNameAndStaysBrandScoped() {
+        var base = authoring.create(TENANT, BRAND, newBook("Main menu", 0));
+        var promo = authoring.create(TENANT, BRAND, newBook("Ramadan", 10));
+        authoring.create(TENANT, OTHER_BRAND, newBook("Someone else's book", 99));
+
+        List<PriceQueryService.PriceBookSummary> books = query.priceBooks(TENANT, BRAND);
+
+        assertThat(books)
+                .extracting(PriceQueryService.PriceBookSummary::priceBookId)
+                .containsExactly(promo.id(), base.id());
+        assertThat(books)
+                .filteredOn(b -> b.priceBookId().equals(base.id()))
+                .singleElement()
+                .satisfies(b -> {
+                    assertThat(b.name()).isEqualTo("Main menu");
+                    assertThat(b.currency()).isEqualTo("UZS");
+                    assertThat(b.status()).isEqualTo("DRAFT");
+                    assertThat(b.priority()).isZero();
+                });
+    }
+
+    @Test
+    @DisplayName("resolving prices reads the active book's amounts for the requested variants")
+    void resolvePricesReadsAmountsFromTheResolvedBook() {
+        UUID book = liveBrandBook(50_000L);
+        authoring.setPrice(TENANT, BRAND, book, PriceableType.MODIFIER_OPTION, cheeseOption, 7_000L);
+
+        var variantResult =
+                query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(variantResult.priceBookId()).isEqualTo(book);
+        assertThat(variantResult.currency()).isEqualTo("UZS");
+        assertThat(variantResult.amountsMinor()).containsEntry(burgerVariant, 50_000L);
+
+        var modifierResult =
+                query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.MODIFIER_OPTION, Set.of(cheeseOption));
+        assertThat(modifierResult.amountsMinor()).containsEntry(cheeseOption, 7_000L);
+    }
+
+    @Test
+    @DisplayName("a brand with no price book yet resolves to an empty, displayable result rather than an error")
+    void resolvePricesIsEmptyWhenNoBookResolves() {
+        var resolved = query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+
+        assertThat(resolved.priceBookId()).isNull();
+        assertThat(resolved.currency()).isNull();
+        assertThat(resolved.amountsMinor()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolving prices for another brand never sees this brand's book")
+    void resolvePricesStaysBrandScoped() {
+        liveBrandBook(50_000L);
+
+        var resolved = query.resolvePrices(
+                TENANT, OTHER_BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(otherBrandVariant));
+
+        assertThat(resolved.priceBookId()).isNull();
+        assertThat(resolved.amountsMinor()).isEmpty();
     }
 
     // ------------------------------------------------------------------ fixtures

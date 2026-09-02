@@ -1,0 +1,187 @@
+<div class="products">
+  <div class="products__toolbar">
+    <div class="products__tabs" role="tablist">
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === 'ALL'"
+        (click)="selectTab('ALL')"
+      >
+        {{ 'catalog.products.tab.all' | t }}
+        <span class="tab__count q-tnum">{{ tabCount('ALL') }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === 'ACTIVE'"
+        (click)="selectTab('ACTIVE')"
+      >
+        {{ 'catalog.products.tab.active' | t }}
+        <span class="tab__count q-tnum">{{ tabCount('ACTIVE') }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === 'DRAFT'"
+        (click)="selectTab('DRAFT')"
+      >
+        {{ 'catalog.products.tab.draft' | t }}
+        <span class="tab__count q-tnum">{{ tabCount('DRAFT') }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === 'NO_MXIK'"
+        (click)="selectTab('NO_MXIK')"
+      >
+        {{ 'catalog.products.tab.noMxik' | t }}
+        <span class="tab__count q-tnum">{{ tabCount('NO_MXIK') }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === 'ARCHIVED'"
+        (click)="selectTab('ARCHIVED')"
+      >
+        {{ 'catalog.products.tab.archived' | t }}
+        <span class="tab__count q-tnum">{{ tabCount('ARCHIVED') }}</span>
+      </button>
+    </div>
+
+    <div class="products__actions">
+      <input
+        type="search"
+        class="products__search"
+        [value]="search()"
+        (input)="onSearchInput($any($event.target).value)"
+        [placeholder]="'catalog.products.search.placeholder' | t"
+        data-testid="products-search"
+      />
+      @if (catalogs().length > 1) {
+        <select
+          class="products__catalog-select"
+          [value]="activeCatalogId()"
+          (change)="switchCatalog($any($event.target).value)"
+        >
+          @for (catalog of catalogs(); track catalog.catalogId) {
+            <option [value]="catalog.catalogId">{{ catalog.name }}</option>
+          }
+        </select>
+      }
+      <button
+        type="button"
+        class="products__create"
+        (click)="openCreateDialog()"
+        data-testid="products-create"
+      >
+        {{ 'catalog.products.create.action' | t }}
+      </button>
+    </div>
+  </div>
+
+  @if (lastError(); as error) {
+    <div class="products__error-band" role="alert">
+      <span class="q-body-sm">{{ error.code }}</span>
+    </div>
+  }
+
+  <div class="products__table-wrap">
+    @if (!firstLoadComplete()) {
+      <div class="products__skeleton" [attr.aria-label]="'catalog.products.loading' | t">
+        @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+          <div class="products__skeleton-row"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="products__denied" data-testid="products-denied">
+        <p class="q-body-sm">{{ 'catalog.products.denied' | t }}</p>
+      </div>
+    } @else {
+      <table class="products__table">
+        <thead>
+          <tr>
+            <th class="products__rail-col" aria-hidden="true"></th>
+            <th>{{ 'catalog.products.column.name' | t }}</th>
+            <th>{{ 'catalog.products.column.code' | t }}</th>
+            <th class="products__num-col">{{ 'catalog.products.column.variants' | t }}</th>
+            <th>{{ 'catalog.products.column.categories' | t }}</th>
+            <th>{{ 'catalog.products.column.mxik' | t }}</th>
+            <th>{{ 'catalog.products.column.status' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (product of visibleProducts(); track product.productId) {
+            <tr
+              class="product-row"
+              tabindex="0"
+              data-testid="product-row"
+              (click)="openProduct(product.productId)"
+              (keydown.enter)="openProduct(product.productId)"
+            >
+              <td
+                class="products__rail-col"
+                [class.products__rail--warning]="severityCaption(product) !== null"
+              ></td>
+              <td>
+                <div>{{ product.name }}</div>
+                @if (severityCaption(product); as caption) {
+                  <div class="product-row__caption q-caption">{{ caption }}</div>
+                }
+              </td>
+              <td class="q-mono">{{ product.code }}</td>
+              <td class="products__num-col q-tnum">{{ product.variantCount || '—' }}</td>
+              <td>
+                @if (product.categoryNames.length > 0) {
+                  @for (name of product.categoryNames; track name) {
+                    <span class="chip">{{ name }}</span>
+                  }
+                } @else {
+                  <span class="q-caption">—</span>
+                }
+              </td>
+              <td>
+                @if (!product.hasMxik) {
+                  <span class="chip chip--warning">{{ 'catalog.products.noMxik' | t }}</span>
+                } @else {
+                  <span class="q-caption">—</span>
+                }
+              </td>
+              <td>
+                <span class="status-badge">{{ statusLabel(product.status) }}</span>
+              </td>
+            </tr>
+          } @empty {
+            <tr class="products__empty-row">
+              <td colspan="7">
+                <p class="q-body-sm" data-testid="products-empty">
+                  {{
+                    (catalogs().length === 0
+                      ? 'catalog.products.empty.noCatalog'
+                      : 'catalog.products.empty.default'
+                    ) | t
+                  }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (hasMore()) {
+        <div class="products__load-more">
+          <button type="button" (click)="loadMore()" [disabled]="loadingMore()">
+            {{ 'catalog.products.loadMore' | t }}
+          </button>
+        </div>
+      }
+    }
+  </div>
+
+  @if (createDialogOpen()) {
+    <q-create-product-dialog
+      [busy]="creating()"
+      [error]="createError()"
+      (confirm)="submitCreate($event)"
+      (dismiss)="closeCreateDialog()"
+    />
+  }
+</div>

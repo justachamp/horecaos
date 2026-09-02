@@ -99,6 +99,17 @@ export class ApiClient {
     );
   }
 
+  /** Catalog authoring's verb of choice for "set this field" (`CatalogAuthoringController`, `PriceAuthoringController`). */
+  put<TRequest, TResponse>(
+    path: string,
+    intent: Command<TRequest>,
+    options: MutateOptions = {},
+  ): Observable<TResponse> {
+    return this.send<TRequest, TResponse>('PUT', path, intent, options).pipe(
+      map((response) => response.body as TResponse),
+    );
+  }
+
   /**
    * The full response, for callers that need the headers — the new `ETag` after
    * a write, or `Idempotency-Replayed` to tell "we did it" from "someone already
