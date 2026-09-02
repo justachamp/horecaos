@@ -562,6 +562,63 @@ public class JdbcCatalogStore {
                 > 0;
     }
 
+    /**
+     * Browses the imported ИКПУ/MXIK reference by code or label (control-plane
+     * IA 6.2), currently-valid rows only.
+     *
+     * <p>Read-only and platform-scoped in its own right — unlike every other
+     * method in this class, which authors a tenant's catalog. This is the
+     * reference list itself: a national dataset, not a tenant's data, which is
+     * exactly why {@link uz.horecaos.platform.catalog.web.FiscalReferenceController}
+     * calls it without a {@code tenantId} at all.
+     */
+    public List<MxikReferenceRow> searchMxikReference(String query, int limit) {
+        String pattern = "%" + query.trim() + "%";
+        return jdbc.sql("""
+                        SELECT code, parent_code, label_ru, label_uz, label_en,
+                               default_package_codes, default_unit_codes, valid_from, valid_until
+                          FROM catalog.mxik_reference
+                         WHERE (valid_until IS NULL OR valid_until >= CURRENT_DATE)
+                           AND (code ILIKE :pattern OR label_ru ILIKE :pattern
+                                OR label_uz ILIKE :pattern OR label_en ILIKE :pattern)
+                         ORDER BY code
+                         LIMIT :limit
+                        """)
+                .param("pattern", pattern)
+                .param("limit", limit)
+                .query((rs, rowNumber) -> new MxikReferenceRow(
+                        rs.getString("code"),
+                        rs.getString("parent_code"),
+                        rs.getString("label_ru"),
+                        rs.getString("label_uz"),
+                        rs.getString("label_en"),
+                        toStringList(rs.getArray("default_package_codes")),
+                        rs.getDate("valid_from").toLocalDate(),
+                        rs.getDate("valid_until") == null
+                                ? null
+                                : rs.getDate("valid_until").toLocalDate()))
+                .list();
+    }
+
+    private static List<String> toStringList(java.sql.Array array) throws java.sql.SQLException {
+        if (array == null) {
+            return List.of();
+        }
+        Object[] elements = (Object[]) array.getArray();
+        return java.util.Arrays.stream(elements).map(String::valueOf).toList();
+    }
+
+    /** One row of the ИКПУ/MXIK product classification reference. */
+    public record MxikReferenceRow(
+            String code,
+            @Nullable String parentCode,
+            String labelRu,
+            String labelUz,
+            @Nullable String labelEn,
+            List<String> defaultPackageCodes,
+            java.time.LocalDate validFrom,
+            java.time.@Nullable LocalDate validUntil) {}
+
     // ------------------------------------------------------------------- reads
 
     /** Whether this catalog exists under this exact tenant and brand. */

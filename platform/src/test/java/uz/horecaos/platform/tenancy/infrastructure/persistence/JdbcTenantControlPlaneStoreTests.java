@@ -410,6 +410,36 @@ class JdbcTenantControlPlaneStoreTests {
                 .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
     }
 
+    @Test
+    void listsTenantsInAStableKeysetOrderAndPaginates() {
+        Tenant first = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120210", "list-a");
+        Tenant second = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120211", "list-b");
+        Tenant third = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120212", "list-c");
+        store.insertTenant(first);
+        store.insertTenant(second);
+        store.insertTenant(third);
+
+        var firstPage = store.listTenants(null, 2);
+        assertThat(firstPage)
+                .as("id is a random UUID, not a time-ordered one, so this is a stable page order — "
+                        + "the sort itself, not the insert order")
+                .hasSize(2);
+
+        var secondPage = store.listTenants(firstPage.getLast().id(), 2);
+        assertThat(secondPage).hasSize(1);
+        assertThat(java.util.stream.Stream.concat(firstPage.stream(), secondPage.stream())
+                        .map(row -> row.id().value()))
+                .as("the two pages together cover every tenant exactly once")
+                .containsExactlyInAnyOrder(
+                        first.id().value(), second.id().value(), third.id().value());
+
+        var row = secondPage.getFirst();
+        assertThat(row.legalName()).isEqualTo("Tenant LLC");
+        assertThat(row.defaultCurrency()).isEqualTo("UZS");
+        assertThat(row.status()).isEqualTo(uz.horecaos.platform.tenancy.domain.TenantStatus.PROVISIONING);
+        assertThat(row.createdAt()).isNotNull();
+    }
+
     private static Tenant tenant(String id, String slug) {
         return Tenant.provision(
                 new TenantId(UUID.fromString(id)),

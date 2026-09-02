@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -82,6 +83,22 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("tenantId", tenantId.value())
                 .query(JdbcTenantControlPlaneStore::mapTenant)
                 .optional();
+    }
+
+    @Override
+    public List<TenantSummary> listTenants(@Nullable TenantId afterTenantId, int limit) {
+        return jdbc.sql("""
+                        SELECT id, slug, legal_name, display_name, default_currency,
+                               default_timezone, status, created_at
+                        FROM tenant.tenants
+                        WHERE (CAST(:afterTenantId AS uuid) IS NULL OR id > CAST(:afterTenantId AS uuid))
+                        ORDER BY id
+                        LIMIT :limit
+                        """)
+                .param("afterTenantId", afterTenantId == null ? null : afterTenantId.value())
+                .param("limit", limit)
+                .query(JdbcTenantControlPlaneStore::mapTenantSummary)
+                .list();
     }
 
     @Override
@@ -354,6 +371,18 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("brandId", brand.id().value())
                 .query(JdbcTenantControlPlaneStore::mapLocation)
                 .list();
+    }
+
+    private static TenantSummary mapTenantSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new TenantSummary(
+                new TenantId(resultSet.getObject("id", UUID.class)),
+                new Slug(resultSet.getString("slug")),
+                resultSet.getString("legal_name"),
+                resultSet.getString("display_name"),
+                resultSet.getString("default_currency"),
+                resultSet.getString("default_timezone"),
+                TenantStatus.valueOf(resultSet.getString("status")),
+                resultSet.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
     private static Tenant mapTenant(ResultSet resultSet, int rowNumber) throws SQLException {

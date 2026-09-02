@@ -27,8 +27,8 @@ only the surface it actually calls:
 | Group | Path prefixes | Baseline | Client | Consumer |
 |---|---|---|---|---|
 | `storefront` | `/api/v1/storefront/**` | [horecaos-api.storefront.json](openapi/v1/horecaos-api.storefront.json) | [horecaos-api-v1.storefront.ts](generated/horecaos-api-v1.storefront.ts) | `frontend/storefront`, and eventually `frontend/mobile` |
-| `control-plane` | `/api/v1/control-plane/**` | [horecaos-api.control-plane.json](openapi/v1/horecaos-api.control-plane.json) | [horecaos-api-v1.control-plane.ts](generated/horecaos-api-v1.control-plane.ts) | `frontend/control-plane` |
-| `operations` | `/api/v1/tenants/**`, `/api/v1/session/**`, `/api/v1/operations/**`, `/api/v1/courier/**`, `/api/v1/platform-admin/**` | [horecaos-api.operations.json](openapi/v1/horecaos-api.operations.json) | [horecaos-api-v1.operations.ts](generated/horecaos-api-v1.operations.ts) | `frontend/operations` |
+| `control-plane` | `/api/v1/control-plane/**`, `/api/v1/platform-admin/**` | [horecaos-api.control-plane.json](openapi/v1/horecaos-api.control-plane.json) | [horecaos-api-v1.control-plane.ts](generated/horecaos-api-v1.control-plane.ts) | `frontend/control-plane` |
+| `operations` | `/api/v1/tenants/**`, `/api/v1/session/**`, `/api/v1/operations/**`, `/api/v1/courier/**` | [horecaos-api.operations.json](openapi/v1/horecaos-api.operations.json) | [horecaos-api-v1.operations.ts](generated/horecaos-api-v1.operations.ts) | `frontend/operations` |
 | `providers` | `/providers/**`, `/api/v1/partner/**` | [horecaos-api.providers.json](openapi/v1/horecaos-api.providers.json) | [horecaos-api-v1.providers.ts](generated/horecaos-api-v1.providers.ts) | no frontend — external payment (Click, Payme) and aggregator/marketplace callers; kept versioned like every other surface |
 
 Each group document is served at `/v3/api-docs/<group>` (Swagger UI at
@@ -37,12 +37,14 @@ are the URL segment and the baseline/client filename suffix — so renaming one
 is a breaking change to whichever frontend pinned it.
 
 `operations` is a catch-all for every operator-facing prefix that is not
-`storefront`, `control-plane`, or `providers`; `platform-admin` (HorecaOS's own
-staff, distinct from a tenant's operations staff) and `courier` (a courier's
-own self-service endpoints, distinct from the operations staff managing them)
-have no dedicated frontend today and fold into it by elimination rather than by
-a considered decision. Splitting either out is a fair question for a future ADR
-once a consumer exists.
+`storefront`, `control-plane`, or `providers`; `courier` (a courier's own
+self-service endpoints, distinct from the operations staff managing them) has
+no dedicated frontend today and folds into it by elimination rather than by a
+considered decision. `platform-admin` (HorecaOS's own staff, distinct from a
+tenant's operations staff) used to fold into `operations` the same way until
+ADR 0066 moved it to `control-plane`, once wave 28 gave platform-admin the
+dedicated frontend that had been the open question. Splitting `courier` out
+is a fair question for a future ADR once a consumer exists.
 
 **Every path in the full document belongs to exactly one group.**
 `OpenApiContractTests#everyPublishedPathBelongsToExactlyOneSurfaceGroup` proves

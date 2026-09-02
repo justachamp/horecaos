@@ -160,6 +160,34 @@ public class TenantControlPlaneService {
     }
 
     /**
+     * A page of the control-plane tenant directory (IA 2.1), oldest first.
+     *
+     * <p>Platform-admin only, the same bar {@link #findTenantBySlug} holds: a
+     * directory across every tenant is exactly the cross-tenant read ADR 0025's
+     * capability model reserves to platform scope, never to organization
+     * membership in one tenant.
+     */
+    @Transactional(readOnly = true)
+    public List<TenantSummaryView> listTenants(@Nullable TenantId afterTenantId, int limit) {
+        accessPolicy.requirePlatformAdministrator();
+        return store.listTenants(afterTenantId, limit).stream()
+                .map(TenantControlPlaneService::toView)
+                .toList();
+    }
+
+    private static TenantSummaryView toView(TenantControlPlaneStore.TenantSummary row) {
+        return new TenantSummaryView(
+                row.id().value(),
+                row.slug().value(),
+                row.legalName(),
+                row.displayName(),
+                row.defaultCurrency(),
+                row.defaultTimezone(),
+                row.status(),
+                row.createdAt());
+    }
+
+    /**
      * Finds a tenant by its slug, platform-admin only.
      *
      * <p>Exists for idempotent provisioning tooling: a script driving a fixed,
@@ -507,6 +535,23 @@ public class TenantControlPlaneService {
             @Nullable String keycloakOrganizationId,
             TenantStatus status,
             CustomerIdentityMode customerIdentityMode) {}
+
+    /**
+     * One row of the control-plane tenant directory (IA 2.1).
+     *
+     * @param defaultCurrency the tenant-wide currency — there is no per-brand
+     *                        currency in this schema yet (control-plane IA 2.3
+     *                        names the gap)
+     */
+    public record TenantSummaryView(
+            UUID id,
+            String slug,
+            String legalName,
+            String displayName,
+            String defaultCurrency,
+            String defaultTimezone,
+            TenantStatus status,
+            java.time.Instant createdAt) {}
 
     public record BrandView(
             UUID id, UUID tenantId, String code, String slug, String displayName, OperatingUnitStatus status) {}

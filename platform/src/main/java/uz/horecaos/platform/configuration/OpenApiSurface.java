@@ -16,17 +16,25 @@ import java.util.List;
  * operations, storefront, customer) plus the partner surface (ADR 0040) down to the three
  * frontends that exist today (storefront, operations, control-plane) plus a fourth for every
  * externally-initiated integration (payment provider callbacks and inbound partner/marketplace
- * traffic). {@code platform-admin} and the courier's own self-service endpoints have no
- * dedicated frontend yet, so they fall into {@code operations} by elimination — see
- * {@code api/README.md} for the reasoning and the open question of whether that should change.
+ * traffic). {@code platform-admin} moved to {@code CONTROL_PLANE} in ADR 0066, once wave 28 gave
+ * it the dedicated frontend this class's own history names as the open question; the courier's
+ * own self-service endpoints still have none, so they remain in {@code operations} by
+ * elimination — see {@code api/README.md} for the current table.
  */
 enum OpenApiSurface {
 
     /** Public and customer-authenticated commerce; the {@code storefront} Angular app and mobile. */
     STOREFRONT("storefront", "/api/v1/storefront/**"),
 
-    /** Tenant administration; the {@code control-plane} Angular app. */
-    CONTROL_PLANE("control-plane", "/api/v1/control-plane/**"),
+    /**
+     * Platform-staff administration; the {@code control-plane} Angular app.
+     *
+     * <p>{@code /api/v1/platform-admin/**} joined this group in ADR 0066: those paths were
+     * always HorecaOS-staff-only (never a tenant's own operations staff), and the only reason
+     * they had sat in {@link #OPERATIONS} was the absence of a frontend to claim them. Wave 28
+     * builds one.
+     */
+    CONTROL_PLANE("control-plane", "/api/v1/control-plane/**", "/api/v1/platform-admin/**"),
 
     /**
      * Externally-initiated integration traffic: payment provider callbacks (Click, Payme) and
@@ -40,16 +48,10 @@ enum OpenApiSurface {
      * Brand and location staff, plus everything operator-facing that is not one of the other
      * three groups: today {@code /api/v1/tenants/**} (kitchen, dine-in, inventory, orders,
      * reporting, and more), {@code /api/v1/session/**}, the {@code operations} Angular app's own
-     * {@code /api/v1/operations/**}, the platform-staff {@code /api/v1/platform-admin/**}, and
-     * the courier's own {@code /api/v1/courier/**}.
+     * {@code /api/v1/operations/**}, and the courier's own {@code /api/v1/courier/**}.
+     * {@code /api/v1/platform-admin/**} moved out to {@link #CONTROL_PLANE} in ADR 0066.
      */
-    OPERATIONS(
-            "operations",
-            "/api/v1/tenants/**",
-            "/api/v1/session/**",
-            "/api/v1/operations/**",
-            "/api/v1/courier/**",
-            "/api/v1/platform-admin/**");
+    OPERATIONS("operations", "/api/v1/tenants/**", "/api/v1/session/**", "/api/v1/operations/**", "/api/v1/courier/**");
 
     private final String id;
 

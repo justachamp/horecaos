@@ -21,6 +21,39 @@ public interface TenantControlPlaneStore {
     Optional<Tenant> findTenant(TenantId tenantId);
 
     /**
+     * A page of every tenant, oldest first, for the control-plane directory
+     * (control-plane IA 2.1).
+     *
+     * <p>Keyset over {@code id} rather than {@code created_at}: two tenants can
+     * share a creation instant at second resolution and a timestamp cursor would
+     * either skip or repeat one of them, the same reasoning
+     * {@code MigrationScopeController}'s own list already documents. {@code id}
+     * is a random {@link java.util.UUID} rather than a time-ordered one, so this
+     * is a stable page order, not a chronological one — {@code createdAt} is
+     * still returned on each row for the screen to sort or display by.
+     */
+    List<TenantSummary> listTenants(@org.jspecify.annotations.Nullable TenantId afterTenantId, int limit);
+
+    /**
+     * One row of the control-plane tenant directory.
+     *
+     * <p>Deliberately narrower than {@link Tenant}: a directory page reads many
+     * rows at once and has no use for {@link Tenant}'s behaviour, and the
+     * directory's own honest gap — no plan, business type, country, or health
+     * score column exists anywhere in this schema yet — is easiest to see when
+     * the row type names only what is real.
+     */
+    record TenantSummary(
+            TenantId id,
+            Slug slug,
+            String legalName,
+            String displayName,
+            String defaultCurrency,
+            String defaultTimezone,
+            uz.horecaos.platform.tenancy.domain.TenantStatus status,
+            Instant createdAt) {}
+
+    /**
      * The tenant holding this slug, if any.
      *
      * <p>Slugs are the one tenant identifier a caller can know before the tenant
