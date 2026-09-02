@@ -1,0 +1,276 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.today {
+  padding: 24px;
+  max-width: 1120px;
+}
+
+/* ---- toolbar: title + refresh stamp, same shape as order-queue's -------- */
+
+.today__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.today__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today__stamp {
+  color: var(--q-ink-subtle);
+}
+
+/* "Loading, refetch: the refresh stamp pulses" — same convention as order-queue.css §2.11. */
+.today__stamp--pulse {
+  animation: today-pulse 1s var(--q-ease-productive) infinite alternate;
+}
+
+@keyframes today-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+.today__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.today__refresh:hover {
+  color: var(--q-ink);
+  border-color: var(--q-ink-subtle);
+}
+
+/* ---- error band --------------------------------------------------------- */
+
+.today__error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border: 1px solid var(--q-hairline);
+}
+
+.today__error-ref {
+  color: var(--q-error-text);
+  margin-left: auto;
+}
+
+.today__error-retry {
+  border: none;
+  background: transparent;
+  color: var(--q-error-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- skeleton / denied (§2.11's shape, applied to two tiles) ----------- */
+
+.today__skeleton {
+  display: flex;
+  gap: 16px;
+}
+
+.today__skeleton-tile {
+  flex: 1;
+  height: 120px;
+  border: 1px solid var(--q-hairline);
+  position: relative;
+  overflow: hidden;
+}
+
+.today__skeleton-tile::after {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  background: var(--q-surface-1);
+}
+
+.today__denied {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+/* ---- oversized counters ------------------------------------------------- */
+
+.today__counters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.counter-card {
+  flex: 1;
+  padding: 20px 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.counter-card__value {
+  color: var(--q-ink);
+}
+
+.counter-card--cancelled .counter-card__value {
+  color: var(--q-ink-muted);
+}
+
+.counter-card__label {
+  margin-top: 4px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}
+
+/* ---- source / type mix --------------------------------------------------- */
+
+.today__mixes {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mix-card {
+  flex: 1;
+  padding: 16px 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.mix-card h2 {
+  margin: 0 0 12px;
+}
+
+.mix-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.mix-row__label {
+  color: var(--q-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mix-row__bar {
+  display: block;
+  height: 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.mix-row__bar span {
+  display: block;
+  height: 100%;
+  background: var(--q-primary);
+}
+
+.mix-row__count {
+  color: var(--q-ink-muted);
+  text-align: right;
+  min-width: 2ch;
+}
+
+/* ---- branch leaderboard --------------------------------------------------- */
+
+.today__branches {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.today__branches h2 {
+  margin: 0 0 12px;
+}
+
+.branch-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.branch-table th {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--q-ink-subtle);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.32px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.branch-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+}
+
+.branch-table tr:last-child td {
+  border-bottom: none;
+}
+
+.branch-table__rank-col {
+  width: 32px;
+  color: var(--q-ink-subtle);
+}
+
+.branch-table__num-col {
+  text-align: right;
+}
+
+.today__partial {
+  margin: 8px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+/* ---- shared empty / locked note ------------------------------------------- */
+
+.today__empty,
+.today__locked {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+/* ---- operators (locked — IA 9.2 not built) --------------------------------- */
+
+.today__operators {
+  padding: 16px 20px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.today__operators h2 {
+  margin: 0 0 4px;
+}

@@ -55,6 +55,40 @@ export function isTerminalOrderStatus(status: string): boolean {
   return TERMINAL_STATUS_SET.has(status);
 }
 
+/**
+ * The canonical "в процессе" grouping — frontend-information-architecture.md
+ * §0's Live board (IA 0.1) "owns... the canonical definition of the 'in
+ * progress' grouping over concrete statuses", and this is that one definition,
+ * so a second screen computing it independently would be the exact drift the
+ * IA line warns against.
+ *
+ * Not simply "not terminal": `PAYMENT_FAILED` is non-terminal (an operator can
+ * still retry payment or cancel) but is not "in progress" — nobody is
+ * working the order forward right now, which is why it lives only in the
+ * board's `attention` tab (`order-tabs.ts`). Excluding it here is what makes
+ * this set equal `order-tabs.ts`'s `new ∪ preparing ∪ delivering` union
+ * exactly, and equal `JdbcOrderStore.counts`'s `total_non_terminal` column,
+ * which excludes it by the same reasoning
+ * (`WHERE status NOT IN ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED',
+ * 'CANCELLED')`) — see `order-status.spec.ts` for the executable proof that
+ * the three do not drift apart.
+ */
+export const IN_PROGRESS_ORDER_STATUSES: readonly OrderStatus[] = [
+  'RECEIVED',
+  'PAYMENT_AUTHORIZING',
+  'AWAITING_APPROVAL',
+  'CONFIRMED',
+  'PREPARING',
+  'READY',
+  'FULFILLING',
+];
+
+const IN_PROGRESS_STATUS_SET: ReadonlySet<string> = new Set(IN_PROGRESS_ORDER_STATUSES);
+
+export function isInProgressOrderStatus(status: string): boolean {
+  return IN_PROGRESS_STATUS_SET.has(status);
+}
+
 /** The i18n key carrying a known status's operator-facing word (§1.1's ru column). */
 export const ORDER_STATUS_LABEL_KEYS: Readonly<Record<OrderStatus, MessageKey>> = {
   RECEIVED: 'orders.status.RECEIVED',

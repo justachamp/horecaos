@@ -1,0 +1,138 @@
+<div class="today">
+  <div class="today__toolbar">
+    <h1 class="q-title">{{ 'shell.nav.today' | t }}</h1>
+    <div class="today__status">
+      @if (formatUpdatedAt(); as stamp) {
+        <span class="today__stamp q-caption q-tnum" [class.today__stamp--pulse]="refreshing()">
+          {{ stamp }}
+        </span>
+      }
+      <button
+        type="button"
+        class="today__refresh"
+        (click)="manualRefresh()"
+        [attr.aria-label]="'orders.queue.refresh' | t"
+        [attr.title]="'orders.queue.refresh' | t"
+      >
+        <span aria-hidden="true">⟳</span>
+      </button>
+    </div>
+  </div>
+
+  @if (lastError(); as error) {
+    <div class="today__error-band" role="alert">
+      <span class="q-body-sm">{{ errorMessage(error) }}</span>
+      <span class="today__error-ref q-mono q-caption">{{ errorReference(error) }}</span>
+      <button type="button" class="today__error-retry q-body-sm" (click)="manualRefresh()">
+        {{ 'today.error.retry' | t }}
+      </button>
+    </div>
+  }
+
+  @if (!firstLoadComplete()) {
+    <div
+      class="today__skeleton"
+      [attr.aria-label]="'today.loading' | t"
+      data-testid="today-skeleton"
+    >
+      @for (i of [1, 2]; track i) {
+        <div class="today__skeleton-tile"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="today__denied" data-testid="today-denied">
+      <p class="q-body-sm">{{ 'today.denied' | t }}</p>
+    </div>
+  } @else {
+    <section class="today__counters" data-testid="today-counters">
+      <div class="counter-card">
+        <div class="counter-card__value q-display q-tnum" data-testid="today-counter-in-progress">
+          {{ inProgressCount() }}
+        </div>
+        <div class="counter-card__label q-caption">{{ 'today.counters.inProgress' | t }}</div>
+      </div>
+      <div class="counter-card counter-card--cancelled">
+        <div class="counter-card__value q-display q-tnum" data-testid="today-counter-cancelled">
+          {{ cancelledCount() }}
+        </div>
+        <div class="counter-card__label q-caption">{{ 'today.counters.cancelled' | t }}</div>
+      </div>
+    </section>
+
+    <section class="today__mixes">
+      <div class="mix-card" data-testid="today-source-mix">
+        <h2 class="q-emphasis">{{ 'today.mix.source.title' | t }}</h2>
+        @if (sourceMix().length === 0) {
+          <p class="q-body-sm today__empty">{{ 'today.mix.empty' | t }}</p>
+        } @else {
+          @for (slice of sourceMix(); track slice.key) {
+            <div class="mix-row">
+              <span class="mix-row__label q-body-sm">{{ slice.key }}</span>
+              <span class="mix-row__bar"
+                ><span [style.width.%]="mixShare(slice, sourceMix())"></span
+              ></span>
+              <span class="mix-row__count q-tnum q-caption">{{ slice.count }}</span>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="mix-card" data-testid="today-type-mix">
+        <h2 class="q-emphasis">{{ 'today.mix.type.title' | t }}</h2>
+        @if (typeMix().length === 0) {
+          <p class="q-body-sm today__empty">{{ 'today.mix.empty' | t }}</p>
+        } @else {
+          @for (slice of typeMix(); track slice.key) {
+            <div class="mix-row">
+              <span class="mix-row__label q-body-sm">{{ typeMixLabel(slice.key) }}</span>
+              <span class="mix-row__bar"
+                ><span [style.width.%]="mixShare(slice, typeMix())"></span
+              ></span>
+              <span class="mix-row__count q-tnum q-caption">{{ slice.count }}</span>
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <section class="today__branches" data-testid="today-branches">
+      <h2 class="q-emphasis">{{ 'today.branches.title' | t }}</h2>
+      @if (!branchesAvailable()) {
+        <p class="q-body-sm today__empty" data-testid="today-branches-unavailable">
+          {{ 'today.branches.unavailable' | t }}
+        </p>
+      } @else if (branches().length === 0) {
+        <p class="q-body-sm today__empty">{{ 'today.branches.empty' | t }}</p>
+      } @else {
+        <table class="branch-table">
+          <thead>
+            <tr>
+              <th class="branch-table__rank-col" aria-hidden="true"></th>
+              <th>{{ 'today.branches.column.branch' | t }}</th>
+              <th class="branch-table__num-col">{{ 'today.branches.column.inProgress' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (branch of branches(); track branch.locationId; let i = $index) {
+              <tr data-testid="today-branch-row">
+                <td class="branch-table__rank-col q-caption">{{ i + 1 }}</td>
+                <td>{{ branch.displayName }}</td>
+                <td class="branch-table__num-col q-mono q-tnum">{{ branch.inProgress }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (branchesPartial()) {
+          <p class="q-caption today__partial" data-testid="today-branches-partial">
+            {{ 'today.branches.partial' | t: { shown: branchesShown(), total: branchesTotal() } }}
+          </p>
+        }
+      }
+    </section>
+
+    <section class="today__operators" data-testid="today-operators">
+      <h2 class="q-emphasis">{{ 'today.operators.title' | t }}</h2>
+      <p class="q-body-sm today__locked">{{ 'today.operators.notBuilt' | t }}</p>
+    </section>
+  }
+</div>
