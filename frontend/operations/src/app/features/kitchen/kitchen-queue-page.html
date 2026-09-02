@@ -1,0 +1,158 @@
+<div class="kitchen">
+  <div class="kitchen__toolbar">
+    <div class="kitchen__tabs" role="tablist">
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          class="tab"
+          [class.tab--active]="activeTab() === tab.id"
+          (click)="selectTab(tab.id)"
+        >
+          {{ tab.labelKey | t }}
+          <span class="tab__count q-tnum">{{ tabCount(tab.id) }}</span>
+        </button>
+      }
+    </div>
+
+    @if (canToggleService()) {
+      <button
+        type="button"
+        class="kitchen__service-toggle"
+        [class.kitchen__service-toggle--closed]="serviceSummary()?.effectiveMode === 'FORCE_CLOSED'"
+        [disabled]="togglingService()"
+        (click)="toggleService()"
+        data-testid="kitchen-service-toggle"
+      >
+        {{ serviceModeLabel() }}
+      </button>
+    }
+  </div>
+
+  @if (wiringWarning()) {
+    <div class="kitchen__warning-band" role="status">
+      <span class="q-body-sm">{{ 'kitchen.warning.notWired' | t }}</span>
+    </div>
+  }
+
+  @if (actionNotice(); as notice) {
+    <div class="kitchen__notice-band" role="alert">
+      <span class="q-body-sm">{{ notice }}</span>
+      <button type="button" class="kitchen__notice-dismiss" (click)="dismissNotice()">×</button>
+    </div>
+  }
+
+  @if (lastError(); as error) {
+    <div class="kitchen__error-band" role="alert">
+      <span class="q-body-sm">{{ error.code }}</span>
+    </div>
+  }
+
+  <div class="kitchen__board">
+    @if (!firstLoadComplete()) {
+      <div class="kitchen__skeleton" [attr.aria-label]="'kitchen.loading' | t">
+        @for (i of [1, 2, 3, 4]; track i) {
+          <div class="kitchen__skeleton-card"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="kitchen__denied" data-testid="kitchen-denied">
+        <p class="q-body-sm">{{ 'kitchen.denied' | t }}</p>
+      </div>
+    } @else {
+      @for (ticket of visibleTickets(); track ticket.ticketId) {
+        <div
+          class="ticket"
+          [class.ticket--danger]="severityTone(ticket) === 'danger'"
+          [class.ticket--warning]="severityTone(ticket) === 'warning'"
+          data-testid="kitchen-ticket"
+        >
+          <div
+            class="ticket__header"
+            tabindex="0"
+            (click)="toggleExpand(ticket)"
+            (keydown.enter)="toggleExpand(ticket)"
+          >
+            <div class="ticket__severity-rail" aria-hidden="true"></div>
+            <div class="ticket__number">
+              <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
+              <span class="chip">{{ fulfilmentModeLabel(ticket.fulfilmentMode) }}</span>
+              @if (ticket.channelCode) {
+                <span class="chip chip--muted">{{ ticket.channelCode }}</span>
+              }
+            </div>
+            <div class="ticket__timing">
+              @if (targetReadyLabel(ticket); as target) {
+                <span class="q-caption">{{
+                  'kitchen.ticket.targetReady' | t: { time: target }
+                }}</span>
+              }
+              <span class="status-badge">{{ ticketStatusLabel(ticket.status) }}</span>
+            </div>
+          </div>
+
+          @if (kitchenNoteFor(ticket); as note) {
+            <div class="ticket__note q-body-sm">
+              {{ 'kitchen.ticket.kitchenNote' | t: { note: note } }}
+            </div>
+          }
+
+          @if (isExpanded(ticket)) {
+            <table class="ticket__items">
+              <thead>
+                <tr>
+                  <th>{{ 'kitchen.item.column.line' | t }}</th>
+                  <th>{{ 'kitchen.item.column.station' | t }}</th>
+                  <th class="kitchen__num-col">{{ 'kitchen.item.column.quantity' | t }}</th>
+                  <th>{{ 'kitchen.item.column.status' | t }}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of ticket.items; track item.itemId) {
+                  <tr>
+                    <td>
+                      @if (lineFor(ticket, item); as line) {
+                        <div>{{ line.productName }}</div>
+                        @if (line.variantName) {
+                          <div class="q-caption">{{ line.variantName }}</div>
+                        }
+                        @if (line.hasNote) {
+                          <div class="q-caption ticket__has-note">
+                            {{ 'kitchen.item.hasNote' | t }}
+                          </div>
+                        }
+                      } @else {
+                        <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
+                      }
+                    </td>
+                    <td>{{ stationLabel(item.stationId) }}</td>
+                    <td class="kitchen__num-col q-tnum">{{ item.quantity }}</td>
+                    <td>
+                      <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
+                    </td>
+                    <td class="ticket__item-actions">
+                      @for (action of itemActions(ticket, item); track action) {
+                        <button
+                          type="button"
+                          class="ticket__action"
+                          [disabled]="isItemBusy(item)"
+                          (click)="onItemAction(item, action)"
+                        >
+                          {{ itemActionLabel(action) }}
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      } @empty {
+        <div class="kitchen__empty">
+          <p class="q-body-sm" data-testid="kitchen-empty">{{ 'kitchen.empty' | t }}</p>
+        </div>
+      }
+    }
+  </div>
+</div>

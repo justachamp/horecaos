@@ -172,6 +172,100 @@ export const operationsPaths = {
   inventoryAvailability(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
   },
+
+  /**
+   * The kitchen board (ADR 0041, `KitchenBoardController`) — on
+   * {@link LEGACY_TENANT_PREFIX} like `orders`, not on the ADR 0031 prefix,
+   * because it was built alongside the orders controller and follows the
+   * same path shape. `stream` is `live` (2.1's queue), `buffer` (2.2, not
+   * built this wave) or `pass` (2.3, not built this wave).
+   */
+  kitchenTickets(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/tickets`;
+  },
+
+  /** One ticket with its lines. Returns an `ETag` (the aggregate version). */
+  kitchenTicket(scope: LocationScope, ticketId: string): string {
+    return `${this.kitchenTickets(scope)}/${encodeURIComponent(ticketId)}`;
+  },
+
+  /** Fire a held ticket now. Mutation: key and `If-Match`. Not used by 2.1 (buffer is 2.2, not built). */
+  kitchenTicketRelease(scope: LocationScope, ticketId: string): string {
+    return `${this.kitchenTicket(scope, ticketId)}/release`;
+  },
+
+  /** One production line, at the station it routed to. */
+  kitchenTicketItemStart(scope: LocationScope, itemId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/ticket-items/${encodeURIComponent(itemId)}/start`;
+  },
+
+  kitchenTicketItemReady(scope: LocationScope, itemId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/ticket-items/${encodeURIComponent(itemId)}/ready`;
+  },
+
+  /** Pull a line back from ready. Mutation: reasonCode in the body, no `If-Match` (item-scoped). */
+  kitchenTicketItemRecall(scope: LocationScope, itemId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/ticket-items/${encodeURIComponent(itemId)}/recall`;
+  },
+
+  /** The location's production stations — department names for routed lines. */
+  kitchenStations(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/stations`;
+  },
+
+  /**
+   * The dispatch board (ADR 0014, `DispatchController`, wave 30) — on the ADR
+   * 0031 prefix, unlike the kitchen board above: this controller is new and
+   * has no legacy shape to inherit.
+   */
+  dispatchQueue(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/queue`;
+  },
+
+  /** Assign one courier to one plan. Mutation: key required (idempotent per ADR 0031, not `If-Match` — the body carries `expectedVersion`). */
+  dispatchAssign(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/assign`;
+  },
+
+  /** Return a carried plan to the sourcing pool. Same mutation shape as {@link dispatchAssign}. */
+  dispatchUnassign(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/unassign`;
+  },
+} as const;
+
+/**
+ * The in-house courier roster (ADR 0042, `OperationsCourierController`) —
+ * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` carries
+ * no `brand_id`/`location_id` column at all (§3.3's branch-bindings ownership
+ * is not built — see the wave's final report). Kept apart from {@link
+ * operationsPaths} for the same reason {@link mediaPaths} is: every call here
+ * takes a bare `tenantId`.
+ */
+export const courierPaths = {
+  /** The roster, with today's load. Same read {@link operationsPaths.dispatchQueue}'s fleet rail uses. */
+  couriers(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/couriers`;
+  },
+
+  /** Register a courier and open their engagement. Mutation: key required. */
+  courierRegistrations(tenantId: string): string {
+    return this.couriers(tenantId);
+  },
+
+  /** Vehicle classes, for the registration form's picker. */
+  courierTypes(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
+  },
+
+  /** Attest that the registration evidence was sighted. Mutation: key required. */
+  courierEngagementVerify(tenantId: string, engagementId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/verify`;
+  },
+
+  /** Suspend an engagement for an operational reason. Mutation: key required. */
+  courierEngagementSuspend(tenantId: string, engagementId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/suspend`;
+  },
 } as const;
 
 /**

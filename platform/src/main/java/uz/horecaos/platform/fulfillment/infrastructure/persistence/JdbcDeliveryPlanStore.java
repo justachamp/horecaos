@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -110,6 +111,28 @@ public class JdbcDeliveryPlanStore {
                 .param("planId", planId)
                 .query(JdbcDeliveryPlanStore::mapPlan)
                 .optional();
+    }
+
+    /**
+     * Every plan this branch has open right now (the dispatch board's queue,
+     * operations §3.1). {@code COMPLETED} and {@code CANCELLED} are the only
+     * two states excluded — everything else, including {@code
+     * MANUAL_ACTION_REQUIRED}, is exactly what a dispatcher needs to see, and
+     * an {@code ASSIGNED} row belongs on the board too so "carried by" has
+     * something to show beside "unassigned".
+     */
+    public List<DeliveryPlan> listActiveByLocation(UUID tenantId, UUID locationId, int limit) {
+        return jdbc.sql(SELECT + """
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND status NOT IN ('COMPLETED', 'CANCELLED')
+                 ORDER BY source_at
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("limit", limit)
+                .query(JdbcDeliveryPlanStore::mapPlan)
+                .list();
     }
 
     /** The live plan, which {@code ux_plan_one_live} guarantees is at most one. */

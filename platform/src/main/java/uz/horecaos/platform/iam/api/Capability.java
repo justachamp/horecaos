@@ -229,6 +229,15 @@ public enum Capability {
      */
     DELIVERY_ZONE_ACTIVATE("delivery.zone.activate", "delivery", "zone.activate"),
 
+    /**
+     * ADR 0037: reading tariffs, their versions, bands, time rules and discounts
+     * — the mirror of {@link #DELIVERY_ZONE_READ} for the rate-table lineage.
+     * Split from {@link #DELIVERY_TARIFF_MANAGE} on the same argument as the
+     * zone: a person who reads what a brand charges for delivery is not
+     * automatically a person who may retype the numbers.
+     */
+    DELIVERY_TARIFF_READ("delivery.tariff.read", "delivery", "tariff.read"),
+
     /** ADR 0037: authoring delivery tariffs, bands, and peak-hour rules as drafts. */
     DELIVERY_TARIFF_MANAGE("delivery.tariff.manage", "delivery", "tariff.manage"),
 
@@ -948,6 +957,19 @@ public enum Capability {
      * courier.
      */
     COURIER_SHIFT_APPROVE("courier.shift.approve", "courier", "shift.approve"),
+
+    /**
+     * ADR 0042: reading the in-house roster — one courier or the whole fleet,
+     * with its type, status, engagement standing and current load. Never the
+     * decrypted legal name: {@code display_reference} is what this capability's
+     * reads carry, exactly as the courier row's own column comment says a
+     * routine screen should use in place of the name, and this capability does
+     * not grant a reveal of it. Held by whoever may onboard a courier and by
+     * whoever dispatches one, which is why it sits beside {@link
+     * #COURIER_ENGAGEMENT_MANAGE} rather than folded into it — a dispatcher
+     * reads the fleet without ever being able to suspend an engagement.
+     */
+    COURIER_READ("courier.read", "courier", "read"),
 
     /** ADR 0042: opening, suspending, and ending a courier's engagement. */
     COURIER_ENGAGEMENT_MANAGE("courier.engagement.manage", "courier", "engagement.manage"),

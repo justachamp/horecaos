@@ -1,0 +1,122 @@
+<div class="dispatch">
+  <div class="dispatch__main">
+    <div class="dispatch__toolbar">
+      <h1 class="q-subhead">{{ 'delivery.dispatch.title' | t }}</h1>
+      <button type="button" class="dispatch__refresh" (click)="manualRefresh()">
+        {{ 'delivery.dispatch.refresh' | t }}
+      </button>
+    </div>
+
+    @if (notice(); as message) {
+      <div class="dispatch__notice-band" role="alert">
+        <span class="q-body-sm">{{ message }}</span>
+        <button type="button" class="dispatch__notice-dismiss" (click)="dismissNotice()">×</button>
+      </div>
+    }
+
+    @if (lastError(); as error) {
+      <div class="dispatch__error-band" role="alert">
+        <span class="q-body-sm">{{ error.code }}</span>
+      </div>
+    }
+
+    <div class="dispatch__table-wrap">
+      @if (!firstLoadComplete()) {
+        <div class="dispatch__skeleton" [attr.aria-label]="'delivery.dispatch.loading' | t">
+          @for (i of [1, 2, 3, 4]; track i) {
+            <div class="dispatch__skeleton-row"></div>
+          }
+        </div>
+      } @else if (denied()) {
+        <div class="dispatch__denied" data-testid="dispatch-denied">
+          <p class="q-body-sm">{{ 'delivery.dispatch.denied' | t }}</p>
+        </div>
+      } @else {
+        <table class="dispatch__table">
+          <thead>
+            <tr>
+              <th>{{ 'delivery.dispatch.column.order' | t }}</th>
+              <th>{{ 'delivery.dispatch.column.status' | t }}</th>
+              <th class="dispatch__num-col">{{ 'delivery.dispatch.column.distance' | t }}</th>
+              <th class="dispatch__num-col">{{ 'delivery.dispatch.column.fee' | t }}</th>
+              <th>{{ 'delivery.dispatch.column.carriedBy' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (plan of sortedPlans(); track plan.planId) {
+              <tr data-testid="dispatch-row">
+                <td class="q-mono">{{ orderFor(plan)?.publicOrderNumber || plan.orderId }}</td>
+                <td>
+                  <span class="status-badge">{{ planStatusLabel(plan.status) }}</span>
+                </td>
+                <td class="dispatch__num-col q-tnum">
+                  {{ plan.distanceMeters ? plan.distanceMeters + ' m' : '—' }}
+                </td>
+                <td class="dispatch__num-col q-tnum">
+                  {{ plan.customerDeliveryFeeMinor }} {{ plan.currency }}
+                </td>
+                <td>
+                  @if (plan.shipment; as shipment) {
+                    <span class="chip">{{ courierReference(shipment.courierId || '') }}</span>
+                  } @else {
+                    <select
+                      [value]="pickedCourierFor(plan)"
+                      (change)="onPickCourier(plan, $any($event.target).value)"
+                    >
+                      @for (courier of fleet(); track courier.courierId) {
+                        <option [value]="courier.courierId">
+                          {{ courier.displayReference }} ({{ courier.activeAssignments }}/{{
+                            courier.concurrencyCeiling
+                          }})
+                        </option>
+                      }
+                    </select>
+                  }
+                </td>
+                <td class="dispatch__action-col">
+                  @if (plan.shipment) {
+                    <button type="button" [disabled]="isBusy(plan)" (click)="unassign(plan)">
+                      {{ 'delivery.dispatch.action.unassign' | t }}
+                    </button>
+                  } @else if (isOpen(plan)) {
+                    <button
+                      type="button"
+                      [disabled]="isBusy(plan) || fleet().length === 0"
+                      (click)="assign(plan)"
+                    >
+                      {{ 'delivery.dispatch.action.assign' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6">
+                  <p class="q-body-sm" data-testid="dispatch-empty">
+                    {{ 'delivery.dispatch.empty' | t }}
+                  </p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+
+  <aside class="dispatch__fleet">
+    <h2 class="q-emphasis">{{ 'delivery.dispatch.fleet.title' | t }}</h2>
+    @for (courier of fleet(); track courier.courierId) {
+      <div class="fleet-card" data-testid="fleet-card">
+        <span class="q-mono">{{ courier.displayReference }}</span>
+        <span class="q-caption">{{ courier.courierTypeName }}</span>
+        <span class="q-tnum"
+          >{{ courier.activeAssignments }} / {{ courier.concurrencyCeiling }}</span
+        >
+      </div>
+    } @empty {
+      <p class="q-caption">{{ 'delivery.dispatch.fleet.empty' | t }}</p>
+    }
+  </aside>
+</div>

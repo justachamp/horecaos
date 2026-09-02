@@ -198,6 +198,78 @@ class DeliveryFeeResolutionTests {
         assertThat(evening.timeRuleSequence()).isZero();
     }
 
+    // ------------------------------------------------- operations §3.6/§3.7 reads
+
+    @Test
+    @DisplayName("listing zones returns the live version's numbers and the branches it applies to")
+    void listZonesReturnsTheLiveVersionsNumbersAndBindings() {
+        UUID zone = activeCircleZone("CITY", 8_000, 3, cityTariff, 50_000L, 20_000L);
+
+        var summaries = zones.listZones(TENANT, BRAND);
+
+        assertThat(summaries).hasSize(1);
+        var summary = summaries.getFirst();
+        assertThat(summary.id()).isEqualTo(zone);
+        assertThat(summary.role()).isEqualTo(ZoneRole.DELIVERY);
+        assertThat(summary.activeVersion()).isEqualTo(1);
+        assertThat(summary.priority()).isEqualTo(3);
+        assertThat(summary.deliveryTariffId()).isEqualTo(cityTariff);
+        assertThat(summary.freeDeliveryFromMinor()).isEqualTo(50_000L);
+        assertThat(summary.minBasketMinor()).isEqualTo(20_000L);
+
+        var detail = zones.zoneDetail(TENANT, BRAND, zone);
+        assertThat(detail.boundLocationIds()).containsExactly(locatedBranch);
+    }
+
+    @Test
+    @DisplayName("a zone drawn but never activated lists as drafted, not as absent or free")
+    void listZonesShowsAnUnactivatedZoneAsDrafted() {
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DRAFT-ONLY", "Draft", "Draft", "Draft");
+
+        var summaries = zones.listZones(TENANT, BRAND);
+
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.getFirst().id()).isEqualTo(zoneId);
+        assertThat(summaries.getFirst().activeVersion()).isNull();
+        assertThat(summaries.getFirst().currency())
+                .as("no live version means nothing priced yet, distinct from a free zone")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("listing tariffs returns the active version's bands, time rules and discounts in full")
+    void listTariffsReturnsTheActiveVersionInFull() {
+        var summaries = tariffs.listTariffs(TENANT, BRAND);
+        assertThat(summaries)
+                .extracting(JdbcDeliveryTariffStore.TariffSummaryRow::id)
+                .contains(cityTariff);
+        var listed = summaries.stream()
+                .filter(row -> row.id().equals(cityTariff))
+                .findFirst()
+                .orElseThrow();
+        assertThat(listed.activeVersion()).isEqualTo(1);
+        assertThat(listed.feeSource()).isEqualTo("TARIFF");
+
+        var detail = tariffs.tariffDetail(TENANT, BRAND, cityTariff);
+        DeliveryTariff active = Objects.requireNonNull(detail.activeVersion());
+        assertThat(active.bands()).hasSize(2);
+        assertThat(active.timeRules()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("reading a tariff that belongs to another brand is refused as not found")
+    void tariffDetailRefusesATariffFromAnotherBrand() {
+        UUID otherBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'OTHER', 'other', 'Other brand', 'ACTIVE', 0)
+                """).param("id", otherBrand).param("tenantId", TENANT).update();
+
+        Throwable thrown = catchThrowable(() -> tariffs.tariffDetail(TENANT, otherBrand, cityTariff));
+
+        assertThat(thrown).isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+    }
+
     // ------------------------------------------------------------- determinism
 
     @Test

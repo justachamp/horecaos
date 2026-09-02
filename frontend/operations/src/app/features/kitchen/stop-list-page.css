@@ -1,0 +1,187 @@
+.stop-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.stop-list__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  flex-wrap: wrap;
+}
+
+.stop-list__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: var(--q-radius);
+}
+
+.tab--active {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.tab__count {
+  margin-left: 4px;
+  color: var(--q-ink-subtle);
+}
+
+.stop-list__bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stop-list__bulk-reason {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 14px;
+  min-width: 220px;
+}
+
+.stop-list__bulk button {
+  padding: 6px 12px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.stop-list__bulk-clear {
+  border-color: var(--q-hairline) !important;
+  color: var(--q-ink-muted) !important;
+}
+
+.stop-list__notice-band,
+.stop-list__error-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.stop-list__notice-band {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.stop-list__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.stop-list__notice-dismiss {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: inherit;
+}
+
+.stop-list__table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+.stop-list__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stop-list__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+  position: sticky;
+  top: 0;
+  background: var(--q-canvas);
+}
+
+.stop-row td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.stop-list__select-col {
+  width: 32px;
+}
+
+.stop-list__action-col {
+  text-align: right;
+}
+
+.stop-list__action-col button {
+  padding: 4px 12px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.status-badge--available {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.status-badge--onStop {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.stop-list__denied,
+.stop-list__skeleton {
+  padding: 16px;
+}
+
+.stop-list__denied {
+  text-align: center;
+  padding: 32px;
+}
+
+.stop-list__skeleton-row {
+  height: 32px;
+  margin-bottom: 8px;
+  background: var(--q-surface-1);
+}
+
+.stop-list__load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.stop-list__load-more button {
+  padding: 6px 16px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}

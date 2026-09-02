@@ -311,6 +311,35 @@ public class JdbcAssignmentStore {
                 .update();
     }
 
+    /**
+     * Undoes a courier's assignment without touching the attempt that won it —
+     * the attempt is history, and unassigning is a new fact about the
+     * shipment, not a retroactive rewrite of who accepted what and when
+     * (operations §3.1's "Unassign" action, distinct from a courier declining,
+     * which {@link #close} already covers).
+     *
+     * <p>Refused once the shipment has moved past {@code ASSIGNED} or {@code
+     * PICKUP_PENDING} — a courier already holding the food cannot be
+     * unassigned out from under them, which is exactly couriers.md's own
+     * "blocked once PICKED_UP" rule.
+     */
+    public boolean cancelShipment(UUID tenantId, UUID shipmentId, int expectedVersion, String reasonCode, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET status = 'CANCELLED', cancelled_at = :now,
+                    cancellation_reason_code = :reasonCode, version = version + 1
+                WHERE tenant_id = :tenantId AND id = :shipmentId AND version = :expectedVersion
+                  AND status IN ('ASSIGNED', 'PICKUP_PENDING')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("shipmentId", shipmentId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("reasonCode", reasonCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     // ------------------------------------------------------------------- reads
 
     /**
@@ -369,10 +398,46 @@ public class JdbcAssignmentStore {
                 startedAt, offeredCouriers, outstandingOffer, offerExpiresAt, attemptedPartners, uncertain);
     }
 
+    /**
+     * The active shipment of every plan in the set, keyed by plan id and
+     * absent for a plan carrying none — the dispatch board's "carried by"
+     * column, read for a whole page of plans in one round trip rather than
+     * one query per row.
+     */
+    public Map<UUID, Shipment> shipmentsByPlans(UUID tenantId, java.util.Collection<UUID> planIds) {
+        if (planIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Shipment> byPlan = new HashMap<>();
+        jdbc.sql("""
+                SELECT delivery_plan_id, id, order_id, status, source_type, courier_id,
+                       provider_binding_id, provider_type, external_shipment_id, version
+                FROM fulfillment.shipments
+                WHERE tenant_id = :tenantId AND delivery_plan_id IN (:planIds) AND status <> 'CANCELLED'
+                """)
+                .param("tenantId", tenantId)
+                .param("planIds", planIds)
+                .query((row, number) -> Map.entry(
+                        row.getObject("delivery_plan_id", UUID.class),
+                        new Shipment(
+                                row.getObject("id", UUID.class),
+                                row.getObject("order_id", UUID.class),
+                                ShipmentStatus.valueOf(row.getString("status")),
+                                SourceType.valueOf(row.getString("source_type")),
+                                row.getObject("courier_id", UUID.class),
+                                row.getObject("provider_binding_id", UUID.class),
+                                row.getString("provider_type"),
+                                row.getString("external_shipment_id"),
+                                row.getInt("version"))))
+                .list()
+                .forEach(entry -> byPlan.put(entry.getKey(), entry.getValue()));
+        return byPlan;
+    }
+
     public Optional<Shipment> findShipment(UUID tenantId, UUID planId) {
         return jdbc.sql("""
                 SELECT id, order_id, status, source_type, courier_id, provider_binding_id,
-                       provider_type, external_shipment_id
+                       provider_type, external_shipment_id, version
                 FROM fulfillment.shipments
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND status <> 'CANCELLED'
                 """)
@@ -386,7 +451,8 @@ public class JdbcAssignmentStore {
                         row.getObject("courier_id", UUID.class),
                         row.getObject("provider_binding_id", UUID.class),
                         row.getString("provider_type"),
-                        row.getString("external_shipment_id")))
+                        row.getString("external_shipment_id"),
+                        row.getInt("version")))
                 .optional();
     }
 
@@ -439,7 +505,8 @@ public class JdbcAssignmentStore {
             UUID courierId,
             UUID providerBindingId,
             String providerType,
-            String externalShipmentId) {}
+            String externalShipmentId,
+            int version) {}
 
     private record AttemptRow(
             SourceType sourceType,

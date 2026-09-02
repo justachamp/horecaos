@@ -45,6 +45,7 @@ import uz.horecaos.platform.courier.application.CourierEngagementService;
 import uz.horecaos.platform.courier.application.CourierLedgerService;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
+import uz.horecaos.platform.courier.application.CourierRosterQueryService;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
@@ -437,6 +438,47 @@ class CourierCompensationTests {
                 null));
         assertThat(noPromise.onTimeOutcome()).isEqualTo(OnTimeOutcome.UNKNOWN);
         assertThat(noPromise.totalMinor()).isEqualTo(lateCourier.totalMinor());
+    }
+
+    // ---------------------------------------------- the roster (operations §3.3)
+
+    @Test
+    @DisplayName("the roster lists a courier's type, engagement standing and current load, never the name")
+    void rosterListsTypeEngagementAndLoadButNeverTheName() {
+        var roster = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of()).roster(TENANT);
+
+        assertThat(roster).hasSize(1);
+        var entry = roster.getFirst();
+        assertThat(entry.courier().id()).isEqualTo(courierId);
+        assertThat(entry.courier().displayReference()).isEqualTo("K-001");
+        assertThat(entry.courier().courierTypeId()).isEqualTo(courierTypeId);
+        assertThat(entry.courier().courierTypeName()).isEqualTo("Scooter");
+        assertThat(entry.courier().engagementStatus()).isEqualTo("ACTIVE");
+        assertThat(entry.activeAssignments()).isZero();
+
+        // Nothing about the roster row can answer "who is this" beyond the
+        // handle — no accessor produces protected_full_name, so there is
+        // nothing here for a careless log line or a future column to leak.
+        assertThat(entry.courier().toString()).doesNotContain("Alisher");
+    }
+
+    @Test
+    @DisplayName("the roster's load count is the courier's own open-shipment count, from ADR 0014's own index")
+    void rosterCarriesTheSameLoadSourcingItselfReads() {
+        var load = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of(courierId, 2))
+                .roster(TENANT);
+
+        assertThat(load.getFirst().activeAssignments()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a suspended engagement is visible on the roster, not hidden as though the courier vanished")
+    void rosterShowsASuspendedEngagement() {
+        engagements.suspend(TENANT, engagementId, "SAFETY_INCIDENT", manager(), "reported by a branch manager", "corr");
+
+        var roster = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of()).roster(TENANT);
+
+        assertThat(roster.getFirst().courier().engagementStatus()).isEqualTo("SUSPENDED_OPERATIONAL");
     }
 
     // ------------------------------------------------------ registration lapse

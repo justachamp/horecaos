@@ -1,0 +1,36 @@
+.kitchen-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.kitchen-shell__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  flex: none;
+}
+
+.kitchen-shell__tab {
+  padding: 12px 12px 10px;
+  color: var(--q-ink-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.kitchen-shell__tab:hover {
+  color: var(--q-ink);
+}
+
+.kitchen-shell__tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+}
+
+.kitchen-shell__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

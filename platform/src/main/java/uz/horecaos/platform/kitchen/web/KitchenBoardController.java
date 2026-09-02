@@ -254,10 +254,23 @@ public class KitchenBoardController {
 
     record BoardResponse(List<TicketResponse> tickets, List<String> warnings) {}
 
+    /**
+     * {@code fulfilmentMode} and {@code channelCode} were on {@code TicketRow}
+     * from V0030 onward but never left the JDBC layer — the KDS board (IA 2.1)
+     * partitions its queue by fulfilment type and shows the channel on each
+     * ticket, and a client cannot do either from a wire response that omits
+     * both. {@code createdAt} is added alongside them for the same reason: the
+     * board colour-codes a ticket against {@code targetReadyAt} where one
+     * exists, and otherwise needs an elapsed-time fallback the way the order
+     * board's own severity model does (orders.md's "45 minutes, no promise"
+     * rule) — impossible without knowing when the ticket was opened.
+     */
     record TicketResponse(
             UUID ticketId,
             UUID orderId,
             String sequenceLabel,
+            String fulfilmentMode,
+            @Nullable String channelCode,
             String status,
             String releaseMode,
             @Nullable Instant releaseAt,
@@ -267,6 +280,7 @@ public class KitchenBoardController {
             @Nullable Instant startedAt,
             @Nullable Instant readyAt,
             int version,
+            Instant createdAt,
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
@@ -274,6 +288,8 @@ public class KitchenBoardController {
                     ticket.id(),
                     ticket.orderId(),
                     ticket.sequenceLabel(),
+                    ticket.fulfilmentMode(),
+                    ticket.channelCode(),
                     ticket.status().name(),
                     ticket.releaseMode().name(),
                     ticket.releaseAt(),
@@ -283,6 +299,7 @@ public class KitchenBoardController {
                     ticket.startedAt(),
                     ticket.readyAt(),
                     ticket.version(),
+                    ticket.createdAt(),
                     items.stream().map(ItemView::of).toList());
         }
     }

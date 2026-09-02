@@ -1,0 +1,212 @@
+<div class="tariffs">
+  <div class="tariffs__toolbar">
+    <h1 class="q-subhead">{{ 'delivery.tariffs.title' | t }}</h1>
+    <button type="button" class="tariffs__create" (click)="openCreateForm()">
+      {{ 'delivery.tariffs.create.action' | t }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="tariffs__skeleton" [attr.aria-label]="'delivery.tariffs.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="tariffs__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="tariffs__denied" data-testid="tariffs-denied">
+      <p class="q-body-sm">{{ 'delivery.tariffs.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="tariffs__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="tariffs__table">
+      <thead>
+        <tr>
+          <th>{{ 'delivery.tariffs.column.code' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.name' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.version' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.feeSource' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.default' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tariff of tariffs(); track tariff.tariffId) {
+          <tr
+            class="tariff-row"
+            tabindex="0"
+            data-testid="tariff-row"
+            (click)="toggleExpand(tariff)"
+            (keydown.enter)="toggleExpand(tariff)"
+          >
+            <td class="q-mono">{{ tariff.code }}</td>
+            <td>{{ tariff.name }}</td>
+            <td>
+              @if (tariff.activeVersion) {
+                <span class="status-badge status-badge--live">v{{ tariff.activeVersion }}</span>
+              } @else {
+                <span class="status-badge">{{ 'delivery.tariffs.notActivated' | t }}</span>
+              }
+            </td>
+            <td>{{ tariff.feeSource || '—' }}</td>
+            <td>{{ tariff.brandDefault ? ('delivery.tariffs.default.yes' | t) : '—' }}</td>
+            <td class="tariffs__action-col">
+              <button type="button" (click)="$event.stopPropagation(); openDraftForm(tariff)">
+                {{ 'delivery.tariffs.draft.action' | t }}
+              </button>
+            </td>
+          </tr>
+          @if (isExpanded(tariff)) {
+            <tr class="tariff-detail-row">
+              <td colspan="6">
+                @if (detailFor(tariff); as detail) {
+                  @if (detail.activeVersion; as active) {
+                    <table class="tariff-bands">
+                      <thead>
+                        <tr>
+                          <th>{{ 'delivery.tariffs.band.from' | t }}</th>
+                          <th>{{ 'delivery.tariffs.band.to' | t }}</th>
+                          <th>{{ 'delivery.tariffs.band.base' | t }}</th>
+                          <th>{{ 'delivery.tariffs.band.perKm' | t }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (band of active.bands; track band.fromMeters) {
+                          <tr>
+                            <td class="q-tnum">{{ band.fromMeters }}</td>
+                            <td class="q-tnum">{{ band.toMeters }}</td>
+                            <td class="q-tnum">{{ band.baseMinor }}</td>
+                            <td class="q-tnum">{{ band.perKmMinor }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                    @if (active.timeRules.length > 0) {
+                      <p class="q-caption">
+                        {{
+                          'delivery.tariffs.detail.timeRules'
+                            | t: { count: active.timeRules.length }
+                        }}
+                      </p>
+                    }
+                  } @else {
+                    <span class="q-caption">{{ 'delivery.tariffs.notActivated' | t }}</span>
+                  }
+                } @else {
+                  <span class="q-caption">{{ 'delivery.tariffs.detail.loading' | t }}</span>
+                }
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="6">
+              <p class="q-body-sm" data-testid="tariffs-empty">
+                {{ 'delivery.tariffs.empty' | t }}
+              </p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (showCreateForm()) {
+    <div class="dialog-backdrop" (click)="closeCreateForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.tariffs.create.title' | t }}</h2>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.create.code' | t }}</span>
+          <input type="text" [value]="newCode()" (input)="newCode.set($any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.create.name' | t }}</span>
+          <input type="text" [value]="newName()" (input)="newName.set($any($event.target).value)" />
+        </label>
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="newBrandDefault()"
+            (change)="newBrandDefault.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'delivery.tariffs.create.brandDefault' | t }}</span>
+        </label>
+        @if (createError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeCreateForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canCreate()" (click)="submitCreate()">
+            {{ 'delivery.tariffs.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (draftingTariffId()) {
+    <div class="dialog-backdrop" (click)="closeDraftForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.tariffs.draft.title' | t }}</h2>
+        <p class="q-caption">{{ 'delivery.tariffs.draft.hint' | t }}</p>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.draft.currency' | t }}</span>
+          <input
+            type="text"
+            [value]="draftCurrency()"
+            (input)="draftCurrency.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.draft.maxDistance' | t }}</span>
+          <input
+            type="number"
+            [value]="draftMaxDistanceMeters()"
+            (input)="draftMaxDistanceMeters.set(+$any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.draft.minFee' | t }}</span>
+          <input
+            type="number"
+            [value]="draftMinFeeMinor()"
+            (input)="draftMinFeeMinor.set(+$any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.draft.base' | t }}</span>
+          <input
+            type="number"
+            [value]="draftBaseMinor()"
+            (input)="draftBaseMinor.set(+$any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.draft.perKm' | t }}</span>
+          <input
+            type="number"
+            [value]="draftPerKmMinor()"
+            (input)="draftPerKmMinor.set(+$any($event.target).value)"
+          />
+        </label>
+        @if (draftError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeDraftForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canDraft()" (click)="submitDraft()">
+            {{ 'delivery.tariffs.draft.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

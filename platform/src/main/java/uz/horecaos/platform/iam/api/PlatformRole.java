@@ -181,9 +181,11 @@ public enum PlatformRole {
                     DELIVERY_ZONE_READ,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
+                    DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_TARIFF_ACTIVATE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -300,8 +302,10 @@ public enum PlatformRole {
                     DELIVERY_ZONE_READ,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
+                    DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -392,6 +396,7 @@ public enum PlatformRole {
                     LEGAL_ENTITY_READ,
                     // Activating a rate table is money; drawing one is not, which is why
                     // finance activates tariffs without being able to author them.
+                    DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_ACTIVATE,
                     DELIVERY_FEE_EVIDENCE_READ,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -429,6 +434,7 @@ public enum PlatformRole {
                     // The brand manager draws; the tenant decides it governs sales.
                     DELIVERY_ZONE_READ,
                     DELIVERY_ZONE_MANAGE,
+                    DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
@@ -492,6 +498,7 @@ public enum PlatformRole {
                     // dispatcher's problem whether or not it has a dispatcher, and a
                     // manager closing a session for someone who went home is the reason
                     // duty management is not the courier's alone.
+                    COURIER_READ,
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
                     CUSTOMER_READ,
@@ -550,6 +557,11 @@ public enum PlatformRole {
                     DELIVERY_PLAN_READ,
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
+                    // The fleet rail: who is engaged, what they drive, how loaded they
+                    // are right now. Never the decrypted name — see COURIER_READ's own
+                    // doc for why display_reference is the whole of what this grant
+                    // shows a dispatcher.
+                    COURIER_READ,
                     // ADR 0045. Assigning an in-house fleet without knowing where it is
                     // is not a job anyone can do, so the live map is this role's tool and
                     // is granted at the locations it dispatches for. The stored track is

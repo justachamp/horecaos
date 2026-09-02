@@ -99,6 +99,65 @@ public class JdbcDeliveryTariffStore {
                 .isPresent();
     }
 
+    /**
+     * Every rate table this brand has registered, with its live version's
+     * headline numbers when it has one (operations §3.7 Delivery tariffs).
+     * {@code LEFT JOIN}, the same reason {@code JdbcServiceZoneStore#listZones}
+     * gives: a tariff drafted but never activated is a real, visible state.
+     */
+    public List<TariffSummaryRow> listTariffs(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT t.id, t.code, t.name, t.status, t.is_brand_default,
+                       v.version, v.currency, v.fee_source, v.distance_mode, v.max_distance_meters
+                  FROM fulfillment.delivery_tariffs t
+             LEFT JOIN fulfillment.delivery_tariff_versions v
+                    ON v.tenant_id = t.tenant_id AND v.tariff_id = t.id AND v.status = 'ACTIVE'
+                 WHERE t.tenant_id = :tenantId AND t.brand_id = :brandId
+                 ORDER BY t.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new TariffSummaryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("code"),
+                        row.getString("name"),
+                        row.getString("status"),
+                        row.getBoolean("is_brand_default"),
+                        row.getObject("version", Integer.class),
+                        row.getString("currency"),
+                        row.getString("fee_source"),
+                        row.getString("distance_mode"),
+                        row.getObject("max_distance_meters", Integer.class)))
+                .list();
+    }
+
+    /** The lineage row alone — code, name, and the brand-default flag the version rows do not carry. */
+    public Optional<TariffSummaryRow> findTariffSummary(UUID tenantId, UUID brandId, UUID tariffId) {
+        return jdbc.sql("""
+                SELECT t.id, t.code, t.name, t.status, t.is_brand_default,
+                       v.version, v.currency, v.fee_source, v.distance_mode, v.max_distance_meters
+                  FROM fulfillment.delivery_tariffs t
+             LEFT JOIN fulfillment.delivery_tariff_versions v
+                    ON v.tenant_id = t.tenant_id AND v.tariff_id = t.id AND v.status = 'ACTIVE'
+                 WHERE t.tenant_id = :tenantId AND t.brand_id = :brandId AND t.id = :tariffId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("tariffId", tariffId)
+                .query((row, number) -> new TariffSummaryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("code"),
+                        row.getString("name"),
+                        row.getString("status"),
+                        row.getBoolean("is_brand_default"),
+                        row.getObject("version", Integer.class),
+                        row.getString("currency"),
+                        row.getString("fee_source"),
+                        row.getString("distance_mode"),
+                        row.getObject("max_distance_meters", Integer.class)))
+                .optional();
+    }
+
     /** The live version of a tariff, with its bands and time rules. */
     public Optional<DeliveryTariff> loadActive(UUID tenantId, UUID tariffId) {
         return load(tenantId, tariffId, null);
@@ -431,6 +490,24 @@ public class JdbcDeliveryTariffStore {
                 .param("from", timestamp(from))
                 .update();
     }
+
+    /**
+     * One tariff, lineage plus its live version's headline numbers — {@link
+     * #listTariffs} and {@link #findTariffSummary}'s shared projection. A
+     * tariff with no {@code ACTIVE} version carries nulls from {@code version}
+     * on, the same "drafted, never activated" state a zone can be in.
+     */
+    public record TariffSummaryRow(
+            UUID id,
+            String code,
+            String name,
+            String status,
+            boolean brandDefault,
+            @Nullable Integer activeVersion,
+            @Nullable String currency,
+            @Nullable String feeSource,
+            @Nullable String distanceMode,
+            @Nullable Integer maxDistanceMeters) {}
 
     private record Header(
             UUID tariffId,

@@ -1,0 +1,242 @@
+.kitchen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.kitchen__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  flex-wrap: wrap;
+}
+
+.kitchen__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: var(--q-radius);
+}
+
+.tab--active {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.tab__count {
+  margin-left: 4px;
+  color: var(--q-ink-subtle);
+}
+
+.kitchen__service-toggle {
+  padding: 6px 14px;
+  border: 1px solid var(--q-success);
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.kitchen__service-toggle--closed {
+  border-color: var(--q-error);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.kitchen__warning-band,
+.kitchen__notice-band,
+.kitchen__error-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.kitchen__warning-band {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.kitchen__notice-band {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.kitchen__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.kitchen__notice-dismiss {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: inherit;
+}
+
+.kitchen__board {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticket {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.ticket--warning {
+  border-color: var(--q-warning);
+}
+
+.ticket--danger {
+  border-color: var(--q-error);
+}
+
+.ticket__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.ticket__header:hover {
+  background: var(--q-surface-1);
+}
+
+.ticket__severity-rail {
+  display: none;
+}
+
+.ticket--warning .ticket__header {
+  border-left: 4px solid var(--q-warning);
+}
+
+.ticket--danger .ticket__header {
+  border-left: 4px solid var(--q-error);
+}
+
+.ticket__number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket__timing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticket__note {
+  padding: 6px 12px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.ticket__has-note {
+  color: var(--q-info-text);
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.chip--muted {
+  color: var(--q-ink-subtle);
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.ticket__items {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.ticket__items th {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.ticket__items td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.kitchen__num-col {
+  text-align: right;
+}
+
+.ticket__item-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.ticket__action {
+  padding: 4px 10px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ticket__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.kitchen__empty,
+.kitchen__denied {
+  padding: 32px;
+  text-align: center;
+}
+
+.kitchen__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kitchen__skeleton-card {
+  height: 48px;
+  background: var(--q-surface-1);
+}

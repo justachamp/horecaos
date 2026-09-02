@@ -6,14 +6,16 @@ import { NAV_ITEMS } from './shell/navigation';
 /**
  * The routing table.
  *
- * Three real routes (Today, Orders, Inbox) plus Catalog's own small tree, and
- * the rest are honest empty ones. The empty ones exist because every rail
- * entry must navigate somewhere — a rail item that does nothing when clicked
- * is a bug report — and because a placeholder that names its specification is
- * more useful to the next developer than a screen half-built against it. The
- * same principle applies one level down inside `catalog`'s own children:
- * `import` is a not-built placeholder for exactly this reason (see its own
- * comment below), even though `catalog` itself is "built".
+ * Today, Orders and Inbox plus Catalog's, Kitchen's and Delivery's own small
+ * trees, and Couriers as a single page, and the rest are honest empty ones.
+ * The empty ones exist because every rail entry must navigate somewhere — a
+ * rail item that does nothing when clicked is a bug report — and because a
+ * placeholder that names its specification is more useful to the next
+ * developer than a screen half-built against it. The same principle applies
+ * one level down inside a built section's own children: `catalog/import` and
+ * `delivery/dispatch-rules` are each a not-built placeholder for exactly this
+ * reason (see their own comments below), even though the section around them
+ * is "built".
  *
  * Everything except `/login` is behind {@link authGuard}. The guard proves
  * somebody is signed in; it never decides what they may do. Authorization is the
@@ -211,6 +213,67 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/catalog/product-editor-page').then((m) => m.ProductEditorPage),
       },
+      {
+        // IA §2: 2.1 Kitchen queue (KDS) and 2.5 Stop list, the section's two
+        // P-tier screens — same sub-nav-over-a-routed-child shape as `catalog`.
+        path: 'kitchen',
+        loadComponent: () => import('./features/kitchen/kitchen-shell').then((m) => m.KitchenShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'queue' },
+          {
+            path: 'queue',
+            loadComponent: () =>
+              import('./features/kitchen/kitchen-queue-page').then((m) => m.KitchenQueuePage),
+          },
+          {
+            path: 'stop-list',
+            loadComponent: () =>
+              import('./features/kitchen/stop-list-page').then((m) => m.StopListPage),
+          },
+        ],
+      },
+      {
+        // IA §3: 3.1 Dispatch board, 3.6 Delivery zones, 3.7 Delivery tariffs
+        // are built; 3.8 Dispatch rules is an honest not-built placeholder —
+        // see `delivery-shell.ts`'s own doc for why. 3.3 Couriers is its own
+        // top-level route below, per `navigation.ts`'s existing rail grouping.
+        path: 'delivery',
+        loadComponent: () =>
+          import('./features/delivery/delivery-shell').then((m) => m.DeliveryShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'dispatch' },
+          {
+            path: 'dispatch',
+            loadComponent: () =>
+              import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
+          },
+          {
+            path: 'zones',
+            loadComponent: () =>
+              import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
+          },
+          {
+            path: 'tariffs',
+            loadComponent: () =>
+              import('./features/delivery/delivery-tariffs-page').then(
+                (m) => m.DeliveryTariffsPage,
+              ),
+          },
+          {
+            path: 'dispatch-rules',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'operations-spec/couriers.md §3.8 (Dispatch rules) — no backend exists' },
+          },
+        ],
+      },
+      {
+        // IA §3.3: the in-house roster. A single page, not a shell — unlike
+        // Kitchen/Delivery there is only one P-tier screen here.
+        path: 'couriers',
+        loadComponent: () =>
+          import('./features/couriers/couriers-page').then((m) => m.CouriersPage),
+      },
       ...placeholderRoutes(),
       // Unknown paths land on Today rather than on a 404. There is no such thing
       // as a deleted page in this console — only one that has not been built —
@@ -225,7 +288,16 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog']);
+  const built = new Set([
+    '/today',
+    '/orders',
+    '/inbox',
+    '/settings',
+    '/catalog',
+    '/kitchen',
+    '/delivery',
+    '/couriers',
+  ]);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

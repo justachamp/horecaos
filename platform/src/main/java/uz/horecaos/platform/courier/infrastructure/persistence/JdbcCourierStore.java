@@ -86,6 +86,21 @@ public class JdbcCourierStore {
                 .optional();
     }
 
+    /** Every active vehicle class, for the registration form's picker (§9). */
+    public List<CourierTypeRow> listTypes(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, code, display_name, vehicle_class,
+                       min_distance_meters, max_distance_meters,
+                       max_concurrent_assignments, offer_ttl_seconds, status
+                  FROM fulfillment.courier_types
+                 WHERE tenant_id = :tenantId AND status = 'ACTIVE'
+                 ORDER BY display_name
+                """)
+                .param("tenantId", tenantId)
+                .query(JdbcCourierStore::mapType)
+                .list();
+    }
+
     // ----------------------------------------------------------------- couriers
 
     public void insertCourier(CourierRow courier) {
@@ -112,6 +127,35 @@ public class JdbcCourierStore {
                 .param("id", courierId)
                 .query(JdbcCourierStore::mapCourier)
                 .optional();
+    }
+
+    /**
+     * The roster (§3.3 Couriers, §5 list). No decrypted name: {@code
+     * display_reference} is what this projection carries, and every screen that
+     * reads it is the routine one {@code courier.read}'s own doc describes
+     * (ADR 0029). The engagement is a {@code LEFT JOIN} rather than an inner one
+     * so a courier row with no live engagement — a state {@link #suspend} and
+     * {@link #verify} never produce, but a future write path might — still
+     * renders instead of vanishing from a manager's count.
+     */
+    public List<CourierRosterRow> listCouriers(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT c.id, c.display_reference, c.status,
+                       c.courier_type_id, t.display_name AS type_name, t.vehicle_class,
+                       t.max_concurrent_assignments,
+                       e.id AS engagement_id, e.status AS engagement_status,
+                       e.warning_state, e.reverification_due_on
+                  FROM fulfillment.couriers c
+                  JOIN fulfillment.courier_types t
+                    ON t.tenant_id = c.tenant_id AND t.id = c.courier_type_id
+             LEFT JOIN fulfillment.courier_engagements e
+                    ON e.tenant_id = c.tenant_id AND e.courier_id = c.id AND e.status <> 'ENDED'
+                 WHERE c.tenant_id = :tenantId
+                 ORDER BY c.created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .query(JdbcCourierStore::mapRoster)
+                .list();
     }
 
     /**
@@ -454,6 +498,27 @@ public class JdbcCourierStore {
             int version) {}
 
     /**
+     * One roster row — {@link #listCouriers}'s projection, joined with the type
+     * and the live engagement (absent for the engagement fields when there is
+     * none). This is deliberately a different shape from {@link CourierRow}:
+     * that one is the write-path aggregate, the internals a command loads and
+     * conditions on; this one is what a list screen renders, and the two must
+     * be free to diverge without either constraining the other's columns.
+     */
+    public record CourierRosterRow(
+            UUID id,
+            String displayReference,
+            String status,
+            UUID courierTypeId,
+            String courierTypeName,
+            String vehicleClass,
+            int maxConcurrentAssignments,
+            @Nullable UUID engagementId,
+            @Nullable String engagementStatus,
+            @Nullable String warningState,
+            @Nullable LocalDate reverificationDueOn) {}
+
+    /**
      * An engagement as the ordinary projection reads it.
      *
      * <p>Everything after {@code engagedFrom} is absent until the act that
@@ -516,6 +581,21 @@ public class JdbcCourierStore {
                 rs.getInt("max_concurrent_assignments"),
                 rs.getInt("offer_ttl_seconds"),
                 rs.getString("status"));
+    }
+
+    private static CourierRosterRow mapRoster(ResultSet rs, int rowNumber) throws SQLException {
+        return new CourierRosterRow(
+                rs.getObject("id", UUID.class),
+                rs.getString("display_reference"),
+                rs.getString("status"),
+                rs.getObject("courier_type_id", UUID.class),
+                rs.getString("type_name"),
+                rs.getString("vehicle_class"),
+                rs.getInt("max_concurrent_assignments"),
+                rs.getObject("engagement_id", UUID.class),
+                rs.getString("engagement_status"),
+                rs.getString("warning_state"),
+                rs.getObject("reverification_due_on", LocalDate.class));
     }
 
     private static CourierRow mapCourier(ResultSet rs, int rowNumber) throws SQLException {
