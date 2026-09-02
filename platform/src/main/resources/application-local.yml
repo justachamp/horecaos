@@ -3,6 +3,13 @@
 # repeatable migration so edits to the checked-in demo data are applied on the
 # next local start without becoming production schema history.
 spring:
+  config:
+    # Real local credentials (a live bot token, a sandbox key) live in an
+    # untracked file beside the module root, never in this tree: the
+    # `environment` secrets provider reads properties, and this optional
+    # import is the one sanctioned way to hand it a value that must not be
+    # committed. Missing file, nothing happens.
+    import: optional:file:./local-secrets.properties
   flyway:
     locations: classpath:db/migration,classpath:db/local-fixtures
 
