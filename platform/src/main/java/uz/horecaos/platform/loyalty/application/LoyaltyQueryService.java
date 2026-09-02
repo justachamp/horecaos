@@ -85,6 +85,29 @@ public class LoyaltyQueryService {
     }
 
     /**
+     * One customer's own ledger for one of their brand balances (frontend
+     * information architecture §5.2: the Customers section's cashback ledger).
+     *
+     * <p>The account is a predicate checked against {@code customerAccountId}
+     * before anything is read, the same ownership-in-the-query discipline every
+     * other customer-scoped read in this codebase uses: an {@code accountId} is
+     * a UUID a client supplies, and matching on it alone would let one
+     * customer's ledger be read by naming another's points account.
+     *
+     * @throws ApiException RESOURCE_NOT_FOUND when {@code accountId} does not
+     *                       belong to {@code customerAccountId} in this tenant
+     */
+    @Transactional(readOnly = true)
+    public List<EntryRow> entriesOfCustomerAccount(UUID tenantId, UUID customerAccountId, UUID accountId) {
+        boolean owns = store.accountsOfCustomer(tenantId, customerAccountId).stream()
+                .anyMatch(account -> account.id().equals(accountId));
+        if (!owns) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account for this customer");
+        }
+        return store.entries(tenantId, accountId, ENTRY_PAGE);
+    }
+
+    /**
      * The reconciliation that says the cache never became the authority.
      *
      * @return the difference between the stored balance and the ledger's sum,

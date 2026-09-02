@@ -419,37 +419,6 @@
         },
         "type" : "object"
       },
-      "EntryResponse" : {
-        "properties" : {
-          "amountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "balanceAfterMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "occurredAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "reasonCode" : {
-            "type" : "string"
-          },
-          "type" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "ExchangeRequest" : {
         "properties" : {
           "tableToken" : {
@@ -550,6 +519,37 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LoyaltyStorefrontControllerEntryResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balanceAfterMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1314,6 +1314,26 @@
         },
         "type" : "object"
       },
+      "StorefrontCustomerControllerUpdateProfileRequest" : {
+        "properties" : {
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredLocale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredTimezone" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "StorefrontMenu" : {
         "properties" : {
           "categories" : {
@@ -1414,26 +1434,6 @@
           }
         },
         "required" : [ "code" ],
-        "type" : "object"
-      },
-      "UpdateProfileRequest" : {
-        "properties" : {
-          "displayName" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "preferredLocale" : {
-            "maxLength" : 16,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "preferredTimezone" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
         "type" : "object"
       }
     },
@@ -1619,7 +1619,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/EntryResponse"
+                    "$ref" : "#/components/schemas/LoyaltyStorefrontControllerEntryResponse"
                   },
                   "type" : "array"
                 }
@@ -2670,7 +2670,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/UpdateProfileRequest"
+                "$ref" : "#/components/schemas/StorefrontCustomerControllerUpdateProfileRequest"
               }
             }
           },

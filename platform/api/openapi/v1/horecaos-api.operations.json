@@ -61,6 +61,21 @@
         "required" : [ "coordinateSource", "fields" ],
         "type" : "object"
       },
+      "AddBlacklistRequest" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "AddContactRequest" : {
         "properties" : {
           "primary" : {
@@ -464,6 +479,25 @@
         "required" : [ "fulfillmentMode", "scheduleId" ],
         "type" : "object"
       },
+      "BlacklistStatusResponse" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "expired" : {
+            "type" : "boolean"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "since" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BlockedDocumentResponse" : {
         "properties" : {
           "attemptCount" : {
@@ -827,6 +861,24 @@
         "required" : [ "decision", "policyVersion", "purpose", "source" ],
         "type" : "object"
       },
+      "ContactSummaryResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "isPrimary" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "verificationStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ConversationDetailResponse" : {
         "properties" : {
           "conversation" : {
@@ -959,6 +1011,23 @@
             "type" : "string"
           },
           "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CountsResponse" : {
+        "properties" : {
+          "orderedToday" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "registeredToday" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total" : {
             "format" : "int64",
             "type" : "integer"
           }
@@ -1113,6 +1182,26 @@
         },
         "type" : "object"
       },
+      "CreateCustomerRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandId", "phone" ],
+        "type" : "object"
+      },
       "CreateTemplateRequest" : {
         "properties" : {
           "channel" : {
@@ -1156,6 +1245,129 @@
         "required" : [ "brandId" ],
         "type" : "object"
       },
+      "CustomerControllerUpdateProfileRequest" : {
+        "properties" : {
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredLocale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredTimezone" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerExportResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerOrderHistoryControllerOrderSummaryResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "fulfillmentStatus" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentStatus" : {
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerProfileResponse" : {
+        "properties" : {
+          "contactSummaries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ContactSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "hasDateOfBirth" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "preferredLocale" : {
+            "type" : "string"
+          },
+          "preferredTimezone" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CustomerResponse" : {
         "properties" : {
           "anonymized" : {
@@ -1178,6 +1390,41 @@
           },
           "transactionalContactAllowed" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerSummaryResponse" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DateOfBirthRequest" : {
+        "properties" : {
+          "dateOfBirth" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DateOfBirthResponse" : {
+        "properties" : {
+          "dateOfBirth" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1688,6 +1935,14 @@
         },
         "type" : "object"
       },
+      "LiftBlacklistRequest" : {
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LineBody" : {
         "properties" : {
           "lineId" : {
@@ -1931,6 +2186,45 @@
         },
         "type" : "object"
       },
+      "LoyaltyOperationsControllerEntryResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balanceAfterMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "entryType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lotId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "tenderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ManagerCloseRequest" : {
         "properties" : {
           "currency" : {
@@ -2093,6 +2387,16 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "MergeRequest" : {
+        "properties" : {
+          "targetAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "targetAccountId" ],
         "type" : "object"
       },
       "MetricResponse" : {
@@ -2890,6 +3194,34 @@
             "type" : "string"
           },
           "systemCategory" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageCustomerOrderHistoryControllerOrderSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CustomerOrderHistoryControllerOrderSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageCustomerSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CustomerSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
             "type" : "string"
           }
         },
@@ -3812,6 +4144,45 @@
             "type" : "string"
           },
           "verificationStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RevealedEntry" : {
+        "properties" : {
+          "actorId" : {
+            "type" : "string"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "liftReason" : {
+            "type" : "string"
+          },
+          "liftedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "liftedByActorId" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           }
         },
@@ -5429,7 +5800,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -5497,7 +5868,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -5838,7 +6209,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}" : {
       "get" : {
-        "operationId" : "profile",
+        "operationId" : "profile_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -6671,6 +7042,54 @@
         "tags" : [ "Loyalty operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/{accountId}/entries" : {
+      "get" : {
+        "description" : "Newest first, up to the last 100 entries. The ledger is the authority and the balance is a projection of it (ADR 0046): this is what an operator reads when a customer disputes the number on {@code GET .../loyalty}. accountId must be one of customerId's own balances, from the list above — naming somebody else's answers the same 404 as a nonexistent one.",
+        "operationId" : "entries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "customerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LoyaltyOperationsControllerEntryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One balance's own movement ledger",
+        "tags" : [ "Loyalty operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/delivery-costs" : {
       "get" : {
         "description" : "The basis is required. Two lines and a total, never one number: an in-house accrual and a partner invoice are recognised at different instants and rest on different tax documents.",
@@ -6883,7 +7302,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
       "get" : {
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7682,6 +8101,69 @@
         },
         "summary" : "Capabilities and scopes for the current principal",
         "tags" : [ "Authorization" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/customers/{accountId}/orders" : {
+      "get" : {
+        "description" : "Cursor-paginated per ADR 0031, identical in shape to the storefront's own \"my orders\" read: pass the previous page's nextCursor, and a null nextCursor is the end. Carries what a list shows and nothing beneath it — open the order itself (GET .../locations/{locationId}/orders/{orderId}) for lines, modifiers, or the customer panel's reveal calls.",
+        "operationId" : "listOrders",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageCustomerOrderHistoryControllerOrderSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One customer's orders at this brand, newest first",
+        "tags" : [ "Customer order history" ]
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/integrations/telegram/link-codes" : {
@@ -8978,7 +9460,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/stations" : {
       "get" : {
-        "operationId" : "list_1",
+        "operationId" : "list_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -9665,7 +10147,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
         "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -9733,7 +10215,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts" : {
       "get" : {
         "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached.",
-        "operationId" : "counts",
+        "operationId" : "counts_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11409,7 +11891,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates" : {
       "get" : {
         "description" : "Includes the tenant's defaults as well as this brand's overrides, because what a brand actually sends is whichever of the two resolution picks, and showing only the overrides hides half the answer.",
-        "operationId" : "list",
+        "operationId" : "list_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11756,6 +12238,187 @@
         "tags" : [ "Quotes" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/customers" : {
+      "get" : {
+        "description" : "Cursor-paginated per ADR 0031. No contact value and no address on this list, ever — that is the 'never a list-wide decrypt' rule frontend information architecture §5.1 is built around. `query` matches a phone number by its keyed hash when it normalizes to one, and the customer's display name otherwise.",
+        "operationId" : "list",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageCustomerSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's customer accounts, newest first",
+        "tags" : [ "Customers" ]
+      },
+      "post" : {
+        "description" : "The staff-initiated counterpart to storefront sign-in: an operator taking a phone call opens an account with no Keycloak principal link, the same channel-identity-only shape ADR 0059's SendPulse import uses. It starts non-contactable — no consent decision exists for it, and 'absence of a decision is not consent' already handles that (ConsentService's own doc) — so no origin column is needed to say so.",
+        "operationId" : "createManually",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerControllerIdResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a customer by hand",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/counts" : {
+      "get" : {
+        "description" : "Total, registered today, and ordered today — computed for UTC midnight (CustomerListQueryService#counts explains why). 'Ordered today' asks the ordering module's own OrderDirectory rather than this module's own tables.",
+        "operationId" : "counts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The grid header's three counters",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/export" : {
+      "get" : {
+        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows.",
+        "operationId" : "export_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CustomerExportResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A filtered export, decrypted",
+        "tags" : [ "Customers" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/customers/resolve" : {
       "post" : {
         "description" : "Creates one on first sign-in. The identity comes from the caller's own token; there is no way to resolve an account for someone else. Resolution is on issuer and subject only, because a phone number is a contact method and not an identity key.",
@@ -11792,6 +12455,43 @@
           }
         },
         "summary" : "Resolve the signed-in principal to a durable account",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}" : {
+      "get" : {
+        "description" : "Display name, status, and preferences — never a contact value or an address, which stay behind their own reveal-gated endpoints. `hasDateOfBirth` says whether one is on file without decrypting it.",
+        "operationId" : "profile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One customer's profile",
         "tags" : [ "Customers" ]
       }
     },
@@ -11884,6 +12584,266 @@
           }
         },
         "summary" : "Add a delivery address",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/addresses/{addressId}" : {
+      "delete" : {
+        "description" : "Archived, never deleted. Requires If-Match.",
+        "operationId" : "archiveAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive one of this customer's addresses",
+        "tags" : [ "Customers" ]
+      },
+      "put" : {
+        "description" : "Operator-visible, operator-editable (frontend information architecture §5.2) — the same write StorefrontCustomerController exposes to the customer themselves, here gated on CUSTOMER_MANAGE instead of account ownership. Requires If-Match.",
+        "operationId" : "updateAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddAddressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RevealedAddress"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace one of this customer's addresses",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-entries" : {
+      "get" : {
+        "description" : "Every entry, reason and lift reason revealed together, in one audit fact. Requires a stated purpose.",
+        "operationId" : "blacklistHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RevealedEntry"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The decrypted blacklist history",
+        "tags" : [ "Customers" ]
+      },
+      "post" : {
+        "description" : "Reason, actor, and an optional expiry (frontend information architecture §5.2). Refused while an entry is already active — lift it first. The enforcement point is CustomerIdentityService#resolve; see its own doc.",
+        "operationId" : "addBlacklistEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddBlacklistRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerControllerIdResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Blacklist this customer",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-entries/lift" : {
+      "post" : {
+        "operationId" : "liftBlacklistEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LiftBlacklistRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift the active blacklist entry",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-status" : {
+      "get" : {
+        "description" : "No reason, no reveal, no audit fact — mirrors CustomerProfileService's own existence-without-reveal split for contact points. Enough for the detail pane's badge; GET .../blacklist-entries is the reveal.",
+        "operationId" : "blacklistStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BlacklistStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this customer is blacklisted right now, with no reveal",
         "tags" : [ "Customers" ]
       }
     },
@@ -12063,10 +13023,133 @@
         "tags" : [ "Customers" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/date-of-birth" : {
+      "get" : {
+        "description" : "Requires a stated purpose, recorded as an audit fact.",
+        "operationId" : "revealDateOfBirth",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DateOfBirthResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reveal the date of birth",
+        "tags" : [ "Customers" ]
+      },
+      "put" : {
+        "description" : "Staff-only, unlike the three self-service profile fields — CustomerProfileService#updateDateOfBirth explains why. A null `dateOfBirth` clears a value already on file. Requires If-Match.",
+        "operationId" : "setDateOfBirth",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DateOfBirthRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set or clear the date of birth",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/merge" : {
+      "post" : {
+        "description" : "Identity merge for aggregator-masked identities (frontend information architecture §5.2): `accountId` becomes a redirect to `targetAccountId`, never the reverse — see CustomerIdentityService#merge for what this does and does not do. Requires If-Match against `accountId`'s own version.",
+        "operationId" : "merge",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MergeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Merge this account into another",
+        "tags" : [ "Customers" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12155,6 +13238,53 @@
         },
         "summary" : "Set one preference",
         "tags" : [ "Notification preferences" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/profile" : {
+      "put" : {
+        "description" : "Requires If-Match, so a second tab loses loudly.",
+        "operationId" : "updateProfile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomerControllerUpdateProfileRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the display name, language, or timezone",
+        "tags" : [ "Customers" ]
       }
     },
     "/api/v1/tenants/{tenantId}/fiscal/coverage" : {
@@ -12987,6 +14117,9 @@
   }, {
     "description" : "Audiences, campaigns, and suppression (ADR 0044)",
     "name" : "Marketing"
+  }, {
+    "description" : "One customer's own orders, as staff may read them",
+    "name" : "Customer order history"
   }, {
     "description" : "Capability grants and session context",
     "name" : "Authorization"

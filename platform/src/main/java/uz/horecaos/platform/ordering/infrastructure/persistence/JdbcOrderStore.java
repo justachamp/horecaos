@@ -576,6 +576,27 @@ public class JdbcOrderStore {
                 .single();
     }
 
+    /**
+     * Distinct customer accounts with at least one order inside {@code [from,
+     * to)}, tenant-wide (not brand- or location-scoped: the customer grid this
+     * serves is a tenant surface, the same scope {@code customer.customer_accounts}
+     * itself lives at). Guest orders — {@code customer_account_id IS NULL} —
+     * are excluded by the join predicate itself, never counted as a distinct
+     * null.
+     */
+    public long countDistinctCustomersBetween(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT count(DISTINCT customer_account_id) FROM ordering.orders
+                WHERE tenant_id = :tenantId AND customer_account_id IS NOT NULL
+                  AND created_at >= :from AND created_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(Long.class)
+                .single();
+    }
+
     public Optional<OrderRow> find(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT_ORDER + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)

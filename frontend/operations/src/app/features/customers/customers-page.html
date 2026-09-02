@@ -1,0 +1,129 @@
+<div class="layout" [class.layout--docked]="docked()">
+  <div class="list">
+    <div class="header">
+      <h1 class="q-title">{{ 'customers.title' | t }}</h1>
+      <div class="header__actions">
+        <button type="button" class="secondary" (click)="exportFiltered()" [disabled]="exporting()">
+          {{ exporting() ? ('customers.export.exporting' | t) : ('customers.export.action' | t) }}
+        </button>
+        <button
+          type="button"
+          class="primary"
+          (click)="openCreateDialog()"
+          data-testid="customers-create-button"
+        >
+          {{ 'customers.create.action' | t }}
+        </button>
+      </div>
+    </div>
+
+    @if (counts(); as c) {
+      <div class="counters">
+        <div class="counter">
+          <span class="q-caption">{{ 'customers.counters.total' | t }}</span>
+          <span class="q-data-lg q-tnum">{{ c.total }}</span>
+        </div>
+        <div class="counter">
+          <span class="q-caption">{{ 'customers.counters.orderedToday' | t }}</span>
+          <span class="q-data-lg q-tnum">{{ c.orderedToday }}</span>
+        </div>
+        <div class="counter">
+          <span class="q-caption">{{ 'customers.counters.registeredToday' | t }}</span>
+          <span class="q-data-lg q-tnum">{{ c.registeredToday }}</span>
+        </div>
+      </div>
+    }
+
+    <div class="filters">
+      <input
+        type="search"
+        class="search"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+        [placeholder]="'customers.search.placeholder' | t"
+        data-testid="customers-search"
+      />
+      <select
+        class="status-select"
+        [value]="statusFilter()"
+        (change)="onStatusFilterChange($any($event.target).value)"
+        data-testid="customers-status-filter"
+      >
+        <option value="ALL">{{ 'customers.status.ALL' | t }}</option>
+        <option value="ACTIVE">{{ 'customers.status.ACTIVE' | t }}</option>
+        <option value="SUSPENDED">{{ 'customers.status.SUSPENDED' | t }}</option>
+        <option value="ANONYMIZED">{{ 'customers.status.ANONYMIZED' | t }}</option>
+        <option value="CLOSED">{{ 'customers.status.CLOSED' | t }}</option>
+      </select>
+    </div>
+
+    @if (exportError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+    @if (exportedRows(); as rows) {
+      <p class="q-body-sm export-notice">
+        {{ 'customers.export.done' | t: { count: rows.length } }}
+        <button type="button" class="link" (click)="dismissExportNotice()">
+          {{ 'customers.export.dismiss' | t }}
+        </button>
+      </p>
+    }
+
+    @if (loading()) {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    } @else if (denied()) {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    } @else if (loadError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.field.name' | t }}</th>
+            <th class="q-caption">{{ 'customers.field.status' | t }}</th>
+            <th class="q-caption">{{ 'customers.field.registered' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (customer of customers(); track customer.id) {
+            <tr class="row" (click)="openCustomer(customer)" data-testid="customer-row">
+              <td class="q-body-sm">{{ customer.displayName ?? '—' }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge">{{ statusLabel(customer.status) }}</span>
+              </td>
+              <td class="q-body-sm q-tnum">{{ formatRegisteredAt(customer.createdAt) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="3">{{ 'customers.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hasMore()) {
+        <button
+          type="button"
+          class="secondary load-more"
+          (click)="loadMore()"
+          [disabled]="loadingMore()"
+        >
+          {{ loadingMore() ? ('customers.loading' | t) : ('customers.loadMore' | t) }}
+        </button>
+      }
+    }
+  </div>
+
+  <div class="detail">
+    <router-outlet (activate)="onOutletActivate()" (deactivate)="onOutletDeactivate()" />
+  </div>
+</div>
+
+@if (createDialogOpen()) {
+  <q-create-customer-dialog
+    [busy]="creating()"
+    [errorMessage]="createError()"
+    (confirm)="onCreateSubmit($event)"
+    (dismiss)="onCreateDismiss()"
+  />
+}

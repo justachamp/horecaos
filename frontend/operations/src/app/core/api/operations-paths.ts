@@ -172,6 +172,109 @@ export const operationsPaths = {
   inventoryAvailability(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
   },
+
+  // ---------------------------------------------------------------- Customers (§5)
+
+  /**
+   * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
+   * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
+   * beside it. `LocationScope.brandId`/`locationId` are unused here; the
+   * customer base is a tenant-wide surface, not a branch's own.
+   */
+  customers(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenant(scope)}/customers`;
+  },
+
+  /** The grid header's three counters. */
+  customersCounts(scope: LocationScope): string {
+    return `${this.customers(scope)}/counts`;
+  },
+
+  /** A filtered export, decrypted, behind one audited egress event (query params `status`, `query`, `purpose`). */
+  customersExport(scope: LocationScope): string {
+    return `${this.customers(scope)}/export`;
+  },
+
+  /** One customer's profile. */
+  customer(scope: LocationScope, accountId: string): string {
+    return `${this.customers(scope)}/${encodeURIComponent(accountId)}`;
+  },
+
+  /** Change the display name, language, or timezone. Mutation: key and `If-Match`. */
+  customerProfile(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/profile`;
+  },
+
+  /** Set/clear (`PUT`, key + `If-Match`) or reveal (`GET`, query param `purpose`) the date of birth. */
+  customerDateOfBirth(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/date-of-birth`;
+  },
+
+  /** Add (`POST`) or reveal every one (`GET`, query param `purpose`) of this customer's addresses. */
+  customerAddresses(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/addresses`;
+  },
+
+  /** Replace (`PUT`, key + `If-Match`) or archive (`DELETE`, `If-Match`) one address. */
+  customerAddress(scope: LocationScope, accountId: string, addressId: string): string {
+    return `${this.customerAddresses(scope, accountId)}/${encodeURIComponent(addressId)}`;
+  },
+
+  /** Add (`POST`) or reveal (`GET`, query param `purpose`) this customer's contact points. */
+  customerContactPoints(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/contact-points`;
+  },
+
+  /** Record (`POST`) or read (`GET`) the full consent history. */
+  customerConsentDecisions(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/consent-decisions`;
+  },
+
+  /** Whether this customer is blacklisted right now, with no reveal. */
+  customerBlacklistStatus(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/blacklist-status`;
+  },
+
+  /** Add (`POST`) or reveal the decrypted history (`GET`, query param `purpose`). */
+  customerBlacklistEntries(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/blacklist-entries`;
+  },
+
+  /** Lift the active entry. Mutation: key required. */
+  customerBlacklistLift(scope: LocationScope, accountId: string): string {
+    return `${this.customerBlacklistEntries(scope, accountId)}/lift`;
+  },
+
+  /** Merge this account into another. Mutation: key and `If-Match` against `accountId`'s own version. */
+  customerMerge(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/merge`;
+  },
+
+  /**
+   * One customer's order history, brand-scoped (`CustomerOrderHistoryController`,
+   * `ordering.web`) — a different module than the rest of this section, and
+   * therefore its own path rather than a child of {@link customer}.
+   */
+  customerOrders(scope: LocationScope, accountId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/customers/${encodeURIComponent(accountId)}/orders`;
+  },
+
+  /**
+   * Every points (cashback) balance this customer holds, one per brand
+   * (`LoyaltyOperationsController`, already on the ADR 0031 prefix).
+   */
+  customerLoyaltyBalances(scope: LocationScope, accountId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/customers/${encodeURIComponent(accountId)}/loyalty`;
+  },
+
+  /** One balance's own movement ledger — `loyaltyAccountId` from {@link customerLoyaltyBalances}, not `accountId`. */
+  customerLoyaltyEntries(
+    scope: LocationScope,
+    accountId: string,
+    loyaltyAccountId: string,
+  ): string {
+    return `${this.customerLoyaltyBalances(scope, accountId)}/${encodeURIComponent(loyaltyAccountId)}/entries`;
+  },
 } as const;
 
 /**
@@ -214,4 +317,15 @@ function tenantBrandLocation(scope: LocationScope): string {
 /** Brand-scoped, no location segment — {@link operationsPaths.conversations} and its children. */
 function tenantBrand(scope: LocationScope): string {
   return `/tenants/${encodeURIComponent(scope.tenantId)}/brands/${encodeURIComponent(scope.brandId)}`;
+}
+
+/**
+ * Tenant-scoped only — the Customers section (§5). `LocationScope` carries a
+ * `brandId` and `locationId` this console always has to hand, but the
+ * customer base itself is not brand- or location-partitioned in the URL: a
+ * `BRAND_ISOLATED` tenant still reads and writes through one tenant-scoped
+ * `CustomerController`, brand only ever appearing inside a request body.
+ */
+function tenant(scope: LocationScope): string {
+  return `/tenants/${encodeURIComponent(scope.tenantId)}`;
 }

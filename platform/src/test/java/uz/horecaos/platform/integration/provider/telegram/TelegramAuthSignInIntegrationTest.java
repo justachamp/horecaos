@@ -39,6 +39,7 @@ import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactEndpoint;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMethod;
 import uz.horecaos.platform.customers.application.CodeProtection;
+import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.application.CustomerPolicyLookup;
 import uz.horecaos.platform.customers.application.CustomerPolicyLookup.ResolvedIdentityPolicy;
@@ -141,7 +142,8 @@ class TelegramAuthSignInIntegrationTest {
         FieldProtection protection = fieldProtection("auth-sign-in-test-kek");
         JdbcCustomerStore customers = new JdbcCustomerStore(jdbc);
         CustomerPolicyLookup policies = (tenant, at) -> ResolvedIdentityPolicy.unconfigured();
-        CustomerIdentityService identity = new CustomerIdentityService(customers, policies, clock);
+        CustomerBlacklistService blacklist = new CustomerBlacklistService(customers, protection, clock, audit);
+        CustomerIdentityService identity = new CustomerIdentityService(customers, policies, clock, blacklist, audit);
 
         CustomerVerificationService verification = new CustomerVerificationService(
                 mock(VerificationChallengeIssuer.class),

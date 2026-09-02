@@ -34,6 +34,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerImportDirectory;
 import uz.horecaos.platform.customers.application.ConsentService;
+import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.application.CustomerImportDirectoryService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
@@ -142,8 +143,9 @@ class SendPulseContactImportIntegrationTest {
                 "local"));
 
         customerStore = new JdbcCustomerStore(jdbc);
-        CustomerIdentityService identity =
-                new CustomerIdentityService(customerStore, new ConfiguredCustomerPolicyLookup(jdbc), clock);
+        CustomerBlacklistService blacklist = new CustomerBlacklistService(customerStore, protection, clock, audit);
+        CustomerIdentityService identity = new CustomerIdentityService(
+                customerStore, new ConfiguredCustomerPolicyLookup(jdbc), clock, blacklist, audit);
         CustomerProfileService profiles =
                 new CustomerProfileService(customerStore, protection, objectMapper, clock, audit);
         consent = new ConsentService(customerStore, clock);

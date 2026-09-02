@@ -6,8 +6,9 @@ import { NAV_ITEMS } from './shell/navigation';
 /**
  * The routing table.
  *
- * Three real routes (Today, Orders, Inbox) plus Catalog's own small tree, and
- * the rest are honest empty ones. The empty ones exist because every rail
+ * Three real routes (Today, Orders, Inbox) plus Catalog's and Customers' own
+ * small trees, and the rest are honest empty ones. The empty ones exist
+ * because every rail
  * entry must navigate somewhere — a rail item that does nothing when clicked
  * is a bug report — and because a placeholder that names its specification is
  * more useful to the next developer than a screen half-built against it. The
@@ -58,6 +59,32 @@ export const routes: Routes = [
             path: ':orderId',
             loadComponent: () =>
               import('./features/orders/order-detail-pane').then((m) => m.OrderDetailPane),
+          },
+        ],
+      },
+      {
+        // The Customers section (frontend-information-architecture.md §5):
+        // the CRM grid docks its detail the same way `orders`/`locations` do.
+        path: 'customers',
+        loadComponent: () =>
+          import('./features/customers/customers-page').then((m) => m.CustomersPage),
+        children: [
+          // Bulk CSV import with retained provenance (§5.1) is honestly not
+          // built: the backend has no generic import pipeline, only the
+          // SendPulse-specific one (ADR 0059 stage 3), which is a different
+          // source and a different shape entirely. Declared before
+          // `:accountId` for the same reason `orders/new` is declared before
+          // `:orderId` — "import" must be a destination, not an account id.
+          {
+            path: 'import',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §5.1 (bulk CSV import)' },
+          },
+          {
+            path: ':accountId',
+            loadComponent: () =>
+              import('./features/customers/customer-detail-pane').then((m) => m.CustomerDetailPane),
           },
         ],
       },
@@ -225,7 +252,7 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog']);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/customers']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

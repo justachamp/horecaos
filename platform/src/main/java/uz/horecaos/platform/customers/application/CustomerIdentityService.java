@@ -10,11 +10,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerDirectory;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.CustomerPolicyLookup.ResolvedIdentityPolicy;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
  * Resolves an authenticated principal to a durable customer account (ADR 0015).
@@ -58,19 +63,38 @@ public class CustomerIdentityService implements CustomerDirectory {
     private final JdbcCustomerStore store;
     private final CustomerPolicyLookup policies;
     private final Clock clock;
+    private final CustomerBlacklistService blacklist;
+    private final AuditRecorder audit;
 
-    public CustomerIdentityService(JdbcCustomerStore store, CustomerPolicyLookup policies, Clock clock) {
+    public CustomerIdentityService(
+            JdbcCustomerStore store,
+            CustomerPolicyLookup policies,
+            Clock clock,
+            CustomerBlacklistService blacklist,
+            AuditRecorder audit) {
         this.store = store;
         this.policies = policies;
         this.clock = clock;
+        this.blacklist = blacklist;
+        this.audit = audit;
     }
 
     /**
      * Finds the account for this principal, creating one on first sign-in.
      *
+     * <p>The one enforcement point for {@link CustomerBlacklistService}
+     * (frontend information architecture §5.2): a blacklisted principal is
+     * refused resolution rather than handed an account, so nothing downstream —
+     * checkout included — ever has to remember to ask. See that service's own
+     * doc for why this is the live checkout-adjacent path and ordering's own
+     * {@code CustomerDirectory} is not.
+     *
      * @param brandId the brand the customer is signing in at. Required even under
      *                {@code TENANT_SHARED}, because a brand profile is created
      *                either way
+     * @throws BlacklistedAccountException when the account this principal
+     *                resolves to currently carries an active, unexpired
+     *                blacklist entry
      */
     @Transactional
     public Resolution resolve(UUID tenantId, UUID brandId, String issuer, String subject) {
@@ -89,11 +113,27 @@ public class CustomerIdentityService implements CustomerDirectory {
             // A merged account redirects to its target. The source row stays
             // because immutable order snapshots point at it.
             UUID effective = store.resolveMergeTarget(tenantId, accountId);
+            requireNotBlacklisted(tenantId, effective);
             ensureBrandProfile(tenantId, brandId, effective);
             return new Resolution(new CustomerAccountRef(effective, tenantId), false, policy);
         }
 
+        // A brand-new account cannot carry a blacklist entry yet — nothing has
+        // had the chance to write one — so the check is not repeated here.
         return new Resolution(create(tenantId, brandId, issuer, subject, resolved, partition, now), true, policy);
+    }
+
+    private void requireNotBlacklisted(UUID tenantId, UUID accountId) {
+        if (blacklist.isCurrentlyBlacklisted(tenantId, accountId)) {
+            throw new BlacklistedAccountException();
+        }
+    }
+
+    /** Refused resolution: the account this principal owns is currently blacklisted. */
+    public static class BlacklistedAccountException extends RuntimeException {
+        public BlacklistedAccountException() {
+            super("This customer account is currently blacklisted");
+        }
     }
 
     private CustomerAccountRef create(
@@ -235,6 +275,102 @@ public class CustomerIdentityService implements CustomerDirectory {
     public boolean sameAccount(UUID tenantId, UUID sessionAccountId, UUID namedAccountId) {
         return store.resolveMergeTarget(tenantId, sessionAccountId)
                 .equals(store.resolveMergeTarget(tenantId, namedAccountId));
+    }
+
+    /**
+     * Merges one account into another, by staff hand (frontend information
+     * architecture §5.2: "identity merge for aggregator-masked identities").
+     *
+     * <p>A redirect, never a data move: {@code source} keeps every row it ever
+     * wrote — addresses, consent decisions, order snapshots — and only its own
+     * {@code status}/{@code merged_into_account_id} change, the same columns
+     * {@code JdbcCustomerStore#resolveMergeTarget} already knew how to follow
+     * before this method could write them (V0017 declared the column; nothing
+     * wrote it until now).
+     * A future sign-in, order lookup, or loyalty balance read for the source
+     * resolves to {@code target} from the moment this commits.
+     *
+     * <p>What this does not do: no automatic duplicate detection. A masked
+     * aggregator phone (Yandex, Wolt) surfacing the same person under two
+     * accounts is found by an operator noticing two order histories that read
+     * like one customer, and named here explicitly — this call is the write, not
+     * the search.
+     *
+     * @param expectedVersion {@code source}'s version, so two operators racing to
+     *                        merge the same duplicate settle at one outcome
+     * @throws SelfMergeException            {@code source} and {@code target} are
+     *                        the same account
+     * @throws MergeTargetInvalidException   {@code target} does not exist in this
+     *                        tenant, or is itself already merged away — chaining
+     *                        merges is refused rather than silently followed, so
+     *                        an operator always names the account that will
+     *                        actually end up owning the history
+     * @throws MergeConflictException        {@code source} has moved on from
+     *                        {@code expectedVersion}, or was merged by a
+     *                        concurrent call before this one committed
+     */
+    @Transactional
+    public void merge(UUID tenantId, UUID sourceAccountId, UUID targetAccountId, int expectedVersion, ActorRef actor) {
+        if (sourceAccountId.equals(targetAccountId)) {
+            throw new SelfMergeException();
+        }
+        var target = store.account(tenantId, targetAccountId).orElseThrow(MergeTargetInvalidException::new);
+        if ("MERGED".equals(target.status())) {
+            throw new MergeTargetInvalidException();
+        }
+        var source = store.account(tenantId, sourceAccountId).orElseThrow(MergeTargetInvalidException::new);
+
+        Instant now = clock.instant();
+        int written = store.mergeAccount(tenantId, sourceAccountId, targetAccountId, expectedVersion, now);
+        if (written == 0) {
+            throw new MergeConflictException(expectedVersion, source.version());
+        }
+
+        audit.record(AuditFact.of("customer.identity.merged", AuditClass.SECURITY)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("customer_account", sourceAccountId)
+                .because("Operator merged a duplicate customer identity")
+                .changed(java.util.Map.of("mergedIntoAccountId", targetAccountId.toString()))
+                .correlatedBy(sourceAccountId.toString())
+                .occurredAt(now)
+                .build());
+
+        log.info("Merged customer account {} into {} in tenant {}", sourceAccountId, targetAccountId, tenantId);
+    }
+
+    /** {@code source} and {@code target} named the same account. */
+    public static class SelfMergeException extends RuntimeException {
+        public SelfMergeException() {
+            super("An account cannot be merged into itself");
+        }
+    }
+
+    /** The named merge target does not exist in this tenant, or is itself merged away. */
+    public static class MergeTargetInvalidException extends RuntimeException {
+        public MergeTargetInvalidException() {
+            super("No such target account, or the target is itself already merged");
+        }
+    }
+
+    /** The source account moved on from the caller's {@code expectedVersion}. */
+    public static class MergeConflictException extends RuntimeException {
+        private final int expected;
+        private final int actual;
+
+        public MergeConflictException(int expected, int actual) {
+            super("Expected version %d but the account is at %d".formatted(expected, actual));
+            this.expected = expected;
+            this.actual = actual;
+        }
+
+        public int expected() {
+            return expected;
+        }
+
+        public int actual() {
+            return actual;
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand;
 import uz.horecaos.platform.loyalty.application.LoyaltyQueryService;
+import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.EntryRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.LiabilityRow;
 import uz.horecaos.platform.web.api.ApiMoney;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -94,6 +96,22 @@ public class LoyaltyOperationsController {
         return ResponseEntity.ok(AdjustmentResponse.of(outcome));
     }
 
+    @GetMapping("/tenants/{tenantId}/customers/{customerId}/loyalty/{accountId}/entries")
+    @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "One balance's own movement ledger",
+            description = "Newest first, up to the last 100 entries. The ledger is the authority "
+                    + "and the balance is a projection of it (ADR 0046): this is what an operator "
+                    + "reads when a customer disputes the number on {@code GET .../loyalty}. "
+                    + "accountId must be one of customerId's own balances, from the list above — "
+                    + "naming somebody else's answers the same 404 as a nonexistent one.")
+    public ResponseEntity<List<EntryResponse>> entries(
+            @PathVariable UUID tenantId, @PathVariable UUID customerId, @PathVariable UUID accountId) {
+        return ResponseEntity.ok(loyalty.entriesOfCustomerAccount(tenantId, customerId, accountId).stream()
+                .map(EntryResponse::of)
+                .toList());
+    }
+
     @GetMapping("/tenants/{tenantId}/reports/loyalty-liability")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -138,6 +156,40 @@ public class LoyaltyOperationsController {
                 case ApprovalOutcome.Approved approved -> new AdjustmentResponse("APPROVED", approved.requestId());
                 case ApprovalOutcome.Declined declined -> new AdjustmentResponse("DECLINED", declined.requestId());
             };
+        }
+    }
+
+    /**
+     * One ledger movement.
+     *
+     * <p>{@code amountMinor}/{@code balanceAfterMinor} are plain whole som
+     * rather than {@link ApiMoney}: the currency lives on the balance this
+     * entry belongs to, already returned by {@code GET .../loyalty}, and this
+     * endpoint does not re-fetch it per row to avoid a second query the caller
+     * already has the answer to.
+     */
+    public record EntryResponse(
+            UUID id,
+            String entryType,
+            long amountMinor,
+            long balanceAfterMinor,
+            @Nullable UUID lotId,
+            @Nullable UUID orderId,
+            @Nullable UUID tenderId,
+            @Nullable String reasonCode,
+            Instant occurredAt) {
+
+        static EntryResponse of(EntryRow row) {
+            return new EntryResponse(
+                    row.id(),
+                    row.entryType().name(),
+                    row.amountMinor(),
+                    row.balanceAfterMinor(),
+                    row.lotId(),
+                    row.orderId(),
+                    row.tenderId(),
+                    row.reasonCode(),
+                    row.occurredAt());
         }
     }
 
