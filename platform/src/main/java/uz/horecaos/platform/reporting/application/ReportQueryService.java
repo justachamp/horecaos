@@ -73,7 +73,7 @@ public class ReportQueryService {
         }
 
         BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
-        refuseMixedBoundaryRegime(query);
+        refuseMixedBoundaryRegime(query.tenantId(), query.from(), query.to());
 
         List<BranchDayAggregate> rows = store.readAggregates(query.tenantId(), query.from(), query.to()).stream()
                 .filter(row -> query.locationIds().isEmpty()
@@ -134,6 +134,53 @@ public class ReportQueryService {
                         businessDays.boundaryFor(tenantId)));
     }
 
+    /**
+     * Order-grain rows for 7.2's per-order tables — «Этапы», «Заказы»,
+     * «Опоздания» — none of which is a day-grain slice the typed {@link #run}
+     * query can answer. See {@code JdbcReportingStore#readOrders}'s doc for why
+     * this is a bounded read rather than a paginated feed.
+     */
+    @Transactional(readOnly = true)
+    public OrderListResult orders(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            JdbcReportingStore.OrderSort sort,
+            int limit) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.OrderRow> rows =
+                store.readOrders(tenantId, from, to, locationIds, channelCodes, sort, limit);
+        return new OrderListResult(
+                rows,
+                // A full page does not prove there is no next row, but it is
+                // enough to tell the console "there may be more than this bounded
+                // read shows" rather than implying the list is complete.
+                rows.size() >= limit,
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * Every terminal status in range, split by cancellation reason — the
+     * funnel's drop-offs and the cancellation panel's reason breakdown from one
+     * read. See {@code JdbcReportingStore#readOrderOutcomes}.
+     */
+    @Transactional(readOnly = true)
+    public OutcomeResult orderOutcomes(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.OutcomeRow> rows =
+                store.readOrderOutcomes(tenantId, from, to, locationIds, channelCodes);
+        return new OutcomeResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
     /** Every definition, with whether finance has signed it. */
     @Transactional(readOnly = true)
     public List<MetricView> catalogue() {
@@ -181,16 +228,26 @@ public class ReportQueryService {
 
     // ------------------------------------------------------------- refusals
 
-    private void refuseMixedBoundaryRegime(ReportQuery query) {
-        Optional<LocalDate> recutThrough = businessDays.recutCompletedThrough(query.tenantId());
+    private void refuseMixedBoundaryRegime(UUID tenantId, LocalDate from, LocalDate to) {
+        Optional<LocalDate> recutThrough = businessDays.recutCompletedThrough(tenantId);
         if (recutThrough.isEmpty()) {
             return;
         }
         LocalDate frontier = recutThrough.get();
         // The range is answerable while it sits wholly on one side of the
         // frontier. It is only the crossing that mixes two regimes.
-        if (!query.from().isAfter(frontier) && query.to().isAfter(frontier)) {
+        if (!from.isAfter(frontier) && to.isAfter(frontier)) {
             throw new ReportingRefusals.MixedBoundaryRegimeException(frontier);
+        }
+    }
+
+    /** Same bound {@link ReportQuery} already enforces, for the two order-grain reads below it. */
+    private static void validateRange(LocalDate from, LocalDate to) {
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("The range ends before it starts");
+        }
+        if (from.plusDays(ReportQuery.MAX_DAYS).isBefore(to)) {
+            throw new IllegalArgumentException("A range may cover at most " + ReportQuery.MAX_DAYS + " days");
         }
     }
 
@@ -301,6 +358,14 @@ public class ReportQueryService {
     public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
 
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
+
+    /**
+     * @param maybeMore true when the bounded read came back full — there may be
+     *                  rows beyond it, not a claim that there are
+     */
+    public record OrderListResult(List<JdbcReportingStore.OrderRow> rows, boolean maybeMore, Provenance provenance) {}
+
+    public record OutcomeResult(List<JdbcReportingStore.OutcomeRow> rows, Provenance provenance) {}
 
     /** A definition plus its signature state, which is what the metric dictionary shows. */
     public record MetricView(

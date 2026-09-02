@@ -1,0 +1,52 @@
+<div class="filter-bar">
+  <div
+    class="filter-bar__row filter-bar__row--period"
+    role="group"
+    [attr.aria-label]="'reports.filter.period.label' | t"
+  >
+    @for (option of periods; track option.id) {
+      <button
+        type="button"
+        class="pill"
+        [class.pill--active]="state.period() === option.id"
+        [attr.aria-pressed]="state.period() === option.id"
+        (click)="selectPeriod(option.id)"
+      >
+        {{ option.labelKey | t }}
+      </button>
+    }
+  </div>
+
+  <div
+    class="filter-bar__row filter-bar__row--slice"
+    role="group"
+    [attr.aria-label]="'reports.filter.slice.label' | t"
+  >
+    <div
+      class="filter-bar__segmented"
+      role="group"
+      [attr.aria-label]="'reports.filter.fulfilment.label' | t"
+    >
+      @for (option of fulfilmentTypes; track option.id) {
+        <button
+          type="button"
+          class="segment"
+          [class.segment--active]="state.fulfilmentType() === option.id"
+          [attr.aria-pressed]="state.fulfilmentType() === option.id"
+          (click)="selectFulfilmentType(option.id)"
+        >
+          {{ option.labelKey | t }}
+        </button>
+      }
+    </div>
+
+    <div
+      class="filter-bar__locked"
+      [attr.aria-label]="'reports.filter.paymentType.label' | t"
+      [attr.title]="'reports.filter.paymentType.locked' | t"
+    >
+      <span class="filter-bar__locked-glyph" aria-hidden="true"><span></span></span>
+      <span class="q-body-sm">{{ 'reports.filter.paymentType.label' | t }}</span>
+    </div>
+  </div>
+</div>

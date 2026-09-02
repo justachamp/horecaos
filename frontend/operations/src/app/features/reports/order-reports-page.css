@@ -1,0 +1,153 @@
+.order-reports {
+  padding: 20px 24px 48px;
+}
+
+.order-reports__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.order-reports__header h1 {
+  margin: 0;
+}
+
+.order-reports__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--q-ink-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+}
+
+.order-reports__export {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px dashed var(--q-ink-subtle);
+  background: transparent;
+  color: var(--q-ink-subtle);
+  cursor: not-allowed;
+}
+
+.order-reports__skeleton {
+  height: 320px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+}
+
+.order-reports__denied,
+.order-reports__error {
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.order-reports__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.order-reports__retry {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--q-error-text);
+  background: transparent;
+  color: var(--q-error-text);
+  cursor: pointer;
+}
+
+.order-reports__pii-note,
+.order-reports__note,
+.order-reports__bounded-note {
+  margin: 0 0 8px;
+  color: var(--q-ink-subtle);
+}
+
+.order-reports__summary-line {
+  margin: 0 0 12px;
+  color: var(--q-ink-muted);
+}
+
+.daily-table,
+.pivot-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.daily-table th,
+.pivot-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.daily-table td,
+.pivot-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.daily-table__num,
+.pivot-table__num {
+  text-align: right;
+}
+
+.daily-table__empty {
+  padding: 24px 10px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+.pivot-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pivot-controls__group {
+  display: inline-flex;
+  border: 1px solid var(--q-hairline);
+}
+
+.segment {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment--active {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+}

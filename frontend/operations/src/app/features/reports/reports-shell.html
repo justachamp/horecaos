@@ -1,0 +1,22 @@
+<div class="reports-shell">
+  <nav class="reports-shell__tabs" [attr.aria-label]="'reports.nav.label' | t">
+    <a
+      class="reports-shell__tab q-body-sm"
+      routerLink="/statistics/overview"
+      routerLinkActive="reports-shell__tab--active"
+      >{{ 'reports.nav.overview' | t }}</a
+    >
+    <a
+      class="reports-shell__tab q-body-sm"
+      routerLink="/statistics/orders"
+      routerLinkActive="reports-shell__tab--active"
+      >{{ 'reports.nav.orders' | t }}</a
+    >
+  </nav>
+
+  <q-reports-filter-bar />
+
+  <div class="reports-shell__body">
+    <router-outlet />
+  </div>
+</div>

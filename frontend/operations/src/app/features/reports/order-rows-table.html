@@ -1,0 +1,118 @@
+<table class="order-table">
+  <thead>
+    <tr>
+      <th class="order-table__rail-col"></th>
+      @if (hasColumn('orderId')) {
+        <th class="q-caption">{{ 'reports.orders.column.orderId' | t }}</th>
+      }
+      @if (hasColumn('businessDate')) {
+        <th class="q-caption">{{ 'reports.orders.column.date' | t }}</th>
+      }
+      @if (hasColumn('channel')) {
+        <th class="q-caption">{{ 'reports.orders.column.channel' | t }}</th>
+      }
+      @if (hasColumn('fulfilment')) {
+        <th class="q-caption">{{ 'reports.orders.column.fulfilment' | t }}</th>
+      }
+      @if (hasColumn('status')) {
+        <th class="q-caption">{{ 'reports.orders.column.status' | t }}</th>
+      }
+      @if (hasColumn('confirm')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.confirm' | t }}</th>
+      }
+      @if (hasColumn('ready')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.ready' | t }}</th>
+      }
+      @if (hasColumn('total')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.total' | t }}</th>
+      }
+      @if (hasColumn('late')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.late' | t }}</th>
+      }
+      @if (hasColumn('gross')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.gross' | t }}</th>
+      }
+      @if (hasColumn('discount')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.discount' | t }}</th>
+      }
+      @if (hasColumn('deliveryFee')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.deliveryFee' | t }}</th>
+      }
+      @if (hasColumn('net')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.net' | t }}</th>
+      }
+      @if (hasColumn('items')) {
+        <th class="q-caption order-table__num">{{ 'reports.orders.column.items' | t }}</th>
+      }
+      @if (hasColumn('occurredAt')) {
+        <th class="q-caption">{{ 'reports.orders.column.occurredAt' | t }}</th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of rows(); track row.orderId) {
+      <tr
+        class="order-row"
+        [class.order-row--amber]="severity(row) === 'amber'"
+        [class.order-row--red]="severity(row) === 'red'"
+      >
+        <td
+          class="order-table__rail-col"
+          [class.order-table__rail--amber]="severity(row) === 'amber'"
+          [class.order-table__rail--red]="severity(row) === 'red'"
+        ></td>
+        @if (hasColumn('orderId')) {
+          <td class="q-mono q-body-sm">{{ shortId(row.orderId) }}</td>
+        }
+        @if (hasColumn('businessDate')) {
+          <td class="q-body-sm q-tnum">{{ date(row.businessDate) }}</td>
+        }
+        @if (hasColumn('channel')) {
+          <td class="q-body-sm">{{ row.channelCode }}</td>
+        }
+        @if (hasColumn('fulfilment')) {
+          <td class="q-body-sm">{{ fulfilmentLabel(row.fulfilmentType) }}</td>
+        }
+        @if (hasColumn('status')) {
+          <td class="q-body-sm">{{ statusLabel(row.terminalStatus) }}</td>
+        }
+        @if (hasColumn('confirm')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ duration(row.secondsToConfirm) }}</td>
+        }
+        @if (hasColumn('ready')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ duration(row.secondsToReady) }}</td>
+        }
+        @if (hasColumn('total')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ duration(row.secondsTotal) }}</td>
+        }
+        @if (hasColumn('late')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ lateness(row.secondsLate) }}</td>
+        }
+        @if (hasColumn('gross')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ money(row.grossRevenueSom) }}</td>
+        }
+        @if (hasColumn('discount')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ money(row.discountSom) }}</td>
+        }
+        @if (hasColumn('deliveryFee')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ money(row.deliveryFeeSom) }}</td>
+        }
+        @if (hasColumn('net')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ money(row.netRevenueSom) }}</td>
+        }
+        @if (hasColumn('items')) {
+          <td class="q-body-sm q-tnum order-table__num">{{ count(row.itemCount) }}</td>
+        }
+        @if (hasColumn('occurredAt')) {
+          <td class="q-body-sm q-tnum">{{ date(row.businessDate) }} {{ time(row.occurredAt) }}</td>
+        }
+      </tr>
+    } @empty {
+      <tr>
+        <td class="order-table__empty q-body-sm" [attr.colspan]="columns().length + 1">
+          {{ emptyMessageKey() | t }}
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>

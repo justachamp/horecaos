@@ -1,0 +1,235 @@
+<div class="overview">
+  <div class="overview__header">
+    <h1 class="q-title">{{ 'reports.overview.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <div class="overview__skeleton" aria-busy="true">
+        <div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div>
+      </div>
+    }
+    @case ('denied') {
+      <div class="overview__denied q-body-sm">{{ 'reports.denied.notGranted' | t }}</div>
+    }
+    @case ('error') {
+      <div class="overview__error" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        @if (lastError(); as error) {
+          <span class="q-mono q-caption">{{ error.correlationId ?? '—' }}</span>
+        }
+        <button type="button" class="overview__retry q-body-sm" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <!-- Band A: five KPI tiles -->
+      <div class="tiles">
+        @for (tile of tiles(); track tile.key) {
+          <div class="tile" [class.tile--provisional]="tile.provisional">
+            <div class="tile__label q-caption">{{ tile.labelKey | t }}</div>
+            <div class="tile__value q-data-lg q-tnum">{{ tile.display }}</div>
+            @if (tile.deltaText) {
+              <div class="tile__delta q-caption" [class.tile__delta--up]="tile.deltaUp">
+                {{ tile.deltaText }} {{ 'reports.overview.tile.deltaSuffix' | t }}
+              </div>
+            }
+            @if (tile.subtitle) {
+              <div class="tile__subtitle q-caption">{{ tile.subtitle }}</div>
+            }
+            @if (tile.provisional) {
+              <div class="tile__provisional-note q-caption">
+                {{ 'reports.provenance.provisional.short' | t }}
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Band B: timing -->
+      <div class="band band--timing">
+        <h2 class="q-subhead">{{ 'reports.overview.timing.title' | t }}</h2>
+        <div class="gauges">
+          <div class="gauge">
+            <div class="gauge__label q-body-sm">
+              {{ 'reports.overview.timing.preparation' | t }}
+            </div>
+            <div class="gauge__value q-data-lg q-tnum">
+              {{ prepMedianSeconds() === null ? '—' : formatDuration(prepMedianSeconds()!) }}
+            </div>
+            <div class="gauge__caption q-caption">
+              {{ 'reports.overview.timing.medianCaption' | t }}
+            </div>
+          </div>
+          <div class="gauge gauge--not-built">
+            <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.delivery' | t }}</div>
+            <div class="gauge__not-built q-caption">
+              {{ 'reports.overview.timing.delivery.notBuilt' | t }}
+            </div>
+          </div>
+          <div class="gauge gauge--not-built">
+            <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.pickup' | t }}</div>
+            <div class="gauge__not-built q-caption">
+              {{ 'reports.overview.timing.pickup.notBuilt' | t }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Band C: mix -->
+      <div class="band band--mix">
+        <div class="mix-card">
+          <div class="mix-card__header">
+            <h2 class="q-subhead">{{ 'reports.overview.mix.channels' | t }}</h2>
+            <button
+              type="button"
+              class="mix-card__toggle q-caption"
+              (click)="toggleChannelMixBasis()"
+            >
+              {{
+                (channelMixByRevenue()
+                  ? 'reports.overview.mix.byRevenue'
+                  : 'reports.overview.mix.byCount'
+                ) | t
+              }}
+            </button>
+          </div>
+          @for (row of channelMix(); track row.key) {
+            <div class="bar-row">
+              <div class="bar-row__label q-body-sm">{{ row.label }}</div>
+              <div class="bar-row__track">
+                <div class="bar-row__fill" [style.width.%]="channelBarWidth(row)"></div>
+              </div>
+              <div class="bar-row__value q-caption q-tnum">
+                {{ channelMixByRevenue() ? row.revenueSharePercent : row.countSharePercent }}%
+              </div>
+            </div>
+          } @empty {
+            <p class="q-caption">{{ 'reports.empty.period' | t }}</p>
+          }
+        </div>
+
+        <div class="mix-card">
+          <h2 class="q-subhead">{{ 'reports.overview.mix.fulfilment' | t }}</h2>
+          <div class="stacked-bar">
+            @for (row of fulfilmentMix(); track row.key) {
+              <div
+                class="stacked-bar__segment"
+                [class]="'stacked-bar__segment--' + row.key"
+                [style.width.%]="row.countSharePercent"
+                [attr.title]="row.label + ' — ' + row.countSharePercent + '%'"
+              ></div>
+            }
+          </div>
+          <div class="stacked-bar__legend">
+            @for (row of fulfilmentMix(); track row.key) {
+              <span class="q-caption">{{ row.label }} · {{ row.countSharePercent }}%</span>
+            }
+          </div>
+        </div>
+
+        <div class="mix-card mix-card--locked">
+          <h2 class="q-subhead">{{ 'reports.overview.mix.payment' | t }}</h2>
+          <p class="q-caption">{{ 'reports.overview.mix.payment.locked' | t }}</p>
+        </div>
+      </div>
+
+      <!-- Band D: funnel + branch table -->
+      <div class="band band--funnel">
+        <h2 class="q-subhead">{{ 'reports.overview.funnel.title' | t }}</h2>
+        <div class="funnel-summary">
+          <div class="funnel-stat">
+            <div class="funnel-stat__value q-data-lg q-tnum">
+              {{ formatCountValue(completedCount()) }}
+            </div>
+            <div class="funnel-stat__label q-caption">
+              {{ 'reports.overview.funnel.completed' | t }}
+            </div>
+          </div>
+          <button type="button" class="funnel-stat funnel-stat--link" (click)="openOrderLog()">
+            <div class="funnel-stat__value q-data-lg q-tnum">
+              {{ formatCountValue(outcomeTotalCount()) }}
+            </div>
+            <div class="funnel-stat__label q-caption">
+              {{ 'reports.overview.funnel.notCompleted' | t }}
+            </div>
+          </button>
+        </div>
+
+        @if (outcomes().length > 0) {
+          <table class="outcome-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.overview.funnel.status' | t }}</th>
+                <th class="q-caption">{{ 'reports.overview.funnel.reason' | t }}</th>
+                <th class="q-caption outcome-table__num">
+                  {{ 'reports.overview.funnel.count' | t }}
+                </th>
+                <th class="q-caption outcome-table__num">
+                  {{ 'reports.overview.funnel.share' | t }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of outcomes(); track row.status + '|' + row.reasonCode) {
+                <tr>
+                  <td class="q-body-sm">{{ statusLabel(row.status) }}</td>
+                  <td class="q-body-sm">
+                    {{ row.reasonCode ?? ('reports.overview.funnel.reasonUnknown' | t) }}
+                  </td>
+                  <td class="q-body-sm q-tnum outcome-table__num">
+                    {{ formatCountValue(row.count) }}
+                  </td>
+                  <td class="q-caption q-tnum outcome-table__num">{{ row.sharePercent }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <p class="q-caption">{{ 'reports.overview.funnel.costNotBuilt' | t }}</p>
+        }
+
+        @if (multiLocation()) {
+          <h2 class="q-subhead">{{ 'reports.overview.branches.title' | t }}</h2>
+          <table class="branch-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.overview.branches.name' | t }}</th>
+                <th class="q-caption branch-table__num">
+                  {{ 'reports.overview.branches.revenue' | t }}
+                </th>
+                <th class="q-caption branch-table__num">
+                  {{ 'reports.overview.branches.orders' | t }}
+                </th>
+                <th class="q-caption branch-table__num">
+                  {{ 'reports.overview.branches.averageCheck' | t }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of branches(); track row.locationId) {
+                <tr>
+                  <td class="q-body-sm">{{ row.name }}</td>
+                  <td class="q-body-sm q-tnum branch-table__num">
+                    {{ formatMoneyValue(row.grossSom) }}
+                  </td>
+                  <td class="q-body-sm q-tnum branch-table__num">
+                    {{ formatCountValue(row.orderCount) }}
+                  </td>
+                  <td class="q-body-sm q-tnum branch-table__num">
+                    {{ row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+  }
+</div>

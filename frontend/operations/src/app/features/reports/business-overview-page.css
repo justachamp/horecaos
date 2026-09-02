@@ -1,0 +1,291 @@
+.overview {
+  padding: 20px 24px 48px;
+  max-width: 1200px;
+}
+
+.overview__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.overview__header h1 {
+  margin: 0;
+}
+
+.overview__skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.skeleton-tile {
+  height: 96px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+}
+
+.overview__denied,
+.overview__error {
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+}
+
+.overview__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.overview__retry {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--q-error-text);
+  background: transparent;
+  color: var(--q-error-text);
+  cursor: pointer;
+}
+
+/* Band A: KPI tiles */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.tile {
+  padding: 14px 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+}
+
+.tile--provisional {
+  border-left: 3px solid var(--q-warning);
+}
+
+.tile__label {
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}
+
+.tile__value {
+  margin-top: 6px;
+  color: var(--q-ink);
+}
+
+.tile__delta {
+  margin-top: 4px;
+  color: var(--q-error-text);
+}
+
+.tile__delta--up {
+  color: var(--q-success-text, #0e6027);
+}
+
+.tile__subtitle {
+  margin-top: 6px;
+  color: var(--q-ink-muted);
+}
+
+.tile__provisional-note {
+  margin-top: 6px;
+  color: var(--q-warning-text);
+}
+
+/* Band B: timing */
+.band {
+  margin-bottom: 28px;
+}
+
+.band h2 {
+  margin: 0 0 12px;
+}
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.gauge {
+  padding: 14px 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+}
+
+.gauge--not-built {
+  background: var(--q-surface-1);
+  color: var(--q-ink-subtle);
+}
+
+.gauge__label {
+  color: var(--q-ink-muted);
+}
+
+.gauge__value {
+  margin-top: 6px;
+}
+
+.gauge__caption {
+  margin-top: 4px;
+  color: var(--q-ink-subtle);
+}
+
+.gauge__not-built {
+  margin-top: 10px;
+  color: var(--q-ink-subtle);
+}
+
+/* Band C: mix */
+.band--mix {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.mix-card {
+  padding: 14px 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+}
+
+.mix-card--locked {
+  background: var(--q-surface-1);
+  color: var(--q-ink-subtle);
+}
+
+.mix-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mix-card__toggle {
+  border: 1px solid var(--q-hairline);
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--q-ink-muted);
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.bar-row__label {
+  color: var(--q-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-row__track {
+  height: 10px;
+  background: var(--q-surface-1);
+}
+
+.bar-row__fill {
+  height: 100%;
+  background: var(--q-primary);
+}
+
+.bar-row__value {
+  text-align: right;
+  color: var(--q-ink-muted);
+}
+
+.stacked-bar {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  background: var(--q-surface-1);
+}
+
+.stacked-bar__segment--DELIVERY {
+  background: var(--q-primary);
+}
+
+.stacked-bar__segment--PICKUP {
+  background: var(--q-success);
+}
+
+.stacked-bar__segment--DINE_IN {
+  background: var(--q-warning);
+}
+
+.stacked-bar__legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--q-ink-muted);
+  flex-wrap: wrap;
+}
+
+/* Band D: funnel + branches */
+.funnel-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.funnel-stat {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+}
+
+.funnel-stat--link {
+  cursor: pointer;
+}
+
+.funnel-stat--link:hover .funnel-stat__value {
+  text-decoration: underline;
+}
+
+.funnel-stat__label {
+  margin-top: 4px;
+  color: var(--q-ink-subtle);
+}
+
+.outcome-table,
+.branch-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.outcome-table th,
+.branch-table th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.outcome-table td,
+.branch-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.outcome-table__num,
+.branch-table__num {
+  text-align: right;
+}
