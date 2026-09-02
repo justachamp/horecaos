@@ -28,11 +28,6 @@ export const routes: Routes = [
         loadComponent: () => import('./features/tenants/tenants').then((m) => m.Tenants),
       },
       {
-        path: 'integrations',
-        canActivate: [requiresCapability('INTEGRATION_INSTALLATION_MANAGE')],
-        loadComponent: () => import('./features/integrations/integrations').then((m) => m.Integrations),
-      },
-      {
         path: 'denied',
         loadComponent: () => import('./features/states/access-denied').then((m) => m.AccessDenied),
       },

@@ -20,7 +20,6 @@ export const ru: Messages = {
   'nav.statistics': 'Статистика',
   'nav.configuration': 'Настройки платформы',
   'nav.staff': 'Сотрудники и доступ',
-  'nav.integrations': 'Интеграции',
 
   'shell.skipToContent': 'Перейти к содержимому',
   'shell.signedInAs': 'Вы вошли как',
@@ -65,90 +64,6 @@ export const ru: Messages = {
 
   'tenants.title': 'Клиенты',
   'tenants.lead': 'Все клиенты, что они платят и у кого из них сейчас проблемы.',
-
-  'integrations.title': 'Интеграции',
-  'integrations.lead':
-    'Подключите Click, Payme и Telegram, обновляйте их учётные данные и отключайте то, что больше не используете. Здесь можно записать учётные данные, но нельзя прочитать их обратно (ADR 0065).',
-  'integrations.loading': 'Загрузка…',
-  'integrations.error.loadFailed': 'Не удалось загрузить интеграции.',
-
-  'integrations.installations.title': 'Подключённые провайдеры',
-  'integrations.installations.empty': 'Провайдеры ещё не подключены.',
-  'integrations.installations.column.provider': 'Провайдер',
-  'integrations.installations.column.environment': 'Окружение',
-  'integrations.installations.column.status': 'Статус',
-  'integrations.installations.column.credential': 'Учётные данные',
-  'integrations.installations.column.lastRotated': 'Последнее обновление',
-  'integrations.installations.column.actions': 'Действия',
-
-  'integrations.merchantBindings.title': 'Привязки продавца',
-  'integrations.merchantBindings.empty': 'Мерчант-аккаунты ещё не зарегистрированы.',
-  'integrations.merchantBindings.column.provider': 'Провайдер',
-  'integrations.merchantBindings.column.account': 'Мерчант-аккаунт',
-  'integrations.merchantBindings.column.status': 'Статус',
-  'integrations.merchantBindings.column.credential': 'Учётные данные',
-  'integrations.merchantBindings.column.lastRotated': 'Последнее обновление',
-  'integrations.merchantBindings.column.actions': 'Действия',
-
-  'integrations.credential.configured': 'Настроено •••••',
-  'integrations.credential.none': 'Не задано',
-  'integrations.lastRotated.never': 'Никогда',
-
-  'integrations.status.DRAFT': 'Черновик',
-  'integrations.status.ACTIVE': 'Активно',
-  'integrations.status.SUSPENDED': 'Приостановлено',
-  'integrations.status.RETIRED': 'Отключено',
-  'integrations.status.UNVERIFIED': 'Не проверено',
-  'integrations.status.SUCCEEDED': 'Проверено',
-  'integrations.status.FAILED': 'Ошибка',
-
-  'integrations.connect.action': 'Подключить провайдера',
-  'integrations.connect.title': 'Подключить провайдера',
-  'integrations.connect.provider': 'Провайдер',
-  'integrations.connect.displayName': 'Название',
-  'integrations.connect.environmentCode': 'Окружение',
-  'integrations.connect.environmentCode.hint':
-    'Код разрешённого окружения для этого провайдера (например, код песочницы из инструкции подключения). Платформа никогда не принимает URL напрямую.',
-  'integrations.connect.reference': 'Ссылка (необязательно)',
-  'integrations.connect.reference.hint':
-    'Несекретная метка, например id мерчанта или сервиса, для ваших собственных записей.',
-  'integrations.connect.submit': 'Подключить',
-  'integrations.connect.submitting': 'Подключение…',
-  'integrations.connect.success': 'Провайдер подключён. Привяжите его к бренду или точке, чтобы начать использовать.',
-  'integrations.connect.cancel': 'Отмена',
-
-  'integrations.rotate.installationAction': 'Обновить учётные данные',
-  'integrations.rotate.bindingAction': 'Обновить учётные данные',
-  'integrations.rotate.title': 'Обновление учётных данных',
-  'integrations.rotate.lead':
-    'Новое значение записывается в менеджер секретов и больше нигде не сохраняется — ни в этой панели, ни в логе, ни в сообщении об ошибке.',
-  'integrations.rotate.value': 'Новое значение учётных данных',
-  'integrations.rotate.reason': 'Причина',
-  'integrations.rotate.submit': 'Обновить',
-  'integrations.rotate.submitting': 'Обновление…',
-  'integrations.rotate.success': 'Учётные данные обновлены.',
-  'integrations.rotate.cancel': 'Отмена',
-  'integrations.rotate.unverifiedNotice':
-    'У этого провайдера нет способа проверить учётные данные до использования. Значение будет записано и подставлено, и помечено как непроверенное, пока не подтвердится реальным платежом.',
-
-  'integrations.archive.action': 'Архивировать',
-  'integrations.archive.confirm': 'Архивировать эту привязку продавца? Приостановленная привязка архивируется отсюда.',
-
-  'integrations.registerBinding.action': 'Зарегистрировать привязку продавца',
-  'integrations.registerBinding.title': 'Регистрация привязки продавца',
-  'integrations.registerBinding.lead':
-    'Связывает юридическое лицо с аккаунтом Click или Payme через уже подключённую выше интеграцию.',
-  'integrations.registerBinding.provider': 'Провайдер',
-  'integrations.registerBinding.legalEntityId': 'Id юридического лица',
-  'integrations.registerBinding.installationId': 'Id интеграции',
-  'integrations.registerBinding.integrationBindingId': 'Id привязки интеграции',
-  'integrations.registerBinding.merchantAccountReference': 'Ссылка мерчант-аккаунта',
-  'integrations.registerBinding.callbackPathSegment': 'Сегмент callback-пути',
-  'integrations.registerBinding.value': 'Секретный ключ мерчанта',
-  'integrations.registerBinding.submit': 'Зарегистрировать',
-  'integrations.registerBinding.submitting': 'Регистрация…',
-  'integrations.registerBinding.success': 'Привязка продавца зарегистрирована как черновик. Активируйте её, когда всё верно.',
-  'integrations.registerBinding.cancel': 'Отмена',
 
   'money.uzsSuffix': 'сўм',
 

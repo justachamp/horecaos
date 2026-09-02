@@ -25,13 +25,10 @@ export type Capability =
   | 'AUDIT_READ'
   | 'IAM_GRANT_MANAGE'
   | 'MIGRATION_READ'
-  // ADR 0065: the Integrations section. Installations (any provider category)
-  // are gated on the first; a merchant binding's own row -- the one that
-  // decides which legal entity a payment settles under -- needs the second as
-  // well, the same split the server's own Capability javadoc draws.
+  // The platform's own, cross-tenant view of providers and installations (IA
+  // §3) -- not the tenant self-service connect/rotate flow, which ADR 0065's
+  // 2026-09-02 amendment moved to the operations app's Settings section.
   | 'INTEGRATION_INSTALLATION_MANAGE'
-  | 'INTEGRATION_BINDING_ACTIVATE'
-  | 'PAYMENT_MERCHANT_BINDING_MANAGE'
   | 'PLATFORM_ADMIN';
 
 /** One scope a principal holds. Mirrors CapabilityView.ScopeGrant. */
