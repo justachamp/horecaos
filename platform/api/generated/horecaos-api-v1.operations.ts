@@ -51,12 +51,6 @@ export interface AddressFields {
   postalCode?: string;
 }
 
-export interface AdvanceScopeRequest {
-  expectedVersion?: number;
-  reason: string;
-  targetState: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-}
-
 export interface AmendRequest {
   applyImmediately?: boolean;
   commands: Array<AmendmentCommandRequest>;
@@ -210,12 +204,6 @@ export interface CashDeclarationRequest {
   declaredMinor?: number;
 }
 
-export interface ChangeProgramStatusRequest {
-  expectedVersion?: number;
-  reason: string;
-  status: "PLANNING" | "ACTIVE" | "COMPLETED" | "ABANDONED";
-}
-
 export interface CloseRequest {
   endReason: string;
   reason: string;
@@ -242,28 +230,6 @@ export interface CoarseCourier {
   courierId?: string;
   lastFixAt?: string;
   reason?: string;
-}
-
-export interface CommercialAdminControllerAdjustmentRequest {
-  approvedBy: string;
-  entitlementKey: string;
-  periodKey: string;
-  quantityDelta?: number;
-  reason: string;
-  sourceReference?: string;
-}
-
-export interface CommercialAdminControllerDraftVersionRequest {
-  billingPeriod: string;
-  currency: string;
-  entitlements?: Array<EntitlementLineRequest>;
-  priceMinor?: number;
-  reason: string;
-  termsReference?: string;
-}
-
-export interface CommercialAdminControllerReasonRequest {
-  reason: string;
 }
 
 export interface CompleteRequest {
@@ -362,12 +328,6 @@ export interface CourierResponse {
   status?: string;
 }
 
-export interface CoverageRequest {
-  expectedVersion?: number;
-  reason: string;
-  undecidedSources?: number;
-}
-
 export interface CoverageResponse {
   awaitingProvider?: number;
   blocked?: number;
@@ -384,20 +344,6 @@ export interface CoverageResponse {
   unreceipted?: number;
   unreceiptedShareBasisPoints?: number;
   warning?: string;
-}
-
-export interface CreatePlanRequest {
-  code: string;
-  name: string;
-  reason: string;
-}
-
-export interface CreateProgramRequest {
-  name: string;
-  policyVersion?: number;
-  reason: string;
-  sourceEnvironment: string;
-  targetEnvironment: string;
 }
 
 export interface CreateTemplateRequest {
@@ -425,38 +371,6 @@ export interface CustomerResponse {
   transactionalContactAllowed?: boolean;
 }
 
-export interface CutoverDecisionRequest {
-  approvalRequestId?: string;
-  evidence: { [key: string]: string };
-  expectedVersion?: number;
-  reason: string;
-  requestedAt?: string;
-  requestedBy: string;
-  targetState: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-}
-
-export interface CutoverDecisionView {
-  approvalRequestId?: string;
-  decidedAt?: string;
-  decidedBy?: string;
-  decision?: "APPROVED" | "REFUSED" | "WITHDRAWN" | "EXPIRED";
-  fromState?: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-  id?: string;
-  reason?: string;
-  requestedAt?: string;
-  requestedBy?: string;
-  scopeId?: string;
-  scopeVersion?: number;
-  toState?: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-}
-
-export interface Divergence {
-  entitlementKey?: string;
-  periodKey?: string;
-  recomputed?: number;
-  stored?: number;
-}
-
 export interface DownloadResponse {
   url?: string;
 }
@@ -478,16 +392,6 @@ export interface EngagementResponse {
   reverificationDueOn?: string;
   status?: string;
   warningState?: string;
-}
-
-export interface EntitlementLineRequest {
-  enabled?: boolean;
-  enforcementMode: string;
-  entitlementKey: string;
-  limit?: number;
-  overageUnitPriceMinor?: number;
-  resetPeriod?: string;
-  warnThresholdBasisPoints?: number;
 }
 
 export interface EstimateResponse {
@@ -525,13 +429,6 @@ export interface EvidenceView {
 export interface ExportRequest {
   limit?: number;
   purpose: string;
-}
-
-export interface FinishRunRequest {
-  checksum?: string;
-  expectedVersion?: number;
-  reason: string;
-  status: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 }
 
 export interface FiscalDocumentControllerResolutionRequest {
@@ -758,22 +655,6 @@ export interface MetricResponse {
   version?: number;
 }
 
-export interface MigrationRunView {
-  checksum?: string;
-  counters?: RunCountersView;
-  finishedAt?: string;
-  id?: string;
-  runType?: "BACKFILL" | "CATCH_UP" | "REMEDIATION" | "RECONCILIATION";
-  scopeId?: string;
-  sourceWatermark?: string;
-  startedAt?: string;
-  startedBy?: string;
-  status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
-  targetWatermark?: string;
-  transformationVersion?: number;
-  version?: number;
-}
-
 export interface NoteResponse {
   lineId?: string;
   note?: string;
@@ -838,16 +719,6 @@ export interface ObservationRequest {
   latitude: number;
   longitude: number;
   speedMps?: number;
-}
-
-export interface OpenScopeRequest {
-  brandId?: string;
-  capability: "TENANCY" | "IDENTITY" | "CUSTOMERS" | "MEDIA" | "CATALOG" | "INVENTORY" | "PRICING" | "ORDERS" | "PAYMENTS" | "FULFILLMENT" | "NOTIFICATIONS" | "CONFIGURATION" | "REPORTING";
-  locationId?: string;
-  reason: string;
-  sourceOwner: string;
-  targetOwner: string;
-  tenantId: string;
 }
 
 export interface OpenShiftRequest {
@@ -1006,32 +877,8 @@ export interface OutcomeResponse {
   systemCategory?: string;
 }
 
-export interface OverrideRequest {
-  approvedBy: string;
-  enabled?: boolean;
-  entitlementKey: string;
-  limit?: number;
-  reason: string;
-  validUntil: string;
-}
-
-export interface OwnershipView {
-  capability?: "TENANCY" | "IDENTITY" | "CUSTOMERS" | "MEDIA" | "CATALOG" | "INVENTORY" | "PRICING" | "ORDERS" | "PAYMENTS" | "FULFILLMENT" | "NOTIFICATIONS" | "CONFIGURATION" | "REPORTING";
-  legacyMayWrite?: boolean;
-  readMode?: "LEGACY" | "SHADOW_COMPARE" | "CANARY_TARGET" | "TARGET";
-  scopeId?: string;
-  state?: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-  targetMayWrite?: boolean;
-  writeMode?: "LEGACY_ONLY" | "LEGACY_WITH_TARGET_SHADOW" | "TARGET_ONLY";
-}
-
 export interface PageRemedyResponse {
   items?: Array<RemedyResponse>;
-  nextCursor?: string;
-}
-
-export interface PageScopeView {
-  items?: Array<ScopeView>;
   nextCursor?: string;
 }
 
@@ -1065,18 +912,6 @@ export interface PreferenceResponse {
   version?: number;
 }
 
-export interface ProgramView {
-  completedAt?: string;
-  id?: string;
-  name?: string;
-  policyVersion?: number;
-  sourceEnvironment?: string;
-  startedAt?: string;
-  status?: "PLANNING" | "ACTIVE" | "COMPLETED" | "ABANDONED";
-  targetEnvironment?: string;
-  version?: number;
-}
-
 export interface ProvenanceResponse {
   asOf?: string;
   boundaryVersion?: number;
@@ -1087,24 +922,6 @@ export interface ProvenanceResponse {
   openDivergences?: number;
   provisionalMetrics?: Array<string>;
   timezone?: string;
-}
-
-export interface QuarantineBacklogView {
-  openItems?: number;
-  scopeId?: string;
-}
-
-export interface QuarantineItemView {
-  entityType?: string;
-  id?: string;
-  legacyId?: string;
-  reasonCode?: string;
-  resolutionCode?: string;
-  resolvedAt?: string;
-  resolvedBy?: string;
-  runId?: string;
-  sanitizedEvidenceReference?: string;
-  status?: string;
 }
 
 export interface QueryResponse {
@@ -1294,11 +1111,6 @@ export interface ResolutionResponse {
   warning?: string;
 }
 
-export interface ResolveQuarantineRequest {
-  reason: string;
-  resolutionCode: string;
-}
-
 export interface ResolveResponse {
   accountId?: string;
   created?: boolean;
@@ -1314,11 +1126,6 @@ export interface ResourceScope {
 
 export interface ResumeResponse {
   suppressedDuringPause?: number;
-}
-
-export interface ResumeScopeRequest {
-  expectedVersion?: number;
-  reason: string;
 }
 
 export interface RetryRequest {
@@ -1382,11 +1189,6 @@ export interface RevisionResponse {
   totalMinor?: number;
 }
 
-export interface RollbackScopeRequest {
-  expectedVersion?: number;
-  reason: string;
-}
-
 export interface RotateMerchantBindingSecretRequest {
   reason: string;
   value: string;
@@ -1437,34 +1239,10 @@ export interface RowResponse {
   values?: { [key: string]: number };
 }
 
-export interface RunCountersView {
-  created?: number;
-  quarantined?: number;
-  scanned?: number;
-  skipped?: number;
-  updated?: number;
-}
-
 export interface ScopeGrant {
   capabilities?: Array<"TENANT_READ" | "TENANT_WRITE" | "TENANT_ONBOARDING_MANAGE" | "BRAND_READ" | "BRAND_WRITE" | "LOCATION_READ" | "LOCATION_WRITE" | "LEGAL_ENTITY_READ" | "LEGAL_ENTITY_MANAGE" | "CHANNEL_READ" | "CHANNEL_MANAGE" | "SERVICEABILITY_MANAGE" | "LOCATION_SERVICE_STATE_CHANGE" | "CATALOG_READ" | "CATALOG_AUTHOR" | "CATALOG_PUBLISH" | "OFFERING_MANAGE" | "MEDIA_READ" | "MEDIA_UPLOAD" | "INVENTORY_READ" | "INVENTORY_ADJUST" | "PRICING_READ" | "PRICING_AUTHOR" | "PRICING_ACTIVATE" | "ORDER_READ" | "ORDER_APPROVE" | "ORDER_ADVANCE" | "ORDER_CANCEL" | "ORDER_STATE_OVERRIDE" | "ORDER_AMEND" | "ORDER_OUTCOME_REASON_MANAGE" | "ORDER_ACCEPTANCE_POLICY_MANAGE" | "PAYMENT_READ" | "PAYMENT_ATTEMPT_RESOLVE" | "PAYMENT_MERCHANT_BINDING_MANAGE" | "FISCAL_DOCUMENT_READ" | "FISCAL_DOCUMENT_RESOLVE" | "REFUND_REQUEST" | "REFUND_APPROVE" | "REFUND_EXECUTE" | "RECOVERY_CASE_MANAGE" | "RECOVERY_REMEDY_APPROVE" | "DELIVERY_PLAN_READ" | "DELIVERY_ZONE_READ" | "DELIVERY_ZONE_MANAGE" | "DELIVERY_ZONE_ACTIVATE" | "DELIVERY_TARIFF_MANAGE" | "DELIVERY_TARIFF_ACTIVATE" | "DELIVERY_FEE_EVIDENCE_READ" | "DELIVERY_MANUAL_ASSIGN" | "SHIPMENT_CANCEL" | "COURIER_POSITION_READ" | "COURIER_TRACK_REVEAL" | "COURIER_DUTY_MANAGE" | "KITCHEN_STATION_MANAGE" | "KITCHEN_TICKET_READ" | "KITCHEN_TICKET_ADVANCE" | "KITCHEN_TICKET_RECALL" | "KITCHEN_TICKET_RELEASE" | "KITCHEN_TICKET_RELEASE_OVERRIDE" | "DINEIN_FLOORPLAN_MANAGE" | "RESERVATION_READ" | "RESERVATION_MANAGE" | "DINEIN_SESSION_READ" | "DINEIN_SESSION_MANAGE" | "DINEIN_SESSION_FORCE_CLOSE" | "DINEIN_QR_ROTATE" | "MARKETPLACE_ORDER_RECEIVE" | "MARKETPLACE_MENU_PUSH" | "MARKETPLACE_AVAILABILITY_PUSH" | "MARKETPLACE_HANDOVER_BYPASS" | "MARKETPLACE_ORDER_CREATE_MANUAL" | "MARKETPLACE_LIVENESS_READ" | "CUSTOMER_READ" | "CUSTOMER_MANAGE" | "CUSTOMER_PII_REVEAL" | "CUSTOMER_IMPORT" | "INTEGRATION_INSTALLATION_MANAGE" | "INTEGRATION_BINDING_ACTIVATE" | "INTEGRATION_TELEGRAM_LINK_ISSUE" | "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE" | "POS_SYNC_READ" | "POS_SYNC_EXECUTE" | "POS_SYNC_APPLY" | "POS_EXPORT_READ" | "POS_EXPORT_RESOLVE" | "INTEGRATION_FAILURE_READ" | "INTEGRATION_FAILURE_RETRY" | "INTEGRATION_FAILURE_RESOLVE" | "NOTIFICATION_TEMPLATE_AUTHOR" | "NOTIFICATION_TEMPLATE_ACTIVATE" | "NOTIFICATION_READ" | "NOTIFICATION_RETRY" | "CONTROL_PLANE_ALERT_RAISE" | "AUDIENCE_READ" | "AUDIENCE_EXPORT" | "CAMPAIGN_AUTHOR" | "CAMPAIGN_APPROVE" | "SUPPRESSION_MANAGE" | "COMMERCIAL_SUBSCRIPTION_MANAGE" | "COMMERCIAL_OVERRIDE_APPROVE" | "COMMERCIAL_PLAN_READ" | "COMMERCIAL_PLAN_MANAGE" | "COMMERCIAL_PLAN_ACTIVATE" | "COMMERCIAL_USAGE_READ" | "COMMERCIAL_USAGE_ADJUST" | "LOYALTY_READ" | "LOYALTY_ADJUST" | "LOYALTY_POLICY_MANAGE" | "IAM_GRANT_MANAGE" | "REPORTING_READ" | "METRIC_MANAGE" | "AUDIT_READ" | "APPROVAL_POLICY_MANAGE" | "APPROVAL_DECIDE" | "MIGRATION_READ" | "MIGRATION_SCOPE_MANAGE" | "MIGRATION_RUN_EXECUTE" | "MIGRATION_CUTOVER_APPROVE" | "MIGRATION_QUARANTINE_RESOLVE" | "COURIER_SHIFT_OPEN" | "COURIER_SHIFT_BREAK" | "COURIER_SHIFT_APPROVE" | "COURIER_ENGAGEMENT_MANAGE" | "COURIER_REGISTRATION_VERIFY" | "COURIER_REGISTRATION_REVEAL" | "COURIER_RATECARD_MANAGE" | "COURIER_ADJUSTMENT_CREATE" | "COURIER_ADJUSTMENT_APPROVE" | "COURIER_CASH_CONFIRM" | "COURIER_LEDGER_READ" | "COURIER_SETTLEMENT_CLOSE" | "COURIER_PAYOUT_AUTHORISE" | "DELIVERY_COST_READ" | "PARTNER_INVOICE_MANAGE" | "CONVERSATION_FLOW_MANAGE" | "CONVERSATION_INBOX_MANAGE" | "PLATFORM_ADMIN">;
   roleCode?: string;
   scope?: ResourceScope;
-}
-
-export interface ScopeView {
-  brandId?: string;
-  capability?: "TENANCY" | "IDENTITY" | "CUSTOMERS" | "MEDIA" | "CATALOG" | "INVENTORY" | "PRICING" | "ORDERS" | "PAYMENTS" | "FULFILLMENT" | "NOTIFICATIONS" | "CONFIGURATION" | "REPORTING";
-  id?: string;
-  locationId?: string;
-  programId?: string;
-  readMode?: "LEGACY" | "SHADOW_COMPARE" | "CANARY_TARGET" | "TARGET";
-  sourceOwner?: string;
-  state?: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-  stateEnteredAt?: string;
-  targetOwner?: string;
-  tenantId?: string;
-  version?: number;
-  writeMode?: "LEGACY_ONLY" | "LEGACY_WITH_TARGET_SHADOW" | "TARGET_ONLY";
 }
 
 export interface SectionRequest {
@@ -1547,16 +1325,6 @@ export interface ShiftResponse {
   version?: number;
 }
 
-export interface SignatureRequest {
-  reason: string;
-}
-
-export interface SignatureResponse {
-  definitionDigest?: string;
-  metricCode?: string;
-  signedBy?: string;
-}
-
 export interface SlaResponse {
   buckets?: Array<BucketResponse>;
   provenance?: ProvenanceResponse;
@@ -1597,19 +1365,6 @@ export interface StaffSessionResponse {
 export interface StaffSignInRequest {
   password: string;
   username: string;
-}
-
-export interface StartRunRequest {
-  reason: string;
-  runType: "BACKFILL" | "CATCH_UP" | "REMEDIATION" | "RECONCILIATION";
-  startedBy: string;
-  transformationVersion?: number;
-}
-
-export interface StartSubscriptionRequest {
-  planVersionId: string;
-  reason: string;
-  trialDays?: number;
 }
 
 export interface StatementResponse {
@@ -1669,12 +1424,6 @@ export interface SuppressionResponse {
 export interface SuspendRequest {
   reason: string;
   reasonCode: string;
-}
-
-export interface SuspendScopeRequest {
-  expectedVersion?: number;
-  holdingState: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
-  reason: string;
 }
 
 export interface TableRequest {
@@ -1756,14 +1505,6 @@ export interface TimelineEntryResponse {
   trigger?: string;
 }
 
-export interface TransitionRequest {
-  cancelAt?: string;
-  expectedVersion?: number;
-  reason: string;
-  status: string;
-  suspensionReason?: string;
-}
-
 export interface Unavailable {
   reason?: string;
   variantId?: string;
@@ -1827,7 +1568,7 @@ export interface Operations {
   "bindSchedule": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindingRequest }; responses: { "200": unknown } };
   "changeServiceState": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-state"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ServiceStateRequest }; responses: { "200": unknown } };
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
-  "suspend_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
+  "suspend_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
   "verify_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/verify"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: VerifyRequest }; responses: { "200": EngagementResponse } };
   "closePeriod": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/close"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: CloseperiodRequest }; responses: { "200": StatementResponse } };
   "authorisePayout": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/payouts"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: PayoutRequest }; responses: { "200": PayoutResponse } };
@@ -1835,10 +1576,10 @@ export interface Operations {
   "approveShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/approve"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ApproveHoursRequest }; responses: { "200": unknown } };
   "closeShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/close"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ManagerCloseRequest }; responses: { "200": unknown } };
   "register_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers"; request: { parameters: { path: { tenantId: string } }; body: RegisterCourierRequest }; responses: { "200": CourierResponse } };
-  "adjust_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: OperationsCourierControllerAdjustmentRequest }; responses: { "200": OperationsCourierControllerAdjustmentResponse } };
+  "adjust_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: OperationsCourierControllerAdjustmentRequest }; responses: { "200": OperationsCourierControllerAdjustmentResponse } };
   "ledgerOf": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/ledger"; request: { parameters: { path: { courierId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": LedgerResponse } };
   "balances": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty"; request: { parameters: { path: { customerId: string; tenantId: string } } }; responses: { "200": Array<BalanceResponse> } };
-  "adjust_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments"; request: { parameters: { path: { customerId: string; tenantId: string } }; body: LoyaltyOperationsControllerAdjustmentRequest }; responses: { "200": LoyaltyOperationsControllerAdjustmentResponse } };
+  "adjust": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments"; request: { parameters: { path: { customerId: string; tenantId: string } }; body: LoyaltyOperationsControllerAdjustmentRequest }; responses: { "200": LoyaltyOperationsControllerAdjustmentResponse } };
   "deliveryCosts": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/delivery-costs"; request: { parameters: { path: { tenantId: string }; query: { basis?: string; from: string; to: string } } }; responses: { "200": CostReport } };
   "liveness": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/liveness"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LivenessResponse> } };
   "search": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/order-references"; request: { parameters: { path: { tenantId: string }; query: { reference: string } } }; responses: { "200": Array<ReferenceMatchResponse> } };
@@ -1846,11 +1587,11 @@ export interface Operations {
   "verify_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-verifications"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: MarketplaceOperationsControllerVerificationRequest }; responses: { "200": MarketplaceOperationsControllerVerificationResponse } };
   "list_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MerchantBindingView> } };
   "register": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings"; request: { parameters: { path: { tenantId: string } }; body: RegisterMerchantBindingRequest }; responses: { "200": MerchantBindingView } };
-  "get_4": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}"; request: { parameters: { path: { bindingId: string; tenantId: string } } }; responses: { "200": MerchantBindingView } };
-  "activate_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
+  "get_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}"; request: { parameters: { path: { bindingId: string; tenantId: string } } }; responses: { "200": MerchantBindingView } };
+  "activate_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "archive": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "rotateSecret": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/secret-rotations"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } }; body: RotateMerchantBindingSecretRequest }; responses: { "200": MerchantBindingView } };
-  "suspend_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
+  "suspend_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "reimburseDeliveryFee": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "grantFutureDiscount": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/future-discounts"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: FutureDiscountRequest }; responses: { "200": RemedyResponse } };
   "recordRefund": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
@@ -1862,34 +1603,6 @@ export interface Operations {
   "verify": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/remedies/{remedyId}/verification"; request: { parameters: { path: { remedyId: string; tenantId: string } }; body: OperationsRemedyControllerVerificationRequest }; responses: { "200": OperationsRemedyControllerVerificationResponse } };
   "liability": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/loyalty-liability"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LiabilityResponse> } };
   "report": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/remedies"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<RemedyTotalsResponse> } };
-  "activate_1": { method: "POST"; path: "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation"; request: { parameters: { path: { planVersionId: string } }; body: CommercialAdminControllerReasonRequest }; responses: { "200": unknown } };
-  "createPlan": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans"; request: { parameters: Record<string, never>; body: CreatePlanRequest }; responses: { "200": {  } } };
-  "draftVersion": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans/{planId}/versions"; request: { parameters: { path: { planId: string } }; body: CommercialAdminControllerDraftVersionRequest }; responses: { "200": {  } } };
-  "override": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/entitlement-overrides"; request: { parameters: { path: { tenantId: string } }; body: OverrideRequest }; responses: { "200": {  } } };
-  "transition": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/subscription-transitions"; request: { parameters: { path: { tenantId: string } }; body: TransitionRequest }; responses: { "200": unknown } };
-  "startSubscription": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/subscriptions"; request: { parameters: { path: { tenantId: string } }; body: StartSubscriptionRequest }; responses: { "200": {  } } };
-  "adjust": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/usage-adjustments"; request: { parameters: { path: { tenantId: string } }; body: CommercialAdminControllerAdjustmentRequest }; responses: { "200": {  } } };
-  "rebuild": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/usage-rebuilds"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<Divergence> } };
-  "resolve_2": { method: "GET"; path: "/api/v1/platform-admin/migration/ownership"; request: { parameters: { query: { brandId?: string; capability: "TENANCY" | "IDENTITY" | "CUSTOMERS" | "MEDIA" | "CATALOG" | "INVENTORY" | "PRICING" | "ORDERS" | "PAYMENTS" | "FULFILLMENT" | "NOTIFICATIONS" | "CONFIGURATION" | "REPORTING"; locationId?: string; tenantId: string } } }; responses: { "200": OwnershipView } };
-  "create_2": { method: "POST"; path: "/api/v1/platform-admin/migration/programs"; request: { parameters: Record<string, never>; body: CreateProgramRequest }; responses: { "200": ProgramView } };
-  "get_3": { method: "GET"; path: "/api/v1/platform-admin/migration/programs/{programId}"; request: { parameters: { path: { programId: string } } }; responses: { "200": ProgramView } };
-  "listScopes": { method: "GET"; path: "/api/v1/platform-admin/migration/programs/{programId}/scopes"; request: { parameters: { path: { programId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageScopeView } };
-  "openScope": { method: "POST"; path: "/api/v1/platform-admin/migration/programs/{programId}/scopes"; request: { parameters: { path: { programId: string } }; body: OpenScopeRequest }; responses: { "200": ScopeView } };
-  "changeStatus": { method: "POST"; path: "/api/v1/platform-admin/migration/programs/{programId}/status"; request: { parameters: { path: { programId: string } }; body: ChangeProgramStatusRequest }; responses: { "200": ProgramView } };
-  "resolve_1": { method: "POST"; path: "/api/v1/platform-admin/migration/quarantine-items/{itemId}/resolution"; request: { parameters: { path: { itemId: string }; query: { tenantId: string } }; body: ResolveQuarantineRequest }; responses: { "200": QuarantineItemView } };
-  "get_2": { method: "GET"; path: "/api/v1/platform-admin/migration/runs/{runId}"; request: { parameters: { path: { runId: string }; query: { tenantId: string } } }; responses: { "200": MigrationRunView } };
-  "finish": { method: "POST"; path: "/api/v1/platform-admin/migration/runs/{runId}/outcome"; request: { parameters: { path: { runId: string }; query: { tenantId: string } }; body: FinishRunRequest }; responses: { "200": MigrationRunView } };
-  "get_1": { method: "GET"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}"; request: { parameters: { path: { scopeId: string }; query: { tenantId: string } } }; responses: { "200": ScopeView } };
-  "republishCoverage": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/coverage"; request: { parameters: { path: { scopeId: string }; query: { tenantId: string } }; body: CoverageRequest }; responses: { "200": ScopeView } };
-  "cutOver": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: CutoverDecisionRequest }; responses: { "200": ScopeView } };
-  "refuseCutover": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover-refusals"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: CutoverDecisionRequest }; responses: { "200": CutoverDecisionView } };
-  "backlog": { method: "GET"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/quarantine"; request: { parameters: { path: { scopeId: string }; query: { tenantId: string } } }; responses: { "200": QuarantineBacklogView } };
-  "resume_2": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: ResumeScopeRequest }; responses: { "200": ScopeView } };
-  "rollBack": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/rollbacks"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: RollbackScopeRequest }; responses: { "200": ScopeView } };
-  "start_1": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/runs"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: StartRunRequest }; responses: { "200": MigrationRunView } };
-  "suspend_1": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/suspensions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: SuspendScopeRequest }; responses: { "200": ScopeView } };
-  "advance": { method: "POST"; path: "/api/v1/platform-admin/migration/scopes/{scopeId}/transitions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { scopeId: string }; query: { tenantId: string } }; body: AdvanceScopeRequest }; responses: { "200": ScopeView } };
-  "sign": { method: "POST"; path: "/api/v1/platform-admin/reporting/metric-signatures/{metricCode}"; request: { parameters: { path: { metricCode: string } }; body: SignatureRequest }; responses: { "200": SignatureResponse } };
   "sessionContext": { method: "GET"; path: "/api/v1/session/context"; request: { parameters: { query: { tenantId?: string } } }; responses: { "200": CapabilityView } };
   "issue_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/integrations/telegram/link-codes"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: string } } }; responses: { "200": {  } } };
   "open_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier/duty-sessions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CourierDutyControllerOpenRequest }; responses: { "200": DutySessionResponse } };

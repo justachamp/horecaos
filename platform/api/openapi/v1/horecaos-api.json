@@ -102,6 +102,21 @@
         "required" : [ "actorId" ],
         "type" : "object"
       },
+      "AdapterCapabilities" : {
+        "properties" : {
+          "declaredCapabilities" : {
+            "items" : {
+              "enum" : [ "CATALOG_READ", "AVAILABILITY_READ", "ORDER_APPROVAL", "ORDER_EXPORT", "ORDER_CANCELLATION", "PREPARATION_STATUS", "RECEIPT_READ", "FISCAL_IDENTIFIER_WRITE_BACK", "FULFILLMENT_STATUS_WRITE", "CUSTOMER_UPSERT" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AddAddressRequest" : {
         "properties" : {
           "coordinateSource" : {
@@ -1090,6 +1105,20 @@
         },
         "type" : "object"
       },
+      "CapabilityDescriptor" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "resourceType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CapabilityView" : {
         "properties" : {
           "activeTenantId" : {
@@ -1819,6 +1848,23 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "Country" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "defaultCurrency" : {
+            "type" : "string"
+          },
+          "defaultTimezone" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -4362,6 +4408,17 @@
         },
         "type" : "object"
       },
+      "Locale" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationFiscalAssignmentView" : {
         "properties" : {
           "approvalReference" : {
@@ -5007,6 +5064,40 @@
           }
         },
         "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "MxikReferenceRow" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "defaultPackageCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "labelEn" : {
+            "type" : "string"
+          },
+          "labelRu" : {
+            "type" : "string"
+          },
+          "labelUz" : {
+            "type" : "string"
+          },
+          "parentCode" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "NoteResponse" : {
@@ -6205,11 +6296,39 @@
         },
         "type" : "object"
       },
+      "PageMxikReferenceRow" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MxikReferenceRow"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PagePendingApprovalResponse" : {
         "properties" : {
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/PendingApprovalResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PagePlatformInstallationView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformInstallationView"
             },
             "type" : "array"
           },
@@ -6266,6 +6385,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/StorefrontOrderingControllerOrderSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageTenantSummaryView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenantSummaryView"
             },
             "type" : "array"
           },
@@ -6652,6 +6785,53 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformInstallationView" : {
+        "properties" : {
+          "adapterVersion" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastConnectionStatus" : {
+            "type" : "string"
+          },
+          "lastSecretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "secretReference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantDisplayName" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantSlug" : {
             "type" : "string"
           }
         },
@@ -7462,6 +7642,23 @@
         },
         "type" : "object"
       },
+      "ReferenceData" : {
+        "properties" : {
+          "countries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Country"
+            },
+            "type" : "array"
+          },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Locale"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ReferenceMatchResponse" : {
         "properties" : {
           "bindingId" : {
@@ -7487,6 +7684,14 @@
           },
           "referenceValue" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReferenceStatus" : {
+        "properties" : {
+          "loaded" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -10128,6 +10333,38 @@
         },
         "type" : "object"
       },
+      "TenantSummaryView" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "defaultCurrency" : {
+            "type" : "string"
+          },
+          "defaultTimezone" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "legalName" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "PROVISIONING", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TenantView" : {
         "properties" : {
           "customerIdentityMode" : {
@@ -10724,6 +10961,84 @@
         "tags" : [ "Staff sign-in" ]
       }
     },
+    "/api/v1/control-plane/capabilities" : {
+      "get" : {
+        "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
+        "operationId" : "list_15",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CapabilityDescriptor"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List every capability this build declares",
+        "tags" : [ "Capability registry" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik" : {
+      "get" : {
+        "description" : "Currently-valid rows only. Empty when the official list has never been imported — that is a named gap, not a search that found nothing to match.",
+        "operationId" : "search_2",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageMxikReferenceRow"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Search the ИКПУ/MXIK reference by code or label",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/status" : {
+      "get" : {
+        "operationId" : "status_1",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferenceStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the official ИКПУ/MXIK list has been imported at all",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
     "/api/v1/control-plane/grants" : {
       "get" : {
         "operationId" : "list_9",
@@ -10811,6 +11126,45 @@
         },
         "summary" : "Revoke a PLATFORM-scope grant",
         "tags" : [ "Platform authorization" ]
+      }
+    },
+    "/api/v1/control-plane/installations" : {
+      "get" : {
+        "description" : "Keyset-paginated by installation id, oldest first. The cross-tenant counterpart of ProviderInstallationController's own per-tenant list, for platform staff who need the whole fleet's connection health rather than one tenant's.",
+        "operationId" : "installations",
+        "parameters" : [ {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagePlatformInstallationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every provider installation, across every tenant",
+        "tags" : [ "Platform integration administration" ]
       }
     },
     "/api/v1/control-plane/integration/failures/inbox/{consumerName}" : {
@@ -11205,7 +11559,7 @@
     },
     "/api/v1/control-plane/onboarding-templates/{templateId}" : {
       "get" : {
-        "operationId" : "get_7",
+        "operationId" : "get_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "templateId",
@@ -11254,7 +11608,110 @@
         "tags" : [ "Commercial" ]
       }
     },
+    "/api/v1/control-plane/pos-capability-matrix" : {
+      "get" : {
+        "description" : "The vendor ceiling from code, not one installation's discovered subset. Compare against ADR 0012's capability-reconciliation, which narrows this per credential.",
+        "operationId" : "matrix",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AdapterCapabilities"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Declared capabilities per wired POS adapter",
+        "tags" : [ "POS capability matrix" ]
+      }
+    },
+    "/api/v1/control-plane/providers" : {
+      "get" : {
+        "description" : "Static and code-owned, not tenant-scoped. Honestly thin: three adapters exist (Click, Payme, Telegram) against the much larger catalogue the parity inventory names.",
+        "operationId" : "providers",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The provider registry: every adapter this build declares",
+        "tags" : [ "Platform integration administration" ]
+      }
+    },
+    "/api/v1/control-plane/reference-data" : {
+      "get" : {
+        "description" : "Countries this platform markets to (ADR 0034) with their default currency and timezone, and the locales the staff consoles ship. Holiday seeds and SLA bucket defaults are not modeled and are not returned.",
+        "operationId" : "get_7",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferenceData"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform's supported reference values",
+        "tags" : [ "Reference data" ]
+      }
+    },
     "/api/v1/control-plane/tenants" : {
+      "get" : {
+        "description" : "Platform-admin only. No plan, business type, country, or health score is returned because none of those exist in the schema yet.",
+        "operationId" : "listTenants",
+        "parameters" : [ {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageTenantSummaryView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List every tenant",
+        "tags" : [ "SaaS control plane" ]
+      },
       "post" : {
         "description" : "Requires the global platform-admin role.",
         "operationId" : "createTenant",
@@ -27380,6 +27837,12 @@
     "description" : "Resumable onboarding runs and activation",
     "name" : "Tenant onboarding"
   }, {
+    "description" : "The ИКПУ/MXIK product classification reference",
+    "name" : "Fiscal reference"
+  }, {
+    "description" : "Cross-tenant provider registry and installations",
+    "name" : "Platform integration administration"
+  }, {
     "description" : "The maker-checker thresholds that decide when an action needs a second signature",
     "name" : "Approval policies"
   }, {
@@ -27512,6 +27975,9 @@
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
   }, {
+    "description" : "Which capabilities each wired POS adapter declares",
+    "name" : "POS capability matrix"
+  }, {
     "description" : "Plans, subscriptions, overrides, and usage corrections",
     "name" : "Commercial administration"
   }, {
@@ -27524,6 +27990,9 @@
     "description" : "Reviewed catalog imports from a point of sale",
     "name" : "POS catalog synchronization"
   }, {
+    "description" : "The full ADR 0025 capability vocabulary",
+    "name" : "Capability registry"
+  }, {
     "description" : "Plans, subscriptions, entitlements, and metered usage",
     "name" : "Commercial"
   }, {
@@ -27532,6 +28001,9 @@
   }, {
     "description" : "Balances, manual adjustments, and liability",
     "name" : "Loyalty operations"
+  }, {
+    "description" : "The platform's own supported countries, currencies, locales, timezones",
+    "name" : "Reference data"
   }, {
     "description" : "Conversation list, history, and takeover/return/close actions",
     "name" : "Operator inbox"

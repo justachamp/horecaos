@@ -37,6 +37,10 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * calling it once per tenant. No installation-level error-rate is returned
  * because none is recorded anywhere in this schema — {@code lastConnectionStatus}
  * and {@code lastSecretRotatedAt} are the closest signals that exist.
+ * {@code secretReference} is the ADR 0028 reference string, never a value —
+ * the same field {@code ProviderInstallationController.InstallationView}
+ * already returns per-tenant; IA 7.4's own screen needs it cross-tenant to
+ * show "configured" versus "not set" without rendering anything secret.
  */
 @RestController
 @RequestMapping("/api/v1/control-plane")
@@ -77,7 +81,8 @@ public class PlatformIntegrationAdminController {
         List<PlatformInstallationView> items = jdbc.sql("""
                         SELECT i.id, i.tenant_id, t.slug AS tenant_slug, t.display_name AS tenant_display_name,
                                i.provider_category, i.provider_type, i.environment_code, i.display_name,
-                               i.status, i.last_connection_status, i.adapter_version, i.last_secret_rotated_at
+                               i.status, i.secret_reference, i.last_connection_status, i.adapter_version,
+                               i.last_secret_rotated_at
                           FROM integration.installations i
                           JOIN tenant.tenants t ON t.id = i.tenant_id
                          WHERE (CAST(:cursor AS uuid) IS NULL OR i.id > CAST(:cursor AS uuid))
@@ -96,6 +101,7 @@ public class PlatformIntegrationAdminController {
                         rs.getString("environment_code"),
                         rs.getString("display_name"),
                         rs.getString("status"),
+                        rs.getString("secret_reference"),
                         rs.getString("last_connection_status"),
                         rs.getString("adapter_version"),
                         rs.getObject("last_secret_rotated_at", OffsetDateTime.class)))
@@ -121,6 +127,7 @@ public class PlatformIntegrationAdminController {
             String environmentCode,
             String displayName,
             String status,
+            @Nullable String secretReference,
             String lastConnectionStatus,
             @Nullable String adapterVersion,
             @Nullable OffsetDateTime lastSecretRotatedAt) {}

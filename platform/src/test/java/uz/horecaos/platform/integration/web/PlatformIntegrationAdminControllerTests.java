@@ -92,7 +92,9 @@ class PlatformIntegrationAdminControllerTests {
                 .isNotNull();
 
         var thirdPage = controller.installations(UUID.fromString(secondPage.nextCursor()), 1);
-        assertThat(thirdPage.items()).as("the empty request that confirms the collection actually ended").isEmpty();
+        assertThat(thirdPage.items())
+                .as("the empty request that confirms the collection actually ended")
+                .isEmpty();
         assertThat(thirdPage.nextCursor()).isNull();
 
         assertThat(secondPage.items().getFirst().id())
