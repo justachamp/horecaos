@@ -50,7 +50,12 @@ public class TenantControlPlaneService {
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
 
-    TenantControlPlaneService(
+    // Public rather than package-private: uz.horecaos.platform.tenancy.application.onboarding
+    // (a subpackage of this same module) needs to construct this in
+    // OnboardingFullRunIntegrationTests exactly the way it already constructs
+    // JdbcTenantControlPlaneStore, and OnboardingService itself takes it as a
+    // collaborator (see that class's activateDraftBrandsAndLocations).
+    public TenantControlPlaneService(
             TenantControlPlaneStore store,
             TenantAccessPolicy accessPolicy,
             Clock clock,

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -27,6 +28,9 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.support.TestDatabase;
@@ -38,6 +42,8 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
 /**
@@ -66,6 +72,7 @@ class OnboardingServiceTests {
     private RecordingEvents published;
     private MutableClock clock;
     private JdbcTenantControlPlaneStore store;
+    private TenantControlPlaneService controlPlane;
 
     // Only so that the gauge under test stays strongly reachable while it is
     // read; see stalledAgeSeconds(). Set only by that method, on the one test
@@ -105,6 +112,18 @@ class OnboardingServiceTests {
         store = new JdbcTenantControlPlaneStore(jdbc);
         provisioner = new RecordingProvisioner();
         published = new RecordingEvents();
+        // Platform-admin bypasses TenantAccessPolicy's own checks entirely, so
+        // this works whichever tenant/brand/location is being activated,
+        // matching how the real activate() endpoint is reached in practice —
+        // see OnboardingService.activate's own javadoc.
+        CurrentActor systemActor = () -> new AuthenticatedActor("platform-admin-1", Set.of("platform-admin"), Map.of());
+        controlPlane = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(systemActor, deniesEverything(), false),
+                clock,
+                published,
+                recorder,
+                systemActor);
 
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         service = new OnboardingService(
@@ -118,10 +137,37 @@ class OnboardingServiceTests {
                 new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry()),
                 published,
                 mapper,
-                clock);
+                clock,
+                controlPlane);
 
         insertTemplate();
         insertTenant();
+    }
+
+    /** Never actually consulted: every {@link TenantControlPlaneService} call here runs as platform-admin. */
+    private static AuthorizationService deniesEverything() {
+        return new AuthorizationService() {
+            @Override
+            public boolean has(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
+                    uz.horecaos.platform.iam.api.ResourceScope scope) {
+                return false;
+            }
+
+            @Override
+            public void require(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
+                    uz.horecaos.platform.iam.api.ResourceScope scope) {
+                throw new AuthorizationService.AccessDeniedException(capability, scope);
+            }
+
+            @Override
+            public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, UUID tenantId) {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
     @Test
@@ -167,7 +213,8 @@ class OnboardingServiceTests {
                         new SimpleMeterRegistry()),
                 published,
                 JsonMapper.builder().build(),
-                clock);
+                clock,
+                controlPlane);
         UUID runId = serviceMissingOneHandler.startRun(
                 TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
 

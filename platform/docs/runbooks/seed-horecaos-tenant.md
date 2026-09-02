@@ -175,6 +175,16 @@ them.
    this fix — including every `tools/proving-run` tenant — has a `DRAFT`
    brand and `DRAFT` locations today** and will not appear in pickup-location
    discovery until activated; this is worth flagging beyond this task.
+   **Update (wave 23):** onboarding now calls these same endpoints itself —
+   `OnboardingService.activate` lifts every `DRAFT` brand and location to
+   `ACTIVE` in the same transaction as the tenant the moment a platform
+   administrator approves `TENANT_ACTIVATE`, so reaching `ACTIVE` no longer
+   depends on anyone remembering this step; this tool's own calls to the two
+   endpoints below are now redundant but remain harmless idempotent no-ops,
+   and no backfill was needed for the gap above since production and staging
+   do not exist yet and every local/dev tenant was already `ACTIVE` one way
+   or another (`R__local_demo_data`'s fixture directly, or this tool's own
+   prior activation calls).
 2. **`GET /api/v1/control-plane/tenants/by-slug/{slug}`**
    (`TenantControlPlaneController`, `TenantControlPlaneService`,
    `TenantControlPlaneStore`/`JdbcTenantControlPlaneStore`) — platform-admin

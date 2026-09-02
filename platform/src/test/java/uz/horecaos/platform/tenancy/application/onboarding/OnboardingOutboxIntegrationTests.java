@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +38,9 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
@@ -43,6 +48,8 @@ import uz.horecaos.platform.integration.outbox.TenancyOutboxEventListener;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
@@ -321,6 +328,55 @@ class OnboardingOutboxIntegrationTests {
             return new JdbcTenantControlPlaneStore(jdbc);
         }
 
+        /** A platform administrator: what actually calls {@code POST .../activate}. */
+        @Bean
+        CurrentActor currentActor() {
+            return () -> new AuthenticatedActor("platform-admin-1", Set.of("platform-admin"), Map.of());
+        }
+
+        /** Never actually consulted: the platform-admin actor above bypasses every check it would answer. */
+        @Bean
+        AuthorizationService authorizationService() {
+            return new AuthorizationService() {
+                @Override
+                public boolean has(
+                        String subject,
+                        uz.horecaos.platform.iam.api.Capability capability,
+                        uz.horecaos.platform.iam.api.ResourceScope scope) {
+                    return false;
+                }
+
+                @Override
+                public void require(
+                        String subject,
+                        uz.horecaos.platform.iam.api.Capability capability,
+                        uz.horecaos.platform.iam.api.ResourceScope scope) {
+                    throw new AuthorizationService.AccessDeniedException(capability, scope);
+                }
+
+                @Override
+                public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, java.util.UUID tenantId) {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+
+        @Bean
+        TenantAccessPolicy tenantAccessPolicy(CurrentActor currentActor, AuthorizationService authorization) {
+            return new TenantAccessPolicy(currentActor, authorization, false);
+        }
+
+        @Bean
+        TenantControlPlaneService tenantControlPlaneService(
+                TenantControlPlaneStore store,
+                TenantAccessPolicy accessPolicy,
+                Clock clock,
+                ApplicationEventPublisher events,
+                AuditRecorder recorder,
+                CurrentActor currentActor) {
+            return new TenantControlPlaneService(store, accessPolicy, clock, events, recorder, currentActor);
+        }
+
         /** Stands in for Keycloak; ADR 0009's own adapter is tested against a real one. */
         @Bean
         OrganizationProvisioner organizationProvisioner() {
@@ -399,11 +455,12 @@ class OnboardingOutboxIntegrationTests {
                 List<OnboardingStepHandler> handlers,
                 AuditRecorder recorder,
                 ApprovalService approvals,
-                org.springframework.context.ApplicationEventPublisher events,
+                ApplicationEventPublisher events,
                 ObjectMapper objectMapper,
-                Clock clock) {
+                Clock clock,
+                TenantControlPlaneService controlPlane) {
             return new OnboardingService(
-                    jdbc, transactions, handlers, recorder, approvals, events, objectMapper, clock);
+                    jdbc, transactions, handlers, recorder, approvals, events, objectMapper, clock, controlPlane);
         }
     }
 }

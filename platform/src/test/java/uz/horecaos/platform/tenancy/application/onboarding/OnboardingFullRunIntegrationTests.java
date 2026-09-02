@@ -29,6 +29,9 @@ import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.application.GrantManagementService;
@@ -44,12 +47,19 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
+import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
+import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStorefrontPickupLocationStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
 /**
@@ -82,6 +92,7 @@ class OnboardingFullRunIntegrationTests {
     private JdbcClient jdbc;
     private TransactionTemplate transactions;
     private OnboardingService service;
+    private TenantControlPlaneService controlPlane;
     private UUID tenantId;
     private UUID brandId;
     private UUID locationId;
@@ -138,6 +149,21 @@ class OnboardingFullRunIntegrationTests {
         new RoleRegistrySynchronizer(jdbc).synchronize();
 
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        // Platform-admin bypasses TenantAccessPolicy's own checks entirely, which
+        // is what actually happens here: TENANT_ACTIVATE is only ever reached
+        // through OnboardingController.activate(), a real HTTP request from
+        // whoever is authorized to activate this tenant — see
+        // OnboardingService.activate's own javadoc for why that is the one place
+        // in the workflow where calling a capability-checked service is safe.
+        CurrentActor systemActor =
+                () -> new AuthenticatedActor("platform-admin-1", java.util.Set.of("platform-admin"), Map.of());
+        controlPlane = new TenantControlPlaneService(
+                new JdbcTenantControlPlaneStore(jdbc),
+                new TenantAccessPolicy(systemActor, deniesEverything(), false),
+                CLOCK,
+                event -> {},
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                systemActor);
         service = new OnboardingService(
                 jdbc,
                 transactions,
@@ -150,7 +176,8 @@ class OnboardingFullRunIntegrationTests {
                         new SimpleMeterRegistry()),
                 event -> {},
                 JsonMapper.builder().build(),
-                CLOCK);
+                CLOCK,
+                controlPlane);
 
         tenantId = UUID.randomUUID();
         brandId = UUID.randomUUID();
@@ -161,33 +188,7 @@ class OnboardingFullRunIntegrationTests {
 
     @Test
     void aRealisticCashOnlyPickupOnlyTenantReachesReadyOnEveryStep() {
-        // Exactly the shape OnboardingController.start() now builds from the
-        // resolved template's default_configuration (Gap B/D): a fresh tenant
-        // gets RESTAURANT_APPROVAL applied with zero manual policy work.
-        UUID runId = service.startRun(
-                tenantId,
-                templateId,
-                1,
-                Map.of(
-                        "ownerEmail",
-                        "owner@acme.example",
-                        "defaultConfiguration",
-                        Map.of(
-                                "acceptancePolicy",
-                                Map.of(
-                                        "mode",
-                                        "RESTAURANT_APPROVAL",
-                                        "approvalChannel",
-                                        "HORECAOS_OPERATIONS",
-                                        "approvalTimeoutSeconds",
-                                        600,
-                                        "timeoutAction",
-                                        "AUTO_REJECT",
-                                        "rejectionReasonRequired",
-                                        false,
-                                        "notifyCustomerWhilePending",
-                                        true))),
-                ADMIN);
+        UUID runId = startRealisticRun();
 
         drain(runId);
 
@@ -235,6 +236,160 @@ class OnboardingFullRunIntegrationTests {
                  WHERE c.key_code = 'ordering.acceptance' AND c.scope_type = 'TENANT' AND c.tenant_id = :tenantId
                 """).param("tenantId", tenantId).query(String.class).single())
                 .isEqualTo("RESTAURANT_APPROVAL");
+    }
+
+    /**
+     * The systemic fix, proved end to end: {@code TenantControlPlaneService
+     * .createBrand}/{@code createLocation} always create {@code DRAFT} (this
+     * fixture seeds the row exactly that way, not {@code ACTIVE} as the other
+     * two tests below and the module's own {@code OnboardingServiceTests} do,
+     * because their subject is the workflow's mechanics, not this gap), and
+     * before wave 23 nothing but a remembered call to the wave-21 activation
+     * endpoints ever moved either out of it. Reaching {@code ACTIVE} alone is
+     * not the customer-visible truth the gap hid — a tenant's brand and
+     * location can report {@code ACTIVE} while still being invisible to
+     * discovery if any of {@code nearestTo}'s other joins are wrong, so this
+     * asserts through the exact store {@code
+     * StorefrontPickupLocationController} calls, not through the status
+     * columns alone.
+     */
+    @Test
+    void activationLiftsTheDraftBrandAndLocationToActiveAndMakesTheLocationStorefrontDiscoverable() {
+        assertThat(controlPlane.getBrands(new TenantId(tenantId)))
+                .as("the fixture must seed exactly what TenantControlPlaneService.createBrand really "
+                        + "produces, or this test cannot tell activation-by-onboarding from "
+                        + "already-active-by-fixture")
+                .extracting(TenantControlPlaneService.BrandView::status)
+                .containsExactly(OperatingUnitStatus.DRAFT);
+        assertThat(controlPlane.getLocations(new TenantId(tenantId), new BrandId(brandId)))
+                .extracting(TenantControlPlaneService.LocationView::status)
+                .containsExactly(OperatingUnitStatus.DRAFT);
+
+        UUID runId = startRealisticRun();
+        drain(runId);
+
+        assertThat(service.activate(runId, ADMIN, "go live").activated()).isTrue();
+
+        assertThat(controlPlane.getBrands(new TenantId(tenantId)))
+                .as("no one had to remember to call POST .../brands/{brandId}/activate")
+                .extracting(TenantControlPlaneService.BrandView::status)
+                .containsExactly(OperatingUnitStatus.ACTIVE);
+        assertThat(controlPlane.getLocations(new TenantId(tenantId), new BrandId(brandId)))
+                .as("no one had to remember to call POST .../locations/{locationId}/activate")
+                .extracting(TenantControlPlaneService.LocationView::status)
+                .containsExactly(OperatingUnitStatus.ACTIVE);
+
+        // The stronger assertion: the exact query JdbcStorefrontPickupLocationStore
+        // .nearestTo runs for StorefrontPickupLocationController, requiring ACTIVE
+        // on tenant, brand and location together plus a published storefront menu
+        // and a PICKUP-enabled channel binding — every one of which this fixture's
+        // own seedARealisticTenant() already set up.
+        assertThat(new JdbcStorefrontPickupLocationStore(jdbc).nearestTo(new GeoPoint(41.311081, 69.240562), 10))
+                .as("the customer-visible truth the gap hid: a location an onboarded tenant just "
+                        + "activated must actually be findable, not merely ACTIVE in the database")
+                .extracting(JdbcStorefrontPickupLocationStore.PickupLocationCandidate::locationId)
+                .contains(locationId);
+    }
+
+    /**
+     * The other half of the mandate: activation must lift {@code DRAFT} alone.
+     * A location a tenant suspends after go-live must stay suspended even when
+     * this same tenant's onboarding activates again — which a second run,
+     * started to add a second brand or location, is a completely ordinary way
+     * to trigger.
+     */
+    @Test
+    void aLocationSuspendedAfterGoLiveIsNotResurrectedByASecondOnboardingRun() {
+        UUID firstRunId = startRealisticRun();
+        drain(firstRunId);
+        assertThat(service.activate(firstRunId, ADMIN, "go live").activated()).isTrue();
+        assertThat(locationStatus()).isEqualTo("ACTIVE");
+
+        // A deliberate operational decision made after go-live: the branch
+        // closes. No suspend-location endpoint exists yet (only activate does),
+        // so the test reaches for the same column a future one would write.
+        jdbc.sql("UPDATE tenant.locations SET status = 'SUSPENDED', version = version + 1 WHERE id = :id")
+                .param("id", locationId)
+                .update();
+
+        UUID secondRunId = startRealisticRun();
+        drain(secondRunId);
+        assertThat(service.activate(secondRunId, ADMIN, "go live again").activated())
+                .isTrue();
+
+        assertThat(locationStatus())
+                .as("activation lifts DRAFT only; a deliberately suspended location must never be "
+                        + "resurrected merely because this tenant's onboarding reached ACTIVATE again")
+                .isEqualTo("SUSPENDED");
+    }
+
+    private String locationStatus() {
+        return jdbc.sql("SELECT status FROM tenant.locations WHERE id = :id")
+                .param("id", locationId)
+                .query(String.class)
+                .single();
+    }
+
+    /**
+     * Exactly the shape {@code OnboardingController.start()} builds from the
+     * resolved template's {@code default_configuration} (Gap B/D): a fresh
+     * tenant gets {@code RESTAURANT_APPROVAL} applied with zero manual policy
+     * work. Safe to call more than once for the same tenant — the fixture's
+     * template and tenant are seeded once in {@code setUp()}, and every step
+     * this run touches is idempotent by the same contract {@code
+     * OnboardingStepHandler} documents for a retried attempt.
+     */
+    private UUID startRealisticRun() {
+        return service.startRun(
+                tenantId,
+                templateId,
+                1,
+                Map.of(
+                        "ownerEmail",
+                        "owner@acme.example",
+                        "defaultConfiguration",
+                        Map.of(
+                                "acceptancePolicy",
+                                Map.of(
+                                        "mode",
+                                        "RESTAURANT_APPROVAL",
+                                        "approvalChannel",
+                                        "HORECAOS_OPERATIONS",
+                                        "approvalTimeoutSeconds",
+                                        600,
+                                        "timeoutAction",
+                                        "AUTO_REJECT",
+                                        "rejectionReasonRequired",
+                                        false,
+                                        "notifyCustomerWhilePending",
+                                        true))),
+                ADMIN);
+    }
+
+    /** Never actually consulted: every {@link TenantControlPlaneService} call here runs as platform-admin. */
+    private static AuthorizationService deniesEverything() {
+        return new AuthorizationService() {
+            @Override
+            public boolean has(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
+                    uz.horecaos.platform.iam.api.ResourceScope scope) {
+                return false;
+            }
+
+            @Override
+            public void require(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
+                    uz.horecaos.platform.iam.api.ResourceScope scope) {
+                throw new AuthorizationService.AccessDeniedException(capability, scope);
+            }
+
+            @Override
+            public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, UUID tenantId) {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
     private String lastErrorOf(UUID runId, String stepKey) {
@@ -365,21 +520,32 @@ class OnboardingFullRunIntegrationTests {
                 .update();
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
-                VALUES (:id, :tenantId, 'ACME', :slug, 'Acme Burgers', 'ACTIVE', 0)
+                VALUES (:id, :tenantId, 'ACME', :slug, 'Acme Burgers', 'DRAFT', 0)
                 """)
                 .param("id", brandId)
                 .param("tenantId", tenantId)
                 .param("slug", "acme-brand-" + brandId.toString().substring(0, 8))
                 .update();
+        // DRAFT, not ACTIVE: this is exactly what TenantControlPlaneService
+        // .createBrand/createLocation actually produce (Brand.draft/Location.draft),
+        // and TENANT_ACTIVATE's own activation is what this suite proves lifts it —
+        // see activationLiftsTheDraftBrandAndLocationToActiveAndMakesTheLocationStorefrontDiscoverable.
+        // A coordinate (MERCHANT_PIN, matching what an onboarding operator would
+        // actually place) is required here too: JdbcStorefrontPickupLocationStore
+        // .nearestTo excludes any location without one, activation notwithstanding.
         jdbc.sql("""
                 INSERT INTO tenant.locations
-                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
-                VALUES (:id, :tenantId, :brandId, 'LOC', :slug, 'Chilonzor', 'Asia/Tashkent', 'ACTIVE', 0)
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version,
+                     latitude, longitude, coordinate_source)
+                VALUES (:id, :tenantId, :brandId, 'LOC', :slug, 'Chilonzor', 'Asia/Tashkent', 'DRAFT', 0,
+                        :latitude, :longitude, 'MERCHANT_PIN')
                 """)
                 .param("id", locationId)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("slug", "loc-" + locationId.toString().substring(0, 8))
+                .param("latitude", 41.311081)
+                .param("longitude", 69.240562)
                 .update();
 
         // One channel, cash-only, pickup-only — the two owner-decided v1
