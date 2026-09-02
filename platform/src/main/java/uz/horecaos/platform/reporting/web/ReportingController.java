@@ -21,6 +21,7 @@ import uz.horecaos.platform.reporting.application.ReportQuery;
 import uz.horecaos.platform.reporting.application.ReportQueryService;
 import uz.horecaos.platform.reporting.domain.Grain;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -135,6 +136,79 @@ public class ReportingController {
                 new MedianResponse(result.medianSeconds(), ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/orders")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Order-grain rows behind 7.2's per-stage, commercial-log, and late-order tables",
+            description = "Not day-grain: one row per order, straight off reporting.fact_order. "
+                    + "Carries no name, phone, operator, or courier — reporting has no PERSONAL "
+                    + "field at all (ADR 0029). A bounded read, ordered by the axis the requested "
+                    + "sort names, not a paginated feed; maybeMore on the response says whether it "
+                    + "came back full.")
+    public ResponseEntity<OrderListResponse> orders(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> channelCode,
+            @RequestParam(defaultValue = "DATE_DESC") String sort,
+            @RequestParam(required = false) Integer limit) {
+
+        var result = queries.orders(
+                tenantId, from, to, orEmpty(locationId), orEmpty(channelCode), orderSort(sort), clampOrderLimit(limit));
+        return ResponseEntity.ok(new OrderListResponse(
+                result.rows().stream().map(OrderRowResponse::of).toList(),
+                result.maybeMore(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/order-outcomes")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Every terminal status in range, split by cancellation reason",
+            description = "One grouped read behind two surfaces: sum by terminalStatus for the "
+                    + "overview funnel's drop-offs, or read the CANCELLED/REJECTED/EXPIRED/"
+                    + "PAYMENT_FAILED rows for the cancellation panel's reason breakdown. What a "
+                    + "cancellation cost — stock_disposition, liability_party — is not here: "
+                    + "ADR 0039's order_outcomes does not exist yet, so fact_order carries null on "
+                    + "every row for both.")
+    public ResponseEntity<OutcomeListResponse> orderOutcomes(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> channelCode) {
+
+        var result = queries.orderOutcomes(tenantId, from, to, orEmpty(locationId), orEmpty(channelCode));
+        return ResponseEntity.ok(new OutcomeListResponse(
+                result.rows().stream().map(OutcomeRowResponse::of).toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    private static JdbcReportingStore.OrderSort orderSort(String requested) {
+        try {
+            return JdbcReportingStore.OrderSort.valueOf(requested);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Unknown sort \"%s\"".formatted(requested), Map.of("sort", requested));
+        }
+    }
+
+    private static final int ORDER_LIST_DEFAULT_LIMIT = 100;
+
+    /** Wider than {@code Page.MAXIMUM_LIMIT}: this is a bounded read, not a page of a feed. */
+    private static final int ORDER_LIST_MAX_LIMIT = 300;
+
+    private static int clampOrderLimit(@Nullable Integer requested) {
+        if (requested == null) {
+            return ORDER_LIST_DEFAULT_LIMIT;
+        }
+        if (requested < 1) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "limit must be at least 1", Map.of());
+        }
+        return Math.min(requested, ORDER_LIST_MAX_LIMIT);
+    }
+
     private static List<Grain.Dimension> dimensions(List<String> requested) {
         if (requested == null) {
             return List.of();
@@ -246,6 +320,71 @@ public class ReportingController {
     public record SlaResponse(List<BucketResponse> buckets, ProvenanceResponse provenance) {}
 
     public record MedianResponse(@Nullable Integer medianSeconds, ProvenanceResponse provenance) {}
+
+    /** One order-grain row. See {@code JdbcReportingStore.OrderRow} for what each field means. */
+    public record OrderRowResponse(
+            UUID orderId,
+            LocalDate businessDate,
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            String channelCode,
+            String fulfilmentType,
+            String terminalStatus,
+            long grossRevenueSom,
+            long discountSom,
+            long deliveryFeeSom,
+            long taxSom,
+            long netRevenueSom,
+            int itemCount,
+            Instant occurredAt,
+            @Nullable Instant closedAt,
+            @Nullable Integer secondsToConfirm,
+            @Nullable Integer secondsToReady,
+            @Nullable Integer secondsTotal,
+            @Nullable Integer secondsLate,
+            @Nullable String cancellationReasonCode) {
+
+        static OrderRowResponse of(JdbcReportingStore.OrderRow row) {
+            return new OrderRowResponse(
+                    row.orderId(),
+                    row.businessDate(),
+                    row.locationId(),
+                    row.legalEntityId(),
+                    row.channelCode(),
+                    row.fulfilmentType(),
+                    row.terminalStatus(),
+                    row.grossRevenueSom(),
+                    row.discountSom(),
+                    row.deliveryFeeSom(),
+                    row.taxSom(),
+                    row.netRevenueSom(),
+                    row.itemCount(),
+                    row.occurredAt(),
+                    row.closedAt(),
+                    row.secondsToConfirm(),
+                    row.secondsToReady(),
+                    row.secondsTotal(),
+                    row.secondsLate(),
+                    row.cancellationReasonCode());
+        }
+    }
+
+    /**
+     * @param maybeMore true when the bounded read came back full — see
+     *                  {@code ReportQueryService.OrderListResult}
+     */
+    public record OrderListResponse(List<OrderRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /** One (terminal status, cancellation reason) bucket. */
+    public record OutcomeRowResponse(
+            String terminalStatus, @Nullable String cancellationReasonCode, int count) {
+
+        static OutcomeRowResponse of(JdbcReportingStore.OutcomeRow row) {
+            return new OutcomeRowResponse(row.terminalStatus(), row.cancellationReasonCode(), row.count());
+        }
+    }
+
+    public record OutcomeListResponse(List<OutcomeRowResponse> rows, ProvenanceResponse provenance) {}
 
     /**
      * What ADR 0023 requires a report to declare about itself.

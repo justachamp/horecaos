@@ -202,6 +202,30 @@ export const routes: Routes = [
           },
         ],
       },
+      {
+        // Reports (IA PART 2 §7, tier P rows only): 7.1 Business overview and
+        // 7.2 Order reports. `ReportsShell` owns the shared filter bar and the
+        // two-tab strip between them — see its own doc for why the other
+        // eight §7 screens stay the shared `NotBuiltPage` below rather than
+        // growing tabs here.
+        path: 'statistics',
+        loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'overview' },
+          {
+            path: 'overview',
+            loadComponent: () =>
+              import('./features/reports/business-overview-page').then(
+                (m) => m.BusinessOverviewPage,
+              ),
+          },
+          {
+            path: 'orders',
+            loadComponent: () =>
+              import('./features/reports/order-reports-page').then((m) => m.OrderReportsPage),
+          },
+        ],
+      },
       // The product editor is a *sibling* of `catalog`, not one of its
       // children — catalog.md §4.2 specifies it as a full page, unlike the
       // order board's docked detail, so opening it replaces the tabbed shell
@@ -225,7 +249,7 @@ export const routes: Routes = [
  * the two cannot drift. Adding a rail item without a route is then impossible.
  */
 function placeholderRoutes(): Routes {
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog']);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/statistics']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

@@ -693,6 +693,191 @@ public class JdbcReportingStore {
         return median == null ? null : (int) Math.round(median);
     }
 
+    /**
+     * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables
+     * that are genuinely per-order rather than day-grain (ADR 0043's own
+     * {@code sla-buckets}/{@code preparation-time} endpoints already establish
+     * that a shape the typed query cannot answer gets its own read; this is the
+     * same move for a row-per-order shape instead of a row-per-slice one).
+     *
+     * <p>No name, phone, operator, or courier: those are not in this schema by
+     * design (ADR 0029 — reporting carries no {@code PERSONAL} field at all), so a
+     * commercial log built from this method is honestly short of them rather than
+     * silently blank.
+     *
+     * <p>Bounded rather than paginated, on the same footing as {@code
+     * medianSecondsToReady} and {@code readSlaBuckets} above: at the "hundreds of
+     * orders a day" pilot scale a capped, severity- or recency-ordered read serves
+     * every 7.2 tab this powers, and a cursor-paginated feed is follow-up work for
+     * whenever a tenant's volume needs it rather than complexity carried from day
+     * one for its own sake.
+     */
+    public List<OrderRow> readOrders(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            OrderSort sort,
+            int limit) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("limit", limit);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!channelCodes.isEmpty()) {
+            filter.append(" AND channel_code IN (:channels)");
+            params.put("channels", channelCodes);
+        }
+
+        String orderClause =
+                switch (sort) {
+                    // «Заказы»: every order in range, newest first — a commercial
+                    // log is read chronologically.
+                    case DATE_DESC -> "ORDER BY occurred_at DESC, order_id DESC";
+                    // «Этапы»: only orders with a total elapsed time to audit. An
+                    // order still open has nothing to measure, and NULLS would
+                    // otherwise sort ahead of every real duration.
+                    case DURATION_DESC -> {
+                        filter.append(" AND seconds_total IS NOT NULL");
+                        yield "ORDER BY seconds_total DESC, order_id DESC";
+                    }
+                    // «Опоздания»: only orders that were actually late. Sorted by
+                    // severity, matching the spec's own "the queue exists for the
+                    // worst case" — never by time.
+                    case LATENESS_DESC -> {
+                        filter.append(" AND seconds_late IS NOT NULL AND seconds_late > 0");
+                        yield "ORDER BY seconds_late DESC, order_id DESC";
+                    }
+                };
+
+        return jdbc.sql("""
+                SELECT order_id, business_date, location_id, legal_entity_id, channel_code,
+                       fulfilment_type, terminal_status, gross_revenue_som, discount_som,
+                       delivery_fee_som, tax_som, net_revenue_som, item_count, occurred_at,
+                       closed_at, seconds_to_confirm, seconds_to_ready, seconds_total,
+                       seconds_late, cancellation_reason_code
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + filter + " " + orderClause + " LIMIT :limit")
+                .params(params)
+                .query(JdbcReportingStore::orderRow)
+                .list();
+    }
+
+    /**
+     * Every terminal status in range, split by cancellation reason where one was
+     * recorded — one grouped read that answers both the funnel's drop-offs (sum by
+     * {@code terminalStatus}) and the cancellation panel's reason breakdown (the
+     * {@code CANCELLED}/{@code REJECTED}/{@code EXPIRED}/{@code PAYMENT_FAILED}
+     * rows). {@code COMPLETED} comes back too, with a null reason, so the funnel
+     * has its whole denominator from one call.
+     *
+     * <p>Not a registry metric: {@code orders.cancelled.v1} already answers "how
+     * many", grouped no finer than location. This answers "which ones and why",
+     * which is a shape the registry's one-value-per-slice contract does not
+     * express — the same reason {@code sla_bucket_set.v1} gets its own endpoint
+     * rather than being folded into {@code /queries}.
+     */
+    public List<OutcomeRow> readOrderOutcomes(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!channelCodes.isEmpty()) {
+            filter.append(" AND channel_code IN (:channels)");
+            params.put("channels", channelCodes);
+        }
+
+        return jdbc.sql("""
+                SELECT terminal_status, cancellation_reason_code, count(*) AS order_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + filter + """
+                 GROUP BY terminal_status, cancellation_reason_code
+                 ORDER BY order_count DESC, terminal_status, cancellation_reason_code NULLS FIRST
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new OutcomeRow(
+                        row.getString("terminal_status"),
+                        row.getString("cancellation_reason_code"),
+                        row.getInt("order_count")))
+                .list();
+    }
+
+    /** Which end of an order-grain read to serve — see {@link #readOrders}. */
+    public enum OrderSort {
+        DATE_DESC,
+        DURATION_DESC,
+        LATENESS_DESC
+    }
+
+    /** One order, straight off {@code fact_order} — see {@link #readOrders}. */
+    public record OrderRow(
+            UUID orderId,
+            LocalDate businessDate,
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            String channelCode,
+            String fulfilmentType,
+            String terminalStatus,
+            long grossRevenueSom,
+            long discountSom,
+            long deliveryFeeSom,
+            long taxSom,
+            long netRevenueSom,
+            int itemCount,
+            Instant occurredAt,
+            @Nullable Instant closedAt,
+            @Nullable Integer secondsToConfirm,
+            @Nullable Integer secondsToReady,
+            @Nullable Integer secondsTotal,
+            @Nullable Integer secondsLate,
+            @Nullable String cancellationReasonCode) {}
+
+    /** One (status, reason) bucket — see {@link #readOrderOutcomes}. */
+    public record OutcomeRow(
+            String terminalStatus, @Nullable String cancellationReasonCode, int count) {}
+
+    private static OrderRow orderRow(ResultSet row, int number) throws SQLException {
+        return new OrderRow(
+                row.getObject("order_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("legal_entity_id", UUID.class),
+                row.getString("channel_code"),
+                row.getString("fulfilment_type"),
+                row.getString("terminal_status"),
+                row.getLong("gross_revenue_som"),
+                row.getLong("discount_som"),
+                row.getLong("delivery_fee_som"),
+                row.getLong("tax_som"),
+                row.getLong("net_revenue_som"),
+                row.getInt("item_count"),
+                requireInstant(row, "occurred_at"),
+                instantOrNull(row, "closed_at"),
+                row.getObject("seconds_to_confirm", Integer.class),
+                row.getObject("seconds_to_ready", Integer.class),
+                row.getObject("seconds_total", Integer.class),
+                row.getObject("seconds_late", Integer.class),
+                row.getString("cancellation_reason_code"));
+    }
+
     /** The boundary versions present in a range, so a mixed range can be refused. */
     public List<Integer> boundaryVersionsIn(UUID tenantId, LocalDate from, LocalDate to) {
         return jdbc.sql("""

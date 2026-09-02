@@ -919,6 +919,40 @@ export interface OrderDetailResponse {
   warnings?: Array<string>;
 }
 
+export interface OrderListResponse {
+  maybeMore?: boolean;
+  provenance?: ProvenanceResponse;
+  rows?: Array<OrderRowResponse>;
+}
+
+export interface OrderRowResponse {
+  businessDate?: string;
+  cancellationReasonCode?: string;
+  channelCode?: string;
+  closedAt?: string;
+  deliveryFeeSom?: number;
+  discountSom?: number;
+  fulfilmentType?: string;
+  grossRevenueSom?: number;
+  itemCount?: number;
+  legalEntityId?: string;
+  locationId?: string;
+  netRevenueSom?: number;
+  occurredAt?: string;
+  orderId?: string;
+  secondsLate?: number;
+  secondsToConfirm?: number;
+  secondsToReady?: number;
+  secondsTotal?: number;
+  taxSom?: number;
+  terminalStatus?: string;
+}
+
+export interface OutcomeListResponse {
+  provenance?: ProvenanceResponse;
+  rows?: Array<OutcomeRowResponse>;
+}
+
 export interface OutcomeResponse {
   customerRefund?: string;
   kind?: string;
@@ -929,6 +963,12 @@ export interface OutcomeResponse {
   reservationCommitted?: boolean;
   stockDisposition?: string;
   systemCategory?: string;
+}
+
+export interface OutcomeRowResponse {
+  cancellationReasonCode?: string;
+  count?: number;
+  terminalStatus?: string;
 }
 
 export interface PageRemedyResponse {
@@ -1776,6 +1816,8 @@ export interface Operations {
   "detail": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}"; request: { parameters: { path: { notificationId: string; tenantId: string } } }; responses: { "200": NotificationResponse } };
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
+  "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
+  "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };
   "preparationTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/preparation-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
   "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
   "slaBuckets": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": SlaResponse } };

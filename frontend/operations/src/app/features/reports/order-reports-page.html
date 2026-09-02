@@ -1,0 +1,234 @@
+<div class="order-reports">
+  <div class="order-reports__header">
+    <h1 class="q-title">{{ 'reports.orders.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  <div class="order-reports__tabs" role="tablist">
+    @for (tab of tabs; track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        [class.tab--active]="activeTab() === tab.id"
+        [attr.aria-selected]="activeTab() === tab.id"
+        (click)="selectTab(tab.id)"
+      >
+        {{ tab.labelKey | t }}
+      </button>
+    }
+    <button
+      type="button"
+      class="order-reports__export"
+      disabled
+      [attr.title]="'reports.export.notBuilt' | t"
+    >
+      {{ 'reports.export.button' | t }}
+    </button>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <div class="order-reports__skeleton" aria-busy="true"></div>
+    }
+    @case ('denied') {
+      <div class="order-reports__denied q-body-sm">{{ 'reports.denied.notGranted' | t }}</div>
+    }
+    @case ('error') {
+      <div class="order-reports__error" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        @if (lastError(); as error) {
+          <span class="q-mono q-caption">{{ error.correlationId ?? '—' }}</span>
+        }
+        <button type="button" class="order-reports__retry q-body-sm" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @switch (activeTab()) {
+        @case ('stages') {
+          <q-order-rows-table [rows]="stagesRows()" [columns]="stageColumns" />
+        }
+        @case ('commercial') {
+          <p class="order-reports__pii-note q-caption">
+            {{ 'reports.orders.commercial.piiNote' | t }}
+          </p>
+          <q-order-rows-table [rows]="commercialRows()" [columns]="commercialColumns" />
+        }
+        @case ('late') {
+          @if (lateSummaryLine(); as summary) {
+            <p class="order-reports__summary-line q-body-sm">{{ summary }}</p>
+          }
+          <q-order-rows-table
+            [rows]="lateRows()"
+            [columns]="lateColumns"
+            emptyMessageKey="reports.orders.late.empty"
+          />
+          @if (lateMaybeMore()) {
+            <p class="order-reports__bounded-note q-caption">
+              {{ 'reports.orders.boundedNote' | t }}
+            </p>
+          }
+        }
+        @case ('daily') {
+          <table class="daily-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.orders.daily.date' | t }}</th>
+                <th class="q-caption daily-table__num">{{ 'reports.orders.daily.gross' | t }}</th>
+                <th class="q-caption daily-table__num">{{ 'reports.orders.daily.net' | t }}</th>
+                <th class="q-caption daily-table__num">{{ 'reports.orders.daily.orders' | t }}</th>
+                <th class="q-caption daily-table__num">
+                  {{ 'reports.orders.daily.cancelled' | t }}
+                </th>
+                <th class="q-caption daily-table__num">
+                  {{ 'reports.orders.daily.averageCheck' | t }}
+                </th>
+                <th class="q-caption daily-table__num">
+                  {{ 'reports.orders.daily.delivery' | t }}
+                </th>
+                <th class="q-caption daily-table__num">{{ 'reports.orders.daily.pickup' | t }}</th>
+                <th class="q-caption daily-table__num">{{ 'reports.orders.daily.dineIn' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of dailyRows(); track row.businessDate) {
+                <tr>
+                  <td class="q-body-sm q-tnum">{{ ddmm(row.businessDate) }}</td>
+                  <td class="q-body-sm q-tnum daily-table__num">{{ money(row.grossSom) }}</td>
+                  <td class="q-body-sm q-tnum daily-table__num">{{ money(row.netSom) }}</td>
+                  <td class="q-body-sm q-tnum daily-table__num">{{ count(row.orderCount) }}</td>
+                  <td class="q-body-sm q-tnum daily-table__num">
+                    {{ count(row.cancelledCount) }} ({{ cancelledShare(row) }})
+                  </td>
+                  <td class="q-body-sm q-tnum daily-table__num">
+                    {{ row.averageCheckSom === null ? '—' : money(row.averageCheckSom) }}
+                  </td>
+                  <td class="q-body-sm q-tnum daily-table__num">
+                    {{ count(row.byFulfilment.DELIVERY.count) }} /
+                    {{ money(row.byFulfilment.DELIVERY.grossSom) }}
+                  </td>
+                  <td class="q-body-sm q-tnum daily-table__num">
+                    {{ count(row.byFulfilment.PICKUP.count) }} /
+                    {{ money(row.byFulfilment.PICKUP.grossSom) }}
+                  </td>
+                  <td class="q-body-sm q-tnum daily-table__num">
+                    {{ count(row.byFulfilment.DINE_IN.count) }} /
+                    {{ money(row.byFulfilment.DINE_IN.grossSom) }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="daily-table__empty q-body-sm" colspan="9">
+                    {{ 'reports.empty.period' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <p class="order-reports__note q-caption">{{ 'reports.orders.daily.notBuiltNote' | t }}</p>
+        }
+        @case ('summary') {
+          <div class="pivot-controls">
+            <div
+              class="pivot-controls__group"
+              role="group"
+              [attr.aria-label]="'reports.orders.summary.measure' | t"
+            >
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotMeasure() === 'count'"
+                (click)="selectPivotMeasure('count')"
+              >
+                {{ 'reports.orders.summary.measure.count' | t }}
+              </button>
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotMeasure() === 'sum'"
+                (click)="selectPivotMeasure('sum')"
+              >
+                {{ 'reports.orders.summary.measure.sum' | t }}
+              </button>
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotMeasure() === 'avgCheck'"
+                (click)="selectPivotMeasure('avgCheck')"
+              >
+                {{ 'reports.orders.summary.measure.averageCheck' | t }}
+              </button>
+            </div>
+            <div
+              class="pivot-controls__group"
+              role="group"
+              [attr.aria-label]="'reports.orders.summary.split' | t"
+            >
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotSplit() === 'ALL'"
+                (click)="selectPivotSplit('ALL')"
+              >
+                {{ 'reports.filter.fulfilment.all' | t }}
+              </button>
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotSplit() === 'DELIVERY'"
+                (click)="selectPivotSplit('DELIVERY')"
+              >
+                {{ 'reports.filter.fulfilment.delivery' | t }}
+              </button>
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotSplit() === 'PICKUP'"
+                (click)="selectPivotSplit('PICKUP')"
+              >
+                {{ 'reports.filter.fulfilment.pickup' | t }}
+              </button>
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="pivotSplit() === 'DINE_IN'"
+                (click)="selectPivotSplit('DINE_IN')"
+              >
+                {{ 'reports.filter.fulfilment.dineIn' | t }}
+              </button>
+            </div>
+          </div>
+
+          <table class="pivot-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.orders.summary.branch' | t }}</th>
+                <th class="q-caption">{{ 'reports.orders.summary.channel' | t }}</th>
+                <th class="q-caption pivot-table__num">{{ 'reports.orders.summary.value' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of pivotRows(); track row.locationName + '|' + row.channelName) {
+                <tr>
+                  <td class="q-body-sm">{{ row.locationName }}</td>
+                  <td class="q-body-sm">{{ row.channelName }}</td>
+                  <td class="q-body-sm q-tnum pivot-table__num">
+                    {{ formatPivotValue(row.value) }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="daily-table__empty q-body-sm" colspan="3">
+                    {{ 'reports.empty.period' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    }
+  }
+</div>

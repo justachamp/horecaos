@@ -2860,6 +2860,118 @@
         },
         "type" : "object"
       },
+      "OrderListResponse" : {
+        "properties" : {
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderRowResponse" : {
+        "properties" : {
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "cancellationReasonCode" : {
+            "type" : "string"
+          },
+          "channelCode" : {
+            "type" : "string"
+          },
+          "closedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "deliveryFeeSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "discountSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fulfilmentType" : {
+            "type" : "string"
+          },
+          "grossRevenueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "itemCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "netRevenueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "secondsLate" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "secondsToConfirm" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "secondsToReady" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "secondsTotal" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "taxSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "terminalStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OutcomeListResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OutcomeRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "OutcomeResponse" : {
         "properties" : {
           "customerRefund" : {
@@ -2890,6 +3002,21 @@
             "type" : "string"
           },
           "systemCategory" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OutcomeRowResponse" : {
+        "properties" : {
+          "cancellationReasonCode" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "terminalStatus" : {
             "type" : "string"
           }
         },
@@ -12677,6 +12804,154 @@
           }
         },
         "summary" : "Every metric this build defines, with its definition and signature",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/order-outcomes" : {
+      "get" : {
+        "description" : "One grouped read behind two surfaces: sum by terminalStatus for the overview funnel's drop-offs, or read the CANCELLED/REJECTED/EXPIRED/PAYMENT_FAILED rows for the cancellation panel's reason breakdown. What a cancellation cost — stock_disposition, liability_party — is not here: ADR 0039's order_outcomes does not exist yet, so fact_order carries null on every row for both.",
+        "operationId" : "orderOutcomes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelCode",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OutcomeListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every terminal status in range, split by cancellation reason",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/orders" : {
+      "get" : {
+        "description" : "Not day-grain: one row per order, straight off reporting.fact_order. Carries no name, phone, operator, or courier — reporting has no PERSONAL field at all (ADR 0029). A bounded read, ordered by the axis the requested sort names, not a paginated feed; maybeMore on the response says whether it came back full.",
+        "operationId" : "orders",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelCode",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sort",
+          "required" : false,
+          "schema" : {
+            "default" : "DATE_DESC",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Order-grain rows behind 7.2's per-stage, commercial-log, and late-order tables",
         "tags" : [ "Reporting" ]
       }
     },

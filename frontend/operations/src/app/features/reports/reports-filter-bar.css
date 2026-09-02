@@ -1,0 +1,104 @@
+/* Two rows with deliberately different visual weight (statistics.md §1.1,
+   Togora §2c): the period axis is primary and dark-filled, the slice axis is
+   secondary and outlined. */
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--q-canvas);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.filter-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-bar__row--slice {
+  justify-content: space-between;
+}
+
+/* Row 1: dark-filled pills. */
+.pill {
+  padding: 6px 14px;
+  border: 1px solid var(--q-ink);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pill--active {
+  background: var(--q-ink);
+  color: var(--q-inverse-ink);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+/* Row 2: amber-outlined, smaller. */
+.filter-bar__segmented {
+  display: inline-flex;
+  border: 1px solid var(--q-warning);
+}
+
+.segment {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--q-warning);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment--active {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+
+/* Локed, not hidden (§1.1): a manager who cannot find the payment filter must
+   see that it exists and why, not conclude it was never built. */
+.filter-bar__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px dashed var(--q-ink-subtle);
+  color: var(--q-ink-subtle);
+  cursor: help;
+}
+
+.filter-bar__locked-glyph {
+  display: inline-block;
+  width: 8px;
+  height: 6px;
+  border: 1px solid var(--q-ink-subtle);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  top: 3px;
+}
+
+.filter-bar__locked-glyph span {
+  display: block;
+  width: 12px;
+  height: 8px;
+  margin-left: -2.5px;
+  margin-top: 5px;
+  background: var(--q-ink-subtle);
+}
