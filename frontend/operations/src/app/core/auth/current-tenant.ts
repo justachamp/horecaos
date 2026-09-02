@@ -52,10 +52,6 @@ export class CurrentTenant {
   /** Every scope the operator holds, for {@link ../../features/staff/scope-coverage.ts}'s coverage checks. */
   readonly scopes: Signal<readonly ScopeGrant[]> = computed(() => this.context()?.scopes ?? []);
 
-  /** See {@link CurrentLocation.denied} for why this is false, not unknown, before load settles. */,
-  /** The operator's tenant id, or null before load and when the session names none. */
-  readonly tenantId: Signal<string | null> = computed(() => this.context()?.activeTenantId ?? null);
-
   /** See `CurrentLocation.denied` for why this is false, not unknown, before load settles. */
   readonly denied: Signal<boolean> = computed(() => this.hasLoaded() && this.tenantId() === null);
 

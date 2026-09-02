@@ -231,42 +231,6 @@ export const operationsPaths = {
   dispatchUnassign(scope: LocationScope, planId: string): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/unassign`;
   },
-} as const;
-
-/**
- * The in-house courier roster (ADR 0042, `OperationsCourierController`) —
- * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` carries
- * no `brand_id`/`location_id` column at all (§3.3's branch-bindings ownership
- * is not built — see the wave's final report). Kept apart from {@link
- * operationsPaths} for the same reason {@link mediaPaths} is: every call here
- * takes a bare `tenantId`.
- */
-export const courierPaths = {
-  /** The roster, with today's load. Same read {@link operationsPaths.dispatchQueue}'s fleet rail uses. */
-  couriers(tenantId: string): string {
-    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/couriers`;
-  },
-
-  /** Register a courier and open their engagement. Mutation: key required. */
-  courierRegistrations(tenantId: string): string {
-    return this.couriers(tenantId);
-  },
-
-  /** Vehicle classes, for the registration form's picker. */
-  courierTypes(tenantId: string): string {
-    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
-  },
-
-  /** Attest that the registration evidence was sighted. Mutation: key required. */
-  courierEngagementVerify(tenantId: string, engagementId: string): string {
-    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/verify`;
-  },
-
-  /** Suspend an engagement for an operational reason. Mutation: key required. */
-  courierEngagementSuspend(tenantId: string, engagementId: string): string {
-    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/suspend`;,
-  // ---------------------------------------------------------------- Customers (§5)
-
   /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
@@ -366,6 +330,41 @@ export const courierPaths = {
     loyaltyAccountId: string,
   ): string {
     return `${this.customerLoyaltyBalances(scope, accountId)}/${encodeURIComponent(loyaltyAccountId)}/entries`;
+  },
+} as const;
+
+/**
+ * The in-house courier roster (ADR 0042, `OperationsCourierController`) —
+ * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` carries
+ * no `brand_id`/`location_id` column at all (§3.3's branch-bindings ownership
+ * is not built — see the wave's final report). Kept apart from {@link
+ * operationsPaths} for the same reason {@link mediaPaths} is: every call here
+ * takes a bare `tenantId`.
+ */
+export const courierPaths = {
+  /** The roster, with today's load. Same read {@link operationsPaths.dispatchQueue}'s fleet rail uses. */
+  couriers(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/couriers`;
+  },
+
+  /** Register a courier and open their engagement. Mutation: key required. */
+  courierRegistrations(tenantId: string): string {
+    return this.couriers(tenantId);
+  },
+
+  /** Vehicle classes, for the registration form's picker. */
+  courierTypes(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
+  },
+
+  /** Attest that the registration evidence was sighted. Mutation: key required. */
+  courierEngagementVerify(tenantId: string, engagementId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/verify`;
+  },
+
+  /** Suspend an engagement for an operational reason. Mutation: key required. */
+  courierEngagementSuspend(tenantId: string, engagementId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/suspend`;
   },
 } as const;
 
