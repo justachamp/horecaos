@@ -772,6 +772,26 @@ export const messagesEn = {
   'catalog.menus.noLocation': 'No location resolved for this account yet',
   'catalog.menus.channelsNote':
     'Per-channel enablement is not built (ADR 0036) — this matrix shows locations only',
+
+  // ---- IA 0.1 Live board (today-page.ts, live-board.ts) ----
+  'today.loading': 'Loading the live board',
+  'today.denied': 'No access to the live board',
+  'today.error.retry': 'Retry',
+  'today.updated': 'updated {time}',
+  'today.counters.inProgress': 'In progress',
+  'today.counters.cancelled': 'Cancelled',
+  'today.mix.source.title': 'By source',
+  'today.mix.type.title': 'By type',
+  'today.mix.empty': 'No orders in progress',
+  'today.branches.title': 'Branch load',
+  'today.branches.column.branch': 'Branch',
+  'today.branches.column.inProgress': 'In progress',
+  'today.branches.empty': 'No branch data',
+  'today.branches.unavailable': 'Could not load the branch list',
+  'today.branches.partial': 'Branches shown: {shown} of {total}',
+  'today.operators.title': 'Operators',
+  'today.operators.notBuilt':
+    'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

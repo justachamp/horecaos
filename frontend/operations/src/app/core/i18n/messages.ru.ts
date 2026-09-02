@@ -749,4 +749,24 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menus.noLocation': 'Этой учётной записи пока не назначен филиал',
   'catalog.menus.channelsNote':
     'Включение по каналам не построено (ADR 0036) — эта матрица показывает только филиалы',
+
+  // ---- IA 0.1 Живая доска (today-page.ts, live-board.ts) ----
+  'today.loading': 'Загрузка живой доски',
+  'today.denied': 'Нет доступа к живой доске',
+  'today.error.retry': 'Повторить',
+  'today.updated': 'обновлено {time}',
+  'today.counters.inProgress': 'В процессе',
+  'today.counters.cancelled': 'Отменено',
+  'today.mix.source.title': 'По источнику',
+  'today.mix.type.title': 'По типу',
+  'today.mix.empty': 'Нет заказов в процессе',
+  'today.branches.title': 'Загрузка по филиалам',
+  'today.branches.column.branch': 'Филиал',
+  'today.branches.column.inProgress': 'В процессе',
+  'today.branches.empty': 'Нет данных по филиалам',
+  'today.branches.unavailable': 'Не удалось загрузить список филиалов',
+  'today.branches.partial': 'Показано филиалов: {shown} из {total}',
+  'today.operators.title': 'Операторы',
+  'today.operators.notBuilt':
+    'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
 };

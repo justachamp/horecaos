@@ -756,4 +756,24 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.noLocation': 'Bu hisobga hali filial biriktirilmagan',
   'catalog.menus.channelsNote':
     'Kanal boʻyicha yoqish qurilmagan (ADR 0036) — bu jadval faqat filiallarni koʻrsatadi',
+
+  // ---- IA 0.1 Jonli taxta (today-page.ts, live-board.ts) ----
+  'today.loading': 'Jonli taxta yuklanmoqda',
+  'today.denied': 'Jonli taxtaga kirish huquqi yoʻq',
+  'today.error.retry': 'Qayta urinish',
+  'today.updated': 'yangilandi {time}',
+  'today.counters.inProgress': 'Jarayonda',
+  'today.counters.cancelled': 'Bekor qilingan',
+  'today.mix.source.title': 'Manba boʻyicha',
+  'today.mix.type.title': 'Turi boʻyicha',
+  'today.mix.empty': 'Jarayondagi buyurtmalar yoʻq',
+  'today.branches.title': 'Filiallar boʻyicha yuklama',
+  'today.branches.column.branch': 'Filial',
+  'today.branches.column.inProgress': 'Jarayonda',
+  'today.branches.empty': 'Filiallar boʻyicha maʼlumot yoʻq',
+  'today.branches.unavailable': 'Filiallar roʻyxatini yuklab boʻlmadi',
+  'today.branches.partial': 'Koʻrsatilgan filiallar: {shown} / {total}',
+  'today.operators.title': 'Operatorlar',
+  'today.operators.notBuilt':
+    'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
 };

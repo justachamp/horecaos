@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  IN_PROGRESS_ORDER_STATUSES,
   ORDER_STATUSES,
   ORDER_STATUS_LABEL_KEYS,
   TERMINAL_ORDER_STATUSES,
+  isInProgressOrderStatus,
   isKnownOrderStatus,
   isTerminalOrderStatus,
   orderStatusLabel,
 } from './order-status';
+import { ORDER_TABS, isOrderTabMember } from './order-tabs';
 
 describe('order status vocabulary', () => {
   it('recognises exactly the twelve canonical statuses', () => {
@@ -54,6 +57,38 @@ describe('order status vocabulary', () => {
     for (const status of live) {
       expect(isTerminalOrderStatus(status)).toBe(false);
     }
+  });
+
+  describe('IN_PROGRESS_ORDER_STATUSES — the IA 0.1 Live board canonical grouping', () => {
+    it('is every non-terminal status except PAYMENT_FAILED', () => {
+      const expected = ORDER_STATUSES.filter(
+        (status) => !TERMINAL_ORDER_STATUSES.includes(status) && status !== 'PAYMENT_FAILED',
+      );
+      expect([...IN_PROGRESS_ORDER_STATUSES].sort()).toEqual([...expected].sort());
+    });
+
+    it('matches isInProgressOrderStatus for every one of the twelve canonical statuses', () => {
+      for (const status of ORDER_STATUSES) {
+        expect(isInProgressOrderStatus(status)).toBe(IN_PROGRESS_ORDER_STATUSES.includes(status));
+      }
+    });
+
+    it('does not drift from order-tabs.ts — equals new ∪ preparing ∪ delivering exactly', () => {
+      const union = ORDER_STATUSES.filter(
+        (status) =>
+          isOrderTabMember('new', { status, severityLevel: 'NORMAL' }) ||
+          isOrderTabMember('preparing', { status, severityLevel: 'NORMAL' }) ||
+          isOrderTabMember('delivering', { status, severityLevel: 'NORMAL' }),
+      );
+      expect([...IN_PROGRESS_ORDER_STATUSES].sort()).toEqual([...union].sort());
+      // ORDER_TABS still has to actually contain those three ids, or the check above is vacuous.
+      expect(ORDER_TABS).toEqual(expect.arrayContaining(['new', 'preparing', 'delivering']));
+    });
+
+    it('excludes PAYMENT_FAILED specifically, since it is non-terminal but nobody is working it forward', () => {
+      expect(isInProgressOrderStatus('PAYMENT_FAILED')).toBe(false);
+      expect(isTerminalOrderStatus('PAYMENT_FAILED')).toBe(false);
+    });
   });
 
   describe('orderStatusLabel', () => {
