@@ -53,10 +53,14 @@ or the platform accepts the value once, in a door built for nothing else.
 
 ## Decision
 
-- **The screens live in the control-plane app** — integrations are tenant
-  administration (the owner/admin connecting a merchant account), the same
-  surface that already owns the binding and installation APIs, not the
-  floor-staff operations app. An "Integrations" section: installed providers
+- **The screens live in the operations app's Settings section** — the owner
+  exercised this record's placement escape hatch on 2026-09-02, and the
+  frontend information architecture agrees: integrations are merchant
+  self-service ("anything a merchant would do for themselves"), and
+  control-plane administers the platform, never the merchant's business. The
+  first build (wave 25) landed them in control-plane on this record's original
+  recommendation; wave 26 moves them under operations Settings, and the
+  control-plane copy is removed. An "Integrations" section: installed providers
   and merchant bindings with status, connect flows per provider, rotation, and
   archive — every action capability-gated (the existing
   `INTEGRATION_INSTALLATION_MANAGE` / `PAYMENT_MERCHANT_BINDING_MANAGE`
@@ -95,7 +99,7 @@ or the platform accepts the value once, in a door built for nothing else.
 | Tenants get scoped vault access instead | Hands every tenant a second product's auth model and UI; the vault becomes tenant-facing infrastructure | Never |
 | Keep operator-mediated setup | Rejected by the directive; does not scale past the pilot | — |
 | Client-side encryption to the vault (platform never sees plaintext) | Real key-distribution complexity for a threat the TLS+no-persistence door already covers at this scale; the platform operator is trusted with far more already | A compliance regime demands it |
-| Screens in the operations app | Integrations are tenant administration, not floor work; the surface model (ADR 0031) puts tenant admin in control-plane | The owner overrules the placement |
+| Screens in the control-plane app (the original recommendation, built in wave 25) | The owner overruled it 2026-09-02, and the IA document sides with the owner: merchant self-service belongs to operations; control-plane never administers the merchant's business | — (decided) |
 
 ## Implementation checklist
 
