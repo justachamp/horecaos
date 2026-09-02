@@ -64,6 +64,32 @@ export const routes: Routes = [
         ],
       },
       {
+        // The Customers section (frontend-information-architecture.md §5):
+        // the CRM grid docks its detail the same way `orders`/`locations` do.
+        path: 'customers',
+        loadComponent: () =>
+          import('./features/customers/customers-page').then((m) => m.CustomersPage),
+        children: [
+          // Bulk CSV import with retained provenance (§5.1) is honestly not
+          // built: the backend has no generic import pipeline, only the
+          // SendPulse-specific one (ADR 0059 stage 3), which is a different
+          // source and a different shape entirely. Declared before
+          // `:accountId` for the same reason `orders/new` is declared before
+          // `:orderId` — "import" must be a destination, not an account id.
+          {
+            path: 'import',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §5.1 (bulk CSV import)' },
+          },
+          {
+            path: ':accountId',
+            loadComponent: () =>
+              import('./features/customers/customer-detail-pane').then((m) => m.CustomerDetailPane),
+          },
+        ],
+      },
+      {
         path: 'inbox',
         loadComponent: () => import('./features/inbox/inbox-page').then((m) => m.InboxPage),
         children: [
@@ -297,6 +323,7 @@ function placeholderRoutes(): Routes {
     '/kitchen',
     '/delivery',
     '/couriers',
+    '/customers',
   ]);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),

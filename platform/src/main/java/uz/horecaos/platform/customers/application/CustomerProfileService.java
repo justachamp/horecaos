@@ -39,6 +39,7 @@ public class CustomerProfileService {
 
     private static final String CONTACT_TABLE = "customer.contact_points";
     private static final String ADDRESS_TABLE = "customer.addresses";
+    private static final String ACCOUNT_TABLE = "customer.customer_accounts";
 
     private final JdbcCustomerStore store;
     private final FieldProtection protection;
@@ -431,6 +432,67 @@ public class CustomerProfileService {
 
     private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    /**
+     * Writes, replaces, or clears the account's date of birth (frontend
+     * information architecture §5.2: "profile + DOB").
+     *
+     * <p>Staff-only by construction: {@code CustomerController} gates this on
+     * {@code CUSTOMER_MANAGE}, never on the customer's own self-service surface,
+     * because {@link #updateProfile}'s own javadoc already drew that line for the
+     * three fields a customer may set about themselves and a date of birth was
+     * deliberately not a fourth.
+     *
+     * @param dateOfBirth ISO-8601 {@code yyyy-MM-dd}, or null to clear a value
+     *                    already on file
+     * @return the stored version after the write
+     */
+    @Transactional
+    public int updateDateOfBirth(UUID tenantId, UUID accountId, int expectedVersion, @Nullable String dateOfBirth) {
+        var current = store.account(tenantId, accountId).orElseThrow(AccountNotFoundException::new);
+        String encrypted = dateOfBirth == null
+                ? null
+                : protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(ACCOUNT_TABLE, "date_of_birth_encrypted", accountId),
+                                dateOfBirth)
+                        .serialize();
+
+        if (store.updateDateOfBirth(tenantId, accountId, expectedVersion, encrypted, clock.instant()) == 0) {
+            throw new StaleRecordException(expectedVersion, current.version());
+        }
+        return expectedVersion + 1;
+    }
+
+    /**
+     * Reveals the date of birth on file, if any.
+     *
+     * <p>One audit fact per call, written before any decrypt — the same ordering
+     * every other reveal in this class uses — and written even when there is
+     * nothing on file: {@code revealedCount: 0} is still an answerable "who
+     * asked, and when".
+     *
+     * @param purpose recorded as an audit fact (ADR 0027)
+     * @param actor   who is revealing — see {@link #revealContactPoints}
+     * @return empty when the account holds no date of birth, which is an
+     *         ordinary answer and not an error
+     */
+    @Transactional
+    public Optional<String> revealDateOfBirth(UUID tenantId, UUID accountId, String purpose, ActorRef actor) {
+        var account = store.account(tenantId, accountId).orElseThrow(AccountNotFoundException::new);
+        int revealedCount = account.dateOfBirthEncrypted() == null ? 0 : 1;
+        recordReveal("customer.dateOfBirth.revealed", tenantId, accountId, purpose, actor, revealedCount);
+        if (account.dateOfBirthEncrypted() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(account.dateOfBirthEncrypted()),
+                new RecordRef(ACCOUNT_TABLE, "date_of_birth_encrypted", accountId),
+                purpose));
     }
 
     /**

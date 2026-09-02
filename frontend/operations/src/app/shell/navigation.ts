@@ -81,7 +81,10 @@ export const NAVIGATION: readonly NavGroup[] = [
         path: '/customers',
         label: 'shell.nav.customers',
         badge: null,
-        spec: 'operations-spec/orders.md',
+        // No dedicated operations-spec file for this section exists (checked
+        // 2026-09-02); frontend-information-architecture.md §5 is the source
+        // of truth this build was scoped against.
+        spec: 'frontend-information-architecture.md §5 (Customers)',
       },
       {
         path: '/staff',

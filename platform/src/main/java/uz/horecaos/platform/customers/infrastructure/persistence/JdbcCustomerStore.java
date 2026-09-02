@@ -377,23 +377,310 @@ public class JdbcCustomerStore {
     public Optional<AccountRow> account(UUID tenantId, UUID accountId) {
         return jdbc.sql("""
                 SELECT id, identity_partition_brand_id, status, display_name, preferred_locale,
-                       preferred_timezone, identity_policy_version, version, created_at
+                       preferred_timezone, identity_policy_version, version, created_at,
+                       date_of_birth_encrypted
                 FROM customer.customer_accounts
                 WHERE tenant_id = :tenantId AND id = :accountId
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
-                .query((row, number) -> new AccountRow(
+                .query(JdbcCustomerStore::accountRow)
+                .optional();
+    }
+
+    private static AccountRow accountRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
+        return new AccountRow(
+                row.getObject("id", UUID.class),
+                row.getObject("identity_partition_brand_id", UUID.class),
+                row.getString("status"),
+                row.getString("display_name"),
+                row.getString("preferred_locale"),
+                row.getString("preferred_timezone"),
+                row.getObject("identity_policy_version", Integer.class),
+                row.getInt("version"),
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getString("date_of_birth_encrypted"));
+    }
+
+    /**
+     * Writes the encrypted date of birth, or clears it.
+     *
+     * <p>Its own method rather than a fourth parameter on {@link
+     * #updateAccountProfile}: that one's own javadoc is deliberate about the three
+     * fields it names being the whole of what a self-service write may touch, and
+     * a date of birth is staff-entered here (CustomerController requires
+     * {@code CUSTOMER_MANAGE}), never customer-entered, so folding it into the
+     * self-service statement would blur who may set it.
+     *
+     * @return rows written: 1, or 0 when the account is not this tenant's or has
+     *         moved on from {@code expectedVersion}
+     */
+    public int updateDateOfBirth(
+            UUID tenantId, UUID accountId, int expectedVersion, @Nullable String encryptedDateOfBirth, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.customer_accounts
+                SET date_of_birth_encrypted = :dob, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :accountId AND version = :expectedVersion
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("expectedVersion", expectedVersion)
+                .param("dob", encryptedDateOfBirth, Types.VARCHAR)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    // -------------------------------------------------------------- list & search
+
+    /**
+     * Where a customer grid cursor points, resolved inside the tenant's own
+     * scope — mirrors {@code JdbcOrderStore#customerOrderCursor} exactly, one
+     * level up: a cursor id and tenant resolve to the {@code created_at} the
+     * page comparison needs, and naming an id from another tenant answers empty
+     * rather than leaking whether it exists.
+     */
+    public Optional<Instant> accountCursor(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT created_at FROM customer.customer_accounts
+                WHERE tenant_id = :tenantId AND id = :accountId
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query((row, number) ->
+                        row.getObject("created_at", OffsetDateTime.class).toInstant())
+                .optional();
+    }
+
+    /**
+     * A page of the tenant's customer accounts, newest first (frontend
+     * information architecture §5.1: the CRM grid).
+     *
+     * <p>Carries no contact value and no address — the grid names the "never a
+     * list-wide decrypt" rule this whole section is built around, and a phone
+     * column here would mean decrypting every row of every page just to mask it.
+     * {@code phoneHash} lets a search match a customer by phone without ever
+     * decrypting one: it is the same keyed hash {@link #accountsWithContact} looks
+     * up by, computed by the caller from a query that parses as a phone number,
+     * and left null the rest of the time so the {@code ILIKE} branch is the only
+     * one that can match.
+     *
+     * @param status     null for every status, or one value to filter to
+     * @param nameQuery  null to skip the name search entirely
+     * @param phoneHash  null to skip the phone search entirely
+     */
+    public List<AccountSummaryRow> listAccounts(
+            UUID tenantId,
+            @Nullable String status,
+            @Nullable String nameQuery,
+            @Nullable String phoneHash,
+            @Nullable Instant beforeCreatedAt,
+            @Nullable UUID beforeId,
+            int limit) {
+        return jdbc.sql("""
+                SELECT a.id, a.status, a.display_name, a.created_at, a.version
+                FROM customer.customer_accounts a
+                WHERE a.tenant_id = :tenantId
+                  AND a.status <> 'MERGED'
+                  AND (CAST(:status AS varchar) IS NULL OR a.status = :status)
+                  AND (
+                    (CAST(:nameQuery AS varchar) IS NULL AND CAST(:phoneHash AS varchar) IS NULL)
+                    OR (CAST(:nameQuery AS varchar) IS NOT NULL AND a.display_name ILIKE '%' || :nameQuery || '%')
+                    OR (CAST(:phoneHash AS varchar) IS NOT NULL AND EXISTS (
+                          SELECT 1 FROM customer.contact_points c
+                          WHERE c.tenant_id = a.tenant_id AND c.customer_account_id = a.id
+                            AND c.type = 'PHONE' AND c.normalized_hash = :phoneHash))
+                  )
+                  AND (:unbounded
+                       OR (a.created_at, a.id)
+                          < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("status", status, Types.VARCHAR)
+                .param("nameQuery", nameQuery, Types.VARCHAR)
+                .param("phoneHash", phoneHash, Types.VARCHAR)
+                .param("unbounded", beforeCreatedAt == null)
+                // Cast in the statement rather than typed here, mirroring
+                // JdbcOrderStore#listForCustomer's identical cursor pair.
+                .param(
+                        "beforeCreatedAt",
+                        beforeCreatedAt == null ? null : OffsetDateTime.ofInstant(beforeCreatedAt, ZoneOffset.UTC))
+                .param("beforeId", beforeId == null ? null : beforeId.toString())
+                .param("limit", limit)
+                .query((row, number) -> new AccountSummaryRow(
                         row.getObject("id", UUID.class),
-                        row.getObject("identity_partition_brand_id", UUID.class),
                         row.getString("status"),
                         row.getString("display_name"),
-                        row.getString("preferred_locale"),
-                        row.getString("preferred_timezone"),
-                        row.getObject("identity_policy_version", Integer.class),
-                        row.getInt("version"),
-                        row.getObject("created_at", OffsetDateTime.class).toInstant()))
-                .optional();
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getInt("version")))
+                .list();
+    }
+
+    /** Every non-{@code MERGED} account in the tenant. The header counter's "total". */
+    public long countActive(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM customer.customer_accounts
+                WHERE tenant_id = :tenantId AND status <> 'MERGED'
+                """).param("tenantId", tenantId).query(Long.class).single();
+    }
+
+    /** Accounts created inside {@code [from, to)}. The header counter's "registered today". */
+    public long countCreatedBetween(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT count(*) FROM customer.customer_accounts
+                WHERE tenant_id = :tenantId AND created_at >= :from AND created_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("from", OffsetDateTime.ofInstant(from, ZoneOffset.UTC))
+                .param("to", OffsetDateTime.ofInstant(to, ZoneOffset.UTC))
+                .query(Long.class)
+                .single();
+    }
+
+    // ------------------------------------------------------------------- merge
+
+    /**
+     * Redirects one account to another, in place (ADR 0015).
+     *
+     * <p>The row is never deleted — {@code merged_into_account_id} is what makes
+     * every immutable order snapshot, address and consent decision the source
+     * account ever wrote still resolvable, and {@link #resolveMergeTarget}
+     * follows exactly this column.
+     *
+     * @return rows written: 1, or 0 when the source is not this tenant's, has
+     *         already moved on from {@code expectedVersion}, or is already
+     *         {@code MERGED}
+     */
+    public int mergeAccount(
+            UUID tenantId, UUID sourceAccountId, UUID targetAccountId, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.customer_accounts
+                SET status = 'MERGED', merged_into_account_id = :target, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :source AND version = :expectedVersion
+                  AND status <> 'MERGED'
+                """)
+                .param("tenantId", tenantId)
+                .param("source", sourceAccountId)
+                .param("target", targetAccountId)
+                .param("expectedVersion", expectedVersion)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    // -------------------------------------------------------------- blacklist
+
+    public void insertBlacklistEntry(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            String encryptedReason,
+            String actorType,
+            String actorId,
+            @Nullable Instant expiresAt,
+            Instant now) {
+        jdbc.sql("""
+                INSERT INTO customer.blacklist_entries (
+                    id, tenant_id, customer_account_id, reason_encrypted, status,
+                    actor_type, actor_id, created_at, expires_at)
+                VALUES (:id, :tenantId, :accountId, :reason, 'ACTIVE', :actorType, :actorId, :now, :expiresAt)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("reason", encryptedReason)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .param(
+                        "expiresAt",
+                        expiresAt == null ? null : OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC),
+                        Types.TIMESTAMP_WITH_TIMEZONE)
+                .update();
+    }
+
+    /**
+     * Lifts the tenant's one active entry for this account, if any.
+     *
+     * <p>Scoped by status rather than by id: the blacklist tab shows one current
+     * state, not a picker over history, so lifting is "end whatever is active now"
+     * rather than "end entry X" — which also means a caller cannot lift an entry
+     * that already lapsed into a later one, because there is never more than one
+     * {@code ACTIVE} row at a time (the service enforces that before insert).
+     *
+     * @return rows written: 1, or 0 when there is no active entry to lift
+     */
+    public int liftActiveBlacklistEntry(
+            UUID tenantId,
+            UUID accountId,
+            String liftedByActorType,
+            String liftedByActorId,
+            @Nullable String encryptedLiftReason,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.blacklist_entries
+                SET status = 'LIFTED', lifted_at = :now, lifted_by_actor_type = :actorType,
+                    lifted_by_actor_id = :actorId, lift_reason_encrypted = :liftReason
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("actorType", liftedByActorType)
+                .param("actorId", liftedByActorId)
+                .param("liftReason", encryptedLiftReason, Types.VARCHAR)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * Whether an unexpired {@code ACTIVE} entry exists right now — the
+     * enforcement point's own read (ADR 0029's "check the clock on every read"
+     * rather than a swept status, per the migration's own comment on
+     * {@code expires_at}).
+     */
+    public boolean isCurrentlyBlacklisted(UUID tenantId, UUID accountId, Instant now) {
+        return jdbc.sql("""
+                SELECT count(*) FROM customer.blacklist_entries
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND status = 'ACTIVE'
+                  AND (expires_at IS NULL OR expires_at > :now)
+                """)
+                        .param("tenantId", tenantId)
+                        .param("accountId", accountId)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    /** Every blacklist entry for this account, newest first — what the reveal call decrypts. */
+    public List<BlacklistEntryRow> blacklistHistory(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT id, reason_encrypted, status, actor_type, actor_id, created_at, expires_at,
+                       lifted_at, lifted_by_actor_type, lifted_by_actor_id, lift_reason_encrypted
+                FROM customer.blacklist_entries
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                ORDER BY created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query((row, number) -> new BlacklistEntryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("reason_encrypted"),
+                        row.getString("status"),
+                        row.getString("actor_type"),
+                        row.getString("actor_id"),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        instantOrNull(row, "expires_at"),
+                        instantOrNull(row, "lifted_at"),
+                        row.getString("lifted_by_actor_type"),
+                        row.getString("lifted_by_actor_id"),
+                        row.getString("lift_reason_encrypted")))
+                .list();
+    }
+
+    private static @Nullable Instant instantOrNull(java.sql.ResultSet row, String column) throws java.sql.SQLException {
+        OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     /**
@@ -766,6 +1053,10 @@ public class JdbcCustomerStore {
      *                         from the row rather than from the tenant's current
      *                         policy, because the two disagree after a governed
      *                         mode change and only the row says where an edit lands
+     * @param dateOfBirthEncrypted still ciphertext — {@code null} covers both "not
+     *                         on file" and "on file, not decrypted here" alike,
+     *                         which is deliberate: this record never decrypts, so
+     *                         it cannot tell the two apart and must not pretend to
      */
     public record AccountRow(
             UUID id,
@@ -776,11 +1067,51 @@ public class JdbcCustomerStore {
             @Nullable String preferredTimezone,
             @Nullable Integer identityPolicyVersion,
             int version,
-            Instant createdAt) {
+            Instant createdAt,
+            @Nullable String dateOfBirthEncrypted) {
 
         @Override
         public String toString() {
             return "AccountRow[id=%s, version=%d]".formatted(id, version);
+        }
+    }
+
+    /**
+     * One row of the CRM grid (frontend information architecture §5.1). No
+     * contact value, no address — see {@link #listAccounts}'s own doc for why.
+     */
+    public record AccountSummaryRow(
+            UUID id, String status, @Nullable String displayName, Instant createdAt, int version) {
+
+        @Override
+        public String toString() {
+            return "AccountSummaryRow[id=%s, status=%s]".formatted(id, status);
+        }
+    }
+
+    /**
+     * One blacklist entry, still ciphertext on its two reason fields.
+     *
+     * <p>Never printed: {@link #toString} exists so a stray log statement prints
+     * an id and a status rather than an operator's account of why somebody was
+     * blacklisted.
+     */
+    public record BlacklistEntryRow(
+            UUID id,
+            String reasonEncrypted,
+            String status,
+            String actorType,
+            String actorId,
+            Instant createdAt,
+            @Nullable Instant expiresAt,
+            @Nullable Instant liftedAt,
+            @Nullable String liftedByActorType,
+            @Nullable String liftedByActorId,
+            @Nullable String liftReasonEncrypted) {
+
+        @Override
+        public String toString() {
+            return "BlacklistEntryRow[id=%s, status=%s]".formatted(id, status);
         }
     }
 

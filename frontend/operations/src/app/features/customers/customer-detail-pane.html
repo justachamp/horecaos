@@ -1,0 +1,825 @@
+<div class="pane">
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else if (profile(); as p) {
+    <h2 class="q-title">{{ p.value.displayName ?? ('customers.detail.unnamed' | t) }}</h2>
+    <p class="q-body-sm status-line">
+      <span class="status-badge">{{ statusLabel(p.value.status) }}</span>
+      <span class="q-ink-muted"
+        >{{ 'customers.detail.registered' | t }} {{ formatRegisteredAt(p.value.createdAt) }}</span
+      >
+    </p>
+
+    @if (notice(); as message) {
+      <p class="q-body-sm error" role="alert">
+        {{ message }}
+        <button type="button" class="link" (click)="dismissNotice()">
+          {{ 'customers.detail.dismiss' | t }}
+        </button>
+      </p>
+    }
+
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'profile'"
+        (click)="selectTab('profile')"
+      >
+        {{ 'customers.tab.profile' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'addresses'"
+        (click)="selectTab('addresses')"
+      >
+        {{ 'customers.tab.addresses' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'orders'"
+        (click)="selectTab('orders')"
+      >
+        {{ 'customers.tab.orders' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'consent'"
+        (click)="selectTab('consent')"
+      >
+        {{ 'customers.tab.consent' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'cashback'"
+        (click)="selectTab('cashback')"
+      >
+        {{ 'customers.tab.cashback' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'blacklist'"
+        (click)="selectTab('blacklist')"
+      >
+        {{ 'customers.tab.blacklist' | t }}
+      </button>
+    </div>
+
+    <!-- ---------------------------------------------------------------- profile -->
+    @if (activeTab() === 'profile') {
+      @if (!editingProfile()) {
+        <dl class="fields">
+          <div class="field">
+            <dt class="q-caption">{{ 'customers.field.name' | t }}</dt>
+            <dd class="q-body">{{ p.value.displayName ?? '—' }}</dd>
+          </div>
+          <div class="field">
+            <dt class="q-caption">{{ 'customers.profile.locale' | t }}</dt>
+            <dd class="q-body">{{ p.value.preferredLocale ?? '—' }}</dd>
+          </div>
+          <div class="field">
+            <dt class="q-caption">{{ 'customers.profile.timezone' | t }}</dt>
+            <dd class="q-body">{{ p.value.preferredTimezone ?? '—' }}</dd>
+          </div>
+        </dl>
+        <button type="button" class="secondary" (click)="startEditingProfile()">
+          {{ 'customers.edit' | t }}
+        </button>
+      } @else {
+        <div class="form">
+          <label class="q-caption" for="profile-name">{{ 'customers.field.name' | t }}</label>
+          <input
+            id="profile-name"
+            class="q-body field"
+            type="text"
+            [value]="draftDisplayName()"
+            (input)="draftDisplayName.set($any($event.target).value)"
+          />
+          <label class="q-caption" for="profile-locale">{{ 'customers.profile.locale' | t }}</label>
+          <input
+            id="profile-locale"
+            class="q-body field"
+            type="text"
+            [value]="draftPreferredLocale()"
+            (input)="draftPreferredLocale.set($any($event.target).value)"
+          />
+          <label class="q-caption" for="profile-timezone">{{
+            'customers.profile.timezone' | t
+          }}</label>
+          <input
+            id="profile-timezone"
+            class="q-body field"
+            type="text"
+            [value]="draftPreferredTimezone()"
+            (input)="draftPreferredTimezone.set($any($event.target).value)"
+          />
+          <div class="form__actions">
+            <button
+              type="button"
+              class="secondary"
+              (click)="editingProfile.set(false)"
+              [disabled]="profileSaving()"
+            >
+              {{ 'customers.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="primary"
+              (click)="saveProfile()"
+              [disabled]="profileSaving()"
+            >
+              {{ profileSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'customers.profile.contacts' | t }}</h3>
+        @if (revealedContacts(); as contacts) {
+          @for (contact of contacts; track contact.id) {
+            <p class="q-body q-mono">
+              {{ contact.value }}
+              @if (contact.isPrimary) {
+                <span class="q-caption">{{ 'customers.profile.primary' | t }}</span>
+              }
+            </p>
+          } @empty {
+            <p class="q-body-sm">{{ 'customers.profile.noContacts' | t }}</p>
+          }
+        } @else {
+          <button
+            type="button"
+            class="secondary reveal-link"
+            [disabled]="revealingContacts()"
+            (click)="revealContacts()"
+          >
+            {{ 'customers.reveal' | t }}
+          </button>
+        }
+        @if (revealedContacts()) {
+          <div class="form form--inline">
+            <input
+              class="q-body field"
+              type="text"
+              [value]="newContactValue()"
+              (input)="newContactValue.set($any($event.target).value)"
+              [placeholder]="'customers.profile.addPhone.placeholder' | t"
+            />
+            <button
+              type="button"
+              class="secondary"
+              (click)="addContact()"
+              [disabled]="addingContact()"
+            >
+              {{ 'customers.profile.addPhone' | t }}
+            </button>
+          </div>
+        }
+      </section>
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'customers.profile.dateOfBirth' | t }}</h3>
+        @if (dateOfBirth() !== undefined) {
+          @if (!editingDob()) {
+            <p class="q-body q-mono">
+              {{ dateOfBirth() ?? ('customers.profile.dateOfBirth.none' | t) }}
+            </p>
+            <button type="button" class="secondary" (click)="startEditingDob()">
+              {{ 'customers.edit' | t }}
+            </button>
+          } @else {
+            <div class="form">
+              <input
+                class="q-body field"
+                type="date"
+                [value]="draftDob()"
+                (input)="draftDob.set($any($event.target).value)"
+              />
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="editingDob.set(false)"
+                  [disabled]="dobSaving()"
+                >
+                  {{ 'customers.cancel' | t }}
+                </button>
+                <button type="button" class="primary" (click)="saveDob()" [disabled]="dobSaving()">
+                  {{ dobSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+                </button>
+              </div>
+            </div>
+          }
+        } @else if (p.value.hasDateOfBirth) {
+          <button
+            type="button"
+            class="secondary reveal-link"
+            [disabled]="revealingDob()"
+            (click)="revealDob()"
+          >
+            {{ 'customers.reveal' | t }}
+          </button>
+        } @else {
+          <p class="q-body-sm">{{ 'customers.profile.dateOfBirth.none' | t }}</p>
+          <button type="button" class="secondary" (click)="editingDob.set(true); draftDob.set('')">
+            {{ 'customers.profile.dateOfBirth.add' | t }}
+          </button>
+          @if (editingDob()) {
+            <div class="form">
+              <input
+                class="q-body field"
+                type="date"
+                [value]="draftDob()"
+                (input)="draftDob.set($any($event.target).value)"
+              />
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="editingDob.set(false)"
+                  [disabled]="dobSaving()"
+                >
+                  {{ 'customers.cancel' | t }}
+                </button>
+                <button type="button" class="primary" (click)="saveDob()" [disabled]="dobSaving()">
+                  {{ dobSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'customers.profile.merge' | t }}</h3>
+        <p class="q-body-sm">{{ 'customers.profile.merge.lead' | t }}</p>
+        <button type="button" class="secondary" (click)="openMergeDialog()">
+          {{ 'customers.profile.merge.action' | t }}
+        </button>
+      </section>
+    }
+
+    <!-- -------------------------------------------------------------- addresses -->
+    @if (activeTab() === 'addresses') {
+      @if (addresses(); as list) {
+        @for (address of list; track address.id) {
+          @if (editingAddressId() === address.id) {
+            <div class="form address-form">
+              <label class="q-caption">{{ 'customers.address.label' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressLabel()"
+                (input)="addressLabel.set($any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.line1' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().line1"
+                (input)="setAddressField('line1', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.city' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().city"
+                (input)="setAddressField('city', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.district' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().district"
+                (input)="setAddressField('district', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.entrance' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().entrance"
+                (input)="setAddressField('entrance', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.floor' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().floor"
+                (input)="setAddressField('floor', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.apartment' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().apartment"
+                (input)="setAddressField('apartment', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.landmark' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="addressFields().landmark"
+                (input)="setAddressField('landmark', $any($event.target).value)"
+              />
+              <label class="q-caption">{{ 'customers.address.instructions' | t }}</label>
+              <textarea
+                class="q-body field"
+                rows="2"
+                [value]="addressInstructions()"
+                (input)="addressInstructions.set($any($event.target).value)"
+              ></textarea>
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="cancelAddressForm()"
+                  [disabled]="addressSaving()"
+                >
+                  {{ 'customers.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  (click)="saveEditedAddress(address)"
+                  [disabled]="addressSaving()"
+                >
+                  {{ addressSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div class="address-card">
+              <p class="q-body">
+                <strong>{{ address.label || ('customers.address.untitled' | t) }}</strong>
+              </p>
+              <p class="q-body-sm">
+                {{ address.fields.line1 }}, {{ address.fields.city }}, {{ address.fields.district }}
+              </p>
+              @if (address.fields.entrance || address.fields.floor || address.fields.apartment) {
+                <p class="q-caption">
+                  {{ 'customers.address.entrance' | t }} {{ address.fields.entrance ?? '—' }} ·
+                  {{ 'customers.address.floor' | t }} {{ address.fields.floor ?? '—' }} ·
+                  {{ 'customers.address.apartment' | t }} {{ address.fields.apartment ?? '—' }}
+                </p>
+              }
+              @if (address.fields.landmark) {
+                <p class="q-caption">
+                  {{ 'customers.address.landmark' | t }}: {{ address.fields.landmark }}
+                </p>
+              }
+              <div class="address-card__actions">
+                <button type="button" class="link" (click)="startEditingAddress(address)">
+                  {{ 'customers.edit' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="link"
+                  (click)="archiveAddress(address.id, address.version)"
+                >
+                  {{ 'customers.address.archive' | t }}
+                </button>
+              </div>
+            </div>
+          }
+        } @empty {
+          <p class="q-body-sm">{{ 'customers.address.empty' | t }}</p>
+        }
+
+        @if (!addingAddress()) {
+          <button type="button" class="secondary" (click)="startAddingAddress()">
+            {{ 'customers.address.add' | t }}
+          </button>
+        } @else {
+          <div class="form address-form">
+            <label class="q-caption">{{ 'customers.address.label' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressLabel()"
+              (input)="addressLabel.set($any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.line1' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().line1"
+              (input)="setAddressField('line1', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.city' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().city"
+              (input)="setAddressField('city', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.district' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().district"
+              (input)="setAddressField('district', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.entrance' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().entrance"
+              (input)="setAddressField('entrance', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.floor' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().floor"
+              (input)="setAddressField('floor', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.apartment' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().apartment"
+              (input)="setAddressField('apartment', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.landmark' | t }}</label>
+            <input
+              class="q-body field"
+              type="text"
+              [value]="addressFields().landmark"
+              (input)="setAddressField('landmark', $any($event.target).value)"
+            />
+            <label class="q-caption">{{ 'customers.address.instructions' | t }}</label>
+            <textarea
+              class="q-body field"
+              rows="2"
+              [value]="addressInstructions()"
+              (input)="addressInstructions.set($any($event.target).value)"
+            ></textarea>
+            <div class="form__actions">
+              <button
+                type="button"
+                class="secondary"
+                (click)="cancelAddressForm()"
+                [disabled]="addressSaving()"
+              >
+                {{ 'customers.cancel' | t }}
+              </button>
+              <button
+                type="button"
+                class="primary"
+                (click)="saveNewAddress()"
+                [disabled]="addressSaving()"
+              >
+                {{ addressSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+              </button>
+            </div>
+          </div>
+        }
+      } @else {
+        <p class="q-body-sm">
+          {{ loadingAddresses() ? ('customers.loading' | t) : ('customers.reveal.prompt' | t) }}
+        </p>
+      }
+    }
+
+    <!-- ------------------------------------------------------------------ orders -->
+    @if (activeTab() === 'orders') {
+      <button type="button" class="secondary reorder-button" (click)="reorder()">
+        {{ 'customers.orders.reorder' | t }}
+      </button>
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.orders.number' | t }}</th>
+            <th class="q-caption">{{ 'customers.orders.status' | t }}</th>
+            <th class="q-caption">{{ 'customers.orders.total' | t }}</th>
+            <th class="q-caption">{{ 'customers.orders.placedAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.orderId) {
+            <tr class="row" (click)="openOrder(order.orderId)">
+              <td class="q-body-sm q-mono">{{ order.publicOrderNumber }}</td>
+              <td class="q-body-sm">{{ order.status }}</td>
+              <td class="q-body-sm q-tnum">{{ formatOrderTotal(order) }}</td>
+              <td class="q-body-sm q-tnum">{{ formatOrderPlacedAt(order.placedAt) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">
+                {{ loadingOrders() ? ('customers.loading' | t) : ('customers.orders.empty' | t) }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (ordersHasMore()) {
+        <button
+          type="button"
+          class="secondary load-more"
+          (click)="loadMoreOrders()"
+          [disabled]="loadingOrders()"
+        >
+          {{ 'customers.loadMore' | t }}
+        </button>
+      }
+    }
+
+    <!-- ----------------------------------------------------------------- consent -->
+    @if (activeTab() === 'consent') {
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.consent.purpose' | t }}</th>
+            <th class="q-caption">{{ 'customers.consent.channel' | t }}</th>
+            <th class="q-caption">{{ 'customers.consent.decision' | t }}</th>
+            <th class="q-caption">{{ 'customers.consent.source' | t }}</th>
+            <th class="q-caption">{{ 'customers.consent.decidedAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of consentHistory(); track entry.purpose + entry.decidedAt) {
+            <tr>
+              <td class="q-body-sm">{{ entry.purpose }}</td>
+              <td class="q-body-sm">{{ entry.channel ?? '—' }}</td>
+              <td class="q-body-sm">{{ entry.decision }}</td>
+              <td class="q-body-sm">{{ entry.source }}</td>
+              <td class="q-body-sm q-tnum">{{ formatConsentDecidedAt(entry.decidedAt) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ loadingConsent() ? ('customers.loading' | t) : ('customers.consent.empty' | t) }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'customers.consent.record' | t }}</h3>
+        <div class="form">
+          <label class="q-caption">{{ 'customers.consent.purpose' | t }}</label>
+          <input
+            class="q-body field"
+            type="text"
+            [value]="consentPurpose()"
+            (input)="consentPurpose.set($any($event.target).value)"
+          />
+          <label class="q-caption">{{ 'customers.consent.channel' | t }}</label>
+          <input
+            class="q-body field"
+            type="text"
+            [value]="consentChannel()"
+            (input)="consentChannel.set($any($event.target).value)"
+          />
+          <label class="q-caption">{{ 'customers.consent.decision' | t }}</label>
+          <select
+            class="q-body field"
+            [value]="consentDecision()"
+            (change)="consentDecision.set($any($event.target).value)"
+          >
+            <option value="GRANTED">{{ 'customers.consent.decision.GRANTED' | t }}</option>
+            <option value="WITHDRAWN">{{ 'customers.consent.decision.WITHDRAWN' | t }}</option>
+          </select>
+          <div class="form__actions">
+            <button
+              type="button"
+              class="primary"
+              (click)="recordConsent()"
+              [disabled]="recordingConsent()"
+            >
+              {{
+                recordingConsent()
+                  ? ('customers.saving' | t)
+                  : ('customers.consent.record.action' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ---------------------------------------------------------------- cashback -->
+    @if (activeTab() === 'cashback') {
+      <p class="q-body-sm">{{ 'customers.cashback.lead' | t }}</p>
+      @for (balance of balances(); track balance.accountId) {
+        <div class="balance-card">
+          <p class="q-body">
+            <strong>{{ formatBalanceMoney(balance.balance) }}</strong>
+            <span class="q-caption"
+              >{{ 'customers.cashback.spendable' | t }}
+              {{ formatBalanceMoney(balance.spendable) }}</span
+            >
+          </p>
+          <button type="button" class="link" (click)="toggleBalance(balance.accountId)">
+            {{
+              expandedBalanceId() === balance.accountId
+                ? ('customers.cashback.hideLedger' | t)
+                : ('customers.cashback.showLedger' | t)
+            }}
+          </button>
+          @if (expandedBalanceId() === balance.accountId) {
+            <table class="grid">
+              <tbody>
+                @for (entry of loyaltyEntries(); track entry.id) {
+                  <tr>
+                    <td class="q-body-sm">{{ entry.entryType }}</td>
+                    <td class="q-body-sm q-tnum">{{ entry.amountMinor }}</td>
+                    <td class="q-body-sm q-tnum">{{ formatOrderPlacedAt(entry.occurredAt) }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td class="q-body-sm empty" colspan="3">
+                      {{
+                        loadingEntries()
+                          ? ('customers.loading' | t)
+                          : ('customers.cashback.noEntries' | t)
+                      }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      } @empty {
+        <p class="q-body-sm">
+          {{ loadingBalances() ? ('customers.loading' | t) : ('customers.cashback.empty' | t) }}
+        </p>
+      }
+
+      <section class="block">
+        <p class="q-caption not-built">{{ 'customers.cashback.depositNotBuilt' | t }}</p>
+        <p class="q-caption not-built">{{ 'customers.cashback.promoNotBuilt' | t }}</p>
+        <p class="q-caption not-built">{{ 'customers.cashback.reviewsNotBuilt' | t }}</p>
+      </section>
+    }
+
+    <!-- --------------------------------------------------------------- blacklist -->
+    @if (activeTab() === 'blacklist') {
+      @if (blacklistStatus(); as status) {
+        @if (status.active) {
+          <p class="q-body">
+            <span class="status-badge status-badge--active">{{
+              'customers.blacklist.active' | t
+            }}</span>
+            @if (status.expiresAt) {
+              <span class="q-caption"
+                >{{ 'customers.blacklist.expiresAt' | t }}
+                {{ formatOrderPlacedAt(status.expiresAt) }}</span
+              >
+            }
+          </p>
+          <div class="form form--inline">
+            <input
+              class="q-body field"
+              type="text"
+              [value]="liftReason()"
+              (input)="liftReason.set($any($event.target).value)"
+              [placeholder]="'customers.blacklist.liftReason.placeholder' | t"
+            />
+            <button
+              type="button"
+              class="secondary"
+              (click)="lift()"
+              [disabled]="liftingBlacklist()"
+            >
+              {{ liftingBlacklist() ? ('customers.saving' | t) : ('customers.blacklist.lift' | t) }}
+            </button>
+          </div>
+        } @else {
+          <p class="q-body-sm">{{ 'customers.blacklist.notActive' | t }}</p>
+          @if (!addingBlacklistEntry()) {
+            <button type="button" class="secondary" (click)="startAddingBlacklistEntry()">
+              {{ 'customers.blacklist.add' | t }}
+            </button>
+          } @else {
+            <div class="form">
+              <label class="q-caption">{{ 'customers.blacklist.reason' | t }}</label>
+              <textarea
+                class="q-body field"
+                rows="2"
+                [value]="blacklistReason()"
+                (input)="blacklistReason.set($any($event.target).value)"
+              ></textarea>
+              <label class="q-caption">{{ 'customers.blacklist.expiresAt.label' | t }}</label>
+              <input
+                class="q-body field"
+                type="date"
+                [value]="blacklistExpiresAt()"
+                (input)="blacklistExpiresAt.set($any($event.target).value)"
+              />
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="addingBlacklistEntry.set(false)"
+                  [disabled]="blacklistSaving()"
+                >
+                  {{ 'customers.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  (click)="submitBlacklistEntry()"
+                  [disabled]="blacklistSaving()"
+                >
+                  {{ blacklistSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      }
+
+      <section class="block">
+        <h3 class="q-subhead">{{ 'customers.blacklist.history' | t }}</h3>
+        @if (blacklistHistory(); as history) {
+          @for (entry of history; track entry.id) {
+            <div class="address-card">
+              <p class="q-body">{{ entry.reason }}</p>
+              <p class="q-caption">
+                {{ entry.status }} · {{ formatOrderPlacedAt(entry.createdAt) }}
+              </p>
+            </div>
+          } @empty {
+            <p class="q-body-sm">{{ 'customers.blacklist.history.empty' | t }}</p>
+          }
+        } @else {
+          <button
+            type="button"
+            class="secondary reveal-link"
+            [disabled]="revealingBlacklistHistory()"
+            (click)="revealBlacklistHistory()"
+          >
+            {{ 'customers.reveal' | t }}
+          </button>
+        }
+      </section>
+    }
+  }
+</div>
+
+@if (mergeDialogOpen()) {
+  <div class="dialog__backdrop">
+    <div class="dialog" role="dialog" aria-modal="true">
+      <h2 class="q-emphasis">{{ 'customers.merge.title' | t }}</h2>
+      <p class="q-body-sm">{{ 'customers.merge.lead' | t }}</p>
+      <div class="dialog__field">
+        <input
+          class="dialog__input"
+          type="text"
+          [value]="mergeQuery()"
+          (input)="mergeQuery.set($any($event.target).value)"
+          [placeholder]="'customers.merge.searchPlaceholder' | t"
+        />
+        <button
+          type="button"
+          class="secondary"
+          (click)="searchMergeTarget()"
+          [disabled]="mergeSearching()"
+        >
+          {{ 'customers.merge.search' | t }}
+        </button>
+      </div>
+      @for (candidate of mergeCandidates(); track candidate.id) {
+        <button
+          type="button"
+          class="merge-candidate"
+          [class.merge-candidate--selected]="mergeTargetId() === candidate.id"
+          (click)="selectMergeTarget(candidate.id)"
+        >
+          {{ candidate.displayName ?? candidate.id }}
+        </button>
+      }
+      <div class="dialog__actions">
+        <button
+          type="button"
+          class="dialog__dismiss"
+          (click)="closeMergeDialog()"
+          [disabled]="merging()"
+        >
+          {{ 'customers.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="dialog__confirm"
+          (click)="confirmMerge()"
+          [disabled]="merging() || !mergeTargetId()"
+        >
+          {{ merging() ? ('customers.saving' | t) : ('customers.merge.confirm' | t) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

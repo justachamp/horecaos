@@ -325,7 +325,7 @@ class CustomerSessionTests {
                 .thenReturn(new Redemption(new CustomerAccountRef(accountId, TENANT), true));
         when(customers.account(TENANT, accountId))
                 .thenReturn(Optional.of(
-                        new AccountRow(accountId, partition, "ACTIVE", null, null, null, 1, 1, clock.instant())));
+                        new AccountRow(accountId, partition, "ACTIVE", null, null, null, 1, 1, clock.instant(), null)));
 
         return service.establish(TENANT, BRAND, "a-grant");
     }

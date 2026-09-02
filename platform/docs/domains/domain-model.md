@@ -95,6 +95,15 @@ Changing the mode after customer data exists requires an explicit, audited
 merge or split migration. A control-plane toggle alone cannot reinterpret
 existing customer data.
 
+A `CustomerAccount` may be redirected onto another via `merged_into_account_id`
+— never deleted or rewritten, since immutable order snapshots, addresses, and
+consent decisions already point at it. `CustomerBlacklistEntry` (wave 31,
+frontend information architecture §5.2) records a suppression with a reason,
+an actor, and an optional expiry; at most one entry is active per account, and
+its enforcement point is customer identity resolution (`CustomerIdentityService#resolve`)
+rather than ordering's checkout, which has no live consumer of `CustomerDirectory`
+to enforce against yet.
+
 ## Catalog, pricing, and inventory
 
 - A catalog and product belong to one brand.

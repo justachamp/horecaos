@@ -25,7 +25,9 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.ConsentService;
+import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
+import uz.horecaos.platform.customers.application.CustomerListQueryService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.customers.application.CustomerProfileService.AddressFields;
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
@@ -69,6 +71,8 @@ class CustomerIdentityTests {
     private CustomerIdentityService identity;
     private CustomerProfileService profiles;
     private ConsentService consent;
+    private CustomerBlacklistService blacklist;
+    private CustomerListQueryService lists;
 
     @BeforeAll
     static void startDatabase() {
@@ -90,7 +94,7 @@ class CustomerIdentityTests {
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.addresses, "
                         + "customer.contact_points, customer.brand_profiles, customer.principal_links, "
-                        + "customer.customer_accounts CASCADE")
+                        + "customer.blacklist_entries, customer.customer_accounts CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events CASCADE").update();
@@ -99,7 +103,6 @@ class CustomerIdentityTests {
 
         java.time.Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         store = new JdbcCustomerStore(jdbc);
-        identity = new CustomerIdentityService(store, new ConfiguredCustomerPolicyLookup(jdbc), clock);
 
         // A real envelope-encryption stack over a throwaway key-encryption key,
         // so the tenant binding and row binding below are genuinely exercised
@@ -111,9 +114,25 @@ class CustomerIdentityTests {
                         clock),
                 "local"));
         objectMapper = JsonMapper.builder().build();
+        blacklist = new CustomerBlacklistService(store, protection, clock, new JdbcAuditRecorder(jdbc, objectMapper));
+        identity = new CustomerIdentityService(
+                store,
+                new ConfiguredCustomerPolicyLookup(jdbc),
+                clock,
+                blacklist,
+                new JdbcAuditRecorder(jdbc, objectMapper));
         profiles = new CustomerProfileService(
                 store, protection, objectMapper, clock, new JdbcAuditRecorder(jdbc, objectMapper));
         consent = new ConsentService(store, clock);
+        // A minimal CustomerOrderActivityPort: no order ever "arrives" in this
+        // suite, so the ordered-today counter's own default (zero) is exactly
+        // right and this suite has no reason to stand up the ordering module.
+        lists = new CustomerListQueryService(
+                store,
+                protection,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock,
+                new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {});
     }
 
     @Test
@@ -291,7 +310,11 @@ class CustomerIdentityTests {
                 .isNotEqualTo(beforeAtA.account().accountId());
 
         CustomerIdentityService afterCutover = new CustomerIdentityService(
-                store, new ConfiguredCustomerPolicyLookup(jdbc), Clock.fixed(cutover, ZoneOffset.UTC));
+                store,
+                new ConfiguredCustomerPolicyLookup(jdbc),
+                Clock.fixed(cutover, ZoneOffset.UTC),
+                blacklist,
+                new JdbcAuditRecorder(jdbc, objectMapper));
         var afterAtA = afterCutover.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-after");
         var afterAtB = afterCutover.resolve(OTHER_TENANT, BRAND_B, ISSUER, "subject-after");
         assertThat(afterAtB.account().accountId()).isEqualTo(afterAtA.account().accountId());
@@ -1116,6 +1139,269 @@ class CustomerIdentityTests {
                             .optional())
                     .isEmpty();
         }
+    }
+
+    // ------------------------------------------------------ §5.1-5.2 the grid, blacklist, merge, DOB
+
+    @Test
+    @DisplayName("the grid finds a customer by name and never by decrypting a candidate")
+    void listFindsByName() {
+        var match = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-name-1");
+        profiles.updateProfile(TENANT, match.account().accountId(), 1, "Dilnoza Karimova", null, null);
+        var other = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-name-2");
+        profiles.updateProfile(TENANT, other.account().accountId(), 1, "Aziz Yusupov", null, null);
+
+        var found = lists.list(TENANT, null, "Karimova", null, 50);
+
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).id()).isEqualTo(match.account().accountId());
+        assertThat(found.get(0).displayName()).isEqualTo("Dilnoza Karimova");
+    }
+
+    @Test
+    @DisplayName("the grid finds a customer by phone through the keyed hash, never by decrypting every row")
+    void listFindsByPhoneHash() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-phone");
+        profiles.addContactPoint(TENANT, account.account().accountId(), ContactType.PHONE, "+998901234567", true);
+        var unrelated = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-phone-2");
+        profiles.addContactPoint(TENANT, unrelated.account().accountId(), ContactType.PHONE, "+998907654321", true);
+
+        // A differently-spaced spelling of the same number: PhoneNumber.normalize
+        // strips it down to the same digits, so it must hash to the same value.
+        var found = lists.list(TENANT, null, "+998 90 123-45-67", null, 50);
+
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).id()).isEqualTo(account.account().accountId());
+    }
+
+    @Test
+    @DisplayName("a short digit run is a name search, not a phone search")
+    void aShortDigitRunIsNotTreatedAsAPhone() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-short-digits");
+        profiles.updateProfile(TENANT, account.account().accountId(), 1, "Branch 42", null, null);
+
+        // "42" alone is five digits short of MIN_PHONE_DIGITS, so this must fall
+        // through to the ILIKE branch and find the display name that contains it.
+        assertThat(lists.list(TENANT, null, "42", null, 50)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("the grid excludes an account once it has been merged away")
+    void listExcludesMergedAccounts() {
+        var source = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-merged-source");
+        var target = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-grid-merged-target");
+
+        assertThat(lists.list(TENANT, null, null, null, 50)).hasSize(2);
+
+        identity.merge(TENANT, source.account().accountId(), target.account().accountId(), 1, STAFF_ACTOR);
+
+        var remaining = lists.list(TENANT, null, null, null, 50);
+        assertThat(remaining)
+                .extracting(row -> row.id())
+                .containsExactly(target.account().accountId());
+    }
+
+    @Test
+    @DisplayName(
+            "the header counters count the tenant's own accounts and today's registrations, never another tenant's")
+    void countersAreTenantScoped() {
+        identity.resolve(TENANT, BRAND_A, ISSUER, "subject-counts-1");
+        identity.resolve(TENANT, BRAND_A, ISSUER, "subject-counts-2");
+        identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-counts-other-tenant");
+
+        var counts = lists.counts(TENANT);
+
+        assertThat(counts.total()).isEqualTo(2);
+        assertThat(counts.registeredToday()).isEqualTo(2);
+        // No order ever arrives in this suite (see setUp's CustomerOrderActivityPort
+        // stub), so this is the port's own documented default rather than a real count —
+        // asserted anyway, because a wiring mistake that stopped calling the port
+        // at all would still show zero and this is the only line that would notice.
+        assertThat(counts.orderedToday()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("a filtered export decrypts every matched row behind exactly one audit fact")
+    void exportWritesOneAuditFactForTheWholeFilteredSet() {
+        var first = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-export-1");
+        profiles.addContactPoint(TENANT, first.account().accountId(), ContactType.PHONE, "+998911112222", true);
+        var second = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-export-2");
+        profiles.addContactPoint(TENANT, second.account().accountId(), ContactType.PHONE, "+998933334444", true);
+
+        var rows = lists.exportFiltered(TENANT, null, null, "audit-export-test", STAFF_ACTOR);
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows)
+                .extracting(CustomerListQueryService.ExportRow::phone)
+                .containsExactlyInAnyOrder("+998911112222", "+998933334444");
+        assertThat(auditFactCount("customer.list.exported")).isEqualTo(1);
+        assertThat(jdbc.sql("""
+                        SELECT change_document ->> 'revealedCount' FROM audit.audit_events
+                        WHERE action_code = 'customer.list.exported'
+                        """).query(String.class).single()).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName("a date of birth round-trips through encryption and is never stored as plaintext")
+    void dateOfBirthRoundTrips() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-dob");
+        UUID accountId = account.account().accountId();
+
+        profiles.updateDateOfBirth(TENANT, accountId, 1, "1990-05-14");
+
+        assertThat(profiles.revealDateOfBirth(TENANT, accountId, "dob-test", STAFF_ACTOR))
+                .contains("1990-05-14");
+        assertThat(jdbc.sql("SELECT date_of_birth_encrypted FROM customer.customer_accounts WHERE id = :id")
+                        .param("id", accountId)
+                        .query(String.class)
+                        .single())
+                .doesNotContain("1990-05-14");
+
+        // Clearing: null is a real, distinct write, not "no change".
+        profiles.updateDateOfBirth(TENANT, accountId, 2, null);
+        assertThat(profiles.revealDateOfBirth(TENANT, accountId, "dob-test", STAFF_ACTOR))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a second blacklist entry is refused while one is already active")
+    void blacklistRefusesASecondActiveEntry() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-dup");
+        UUID accountId = account.account().accountId();
+        blacklist.add(TENANT, accountId, "Repeated chargebacks", null, STAFF_ACTOR);
+
+        Throwable thrown = catchThrowable(() -> blacklist.add(TENANT, accountId, "Also abusive", null, STAFF_ACTOR));
+
+        assertThat(thrown).isInstanceOf(CustomerBlacklistService.AlreadyBlacklistedException.class);
+    }
+
+    @Test
+    @DisplayName("a blacklisted account cannot resolve, and lifting the entry restores it")
+    void blacklistIsEnforcedAtResolutionAndLiftingRestoresIt() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-enforced");
+        UUID accountId = account.account().accountId();
+        blacklist.add(TENANT, accountId, "Abusive to staff on the phone", null, STAFF_ACTOR);
+
+        Throwable blocked =
+                catchThrowable(() -> identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-enforced"));
+        assertThat(blocked).isInstanceOf(CustomerIdentityService.BlacklistedAccountException.class);
+
+        blacklist.lift(TENANT, accountId, "Escalation resolved with the customer", STAFF_ACTOR);
+
+        var afterLift = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-enforced");
+        assertThat(afterLift.account().accountId()).isEqualTo(accountId);
+    }
+
+    @Test
+    @DisplayName("an expired blacklist entry no longer blocks resolution, with the clock as the only authority")
+    void anExpiredBlacklistEntryStopsEnforcingItself() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-expired");
+        UUID accountId = account.account().accountId();
+        blacklist.add(TENANT, accountId, "Suspended for a week", NOW.plusSeconds(3600), STAFF_ACTOR);
+
+        assertThat(blacklist.isCurrentlyBlacklisted(TENANT, accountId)).isTrue();
+
+        CustomerBlacklistService afterExpiry = new CustomerBlacklistService(
+                store,
+                protectionField(),
+                Clock.fixed(NOW.plusSeconds(7200), ZoneOffset.UTC),
+                new JdbcAuditRecorder(jdbc, objectMapper));
+
+        // Still ACTIVE in the database — nothing swept it — and yet no longer
+        // enforced, because expiry is checked against the clock on every read.
+        assertThat(afterExpiry.isCurrentlyBlacklisted(TENANT, accountId)).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "the decrypted blacklist history reveals the reason behind one audit fact, and the reason is never stored in the clear")
+    void blacklistHistoryRevealIsAudited() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-blacklist-history");
+        UUID accountId = account.account().accountId();
+        blacklist.add(TENANT, accountId, "Chargeback fraud pattern", null, STAFF_ACTOR);
+
+        var revealed = blacklist.revealHistory(TENANT, accountId, "history-test", STAFF_ACTOR);
+
+        assertThat(revealed).hasSize(1);
+        assertThat(revealed.get(0).reason()).isEqualTo("Chargeback fraud pattern");
+        assertThat(jdbc.sql("SELECT reason_encrypted FROM customer.blacklist_entries WHERE customer_account_id = :id")
+                        .param("id", accountId)
+                        .query(String.class)
+                        .single())
+                .doesNotContain("Chargeback fraud pattern");
+        assertThat(auditFactCount("customer.blacklist.revealed")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a merge redirects the source's own sign-in to the target, and the source row survives")
+    void mergeRedirectsAndIsFollowedOnTheNextSignIn() {
+        var source = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-source");
+        var target = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-target");
+
+        identity.merge(TENANT, source.account().accountId(), target.account().accountId(), 1, STAFF_ACTOR);
+
+        // The same principal that used to own `source` now resolves to `target` —
+        // this is what makes the merge live rather than a label on a dead row.
+        var resolvedAgain = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-source");
+        assertThat(resolvedAgain.account().accountId())
+                .isEqualTo(target.account().accountId());
+        assertThat(identity.effective(TENANT, source.account().accountId()).accountId())
+                .isEqualTo(target.account().accountId());
+
+        assertThat(jdbc.sql("SELECT status FROM customer.customer_accounts WHERE id = :id")
+                        .param("id", source.account().accountId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("MERGED");
+    }
+
+    @Test
+    @DisplayName("an account cannot be merged into itself, into a nonexistent account, or across tenants")
+    void mergeRefusesInvalidTargets() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-self");
+        var otherTenantAccount = identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-merge-cross-tenant");
+
+        assertThat(catchThrowable(() -> identity.merge(
+                        TENANT, account.account().accountId(), account.account().accountId(), 1, STAFF_ACTOR)))
+                .isInstanceOf(CustomerIdentityService.SelfMergeException.class);
+
+        assertThat(catchThrowable(
+                        () -> identity.merge(TENANT, account.account().accountId(), UUID.randomUUID(), 1, STAFF_ACTOR)))
+                .isInstanceOf(CustomerIdentityService.MergeTargetInvalidException.class);
+
+        // otherTenantAccount is a real account id, just not this tenant's — the
+        // FK constraint's own tenant column is what a same-tenant-only merge relies on.
+        assertThat(catchThrowable(() -> identity.merge(
+                        TENANT,
+                        account.account().accountId(),
+                        otherTenantAccount.account().accountId(),
+                        1,
+                        STAFF_ACTOR)))
+                .isInstanceOf(CustomerIdentityService.MergeTargetInvalidException.class);
+    }
+
+    @Test
+    @DisplayName("a merge under a stale expected version is refused rather than silently applied")
+    void mergeRefusesAStaleVersion() {
+        var source = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-stale");
+        var target = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-merge-stale-target");
+
+        assertThat(catchThrowable(() -> identity.merge(
+                        TENANT, source.account().accountId(), target.account().accountId(), 99, STAFF_ACTOR)))
+                .isInstanceOf(CustomerIdentityService.MergeConflictException.class);
+    }
+
+    private FieldProtection protectionField() {
+        return new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
+                new EnvironmentSecretResolver(
+                        java.util.Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")
+                                ::get,
+                        clockField()),
+                "local"));
+    }
+
+    private Clock clockField() {
+        return Clock.fixed(NOW, ZoneOffset.UTC);
     }
 
     private static void insertLegacyAddress(

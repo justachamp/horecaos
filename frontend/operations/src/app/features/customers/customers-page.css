@@ -1,0 +1,175 @@
+.layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.list {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout--docked .list {
+  flex: 0 0 480px;
+}
+
+.detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.counters {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.counter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.search {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.status-select {
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.row {
+  cursor: pointer;
+}
+
+.row td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.row:hover {
+  background: var(--q-surface-1);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: 12px;
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+  padding: 20px;
+}
+
+.error {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 640px;
+  margin-top: 12px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.export-notice {
+  margin-top: 8px;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--q-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.load-more {
+  margin-top: 12px;
+}
+
+.primary,
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
