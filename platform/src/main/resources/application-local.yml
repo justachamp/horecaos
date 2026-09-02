@@ -52,6 +52,17 @@ horecaos:
         # it. That is a `make down && make up` on a laptop and an ADR 0028
         # rotation procedure anywhere else.
         kek: ${HORECAOS_DATA_ENCRYPTION_KEK:horecaos-local-data-encryption-kek-not-for-use}
+    identity_admin:
+      keycloak:
+        # ADR 0062's staff-login direct-grant client secret, for the
+        # `environment` secrets provider `make run` defaults to. The value must
+        # equal the realm import's dev fallback (and compose.yaml's OpenBao
+        # seed of the same reference), or the staff login page answers every
+        # attempt with "the platform answered in a way this panel does not
+        # understand" — a 500 from SecretNotFoundException, found the hard way
+        # on the first local walkthrough after wave 18, which seeded OpenBao
+        # but not this provider. Same gap class the KEK comment above records.
+        staff-login-secret: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_SECRET:development-only-not-a-secret-staff-login}
   customers:
     verification:
       # ADR 0051. The one number that signs in with a fixed code and sends no SMS,

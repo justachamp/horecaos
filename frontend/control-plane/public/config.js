@@ -11,6 +11,6 @@
  * talks to Keycloak at all.
  */
 window.horecaosControlPlaneConfig = {
-  apiBaseUrl: 'http://localhost:8080',
+  apiBaseUrl: '',
   displayTimeZone: 'Asia/Tashkent',
 };

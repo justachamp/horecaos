@@ -55,7 +55,14 @@ public final class StaffDirectGrantClient {
     private static final String ACCOUNT_NOT_FULLY_SET_UP = "not fully set up";
 
     /** `openid` for the subject; `offline_access` so the refresh token this endpoint proxies exists at all. */
-    private static final String SCOPE = "openid offline_access";
+    // "organization" is requested explicitly because Keycloak's organization
+    // membership mapper adds the tenant claim only when the grant asks for the
+    // scope — attaching it to the client as a default scope is not enough for
+    // the direct grant, found the hard way on the first local walkthrough: the
+    // token minted fine, but carried no organization claim, so the staff apps
+    // resolved zero capabilities ("Pending Profile", empty nav) for a user
+    // holding a full tenant-owner grant.
+    private static final String SCOPE = "openid offline_access organization";
 
     private final RestClient restClient;
     private final String realm;

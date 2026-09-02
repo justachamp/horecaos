@@ -22,6 +22,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
 import uz.horecaos.platform.iam.application.GrantManagementService;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -34,12 +35,17 @@ public class GrantController {
     private final GrantManagementService grants;
     private final AuthorizationService authorization;
     private final CurrentActor currentActor;
+    private final TenantOrganizationDirectory tenantOrganizations;
 
     public GrantController(
-            GrantManagementService grants, AuthorizationService authorization, CurrentActor currentActor) {
+            GrantManagementService grants,
+            AuthorizationService authorization,
+            CurrentActor currentActor,
+            TenantOrganizationDirectory tenantOrganizations) {
         this.grants = grants;
         this.authorization = authorization;
         this.currentActor = currentActor;
+        this.tenantOrganizations = tenantOrganizations;
     }
 
     /**
@@ -53,7 +59,25 @@ public class GrantController {
     @Operation(summary = "Capabilities and scopes for the current principal")
     CapabilityView sessionContext(
             @org.springframework.web.bind.annotation.RequestParam(required = false) UUID tenantId) {
-        return authorization.viewFor(currentActor.get().subject(), tenantId);
+        var actor = currentActor.get();
+        // Without an explicit tenant, resolve one from the token's signed
+        // organization claim (ADR 0003). A staff frontend has no other way to
+        // learn its tenant: before this fallback, a tenant owner signing in
+        // saw the platform-scope view — zero capabilities, an empty nav —
+        // while holding a full grant. Exactly one resolvable organization
+        // picks that tenant; none or several keeps the platform view, since
+        // guessing among tenants is not this endpoint's call to make.
+        if (tenantId == null) {
+            var resolved = actor.organizationRoles().keySet().stream()
+                    .map(tenantOrganizations::tenantIdForKeycloakOrganization)
+                    .flatMap(java.util.Optional::stream)
+                    .limit(2)
+                    .toList();
+            if (resolved.size() == 1) {
+                tenantId = resolved.getFirst();
+            }
+        }
+        return authorization.viewFor(actor.subject(), tenantId);
     }
 
     @GetMapping("/control-plane/tenants/{tenantId}/grants")
