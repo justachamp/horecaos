@@ -9,8 +9,10 @@
 - Deciders: platform owner (direction), Claude (draft architecture)
 - Depends on: 0004, 0023, 0025, 0026, 0027, 0028, 0029, 0033, 0043, 0059
 - Supersedes / Superseded by: —
-- Open inputs: the PBX/provider family to integrate first (a hosted SIP/PBX
-  common in the market vs a tenant's own Asterisk-class system); whether call
+- Open inputs: WHICH provider adapter to build first (the core is
+  provider-neutral by the owner's 2026-09-02 direction — a hosted SIP/PBX
+  common in the market vs a tenant's own Asterisk-class system is now a
+  first-adapter sequencing question, not an architecture one); whether call
   audio is recorded and the legal posture if so; numbering (per-brand DIDs vs a
   shared line); the presence model's interaction with shift scheduling.
 
@@ -29,12 +31,25 @@ layer (0043).
 
 ## Decision (draft)
 
-- **Telephony is a provider adapter, not a switch.** The platform never carries
-  audio. A `VOICE` provider category joins ADR 0026's installations: the
-  adapter consumes the PBX's call events (webhook or event-socket, authenticated
-  per the installation's secret reference) and issues the PBX's control calls
-  where offered. Everything provider-specific stays in the adapter, per the
-  platform's channel discipline.
+- **Telephony is a provider-neutral core behind an adapter family, not a
+  switch — and not a single integration.** (Owner-directed 2026-09-02: any
+  number of providers must be integrable.) The platform never carries audio.
+  The core owns a normalized call-event vocabulary — offered, answered, ended,
+  missed, transferred, with caller number, line/DID, timestamps, and a
+  provider-scoped call id for correlation — and everything downstream (the
+  screen-pop, presence routing, ADR 0043 facts, call-to-order provenance)
+  consumes only that vocabulary. Each PBX/provider is one adapter behind a
+  `VOICE` category in ADR 0026's installations: the adapter translates that
+  provider's webhooks or event-socket into core events and issues the
+  provider's control calls where offered, authenticated per the installation's
+  secret reference. Adapters declare their capabilities (can it consume
+  presence for routing? does it support call control? push or poll?) the way
+  provider capability reconciliation already models them, so the core degrades
+  honestly per provider instead of assuming every PBX can do everything. No
+  provider type, DTO, or `if (provider == X)` reaches the core — the same
+  channel discipline payments and Telegram already enforce — and a tenant may
+  hold multiple concurrent VOICE installations (a hosted PBX at one location,
+  an Asterisk-class system at another).
 - **Presence is a first-class operator state, channel-neutral.** An operator's
   availability (ONLINE / PAUSED / WRAP_UP / OFFLINE, with a reason on pause) is
   a small platform model owned by the operations surface — written by the staff
