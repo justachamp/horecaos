@@ -1584,6 +1584,17 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "ConnectField" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "ConsentRequest" : {
         "properties" : {
           "brandId" : {
@@ -4036,6 +4047,10 @@
           "lastConnectionStatus" : {
             "type" : "string"
           },
+          "lastSecretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
           "providerType" : {
             "type" : "string"
           },
@@ -4814,6 +4829,10 @@
           },
           "integrationBindingId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "lastSecretRotatedAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "legalEntityId" : {
@@ -6984,6 +7003,24 @@
         },
         "type" : "object"
       },
+      "ProviderConnectDeclaration" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "OTHER" ],
+            "type" : "string"
+          },
+          "fields" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectField"
+            },
+            "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ProviderInstallationControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -8256,6 +8293,22 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "RotateMerchantBindingSecretRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "value" ],
+        "type" : "object"
+      },
       "RotateSecretRequest" : {
         "properties" : {
           "newSecretReference" : {
@@ -8288,6 +8341,22 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "RotateSecretValueRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "value" ],
         "type" : "object"
       },
       "RotationRequest" : {
@@ -8679,6 +8748,34 @@
           },
           "writeMode" : {
             "enum" : [ "LEGACY_ONLY", "LEGACY_WITH_TARGET_SHADOW", "TARGET_ONLY" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SecretIngressRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
+            "type" : "string"
+          },
+          "providerType" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "providerType", "value" ],
+        "type" : "object"
+      },
+      "SecretIngressResponse" : {
+        "properties" : {
+          "reference" : {
             "type" : "string"
           }
         },
@@ -14219,6 +14316,77 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields" : {
+      "get" : {
+        "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen.",
+        "operationId" : "connectFields",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Per-adapter connect field declarations (ADR 0065)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/secrets" : {
+      "post" : {
+        "description" : "Writes the value directly into the ADR 0028 secrets manager under a platform-generated reference and returns only that reference. There is no corresponding read endpoint anywhere in the API: pass the returned reference to the installation or merchant-binding call that follows.",
+        "operationId" : "write",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SecretIngressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SecretIngressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Write a provider credential",
+        "tags" : [ "Secret ingress" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings" : {
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
@@ -14419,7 +14587,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
       "post" : {
         "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file — the docs/runbooks/sendpulse-cutover.md step 9 gap. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
-        "operationId" : "rotateSecret",
+        "operationId" : "rotateSecret_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14460,6 +14628,53 @@
           }
         },
         "summary" : "Point an installation's secret reference at a rotated credential",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value" : {
+      "post" : {
+        "description" : "ADR 0065: generalizes the endpoint above to a tenant that has no way to write a reference by hand. Accepts the new VALUE directly, verifies it (Telegram bot installations only, the same scoping rotateSecret already documents) before it is ever written anywhere, then writes it through the door under a freshly-minted reference and swaps the installation onto it. For every other provider type there is no harmless authenticated call to verify against, so the write proceeds and the installation is left last_connection_status = UNVERIFIED — connected, not silently claimed as confirmed, mirroring the Telegram-only scoping rationale rather than pretending a stronger guarantee.",
+        "operationId" : "rotateSecretByValue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretValueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate an installation's credential through the write-only door",
         "tags" : [ "Provider integrations" ]
       }
     },
@@ -17752,6 +17967,61 @@
           }
         },
         "summary" : "Retire a merchant binding",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0065: writes the new value into the ADR 0028 secrets manager under a freshly-minted reference and swaps this binding onto it under its expected version. Neither Click's nor Payme's Merchant API offers a harmless outbound call to verify a credential before committing to it -- the same absence ProviderCapabilityReconciliationService's own doc comment records -- so unlike the Telegram installation rotation this cannot verify before flipping; whether the new value is right is proven the next time a real payment settles through it.",
+        "operationId" : "rotateSecret",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateMerchantBindingSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate this binding's credential through the write-only door",
         "tags" : [ "Merchant bindings" ]
       }
     },
@@ -27107,6 +27377,9 @@
   }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
+  }, {
+    "description" : "The ADR 0065 write-only door: values enter, only references leave",
+    "name" : "Secret ingress"
   }, {
     "description" : "The branch's order queue, approvals, and timeline",
     "name" : "Operations orders"

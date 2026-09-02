@@ -723,6 +723,7 @@ export interface MerchantBindingView {
   id?: string;
   installationId?: string;
   integrationBindingId?: string;
+  lastSecretRotatedAt?: string;
   legalEntityId?: string;
   merchantAccountReference?: string;
   merchantIdReference?: string;
@@ -1378,6 +1379,11 @@ export interface RollbackScopeRequest {
   reason: string;
 }
 
+export interface RotateMerchantBindingSecretRequest {
+  reason: string;
+  value: string;
+}
+
 export interface RotationRequest {
   reason: string;
 }
@@ -1835,6 +1841,7 @@ export interface Operations {
   "get_4": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}"; request: { parameters: { path: { bindingId: string; tenantId: string } } }; responses: { "200": MerchantBindingView } };
   "activate_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "archive": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
+  "rotateSecret": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/secret-rotations"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } }; body: RotateMerchantBindingSecretRequest }; responses: { "200": MerchantBindingView } };
   "suspend_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "reimburseDeliveryFee": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "grantFutureDiscount": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/future-discounts"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: FutureDiscountRequest }; responses: { "200": RemedyResponse } };

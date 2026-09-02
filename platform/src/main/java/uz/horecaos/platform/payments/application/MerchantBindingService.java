@@ -11,7 +11,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
+import uz.horecaos.platform.iam.api.secrets.SecretIngressGateway;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.iam.api.secrets.SecretValue;
 import uz.horecaos.platform.payments.domain.MerchantBinding;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcMerchantBindingStore;
@@ -43,11 +45,17 @@ public class MerchantBindingService {
     private final JdbcMerchantBindingStore store;
     private final MerchantLegalEntityGate legalEntities;
     private final Clock clock;
+    private final SecretIngressGateway door;
 
-    public MerchantBindingService(JdbcMerchantBindingStore store, MerchantLegalEntityGate legalEntities, Clock clock) {
+    public MerchantBindingService(
+            JdbcMerchantBindingStore store,
+            MerchantLegalEntityGate legalEntities,
+            Clock clock,
+            SecretIngressGateway door) {
         this.store = store;
         this.legalEntities = legalEntities;
         this.clock = clock;
+        this.door = door;
     }
 
     @Transactional
@@ -93,6 +101,43 @@ public class MerchantBindingService {
     @Transactional
     public MerchantBinding archive(UUID tenantId, UUID bindingId, int expectedVersion) {
         return transition(tenantId, bindingId, expectedVersion, MerchantBinding::archive);
+    }
+
+    /**
+     * Rotates this binding's credential through the ADR 0065 door.
+     *
+     * <p>Unlike {@code ProviderInstallationController}'s Telegram path, there is
+     * no pre-flip verification here: Click's Merchant API and Payme's Merchant
+     * API both offer HorecaOS no outbound, side-effect-free call that would
+     * prove a rotated key before committing to it — the same absence {@code
+     * ProviderCapabilityReconciliationService}'s own doc comment records for its
+     * non-POS preflight, and the reason ADR 0026 never invented a generic
+     * provider ping. The value is written and the reference is swapped; whether
+     * it was right is proven the next time a real payment settles through it,
+     * the same posture ADR 0065 describes for any provider with no harmless
+     * call to verify against.
+     *
+     * @throws uz.horecaos.platform.web.api.ApiException {@code STALE_VERSION}
+     *         when the row moved on since {@code expectedVersion} was read.
+     *         The write to the secrets manager already happened by then, under
+     *         a reference this binding never gets pointed at — orphaned, never
+     *         a leak, the same accepted trade-off ADR 0028's rollback section
+     *         names ("never returns secret values to the database")
+     */
+    @Transactional
+    public MerchantBinding rotateSecret(UUID tenantId, UUID bindingId, int expectedVersion, String newValue) {
+        // Confirms the binding exists (and belongs to this tenant) before a
+        // door write is spent on a rotation that could never land anywhere.
+        require(tenantId, bindingId);
+        SecretReference newReference =
+                door.write(SecretCategory.PROVIDER_PAYMENT, "tenant-" + tenantId, SecretValue.of(newValue));
+
+        if (!store.updateSecretReference(tenantId, bindingId, newReference, expectedVersion, clock.instant())) {
+            throw new ApiException(
+                    ErrorCode.STALE_VERSION,
+                    "Merchant binding %s has moved on from version %d".formatted(bindingId, expectedVersion));
+        }
+        return require(tenantId, bindingId);
     }
 
     @Transactional(readOnly = true)
