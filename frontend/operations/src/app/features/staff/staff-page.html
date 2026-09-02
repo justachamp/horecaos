@@ -1,0 +1,261 @@
+<div class="layout" [class.layout--docked]="docked()">
+  <div class="list">
+    <div class="header">
+      <div>
+        <h1 class="q-title">{{ 'staff.people.title' | t }}</h1>
+        <p class="q-body-sm lead">{{ 'staff.people.lead' | t }}</p>
+      </div>
+      <button
+        type="button"
+        class="primary-button"
+        (click)="openInviteDialog()"
+        data-testid="staff-invite-button"
+      >
+        {{ 'staff.action.invite' | t }}
+      </button>
+    </div>
+
+    @if (notice(); as message) {
+      <p class="q-body-sm notice" role="status">{{ message }}</p>
+    }
+
+    @if (loading()) {
+      <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
+    } @else if (denied()) {
+      <p class="q-body-sm denied">{{ 'staff.people.denied' | t }}</p>
+    } @else if (loadError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else if (hasNoStaffAtAll()) {
+      <div class="empty-state">
+        <p class="q-body-sm">{{ 'staff.people.emptyRule' | t }}</p>
+        <button type="button" class="primary-button" (click)="openInviteDialog()">
+          {{ 'staff.action.invite' | t }}
+        </button>
+      </div>
+    } @else {
+      <div class="toolbar">
+        <div class="toolbar__group toolbar__view">
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="effectiveViewMode() === 'flat'"
+            (click)="setViewMode('flat')"
+          >
+            {{ 'staff.view.all' | t }}
+          </button>
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="effectiveViewMode() === 'byBranch'"
+            (click)="setViewMode('byBranch')"
+          >
+            {{ 'staff.view.byBranch' | t }}
+          </button>
+        </div>
+
+        <div class="toolbar__divider"></div>
+
+        <div class="toolbar__group">
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="statusFilter() === 'all'"
+            (click)="setStatusFilter('all')"
+          >
+            {{ 'staff.filter.all' | t: { count: statusCounts().all } }}
+          </button>
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="statusFilter() === 'active'"
+            (click)="setStatusFilter('active')"
+          >
+            {{ 'staff.filter.active' | t: { count: statusCounts().active } }}
+          </button>
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="statusFilter() === 'suspended'"
+            (click)="setStatusFilter('suspended')"
+          >
+            {{ 'staff.filter.suspended' | t: { count: statusCounts().suspended } }}
+          </button>
+        </div>
+
+        <div class="toolbar__divider"></div>
+
+        <input
+          type="search"
+          class="toolbar__search"
+          [value]="search()"
+          (input)="setSearch($any($event.target).value)"
+          [placeholder]="'staff.filter.search.placeholder' | t"
+          data-testid="staff-search"
+        />
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'staff.column.person' | t }}</th>
+            <th class="q-caption">{{ 'staff.column.job' | t }}</th>
+            <th class="q-caption">{{ 'staff.column.scope' | t }}</th>
+            <th class="q-caption">{{ 'staff.column.access' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        @for (group of displayGroups(); track group.labelKey ?? group.label) {
+          <tbody>
+            @if (effectiveViewMode() === 'byBranch') {
+              <tr class="group-header">
+                <td colspan="5" class="q-caption">
+                  {{ group.labelKey ? (group.labelKey | t) : group.label }}
+                  <span class="q-caption group-header__count">{{ group.people.length }}</span>
+                </td>
+              </tr>
+            }
+            @for (person of group.people; track person.principalSubject) {
+              <tr
+                class="row"
+                [class.row--revoked]="statusOfPerson(person).kind === 'ALL_REVOKED'"
+                [class.row--expiring]="statusOfPerson(person).kind === 'EXPIRING_SOON'"
+                (click)="openPerson(person.principalSubject)"
+              >
+                <td class="q-body-sm">
+                  <span class="q-mono person-id">{{ person.principalSubject }}</span>
+                  @if (isSelf(person.principalSubject)) {
+                    <span class="chip chip--muted">{{ 'staff.chip.you' | t }}</span>
+                  }
+                  @if (isLinkedToTelegram(person.principalSubject)) {
+                    <span class="chip chip--telegram" [title]="'staff.telegram.linked' | t"
+                      >Telegram</span
+                    >
+                  }
+                  <p class="q-caption not-built-note">{{ 'staff.column.person.notBuilt' | t }}</p>
+                  @if (rowCaption(person); as caption) {
+                    <p class="q-caption row-caption">{{ caption }}</p>
+                  }
+                </td>
+                <td class="q-body-sm">
+                  @for (grant of activeJobsOf(person); track grant.id) {
+                    <span class="chip"
+                      >{{ roleLabel(grant.roleCode) }} · {{ scopeText(grant) }}</span
+                    >
+                  } @empty {
+                    <span class="q-body-sm not-built-note">{{ 'staff.column.job.none' | t }}</span>
+                  }
+                </td>
+                <td class="q-body-sm">
+                  @for (grant of activeJobsOf(person); track grant.id) {
+                    <div>{{ scopeText(grant) }}</div>
+                  }
+                </td>
+                <td class="q-body-sm">
+                  <span
+                    class="status-pill"
+                    [class.status-pill--revoked]="statusOfPerson(person).kind === 'ALL_REVOKED'"
+                    [class.status-pill--expiring]="statusOfPerson(person).kind === 'EXPIRING_SOON'"
+                  >
+                    {{
+                      (statusOfPerson(person).kind === 'ALL_REVOKED'
+                        ? 'staff.status.revoked'
+                        : statusOfPerson(person).kind === 'EXPIRING_SOON'
+                          ? 'staff.status.expiring'
+                          : 'staff.status.ok'
+                      ) | t
+                    }}
+                  </span>
+                </td>
+                <td class="row-actions" (click)="$event.stopPropagation()">
+                  @if (!isSelf(person.principalSubject)) {
+                    <button
+                      type="button"
+                      class="text-button"
+                      (click)="openJobDialog(person.principalSubject)"
+                      data-testid="staff-row-add-job"
+                    >
+                      {{ 'staff.action.addJob' | t }}
+                    </button>
+                    @if (statusOfPerson(person).kind !== 'ALL_REVOKED') {
+                      <button
+                        type="button"
+                        class="text-button text-button--destructive"
+                        (click)="openSuspendDialog(person.principalSubject)"
+                        data-testid="staff-row-suspend"
+                      >
+                        {{ 'staff.action.suspend' | t }}
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="text-button"
+                        (click)="openRestoreDialog(person.principalSubject)"
+                        data-testid="staff-row-restore"
+                      >
+                        {{ 'staff.action.restore' | t }}
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            } @empty {
+              @if (effectiveViewMode() !== 'byBranch') {
+                <tr>
+                  <td class="q-body-sm empty" colspan="5">
+                    {{ 'staff.people.noMatches' | t }}
+                    <button type="button" class="text-button" (click)="resetFilters()">
+                      {{ 'staff.filter.reset' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        }
+      </table>
+
+      @if (hasNoFilterMatches() && effectiveViewMode() === 'byBranch') {
+        <p class="q-body-sm empty">
+          {{ 'staff.people.noMatches' | t }}
+          <button type="button" class="text-button" (click)="resetFilters()">
+            {{ 'staff.filter.reset' | t }}
+          </button>
+        </p>
+      }
+    }
+  </div>
+
+  <div class="detail">
+    <router-outlet (activate)="onOutletActivate()" (deactivate)="onOutletDeactivate()" />
+  </div>
+</div>
+
+@if (jobDialogTarget(); as subject) {
+  <q-staff-job-dialog
+    [tenantId]="tenantId() ?? ''"
+    [principalSubject]="subject"
+    [roles]="roles()"
+    [directory]="directory()"
+    [myScopes]="myScopes()"
+    [busy]="jobDialogBusy()"
+    [serverError]="jobDialogError()"
+    (submitted)="submitJob($event)"
+    (dismiss)="closeJobDialog()"
+  />
+}
+
+@if (accessDialogTarget(); as target) {
+  <q-staff-access-dialog
+    [mode]="target.mode"
+    [principalSubject]="target.subject"
+    [affectedJobCount]="accessDialogAffectedCount()"
+    [busy]="accessDialogBusy()"
+    [serverError]="accessDialogError()"
+    (confirmed)="confirmAccess($event)"
+    (dismiss)="closeAccessDialog()"
+  />
+}
+
+@if (inviteDialogOpen()) {
+  <q-staff-invite-dialog (dismiss)="closeInviteDialog()" />
+}

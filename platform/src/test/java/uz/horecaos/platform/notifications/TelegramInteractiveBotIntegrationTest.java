@@ -1217,9 +1217,12 @@ class TelegramInteractiveBotIntegrationTest {
     }
 
     private void revokeGrantsFor(String subject) {
-        jdbc.sql("UPDATE iam.grants SET status = 'REVOKED' WHERE principal_subject = :subject")
-                .param("subject", subject)
-                .update();
+        // V0127's ck_grant_revocation_pair requires the trio whenever status is REVOKED.
+        jdbc.sql("""
+                UPDATE iam.grants
+                   SET status = 'REVOKED', revoked_at = now(), revoked_by = 'test', revoked_reason = 'test'
+                 WHERE principal_subject = :subject
+                """).param("subject", subject).update();
     }
 
     private record StockedVariant(UUID variantId, String reference) {}

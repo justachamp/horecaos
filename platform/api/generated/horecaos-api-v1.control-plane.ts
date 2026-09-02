@@ -656,10 +656,16 @@ export interface GrantView {
   grantedBy?: string;
   id?: string;
   principalSubject?: string;
+  reason?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  revokedReason?: string;
   roleCode?: string;
   scopeId?: string;
   scopeType?: string;
   status?: string;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export interface ImportRequest {
@@ -1290,6 +1296,12 @@ export interface ResumeScopeRequest {
   reason: string;
 }
 
+export interface RoleDescriptor {
+  capabilities?: Array<string>;
+  code?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
 export interface RollbackScopeRequest {
   expectedVersion?: number;
   reason: string;
@@ -1724,7 +1736,7 @@ export interface Operations {
   "draftVersion_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } }; body: ActivateRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "entitlements": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": EntitlementSnapshotResponse } };
-  "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<GrantView> } };
+  "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
   "revoke": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
   "linkKeycloakOrganization": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/identity/keycloak-organization"; request: { parameters: { path: { tenantId: string } }; body: LinkKeycloakOrganizationRequest }; responses: { "200": TenantView } };
@@ -1763,6 +1775,7 @@ export interface Operations {
   "start_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: PosSyncRunControllerStartRequest }; responses: { "200": {  } } };
   "reconcileCapabilities": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/capability-reconciliation"; request: { parameters: { path: { tenantId: string } }; body: ReconcileRequest }; responses: { "200": {  } } };
   "differences": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/differences"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": PageDifferenceView } };
+  "roles": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/roles"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RoleDescriptor> } };
   "list": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };
   "create_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } }; body: CreateChannelRequest }; responses: { "200": ChannelView } };
   "archive_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };

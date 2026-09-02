@@ -1,0 +1,27 @@
+.shell {
+  padding: 24px;
+}
+
+.shell__tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.shell__tab {
+  display: inline-block;
+  padding: 8px 4px;
+  margin-right: 16px;
+  color: var(--q-ink-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  font-family: var(--q-font-sans);
+  font-size: 14px;
+}
+
+.shell__tab--on {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+  font-weight: 600;
+}

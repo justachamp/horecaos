@@ -1417,6 +1417,12 @@ export interface SseEmitter {
   timeout?: number;
 }
 
+export interface StaffLinkView {
+  linkedAt?: string;
+  principalSubject?: string;
+  telegramUserId?: number;
+}
+
 export interface StaffLogoutRequest {
   refreshToken: string;
 }
@@ -1780,6 +1786,7 @@ export interface Operations {
   "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
   "slaBuckets": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": SlaResponse } };
   "issue": { method: "POST"; path: "/api/v1/tenants/{tenantId}/staff/telegram/link-codes"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": LinkCodeResponse } };
+  "listLinks": { method: "GET"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StaffLinkView> } };
 }
 
 export type OperationName = keyof Operations;

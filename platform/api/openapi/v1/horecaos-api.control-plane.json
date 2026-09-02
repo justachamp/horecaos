@@ -2086,6 +2086,19 @@
           "principalSubject" : {
             "type" : "string"
           },
+          "reason" : {
+            "type" : "string"
+          },
+          "revokedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "revokedBy" : {
+            "type" : "string"
+          },
+          "revokedReason" : {
+            "type" : "string"
+          },
           "roleCode" : {
             "type" : "string"
           },
@@ -2097,6 +2110,14 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
             "type" : "string"
           }
         },
@@ -4059,6 +4080,25 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "RoleDescriptor" : {
+        "properties" : {
+          "capabilities" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "RollbackScopeRequest" : {
@@ -9256,6 +9296,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
+        "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
         "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
@@ -9264,6 +9305,14 @@
           "schema" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "includeInactive",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
           }
         } ],
         "responses" : {
@@ -9281,7 +9330,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "List active grants within a tenant",
+        "summary" : "List grants within a tenant",
         "tags" : [ "Authorization" ]
       },
       "post" : {
@@ -10864,6 +10913,38 @@
         },
         "summary" : "The difference report",
         "tags" : [ "POS catalog synchronization" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/roles" : {
+      "get" : {
+        "description" : "The eight tenant-visible PlatformRole bundles (staff-and-access.md §5 \"Должности\"), each with its capability codes. platform-admin and platform-support are never included. Tenant-defined roles are not yet supported (ADR 0025's deferred item) and so are not yet in this list.",
+        "operationId" : "roles",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RoleDescriptor"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the platform-defined jobs a tenant may see",
+        "tags" : [ "Authorization" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {

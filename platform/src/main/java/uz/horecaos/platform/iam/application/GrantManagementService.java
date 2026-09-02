@@ -277,14 +277,21 @@ public class GrantManagementService {
             return false;
         }
 
+        Instant now = clock.instant();
+        // V0127: the revocation's own reason and actor, kept apart from the
+        // grant's own `reason` (why it was created) so a suspended person's
+        // row can show why access was taken away, not why it was given.
         int updated = jdbc.sql("""
                 UPDATE iam.grants
-                   SET status = 'REVOKED', version = version + 1, updated_at = :now
+                   SET status = 'REVOKED', version = version + 1, updated_at = :now,
+                       revoked_at = :now, revoked_by = :revokedBy, revoked_reason = :revokedReason
                  WHERE id = :id AND tenant_id IS NOT DISTINCT FROM :tenantId AND status = 'ACTIVE'
                 """)
                 .param("id", grantId)
                 .param("tenantId", tenantId)
-                .param("now", at(clock.instant()))
+                .param("now", at(now))
+                .param("revokedBy", revokerSubject)
+                .param("revokedReason", reason)
                 .update();
 
         if (updated == 1) {
@@ -302,24 +309,32 @@ public class GrantManagementService {
         return updated == 1;
     }
 
+    /** Active grants only, the historical default — see {@link #listForTenant(UUID, boolean)}. */
     public List<GrantView> listForTenant(UUID tenantId) {
+        return listForTenant(tenantId, false);
+    }
+
+    /**
+     * A tenant's grants, active-only by default.
+     *
+     * @param includeInactive when true, also returns {@code REVOKED} grants —
+     *                         staff-and-access.md §2's suspended-row state and
+     *                         §11.2's "restore" action both need to see what
+     *                         was taken away, not just what remains
+     */
+    public List<GrantView> listForTenant(UUID tenantId, boolean includeInactive) {
         return jdbc.sql("""
                 SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
-                       g.status, g.granted_by, g.valid_from, g.valid_until
+                       g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
+                       g.revoked_at, g.revoked_by, g.revoked_reason
                   FROM iam.grants g
                   JOIN iam.roles r ON r.id = g.role_id
-                 WHERE g.tenant_id = :tenantId AND g.status = 'ACTIVE'
+                 WHERE g.tenant_id = :tenantId AND (:includeInactive OR g.status = 'ACTIVE')
                  ORDER BY g.created_at DESC
                 """)
                 .param("tenantId", tenantId)
-                .query((rs, n) -> new GrantView(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("principal_subject"),
-                        rs.getString("role_code"),
-                        rs.getString("scope_type"),
-                        rs.getObject("scope_id", UUID.class),
-                        rs.getString("status"),
-                        rs.getString("granted_by")))
+                .param("includeInactive", includeInactive)
+                .query(GrantManagementService::toGrantView)
                 .list();
     }
 
@@ -327,21 +342,36 @@ public class GrantManagementService {
     public List<GrantView> listPlatformGrants() {
         return jdbc.sql("""
                 SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
-                       g.status, g.granted_by, g.valid_from, g.valid_until
+                       g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
+                       g.revoked_at, g.revoked_by, g.revoked_reason
                   FROM iam.grants g
                   JOIN iam.roles r ON r.id = g.role_id
                  WHERE g.tenant_id IS NULL AND g.scope_type = 'PLATFORM' AND g.status = 'ACTIVE'
                  ORDER BY g.created_at DESC
-                """)
-                .query((rs, n) -> new GrantView(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("principal_subject"),
-                        rs.getString("role_code"),
-                        rs.getString("scope_type"),
-                        rs.getObject("scope_id", UUID.class),
-                        rs.getString("status"),
-                        rs.getString("granted_by")))
-                .list();
+                """).query(GrantManagementService::toGrantView).list();
+    }
+
+    private static GrantView toGrantView(java.sql.ResultSet rs, int rowNumber) throws java.sql.SQLException {
+        return new GrantView(
+                rs.getObject("id", UUID.class),
+                rs.getString("principal_subject"),
+                rs.getString("role_code"),
+                rs.getString("scope_type"),
+                rs.getObject("scope_id", UUID.class),
+                rs.getString("status"),
+                rs.getString("granted_by"),
+                rs.getString("reason"),
+                rs.getObject("valid_from", OffsetDateTime.class).toInstant(),
+                optionalInstant(rs, "valid_until"),
+                optionalInstant(rs, "revoked_at"),
+                rs.getString("revoked_by"),
+                rs.getString("revoked_reason"));
+    }
+
+    private static @Nullable Instant optionalInstant(java.sql.ResultSet rs, String column)
+            throws java.sql.SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     /**
@@ -502,6 +532,15 @@ public class GrantManagementService {
             String reason,
             @Nullable Instant validUntil) {}
 
+    /**
+     * @param reason        why this grant was created, whatever its current status
+     * @param validFrom     when this grant took effect
+     * @param validUntil    null for an open-ended grant
+     * @param revokedAt     null unless {@code status} is {@code REVOKED} (V0127)
+     * @param revokedBy     null unless {@code status} is {@code REVOKED}
+     * @param revokedReason why this grant was taken away — distinct from
+     *                      {@code reason}, which stays why it was given
+     */
     public record GrantView(
             UUID id,
             String principalSubject,
@@ -509,7 +548,13 @@ public class GrantManagementService {
             String scopeType,
             UUID scopeId,
             String status,
-            String grantedBy) {}
+            String grantedBy,
+            String reason,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            @Nullable Instant revokedAt,
+            @Nullable String revokedBy,
+            @Nullable String revokedReason) {}
 
     private record RevokedGrant(String principalSubject, UUID tenantId, String scopeType, UUID scopeId) {}
 }

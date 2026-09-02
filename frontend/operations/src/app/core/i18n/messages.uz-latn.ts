@@ -756,4 +756,151 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.noLocation': 'Bu hisobga hali filial biriktirilmagan',
   'catalog.menus.channelsNote':
     'Kanal boʻyicha yoqish qurilmagan (ADR 0036) — bu jadval faqat filiallarni koʻrsatadi',
+
+  // ------------------------------------------------------------------- staff
+  'staff.people.title': 'Xodimlar',
+  'staff.people.lead':
+    'Kim ishlaydi, har biri nima qila oladi va kimda boʻlmasligi kerak boʻlgan huquq bor.',
+  'staff.people.loading': 'Roʻyxat yuklanmoqda',
+  'staff.people.denied': 'Bu boʻlimga kirish huquqi yoʻq',
+  'staff.people.emptyRule':
+    'Har bir odamning bitta yoki bir nechta lavozimi bor, va har bir lavozim biror joyda — butun kompaniyada, bitta brendda yoki bitta filialda beriladi. Bitta filialda berilgan lavozim faqat shu joyda ishlaydi.',
+  'staff.people.noMatches': 'Hech kim topilmadi',
+
+  'staff.action.invite': 'Taklif qilish',
+  'staff.action.addJob': 'Lavozimni oʻzgartirish',
+  'staff.action.suspend': 'Kirish huquqini toʻxtatish',
+  'staff.action.restore': 'Kirish huquqini qaytarish',
+  'staff.action.remove': 'Olib tashlash',
+
+  'staff.chip.you': 'Siz',
+
+  'staff.view.all': 'Barchasi',
+  'staff.view.byBranch': 'Filiallar boʻyicha',
+
+  'staff.filter.all': 'Barchasi ({count})',
+  'staff.filter.active': 'Faol ({count})',
+  'staff.filter.suspended': 'Toʻxtatilgan ({count})',
+  'staff.filter.search.placeholder': 'Identifikator boʻyicha qidirish',
+  'staff.filter.reset': 'Filtrlarni tozalash',
+
+  'staff.group.companyWide': 'Butun kompaniya',
+  'staff.group.noActiveJob': 'Faol lavozim yoʻq',
+
+  'staff.column.person': 'Xodim',
+  'staff.column.person.notBuilt':
+    'Ism va telefon hali saqlanmaydi — hisob identifikatori koʻrsatilgan',
+  'staff.column.job': 'Lavozim',
+  'staff.column.job.none': '—',
+  'staff.column.scope': 'Qayerda ishlaydi',
+  'staff.column.access': 'Kirish huquqi',
+
+  'staff.status.ok': 'Hammasi joyida',
+  'staff.status.revoked': 'Kirish huquqi bekor qilingan',
+  'staff.status.expiring': 'Muddati tugamoqda',
+
+  'staff.row.revoked.reason': 'Kirish huquqi bekor qilingan: {reason}',
+  'staff.row.revoked.noReason': 'Kirish huquqi bekor qilingan',
+  'staff.row.expiring': 'Muddati {date} da tugaydi',
+
+  'staff.telegram.linked': 'Telegram bogʻlangan',
+  'staff.telegram.notLinked': 'Telegram bogʻlanmagan',
+
+  'staff.scope.company': 'Butun kompaniya',
+  'staff.scope.brand': 'Brend',
+  'staff.scope.location': 'Filial',
+  'staff.scope.platform': 'Platforma',
+  'staff.scope.unknown': 'Nomaʼlum',
+
+  'staff.outcome.allSucceeded': 'Bajarildi: {count}',
+  'staff.outcome.partial': '{total} tadan {succeeded} tasi bajarildi',
+
+  'staff.dialog.cancel': 'Bekor qilish',
+  'staff.dialog.close': 'Yopish',
+
+  'staff.jobDialog.title': 'Lavozim',
+  'staff.jobDialog.role.label': 'Lavozim',
+  'staff.jobDialog.role.placeholder': 'Lavozimni tanlang',
+  'staff.jobDialog.role.hint': 'Bu yerda faqat oʻzingiz tayinlay oladigan lavozimlar koʻrsatilgan.',
+  'staff.jobDialog.scope.label': 'Qayerda',
+  'staff.jobDialog.scope.placeholder': 'Filialni tanlang',
+  'staff.jobDialog.validUntil.label': 'Qaysi sanagacha',
+  'staff.jobDialog.validUntil.hint':
+    'Vaqtinchalik kirish huquqi. Doimiy huquq uchun boʻsh qoldiring.',
+  'staff.jobDialog.reason.label': 'Nima uchun?',
+  'staff.jobDialog.reason.placeholder': 'Masalan: Yunusobod filialiga koʻchirildi',
+  'staff.jobDialog.reason.required': 'Sabab kiritilishi shart',
+  'staff.jobDialog.canDo': 'Qila oladi',
+  'staff.jobDialog.cannotDo': 'Qila olmaydi',
+  'staff.jobDialog.confirm': 'Tayinlash',
+
+  'staff.accessDialog.suspend.title': 'Kirish huquqini toʻxtatish',
+  'staff.accessDialog.suspend.body':
+    '{count} ta tayinlash bekor qilinadi. Bu odam tizimda boshqa hech narsa qila olmaydi.',
+  'staff.accessDialog.suspend.caveat':
+    'U hali ham tizimga kira oladi — ekran shunchaki boʻsh boʻladi. Sabab kiritilishi shart, u jurnalga yoziladi.',
+  'staff.accessDialog.restore.title': 'Kirish huquqini qaytarish',
+  'staff.accessDialog.restore.body':
+    '{count} ta tayinlash oxirgi bekor qilingandagi holatida qaytariladi.',
+  'staff.accessDialog.reason.label': 'Nima uchun?',
+  'staff.accessDialog.reason.placeholder': 'Masalan: Yunusobod filialiga koʻchirildi',
+  'staff.accessDialog.reason.required': 'Sabab kiritilishi shart',
+
+  'staff.inviteDialog.title': 'Taklif qilish',
+  'staff.inviteDialog.body':
+    'Telefon orqali mustaqil taklif qilish hali qurilmagan: platforma faqat kompaniyani ulash jarayonida egasi uchun hisob yarata oladi, oddiy xodim uchun emas.',
+  'staff.inviteDialog.workaround':
+    'Allaqachon hisobi bor odamga kirish huquqi berish uchun uning kartasini oching va lavozim qoʻshing.',
+
+  'staff.detail.back': 'Roʻyxatga qaytish',
+  'staff.detail.notFound': 'Bunday xodim yoʻq',
+  'staff.detail.denied': 'Bu xodimning huquqlariga kirish yoʻq',
+  'staff.detail.identity.notBuilt': 'Ism, telefon va rasm hali saqlanmaydi',
+  'staff.detail.since': 'Tizimda {date} dan beri',
+  'staff.detail.tab.access': 'Kirish huquqi',
+  'staff.detail.tab.security': 'Xavfsizlik',
+  'staff.detail.access.empty': 'Bu odamning hali birorta ham lavozimi yoʻq.',
+  'staff.detail.canDo.show': 'Nima qila oladi',
+  'staff.detail.canDo.hide': 'Yashirish',
+  'staff.detail.field.validFrom': 'Amal qiladi',
+  'staff.detail.field.validUntil': 'Muddati',
+  'staff.detail.field.indefinite': 'Muddatsiz',
+  'staff.detail.field.grantedBy': 'Tayinlagan',
+  'staff.detail.field.reason': 'Sabab',
+  'staff.detail.field.revokedReason': 'Bekor qilish sababi',
+  'staff.detail.field.subject': 'Ichki identifikator',
+  'staff.detail.field.telegram': 'Telegram',
+  'staff.detail.security.notBuilt':
+    'Kirish usuli, oxirgi kirish va terminal PIN-kodi hali kuzatilmaydi',
+
+  'staff.role.tenant-owner': 'Egasi',
+  'staff.role.tenant-owner.description': 'Butun kompaniyaga toʻliq kirish huquqi.',
+  'staff.role.tenant-admin': 'Administrator',
+  'staff.role.tenant-admin.description': 'Egasidagi hammasi, pul va tarifdan tashqari.',
+  'staff.role.tenant-finance': 'Moliya',
+  'staff.role.tenant-finance.description': 'Pul va tijorat sozlamalari, menyusiz.',
+  'staff.role.support-agent': 'Qoʻllab-quvvatlash operatori',
+  'staff.role.support-agent.description': 'Mijozlarga javob beradi, menyu va narxlarga tegmaydi.',
+  'staff.role.brand-manager': 'Brend menejeri',
+  'staff.role.brand-manager.description': 'Bitta brendning menyusi va reklamasini yuritadi.',
+  'staff.role.courier-dispatcher': 'Dispecher',
+  'staff.role.courier-dispatcher.description': 'Brend kuryerlariga buyurtmalarni taqsimlaydi.',
+  'staff.role.location-manager': 'Filial boshqaruvchisi',
+  'staff.role.location-manager.description': 'Bitta filialni toʻliq boshqaradi.',
+  'staff.role.location-staff': 'Filial xodimi',
+  'staff.role.location-staff.description': 'Joyida buyurtmalar bilan ishlaydi.',
+
+  'staff.roles.title': 'Lavozimlar',
+  'staff.roles.lead': 'Har bir lavozim odamga berilishidan oldin nimaga ruxsat berishi.',
+  'staff.roles.column.name': 'Lavozim',
+  'staff.roles.column.level': 'Daraja',
+  'staff.roles.column.covers': 'Nimani qamraydi',
+  'staff.roles.column.holders': 'Necha kishi',
+  'staff.roles.canDo': 'Nima qila oladi',
+  'staff.roles.cannotDo': 'Nima qila olmaydi',
+  'staff.roles.holders': 'Kim egallagan',
+  'staff.roles.holders.none': 'Hali hech kim',
+
+  'staff.shell.people': 'Xodimlar',
+  'staff.shell.roles': 'Lavozimlar',
 };

@@ -1,0 +1,243 @@
+.layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.list {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout--docked .list {
+  flex: 0 0 560px;
+}
+
+.detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.notice {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px 0;
+  max-width: 520px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.toolbar__group {
+  display: flex;
+  gap: 6px;
+}
+
+.toolbar__divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--q-hairline);
+  margin: 0 4px;
+}
+
+.toolbar__search {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: 14px;
+}
+
+.pill {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.pill--active {
+  background: var(--q-ink);
+  color: var(--q-inverse);
+  border-color: var(--q-ink);
+}
+
+.primary-button {
+  padding: 8px 16px;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.group-header td {
+  padding: 8px 14px;
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.group-header__count {
+  margin-left: 6px;
+}
+
+.row {
+  cursor: pointer;
+  border-left: 4px solid transparent;
+}
+
+.row td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.row:hover {
+  background: var(--q-surface-1);
+}
+
+.row--revoked {
+  background: var(--q-error-tint);
+  border-left-color: var(--q-error);
+}
+
+.row--expiring {
+  border-left-color: var(--q-warning);
+}
+
+.person-id {
+  display: inline-block;
+}
+
+.not-built-note {
+  margin: 2px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+.row-caption {
+  margin: 2px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 4px 4px 0;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.chip--muted {
+  color: var(--q-ink-muted);
+}
+
+.chip--telegram {
+  border-color: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.status-pill--revoked {
+  border-color: var(--q-error);
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+}
+
+.status-pill--expiring {
+  border-color: var(--q-warning);
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+}
+
+.row-actions {
+  white-space: nowrap;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+
+.text-button--destructive {
+  color: var(--q-error-text);
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+  padding: 20px;
+}
+
+.error {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 640px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}

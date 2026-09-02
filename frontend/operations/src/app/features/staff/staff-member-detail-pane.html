@@ -1,0 +1,197 @@
+<div class="pane">
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
+  } @else if (notFound()) {
+    <div class="not-found">
+      <p class="q-body-sm">{{ 'staff.detail.notFound' | t }}</p>
+      <button type="button" class="text-button" (click)="backToList()">
+        {{ 'staff.detail.back' | t }}
+      </button>
+    </div>
+  } @else if (denied()) {
+    <div>
+      <p class="q-body-sm">{{ 'staff.detail.denied' | t }}</p>
+    </div>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else {
+    <button type="button" class="text-button back-link" (click)="backToList()">
+      {{ 'staff.detail.back' | t }}
+    </button>
+
+    <div class="identity">
+      <div class="identity__avatar" aria-hidden="true"></div>
+      <div>
+        <h2 class="q-title q-mono">{{ subjectId() }}</h2>
+        <p class="q-caption not-built-note">{{ 'staff.detail.identity.notBuilt' | t }}</p>
+        <span
+          class="status-pill"
+          [class.status-pill--revoked]="accessStatusKey() === 'staff.status.revoked'"
+        >
+          {{ accessStatusKey() | t }}
+        </span>
+        @if (memberSince(); as since) {
+          <span class="q-caption identity__since">{{
+            'staff.detail.since' | t: { date: since.slice(0, 10) }
+          }}</span>
+        }
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'access'"
+        (click)="selectTab('access')"
+      >
+        {{ 'staff.detail.tab.access' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'security'"
+        (click)="selectTab('security')"
+      >
+        {{ 'staff.detail.tab.security' | t }}
+      </button>
+    </div>
+
+    @if (activeTab() === 'access') {
+      <div class="tab-panel">
+        @if (myGrants().length === 0) {
+          <p class="q-body-sm empty">{{ 'staff.detail.access.empty' | t }}</p>
+        } @else {
+          @for (grant of myGrants(); track grant.id) {
+            <div class="card" [class.card--revoked]="grant.status === 'REVOKED'">
+              <div class="card__header">
+                <span class="q-emphasis">{{ roleLabel(grant.roleCode) }}</span>
+                <span class="q-body-sm card__scope">{{ scopeText(grant) }}</span>
+                @if (grant.status === 'REVOKED') {
+                  <span class="status-pill status-pill--revoked">{{
+                    'staff.status.revoked' | t
+                  }}</span>
+                }
+              </div>
+              <dl class="card__fields">
+                <div>
+                  <dt class="q-caption">{{ 'staff.detail.field.validFrom' | t }}</dt>
+                  <dd class="q-body-sm">{{ grant.validFrom.slice(0, 10) }}</dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'staff.detail.field.validUntil' | t }}</dt>
+                  <dd class="q-body-sm">
+                    {{
+                      grant.validUntil
+                        ? grant.validUntil.slice(0, 10)
+                        : ('staff.detail.field.indefinite' | t)
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'staff.detail.field.grantedBy' | t }}</dt>
+                  <dd class="q-body-sm q-mono">{{ grant.grantedBy }}</dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'staff.detail.field.reason' | t }}</dt>
+                  <dd class="q-body-sm">{{ grant.reason }}</dd>
+                </div>
+                @if (grant.status === 'REVOKED') {
+                  <div>
+                    <dt class="q-caption">{{ 'staff.detail.field.revokedReason' | t }}</dt>
+                    <dd class="q-body-sm">{{ grant.revokedReason }}</dd>
+                  </div>
+                }
+              </dl>
+
+              <button type="button" class="text-button" (click)="toggleCapabilities(grant.id)">
+                {{
+                  (expandedGrantId() === grant.id
+                    ? 'staff.detail.canDo.hide'
+                    : 'staff.detail.canDo.show'
+                  ) | t
+                }}
+              </button>
+              @if (expandedGrantId() === grant.id) {
+                <div class="capabilities">
+                  @for (group of capabilityGroups(grant.roleCode); track group.area) {
+                    <div class="capabilities__group">
+                      <p class="q-caption capabilities__area">{{ group.area }}</p>
+                      <ul class="q-body-sm">
+                        @for (sentence of group.sentences; track sentence) {
+                          <li>{{ sentence }}</li>
+                        }
+                      </ul>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (grant.status === 'ACTIVE' && canRemove(grant)) {
+                <button
+                  type="button"
+                  class="text-button text-button--destructive"
+                  (click)="openRemoveDialog(grant.id)"
+                  data-testid="staff-detail-remove"
+                >
+                  {{ 'staff.action.remove' | t }}
+                </button>
+              }
+            </div>
+          }
+        }
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="openJobDialog()"
+          data-testid="staff-detail-add-job"
+        >
+          {{ 'staff.action.addJob' | t }}
+        </button>
+      </div>
+    } @else {
+      <div class="tab-panel">
+        <dl class="card__fields">
+          <div>
+            <dt class="q-caption">{{ 'staff.detail.field.subject' | t }}</dt>
+            <dd class="q-body-sm q-mono">{{ subjectId() }}</dd>
+          </div>
+          <div>
+            <dt class="q-caption">{{ 'staff.detail.field.telegram' | t }}</dt>
+            <dd class="q-body-sm">
+              {{ (telegramLink() ? 'staff.telegram.linked' : 'staff.telegram.notLinked') | t }}
+            </dd>
+          </div>
+        </dl>
+        <p class="q-caption not-built-note">{{ 'staff.detail.security.notBuilt' | t }}</p>
+      </div>
+    }
+  }
+</div>
+
+@if (jobDialogOpen()) {
+  <q-staff-job-dialog
+    [tenantId]="tenantId() ?? ''"
+    [principalSubject]="subjectId()"
+    [roles]="roles()"
+    [directory]="directory()"
+    [myScopes]="myScopes()"
+    [busy]="jobDialogBusy()"
+    [serverError]="jobDialogError()"
+    (submitted)="submitJob($event)"
+    (dismiss)="closeJobDialog()"
+  />
+}
+
+@if (removeTargetGrantId(); as grantId) {
+  <q-staff-access-dialog
+    mode="suspend"
+    [principalSubject]="subjectId()"
+    [affectedJobCount]="1"
+    [busy]="removeBusy()"
+    [serverError]="removeError()"
+    (confirmed)="confirmRemove($event)"
+    (dismiss)="closeRemoveDialog()"
+  />
+}

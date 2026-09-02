@@ -1,0 +1,120 @@
+<div class="job-dialog__backdrop" data-testid="staff-job-dialog">
+  <div
+    class="job-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'staff.jobDialog.title' | t"
+  >
+    <h2 class="q-emphasis job-dialog__title">{{ 'staff.jobDialog.title' | t }}</h2>
+
+    <label class="job-dialog__field">
+      <span class="q-body-sm">{{ 'staff.jobDialog.role.label' | t }}</span>
+      <select
+        class="job-dialog__select"
+        [value]="selectedRoleCode() ?? ''"
+        (change)="selectRole($any($event.target).value)"
+        data-testid="staff-job-dialog-role"
+      >
+        <option value="" disabled selected hidden>
+          {{ 'staff.jobDialog.role.placeholder' | t }}
+        </option>
+        @for (role of grantableRoles(); track role.code) {
+          <option [value]="role.code">{{ roleLabel(role.code) }}</option>
+        }
+      </select>
+      <span class="q-caption job-dialog__hint">{{ 'staff.jobDialog.role.hint' | t }}</span>
+    </label>
+
+    @if (selectedRole(); as role) {
+      @if (roleDescription(role.code); as description) {
+        <p class="q-caption job-dialog__roleDescription">{{ description }}</p>
+      }
+      <label class="job-dialog__field">
+        <span class="q-body-sm">{{ 'staff.jobDialog.scope.label' | t }}</span>
+        @if (role.scopeType === 'TENANT') {
+          <span class="q-body-sm job-dialog__staticScope">{{ 'staff.scope.company' | t }}</span>
+        } @else if (scopeIsFixed()) {
+          <span class="q-body-sm job-dialog__staticScope">{{ scopeOptions()[0].label }}</span>
+        } @else {
+          <select
+            class="job-dialog__select"
+            (change)="selectScope($any($event.target).value)"
+            data-testid="staff-job-dialog-scope"
+          >
+            <option value="" disabled selected hidden>
+              {{ 'staff.jobDialog.scope.placeholder' | t }}
+            </option>
+            @for (option of scopeOptions(); track option.label; let i = $index) {
+              <option [value]="i">{{ option.label }}</option>
+            }
+          </select>
+        }
+      </label>
+
+      <div class="job-dialog__preview" data-testid="staff-job-dialog-preview">
+        <p class="q-caption job-dialog__previewLabel">{{ 'staff.jobDialog.canDo' | t }}</p>
+        <ul class="q-body-sm job-dialog__list">
+          @for (sentence of grantedSentences(); track sentence) {
+            <li>{{ sentence }}</li>
+          }
+        </ul>
+        @if (cannotSentences().length > 0) {
+          <p class="q-caption job-dialog__previewLabel">{{ 'staff.jobDialog.cannotDo' | t }}</p>
+          <ul class="q-body-sm job-dialog__list job-dialog__list--muted">
+            @for (sentence of cannotSentences(); track sentence) {
+              <li>{{ sentence }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    <label class="job-dialog__field">
+      <span class="q-body-sm">{{ 'staff.jobDialog.validUntil.label' | t }}</span>
+      <input
+        type="date"
+        class="job-dialog__input"
+        [value]="validUntil()"
+        (input)="setValidUntil($any($event.target).value)"
+        data-testid="staff-job-dialog-validUntil"
+      />
+      <span class="q-caption job-dialog__hint">{{ 'staff.jobDialog.validUntil.hint' | t }}</span>
+    </label>
+
+    <label class="job-dialog__field">
+      <span class="q-body-sm">{{ 'staff.jobDialog.reason.label' | t }}</span>
+      <input
+        type="text"
+        class="job-dialog__input"
+        [value]="reason()"
+        (input)="setReason($any($event.target).value)"
+        [placeholder]="'staff.jobDialog.reason.placeholder' | t"
+        [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+        maxlength="1000"
+        data-testid="staff-job-dialog-reason"
+      />
+      @if (reasonMissing()) {
+        <span class="q-caption job-dialog__error">{{ 'staff.jobDialog.reason.required' | t }}</span>
+      }
+    </label>
+
+    @if (serverError(); as message) {
+      <p class="q-body-sm job-dialog__error" role="alert">{{ message }}</p>
+    }
+
+    <div class="job-dialog__actions">
+      <button type="button" class="job-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'staff.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="job-dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy() || !canSubmit()"
+        data-testid="staff-job-dialog-confirm"
+      >
+        {{ 'staff.jobDialog.confirm' | t }}
+      </button>
+    </div>
+  </div>
+</div>

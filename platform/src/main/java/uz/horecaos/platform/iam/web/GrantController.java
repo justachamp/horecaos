@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -23,6 +24,7 @@ import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
+import uz.horecaos.platform.iam.api.TenantRoleCatalog;
 import uz.horecaos.platform.iam.application.GrantManagementService;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -82,9 +84,27 @@ public class GrantController {
 
     @GetMapping("/control-plane/tenants/{tenantId}/grants")
     @RequiresCapability(Capability.IAM_GRANT_MANAGE)
-    @Operation(summary = "List active grants within a tenant")
-    List<GrantManagementService.GrantView> list(@PathVariable UUID tenantId) {
-        return grants.listForTenant(tenantId);
+    @Operation(
+            summary = "List grants within a tenant",
+            description = "Active only by default. Pass includeInactive=true for staff-and-access.md "
+                    + "§2's suspended-row state and §11.2's restore action, which both need to see a "
+                    + "revoked grant, not only what remains active.")
+    List<GrantManagementService.GrantView> list(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false, defaultValue = "false") boolean includeInactive) {
+        return grants.listForTenant(tenantId, includeInactive);
+    }
+
+    @GetMapping("/control-plane/tenants/{tenantId}/roles")
+    @RequiresCapability(Capability.IAM_GRANT_MANAGE)
+    @Operation(
+            summary = "List the platform-defined jobs a tenant may see",
+            description = "The eight tenant-visible PlatformRole bundles (staff-and-access.md §5 "
+                    + "\"Должности\"), each with its capability codes. platform-admin and "
+                    + "platform-support are never included. Tenant-defined roles are not yet "
+                    + "supported (ADR 0025's deferred item) and so are not yet in this list.")
+    List<TenantRoleCatalog.RoleDescriptor> roles(@PathVariable UUID tenantId) {
+        return TenantRoleCatalog.tenantVisible();
     }
 
     @PostMapping("/control-plane/tenants/{tenantId}/grants")
