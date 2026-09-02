@@ -8,6 +8,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
+import uz.horecaos.platform.iam.api.secrets.SecretWriter;
 
 /**
  * Refuses to start a non-local profile on environment-variable secrets
@@ -25,15 +26,21 @@ public class SecretsProfileGuard implements ApplicationRunner {
 
     private final Environment environment;
     private final SecretResolver resolver;
+    private final SecretWriter writer;
 
-    public SecretsProfileGuard(Environment environment, SecretResolver resolver) {
+    public SecretsProfileGuard(Environment environment, SecretResolver resolver, SecretWriter writer) {
         this.environment = environment;
         this.resolver = resolver;
+        this.writer = writer;
     }
 
     @Override
     public void run(@Nullable ApplicationArguments args) {
-        if (!(resolver instanceof EnvironmentSecretResolver)) {
+        // The writer (ADR 0065) is selected by the same property as the
+        // resolver and the two beans are never mismatched by SecretsConfiguration,
+        // but checking both rather than assuming it is what makes this guard
+        // still correct if that ever stops being true.
+        if (!(resolver instanceof EnvironmentSecretResolver) && !(writer instanceof EnvironmentSecretWriter)) {
             return;
         }
         List<String> active = List.of(environment.getActiveProfiles());

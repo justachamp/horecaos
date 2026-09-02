@@ -9,8 +9,11 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +25,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.payments.application.MerchantBindingService;
 import uz.horecaos.platform.payments.application.MerchantBindingService.RegisterMerchantBindingCommand;
 import uz.horecaos.platform.payments.domain.MerchantBinding;
@@ -77,9 +86,16 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class MerchantBindingController {
 
     private final MerchantBindingService bindings;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
+    private final Clock clock;
 
-    public MerchantBindingController(MerchantBindingService bindings) {
+    public MerchantBindingController(
+            MerchantBindingService bindings, AuditRecorder audit, CurrentActor currentActor, Clock clock) {
         this.bindings = bindings;
+        this.audit = audit;
+        this.currentActor = currentActor;
+        this.clock = clock;
     }
 
     @PostMapping
@@ -150,6 +166,42 @@ public class MerchantBindingController {
     MerchantBindingView archive(
             @PathVariable UUID tenantId, @PathVariable UUID bindingId, @RequestParam int expectedVersion) {
         return MerchantBindingView.of(bindings.archive(tenantId, bindingId, expectedVersion));
+    }
+
+    @PostMapping("/{bindingId}/secret-rotations")
+    @RequiresCapability(value = Capability.PAYMENT_MERCHANT_BINDING_MANAGE, mutating = true)
+    @Operation(
+            summary = "Rotate this binding's credential through the write-only door",
+            description = "ADR 0065: writes the new value into the ADR 0028 secrets manager under a "
+                    + "freshly-minted reference and swaps this binding onto it under its expected "
+                    + "version. Neither Click's nor Payme's Merchant API offers a harmless outbound call "
+                    + "to verify a credential before committing to it -- the same absence "
+                    + "ProviderCapabilityReconciliationService's own doc comment records -- so unlike "
+                    + "the Telegram installation rotation this cannot verify before flipping; whether the "
+                    + "new value is right is proven the next time a real payment settles through it.")
+    ResponseEntity<MerchantBindingView> rotateSecret(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID bindingId,
+            @RequestParam int expectedVersion,
+            @Valid @RequestBody RotateMerchantBindingSecretRequest request) {
+
+        MerchantBinding rotated = bindings.rotateSecret(tenantId, bindingId, expectedVersion, request.value());
+
+        audit.record(AuditFact.of("payment.merchant_binding_secret_rotated", AuditClass.SECURITY)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.tenant(tenantId))
+                .target("MerchantBinding", bindingId)
+                .because(request.reason())
+                // Reference only, never the value -- the same discipline
+                // ProviderInstallationController.rotateSecret's own audit
+                // comment documents for the installation path.
+                .changed(Map.of("newReference", rotated.secretReference().toString()))
+                .usingCapability(Capability.PAYMENT_MERCHANT_BINDING_MANAGE.code())
+                .correlatedBy(bindingId.toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        return ResponseEntity.ok(MerchantBindingView.of(rotated));
     }
 
     /**
@@ -228,7 +280,8 @@ public class MerchantBindingController {
             MerchantBindingStatus status,
             LocalDate effectiveFrom,
             @Nullable LocalDate effectiveUntil,
-            int version) {
+            int version,
+            @Nullable OffsetDateTime lastSecretRotatedAt) {
 
         static MerchantBindingView of(MerchantBinding binding) {
             return new MerchantBindingView(
@@ -247,7 +300,17 @@ public class MerchantBindingController {
                     binding.status(),
                     binding.effectiveFrom(),
                     binding.effectiveUntil(),
-                    binding.version());
+                    binding.version(),
+                    binding.lastSecretRotatedAt());
         }
     }
+
+    /**
+     * @param value the new credential, ADR 0065's door. Exists only in this
+     *              request body and the one write call this endpoint makes with
+     *              it; never returned, logged, or placed in an error message
+     */
+    record RotateMerchantBindingSecretRequest(
+            @NotBlank @Size(max = 4096) String value,
+            @NotBlank @Size(max = 1000) String reason) {}
 }

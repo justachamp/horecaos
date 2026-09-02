@@ -28,10 +28,13 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.secrets.SecretCategory;
+import uz.horecaos.platform.iam.api.secrets.SecretIngressGateway;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
+import uz.horecaos.platform.integration.api.provider.ConnectFieldCatalog;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup.InstallationSnapshot;
@@ -70,6 +73,7 @@ public class ProviderInstallationController {
     private final ProviderInstallationLookup installations;
     private final SecretResolver secrets;
     private final TelegramBotApiClient telegramBotApi;
+    private final SecretIngressGateway door;
 
     public ProviderInstallationController(
             JdbcClient jdbc,
@@ -79,7 +83,8 @@ public class ProviderInstallationController {
             ProviderCapabilityReconciliationService reconciliation,
             ProviderInstallationLookup installations,
             SecretResolver secrets,
-            TelegramBotApiClient telegramBotApi) {
+            TelegramBotApiClient telegramBotApi,
+            SecretIngressGateway door) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.currentActor = currentActor;
@@ -88,6 +93,19 @@ public class ProviderInstallationController {
         this.installations = installations;
         this.secrets = secrets;
         this.telegramBotApi = telegramBotApi;
+        this.door = door;
+    }
+
+    @GetMapping("/connect-fields")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "Per-adapter connect field declarations (ADR 0065)",
+            description = "Static, code-owned catalogue: which fields a Click, Payme, or Telegram "
+                    + "connect flow needs, and which of those must travel through the write-only secret "
+                    + "door rather than as plain configuration. The control-plane app renders its connect "
+                    + "form from this, so a new provider adapter costs a catalogue entry, not a new screen.")
+    List<ConnectFieldCatalog.ProviderConnectDeclaration> connectFields(@PathVariable UUID tenantId) {
+        return ConnectFieldCatalog.all();
     }
 
     @GetMapping
@@ -97,7 +115,7 @@ public class ProviderInstallationController {
         return Page.last(jdbc.sql("""
                 SELECT i.id, i.provider_category, i.provider_type, i.environment_code,
                        i.display_name, i.status, i.secret_reference, i.last_connection_status,
-                       i.adapter_version
+                       i.adapter_version, i.last_secret_rotated_at
                   FROM integration.installations i
                  WHERE i.tenant_id = :tenantId
                  ORDER BY i.created_at DESC
@@ -112,7 +130,8 @@ public class ProviderInstallationController {
                         rs.getString("status"),
                         rs.getString("secret_reference"),
                         rs.getString("last_connection_status"),
-                        rs.getString("adapter_version")))
+                        rs.getString("adapter_version"),
+                        rs.getObject("last_secret_rotated_at", OffsetDateTime.class)))
                 .list());
     }
 
@@ -308,7 +327,8 @@ public class ProviderInstallationController {
         String oldReference = installation.secretReference();
         int changed = jdbc.sql("""
                 UPDATE integration.installations
-                   SET secret_reference = :newReference, version = version + 1, updated_at = :now
+                   SET secret_reference = :newReference, last_secret_rotated_at = :now,
+                       version = version + 1, updated_at = :now
                  WHERE id = :id AND tenant_id = :tenantId AND secret_reference = :oldReference
                 """)
                 .param("newReference", reference.toString())
@@ -354,6 +374,121 @@ public class ProviderInstallationController {
 
         return ResponseEntity.ok(
                 new RotateSecretResponse(installationId, oldReference, reference.toString(), botUsername));
+    }
+
+    @PostMapping("/{installationId}/secret-rotations/value")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Rotate an installation's credential through the write-only door",
+            description = "ADR 0065: generalizes the endpoint above to a tenant that has no way to "
+                    + "write a reference by hand. Accepts the new VALUE directly, verifies it "
+                    + "(Telegram bot installations only, the same scoping rotateSecret already "
+                    + "documents) before it is ever written anywhere, then writes it through the door "
+                    + "under a freshly-minted reference and swaps the installation onto it. For every "
+                    + "other provider type there is no harmless authenticated call to verify against, so "
+                    + "the write proceeds and the installation is left last_connection_status = "
+                    + "UNVERIFIED — connected, not silently claimed as confirmed, mirroring the "
+                    + "Telegram-only scoping rationale rather than pretending a stronger guarantee.")
+    public ResponseEntity<RotateSecretResponse> rotateSecretByValue(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @Valid @RequestBody RotateSecretValueRequest request) {
+
+        InstallationSnapshot installation = installations
+                .installation(tenantId, installationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available"));
+
+        SecretValue newCredential = SecretValue.of(request.value());
+        String botUsername = null;
+        boolean verified = false;
+
+        if (TELEGRAM_BOT_API.equals(installation.providerType())) {
+            // Verified BEFORE it ever touches the secrets manager: a rejected
+            // credential must never even become a resolvable, if orphaned,
+            // secret. Only a value Telegram accepts is written at all.
+            TelegramCallResult result = telegramBotApi.getMe(
+                    new ProviderCall(installation.baseUrl(), newCredential.reveal(), null, Duration.ofSeconds(15)));
+            if (!(result instanceof TelegramCallResult.Success success)) {
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE, "Telegram rejected the new token: " + describe(result));
+            }
+            Object usernameValue = success.result().get("username");
+            botUsername = usernameValue == null ? null : String.valueOf(usernameValue);
+            verified = true;
+        }
+
+        SecretReference reference =
+                door.write(secretCategoryFor(installation.category()), ownerScopeFor(tenantId), newCredential);
+
+        String oldReference = installation.secretReference();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        int changed = jdbc.sql("""
+                UPDATE integration.installations
+                   SET secret_reference = :newReference,
+                       last_connection_status = :connectionStatus,
+                       last_secret_rotated_at = :now,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE id = :id AND tenant_id = :tenantId AND secret_reference = :oldReference
+                """)
+                .param("newReference", reference.toString())
+                .param("connectionStatus", verified ? "SUCCEEDED" : "UNVERIFIED")
+                .param("id", installationId)
+                .param("tenantId", tenantId)
+                .param("oldReference", oldReference)
+                .param("now", now)
+                .update();
+
+        if (changed == 0) {
+            // A value was already written through the door above; the row
+            // simply never gets pointed at it. It stays orphaned in the
+            // secrets manager, unreachable by any reference in a database
+            // row -- ADR 0028's accepted posture (rollback "never returns
+            // secret values to the database") rather than a leak.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This installation's secret reference changed while the new value was being verified");
+        }
+
+        record(
+                tenantId,
+                "integration.installation_secret_rotated",
+                installationId,
+                request.reason(),
+                // Reference names and the verification outcome only -- never
+                // the value, which never reaches this method beyond the one
+                // door.write() and (Telegram only) getMe() calls above.
+                Map.of(
+                        "oldReference",
+                        oldReference,
+                        "newReference",
+                        reference.toString(),
+                        "verified",
+                        verified,
+                        "botUsername",
+                        botUsername == null ? "" : botUsername),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
+
+        return ResponseEntity.ok(
+                new RotateSecretResponse(installationId, oldReference, reference.toString(), botUsername));
+    }
+
+    /** ownerScope is platform-derived, never a caller-supplied string. */
+    private static String ownerScopeFor(UUID tenantId) {
+        return "tenant-" + tenantId;
+    }
+
+    private static SecretCategory secretCategoryFor(ProviderCategory category) {
+        return switch (category) {
+            case POS -> SecretCategory.PROVIDER_POS;
+            case PAYMENT -> SecretCategory.PROVIDER_PAYMENT;
+            case DELIVERY -> SecretCategory.PROVIDER_DELIVERY;
+            case NOTIFICATION -> SecretCategory.PROVIDER_NOTIFICATION;
+            case MARKETPLACE, GEOCODING, OTHER ->
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "The secret door has no category for " + category + " installations yet");
+        };
     }
 
     private static String describe(TelegramCallResult result) {
@@ -548,6 +683,16 @@ public class ProviderInstallationController {
             @NotBlank @Size(max = 512) String newSecretReference,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * @param value the new credential, ADR 0065's door: exists only in this
+     *              request body and the one write/verify call this endpoint
+     *              makes with it. Never returned, logged, or placed in an
+     *              error message
+     */
+    public record RotateSecretValueRequest(
+            @NotBlank @Size(max = 4096) String value,
+            @NotBlank @Size(max = 1000) String reason) {}
+
     /** Reference strings only, per ADR 0028 — never a secret value. */
     public record RotateSecretResponse(
             UUID installationId,
@@ -568,5 +713,6 @@ public class ProviderInstallationController {
             String status,
             String secretReference,
             String lastConnectionStatus,
-            String adapterVersion) {}
+            String adapterVersion,
+            @Nullable OffsetDateTime lastSecretRotatedAt) {}
 }

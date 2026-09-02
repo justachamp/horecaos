@@ -20,6 +20,7 @@ export const uzLatn: Messages = {
   'nav.statistics': 'Statistika',
   'nav.configuration': 'Platforma sozlamalari',
   'nav.staff': 'Xodimlar va ruxsatlar',
+  'nav.integrations': 'Integratsiyalar',
 
   'shell.skipToContent': 'Asosiy qismga o‘tish',
   'shell.signedInAs': 'Kirgan foydalanuvchi',
@@ -64,6 +65,92 @@ export const uzLatn: Messages = {
 
   'tenants.title': 'Mijozlar',
   'tenants.lead': 'Barcha mijozlar, ular to‘laydigan summa va hozir muammosi borlari.',
+
+  'integrations.title': 'Integratsiyalar',
+  'integrations.lead':
+    'Click, Payme va Telegramni ulang, ularning maxfiy ma’lumotlarini yangilang va endi kerak bo‘lmaganini uzing. Bu yerda maxfiy qiymatni yozish mumkin, lekin uni qayta o‘qib bo‘lmaydi (ADR 0065).',
+  'integrations.loading': 'Yuklanmoqda…',
+  'integrations.error.loadFailed': 'Integratsiyalarni yuklab bo‘lmadi.',
+
+  'integrations.installations.title': 'Ulangan provayderlar',
+  'integrations.installations.empty': 'Hali provayder ulanmagan.',
+  'integrations.installations.column.provider': 'Provayder',
+  'integrations.installations.column.environment': 'Muhit',
+  'integrations.installations.column.status': 'Holat',
+  'integrations.installations.column.credential': 'Maxfiy ma’lumot',
+  'integrations.installations.column.lastRotated': 'Oxirgi yangilanish',
+  'integrations.installations.column.actions': 'Amallar',
+
+  'integrations.merchantBindings.title': 'Sotuvchi bog‘lanishlari',
+  'integrations.merchantBindings.empty': 'Hali merchant hisobi ro‘yxatdan o‘tkazilmagan.',
+  'integrations.merchantBindings.column.provider': 'Provayder',
+  'integrations.merchantBindings.column.account': 'Merchant hisobi',
+  'integrations.merchantBindings.column.status': 'Holat',
+  'integrations.merchantBindings.column.credential': 'Maxfiy ma’lumot',
+  'integrations.merchantBindings.column.lastRotated': 'Oxirgi yangilanish',
+  'integrations.merchantBindings.column.actions': 'Amallar',
+
+  'integrations.credential.configured': 'Sozlangan •••••',
+  'integrations.credential.none': 'Kiritilmagan',
+  'integrations.lastRotated.never': 'Hech qachon',
+
+  'integrations.status.DRAFT': 'Qoralama',
+  'integrations.status.ACTIVE': 'Faol',
+  'integrations.status.SUSPENDED': 'To‘xtatilgan',
+  'integrations.status.RETIRED': 'O‘chirilgan',
+  'integrations.status.UNVERIFIED': 'Tekshirilmagan',
+  'integrations.status.SUCCEEDED': 'Tekshirilgan',
+  'integrations.status.FAILED': 'Xato',
+
+  'integrations.connect.action': 'Provayder ulash',
+  'integrations.connect.title': 'Provayder ulash',
+  'integrations.connect.provider': 'Provayder',
+  'integrations.connect.displayName': 'Nomi',
+  'integrations.connect.environmentCode': 'Muhit',
+  'integrations.connect.environmentCode.hint':
+    'Ushbu provayder uchun tasdiqlangan muhit kodi (masalan, ulash yo‘riqnomasidagi sandbox kodi). Platforma hech qachon URL manzilni to‘g‘ridan-to‘g‘ri qabul qilmaydi.',
+  'integrations.connect.reference': 'Havola (ixtiyoriy)',
+  'integrations.connect.reference.hint':
+    'Maxfiy bo‘lmagan belgi, masalan merchant yoki servis id, o‘z yozuvlaringiz uchun.',
+  'integrations.connect.submit': 'Ulash',
+  'integrations.connect.submitting': 'Ulanmoqda…',
+  'integrations.connect.success': 'Provayder ulandi. Undan foydalanish uchun brend yoki filialga bog‘lang.',
+  'integrations.connect.cancel': 'Bekor qilish',
+
+  'integrations.rotate.installationAction': 'Maxfiy ma’lumotni yangilash',
+  'integrations.rotate.bindingAction': 'Maxfiy ma’lumotni yangilash',
+  'integrations.rotate.title': 'Maxfiy ma’lumotni yangilash',
+  'integrations.rotate.lead':
+    'Yangi qiymat maxfiy ma’lumotlar menejeriga yoziladi va bu panelda, logda yoki xato xabarida boshqa hech qayerda saqlanmaydi.',
+  'integrations.rotate.value': 'Yangi maxfiy qiymat',
+  'integrations.rotate.reason': 'Sabab',
+  'integrations.rotate.submit': 'Yangilash',
+  'integrations.rotate.submitting': 'Yangilanmoqda…',
+  'integrations.rotate.success': 'Maxfiy ma’lumot yangilandi.',
+  'integrations.rotate.cancel': 'Bekor qilish',
+  'integrations.rotate.unverifiedNotice':
+    'Bu provayderda maxfiy ma’lumotni foydalanishdan oldin tekshirish imkoni yo‘q. Qiymat yoziladi va almashtiriladi, haqiqiy to‘lov bilan tasdiqlanguncha "tekshirilmagan" deb belgilanadi.',
+
+  'integrations.archive.action': 'Arxivlash',
+  'integrations.archive.confirm':
+    'Bu sotuvchi bog‘lanishini arxivlaysizmi? To‘xtatilgan bog‘lanish shu yerdan arxivlanadi.',
+
+  'integrations.registerBinding.action': 'Sotuvchi bog‘lanishini ro‘yxatdan o‘tkazish',
+  'integrations.registerBinding.title': 'Sotuvchi bog‘lanishini ro‘yxatdan o‘tkazish',
+  'integrations.registerBinding.lead':
+    'Yuqorida ulangan integratsiya orqali yuridik shaxsni Click yoki Payme hisobiga bog‘laydi.',
+  'integrations.registerBinding.provider': 'Provayder',
+  'integrations.registerBinding.legalEntityId': 'Yuridik shaxs id',
+  'integrations.registerBinding.installationId': 'Integratsiya id',
+  'integrations.registerBinding.integrationBindingId': 'Integratsiya bog‘lanish id',
+  'integrations.registerBinding.merchantAccountReference': 'Merchant hisob havolasi',
+  'integrations.registerBinding.callbackPathSegment': 'Callback yo‘l segmenti',
+  'integrations.registerBinding.value': 'Merchant maxfiy kaliti',
+  'integrations.registerBinding.submit': 'Ro‘yxatdan o‘tkazish',
+  'integrations.registerBinding.submitting': 'Ro‘yxatdan o‘tkazilmoqda…',
+  'integrations.registerBinding.success':
+    'Sotuvchi bog‘lanishi qoralama sifatida ro‘yxatdan o‘tkazildi. Hammasi to‘g‘ri bo‘lsa, faollashtiring.',
+  'integrations.registerBinding.cancel': 'Bekor qilish',
 
   'money.uzsSuffix': 'so‘m',
 

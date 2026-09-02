@@ -44,7 +44,8 @@ public class JdbcMerchantBindingStore {
             id, tenant_id, legal_entity_id, provider_type, installation_id, binding_id,
             merchant_account_reference, merchant_user_reference, merchant_id_reference,
             secret_reference, callback_path_segment, supports_reversal,
-            supports_partner_fiscalization, status, effective_from, effective_until, version
+            supports_partner_fiscalization, status, effective_from, effective_until, version,
+            last_secret_rotated_at
             """;
 
     private final JdbcClient jdbc;
@@ -111,6 +112,37 @@ public class JdbcMerchantBindingStore {
                         .param("id", binding.id())
                         .param("tenantId", binding.tenantId())
                         .param("status", binding.status().name())
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Writes a rotated secret reference back under its expected version (ADR
+     * 0065).
+     *
+     * <p>Only {@code secret_reference}, {@code last_secret_rotated_at}, and
+     * {@code version} are in the {@code SET} list, the same narrow-column
+     * discipline {@link #update} keeps for a status transition — every other
+     * column is this account's own identity and none of it moves for a
+     * rotation.
+     *
+     * @return false when somebody else moved the row first
+     */
+    public boolean updateSecretReference(
+            UUID tenantId, UUID bindingId, SecretReference newReference, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE payments.merchant_bindings
+                   SET secret_reference = :newReference,
+                       last_secret_rotated_at = :now,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("newReference", newReference.toString())
+                        .param("tenantId", tenantId)
+                        .param("id", bindingId)
                         .param("expectedVersion", expectedVersion)
                         .param("now", timestamp(now))
                         .update()
@@ -205,7 +237,8 @@ public class JdbcMerchantBindingStore {
                 row.getObject("effective_from", LocalDate.class),
                 row.getObject("effective_until", LocalDate.class),
                 MerchantBindingStatus.valueOf(row.getString("status")),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getObject("last_secret_rotated_at", OffsetDateTime.class));
     }
 
     private static OffsetDateTime timestamp(Instant instant) {

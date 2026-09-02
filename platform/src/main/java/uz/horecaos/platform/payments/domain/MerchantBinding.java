@@ -1,6 +1,7 @@
 package uz.horecaos.platform.payments.domain;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,6 +48,7 @@ public final class MerchantBinding {
     private final @Nullable LocalDate effectiveUntil;
     private MerchantBindingStatus status;
     private final int version;
+    private final @Nullable OffsetDateTime lastSecretRotatedAt;
 
     private MerchantBinding(
             UUID id,
@@ -65,7 +67,8 @@ public final class MerchantBinding {
             LocalDate effectiveFrom,
             @Nullable LocalDate effectiveUntil,
             MerchantBindingStatus status,
-            int version) {
+            int version,
+            @Nullable OffsetDateTime lastSecretRotatedAt) {
         this.id = Objects.requireNonNull(id, "A merchant binding ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "A tenant ID is required");
         this.legalEntityId = Objects.requireNonNull(legalEntityId, "A legal entity is required: it is the seller");
@@ -91,6 +94,7 @@ public final class MerchantBinding {
         this.effectiveUntil = effectiveUntil;
         this.status = Objects.requireNonNull(status, "A status is required");
         this.version = version;
+        this.lastSecretRotatedAt = lastSecretRotatedAt;
     }
 
     /**
@@ -136,7 +140,8 @@ public final class MerchantBinding {
                 effectiveFrom,
                 effectiveUntil,
                 MerchantBindingStatus.DRAFT,
-                1);
+                1,
+                null);
     }
 
     public static MerchantBinding reconstitute(
@@ -156,7 +161,8 @@ public final class MerchantBinding {
             LocalDate effectiveFrom,
             @Nullable LocalDate effectiveUntil,
             MerchantBindingStatus status,
-            int version) {
+            int version,
+            @Nullable OffsetDateTime lastSecretRotatedAt) {
         return new MerchantBinding(
                 id,
                 tenantId,
@@ -174,7 +180,8 @@ public final class MerchantBinding {
                 effectiveFrom,
                 effectiveUntil,
                 status,
-                version);
+                version,
+                lastSecretRotatedAt);
     }
 
     public void activate() {
@@ -273,6 +280,11 @@ public final class MerchantBinding {
 
     public int version() {
         return version;
+    }
+
+    /** Null until this binding's secret is rotated through the ADR 0065 door for the first time. */
+    public @Nullable OffsetDateTime lastSecretRotatedAt() {
+        return lastSecretRotatedAt;
     }
 
     private void requireStatus(MerchantBindingStatus... allowed) {

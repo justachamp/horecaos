@@ -192,6 +192,11 @@ export interface CircleRequest {
   radiusMeters?: number;
 }
 
+export interface ConnectField {
+  key?: string;
+  secret?: boolean;
+}
+
 export interface ControlBandEscalationRequest {
   description: string;
   metricId: string;
@@ -550,6 +555,7 @@ export interface InstallationView {
   environmentCode?: string;
   id?: string;
   lastConnectionStatus?: string;
+  lastSecretRotatedAt?: string;
   providerType?: string;
   secretReference?: string;
   status?: string;
@@ -820,6 +826,12 @@ export interface ProductResponse {
   productId?: string;
 }
 
+export interface ProviderConnectDeclaration {
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "OTHER";
+  fields?: Array<ConnectField>;
+  providerType?: string;
+}
+
 export interface ProviderInstallationControllerReasonRequest {
   reason: string;
 }
@@ -892,6 +904,11 @@ export interface RotateSecretResponse {
   oldSecretReference?: string;
 }
 
+export interface RotateSecretValueRequest {
+  reason: string;
+  value: string;
+}
+
 export interface RowEntry {
   chatId?: number;
   customerAccountId?: string;
@@ -933,6 +950,16 @@ export interface ScheduleView {
   acceptsScheduledOrders?: boolean;
   id?: string;
   name?: string;
+}
+
+export interface SecretIngressRequest {
+  category: "PROVIDER_POS" | "PROVIDER_PAYMENT" | "PROVIDER_DELIVERY" | "PROVIDER_NOTIFICATION" | "IDENTITY_ADMIN" | "DATA_ENCRYPTION" | "DATABASE" | "OBJECT_STORAGE";
+  providerType: string;
+  value: string;
+}
+
+export interface SecretIngressResponse {
+  reference?: string;
 }
 
 export interface SendPulseImportReport {
@@ -1199,11 +1226,14 @@ export interface Operations {
   "linkKeycloakOrganization": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/identity/keycloak-organization"; request: { parameters: { path: { tenantId: string } }; body: LinkKeycloakOrganizationRequest }; responses: { "200": TenantView } };
   "list_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };
   "install": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } }; body: InstallRequest }; responses: { "200": {  } } };
+  "connectFields": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ProviderConnectDeclaration> } };
+  "write": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/secrets"; request: { parameters: { path: { tenantId: string } }; body: SecretIngressRequest }; responses: { "200": SecretIngressResponse } };
   "bind": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: BindRequest }; responses: { "200": {  } } };
   "activateBinding": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/activate"; request: { parameters: { path: { bindingId: string; installationId: string; tenantId: string } }; body: ProviderInstallationControllerReasonRequest }; responses: { "200": {  } } };
   "suspendBinding": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; installationId: string; tenantId: string } }; body: ProviderInstallationControllerReasonRequest }; responses: { "200": {  } } };
   "reconcileCapabilities_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Reconciliation } };
   "rotateSecret": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretRequest }; responses: { "200": RotateSecretResponse } };
+  "rotateSecretByValue": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
   "list_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
   "register": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } }; body: RegisterLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "assignmentHistory": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<LocationFiscalAssignmentView> } };

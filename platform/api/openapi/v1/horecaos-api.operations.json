@@ -2276,6 +2276,10 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "lastSecretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
           "legalEntityId" : {
             "format" : "uuid",
             "type" : "string"
@@ -4381,6 +4385,22 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "RotateMerchantBindingSecretRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "value" ],
         "type" : "object"
       },
       "RotationRequest" : {
@@ -7489,6 +7509,61 @@
           }
         },
         "summary" : "Retire a merchant binding",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0065: writes the new value into the ADR 0028 secrets manager under a freshly-minted reference and swaps this binding onto it under its expected version. Neither Click's nor Payme's Merchant API offers a harmless outbound call to verify a credential before committing to it -- the same absence ProviderCapabilityReconciliationService's own doc comment records -- so unlike the Telegram installation rotation this cannot verify before flipping; whether the new value is right is proven the next time a real payment settles through it.",
+        "operationId" : "rotateSecret",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateMerchantBindingSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate this binding's credential through the write-only door",
         "tags" : [ "Merchant bindings" ]
       }
     },

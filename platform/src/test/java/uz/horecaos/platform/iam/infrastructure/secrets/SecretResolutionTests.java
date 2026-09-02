@@ -106,7 +106,8 @@ class SecretResolutionTests {
         environment.setActiveProfiles("production");
         var fixture = fixture(Map.of());
 
-        SecretsProfileGuard guard = new SecretsProfileGuard(environment, fixture.resolver());
+        SecretsProfileGuard guard = new SecretsProfileGuard(
+                environment, fixture.resolver(), new EnvironmentSecretWriter(new MutableSecretStore()));
 
         assertThatThrownBy(() -> guard.run(null))
                 .isInstanceOf(IllegalStateException.class)
@@ -119,7 +120,8 @@ class SecretResolutionTests {
         environment.setActiveProfiles("local");
         var fixture = fixture(Map.of());
 
-        new SecretsProfileGuard(environment, fixture.resolver()).run(null);
+        new SecretsProfileGuard(environment, fixture.resolver(), new EnvironmentSecretWriter(new MutableSecretStore()))
+                .run(null);
     }
 
     private static Fixture fixture(Map<String, String> values) {

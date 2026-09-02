@@ -23,6 +23,7 @@ export const en = {
   'nav.statistics': 'Statistics',
   'nav.configuration': 'Platform configuration',
   'nav.staff': 'Staff and access',
+  'nav.integrations': 'Integrations',
 
   'shell.skipToContent': 'Skip to content',
   'shell.signedInAs': 'Signed in as',
@@ -73,6 +74,92 @@ export const en = {
 
   'tenants.title': 'Tenants',
   'tenants.lead': 'Every customer, what they pay, and which of them is not fine right now.',
+
+  'integrations.title': 'Integrations',
+  'integrations.lead':
+    'Connect Click, Payme and Telegram, rotate their credentials, and disconnect what you no longer use. A credential can be written here but never read back (ADR 0065).',
+  'integrations.loading': 'Loading…',
+  'integrations.error.loadFailed': 'Could not load integrations.',
+
+  'integrations.installations.title': 'Provider installations',
+  'integrations.installations.empty': 'No providers connected yet.',
+  'integrations.installations.column.provider': 'Provider',
+  'integrations.installations.column.environment': 'Environment',
+  'integrations.installations.column.status': 'Status',
+  'integrations.installations.column.credential': 'Credential',
+  'integrations.installations.column.lastRotated': 'Last rotated',
+  'integrations.installations.column.actions': 'Actions',
+
+  'integrations.merchantBindings.title': 'Merchant bindings',
+  'integrations.merchantBindings.empty': 'No merchant accounts registered yet.',
+  'integrations.merchantBindings.column.provider': 'Provider',
+  'integrations.merchantBindings.column.account': 'Merchant account',
+  'integrations.merchantBindings.column.status': 'Status',
+  'integrations.merchantBindings.column.credential': 'Credential',
+  'integrations.merchantBindings.column.lastRotated': 'Last rotated',
+  'integrations.merchantBindings.column.actions': 'Actions',
+
+  // Never a value, and never even the reference (ADR 0065's own wording: "the
+  // UI shows a masked placeholder and 'last rotated' only"). configured/none
+  // read off whether secretReference is present at all.
+  'integrations.credential.configured': 'Configured •••••',
+  'integrations.credential.none': 'Not set',
+  'integrations.lastRotated.never': 'Never',
+
+  'integrations.status.DRAFT': 'Draft',
+  'integrations.status.ACTIVE': 'Active',
+  'integrations.status.SUSPENDED': 'Suspended',
+  'integrations.status.RETIRED': 'Retired',
+  'integrations.status.UNVERIFIED': 'Unverified',
+  'integrations.status.SUCCEEDED': 'Verified',
+  'integrations.status.FAILED': 'Failed',
+
+  'integrations.connect.action': 'Connect a provider',
+  'integrations.connect.title': 'Connect a provider',
+  'integrations.connect.provider': 'Provider',
+  'integrations.connect.displayName': 'Display name',
+  'integrations.connect.environmentCode': 'Environment',
+  'integrations.connect.environmentCode.hint':
+    'The approved environment code for this provider (for example a sandbox code from the connect runbook). The platform never accepts a URL directly.',
+  'integrations.connect.reference': 'Reference (optional)',
+  'integrations.connect.reference.hint': 'A non-secret label such as a merchant or service id, for your own records.',
+  'integrations.connect.submit': 'Connect',
+  'integrations.connect.submitting': 'Connecting…',
+  'integrations.connect.success': 'Provider connected. Bind it to a brand or location to start using it.',
+  'integrations.connect.cancel': 'Cancel',
+
+  'integrations.rotate.installationAction': 'Rotate credential',
+  'integrations.rotate.bindingAction': 'Rotate credential',
+  'integrations.rotate.title': 'Rotate this credential',
+  'integrations.rotate.lead':
+    'The new value is written to the secrets manager and never stored anywhere else in this console, in a log, or in an error message.',
+  'integrations.rotate.value': 'New credential value',
+  'integrations.rotate.reason': 'Reason',
+  'integrations.rotate.submit': 'Rotate',
+  'integrations.rotate.submitting': 'Rotating…',
+  'integrations.rotate.success': 'Credential rotated.',
+  'integrations.rotate.cancel': 'Cancel',
+  'integrations.rotate.unverifiedNotice':
+    'This provider has no way to verify a credential before it is used. It will be written and swapped in, and marked unverified until it is proven by a real payment.',
+
+  'integrations.archive.action': 'Archive',
+  'integrations.archive.confirm': 'Archive this merchant binding? A suspended binding is archived from here.',
+
+  'integrations.registerBinding.action': 'Register a merchant binding',
+  'integrations.registerBinding.title': 'Register a merchant binding',
+  'integrations.registerBinding.lead':
+    'Links a legal entity to a Click or Payme account through an installation you already connected above.',
+  'integrations.registerBinding.provider': 'Provider',
+  'integrations.registerBinding.legalEntityId': 'Legal entity id',
+  'integrations.registerBinding.installationId': 'Installation id',
+  'integrations.registerBinding.integrationBindingId': 'Integration binding id',
+  'integrations.registerBinding.merchantAccountReference': 'Merchant account reference',
+  'integrations.registerBinding.callbackPathSegment': 'Callback path segment',
+  'integrations.registerBinding.value': 'Merchant secret key',
+  'integrations.registerBinding.submit': 'Register',
+  'integrations.registerBinding.submitting': 'Registering…',
+  'integrations.registerBinding.success': 'Merchant binding registered as draft. Activate it once it is correct.',
+  'integrations.registerBinding.cancel': 'Cancel',
 
   'money.uzsSuffix': "so'm",
 

@@ -21,9 +21,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.secrets.SecretIngressGateway;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
+import uz.horecaos.platform.iam.api.secrets.SecretWriter;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
@@ -71,6 +73,11 @@ class ProviderInstallationControllerTests {
         }
     };
 
+    /** Neither test in this class reaches the value-rotation path. */
+    private static final SecretWriter UNUSED_WRITER = (reference, value) -> {
+        throw new UnsupportedOperationException("not exercised by these tests");
+    };
+
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
@@ -116,7 +123,8 @@ class ProviderInstallationControllerTests {
                 // rather than stand-ins for one.
                 UNUSED_INSTALLATIONS,
                 UNUSED_SECRETS,
-                new TelegramBotApiClient(new ObjectMapper()));
+                new TelegramBotApiClient(new ObjectMapper()),
+                new SecretIngressGateway(UNUSED_WRITER, "test"));
     }
 
     @Test
