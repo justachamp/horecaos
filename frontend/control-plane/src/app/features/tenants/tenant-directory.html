@@ -1,0 +1,138 @@
+<div class="head">
+  <div>
+    <h1 class="q-title">{{ i18n.t('tenants.title') }}</h1>
+    <p class="q-body-sm lead">{{ i18n.t('tenants.lead') }}</p>
+  </div>
+  <button type="button" class="q-body-sm primary" (click)="openCreate()">
+    {{ i18n.t('tenants.create.action') }}
+  </button>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  @if (tenants().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('tenants.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('tenants.column.displayName') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.slug') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.currency') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.status') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.created') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tenant of tenants(); track tenant.id) {
+          <tr>
+            <td class="q-body-sm">
+              <a [routerLink]="['/tenants', tenant.id]">{{ tenant.displayName }}</a>
+            </td>
+            <td class="q-body-sm q-tnum">{{ tenant.slug }}</td>
+            <td class="q-body-sm q-tnum">{{ tenant.defaultCurrency }}</td>
+            <td class="q-body-sm">
+              <span class="pill" [class]="'pill-' + tenant.status">{{ i18n.t(statusKey(tenant.status)) }}</span>
+            </td>
+            <td class="q-body-sm q-tnum">{{ i18n.day(asDate(tenant.createdAt)) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (nextCursor(); as cursor) {
+      <button type="button" class="q-body-sm loadMore" [disabled]="loadingMore()" (click)="loadMore()">
+        {{ loadingMore() ? i18n.t('tenants.loadingMore') : i18n.t('tenants.loadMore') }}
+      </button>
+    }
+  }
+}
+
+@if (creating()) {
+  <div class="scrim" (click)="closeCreate()"></div>
+  <form class="drawer" (submit)="submitCreate($event)">
+    <h2 class="q-subhead">{{ i18n.t('tenants.create.title') }}</h2>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.slug') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        [value]="slug()"
+        (input)="slug.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.legalName') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        [value]="legalName()"
+        (input)="legalName.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.displayName') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        [value]="displayName()"
+        (input)="displayName.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.currency') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        maxlength="3"
+        [value]="defaultCurrency()"
+        (input)="defaultCurrency.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.timezone') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        [value]="defaultTimezone()"
+        (input)="defaultTimezone.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenants.create.identityMode') }}</span>
+      <select
+        class="q-body-sm"
+        [value]="customerIdentityMode()"
+        (change)="customerIdentityMode.set($any($event.target).value)"
+      >
+        <option value="TENANT_SHARED">{{ i18n.t('tenants.create.identityMode.tenantShared') }}</option>
+        <option value="BRAND_ISOLATED">{{ i18n.t('tenants.create.identityMode.brandIsolated') }}</option>
+      </select>
+    </label>
+
+    @if (createError(); as message) {
+      <p class="q-body-sm error">{{ message }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" class="q-body-sm" (click)="closeCreate()">{{ i18n.t('tenants.create.cancel') }}</button>
+      <button type="submit" class="q-body-sm primary" [disabled]="!canSubmitCreate()">
+        {{ createSubmitting() ? i18n.t('tenants.create.submitting') : i18n.t('tenants.create.submit') }}
+      </button>
+    </div>
+  </form>
+}

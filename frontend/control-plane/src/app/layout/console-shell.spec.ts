@@ -67,18 +67,38 @@ describe('ConsoleShell', () => {
   });
 
   it('adds a section once its capability is held', () => {
+    // TENANT_READ gates both Tenants (IA 2.1) and Global lookup (IA 10.1):
+    // both are tenant-lookup screens, and the latter's own real capability
+    // (tenant-by-slug) is the same one the directory list uses.
     session.held.set(new Set<string>(['TENANT_READ']));
     fixture.detectChanges();
-    expect(railLabels()).toEqual(['Обзор', 'Клиенты']);
+    expect(railLabels()).toEqual(['Обзор', 'Клиенты', 'Глобальный поиск']);
   });
 
-  it('never renders a section the console has no screen for', () => {
-    // Onboarding is declared in SECTIONS with its capability but has no route.
+  it('never renders more rail links than routed sections, however much is granted', () => {
+    // Every SECTIONS entry that carries a capability also carries a route in
+    // this build (see sections.ts) -- unlike an earlier, coarser nav that
+    // pre-declared unrouted future sections. Holding every capability this
+    // console asks about must still never produce a link with nowhere to go.
     session.held.set(
-      new Set<string>(['TENANT_READ', 'TENANT_ONBOARDING_MANAGE', 'PLATFORM_ADMIN']),
+      new Set<string>([
+        'TENANT_READ',
+        'BRAND_READ',
+        'LEGAL_ENTITY_READ',
+        'COMMERCIAL_PLAN_READ',
+        'INTEGRATION_INSTALLATION_MANAGE',
+        'INTEGRATION_FAILURE_READ',
+        'POS_SYNC_READ',
+        'CATALOG_READ',
+        'FISCAL_DOCUMENT_READ',
+        'IAM_GRANT_MANAGE',
+        'AUDIT_READ',
+        'MIGRATION_READ',
+        'PLATFORM_ADMIN',
+      ]),
     );
     fixture.detectChanges();
-    expect(railLabels()).not.toContain('Подключение');
+    expect(railLabels()).toHaveLength(18);
   });
 
   it('names the operator in the rail', () => {

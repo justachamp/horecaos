@@ -1,0 +1,64 @@
+<h1 class="q-title">{{ i18n.t('fiscalization.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('fiscalization.lead') }}</p>
+
+<form class="picker" (submit)="load(); $event.preventDefault()">
+  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
+  <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
+</form>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  @if (warning(); as message) {
+    <p class="q-body-sm warningNotice">{{ message }}</p>
+  }
+  @if (actionMessage(); as message) {
+    <p class="q-body-sm success">{{ message }}</p>
+  }
+
+  @if (worklist().length === 0) {
+    @if (tenantId().length > 0) {
+      <p class="q-body-sm state">{{ i18n.t('fiscalization.empty') }}</p>
+    }
+  } @else {
+    <div class="toolbar">
+      <button type="button" [disabled]="selected().size === 0 || retrying()" (click)="retrySelected()">
+        {{ retrying() ? i18n.t('fiscalization.retry.submitting') : i18n.t('fiscalization.retry.selected', { count: selected().size }) }}
+      </button>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="q-caption">{{ i18n.t('fiscalization.column.order') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalization.column.type') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalization.column.reason') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalization.column.attempts') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalization.column.blockedSince') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (document of worklist(); track document.documentId) {
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                [checked]="selected().has(document.documentId)"
+                (change)="toggle(document.documentId)"
+              />
+            </td>
+            <td class="q-body-sm q-tnum">{{ document.orderId }}</td>
+            <td class="q-body-sm">{{ document.documentType }}</td>
+            <td class="q-body-sm">{{ document.reasonCode }}</td>
+            <td class="q-body-sm q-tnum">{{ document.attemptCount }}</td>
+            <td class="q-body-sm">{{ document.blockedAt ? i18n.dateTime(asDate(document.blockedAt)) : '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

@@ -1,0 +1,43 @@
+<h1 class="q-title">{{ i18n.t('fiscalReference.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('fiscalReference.lead') }}</p>
+
+@if (loaded() === false) {
+  <p class="q-body-sm warningNotice">{{ i18n.t('fiscalReference.notLoaded') }}</p>
+}
+
+<form class="picker" (submit)="search($event)">
+  <label class="q-caption">{{ i18n.t('fiscalReference.query') }}</label>
+  <input class="q-body-sm" type="text" [value]="query()" (input)="query.set($any($event.target).value)" />
+  <button type="submit" [disabled]="query().trim().length < 2">{{ i18n.t('entitlements.load') }}</button>
+</form>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (searched()) {
+  @if (results().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('fiscalReference.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('fiscalReference.column.code') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalReference.column.labelRu') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalReference.column.labelUz') }}</th>
+          <th class="q-caption">{{ i18n.t('fiscalReference.column.packages') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of results(); track row.code) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ row.code }}</td>
+            <td class="q-body-sm">{{ row.labelRu }}</td>
+            <td class="q-body-sm">{{ row.labelUz }}</td>
+            <td class="q-body-sm muted">{{ row.defaultPackageCodes.join(', ') }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

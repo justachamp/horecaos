@@ -1,0 +1,48 @@
+<h1 class="q-title">{{ i18n.t('messageFlow.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('messageFlow.lead') }}</p>
+
+<div class="notice">
+  <p class="q-caption">{{ i18n.t('messageFlow.gap') }}</p>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <div class="grid">
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('messageFlow.pending.title') }}</h2>
+      <p class="q-caption muted">{{ i18n.t('messageFlow.pending.note') }}</p>
+      @if (pending().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('messageFlow.pending.empty') }}</p>
+      } @else {
+        <ul class="list">
+          @for (event of pending(); track event.eventId) {
+            <li class="q-body-sm">
+              <span class="q-tnum">{{ event.eventId }}</span>
+              <span class="muted">{{ event.eventType }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('messageFlow.deadLetter.title') }}</h2>
+      <p class="q-caption muted">{{ i18n.t('messageFlow.deadLetter.note') }}</p>
+      @if (deadLettered().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('messageFlow.deadLetter.empty') }}</p>
+      } @else {
+        <ul class="list">
+          @for (event of deadLettered(); track event.eventId) {
+            <li class="q-body-sm">
+              <span class="q-tnum">{{ event.eventId }}</span>
+              <span class="muted">{{ event.lastErrorCode }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </div>
+}

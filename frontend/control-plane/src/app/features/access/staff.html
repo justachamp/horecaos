@@ -1,0 +1,120 @@
+<h1 class="q-title">{{ i18n.t('staff.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('staff.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('staff.platformGrants.title') }}</h2>
+    @if (platformGrants().length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('staff.platformGrants.empty') }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('staff.column.principal') }}</th>
+            <th class="q-caption">{{ i18n.t('staff.column.role') }}</th>
+            <th class="q-caption">{{ i18n.t('staff.column.status') }}</th>
+            <th class="q-caption">{{ i18n.t('staff.column.grantedBy') }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (grant of platformGrants(); track grant.id) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ grant.principalSubject }}</td>
+              <td class="q-body-sm">{{ grant.roleCode }}</td>
+              <td class="q-body-sm">{{ grant.status }}</td>
+              <td class="q-body-sm muted">{{ grant.grantedBy }}</td>
+              <td class="q-body-sm">
+                <button type="button" (click)="revoke(grant.id)">{{ i18n.t('staff.revoke.action') }}</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <form class="inlineForm" (submit)="submitGrant($event)">
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.principal')" [value]="principalSubject()" (input)="principalSubject.set($any($event.target).value)" />
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.role')" [value]="roleCode()" (input)="roleCode.set($any($event.target).value)" />
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="grantReason()" (input)="grantReason.set($any($event.target).value)" />
+      <button type="submit" [disabled]="!canSubmitGrant()">
+        {{ granting() ? i18n.t('onboarding.start.submitting') : i18n.t('staff.grant.action') }}
+      </button>
+    </form>
+    @if (grantMessage(); as message) {
+      <p class="q-body-sm">{{ message }}</p>
+    }
+  </section>
+
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('staff.tenantGrant.title') }}</h2>
+    <p class="q-body-sm muted">{{ i18n.t('staff.tenantGrant.lead') }}</p>
+    <form class="inlineForm" (submit)="submitTenantGrant($event)">
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('entitlements.tenantId')" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.principal')" [value]="tenantPrincipalSubject()" (input)="tenantPrincipalSubject.set($any($event.target).value)" />
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.role')" [value]="tenantRoleCode()" (input)="tenantRoleCode.set($any($event.target).value)" />
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="tenantGrantReason()" (input)="tenantGrantReason.set($any($event.target).value)" />
+      <button type="submit" [disabled]="!canSubmitTenantGrant()">
+        {{ tenantGranting() ? i18n.t('onboarding.start.submitting') : i18n.t('staff.grant.action') }}
+      </button>
+    </form>
+    @if (tenantGrantMessage(); as message) {
+      <p class="q-body-sm">{{ message }}</p>
+    }
+  </section>
+
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('staff.approvals.title') }}</h2>
+    <p class="q-body-sm muted">{{ i18n.t('staff.approvals.lead') }}</p>
+    <form class="inlineForm" (submit)="loadPending($event)">
+      <input class="q-body-sm" type="text" [placeholder]="i18n.t('entitlements.tenantId')" [value]="approvalsTenantId()" (input)="approvalsTenantId.set($any($event.target).value)" />
+      <button type="submit" [disabled]="approvalsTenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
+    </form>
+
+    @if (pendingLoading()) {
+      <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+    } @else if (pendingError(); as message) {
+      <p class="q-body-sm error">{{ message }}</p>
+    } @else if (pending().length > 0) {
+      <input class="q-body-sm decideReason" type="text" [placeholder]="i18n.t('staff.approvals.decisionReason')" [value]="decideReason()" (input)="decideReason.set($any($event.target).value)" />
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('staff.approvals.column.action') }}</th>
+            <th class="q-caption">{{ i18n.t('staff.approvals.column.threshold') }}</th>
+            <th class="q-caption">{{ i18n.t('staff.approvals.column.requestedBy') }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (request of pending(); track request.id) {
+            <tr>
+              <td class="q-body-sm">{{ request.actionCode }}</td>
+              <td class="q-body-sm muted">{{ request.thresholdDescription }}</td>
+              <td class="q-body-sm q-tnum">{{ request.requestedBy }}</td>
+              <td class="q-body-sm actionsCell">
+                @if (request.mayDecide) {
+                  <button type="button" [disabled]="decidingId() === request.id || decideReason().trim().length === 0" (click)="decide(request.id, 'APPROVE')">
+                    {{ i18n.t('staff.approvals.approve') }}
+                  </button>
+                  <button type="button" [disabled]="decidingId() === request.id || decideReason().trim().length === 0" (click)="decide(request.id, 'DECLINE')">
+                    {{ i18n.t('staff.approvals.decline') }}
+                  </button>
+                } @else {
+                  <span class="muted">{{ i18n.t('staff.approvals.cannotDecideOwn') }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else if (approvalsTenantId().trim().length > 0) {
+      <p class="q-body-sm muted">{{ i18n.t('staff.approvals.empty') }}</p>
+    }
+  </section>
+}

@@ -5,7 +5,13 @@ import { AuthService } from '../core/auth/auth.service';
 import { SessionContextService } from '../core/auth/session-context.service';
 import { I18nService, LOCALES, Locale } from '../core/i18n/i18n.service';
 import { MessageKey } from '../core/i18n/messages.en';
-import { ROUTED_SECTIONS } from './sections';
+import { ROUTED_SECTIONS, Section } from './sections';
+
+/** One rail row: the section, and the group heading to print above it, if any. */
+interface SectionRow {
+  readonly section: Section;
+  readonly groupHeader?: MessageKey;
+}
 
 /**
  * The CONSOLE shell: a near-black rail, a hairline-bordered content area, and
@@ -32,16 +38,24 @@ export class ConsoleShell {
   protected readonly locales = LOCALES;
 
   /**
-   * The rail, filtered to what this principal may reach.
+   * The rail, filtered to what this principal may reach, with a group heading
+   * attached to the first row of each run of same-`group` sections.
    *
    * Hiding a section is a courtesy: the API refuses the calls behind it either
    * way. Sections with no capability requirement are always shown.
    */
-  protected readonly sections = computed(() =>
-    ROUTED_SECTIONS.filter(
+  protected readonly sections = computed<readonly SectionRow[]>(() => {
+    const visible = ROUTED_SECTIONS.filter(
       (section) => section.capability === undefined || this.session.has(section.capability),
-    ),
-  );
+    );
+
+    let lastGroup: MessageKey | undefined;
+    return visible.map((section) => {
+      const groupHeader = section.group !== lastGroup ? section.group : undefined;
+      lastGroup = section.group;
+      return { section, groupHeader };
+    });
+  });
 
   protected readonly operatorName = computed(
     () => this.auth.displayName() ?? this.i18n.t('shell.unknownOperator'),

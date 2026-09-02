@@ -1,0 +1,32 @@
+<h1 class="q-title">{{ i18n.t('providerRegistry.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('providerRegistry.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('providerRegistry.column.provider') }}</th>
+        <th class="q-caption">{{ i18n.t('providerRegistry.column.category') }}</th>
+        <th class="q-caption">{{ i18n.t('providerRegistry.column.fields') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (provider of providers(); track provider.providerType) {
+        <tr>
+          <td class="q-body-sm">{{ provider.providerType }}</td>
+          <td class="q-body-sm">{{ provider.category }}</td>
+          <td class="q-body-sm">
+            @for (field of provider.fields; track field.key) {
+              <span class="fieldTag" [class.secret]="field.secret">{{ field.key }}</span>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <p class="q-caption note">{{ i18n.t('providerRegistry.note') }}</p>
+}

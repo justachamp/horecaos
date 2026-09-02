@@ -67,6 +67,17 @@
   list-style: none;
 }
 
+li.rail-group {
+  color: var(--q-inverse-ink-muted);
+  padding: 16px 16px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+li.rail-group:first-child {
+  padding-top: 4px;
+}
+
 .rail-link {
   display: block;
   padding: 10px 16px;

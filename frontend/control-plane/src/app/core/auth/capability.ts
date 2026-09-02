@@ -17,18 +17,33 @@ export type Capability =
   | 'TENANT_WRITE'
   | 'TENANT_ONBOARDING_MANAGE'
   | 'BRAND_READ'
+  | 'BRAND_WRITE'
   | 'LOCATION_READ'
+  | 'LOCATION_WRITE'
+  | 'LEGAL_ENTITY_READ'
+  | 'LEGAL_ENTITY_MANAGE'
+  | 'COMMERCIAL_PLAN_READ'
   | 'COMMERCIAL_SUBSCRIPTION_MANAGE'
   | 'COMMERCIAL_OVERRIDE_APPROVE'
+  | 'COMMERCIAL_USAGE_READ'
+  | 'COMMERCIAL_USAGE_ADJUST'
   | 'PAYMENT_READ'
   | 'REPORTING_READ'
   | 'AUDIT_READ'
   | 'IAM_GRANT_MANAGE'
+  | 'APPROVAL_DECIDE'
   | 'MIGRATION_READ'
   // The platform's own, cross-tenant view of providers and installations (IA
   // §3) -- not the tenant self-service connect/rotate flow, which ADR 0065's
   // 2026-09-02 amendment moved to the operations app's Settings section.
   | 'INTEGRATION_INSTALLATION_MANAGE'
+  | 'INTEGRATION_FAILURE_READ'
+  | 'INTEGRATION_FAILURE_RETRY'
+  | 'INTEGRATION_FAILURE_RESOLVE'
+  | 'POS_SYNC_READ'
+  | 'CATALOG_READ'
+  | 'FISCAL_DOCUMENT_READ'
+  | 'FISCAL_DOCUMENT_RESOLVE'
   | 'PLATFORM_ADMIN';
 
 /** One scope a principal holds. Mirrors CapabilityView.ScopeGrant. */

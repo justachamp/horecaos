@@ -1,0 +1,43 @@
+<h1 class="q-title">{{ i18n.t('installationsExplorer.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('installationsExplorer.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (installations().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('installationsExplorer.empty') }}</p>
+} @else {
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('installationsExplorer.column.tenant') }}</th>
+        <th class="q-caption">{{ i18n.t('installationsExplorer.column.provider') }}</th>
+        <th class="q-caption">{{ i18n.t('installationsExplorer.column.status') }}</th>
+        <th class="q-caption">{{ i18n.t('installationsExplorer.column.connection') }}</th>
+        <th class="q-caption">{{ i18n.t('installationsExplorer.column.rotated') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (installation of installations(); track installation.id) {
+        <tr>
+          <td class="q-body-sm">
+            <a [routerLink]="['/tenants', installation.tenantId]">{{ installation.tenantDisplayName }}</a>
+          </td>
+          <td class="q-body-sm">{{ installation.providerType }}</td>
+          <td class="q-body-sm">
+            <span class="pill" [class]="'pill-' + installation.status">{{ installation.status }}</span>
+          </td>
+          <td class="q-body-sm">{{ installation.lastConnectionStatus ?? i18n.t('installationsExplorer.neverChecked') }}</td>
+          <td class="q-body-sm">{{ installation.lastSecretRotatedAt ? i18n.day(asDate(installation.lastSecretRotatedAt)) : i18n.t('installationsExplorer.neverRotated') }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  @if (nextCursor(); as cursor) {
+    <button type="button" class="loadMore" [disabled]="loadingMore()" (click)="loadMore()">
+      {{ loadingMore() ? i18n.t('tenants.loadingMore') : i18n.t('tenants.loadMore') }}
+    </button>
+  }
+}

@@ -1,0 +1,36 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.panel {
+  margin-top: 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  font-family: var(--q-font-mono);
+  font-size: 12px;
+  color: var(--q-ink);
+}

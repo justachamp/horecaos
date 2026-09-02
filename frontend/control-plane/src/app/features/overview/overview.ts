@@ -1,19 +1,25 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
-import { APP_CONFIG } from '../../core/config/app-config';
-import { AuthService } from '../../core/auth/auth.service';
-import { SessionContextService } from '../../core/auth/session-context.service';
+import { IntegrationOpsApi } from '../integration-ops/integration-ops-api';
+import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { MessageKey } from '../../core/i18n/messages.en';
+import { TenantsApi } from '../tenants/tenants-api';
 
 /**
- * The landing section.
+ * IA 1.1 Platform health -- single board: tenants live, order throughput,
+ * integration failure rate, fiscalization failure rate, queue lag, SLO burn.
  *
- * Deliberately not a dashboard. The real overview is specified in the platform
- * repository and belongs to whoever builds it; what is here is a diagnostic
- * panel showing that the shell, the session and the API client are wired, and
- * it is deleted when the real screen arrives. A half-built dashboard would be
- * harder to delete and would be mistaken for a specification.
+ * Honestly partial. Real tiles: tenants by status (from the new tenant
+ * directory list, IA 2.1's own backend addition) and integration failure
+ * counts (`FailureOperationsController`, already platform-scoped). Named
+ * gaps, not silently absent: order throughput has no platform-wide read
+ * anywhere (`ReportingController` is tenant-scoped); fiscalization failure
+ * rate has no cross-tenant aggregate (`FiscalDocumentController` is
+ * tenant-scoped, the same gap IA 6.1's own screen names); queue lag and SLO
+ * burn live in Micrometer/Prometheus, not this HTTP API. `Page` carries no
+ * total count, so "tenants live" and the integration counts below are a
+ * single page's worth (up to 200), named as such rather than presented as
+ * an exact total.
  */
 @Component({
   selector: 'app-overview',
@@ -23,20 +29,57 @@ import { MessageKey } from '../../core/i18n/messages.en';
 })
 export class Overview {
   protected readonly i18n = inject(I18nService);
-  private readonly auth = inject(AuthService);
-  private readonly session = inject(SessionContextService);
-  private readonly config = inject(APP_CONFIG);
+  private readonly tenantsApi = inject(TenantsApi);
+  private readonly integrationOpsApi = inject(IntegrationOpsApi);
 
-  protected readonly rows = computed(() => [
-    { labelKey: 'overview.foundations.auth' as MessageKey, value: this.i18n.t(`auth.${this.auth.status()}` as MessageKey) },
-    { labelKey: 'overview.foundations.api' as MessageKey, value: this.config.apiBaseUrl },
-    {
-      labelKey: 'overview.foundations.capabilities' as MessageKey,
-      value: this.session.loaded()
-        ? String(this.session.current()?.capabilities.length ?? 0)
-        : this.i18n.t('overview.foundations.capabilitiesUnknown'),
-    },
-    { labelKey: 'overview.foundations.locale' as MessageKey, value: this.i18n.locale() },
-    { labelKey: 'overview.foundations.timeZone' as MessageKey, value: this.config.displayTimeZone },
-  ]);
+  protected readonly loading = signal(true);
+  protected readonly loadError = signal<string | null>(null);
+
+  protected readonly tenantsActive = signal(0);
+  protected readonly tenantsProvisioning = signal(0);
+  protected readonly tenantsOther = signal(0);
+  protected readonly tenantsSampleTruncated = signal(false);
+
+  protected readonly integrationPending = signal(0);
+  protected readonly integrationDeadLettered = signal(0);
+
+  constructor() {
+    void this.load();
+  }
+
+  private async load(): Promise<void> {
+    this.loading.set(true);
+    this.loadError.set(null);
+    try {
+      const [tenants, pending, deadLettered] = await Promise.all([
+        this.tenantsApi.listTenants(null, 200),
+        this.integrationOpsApi.outboxFailures('PENDING', 200),
+        this.integrationOpsApi.outboxFailures('DEAD_LETTER', 200),
+      ]);
+
+      let active = 0;
+      let provisioning = 0;
+      let other = 0;
+      for (const tenant of tenants.items) {
+        if (tenant.status === 'ACTIVE') {
+          active += 1;
+        } else if (tenant.status === 'PROVISIONING') {
+          provisioning += 1;
+        } else {
+          other += 1;
+        }
+      }
+      this.tenantsActive.set(active);
+      this.tenantsProvisioning.set(provisioning);
+      this.tenantsOther.set(other);
+      this.tenantsSampleTruncated.set(tenants.nextCursor !== null);
+
+      this.integrationPending.set(pending.items.length);
+      this.integrationDeadLettered.set(deadLettered.items.length);
+    } catch (error) {
+      this.loadError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loading.set(false);
+    }
+  }
 }

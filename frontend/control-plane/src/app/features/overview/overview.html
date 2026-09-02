@@ -1,15 +1,40 @@
 <h1 class="q-title">{{ i18n.t('overview.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('overview.lead') }}</p>
 
-<section class="panel">
-  <h2 class="q-subhead">{{ i18n.t('overview.foundations.title') }}</h2>
-  <dl class="grid">
-    @for (row of rows(); track row.labelKey) {
-      <div class="cell">
-        <dt class="q-caption label">{{ i18n.t(row.labelKey) }}</dt>
-        <dd class="q-body-sm value q-tnum">{{ row.value }}</dd>
-      </div>
-    }
-  </dl>
-  <p class="q-caption note">{{ i18n.t('overview.foundations.note') }}</p>
-</section>
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <div class="tiles">
+    <section class="tile">
+      <h2 class="q-caption label">{{ i18n.t('overview.tenants.title') }}</h2>
+      <p class="q-display value q-tnum">{{ tenantsActive() }}</p>
+      <p class="q-caption sub">{{ i18n.t('overview.tenants.active') }}</p>
+      <p class="q-caption sub">
+        {{ tenantsProvisioning() }} {{ i18n.t('overview.tenants.provisioning') }} &middot;
+        {{ tenantsOther() }} {{ i18n.t('overview.tenants.other') }}
+      </p>
+      @if (tenantsSampleTruncated()) {
+        <p class="q-caption truncated">{{ i18n.t('overview.sampleNote') }}</p>
+      }
+    </section>
+
+    <section class="tile">
+      <h2 class="q-caption label">{{ i18n.t('overview.integrations.title') }}</h2>
+      <p class="q-display value q-tnum">{{ integrationDeadLettered() }}</p>
+      <p class="q-caption sub">{{ i18n.t('overview.integrations.deadLettered') }}</p>
+      <p class="q-caption sub">{{ integrationPending() }} {{ i18n.t('overview.integrations.pending') }}</p>
+    </section>
+  </div>
+
+  <section class="gaps">
+    <h2 class="q-subhead">{{ i18n.t('overview.gaps.title') }}</h2>
+    <ul class="gapsList">
+      <li class="q-body-sm">{{ i18n.t('overview.gaps.throughput') }}</li>
+      <li class="q-body-sm">{{ i18n.t('overview.gaps.fiscal') }}</li>
+      <li class="q-body-sm">{{ i18n.t('overview.gaps.lag') }}</li>
+      <li class="q-body-sm">{{ i18n.t('overview.gaps.slo') }}</li>
+    </ul>
+  </section>
+}
