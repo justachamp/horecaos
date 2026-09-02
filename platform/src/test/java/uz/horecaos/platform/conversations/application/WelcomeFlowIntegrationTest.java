@@ -168,6 +168,7 @@ class WelcomeFlowIntegrationTest {
                 new ThrowingAuthorizationService(),
                 entitlements,
                 new NoSummaryOrderDirectory(),
+                () -> java.util.List.of(),
                 new NoOpContactDirectory(),
                 new NoOpStopListPort(),
                 new ThrowingStockAvailabilityPort(),
@@ -180,7 +181,8 @@ class WelcomeFlowIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$");
+                "^\\+?998\\d{9}$",
+                Duration.ofHours(6));
     }
 
     // The welcome series itself, reproduced from the ADR's observed SendPulse

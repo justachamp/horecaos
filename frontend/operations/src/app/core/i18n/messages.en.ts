@@ -108,6 +108,9 @@ export const messagesEn = {
   'orders.dialog.note.label': 'Note (optional)',
   'orders.dialog.reasonRequired': 'Enter a reason',
   'orders.dialog.dismiss': 'Dismiss',
+  'orders.dialog.reject.note.label': 'Note',
+  'orders.dialog.reject.note.requiredLabel': 'Note (required for this reason)',
+  'orders.dialog.reject.note.missing': 'This reason needs a short note',
 
   'orders.detail.reference': 'Order',
   'orders.detail.loading': 'Loading order',

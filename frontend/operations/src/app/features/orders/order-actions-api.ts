@@ -55,19 +55,25 @@ export class OrderActionsApi {
     );
   }
 
-  /** `Отклонить` (§4.3) — confirm is "yes, reason required" in the UI even though the field is optional on the wire. */
+  /**
+   * `Отклонить` (§4.3, wave 24). `reasonCode` names one of `GET
+   * .../reject-reasons`' curated codes; `note` is required exactly when that
+   * reason's `requiresNote` said so — `OrderRejectReasonDialog` is what
+   * enforces that before this is ever called.
+   */
   reject(
     scope: LocationScope,
     orderId: string,
     decisionId: string,
     reasonCode: string,
+    note?: string,
   ): Observable<DecisionResponse> {
     return this.api.post<
-      { decisionId: string; action: string; reasonCode: string },
+      { decisionId: string; action: string; reasonCode: string; note?: string },
       DecisionResponse
     >(
       operationsPaths.orderApprovalDecisions(scope, orderId),
-      command({ decisionId, action: 'REJECT', reasonCode }),
+      command({ decisionId, action: 'REJECT', reasonCode, note: note ? note : undefined }),
     );
   }
 

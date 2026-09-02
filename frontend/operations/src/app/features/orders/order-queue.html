@@ -198,13 +198,21 @@
     }
   </div>
 
-  @if (dialog()) {
+  @if (dialog()?.kind === 'cancel') {
     <q-order-reason-dialog
-      [titleKey]="dialogTitleKey()"
-      [confirmLabelKey]="dialogConfirmLabelKey()"
-      [noteEnabled]="dialogNoteEnabled()"
+      titleKey="orders.dialog.cancel.title"
+      confirmLabelKey="orders.action.cancel"
+      [noteEnabled]="true"
       [busy]="dialogBusy()"
-      (confirm)="onDialogConfirm($event)"
+      (confirm)="onCancelDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog()?.kind === 'reject') {
+    <q-order-reject-reason-dialog
+      [reasons]="rejectReasons()"
+      [busy]="dialogBusy()"
+      (confirm)="onRejectDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }

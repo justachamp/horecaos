@@ -10,13 +10,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { operationsPaths } from '../../core/api/operations-paths';
+import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
-import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ServiceStatus } from '../../shell/service-status';
 import {
@@ -30,6 +29,12 @@ import { DecisionResponse, OrderActionsApi } from './order-actions-api';
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
+import {
+  OrderRejectReasonDialog,
+  OrderRejectSubmission,
+  RejectReasonOption,
+} from './order-reject-reason-dialog';
+import { RejectReasonsApi } from './order-reject-reasons-api';
 import {
   OrderSeverity,
   compareNewestFirst,
@@ -107,7 +112,7 @@ interface RowDialogState {
  */
 @Component({
   selector: 'q-order-queue',
-  imports: [TPipe, OrderReasonDialog],
+  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -117,6 +122,7 @@ export class OrderQueue implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly counts = inject(OrderCounts);
   private readonly actionsApi = inject(OrderActionsApi);
+  private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly serviceStatus = inject(ServiceStatus);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
@@ -139,6 +145,8 @@ export class OrderQueue implements OnInit {
   protected readonly openOverflowFor = signal<string | null>(null);
   protected readonly actionNotice = signal<string | null>(null);
   protected readonly dialog = signal<RowDialogState | null>(null);
+  /** Fetched before the reject dialog opens — see {@link onActionClick}'s REJECT case. */
+  protected readonly rejectReasons = signal<readonly RejectReasonOption[]>([]);
   private readonly decisionIds = new DecisionIdRegistry();
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -371,7 +379,7 @@ export class OrderQueue implements OnInit {
         );
         return;
       case 'REJECT':
-        this.dialog.set({ orderId: order.orderId, kind: 'reject', version });
+        void this.openRejectDialog(order.orderId, version, scope);
         return;
       case 'CANCEL':
         this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
@@ -390,18 +398,22 @@ export class OrderQueue implements OnInit {
     }
   }
 
-  protected dialogTitleKey(): MessageKey {
-    return this.dialog()?.kind === 'cancel'
-      ? 'orders.dialog.cancel.title'
-      : 'orders.dialog.reject.title';
-  }
-
-  protected dialogConfirmLabelKey(): MessageKey {
-    return this.dialog()?.kind === 'cancel' ? 'orders.action.cancel' : 'orders.action.reject';
-  }
-
-  protected dialogNoteEnabled(): boolean {
-    return this.dialog()?.kind === 'cancel';
+  /** Fetch-before-open (wave 24) — see `order-detail-pane.ts`'s identical method for why. */
+  private async openRejectDialog(
+    orderId: string,
+    version: number,
+    scope: LocationScope,
+  ): Promise<void> {
+    try {
+      this.rejectReasons.set(await this.rejectReasonsApi.list(scope));
+      this.dialog.set({ orderId, kind: 'reject', version });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    }
   }
 
   protected dialogBusy(): boolean {
@@ -413,36 +425,42 @@ export class OrderQueue implements OnInit {
     this.dialog.set(null);
   }
 
-  protected onDialogConfirm(submission: OrderReasonSubmission): void {
+  protected onCancelDialogConfirm(submission: OrderReasonSubmission): void {
     const state = this.dialog();
     const scope = this.location.scope();
     if (!state || !scope) {
       return;
     }
 
-    const task =
-      state.kind === 'reject'
-        ? this.submitDecision(
-            state.orderId,
-            this.actionsApi.reject(
-              scope,
-              state.orderId,
-              this.decisionIds.idFor(state.orderId),
-              submission.reasonCode,
-            ),
-          )
-        : this.submitStateMutation(
-            state.orderId,
-            this.actionsApi.cancel(
-              scope,
-              state.orderId,
-              state.version,
-              submission.reasonCode,
-              submission.note,
-            ),
-          );
+    void this.submitStateMutation(
+      state.orderId,
+      this.actionsApi.cancel(
+        scope,
+        state.orderId,
+        state.version,
+        submission.reasonCode,
+        submission.note,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
 
-    void task.finally(() => this.dialog.set(null));
+  protected onRejectDialogConfirm(submission: OrderRejectSubmission): void {
+    const state = this.dialog();
+    const scope = this.location.scope();
+    if (!state || !scope) {
+      return;
+    }
+
+    void this.submitDecision(
+      state.orderId,
+      this.actionsApi.reject(
+        scope,
+        state.orderId,
+        this.decisionIds.idFor(state.orderId),
+        submission.reasonCode,
+        submission.note,
+      ),
+    ).finally(() => this.dialog.set(null));
   }
 
   /**

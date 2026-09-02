@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -28,6 +29,28 @@ public interface OrderDecisionPort {
 
     Decision decide(UUID tenantId, UUID orderId, DecisionCommand command);
 
+    /**
+     * Whether the order has already settled, without attempting a decision or
+     * spending a decisionId (wave 24, ADR 0060 §4).
+     *
+     * <p>The bare Reject button carries no reason yet, so {@code
+     * BotCallbackAuthorizer} cannot call {@link #decide} for it — there is
+     * nothing to decide with. But a late tap on that same stale button, after
+     * the order already settled some other way (an Approve elsewhere, a
+     * timeout), must still answer exactly as {@link #decide} always has —
+     * "already approved" — rather than presenting a reason picker for a
+     * decision that can no longer be made. This is the read that tells
+     * {@code BotCallbackAuthorizer} which of the two to do.
+     *
+     * @return empty while the order still awaits a decision — present the
+     *         reason picker; present, with {@code applied=false}, once it has
+     *         settled — answer with this directly, the same shape {@link
+     *         #decide} returns for a losing command
+     */
+    default Optional<Decision> settledDecisionIfAny(UUID tenantId, UUID orderId) {
+        return Optional.empty();
+    }
+
     enum Action {
         APPROVE,
         REJECT
@@ -43,18 +66,26 @@ public interface OrderDecisionPort {
      * @param actorId     the linked principal's Keycloak subject, resolved by
      *                    {@code BotCallbackAuthorizer} before this is ever
      *                    called — never a Telegram user id
+     * @param rejectReasonCode the reason picked from {@code RejectReasonDirectory}'s
+     *                    follow-up keyboard (wave 24). Set on a genuinely
+     *                    reasoned {@code REJECT} tap; null for {@code APPROVE}
+     *                    and also null on the one {@code REJECT} case that
+     *                    still reaches {@link #decide} without one — a late
+     *                    tap on a bare Reject button whose order has already
+     *                    settled some other way, forwarded only to record the
+     *                    attempt (see {@link #settledDecisionIfAny})
      *
-     *                    <p>Carries no channel or reason code: there is
-     *                    exactly one caller of this port, so both are fixed
-     *                    policy the adapter applies rather than something a
-     *                    caller configures.
+     *                    <p>Carries no channel: there is exactly one caller of
+     *                    this port, so it is fixed policy the adapter applies
+     *                    rather than something a caller configures.
      */
     record DecisionCommand(
             String decisionId,
             Action action,
             String actorId,
             Instant issuedAt,
-            @Nullable String correlationId) {}
+            @Nullable String correlationId,
+            @Nullable String rejectReasonCode) {}
 
     /**
      * @param applied whether this call's command is the one that moved the

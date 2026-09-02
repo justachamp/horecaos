@@ -234,7 +234,7 @@ public class OrderStateService {
                         LiabilityParty.TENANT,
                         CustomerRefund.FULL,
                         reservationCommitted(order),
-                        null)
+                        command.noteEncrypted())
                 : null;
 
         applyConsequences(
@@ -273,6 +273,21 @@ public class OrderStateService {
                 target,
                 version,
                 orders.findEffectiveDecision(tenantId, orderId).orElse(null));
+    }
+
+    /**
+     * The order's status and effective decision, read without attempting one
+     * (wave 24) — what {@code OrderDecisionPortAdapter.settledDecisionIfAny}
+     * answers a bare Reject tap with, before deciding whether to present the
+     * reason picker or the "already settled" answer {@link #decide} itself
+     * gives a losing command.
+     */
+    public Optional<CurrentState> currentState(UUID tenantId, UUID orderId) {
+        return orders.find(tenantId, orderId)
+                .map(order -> new CurrentState(
+                        order.status(),
+                        order.version(),
+                        orders.findEffectiveDecision(tenantId, orderId).orElse(null)));
     }
 
     /**
@@ -1249,6 +1264,11 @@ public class OrderStateService {
      *                   click arriving twice is one decision rather than two
      * @param issuedAt   when the operator decided, not when the command arrived;
      *                   the two differ by however long a POS channel was offline
+     * @param noteEncrypted the operator's own words on a rejection, already
+     *                   encrypted (wave 24) — ignored for an approve. Null unless
+     *                   the reason picked required one; {@link OrderOutcomeService#reject}
+     *                   is what encrypts it before this is ever called, exactly as
+     *                   it already does for a cancellation's note
      */
     public record DecisionCommand(
             String decisionId,
@@ -1258,7 +1278,8 @@ public class OrderStateService {
             String actorId,
             String reasonCode,
             Instant issuedAt,
-            @Nullable String correlationId) {}
+            @Nullable String correlationId,
+            @Nullable String noteEncrypted) {}
 
     /**
      * The result of one approve/reject command against an order.
@@ -1273,6 +1294,10 @@ public class OrderStateService {
             OrderStatus status,
             int orderVersion,
             @Nullable ApprovalDecisionRow effectiveDecision) {}
+
+    /** An order's status and effective decision, read rather than acted on (wave 24, {@link #currentState}). */
+    public record CurrentState(
+            OrderStatus status, int orderVersion, @Nullable ApprovalDecisionRow effectiveDecision) {}
 
     public static class OrderNotFoundException extends RuntimeException {
         public OrderNotFoundException(UUID orderId) {

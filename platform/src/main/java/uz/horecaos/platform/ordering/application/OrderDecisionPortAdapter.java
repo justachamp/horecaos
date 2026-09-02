@@ -1,8 +1,10 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
+import uz.horecaos.platform.ordering.domain.OrderStatus;
 
 /**
  * The {@code ordering.api} face of {@link OrderStateService#decide}
@@ -18,7 +20,16 @@ import uz.horecaos.platform.ordering.api.OrderDecisionPort;
  * decision is always {@code actorType = "USER"} (a resolved staff principal,
  * never the bot itself — see {@code BotCallbackAuthorizer}) on the
  * {@code HORECAOS_TELEGRAM_BOT} channel, the Telegram-bot counterpart of the
- * web board's hardcoded {@code "HORECAOS_OPERATIONS"}.
+ * web board's hardcoded {@code "HORECAOS_OPERATIONS"}. An approve's reason is
+ * always the fixed {@link #REASON_CODE} (wave 24 changes nothing there); a
+ * reject that names a chosen reason routes through {@link
+ * OrderOutcomeService#reject} instead — the same registry-validated,
+ * note-encrypting path {@code OperationsOrderController} calls for a web
+ * rejection, so a bot decision and a board decision stay byte-for-byte the
+ * same call there too. A reject with no reason still reaches {@link #decide},
+ * carrying {@link #REASON_CODE} like an approve does — see that method's own
+ * comment for why {@code BotCallbackAuthorizer} only ever sends one of those
+ * for a tap that is guaranteed to lose.
  */
 @Component
 public class OrderDecisionPortAdapter implements OrderDecisionPort {
@@ -37,29 +48,71 @@ public class OrderDecisionPortAdapter implements OrderDecisionPort {
     static final String DECISION_CHANNEL = "HORECAOS_TELEGRAM_BOT";
 
     private final OrderStateService orderState;
+    private final OrderOutcomeService outcomes;
 
-    public OrderDecisionPortAdapter(OrderStateService orderState) {
+    public OrderDecisionPortAdapter(OrderStateService orderState, OrderOutcomeService outcomes) {
         this.orderState = orderState;
+        this.outcomes = outcomes;
     }
 
     @Override
     public Decision decide(java.util.UUID tenantId, java.util.UUID orderId, DecisionCommand command) {
-        OrderStateService.DecisionResult result = orderState.decide(
-                tenantId,
-                orderId,
-                new OrderStateService.DecisionCommand(
-                        command.decisionId(),
-                        command.action() == Action.APPROVE
-                                ? OrderStateService.DecisionAction.APPROVE
-                                : OrderStateService.DecisionAction.REJECT,
-                        DECISION_CHANNEL,
-                        "USER",
-                        command.actorId(),
-                        REASON_CODE,
-                        command.issuedAt(),
-                        command.correlationId()));
+        // wave 24: only a REJECT that names a chosen reason routes through the
+        // registry-validated path. Two other cases reach this method with no
+        // rejectReasonCode: an APPROVE, always, and a REJECT that
+        // BotCallbackAuthorizer forwarded purely to record a late/losing tap
+        // on an already-settled order (settledDecisionIfAny found it settled
+        // before this was ever called) — that call is guaranteed to land on
+        // OrderStateService.decide's own "already settled" branch and never
+        // actually reject anything, so the fixed REASON_CODE is exactly as
+        // honest an audit reason for it as it always was for an APPROVE.
+        OrderStateService.DecisionResult result =
+                command.action() == Action.REJECT && command.rejectReasonCode() != null
+                        ? outcomes.reject(
+                                tenantId,
+                                orderId,
+                                new OrderOutcomeService.RejectCommand(
+                                        command.decisionId(),
+                                        command.rejectReasonCode(),
+                                        null,
+                                        DECISION_CHANNEL,
+                                        "USER",
+                                        command.actorId(),
+                                        command.issuedAt(),
+                                        command.correlationId()))
+                        : orderState.decide(
+                                tenantId,
+                                orderId,
+                                new OrderStateService.DecisionCommand(
+                                        command.decisionId(),
+                                        command.action() == Action.APPROVE
+                                                ? OrderStateService.DecisionAction.APPROVE
+                                                : OrderStateService.DecisionAction.REJECT,
+                                        DECISION_CHANNEL,
+                                        "USER",
+                                        command.actorId(),
+                                        REASON_CODE,
+                                        command.issuedAt(),
+                                        command.correlationId(),
+                                        null));
 
         return new Decision(result.applied(), result.status().name(), result.orderVersion(), settledBy(result));
+    }
+
+    @Override
+    public Optional<Decision> settledDecisionIfAny(java.util.UUID tenantId, java.util.UUID orderId) {
+        return orderState
+                .currentState(tenantId, orderId)
+                .filter(state -> state.status() != OrderStatus.AWAITING_APPROVAL)
+                .map(state -> new Decision(false, state.status().name(), state.orderVersion(), settledByState(state)));
+    }
+
+    private static @Nullable SettledBy settledByState(OrderStateService.CurrentState state) {
+        var effective = state.effectiveDecision();
+        if (effective == null) {
+            return null;
+        }
+        return new SettledBy(effective.decisionId(), effective.action(), effective.actorId());
     }
 
     private static @Nullable SettledBy settledBy(OrderStateService.DecisionResult result) {

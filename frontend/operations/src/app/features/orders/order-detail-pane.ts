@@ -27,6 +27,12 @@ import {
 import { describeApiError, mutationErrorNotice } from './order-errors';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
+import {
+  OrderRejectReasonDialog,
+  OrderRejectSubmission,
+  RejectReasonOption,
+} from './order-reject-reason-dialog';
+import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
 import { OrderSeverity, computeOrderSeverity, formatSeverityCaption } from './order-severity';
 import { orderStatusLabel } from './order-status';
@@ -70,7 +76,7 @@ type DialogKind = 'reject' | 'cancel';
  */
 @Component({
   selector: 'q-order-detail-pane',
-  imports: [TPipe, OrderReasonDialog],
+  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog],
   templateUrl: './order-detail-pane.html',
   styleUrl: './order-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -79,6 +85,7 @@ export class OrderDetailPane {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly actionsApi = inject(OrderActionsApi);
+  private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly revealApi = inject(OrderRevealApi);
   private readonly i18n = inject(I18n);
 
@@ -98,6 +105,8 @@ export class OrderDetailPane {
   protected readonly notice = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly dialog = signal<DialogKind | null>(null);
+  /** Fetched before the reject dialog opens — see {@link onActionClick}'s REJECT case. */
+  protected readonly rejectReasons = signal<readonly RejectReasonOption[]>([]);
   protected readonly headerOverflowOpen = signal(false);
   private readonly decisionIds = new DecisionIdRegistry();
 
@@ -271,7 +280,7 @@ export class OrderDetailPane {
         );
         return;
       case 'REJECT':
-        this.dialog.set('reject');
+        void this.openRejectDialog();
         return;
       case 'CANCEL':
         this.dialog.set('cancel');
@@ -288,47 +297,65 @@ export class OrderDetailPane {
     }
   }
 
-  protected dialogTitleKey(): MessageKey {
-    return this.dialog() === 'cancel' ? 'orders.dialog.cancel.title' : 'orders.dialog.reject.title';
-  }
-
-  protected dialogConfirmLabelKey(): MessageKey {
-    return this.dialog() === 'cancel' ? 'orders.action.cancel' : 'orders.action.reject';
-  }
-
-  protected dialogNoteEnabled(): boolean {
-    return this.dialog() === 'cancel';
+  /**
+   * Fetch-before-open (wave 24): the picker needs `GET .../reject-reasons`
+   * before it has anything to show, and opening on an empty list would be a
+   * dialog with no way to confirm. A failed fetch surfaces through the same
+   * notice band every other mutation error already uses, and the dialog
+   * never opens.
+   */
+  private async openRejectDialog(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.rejectReasons.set(await this.rejectReasonsApi.list(scope));
+      this.dialog.set('reject');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.notice.set(this.errorMessage(error));
+      } else {
+        throw error;
+      }
+    }
   }
 
   protected onDialogDismiss(): void {
     this.dialog.set(null);
   }
 
-  protected onDialogConfirm(submission: OrderReasonSubmission): void {
-    const kind = this.dialog();
+  protected onCancelDialogConfirm(submission: OrderReasonSubmission): void {
     const detail = this.order();
     const scope = this.location.scope();
-    if (!kind || !detail || !scope) {
+    if (!detail || !scope) {
       return;
     }
     const orderId = detail.value.summary.orderId;
     const version = detail.value.summary.version ?? 0;
 
-    const task =
-      kind === 'reject'
-        ? this.submitDecision(
-            this.actionsApi.reject(
-              scope,
-              orderId,
-              this.decisionIds.idFor(orderId),
-              submission.reasonCode,
-            ),
-          )
-        : this.submitStateMutation(
-            this.actionsApi.cancel(scope, orderId, version, submission.reasonCode, submission.note),
-          );
+    void this.submitStateMutation(
+      this.actionsApi.cancel(scope, orderId, version, submission.reasonCode, submission.note),
+    ).finally(() => this.dialog.set(null));
+  }
 
-    void task.finally(() => this.dialog.set(null));
+  protected onRejectDialogConfirm(submission: OrderRejectSubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    const orderId = detail.value.summary.orderId;
+
+    void this.submitDecision(
+      this.actionsApi.reject(
+        scope,
+        orderId,
+        this.decisionIds.idFor(orderId),
+        submission.reasonCode,
+        submission.note,
+      ),
+    ).finally(() => this.dialog.set(null));
   }
 
   private async submitDecision(request: Observable<DecisionResponse>): Promise<void> {

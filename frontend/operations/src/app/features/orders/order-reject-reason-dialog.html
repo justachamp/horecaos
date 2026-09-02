@@ -1,0 +1,70 @@
+<div class="reject-dialog__backdrop" data-testid="order-reject-reason-dialog">
+  <div
+    class="reject-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'orders.dialog.reject.title' | t"
+  >
+    <h2 class="q-emphasis reject-dialog__title">{{ 'orders.dialog.reject.title' | t }}</h2>
+
+    <fieldset class="reject-dialog__field" [attr.aria-invalid]="reasonMissing() ? 'true' : null">
+      <legend class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</legend>
+      @for (reason of orderedReasons(); track reason.code) {
+        <label class="reject-dialog__option">
+          <input
+            type="radio"
+            name="reject-reason"
+            [value]="reason.code"
+            [checked]="selectedCode() === reason.code"
+            (change)="select(reason.code)"
+            [attr.data-testid]="'order-reject-reason-option-' + reason.code"
+          />
+          <span>{{ label(reason) }}</span>
+        </label>
+      }
+      @if (reasonMissing()) {
+        <span class="q-caption reject-dialog__error" data-testid="order-reject-reason-required">{{
+          'orders.dialog.reasonRequired' | t
+        }}</span>
+      }
+    </fieldset>
+
+    <label class="reject-dialog__field">
+      <span class="q-body-sm">{{
+        (noteRequired()
+          ? 'orders.dialog.reject.note.requiredLabel'
+          : 'orders.dialog.reject.note.label'
+        ) | t
+      }}</span>
+      <textarea
+        class="reject-dialog__textarea"
+        rows="3"
+        [value]="note()"
+        (input)="setNote($any($event.target).value)"
+        data-testid="order-reject-reason-note"
+      ></textarea>
+      @if (noteMissing()) {
+        <span
+          class="q-caption reject-dialog__error"
+          data-testid="order-reject-reason-note-required"
+          >{{ 'orders.dialog.reject.note.missing' | t }}</span
+        >
+      }
+    </label>
+
+    <div class="reject-dialog__actions">
+      <button type="button" class="reject-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'orders.dialog.dismiss' | t }}
+      </button>
+      <button
+        type="button"
+        class="reject-dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy()"
+        data-testid="order-reject-reason-confirm"
+      >
+        {{ 'orders.action.reject' | t }}
+      </button>
+    </div>
+  </div>
+</div>

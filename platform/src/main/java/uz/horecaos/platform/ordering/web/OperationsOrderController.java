@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -31,11 +32,13 @@ import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
+import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -62,6 +65,7 @@ public class OperationsOrderController {
     private final OrderStateService orderState;
     private final OrderOutcomeService outcomes;
     private final OrderAmendmentService amendments;
+    private final RejectReasonQueryService rejectReasons;
     private final CurrentActor currentActor;
 
     public OperationsOrderController(
@@ -69,11 +73,13 @@ public class OperationsOrderController {
             OrderStateService orderState,
             OrderOutcomeService outcomes,
             OrderAmendmentService amendments,
+            RejectReasonQueryService rejectReasons,
             CurrentActor currentActor) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
         this.amendments = amendments;
+        this.rejectReasons = rejectReasons;
         this.currentActor = currentActor;
     }
 
@@ -181,6 +187,22 @@ public class OperationsOrderController {
                 .toList());
     }
 
+    @GetMapping("/reject-reasons")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The curated list a reject dialog picks from",
+            description = "Platform-owned reference data (V0119), not a tenant registry: the same "
+                    + "eight reasons for every tenant, read with ORDER_READ because the reject "
+                    + "dialog has to populate its picker for every operator who can reject an "
+                    + "order. `labels` carries every locale at once so the client renders whichever "
+                    + "one the operator is using without a second round trip.")
+    public ResponseEntity<List<RejectReasonResponse>> rejectReasons(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return ResponseEntity.ok(rejectReasons.listActive().stream()
+                .map(RejectReasonResponse::of)
+                .toList());
+    }
+
     @PostMapping("/{orderId}/approval-decisions")
     @RequiresCapability(value = Capability.ORDER_APPROVE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -188,7 +210,8 @@ public class OperationsOrderController {
             description = "The first valid command wins under compare-and-set. A command that "
                     + "loses is recorded and inert, and the response reports the outcome that "
                     + "actually settled the order — so a second click gives the same answer as "
-                    + "the first rather than an error.")
+                    + "the first rather than an error. A rejection names a code from "
+                    + "GET .../reject-reasons; OTHER additionally needs `note`.")
     public ResponseEntity<DecisionResponse> decide(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -196,30 +219,55 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody DecisionRequest body) {
 
-        var result = orderState.decide(
-                tenantId,
-                orderId,
-                new OrderStateService.DecisionCommand(
-                        body.decisionId(),
-                        body.action(),
-                        "HORECAOS_OPERATIONS",
-                        "USER",
-                        currentActor.get().subject(),
-                        body.reasonCode(),
-                        body.issuedAt() == null ? Instant.now() : body.issuedAt(),
-                        null));
+        if (body.action() == OrderStateService.DecisionAction.REJECT
+                && (body.reasonCode() == null || body.reasonCode().isBlank())) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A rejection needs a reason code");
+        }
 
-        return ResponseEntity.ok(new DecisionResponse(
-                orderId,
-                result.status().name(),
-                result.orderVersion(),
-                result.applied(),
-                result.effectiveDecision() == null
-                        ? null
-                        : result.effectiveDecision().decisionId(),
-                result.effectiveDecision() == null
-                        ? null
-                        : result.effectiveDecision().action()));
+        try {
+            OrderStateService.DecisionResult result = body.action() == OrderStateService.DecisionAction.REJECT
+                    ? outcomes.reject(
+                            tenantId,
+                            orderId,
+                            new OrderOutcomeService.RejectCommand(
+                                    body.decisionId(),
+                                    body.reasonCode(),
+                                    body.note(),
+                                    "HORECAOS_OPERATIONS",
+                                    "USER",
+                                    currentActor.get().subject(),
+                                    body.issuedAt() == null ? Instant.now() : body.issuedAt(),
+                                    null))
+                    : orderState.decide(
+                            tenantId,
+                            orderId,
+                            new OrderStateService.DecisionCommand(
+                                    body.decisionId(),
+                                    body.action(),
+                                    "HORECAOS_OPERATIONS",
+                                    "USER",
+                                    currentActor.get().subject(),
+                                    body.reasonCode(),
+                                    body.issuedAt() == null ? Instant.now() : body.issuedAt(),
+                                    null,
+                                    null));
+
+            return ResponseEntity.ok(new DecisionResponse(
+                    orderId,
+                    result.status().name(),
+                    result.orderVersion(),
+                    result.applied(),
+                    result.effectiveDecision() == null
+                            ? null
+                            : result.effectiveDecision().decisionId(),
+                    result.effectiveDecision() == null
+                            ? null
+                            : result.effectiveDecision().action()));
+        } catch (RejectReasonQueryService.UnknownRejectReasonException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        } catch (IllegalArgumentException refused) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
+        }
     }
 
     @PostMapping("/{orderId}/state-actions")
@@ -605,11 +653,19 @@ public class OperationsOrderController {
         }
     }
 
+    /**
+     * @param reasonCode required for a rejection, naming a code from {@code
+     *                   GET .../reject-reasons} (V0119); unused for an approval
+     * @param note       the operator's own words, optional and encrypted at
+     *                   rest — required when the picked reason itself does
+     *                   (OTHER today), ignored for an approval
+     */
     public record DecisionRequest(
             @NotBlank @Size(max = 64) String decisionId,
             @NotNull OrderStateService.DecisionAction action,
             @Size(max = 64) String reasonCode,
-            Instant issuedAt) {}
+            Instant issuedAt,
+            @Size(max = 2000) @Nullable String note) {}
 
     public record StateActionRequest(
             @NotNull OrderStatus targetStatus,
@@ -839,6 +895,24 @@ public class OperationsOrderController {
             boolean applied,
             @Nullable String effectiveDecisionId,
             @Nullable String effectiveAction) {}
+
+    /**
+     * One curated reject reason (V0119), as the reject dialog's picker renders it.
+     *
+     * @param labels every locale's label at once, keyed {@code ru}/{@code
+     *               uz-Latn}/{@code en} — the same shape {@code
+     *               OrderOutcomeReasonController.ReasonResponse.customerTexts}
+     *               already returns for the same reason
+     * @param requiresNote true only for {@code OTHER} today: picking it without
+     *               `note` on the decision is refused
+     */
+    public record RejectReasonResponse(
+            String code, int displayOrder, boolean requiresNote, Map<String, String> labels) {
+
+        static RejectReasonResponse of(JdbcRejectReasonStore.ReasonRow row) {
+            return new RejectReasonResponse(row.code(), row.displayOrder(), row.requiresNote(), row.labels());
+        }
+    }
 
     /**
      * One order, as the branch's queue renders it.
