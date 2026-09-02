@@ -30,6 +30,8 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.OnboardingHealth;
 import uz.horecaos.platform.tenancy.api.OnboardingHealthQuery;
 import uz.horecaos.platform.tenancy.api.TenantActivated;
@@ -40,6 +42,8 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
+import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 
 /**
  * The resumable onboarding workflow (ADR 0008).
@@ -70,6 +74,7 @@ public class OnboardingService implements OnboardingHealthQuery {
     private final ApplicationEventPublisher events;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final TenantControlPlaneService controlPlane;
 
     // A template rather than @Transactional on the pieces of runNextStep, for the
     // reason the scheduler used to get wrong: a bean calling its own annotated
@@ -83,7 +88,8 @@ public class OnboardingService implements OnboardingHealthQuery {
             ApprovalService approvals,
             ApplicationEventPublisher events,
             ObjectMapper objectMapper,
-            Clock clock) {
+            Clock clock,
+            TenantControlPlaneService controlPlane) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.handlers = handlers.stream()
@@ -93,6 +99,7 @@ public class OnboardingService implements OnboardingHealthQuery {
         this.events = events;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.controlPlane = controlPlane;
     }
 
     /** Creates a run with every step materialised, blocked ones included. */
@@ -424,6 +431,30 @@ public class OnboardingService implements OnboardingHealthQuery {
      *
      * <p>Compare-and-set on the run version, so two simultaneous activations
      * produce one transition rather than two.
+     *
+     * <p>A tenant's activation activates the tenant: every {@code DRAFT} brand
+     * and location this tenant owns is lifted to {@code ACTIVE} in the same
+     * transaction as the tenant itself — see {@link
+     * #activateDraftBrandsAndLocations}. Before this, nothing in the onboarding
+     * workflow ever called {@link TenantControlPlaneService#activateBrand} or
+     * {@link TenantControlPlaneService#activateLocation}: {@code
+     * BRANDS_AND_LOCATIONS_VALIDATE} checks only that a brand and a location
+     * exist, never their status, so a tenant reached {@code ACTIVE} while its
+     * brand and locations stayed {@code DRAFT} forever — invisible to {@code
+     * JdbcStorefrontPickupLocationStore.nearestTo}, which requires {@code
+     * ACTIVE} on tenant, brand, and location alike. The fix belongs here rather
+     * than in a {@code *_VALIDATE} step (a validator that mutates state
+     * contradicts what every other step in {@link OnboardingStep.Phase#VALIDATING}
+     * promises: it reports readiness, it does not create it) or in {@code
+     * DEFAULT_CONFIGURATION_APPLY} (which runs before {@code
+     * BRANDS_AND_LOCATIONS_VALIDATE} even confirms a brand or location exists,
+     * and never re-runs once completed, so it could only ever catch units
+     * created before step 3 ran). This method is also the only point in the
+     * whole workflow that executes inside a real, human-authenticated HTTP
+     * request rather than the background scheduler — {@link #claimNextStep}
+     * never lets a worker claim {@code TENANT_ACTIVATE} — which is what makes
+     * calling capability-checked, currently-audited application services safe
+     * here and nowhere else in this class.
      */
     @Transactional
     public ActivationOutcome activate(UUID runId, ActorRef actor, String reason) {
@@ -476,6 +507,8 @@ public class OnboardingService implements OnboardingHealthQuery {
                 .param("id", tenantId)
                 .update();
 
+        activateDraftBrandsAndLocations(new TenantId(tenantId));
+
         audit.record(AuditFact.of("tenant.activated", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -490,6 +523,47 @@ public class OnboardingService implements OnboardingHealthQuery {
         events.publishEvent(new TenantActivated(UUID.randomUUID(), new TenantId(tenantId), runId, "ACTIVE", now));
 
         return new ActivationOutcome(true, "ACTIVATED", List.of(), null);
+    }
+
+    /**
+     * Lifts every {@code DRAFT} brand and location this tenant owns to {@code
+     * ACTIVE}, alongside the tenant itself. See {@link #activate}'s own javadoc
+     * for why this lives here instead of a validating step or the
+     * configuration-apply step.
+     *
+     * <p>Reused rather than reimplemented: {@link
+     * TenantControlPlaneService#activateBrand} and {@link
+     * TenantControlPlaneService#activateLocation} already carry the ADR 0027
+     * audit fact and the idempotent no-op-when-ACTIVE behavior this transition
+     * needs, and this method is what {@code tools/seed-horecaos-tenant} used to
+     * have to call by hand.
+     *
+     * <p>Deliberately gated to {@code DRAFT} here — one level stricter than
+     * what {@link TenantControlPlaneService#activateBrand}/{@code
+     * activateLocation} alone would allow. {@code Brand#activate}/{@code
+     * Location#activate} both accept a transition from {@code SUSPENDED} too,
+     * because a platform administrator manually reactivating a suspended unit
+     * is a real, separate action those domain methods must go on supporting.
+     * A unit a tenant deliberately suspended after going live must never be
+     * silently resurrected merely because this same tenant's onboarding run —
+     * or a later one, for a tenant that re-onboards to add a brand or location
+     * — reaches this activation point again; {@code ACTIVATE}'s own
+     * compare-and-set already limits how often that can happen for one run, but
+     * nothing stops a second run for the same tenant, so the status check
+     * carries the real guarantee.
+     */
+    private void activateDraftBrandsAndLocations(TenantId tenantId) {
+        for (var brand : controlPlane.getBrands(tenantId)) {
+            BrandId brandId = new BrandId(brand.id());
+            if (brand.status() == OperatingUnitStatus.DRAFT) {
+                controlPlane.activateBrand(tenantId, brandId);
+            }
+            for (var location : controlPlane.getLocations(tenantId, brandId)) {
+                if (location.status() == OperatingUnitStatus.DRAFT) {
+                    controlPlane.activateLocation(tenantId, brandId, new LocationId(location.id()));
+                }
+            }
+        }
     }
 
     /** {@link OnboardingHealthQuery}: the same counts {@code OnboardingScheduler}'s own gauges read. */

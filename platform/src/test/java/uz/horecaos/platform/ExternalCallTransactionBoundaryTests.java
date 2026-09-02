@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +40,9 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.media.application.MediaAssetService;
@@ -64,7 +68,11 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentTrans
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingService;
+import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
 /**
  * No pooled database connection is held across a call to something we do not
@@ -329,6 +337,60 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
+        TenantControlPlaneStore tenantControlPlaneStore(JdbcClient client) {
+            return new JdbcTenantControlPlaneStore(client);
+        }
+
+        /** A platform administrator: what actually calls {@code POST .../activate}. */
+        @Bean
+        CurrentActor currentActor() {
+            return () -> new AuthenticatedActor("platform-admin-1", Set.of("platform-admin"), Map.of());
+        }
+
+        /** Never actually consulted: the platform-admin actor above bypasses every check it would answer. */
+        @Bean
+        AuthorizationService authorizationService() {
+            return new AuthorizationService() {
+                @Override
+                public boolean has(
+                        String subject,
+                        uz.horecaos.platform.iam.api.Capability capability,
+                        uz.horecaos.platform.iam.api.ResourceScope scope) {
+                    return false;
+                }
+
+                @Override
+                public void require(
+                        String subject,
+                        uz.horecaos.platform.iam.api.Capability capability,
+                        uz.horecaos.platform.iam.api.ResourceScope scope) {
+                    throw new AuthorizationService.AccessDeniedException(capability, scope);
+                }
+
+                @Override
+                public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, UUID tenantId) {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+
+        @Bean
+        TenantAccessPolicy tenantAccessPolicy(CurrentActor currentActor, AuthorizationService authorization) {
+            return new TenantAccessPolicy(currentActor, authorization, false);
+        }
+
+        @Bean
+        TenantControlPlaneService tenantControlPlaneService(
+                TenantControlPlaneStore store,
+                TenantAccessPolicy accessPolicy,
+                Clock clock,
+                ApplicationEventPublisher events,
+                AuditRecorder recorder,
+                CurrentActor currentActor) {
+            return new TenantControlPlaneService(store, accessPolicy, clock, events, recorder, currentActor);
+        }
+
+        @Bean
         OnboardingService onboardingService(
                 JdbcClient client,
                 TransactionTemplate transactions,
@@ -337,9 +399,10 @@ class ExternalCallTransactionBoundaryTests {
                 ApprovalService approvals,
                 ApplicationEventPublisher events,
                 ObjectMapper mapper,
-                Clock clock) {
+                Clock clock,
+                TenantControlPlaneService controlPlane) {
             return new OnboardingService(
-                    client, transactions, List.of(handler), recorder, approvals, events, mapper, clock);
+                    client, transactions, List.of(handler), recorder, approvals, events, mapper, clock, controlPlane);
         }
 
         @Bean
