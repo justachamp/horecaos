@@ -1,0 +1,487 @@
+<div class="payments">
+  <h1 class="q-title">{{ 'finance.payments.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'finance.payments.lead' | t }}</p>
+
+  <section class="lookup">
+    <label class="q-caption" for="order-id">{{ 'finance.payments.lookup.label' | t }}</label>
+    <div class="lookup__row">
+      <input
+        id="order-id"
+        class="q-body field"
+        type="text"
+        [value]="orderIdInput()"
+        (input)="orderIdInput.set($any($event.target).value)"
+        [placeholder]="'finance.payments.lookup.placeholder' | t"
+      />
+      <button type="button" class="q-body primary" [disabled]="!canLookup()" (click)="lookup()">
+        {{ 'finance.payments.lookup.action' | t }}
+      </button>
+    </div>
+    @if (orderDenied()) {
+      <p class="q-body-sm denied">{{ 'finance.scope.denied' | t }}</p>
+    } @else if (orderError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+  </section>
+
+  @if (loadingOrder()) {
+    <p class="q-body-sm">{{ 'finance.payments.loading' | t }}</p>
+  } @else if (payment(); as order) {
+    <section class="order-summary">
+      <h2 class="q-subhead">
+        {{ 'finance.payments.order.title' | t: { number: order.publicOrderNumber } }}
+      </h2>
+      <dl class="kv">
+        <dt class="q-caption">{{ 'finance.payments.order.status' | t }}</dt>
+        <dd class="q-body-sm">{{ order.orderStatus }}</dd>
+        <dt class="q-caption">{{ 'finance.payments.order.total' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ money(order.orderTotal) }}</dd>
+      </dl>
+
+      @if (order.intent; as intent) {
+        <dl class="kv">
+          <dt class="q-caption">{{ 'finance.payments.intent.tender' | t }}</dt>
+          <dd class="q-body-sm">{{ intent.tender }} · {{ intent.method }}</dd>
+          @if (intent.providerType) {
+            <dt class="q-caption">{{ 'finance.payments.intent.provider' | t }}</dt>
+            <dd class="q-body-sm">{{ intent.providerType }}</dd>
+          }
+          <dt class="q-caption">{{ 'finance.payments.intent.amount' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(intent.amount) }}</dd>
+          <dt class="q-caption">{{ 'finance.payments.intent.status' | t }}</dt>
+          <dd class="q-body-sm">
+            <span class="status-badge">{{ intent.status }}</span>
+          </dd>
+          <dt class="q-caption">{{ 'finance.payments.captured' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(order.captured) }}</dd>
+          <dt class="q-caption">{{ 'finance.payments.returned' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(order.returned) }}</dd>
+        </dl>
+        <p class="q-body-sm note">{{ 'finance.payments.intent.splitTenderNote' | t }}</p>
+
+        @if (order.attempts.length > 0) {
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'finance.payments.attempts.provider' | t }}</th>
+                <th class="q-caption">{{ 'finance.payments.attempts.status' | t }}</th>
+                <th class="q-caption">{{ 'finance.payments.attempts.presentation' | t }}</th>
+                <th class="q-caption">{{ 'finance.payments.attempts.amount' | t }}</th>
+                <th class="q-caption">{{ 'finance.payments.attempts.createdAt' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (attempt of order.attempts; track attempt.attemptId) {
+                <tr>
+                  <td class="q-body-sm">{{ attempt.providerType }}</td>
+                  <td class="q-body-sm">
+                    <span class="status-badge">{{ attempt.status }}</span>
+                  </td>
+                  <td class="q-body-sm">{{ attempt.presentationKind ?? '—' }}</td>
+                  <td class="q-body-sm q-mono">{{ money(attempt.amount) }}</td>
+                  <td class="q-body-sm">{{ attempt.createdAt }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        @if (intent.tender === 'PROVIDER') {
+          <div class="toolbar">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="showReissueForm.set(!showReissueForm())"
+            >
+              {{ 'finance.payments.reissue.action' | t }}
+            </button>
+          </div>
+          @if (showReissueForm()) {
+            <div class="form">
+              <label class="q-caption" for="reissue-kind">{{
+                'finance.payments.reissue.kind.label' | t
+              }}</label>
+              <select
+                id="reissue-kind"
+                class="q-body field"
+                [value]="reissueKind()"
+                (change)="reissueKind.set($any($event.target).value)"
+              >
+                <option value="PAYMENT_LINK">{{ 'finance.payments.reissue.kind.link' | t }}</option>
+                <option value="INVOICE_PUSH">{{ 'finance.payments.reissue.kind.push' | t }}</option>
+              </select>
+
+              @if (reissueKind() === 'INVOICE_PUSH') {
+                <label class="q-caption" for="reissue-phone">{{
+                  'finance.payments.reissue.phone.label' | t
+                }}</label>
+                <input
+                  id="reissue-phone"
+                  class="q-body field"
+                  type="text"
+                  [value]="reissuePhone()"
+                  (input)="reissuePhone.set($any($event.target).value)"
+                  [placeholder]="'finance.payments.reissue.phone.placeholder' | t"
+                />
+              }
+
+              @if (reissueError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              }
+              @if (reissueResult(); as result) {
+                <p class="q-body-sm success" role="status">
+                  {{
+                    result.checkoutUrl
+                      ? ('finance.payments.reissue.result.link' | t: { url: result.checkoutUrl })
+                      : ('finance.payments.reissue.result.push' | t)
+                  }}
+                </p>
+              }
+
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="q-body secondary"
+                  (click)="showReissueForm.set(false)"
+                  [disabled]="reissueSubmitting()"
+                >
+                  {{ 'finance.payments.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body primary"
+                  (click)="submitReissue()"
+                  [disabled]="!canReissue()"
+                >
+                  {{
+                    reissueSubmitting()
+                      ? ('finance.payments.reissue.submitting' | t)
+                      : ('finance.payments.reissue.submit' | t)
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      } @else {
+        <p class="q-body-sm note">{{ 'finance.payments.intent.none' | t }}</p>
+      }
+
+      <div class="toolbar">
+        <h2 class="q-subhead">{{ 'finance.payments.remedy.title' | t }}</h2>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="showRemedyForm.set(!showRemedyForm())"
+        >
+          {{ 'finance.payments.remedy.action' | t }}
+        </button>
+      </div>
+
+      @if (showRemedyForm()) {
+        <div class="form">
+          <label class="q-caption" for="remedy-kind">{{
+            'finance.payments.remedy.kind.label' | t
+          }}</label>
+          <select
+            id="remedy-kind"
+            class="q-body field"
+            [value]="remedyKind()"
+            (change)="remedyKind.set($any($event.target).value)"
+          >
+            <option value="ORDER_REFUND">{{ 'finance.remedyType.ORDER_REFUND' | t }}</option>
+            <option value="DELIVERY_FEE_REIMBURSEMENT">
+              {{ 'finance.remedyType.DELIVERY_FEE_REIMBURSEMENT' | t }}
+            </option>
+          </select>
+
+          <label class="q-caption" for="remedy-amount">{{
+            'finance.payments.remedy.amount.label' | t: { currency: order.orderTotal.currency }
+          }}</label>
+          <input
+            id="remedy-amount"
+            class="q-body field"
+            type="number"
+            min="1"
+            step="1"
+            [value]="remedyAmount()"
+            (input)="remedyAmount.set($any($event.target).value)"
+          />
+
+          <label class="q-caption" for="remedy-channel">{{
+            'finance.payments.remedy.channel.label' | t
+          }}</label>
+          <select
+            id="remedy-channel"
+            class="q-body field"
+            [value]="remedyChannel()"
+            (change)="remedyChannel.set($any($event.target).value)"
+          >
+            <option value="CASH_DRAWER">{{ 'finance.executionChannel.CASH_DRAWER' | t }}</option>
+            <option value="PROVIDER_CONSOLE">
+              {{ 'finance.executionChannel.PROVIDER_CONSOLE' | t }}
+            </option>
+            <option value="BANK_TRANSFER">
+              {{ 'finance.executionChannel.BANK_TRANSFER' | t }}
+            </option>
+          </select>
+
+          @if (remedyChannel() === 'PROVIDER_CONSOLE') {
+            <label class="q-caption" for="remedy-provider-reference">{{
+              'finance.payments.remedy.providerReference.label' | t
+            }}</label>
+            <input
+              id="remedy-provider-reference"
+              class="q-body field"
+              type="text"
+              [value]="remedyProviderReference()"
+              (input)="remedyProviderReference.set($any($event.target).value)"
+            />
+          }
+
+          <label class="q-caption" for="remedy-reason-code">{{
+            'finance.payments.remedy.reasonCode.label' | t
+          }}</label>
+          <input
+            id="remedy-reason-code"
+            class="q-body field"
+            type="text"
+            [value]="remedyReasonCode()"
+            (input)="remedyReasonCode.set($any($event.target).value)"
+          />
+
+          <label class="q-caption" for="remedy-reason">{{
+            'finance.payments.remedy.reason.label' | t
+          }}</label>
+          <input
+            id="remedy-reason"
+            class="q-body field"
+            type="text"
+            [value]="remedyReason()"
+            (input)="remedyReason.set($any($event.target).value)"
+          />
+
+          @if (remedyError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="showRemedyForm.set(false)"
+              [disabled]="remedySubmitting()"
+            >
+              {{ 'finance.payments.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="submitRemedy()"
+              [disabled]="!canSubmitRemedy()"
+            >
+              {{
+                remedySubmitting()
+                  ? ('finance.payments.remedy.submitting' | t)
+                  : ('finance.payments.remedy.submit' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payments.history.type' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.amount' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.basis' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.verification' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.recordedBy' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (remedy of remedies(); track remedy.remedyId) {
+            <tr>
+              <td class="q-body-sm">{{ remedyTypeLabel(remedy.remedyType) }}</td>
+              <td class="q-body-sm q-mono">{{ money(remedy.amount) }}</td>
+              <td class="q-body-sm">{{ settlementBasisLabel(remedy.settlementBasis) }}</td>
+              <td class="q-body-sm">
+                {{ verificationStateLabel(remedy.verificationState) }}
+              </td>
+              <td class="q-body-sm">{{ remedy.recordedBy ?? '—' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'finance.payments.history.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  <section class="unverified">
+    <h2 class="q-subhead">{{ 'finance.payments.unverified.title' | t }}</h2>
+    <p class="q-body-sm lead">{{ 'finance.payments.unverified.lead' | t }}</p>
+
+    @if (unverifiedLoading()) {
+      <p class="q-body-sm">{{ 'finance.payments.loading' | t }}</p>
+    } @else if (unverifiedDenied()) {
+      <p class="q-body-sm denied">{{ 'finance.scope.denied' | t }}</p>
+    } @else if (unverifiedError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payments.unverified.order' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.type' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.amount' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.unverified.recordedAt' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (remedy of unverified(); track remedy.remedyId) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ remedy.orderId }}</td>
+              <td class="q-body-sm">{{ remedyTypeLabel(remedy.remedyType) }}</td>
+              <td class="q-body-sm q-mono">{{ money(remedy.attestedMoney) }}</td>
+              <td class="q-body-sm">{{ remedy.recordedAt ?? '—' }}</td>
+              <td class="q-body-sm">
+                <button type="button" class="q-body-sm link" (click)="startVerify(remedy)">
+                  {{ 'finance.payments.verify.action' | t }}
+                </button>
+              </td>
+            </tr>
+            @if (verifyingRemedyId() === remedy.remedyId) {
+              <tr>
+                <td colspan="5">
+                  <div class="form form--inline">
+                    <label class="q-caption" for="verify-source">{{
+                      'finance.payments.verify.source.label' | t
+                    }}</label>
+                    <input
+                      id="verify-source"
+                      class="q-body field"
+                      type="text"
+                      [value]="verifySource()"
+                      (input)="verifySource.set($any($event.target).value)"
+                    />
+                    <label class="q-caption" for="verify-reason">{{
+                      'finance.payments.verify.reason.label' | t
+                    }}</label>
+                    <input
+                      id="verify-reason"
+                      class="q-body field"
+                      type="text"
+                      [value]="verifyReason()"
+                      (input)="verifyReason.set($any($event.target).value)"
+                    />
+                    @if (verifyError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                    <div class="form__actions">
+                      <button
+                        type="button"
+                        class="q-body secondary"
+                        (click)="verifyingRemedyId.set(null)"
+                      >
+                        {{ 'finance.payments.cancel' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="q-body secondary"
+                        [disabled]="!canSubmitVerification()"
+                        (click)="submitVerification('DISPUTED')"
+                      >
+                        {{ 'finance.payments.verify.dispute' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="q-body primary"
+                        [disabled]="!canSubmitVerification()"
+                        (click)="submitVerification('CONFIRMED')"
+                      >
+                        {{ 'finance.payments.verify.confirm' | t }}
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'finance.payments.unverified.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+
+  <section class="totals">
+    <h2 class="q-subhead">{{ 'finance.payments.totals.title' | t }}</h2>
+    <div class="totals__range">
+      <label class="q-caption" for="totals-from">{{ 'finance.payments.totals.from' | t }}</label>
+      <input
+        id="totals-from"
+        class="q-body field"
+        type="date"
+        [value]="totalsFrom()"
+        (input)="totalsFrom.set($any($event.target).value)"
+      />
+      <label class="q-caption" for="totals-to">{{ 'finance.payments.totals.to' | t }}</label>
+      <input
+        id="totals-to"
+        class="q-body field"
+        type="date"
+        [value]="totalsTo()"
+        (input)="totalsTo.set($any($event.target).value)"
+      />
+      <button type="button" class="q-body secondary" (click)="reloadTotals()">
+        {{ 'finance.payments.totals.reload' | t }}
+      </button>
+    </div>
+
+    @if (totalsLoading()) {
+      <p class="q-body-sm">{{ 'finance.payments.loading' | t }}</p>
+    } @else if (totalsError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payments.history.type' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.totals.count' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.history.amount' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.totals.attested' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.totals.platformSettled' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.totals.unverified' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of totals(); track row.remedyType) {
+            <tr>
+              <td class="q-body-sm">{{ remedyTypeLabel(row.remedyType) }}</td>
+              <td class="q-body-sm q-mono">{{ row.remedyCount }}</td>
+              <td class="q-body-sm q-mono">{{ money(row.amount) }}</td>
+              <td class="q-body-sm q-mono">{{ money(row.attestedMoney) }}</td>
+              <td class="q-body-sm q-mono">{{ money(row.platformSettledMoney) }}</td>
+              <td class="q-body-sm q-mono">{{ money(row.unverified) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">{{ 'finance.payments.totals.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+</div>

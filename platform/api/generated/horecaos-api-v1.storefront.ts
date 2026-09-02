@@ -300,20 +300,6 @@ export interface PaymentSessionRequest {
   returnUrl?: string;
 }
 
-export interface PaymentSessionResponse {
-  amountMinor?: number;
-  attemptId?: string;
-  checkoutUrl?: string;
-  currency?: string;
-  expiresAt?: string;
-  merchantTransId?: string;
-  presentation?: string;
-  presentationCount?: number;
-  provider?: string;
-  qrPayload?: string;
-  rePresented?: boolean;
-}
-
 export interface PickupLocation {
   acceptsScheduledOrders?: boolean;
   addressLine?: string;
@@ -461,6 +447,20 @@ export interface StorefrontOrderingControllerOrderSummaryResponse {
   version?: number;
 }
 
+export interface StorefrontPaymentControllerPaymentSessionResponse {
+  amountMinor?: number;
+  attemptId?: string;
+  checkoutUrl?: string;
+  currency?: string;
+  expiresAt?: string;
+  merchantTransId?: string;
+  presentation?: string;
+  presentationCount?: number;
+  provider?: string;
+  qrPayload?: string;
+  rePresented?: boolean;
+}
+
 export interface SubmitCodeRequest {
   code: string;
 }
@@ -509,7 +509,7 @@ export interface Operations {
   "listOrders": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontOrderingControllerOrderSummaryResponse } };
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
-  "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": PaymentSessionResponse } };
+  "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };

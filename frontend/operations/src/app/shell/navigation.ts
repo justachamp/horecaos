@@ -101,6 +101,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         spec: 'operations-spec/statistics.md',
       },
       {
+        path: '/finance',
+        label: 'shell.nav.finance',
+        badge: null,
+        spec: 'operations-spec/finance.md',
+      },
+      {
         path: '/catalog',
         label: 'shell.nav.catalog',
         badge: null,

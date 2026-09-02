@@ -171,6 +171,9 @@ public enum PlatformRole {
                     RECOVERY_CASE_MANAGE,
                     RECOVERY_REMEDY_APPROVE,
                     PAYMENT_READ,
+                    // ADR 0013: re-issuing a payment link or pushing an invoice to an
+                    // alternate phone on a customer's behalf.
+                    PAYMENT_INITIATE,
                     PAYMENT_ATTEMPT_RESOLVE,
                     PAYMENT_MERCHANT_BINDING_MANAGE,
                     FISCAL_DOCUMENT_READ,
@@ -382,6 +385,7 @@ public enum PlatformRole {
                     // "The people qualified to read a provider's status response are
                     // finance and integration staff" — ADR 0013 on the uncertain attempt.
                     PAYMENT_READ,
+                    PAYMENT_INITIATE,
                     PAYMENT_ATTEMPT_RESOLVE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,

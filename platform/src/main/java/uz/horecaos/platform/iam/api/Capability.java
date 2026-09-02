@@ -149,6 +149,25 @@ public enum Capability {
     PAYMENT_READ("payment.read", "payment", "read"),
 
     /**
+     * ADR 0013 and ADR 0031: opening or re-presenting a payment checkout surface
+     * on somebody else's behalf — an operator re-issuing a payment link or
+     * pushing an invoice to a phone number the order was not placed with.
+     *
+     * <p>{@code StorefrontPaymentController}'s own Javadoc named this capability
+     * before it existed: "delegated staff authority over somebody else's
+     * payment; no customer principal holds it or is meant to". A customer opens
+     * their own checkout under {@link uz.horecaos.platform.web.idempotency.Idempotent}
+     * alone, with no capability check, because the ownership check on the order
+     * itself is the authorization decision there. Staff have no order to own, so
+     * the capability is what stands in its place. Separate from {@link
+     * #PAYMENT_READ}: reading that a payment is stuck is not the same power as
+     * pushing a second invoice at it, and finance's own call-centre counterpart,
+     * support, is read-only on payments today precisely because this capability
+     * did not exist to grant instead.
+     */
+    PAYMENT_INITIATE("payment.initiate", "payment", "initiate"),
+
+    /**
      * ADR 0013: settling a payment attempt whose outcome is unknown.
      *
      * <p>Its own capability, and a narrow one, because of what the action is. An

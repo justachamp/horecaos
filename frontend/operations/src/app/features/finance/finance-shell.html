@@ -1,0 +1,19 @@
+<div class="finance-shell">
+  <nav class="finance-shell__tabs" [attr.aria-label]="'finance.nav.label' | t">
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/payments"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.payments' | t }}</a
+    >
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/fiscal"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.fiscal' | t }}</a
+    >
+  </nav>
+  <div class="finance-shell__body">
+    <router-outlet />
+  </div>
+</div>

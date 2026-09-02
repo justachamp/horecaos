@@ -48,8 +48,11 @@ describe('Shell', () => {
 
   it('renders every navigation entry', () => {
     const items = fixture.nativeElement.querySelectorAll('.rail__item');
-    // Twelve since ADR 0059 stage 2 added the inbox entry to the Service group.
-    expect(items.length).toBe(12);
+    // Thirteen since wave 34 added Finance to the Business group (IA §8,
+    // 8.1 and 8.2 only — the tier legend gives Marketing §6 no P-tier row at
+    // all this wave, so it has no rail entry, the same silent omission
+    // Settings 10.11 gets).
+    expect(items.length).toBe(13);
   });
 
   it('hides the late indicator when nothing is late', () => {
