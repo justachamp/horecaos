@@ -1,10 +1,26 @@
 # ADR 0065: Tenants manage their own integrations — secrets enter once, through a write-only door
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. The APIs it fronts
-  largely exist (provider installations, merchant bindings, the wave-13
-  rotate-reference endpoint); no tenant-facing screen manages any of them, and
-  no API accepts a secret value at all.
+- Implementation status: Partial — the write-only door is built and its
+  contract is tested as a contract (wave 25): `SecretIngressController` mints
+  platform-generated references over an allow-listed category set, the raw
+  value is proven absent from logs by a root-appender scan across a real
+  write, absent from the audit fact, and unreadable by construction (a test
+  hits the read path and expects it not to exist); value-based rotation
+  covers installations (verify-before-write for Telegram — a rejected token
+  never touches the store) and merchant bindings (always unverified: neither
+  Click nor Payme offers a harmless call, verified against the adapters);
+  `ConnectFieldCatalog` declares per-provider fields so screens render from
+  the adapter's declaration; the control-plane Integrations section lists,
+  connects, and rotates with masked display and last-rotated (V0120);
+  `docs/runbooks/connect-click-payme-sandbox.md` walks the screens
+  end to end. Not built: brand/legal-entity/installation picker UI (manual id
+  entry today), an installation archive action (the status enum's RETIRED has
+  no transition anywhere), a binding step inside the connect drawer. Not
+  proven: the real Click/Payme sandbox round trip — the runbook is written
+  and marked never-executed, awaiting the owner's credentials. A recorded
+  tension: the merchant-bindings API sits on the operations OpenAPI surface
+  while its screen lives in control-plane (flagged in code, not resolved).
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed tenant self-service for integrations and
