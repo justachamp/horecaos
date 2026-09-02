@@ -1,0 +1,31 @@
+<div class="delivery-shell">
+  <nav class="delivery-shell__tabs" [attr.aria-label]="'delivery.nav.label' | t">
+    <a
+      class="delivery-shell__tab q-body-sm"
+      routerLink="/delivery/dispatch"
+      routerLinkActive="delivery-shell__tab--active"
+      >{{ 'delivery.nav.dispatch' | t }}</a
+    >
+    <a
+      class="delivery-shell__tab q-body-sm"
+      routerLink="/delivery/zones"
+      routerLinkActive="delivery-shell__tab--active"
+      >{{ 'delivery.nav.zones' | t }}</a
+    >
+    <a
+      class="delivery-shell__tab q-body-sm"
+      routerLink="/delivery/tariffs"
+      routerLinkActive="delivery-shell__tab--active"
+      >{{ 'delivery.nav.tariffs' | t }}</a
+    >
+    <a
+      class="delivery-shell__tab q-body-sm"
+      routerLink="/delivery/dispatch-rules"
+      routerLinkActive="delivery-shell__tab--active"
+      >{{ 'delivery.nav.dispatchRules' | t }}</a
+    >
+  </nav>
+  <div class="delivery-shell__body">
+    <router-outlet />
+  </div>
+</div>

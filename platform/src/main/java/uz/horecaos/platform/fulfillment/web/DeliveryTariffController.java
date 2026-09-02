@@ -15,13 +15,16 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffService.TariffDetail;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
@@ -32,6 +35,7 @@ import uz.horecaos.platform.fulfillment.domain.tariff.RoundingRule;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffDiscount;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffTimeRule;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore.TariffSummaryRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
@@ -54,6 +58,29 @@ public class DeliveryTariffController {
 
     public DeliveryTariffController(DeliveryTariffService tariffs) {
         this.tariffs = tariffs;
+    }
+
+    @GetMapping
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "Every rate table this brand has registered", description = "Operations §3.7.")
+    public ResponseEntity<List<TariffSummaryResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(tariffs.listTariffs(tenantId, brandId).stream()
+                .map(TariffSummaryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/{tariffId}")
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "One tariff's live bands, time rules and discounts",
+            description = "activeVersion is absent for a tariff drafted but never activated.")
+    public ResponseEntity<TariffDetailResponse> detail(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID tariffId) {
+        try {
+            return ResponseEntity.ok(TariffDetailResponse.of(tariffs.tariffDetail(tenantId, brandId, tariffId)));
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
     }
 
     @PostMapping
@@ -288,4 +315,137 @@ public class DeliveryTariffController {
     public record TariffView(UUID tariffId, String code, boolean brandDefault) {}
 
     public record VersionView(UUID tariffId, int version, String status) {}
+
+    /**
+     * One row of {@link #list}. {@code activeVersion} and every field after it
+     * are null together for a tariff drafted but never activated — the same
+     * "not yet priced" state {@code ZoneSummaryResponse} carries for a zone.
+     */
+    public record TariffSummaryResponse(
+            UUID tariffId,
+            String code,
+            String name,
+            String status,
+            boolean brandDefault,
+            @Nullable Integer activeVersion,
+            @Nullable String currency,
+            @Nullable String feeSource,
+            @Nullable String distanceMode,
+            @Nullable Integer maxDistanceMeters) {
+
+        static TariffSummaryResponse of(TariffSummaryRow row) {
+            return new TariffSummaryResponse(
+                    row.id(),
+                    row.code(),
+                    row.name(),
+                    row.status(),
+                    row.brandDefault(),
+                    row.activeVersion(),
+                    row.currency(),
+                    row.feeSource(),
+                    row.distanceMode(),
+                    row.maxDistanceMeters());
+        }
+    }
+
+    public record BandView(String bandSet, int fromMeters, int toMeters, long baseMinor, long perKmMinor) {
+
+        static BandView of(TariffBand band) {
+            return new BandView(
+                    band.bandSet(), band.fromMeters(), band.toMeters(), band.baseMinor(), band.perKmMinor());
+        }
+    }
+
+    public record TimeRuleView(
+            int priority,
+            int dayMask,
+            LocalTime fromTime,
+            LocalTime toTime,
+            @Nullable String bandSet,
+            int multiplierBasisPoints,
+            long surchargeMinor) {
+
+        static TimeRuleView of(TariffTimeRule rule) {
+            return new TimeRuleView(
+                    rule.priority(),
+                    rule.dayMask(),
+                    rule.fromTime(),
+                    rule.toTime(),
+                    rule.bandSet(),
+                    rule.multiplierBasisPoints(),
+                    rule.surchargeMinor());
+        }
+    }
+
+    public record DiscountView(
+            int priority,
+            String kind,
+            @Nullable Long amountMinor,
+            @Nullable Integer allowanceMeters,
+            int dayMask,
+            LocalTime fromTime,
+            LocalTime toTime) {
+
+        static DiscountView of(TariffDiscount discount) {
+            return new DiscountView(
+                    discount.priority(),
+                    discount.kind().name(),
+                    discount.amountMinor(),
+                    discount.allowanceMeters(),
+                    discount.dayMask(),
+                    discount.fromTime(),
+                    discount.toTime());
+        }
+    }
+
+    /** {@code activeVersion} carries every number a quote actually resolves against; null when there is none live yet. */
+    public record TariffDetailResponse(
+            TariffSummaryResponse tariff, @Nullable ActiveVersionResponse activeVersion) {
+
+        static TariffDetailResponse of(TariffDetail detail) {
+            DeliveryTariff active = detail.activeVersion();
+            return new TariffDetailResponse(
+                    TariffSummaryResponse.of(detail.summary()),
+                    active == null ? null : ActiveVersionResponse.of(active));
+        }
+    }
+
+    public record ActiveVersionResponse(
+            int version,
+            String currency,
+            String feeSource,
+            String distanceMode,
+            int roadFactorBasisPoints,
+            @Nullable UUID routingProviderInstallationId,
+            int maxDistanceMeters,
+            long minFeeMinor,
+            @Nullable Long maxFeeMinor,
+            String distanceAccrual,
+            @Nullable Long feeRoundingStepMinor,
+            @Nullable String feeRoundingRule,
+            List<BandView> bands,
+            List<TimeRuleView> timeRules,
+            List<DiscountView> discounts) {
+
+        static ActiveVersionResponse of(DeliveryTariff tariff) {
+            return new ActiveVersionResponse(
+                    tariff.version(),
+                    tariff.currency(),
+                    tariff.feeSource().name(),
+                    tariff.distanceMode().name(),
+                    tariff.roadFactorBasisPoints(),
+                    tariff.routingProviderInstallationId(),
+                    tariff.maxDistanceMeters(),
+                    tariff.minFeeMinor(),
+                    tariff.maxFeeMinor(),
+                    tariff.distanceAccrual().name(),
+                    tariff.feeRoundingStepMinor(),
+                    tariff.feeRoundingRule() == null
+                            ? null
+                            : tariff.feeRoundingRule().name(),
+                    tariff.bands().stream().map(BandView::of).toList(),
+                    tariff.timeRules().stream().map(TimeRuleView::of).toList(),
+                    tariff.discounts().stream().map(DiscountView::of).toList());
+        }
+    }
 }

@@ -197,6 +197,23 @@ public class ServiceZoneService {
         store.bindLocation(tenantId, brandId, zoneId, locationId, clock.instant());
     }
 
+    /** Every zone this brand has registered (operations §3.6 Delivery zones). */
+    @Transactional(readOnly = true)
+    public List<JdbcServiceZoneStore.ZoneSummaryRow> listZones(UUID tenantId, UUID brandId) {
+        return store.listZones(tenantId, brandId);
+    }
+
+    /** One zone's lineage plus its live version's numbers, and the branches it currently applies to. */
+    @Transactional(readOnly = true)
+    public ZoneDetail zoneDetail(UUID tenantId, UUID brandId, UUID zoneId) {
+        JdbcServiceZoneStore.ZoneSummaryRow zone = store.findZone(tenantId, brandId, zoneId)
+                .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
+        List<UUID> locations = store.boundLocations(tenantId, zoneId, clock.instant());
+        return new ZoneDetail(zone, locations);
+    }
+
+    public record ZoneDetail(JdbcServiceZoneStore.ZoneSummaryRow zone, List<UUID> boundLocationIds) {}
+
     private JdbcServiceZoneStore.DraftVersion draft(
             NewVersion request, UUID id, int version, @Nullable UUID originLocationId, Instant now) {
         return new JdbcServiceZoneStore.DraftVersion(

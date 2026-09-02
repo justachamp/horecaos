@@ -45,6 +45,101 @@ public class JdbcServiceZoneStore {
     // ------------------------------------------------------------------- reads
 
     /**
+     * Every zone this brand has registered, with its live version's numbers when
+     * it has one (operations §3.6 Delivery zones).
+     *
+     * <p>{@code LEFT JOIN} rather than an inner one, deliberately: a zone with no
+     * {@code ACTIVE} version is a real, visible state — "drawn, never
+     * activated" — and V0025's own comment calls a half-configured zone
+     * "visibly inert rather than quietly serving the whole brand". Dropping it
+     * from this list would make that inertness invisible to the one screen an
+     * operator would use to notice it.
+     */
+    public List<ZoneSummaryRow> listZones(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT z.id, z.zone_role, z.code,
+                       z.display_name_ru, z.display_name_uz, z.display_name_en, z.status,
+                       v.version, v.priority, v.currency, v.delivery_tariff_id,
+                       v.free_delivery_from_minor, v.min_basket_minor, v.area_sq_meters
+                  FROM fulfillment.service_zones z
+             LEFT JOIN fulfillment.service_zone_versions v
+                    ON v.tenant_id = z.tenant_id AND v.zone_id = z.id AND v.status = 'ACTIVE'
+                 WHERE z.tenant_id = :tenantId AND z.brand_id = :brandId
+                 ORDER BY z.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new ZoneSummaryRow(
+                        row.getObject("id", UUID.class),
+                        ZoneRole.valueOf(row.getString("zone_role")),
+                        row.getString("code"),
+                        row.getString("display_name_ru"),
+                        row.getString("display_name_uz"),
+                        row.getString("display_name_en"),
+                        row.getString("status"),
+                        row.getObject("version", Integer.class),
+                        row.getObject("priority", Integer.class),
+                        row.getString("currency"),
+                        row.getObject("delivery_tariff_id", UUID.class),
+                        row.getObject("free_delivery_from_minor", Long.class),
+                        row.getObject("min_basket_minor", Long.class),
+                        row.getObject("area_sq_meters", Double.class)))
+                .list();
+    }
+
+    /** One zone's lineage row, for the detail screen's header. */
+    public Optional<ZoneSummaryRow> findZone(UUID tenantId, UUID brandId, UUID zoneId) {
+        return jdbc.sql("""
+                SELECT z.id, z.zone_role, z.code,
+                       z.display_name_ru, z.display_name_uz, z.display_name_en, z.status,
+                       v.version, v.priority, v.currency, v.delivery_tariff_id,
+                       v.free_delivery_from_minor, v.min_basket_minor, v.area_sq_meters
+                  FROM fulfillment.service_zones z
+             LEFT JOIN fulfillment.service_zone_versions v
+                    ON v.tenant_id = z.tenant_id AND v.zone_id = z.id AND v.status = 'ACTIVE'
+                 WHERE z.tenant_id = :tenantId AND z.brand_id = :brandId AND z.id = :zoneId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
+                .query((row, number) -> new ZoneSummaryRow(
+                        row.getObject("id", UUID.class),
+                        ZoneRole.valueOf(row.getString("zone_role")),
+                        row.getString("code"),
+                        row.getString("display_name_ru"),
+                        row.getString("display_name_uz"),
+                        row.getString("display_name_en"),
+                        row.getString("status"),
+                        row.getObject("version", Integer.class),
+                        row.getObject("priority", Integer.class),
+                        row.getString("currency"),
+                        row.getObject("delivery_tariff_id", UUID.class),
+                        row.getObject("free_delivery_from_minor", Long.class),
+                        row.getObject("min_basket_minor", Long.class),
+                        row.getObject("area_sq_meters", Double.class)))
+                .optional();
+    }
+
+    /**
+     * The branches this zone currently applies to (§3.6's "zone → branch set").
+     * A binding whose {@code valid_until} has passed is not currently applying,
+     * so it is excluded rather than left for the caller to filter.
+     */
+    public List<UUID> boundLocations(UUID tenantId, UUID zoneId, Instant at) {
+        return jdbc.sql("""
+                SELECT location_id FROM fulfillment.zone_location_bindings
+                WHERE tenant_id = :tenantId AND zone_id = :zoneId
+                  AND valid_from <= :at AND (valid_until IS NULL OR valid_until > :at)
+                ORDER BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("at", timestamp(at))
+                .query(UUID.class)
+                .list();
+    }
+
+    /**
      * Where the branch is, and its timezone, which every time rule is evaluated
      * against.
      *
@@ -425,6 +520,29 @@ public class JdbcServiceZoneStore {
             return BranchOrigin.of(locationId, latitude, longitude, coordinateSource);
         }
     }
+
+    /**
+     * One zone, lineage plus its live version's numbers — {@link #listZones}
+     * and {@link #findZone}'s shared projection. Every field after {@code
+     * status} is null together: a zone with no {@code ACTIVE} version has
+     * nothing priced yet, which is a fact this row states rather than hides
+     * behind zeroes that would read as "free everywhere".
+     */
+    public record ZoneSummaryRow(
+            UUID id,
+            ZoneRole role,
+            String code,
+            String displayNameRu,
+            String displayNameUz,
+            String displayNameEn,
+            String status,
+            @Nullable Integer activeVersion,
+            @Nullable Integer priority,
+            @Nullable String currency,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
+            @Nullable Double areaSquareMeters) {}
 
     /**
      * Whether a brand-level catchment guard applies, and whether this point clears it.

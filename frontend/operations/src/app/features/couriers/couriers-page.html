@@ -1,0 +1,235 @@
+<div class="couriers">
+  <div class="couriers__toolbar">
+    <h1 class="q-subhead">{{ 'couriers.title' | t }}</h1>
+    <button type="button" class="couriers__register" (click)="openRegisterForm()">
+      {{ 'couriers.register.action' | t }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="couriers__skeleton" [attr.aria-label]="'couriers.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="couriers__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="couriers__denied" data-testid="couriers-denied">
+      <p class="q-body-sm">{{ 'couriers.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="couriers__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="couriers__table">
+      <thead>
+        <tr>
+          <th>{{ 'couriers.column.reference' | t }}</th>
+          <th>{{ 'couriers.column.type' | t }}</th>
+          <th>{{ 'couriers.column.load' | t }}</th>
+          <th>{{ 'couriers.column.engagement' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (courier of roster(); track courier.courierId) {
+          <tr data-testid="courier-row">
+            <td class="q-mono">{{ courier.displayReference }}</td>
+            <td>{{ courier.courierTypeName }}</td>
+            <td class="q-tnum">
+              {{ courier.activeAssignments }} / {{ courier.concurrencyCeiling }}
+            </td>
+            <td>
+              <span class="status-badge">{{
+                engagementStatusLabel(courier.engagementStatus)
+              }}</span>
+              @if (courier.warningState && courier.warningState !== 'VALID') {
+                <span class="status-badge status-badge--warning">{{ courier.warningState }}</span>
+              }
+            </td>
+            <td class="couriers__row-actions">
+              @if (canVerifyRow(courier)) {
+                <button type="button" (click)="openVerify(courier)">
+                  {{ 'couriers.action.verify' | t }}
+                </button>
+              }
+              @if (canSuspendRow(courier)) {
+                <button type="button" (click)="openSuspend(courier)">
+                  {{ 'couriers.action.suspend' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5">
+              <p class="q-body-sm" data-testid="couriers-empty">{{ 'couriers.empty' | t }}</p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="couriers__not-built">
+      <p class="q-caption">{{ 'couriers.notBuilt.fields' | t }}</p>
+    </div>
+  }
+
+  @if (showRegisterForm()) {
+    <div class="dialog-backdrop" (click)="closeRegisterForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'couriers.register.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.type' | t }}</span>
+          <select
+            [value]="newCourierTypeId()"
+            (change)="newCourierTypeId.set($any($event.target).value)"
+          >
+            @for (type of types(); track type.courierTypeId) {
+              <option [value]="type.courierTypeId">{{ type.displayName }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.principalSubject' | t }}</span>
+          <input
+            type="text"
+            [value]="newPrincipalSubject()"
+            (input)="newPrincipalSubject.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.displayReference' | t }}</span>
+          <input
+            type="text"
+            [value]="newDisplayReference()"
+            (input)="newDisplayReference.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.fullName' | t }}</span>
+          <input
+            type="text"
+            [value]="newFullName()"
+            (input)="newFullName.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.engagedFrom' | t }}</span>
+          <input
+            type="date"
+            [value]="newEngagedFrom()"
+            (input)="newEngagedFrom.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.reason' | t }}</span>
+          <input
+            type="text"
+            [value]="newReason()"
+            (input)="newReason.set($any($event.target).value)"
+          />
+        </label>
+
+        @if (registerError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+
+        <div class="dialog__actions">
+          <button type="button" (click)="closeRegisterForm()">
+            {{ 'couriers.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canRegister()" (click)="submitRegister()">
+            {{ 'couriers.register.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (dialog(); as state) {
+    <div class="dialog-backdrop" (click)="closeDialog()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        @if (state.kind === 'verify') {
+          <h2 class="q-subhead">
+            {{ 'couriers.verify.title' | t: { reference: state.courier.displayReference } }}
+          </h2>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.verify.registrationIdentifier' | t }}</span>
+            <input
+              type="text"
+              [value]="verifyRegistrationId()"
+              (input)="verifyRegistrationId.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.verify.validUntil' | t }}</span>
+            <input
+              type="date"
+              [value]="verifyValidUntil()"
+              (input)="verifyValidUntil.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.verify.reason' | t }}</span>
+            <input
+              type="text"
+              [value]="verifyReason()"
+              (input)="verifyReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (dialogError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeDialog()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button type="button" [disabled]="!canVerify()" (click)="submitVerify()">
+              {{ 'couriers.verify.submit' | t }}
+            </button>
+          </div>
+        } @else {
+          <h2 class="q-subhead">
+            {{ 'couriers.suspend.title' | t: { reference: state.courier.displayReference } }}
+          </h2>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.suspend.reasonCode' | t }}</span>
+            <input
+              type="text"
+              [value]="suspendReasonCode()"
+              (input)="suspendReasonCode.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.suspend.reason' | t }}</span>
+            <input
+              type="text"
+              [value]="suspendReason()"
+              (input)="suspendReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (dialogError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeDialog()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button type="button" [disabled]="!canSuspend()" (click)="submitSuspend()">
+              {{ 'couriers.suspend.submit' | t }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

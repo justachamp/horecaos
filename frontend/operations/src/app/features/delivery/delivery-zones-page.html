@@ -1,0 +1,198 @@
+<div class="zones">
+  <div class="zones__toolbar">
+    <h1 class="q-subhead">{{ 'delivery.zones.title' | t }}</h1>
+    <button type="button" class="zones__create" (click)="openCreateForm()">
+      {{ 'delivery.zones.create.action' | t }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="zones__skeleton" [attr.aria-label]="'delivery.zones.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="zones__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="zones__denied" data-testid="zones-denied">
+      <p class="q-body-sm">{{ 'delivery.zones.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="zones__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="zones__table">
+      <thead>
+        <tr>
+          <th>{{ 'delivery.zones.column.code' | t }}</th>
+          <th>{{ 'delivery.zones.column.role' | t }}</th>
+          <th>{{ 'delivery.zones.column.version' | t }}</th>
+          <th>{{ 'delivery.zones.column.priority' | t }}</th>
+          <th>{{ 'delivery.zones.column.tariff' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (zone of zones(); track zone.zoneId) {
+          <tr
+            class="zone-row"
+            tabindex="0"
+            data-testid="zone-row"
+            (click)="toggleExpand(zone)"
+            (keydown.enter)="toggleExpand(zone)"
+          >
+            <td class="q-mono">{{ zone.code }}</td>
+            <td>{{ zone.role }}</td>
+            <td>
+              @if (zone.activeVersion) {
+                <span class="status-badge status-badge--live">v{{ zone.activeVersion }}</span>
+              } @else {
+                <span class="status-badge">{{ 'delivery.zones.notActivated' | t }}</span>
+              }
+            </td>
+            <td class="q-tnum">{{ zone.priority ?? '—' }}</td>
+            <td>{{ zone.deliveryTariffId ? zone.deliveryTariffId : '—' }}</td>
+            <td class="zones__action-col">
+              <button type="button" (click)="$event.stopPropagation(); openDraftForm(zone)">
+                {{ 'delivery.zones.draft.action' | t }}
+              </button>
+            </td>
+          </tr>
+          @if (isExpanded(zone)) {
+            <tr class="zone-detail-row">
+              <td colspan="6">
+                @if (detailFor(zone); as detail) {
+                  <div class="zone-detail">
+                    <span class="q-caption">
+                      {{
+                        'delivery.zones.detail.boundLocations'
+                          | t: { count: detail.boundLocationIds.length }
+                      }}
+                    </span>
+                    @if (
+                      zone.freeDeliveryFromMinor !== null &&
+                      zone.freeDeliveryFromMinor !== undefined
+                    ) {
+                      <span class="q-caption">
+                        {{
+                          'delivery.zones.detail.freeFrom'
+                            | t: { amount: zone.freeDeliveryFromMinor }
+                        }}
+                      </span>
+                    }
+                    @if (zone.minBasketMinor !== null && zone.minBasketMinor !== undefined) {
+                      <span class="q-caption">
+                        {{ 'delivery.zones.detail.minBasket' | t: { amount: zone.minBasketMinor } }}
+                      </span>
+                    }
+                  </div>
+                } @else {
+                  <span class="q-caption">{{ 'delivery.zones.detail.loading' | t }}</span>
+                }
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="6">
+              <p class="q-body-sm" data-testid="zones-empty">{{ 'delivery.zones.empty' | t }}</p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (showCreateForm()) {
+    <div class="dialog-backdrop" (click)="closeCreateForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.zones.create.title' | t }}</h2>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.create.code' | t }}</span>
+          <input type="text" [value]="newCode()" (input)="newCode.set($any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.create.name' | t }}</span>
+          <input type="text" [value]="newName()" (input)="newName.set($any($event.target).value)" />
+        </label>
+        @if (createError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeCreateForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canCreate()" (click)="submitCreate()">
+            {{ 'delivery.zones.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (draftingZoneId(); as zoneId) {
+    <div class="dialog-backdrop" (click)="closeDraftForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.zones.draft.title' | t }}</h2>
+        <p class="q-caption">{{ 'delivery.zones.draft.hint' | t }}</p>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.draft.radius' | t }}</span>
+          <input
+            type="number"
+            [value]="draftRadiusMeters()"
+            (input)="draftRadiusMeters.set(+$any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.draft.priority' | t }}</span>
+          <input
+            type="number"
+            [value]="draftPriority()"
+            (input)="draftPriority.set(+$any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.draft.currency' | t }}</span>
+          <input
+            type="text"
+            [value]="draftCurrency()"
+            (input)="draftCurrency.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.draft.freeFrom' | t }}</span>
+          <input
+            type="number"
+            [value]="draftFreeFromMinor()"
+            (input)="
+              draftFreeFromMinor.set($any($event.target).value ? +$any($event.target).value : null)
+            "
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.zones.draft.minBasket' | t }}</span>
+          <input
+            type="number"
+            [value]="draftMinBasketMinor()"
+            (input)="
+              draftMinBasketMinor.set($any($event.target).value ? +$any($event.target).value : null)
+            "
+          />
+        </label>
+        @if (draftError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeDraftForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canDraft()" (click)="submitDraft()">
+            {{ 'delivery.zones.draft.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

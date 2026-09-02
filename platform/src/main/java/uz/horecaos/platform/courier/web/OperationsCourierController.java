@@ -24,6 +24,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
+import uz.horecaos.platform.courier.application.CourierRosterQueryService;
+import uz.horecaos.platform.courier.application.CourierRosterQueryService.RosterEntry;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
@@ -35,6 +37,8 @@ import uz.horecaos.platform.courier.domain.PayoutMethod;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.web.api.ApiException;
@@ -63,6 +67,8 @@ public class OperationsCourierController {
     private final DeliveryCostQueryService deliveryCosts;
     private final PartnerInvoiceService partnerInvoices;
     private final JdbcCourierLedgerStore ledger;
+    private final CourierRosterQueryService rosterQuery;
+    private final JdbcCourierStore courierStore;
     private final CurrentActor currentActor;
 
     public OperationsCourierController(
@@ -74,6 +80,8 @@ public class OperationsCourierController {
             DeliveryCostQueryService deliveryCosts,
             PartnerInvoiceService partnerInvoices,
             JdbcCourierLedgerStore ledger,
+            CourierRosterQueryService rosterQuery,
+            JdbcCourierStore courierStore,
             CurrentActor currentActor) {
         this.engagements = engagements;
         this.shifts = shifts;
@@ -83,7 +91,34 @@ public class OperationsCourierController {
         this.deliveryCosts = deliveryCosts;
         this.partnerInvoices = partnerInvoices;
         this.ledger = ledger;
+        this.rosterQuery = rosterQuery;
+        this.courierStore = courierStore;
         this.currentActor = currentActor;
+    }
+
+    // ------------------------------------------------------------------ roster
+
+    @GetMapping("/couriers")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(
+            summary = "The in-house roster",
+            description = "§3.3 Couriers, and §3.1's fleet rail — both read this. display_reference "
+                    + "only, never the decrypted name (ADR 0029); current load is counted from open "
+                    + "shipments the same way sourcing counts it, so a dispatcher and a manager can "
+                    + "never see two different numbers for one courier.")
+    public ResponseEntity<List<RosterEntryResponse>> roster(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(rosterQuery.roster(tenantId).stream()
+                .map(RosterEntryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/courier-types")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(summary = "Vehicle classes, for the registration form's picker")
+    public ResponseEntity<List<CourierTypeResponse>> types(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(courierStore.listTypes(tenantId).stream()
+                .map(CourierTypeResponse::of)
+                .toList());
     }
 
     // ------------------------------------------------------------- engagement
@@ -440,6 +475,67 @@ public class OperationsCourierController {
     record MatchRequest(
             @NotNull Map<String, UUID> shipmentsByProviderRef,
             @NotBlank String reason) {}
+
+    /**
+     * One roster row on the wire. No name field exists here at all — not even
+     * a masked one — because there is nothing decrypted to mask; see {@link
+     * Capability#COURIER_READ}'s own doc for why {@code displayReference} is
+     * the whole of what this response names a person by.
+     */
+    record RosterEntryResponse(
+            UUID courierId,
+            String displayReference,
+            String status,
+            UUID courierTypeId,
+            String courierTypeName,
+            String vehicleClass,
+            int activeAssignments,
+            int concurrencyCeiling,
+            @Nullable UUID engagementId,
+            @Nullable String engagementStatus,
+            @Nullable String warningState,
+            @Nullable LocalDate reverificationDueOn) {
+
+        static RosterEntryResponse of(RosterEntry entry) {
+            var courier = entry.courier();
+            return new RosterEntryResponse(
+                    courier.id(),
+                    courier.displayReference(),
+                    courier.status(),
+                    courier.courierTypeId(),
+                    courier.courierTypeName(),
+                    courier.vehicleClass(),
+                    entry.activeAssignments(),
+                    courier.maxConcurrentAssignments(),
+                    courier.engagementId(),
+                    courier.engagementStatus(),
+                    courier.warningState(),
+                    courier.reverificationDueOn());
+        }
+    }
+
+    record CourierTypeResponse(
+            UUID courierTypeId,
+            String code,
+            String displayName,
+            String vehicleClass,
+            int minDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
+            int maxConcurrentAssignments,
+            int offerTtlSeconds) {
+
+        static CourierTypeResponse of(CourierTypeRow row) {
+            return new CourierTypeResponse(
+                    row.id(),
+                    row.code(),
+                    row.displayName(),
+                    row.vehicleClass(),
+                    row.minDistanceMeters(),
+                    row.maxDistanceMeters(),
+                    row.maxConcurrentAssignments(),
+                    row.offerTtlSeconds());
+        }
+    }
 
     record CourierResponse(UUID courierId, UUID engagementId, String status) {}
 

@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
@@ -107,6 +108,30 @@ public class DeliveryTariffService {
     public void bindLocation(UUID tenantId, UUID brandId, UUID locationId, UUID tariffId) {
         store.bindLocation(tenantId, brandId, locationId, tariffId, clock.instant());
     }
+
+    /** Every rate table this brand has registered (operations §3.7 Delivery tariffs). */
+    @Transactional(readOnly = true)
+    public List<JdbcDeliveryTariffStore.TariffSummaryRow> listTariffs(UUID tenantId, UUID brandId) {
+        return store.listTariffs(tenantId, brandId);
+    }
+
+    /**
+     * One tariff's lineage and its live version in full — bands, time rules and
+     * discounts included, straight from {@link JdbcDeliveryTariffStore#loadActive}.
+     */
+    @Transactional(readOnly = true)
+    public TariffDetail tariffDetail(UUID tenantId, UUID brandId, UUID tariffId) {
+        requireOwned(tenantId, brandId, tariffId);
+        JdbcDeliveryTariffStore.TariffSummaryRow summary = store.findTariffSummary(tenantId, brandId, tariffId)
+                .orElseThrow(() -> new DeliveryResourceNotFoundException(
+                        "Tariff %s does not belong to this brand".formatted(tariffId)));
+        return new TariffDetail(summary, store.loadActive(tenantId, tariffId).orElse(null));
+    }
+
+    /** @param activeVersion null exactly when the summary's activeVersion is — drafted, never activated. */
+    public record TariffDetail(
+            JdbcDeliveryTariffStore.TariffSummaryRow summary,
+            @Nullable DeliveryTariff activeVersion) {}
 
     public record DraftedVersion(UUID id, UUID tariffId, int version) {}
 

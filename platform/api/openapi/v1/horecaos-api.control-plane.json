@@ -67,6 +67,72 @@
         },
         "type" : "object"
       },
+      "ActiveVersionResponse" : {
+        "properties" : {
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BandView"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "discounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DiscountView"
+            },
+            "type" : "array"
+          },
+          "distanceAccrual" : {
+            "type" : "string"
+          },
+          "distanceMode" : {
+            "type" : "string"
+          },
+          "feeRoundingRule" : {
+            "type" : "string"
+          },
+          "feeRoundingStepMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeSource" : {
+            "type" : "string"
+          },
+          "maxDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "routingProviderInstallationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "timeRules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeRuleView"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ActorRequest" : {
         "properties" : {
           "actorId" : {
@@ -456,6 +522,30 @@
           }
         },
         "required" : [ "approvalChannel", "mode", "reason", "timeoutAction" ],
+        "type" : "object"
+      },
+      "BandView" : {
+        "properties" : {
+          "bandSet" : {
+            "type" : "string"
+          },
+          "baseMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fromMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "perKmMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "toMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "BindRequest" : {
@@ -1546,6 +1636,36 @@
           }
         },
         "required" : [ "fromTime", "kind", "toTime" ],
+        "type" : "object"
+      },
+      "DiscountView" : {
+        "properties" : {
+          "allowanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "dayMask" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fromTime" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "toTime" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "Divergence" : {
@@ -4696,6 +4816,55 @@
         "required" : [ "holdingState", "reason" ],
         "type" : "object"
       },
+      "TariffDetailResponse" : {
+        "properties" : {
+          "activeVersion" : {
+            "$ref" : "#/components/schemas/ActiveVersionResponse"
+          },
+          "tariff" : {
+            "$ref" : "#/components/schemas/TariffSummaryResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "TariffSummaryResponse" : {
+        "properties" : {
+          "activeVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "brandDefault" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "distanceMode" : {
+            "type" : "string"
+          },
+          "feeSource" : {
+            "type" : "string"
+          },
+          "maxDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TariffView" : {
         "properties" : {
           "brandDefault" : {
@@ -4894,6 +5063,36 @@
         "required" : [ "fromTime", "toTime" ],
         "type" : "object"
       },
+      "TimeRuleView" : {
+        "properties" : {
+          "bandSet" : {
+            "type" : "string"
+          },
+          "dayMask" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fromTime" : {
+            "type" : "string"
+          },
+          "multiplierBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "surchargeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "toTime" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TransitionRequest" : {
         "properties" : {
           "cancelAt" : {
@@ -5056,6 +5255,75 @@
         },
         "type" : "object"
       },
+      "ZoneDetailResponse" : {
+        "properties" : {
+          "boundLocationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "zone" : {
+            "$ref" : "#/components/schemas/ZoneSummaryResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "ZoneSummaryResponse" : {
+        "properties" : {
+          "activeVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "areaSquareMeters" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayNameEn" : {
+            "type" : "string"
+          },
+          "displayNameRu" : {
+            "type" : "string"
+          },
+          "displayNameUz" : {
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "role" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "zoneId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ZoneView" : {
         "properties" : {
           "code" : {
@@ -5197,7 +5465,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_9",
+        "operationId" : "list_11",
         "responses" : {
           "200" : {
             "content" : {
@@ -5274,7 +5542,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_8",
         "responses" : {
           "200" : {
             "content" : {
@@ -5750,7 +6018,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_10",
         "responses" : {
           "200" : {
             "content" : {
@@ -6034,7 +6302,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_5",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7690,7 +7958,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_7",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7782,6 +8050,44 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
+      "get" : {
+        "description" : "Operations §3.7.",
+        "operationId" : "list_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TariffSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every rate table this brand has registered",
+        "tags" : [ "Delivery tariffs" ]
+      },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default, which is the last rung of fee resolution — and there is no rung after it, because a missing rate table and free delivery must never look alike.",
         "operationId" : "create_6",
@@ -7825,6 +8131,51 @@
           }
         },
         "summary" : "Register a rate table",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
+      "get" : {
+        "description" : "activeVersion is absent for a tariff drafted but never activated.",
+        "operationId" : "detail_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tariffId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One tariff's live bands, time rules and discounts",
         "tags" : [ "Delivery tariffs" ]
       }
     },
@@ -9013,6 +9364,44 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
+      "get" : {
+        "description" : "Operations §3.6.",
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ZoneSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every zone this brand has registered",
+        "tags" : [ "Service zones" ]
+      },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
         "operationId" : "create_3",
@@ -9056,6 +9445,51 @@
           }
         },
         "summary" : "Register a zone",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}" : {
+      "get" : {
+        "description" : "The zone → branch set (§3.6). Empty when the zone is drawn but never bound.",
+        "operationId" : "detail",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "zoneId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ZoneDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One zone's live numbers and the branches it applies to",
         "tags" : [ "Service zones" ]
       }
     },

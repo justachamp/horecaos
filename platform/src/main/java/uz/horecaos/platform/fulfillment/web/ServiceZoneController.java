@@ -8,9 +8,12 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore.ZoneSummaryRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
@@ -46,6 +50,29 @@ public class ServiceZoneController {
 
     public ServiceZoneController(ServiceZoneService zones) {
         this.zones = zones;
+    }
+
+    @GetMapping
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "Every zone this brand has registered", description = "Operations §3.6.")
+    public ResponseEntity<List<ZoneSummaryResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(zones.listZones(tenantId, brandId).stream()
+                .map(ZoneSummaryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/{zoneId}")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "One zone's live numbers and the branches it applies to",
+            description = "The zone → branch set (§3.6). Empty when the zone is drawn but never bound.")
+    public ResponseEntity<ZoneDetailResponse> detail(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID zoneId) {
+        try {
+            return ResponseEntity.ok(ZoneDetailResponse.of(zones.zoneDetail(tenantId, brandId, zoneId)));
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
     }
 
     @PostMapping
@@ -212,4 +239,52 @@ public class ServiceZoneController {
     public record ZoneView(UUID zoneId, String code, String role) {}
 
     public record VersionView(UUID zoneId, int version, String status) {}
+
+    /**
+     * One row of {@link #list}. {@code activeVersion} and everything after it
+     * are null together, for a zone drawn but never activated — see {@link
+     * ZoneSummaryRow}'s own doc for why that is a real state and not an
+     * omission.
+     */
+    public record ZoneSummaryResponse(
+            UUID zoneId,
+            String role,
+            String code,
+            String displayNameRu,
+            String displayNameUz,
+            String displayNameEn,
+            String status,
+            @Nullable Integer activeVersion,
+            @Nullable Integer priority,
+            @Nullable String currency,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
+            @Nullable Double areaSquareMeters) {
+
+        static ZoneSummaryResponse of(ZoneSummaryRow row) {
+            return new ZoneSummaryResponse(
+                    row.id(),
+                    row.role().name(),
+                    row.code(),
+                    row.displayNameRu(),
+                    row.displayNameUz(),
+                    row.displayNameEn(),
+                    row.status(),
+                    row.activeVersion(),
+                    row.priority(),
+                    row.currency(),
+                    row.deliveryTariffId(),
+                    row.freeDeliveryFromMinor(),
+                    row.minBasketMinor(),
+                    row.areaSquareMeters());
+        }
+    }
+
+    public record ZoneDetailResponse(ZoneSummaryResponse zone, List<UUID> boundLocationIds) {
+
+        static ZoneDetailResponse of(ServiceZoneService.ZoneDetail detail) {
+            return new ZoneDetailResponse(ZoneSummaryResponse.of(detail.zone()), detail.boundLocationIds());
+        }
+    }
 }

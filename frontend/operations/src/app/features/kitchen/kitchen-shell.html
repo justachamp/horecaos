@@ -1,0 +1,19 @@
+<div class="kitchen-shell">
+  <nav class="kitchen-shell__tabs" [attr.aria-label]="'kitchen.nav.label' | t">
+    <a
+      class="kitchen-shell__tab q-body-sm"
+      routerLink="/kitchen/queue"
+      routerLinkActive="kitchen-shell__tab--active"
+      >{{ 'kitchen.nav.queue' | t }}</a
+    >
+    <a
+      class="kitchen-shell__tab q-body-sm"
+      routerLink="/kitchen/stop-list"
+      routerLinkActive="kitchen-shell__tab--active"
+      >{{ 'kitchen.nav.stopList' | t }}</a
+    >
+  </nav>
+  <div class="kitchen-shell__body">
+    <router-outlet />
+  </div>
+</div>
