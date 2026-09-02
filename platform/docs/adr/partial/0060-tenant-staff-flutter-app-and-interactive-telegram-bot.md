@@ -15,6 +15,13 @@
   shell, kitchen views, stop-list and stats screens, user management, generated
   operations-client adoption — has not been started. `GrantChanged`-driven
   proactive keyboard cleanup remains the stated v2 enhancement.
+  Wave 24 extends the bot's Reject to a two-step reason picker: the bare tap
+  swaps the keyboard for a follow-up of curated reasons (OTHER excluded — the
+  bot collects no note; a reject that needs explaining finishes in
+  Operations), each button its own `bot_action_tokens` row naming the code,
+  and `OrderDecisionPort.settledDecisionIfAny` lets a late tap on a
+  since-settled order still get the audited "already decided" answer instead
+  of a picker; covered by `TelegramInteractiveBotIntegrationTest`.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed both surfaces and the no-POS tenant focus), Claude

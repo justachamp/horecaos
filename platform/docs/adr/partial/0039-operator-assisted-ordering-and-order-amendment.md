@@ -19,6 +19,14 @@
   bulk actions (`POST /api/v1/operations/order-bulk-actions`); and the
   `OrderAmendment*`, `OrderRevisionCreated` and `OrderCallback*` event contracts,
   which exist nowhere in `ordering.api`.
+  V0119 (wave 24) adds a platform-curated, code-owned reject-reason reference
+  table (`ordering.order_reject_reasons`/`_texts`) — deliberately not
+  `order_outcome_reasons`'s tenant-authored shape, since a rejection's
+  consequence never varies by reason — read through
+  `RejectReasonQueryService`/`JdbcRejectReasonStore`, validated by
+  `OrderOutcomeService.reject` (OTHER requires an encrypted note), with the
+  operations reject dialog a picker over `GET .../orders/reject-reasons`
+  instead of free text; covered by `OrderAmendmentAndOutcomeTests`.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance, legal
