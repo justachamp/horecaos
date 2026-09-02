@@ -95,6 +95,9 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.note.label': 'Комментарий (необязательно)',
   'orders.dialog.reasonRequired': 'Укажите причину',
   'orders.dialog.dismiss': 'Отмена',
+  'orders.dialog.reject.note.label': 'Комментарий',
+  'orders.dialog.reject.note.requiredLabel': 'Комментарий (обязателен для этой причины)',
+  'orders.dialog.reject.note.missing': 'Для этой причины нужен короткий комментарий',
 
   'orders.detail.reference': 'Заказ',
   'orders.detail.loading': 'Загрузка заказа',

@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,10 +44,38 @@ public class BotActionTokenStore {
             UUID locationId,
             OrderDecisionPort.Action action,
             Instant expiresAt) {
+        return mintOrReuseOrderDecisionToken(tenantId, orderId, brandId, locationId, action, null, expiresAt);
+    }
+
+    /**
+     * The reason-picker's own button (wave 24): a {@code REJECT} token that
+     * additionally names which reason this physical button rejects with.
+     * Minted once per {@code (order, code)} and reused on a harmless resend,
+     * exactly like {@link #mintOrReuseOrderDecisionToken(UUID, UUID, UUID,
+     * UUID, OrderDecisionPort.Action, Instant)}'s own reuse contract — reused
+     * rather than a fresh mint per render is what keeps a physical button's
+     * {@code decisionId} stable.
+     */
+    @Transactional
+    public String mintOrReuseOrderRejectReasonToken(
+            UUID tenantId, UUID orderId, UUID brandId, UUID locationId, String rejectReasonCode, Instant expiresAt) {
+        return mintOrReuseOrderDecisionToken(
+                tenantId, orderId, brandId, locationId, OrderDecisionPort.Action.REJECT, rejectReasonCode, expiresAt);
+    }
+
+    private String mintOrReuseOrderDecisionToken(
+            UUID tenantId,
+            UUID orderId,
+            UUID brandId,
+            UUID locationId,
+            OrderDecisionPort.Action action,
+            @Nullable String rejectReasonCode,
+            Instant expiresAt) {
         Instant now = clock.instant();
         Optional<String> existing = jdbc.sql("""
                 SELECT token FROM integration.bot_action_tokens
                 WHERE tenant_id = :tenantId AND order_id = :orderId AND decision_action = :action
+                  AND reject_reason_code IS NOT DISTINCT FROM :rejectReasonCode
                   AND expires_at > :now
                 ORDER BY created_at DESC
                 LIMIT 1
@@ -54,6 +83,7 @@ public class BotActionTokenStore {
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
                 .param("action", action.name())
+                .param("rejectReasonCode", rejectReasonCode)
                 .param("now", utc(now))
                 .query(String.class)
                 .optional();
@@ -64,8 +94,10 @@ public class BotActionTokenStore {
         String token = TelegramLinkCode.generate();
         jdbc.sql("""
                 INSERT INTO integration.bot_action_tokens (
-                    token, tenant_id, kind, order_id, brand_id, location_id, decision_action, expires_at, created_at)
-                VALUES (:token, :tenantId, 'ORDER_DECISION', :orderId, :brandId, :locationId, :action, :expiresAt, :now)
+                    token, tenant_id, kind, order_id, brand_id, location_id, decision_action,
+                    reject_reason_code, expires_at, created_at)
+                VALUES (:token, :tenantId, 'ORDER_DECISION', :orderId, :brandId, :locationId, :action,
+                    :rejectReasonCode, :expiresAt, :now)
                 """)
                 .param("token", token)
                 .param("tenantId", tenantId)
@@ -73,6 +105,7 @@ public class BotActionTokenStore {
                 .param("brandId", brandId)
                 .param("locationId", locationId)
                 .param("action", action.name())
+                .param("rejectReasonCode", rejectReasonCode)
                 .param("expiresAt", utc(expiresAt))
                 .param("now", utc(now))
                 .update();
@@ -81,7 +114,7 @@ public class BotActionTokenStore {
 
     public Optional<OrderDecisionToken> resolveOrderDecision(String token) {
         return jdbc.sql("""
-                SELECT tenant_id, order_id, brand_id, location_id, decision_action
+                SELECT tenant_id, order_id, brand_id, location_id, decision_action, reject_reason_code
                 FROM integration.bot_action_tokens
                 WHERE token = :token AND kind = 'ORDER_DECISION' AND expires_at > :now
                 """)
@@ -92,7 +125,8 @@ public class BotActionTokenStore {
                         row.getObject("order_id", UUID.class),
                         row.getObject("brand_id", UUID.class),
                         row.getObject("location_id", UUID.class),
-                        OrderDecisionPort.Action.valueOf(row.getString("decision_action"))))
+                        OrderDecisionPort.Action.valueOf(row.getString("decision_action")),
+                        row.getString("reject_reason_code")))
                 .optional();
     }
 
@@ -146,8 +180,14 @@ public class BotActionTokenStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
+    /** @param rejectReasonCode null on an APPROVE token and on the bare "pick a reason" REJECT token (wave 24) */
     public record OrderDecisionToken(
-            UUID tenantId, UUID orderId, UUID brandId, UUID locationId, OrderDecisionPort.Action action) {}
+            UUID tenantId,
+            UUID orderId,
+            UUID brandId,
+            UUID locationId,
+            OrderDecisionPort.Action action,
+            @Nullable String rejectReasonCode) {}
 
     public record TenantSelectToken(
             UUID tenantId,

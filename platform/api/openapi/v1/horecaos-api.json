@@ -5445,6 +5445,11 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "note" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "reasonCode" : {
             "maxLength" : 64,
             "minLength" : 0,
@@ -7668,6 +7673,27 @@
             "type" : "string"
           },
           "created" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "RejectReasonResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "requiresNote" : {
             "type" : "boolean"
           }
         },
@@ -23754,6 +23780,54 @@
         "tags" : [ "Operations orders" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons" : {
+      "get" : {
+        "description" : "Platform-owned reference data (V0119), not a tenant registry: the same eight reasons for every tenant, read with ORDER_READ because the reject dialog has to populate its picker for every operator who can reject an order. `labels` carries every locale at once so the client renders whichever one the operator is using without a second round trip.",
+        "operationId" : "rejectReasons",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RejectReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The curated list a reject dialog picks from",
+        "tags" : [ "Operations orders" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}" : {
       "get" : {
         "description" : "Revision-aware (ADR 0039). The default is the order's current revision; naming an earlier one re-renders the lines as they were. A read that forgets to pin a revision double-counts, and the mistake stays invisible until somebody reconciles a total by hand.",
@@ -24059,7 +24133,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/approval-decisions" : {
       "post" : {
-        "description" : "The first valid command wins under compare-and-set. A command that loses is recorded and inert, and the response reports the outcome that actually settled the order — so a second click gives the same answer as the first rather than an error.",
+        "description" : "The first valid command wins under compare-and-set. A command that loses is recorded and inert, and the response reports the outcome that actually settled the order — so a second click gives the same answer as the first rather than an error. A rejection names a code from GET .../reject-reasons; OTHER additionally needs `note`.",
         "operationId" : "decide",
         "parameters" : [ {
           "in" : "path",

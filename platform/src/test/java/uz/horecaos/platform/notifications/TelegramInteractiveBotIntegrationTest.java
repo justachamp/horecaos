@@ -161,6 +161,7 @@ class TelegramInteractiveBotIntegrationTest {
     private CustomerProviderBindingSync bindingSync;
     private BotActionTokenStore actionTokens;
     private FakeOrderDecisionPort orderDecisions;
+    private uz.horecaos.platform.ordering.api.RejectReasonDirectory rejectReasons;
     private TelegramUpdateHandler updateHandler;
     private TelegramWebhookInstallationLookup webhookInstallations;
     private StockAvailabilityPort stockAvailability;
@@ -215,6 +216,10 @@ class TelegramInteractiveBotIntegrationTest {
         BotCallbackAuthorizer callbackAuthorizer = new BotCallbackAuthorizer(
                 actionTokens, staffLinks, authorization, new AlwaysEntitledService(), orderDecisions, clock);
 
+        rejectReasons = new uz.horecaos.platform.ordering.application.RejectReasonDirectoryAdapter(
+                new uz.horecaos.platform.ordering.application.RejectReasonQueryService(
+                        new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore(jdbc)));
+
         updateHandler = new TelegramUpdateHandler(
                 new TelegramLinkService(jdbc, clock, Duration.ofMinutes(15)),
                 staffLinks,
@@ -228,6 +233,7 @@ class TelegramInteractiveBotIntegrationTest {
                 authorization,
                 new AlwaysEntitledService(),
                 new NoSummaryOrderDirectory(),
+                rejectReasons,
                 new NoOpContactDirectory(),
                 stopList,
                 stockAvailability,
@@ -240,7 +246,8 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$");
+                "^\\+?998\\d{9}$",
+                Duration.ofHours(6));
     }
 
     @Test
@@ -383,6 +390,166 @@ class TelegramInteractiveBotIntegrationTest {
         assertThat(lastMessageTo(groupChatId)).contains("not authorized");
         // Unauthorized taps are not recorded as ordering decisions.
         assertThat(auditRowsFor(orderId)).hasSize(2);
+    }
+
+    /**
+     * wave 24: the Reject button no longer decides on the first tap. It now
+     * mirrors the tenant picker's own shape (§{@link
+     * #ambiguousDmCommandShowsATenantPicker}) — one authorized tap presents a
+     * follow-up keyboard, minted fresh against the same order, and a second
+     * tap on one of ITS buttons is the one that actually rejects. The whole
+     * two-tap sequence still resolves through {@link BotCallbackAuthorizer}
+     * and still re-earns authorization on every tap, exactly as a single-tap
+     * Approve always has.
+     */
+    @Test
+    @DisplayName("reject presents a reason picker; picking one rejects with that code, and OTHER is never offered")
+    void rejectPresentsAReasonPickerThenDecidesWithTheChosenCode() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID brand = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        long groupChatId = -100_555_002L;
+        long staffTelegramUserId = 42_043L;
+        String staffSubject = UUID.randomUUID().toString();
+
+        seedTenancy(tenant, brand, location, "reject-tenant", "REJECT1");
+        UUID installationId = seedTelegramInstallation(tenant, "reject-bot-env");
+        activateAwaitingApprovalTemplate(tenant, brand);
+        grant(staffSubject, PlatformRole.LOCATION_STAFF, location, tenant);
+
+        NotificationGateway gateway = notificationGateway();
+        CamelContext camel = new DefaultCamelContext();
+        camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
+        camel.start();
+        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+
+        JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
+        JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
+        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        StubOrderDirectory orderSummaries = new StubOrderDirectory();
+        orderSummaries.publish(new OrderDirectory.OrderSummary(
+                orderId, tenant, brand, location, "A-2", null, "guest", "AWAITING_APPROVAL", "UZS", 40_000L, 1));
+        NotificationEligibilityService eligibility = new NotificationEligibilityService(
+                notifications,
+                templates,
+                (t, a, b, p, c) -> Optional.empty(),
+                new NoOpContactDirectory(),
+                orderSummaries,
+                transport,
+                new AlwaysSendingCampaignFeedback(),
+                objectMapper,
+                clock,
+                "en");
+        OperationsAlertFanoutService fanout = new OperationsAlertFanoutService(
+                new uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory(
+                        new TelegramBindingStore(jdbc, clock, audit)),
+                notifications,
+                new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
+                objectMapper,
+                clock);
+        NotificationDispatchService dispatch = new NotificationDispatchService(
+                notifications,
+                templateStore,
+                new NoOpContactDirectory(),
+                transport,
+                new CampaignBlockRateMonitor(new AlwaysSendingCampaignFeedback(), fanout, new SimpleMeterRegistry()),
+                objectMapper,
+                clock,
+                8,
+                Duration.ofSeconds(30));
+        NotificationWorker worker =
+                new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
+        OrderNotificationTrigger trigger = new OrderNotificationTrigger(
+                notifications,
+                fanout,
+                orderSummaries,
+                new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService()),
+                objectMapper,
+                clock,
+                "SMS",
+                Duration.ofHours(6));
+
+        TelegramBindingStore bindingStore = new TelegramBindingStore(jdbc, clock, audit);
+        UUID bindingId = bindingStore.createBinding(tenant, installationId, brand, location, groupChatId, null, null);
+        bindingStore.subscribe(tenant, bindingId, java.util.Set.of("ORDER_AWAITING_APPROVAL"));
+
+        String code = staffLinks.issueCode(tenant, staffSubject);
+        updateHandler.handle(installation(installationId, tenant), privateLinkUpdate(code, staffTelegramUserId));
+
+        trigger.onOrderingEvent(new OrderAwaitingApproval(
+                UUID.randomUUID(),
+                new TenantId(tenant),
+                orderId,
+                clock.instant(),
+                brand,
+                location,
+                "OPERATIONS",
+                clock.instant().plus(Duration.ofMinutes(10)),
+                "AUTO_CONFIRM",
+                "AWAITING_APPROVAL",
+                1));
+        drainUntilQuiet(worker);
+
+        long messageId = java.util.Objects.requireNonNull(bot.lastMessageIdSentTo(groupChatId));
+        List<String> initialTokens = bot.callbackDataOn(messageId);
+        assertThat(initialTokens).hasSize(2);
+        String rejectToken = initialTokens.get(1);
+
+        // First tap: authorized, but the button carries no reason yet. The
+        // picker replaces the keyboard on the SAME message rather than
+        // sending a new one — the eventual APPLIED strip below still targets
+        // this messageId.
+        updateHandler.handle(
+                installation(installationId, tenant),
+                callbackQueryUpdate("cbq-reject-1", rejectToken, groupChatId, messageId, staffTelegramUserId, null));
+
+        assertThat(bot.answeredCallbackQueryIds()).contains("cbq-reject-1");
+        assertThat(bot.hasKeyboard(messageId))
+                .as("swapped for the reason picker, not stripped")
+                .isTrue();
+        // Nothing was decided by the bare tap: the FakeOrderDecisionPort never saw a REJECT.
+        assertThat(auditRowsFor(orderId)).isEmpty();
+
+        List<String> reasonTokens = bot.callbackDataOn(messageId);
+        // The seeded platform list is eight reasons; OTHER is excluded because
+        // the bot has no free-text follow-up wired into this flow (RejectReasonDirectory#topOptions).
+        assertThat(reasonTokens).hasSize(7).doesNotContain(rejectToken);
+
+        // Second tap: one of the picker's own buttons. This is the one that
+        // actually rejects, with the reason that button named.
+        updateHandler.handle(
+                installation(installationId, tenant),
+                callbackQueryUpdate(
+                        "cbq-reject-2", reasonTokens.get(0), groupChatId, messageId, staffTelegramUserId, null));
+
+        assertThat(bot.answeredCallbackQueryIds()).contains("cbq-reject-2");
+        assertThat(bot.hasKeyboard(messageId))
+                .as("stripped on the first successful decision")
+                .isFalse();
+        assertThat(lastMessageTo(groupChatId)).contains("rejected");
+        assertThat(auditRowsFor(orderId)).hasSize(1).allSatisfy(row -> {
+            assertThat(row.get("actor_subject")).isEqualTo(staffSubject);
+            assertThat(row.get("outcome")).isEqualTo("SUCCEEDED");
+        });
+        // The chosen reason — the first of the curated list, ITEM_UNAVAILABLE
+        // (display_order 1, V0119) — is what actually reached the decision port,
+        // not a bot-generic placeholder like the old hardcoded TELEGRAM_BOT_TAP.
+        assertThat(orderDecisions.rejectReasonCodesSeen()).containsExactly("ITEM_UNAVAILABLE");
+
+        // A third tap on a DIFFERENT reason button — a different physical
+        // button, so its own decisionId genuinely loses the race — is told
+        // who already settled it, the same mechanism this suite's other test
+        // proves for Approve, restated here for the two-step path. (Retapping
+        // reasonTokens.get(0) itself would instead replay its own winning
+        // decisionId and report success again — correct idempotency, not what
+        // this assertion means to exercise.)
+        updateHandler.handle(
+                installation(installationId, tenant),
+                callbackQueryUpdate(
+                        "cbq-reject-3", reasonTokens.get(1), groupChatId, messageId, staffTelegramUserId, null));
+        assertThat(bot.answeredCallbackQueryIds()).contains("cbq-reject-3");
+        assertThat(lastMessageTo(groupChatId)).contains("already").contains("rejected");
     }
 
     @Test
@@ -1272,14 +1439,34 @@ class TelegramInteractiveBotIntegrationTest {
         private final Clock clock;
         private final Map<UUID, Decision> settledByOrder = new ConcurrentHashMap<>();
         private final Map<String, Decision> byDecisionId = new ConcurrentHashMap<>();
+        // wave 24: every REJECT command's rejectReasonCode, in call order — what
+        // a test reads to prove the two-step picker's own chosen reason actually
+        // reached this port, since the fake otherwise treats every rejection alike.
+        private final List<String> rejectReasonCodesSeen = new java.util.concurrent.CopyOnWriteArrayList<>();
 
         FakeOrderDecisionPort(AuditRecorder audit, Clock clock) {
             this.audit = audit;
             this.clock = clock;
         }
 
+        List<String> rejectReasonCodesSeen() {
+            return List.copyOf(rejectReasonCodesSeen);
+        }
+
+        @Override
+        public synchronized Optional<Decision> settledDecisionIfAny(UUID tenantId, UUID orderId) {
+            Decision existing = settledByOrder.get(orderId);
+            if (existing == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new Decision(false, existing.status(), existing.orderVersion(), existing.settledBy()));
+        }
+
         @Override
         public synchronized Decision decide(UUID tenantId, UUID orderId, DecisionCommand command) {
+            if (command.action() == Action.REJECT) {
+                rejectReasonCodesSeen.add(command.rejectReasonCode());
+            }
             Decision cached = byDecisionId.get(command.decisionId());
             if (cached != null) {
                 return cached;

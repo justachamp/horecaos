@@ -98,6 +98,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.note.label': 'Izoh (ixtiyoriy)',
   'orders.dialog.reasonRequired': 'Sababni kiriting',
   'orders.dialog.dismiss': 'Bekor qilish',
+  'orders.dialog.reject.note.label': 'Izoh',
+  'orders.dialog.reject.note.requiredLabel': 'Izoh (bu sabab uchun majburiy)',
+  'orders.dialog.reject.note.missing': 'Bu sabab uchun qisqa izoh kerak',
 
   'orders.detail.reference': 'Buyurtma',
   'orders.detail.loading': 'Buyurtma yuklanmoqda',

@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.provider.telegram;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,6 +43,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkServi
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup.WebhookInstallation;
 import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.RejectReasonDirectory;
 import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
@@ -116,6 +118,7 @@ public class TelegramUpdateHandler {
     private final AuthorizationService authorization;
     private final EntitlementService entitlements;
     private final OrderDirectory orderDirectory;
+    private final RejectReasonDirectory rejectReasons;
     private final RecipientContactDirectory contacts;
     private final StopListPort stopList;
     private final StockAvailabilityPort stockAvailability;
@@ -129,6 +132,7 @@ public class TelegramUpdateHandler {
     private final TelegramUpdateDedupStore dedup;
     private final RateLimiter rateLimiter;
     private final Pattern authAllowedPhonePattern;
+    private final Duration rejectReasonTokenTtl;
 
     public TelegramUpdateHandler(
             TelegramLinkService links,
@@ -143,6 +147,7 @@ public class TelegramUpdateHandler {
             AuthorizationService authorization,
             EntitlementService entitlements,
             OrderDirectory orderDirectory,
+            RejectReasonDirectory rejectReasons,
             RecipientContactDirectory contacts,
             StopListPort stopList,
             StockAvailabilityPort stockAvailability,
@@ -157,8 +162,12 @@ public class TelegramUpdateHandler {
             RateLimiter rateLimiter,
             // ADR 0063's own open input: the owner's final allowed-phone pattern.
             // Defaults to the ADR's own default, an Uzbek mobile in E.164.
-            @Value("${horecaos.customers.telegram-auth.phone-pattern:^\\+?998\\d{9}$}")
-                    String authAllowedPhonePattern) {
+            @Value("${horecaos.customers.telegram-auth.phone-pattern:^\\+?998\\d{9}$}") String authAllowedPhonePattern,
+            // Same property and default TelegramChannelAdapter's own order-decision
+            // keyboard uses (wave 24): a reason-picker button is a second decision
+            // token for the same order, and there is no reason for the two halves
+            // of one decision to expire on different schedules.
+            @Value("${horecaos.notifications.telegram.decision-token-ttl:PT6H}") Duration rejectReasonTokenTtl) {
         this.links = links;
         this.staffLinks = staffLinks;
         this.customerLinks = customerLinks;
@@ -171,6 +180,7 @@ public class TelegramUpdateHandler {
         this.authorization = authorization;
         this.entitlements = entitlements;
         this.orderDirectory = orderDirectory;
+        this.rejectReasons = rejectReasons;
         this.contacts = contacts;
         this.stopList = stopList;
         this.stockAvailability = stockAvailability;
@@ -184,6 +194,7 @@ public class TelegramUpdateHandler {
         this.dedup = dedup;
         this.rateLimiter = rateLimiter;
         this.authAllowedPhonePattern = Pattern.compile(authAllowedPhonePattern);
+        this.rejectReasonTokenTtl = rejectReasonTokenTtl;
     }
 
     /**
@@ -401,7 +412,64 @@ public class TelegramUpdateHandler {
                 bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionTokenExpired(defaultLocale));
             case NOT_ENTITLED ->
                 bots.sendMessage(call, chatId, topicId, TelegramBotMessages.botNotEnabledForTenant(defaultLocale));
+            case NEEDS_REASON ->
+                presentRejectReasonPicker(
+                        call, chatId, messageId, java.util.Objects.requireNonNull(outcome.pendingReject()));
         }
+    }
+
+    /**
+     * The bare Reject button's own tap (wave 24): swaps the message's
+     * keyboard for the curated reject-reason list, one button per active,
+     * non-{@code OTHER} reason (see {@link RejectReasonDirectory#topOptions}
+     * for why {@code OTHER} is never among them). Each button is its own
+     * fresh {@code ORDER_DECISION} token naming that reason; tapping one
+     * re-enters {@link #handleOrderDecisionCallback} and, this time,
+     * {@link BotCallbackAuthorizer#decide} finds a reason on the resolved
+     * token and applies the decision instead of presenting the picker again.
+     *
+     * <p>Replaces the keyboard in place rather than sending a new message, so
+     * {@code messageId} stays the one the eventual APPLIED strip targets —
+     * exactly the single-message-evolving-keyboard shape the Approve/Reject
+     * pair already used.
+     */
+    private void presentRejectReasonPicker(
+            ProviderCall call, long chatId, long messageId, BotActionTokenStore.OrderDecisionToken pending) {
+        List<RejectReasonDirectory.Option> options = rejectReasons.topOptions();
+        if (options.isEmpty()) {
+            // Seeded reference data (V0119) — never empty in practice — but an
+            // operator staring at a keyboard that silently vanished is a worse
+            // failure than one plain sentence naming the fallback.
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.decisionTokenExpired(defaultLocale));
+            return;
+        }
+
+        Instant expiresAt = clock.instant().plus(rejectReasonTokenTtl);
+        List<List<TelegramInlineKeyboard.Button>> rows = options.stream()
+                .map(option -> List.of(new TelegramInlineKeyboard.Button(
+                        rejectReasonLabel(option),
+                        actionTokens.mintOrReuseOrderRejectReasonToken(
+                                pending.tenantId(),
+                                pending.orderId(),
+                                pending.brandId(),
+                                pending.locationId(),
+                                option.code(),
+                                expiresAt))))
+                .toList();
+
+        bots.editMessageReplyMarkup(call, chatId, messageId, new TelegramInlineKeyboard(rows));
+    }
+
+    /** {@code ru}/{@code uz-Latn}/{@code en} label lookup, same fallback order {@link TelegramBotMessages#pick} uses. */
+    private String rejectReasonLabel(RejectReasonDirectory.Option option) {
+        Map<String, String> labels = option.labelsByLocale();
+        String resolved =
+                switch (defaultLocale == null ? "" : defaultLocale.toLowerCase(Locale.ROOT)) {
+                    case "uz-latn", "uz" -> labels.get("uz-Latn");
+                    case "en" -> labels.get("en");
+                    default -> labels.get("ru");
+                };
+        return resolved != null ? resolved : option.code();
     }
 
     private void handleTenantSelected(

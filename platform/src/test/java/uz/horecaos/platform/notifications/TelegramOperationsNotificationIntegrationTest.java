@@ -205,6 +205,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 authorization,
                 new AlwaysEntitledService(),
                 new StubOrderDirectory(),
+                () -> java.util.List.of(),
                 new NoOpContactDirectory(),
                 new NoOpStopListPort(),
                 new NoOpStockAvailabilityPort(),
@@ -217,7 +218,8 @@ class TelegramOperationsNotificationIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$");
+                "^\\+?998\\d{9}$",
+                Duration.ofHours(6));
 
         JdbcProviderInstallationLookup installationLookup = new JdbcProviderInstallationLookup(jdbc, clock);
         NotificationGateway gateway = new NotificationGateway(

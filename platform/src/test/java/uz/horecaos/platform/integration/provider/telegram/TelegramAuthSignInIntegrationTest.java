@@ -195,6 +195,7 @@ class TelegramAuthSignInIntegrationTest {
                 new ThrowingAuthorizationService(),
                 new AlwaysEntitledService(),
                 new NoSummaryOrderDirectory(),
+                () -> java.util.List.of(),
                 new NoOpContactDirectory(),
                 new NoOpStopListPort(),
                 new ThrowingStockAvailabilityPort(),
@@ -207,7 +208,8 @@ class TelegramAuthSignInIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$");
+                "^\\+?998\\d{9}$",
+                Duration.ofHours(6));
     }
 
     // -------------------------------------------------------------- happy path

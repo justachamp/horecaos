@@ -13,9 +13,38 @@ import { I18n } from '../../core/i18n/i18n';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
+import { RejectReasonOption } from './order-reject-reason-dialog';
+import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderSummaryResponse } from './order-summary';
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+/**
+ * The curated list `RejectReasonsApi.list` would fetch from `GET
+ * .../orders/reject-reasons` (wave 24) — a small fixture, not the platform's
+ * real eight, since these tests are about the queue's own wiring to the
+ * picker, not the registry's content (`OrderAmendmentAndOutcomeTests`'s job).
+ */
+const FAKE_REJECT_REASONS: readonly RejectReasonOption[] = [
+  {
+    code: 'ITEM_UNAVAILABLE',
+    displayOrder: 1,
+    requiresNote: false,
+    labels: { ru: 'Нет в наличии', 'uz-Latn': 'Mavjud emas', en: 'Item unavailable' },
+  },
+  {
+    code: 'OTHER',
+    displayOrder: 8,
+    requiresNote: true,
+    labels: { ru: 'Другое', 'uz-Latn': 'Boshqa', en: 'Other' },
+  },
+];
+
+function stubRejectReasons(
+  reasons: readonly RejectReasonOption[] = FAKE_REJECT_REASONS,
+): Partial<RejectReasonsApi> {
+  return { list: () => Promise.resolve(reasons) };
+}
 
 /**
  * Zoneless change detection schedules its tick partly via
@@ -57,6 +86,7 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
       },
       { provide: ApiClient, useValue: { get: getOrders } },
       { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+      { provide: RejectReasonsApi, useValue: stubRejectReasons() },
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -396,6 +426,7 @@ describe('OrderQueue: empty, error and denied states (§2.11)', () => {
 function configureWithActions(
   orders: readonly OrderSummaryResponse[],
   actionsApi: Partial<OrderActionsApi>,
+  rejectReasonsApi: Partial<RejectReasonsApi> = stubRejectReasons(),
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -411,6 +442,7 @@ function configureWithActions(
       { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
       { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
       { provide: OrderActionsApi, useValue: actionsApi },
+      { provide: RejectReasonsApi, useValue: rejectReasonsApi },
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -551,7 +583,7 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     expect(notice?.textContent).toContain('changed');
   });
 
-  it('opens the reason dialog for Reject and submits it with the entered reason code', async () => {
+  it('opens the curated reason picker for Reject and submits with the chosen code (wave 24)', async () => {
     const reject = vi.fn().mockReturnValue(
       of({
         orderId: 'order-1',
@@ -579,15 +611,21 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     (host.querySelector('[data-testid="order-row-action-REJECT"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(host.querySelector('[data-testid="order-reason-dialog"]')).not.toBeNull();
+    // The free-text dialog is gone for Reject; a picker built from
+    // GET .../orders/reject-reasons opens instead.
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-reject-reason-dialog"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-reject-reason-option-ITEM_UNAVAILABLE"]'),
+    ).not.toBeNull();
 
-    const codeInput = host.querySelector(
-      '[data-testid="order-reason-dialog-code"]',
-    ) as HTMLInputElement;
-    codeInput.value = 'CUSTOMER_ASKED';
-    codeInput.dispatchEvent(new Event('input'));
     (
-      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+      host.querySelector(
+        '[data-testid="order-reject-reason-option-ITEM_UNAVAILABLE"]',
+      ) as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
     ).click();
     await flushMicrotasks();
 
@@ -595,7 +633,66 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
       FAKE_SCOPE,
       'order-1',
       expect.any(String),
-      'CUSTOMER_ASKED',
+      'ITEM_UNAVAILABLE',
+      undefined,
+    );
+  });
+
+  it('OTHER refuses to submit without a note, then submits code and note once one is entered', async () => {
+    const reject = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'AWAITING_APPROVAL',
+          actions: [{ action: 'REJECT' }],
+        }),
+      ],
+      { reject },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-REJECT"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="order-reject-reason-option-OTHER"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-reject-reason-note-required"]')).not.toBeNull();
+
+    const noteField = host.querySelector(
+      '[data-testid="order-reject-reason-note"]',
+    ) as HTMLTextAreaElement;
+    noteField.value = 'клиент оскорблял оператора';
+    noteField.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      expect.any(String),
+      'OTHER',
+      'клиент оскорблял оператора',
     );
   });
 });

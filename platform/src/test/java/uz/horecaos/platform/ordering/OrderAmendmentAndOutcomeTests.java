@@ -51,6 +51,7 @@ import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
+import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
@@ -66,6 +67,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendme
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.pos.JdbcPosExportStatus;
 import uz.horecaos.platform.ordering.infrastructure.tenancy.JdbcOrderingTenantContext;
 import uz.horecaos.platform.pricing.application.PricingEngine;
@@ -119,7 +121,10 @@ class OrderAmendmentAndOutcomeTests {
     private OrderAmendmentService amendments;
     private OrderOutcomeService outcomes;
     private OrderOutcomeReasonService reasons;
+    private RejectReasonQueryService rejectReasons;
     private OrderInventoryProcess inventoryProcess;
+    /** Kept as a field so a test can decrypt {@code note_encrypted} back for itself. */
+    private FieldProtection protection;
     /** One factory, so a test can substitute the store and change nothing else. */
     private java.util.function.Function<JdbcOrderStore, OrderStateService> orderStateWith;
 
@@ -217,7 +222,7 @@ class OrderAmendmentAndOutcomeTests {
         var attemptStore = new JdbcCheckoutAttemptStore(jdbc);
         var processStore = new JdbcOrderProcessStore(jdbc);
 
-        FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
+        protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
                         Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get, clock),
                 "local"));
@@ -262,7 +267,8 @@ class OrderAmendmentAndOutcomeTests {
         orderQuery = new OrderQueryService(
                 orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper, auditRecorder, clock);
         reasons = new OrderOutcomeReasonService(reasonStore, clock);
-        outcomes = new OrderOutcomeService(orderState, reasons, orderStore, protection, objectMapper);
+        rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
+        outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);
         // The real adapter, against the same database: the export guard is only
         // meaningful if it reads the table the export actually writes, and a stub
         // here would reproduce exactly the failure this port was built to end.
@@ -823,6 +829,214 @@ class OrderAmendmentAndOutcomeTests {
                 .containsExactly("CANCELLED", "OTHER");
     }
 
+    // -------------------------------------------------------- reject reasons (wave 24)
+
+    @Test
+    @DisplayName("the curated reject-reason list reads back in display order, labelled in all three locales")
+    void theCuratedListReadsBackInDisplayOrder() {
+        var seeded = rejectReasons.listActive();
+
+        assertThat(seeded)
+                .extracting("code")
+                .containsExactly(
+                        "ITEM_UNAVAILABLE",
+                        "KITCHEN_OVERLOADED",
+                        "CLOSING_SOON",
+                        "DELIVERY_ZONE_UNREACHABLE",
+                        "CUSTOMER_UNREACHABLE",
+                        "SUSPICIOUS_OR_TEST_ORDER",
+                        "PRICE_OR_MENU_ERROR",
+                        "OTHER");
+
+        var itemUnavailable = seeded.stream()
+                .filter(r -> r.code().equals("ITEM_UNAVAILABLE"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(itemUnavailable.labels())
+                .containsEntry("ru", "Нет в наличии")
+                .containsEntry("uz-Latn", "Mavjud emas")
+                .containsEntry("en", "Item unavailable");
+        assertThat(itemUnavailable.requiresNote()).isFalse();
+
+        var other = seeded.stream()
+                .filter(r -> r.code().equals("OTHER"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(other.requiresNote())
+                .as("OTHER carries no wording of its own, so a note is the only way it keeps information")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("rejecting with a valid code stores the code and the encrypted note; the audit fact carries the code")
+    void rejectingWithAValidCodeStoresCodeAndNote() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        tx(() -> outcomes.reject(
+                TENANT,
+                orderId,
+                new OrderOutcomeService.RejectCommand(
+                        "d-reject-1",
+                        "ITEM_UNAVAILABLE",
+                        "плова не осталось",
+                        "HORECAOS_OPERATIONS",
+                        "USER",
+                        "sharif",
+                        clock.instant(),
+                        null)));
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.REJECTED);
+
+        // The code is what the audit fact and the timeline both carry — the same
+        // column every free-typed reason used before this release, so an old row
+        // and a new registry-backed one are equally readable.
+        Map<String, Object> transition = jdbc.sql("""
+                SELECT reason_code FROM ordering.order_state_history
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND to_status = 'REJECTED'
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .query()
+                .singleRow();
+        assertThat(transition.get("reason_code")).isEqualTo("ITEM_UNAVAILABLE");
+
+        String noteCiphertext =
+                jdbc.sql("""
+                SELECT note_encrypted FROM ordering.order_outcomes WHERE order_id = :orderId
+                """).param("orderId", orderId).query(String.class).single();
+        assertThat(noteCiphertext).isNotNull();
+        String decryptedNote = protection.reveal(
+                TENANT,
+                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(noteCiphertext),
+                new FieldProtection.RecordRef("ordering.order_outcomes", "note_encrypted", orderId),
+                "TEST");
+        assertThat(decryptedNote).isEqualTo("плова не осталось");
+
+        assertThat(auditReasonFor(orderId)).isEqualTo("ITEM_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("rejecting with an unknown code is refused, and nothing about the order changes")
+    void rejectingWithAnUnknownCodeIsRefused() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        assertThatThrownBy(() -> tx(() -> outcomes.reject(
+                        TENANT,
+                        orderId,
+                        new OrderOutcomeService.RejectCommand(
+                                "d-1",
+                                "NO_SUCH_CODE",
+                                null,
+                                "HORECAOS_OPERATIONS",
+                                "USER",
+                                "sharif",
+                                clock.instant(),
+                                null))))
+                .isInstanceOf(RejectReasonQueryService.UnknownRejectReasonException.class)
+                .hasMessageContaining("NO_SUCH_CODE");
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(orderQuery.outcome(TENANT, orderId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("rejecting with a retired code is refused")
+    void rejectingWithAnInactiveCodeIsRefused() {
+        // A platform-seeded reference table, deliberately outside setUp()'s
+        // truncate list (it is not per-tenant fixture data) — idempotent so a
+        // rerun of this one test does not collide with its own leftover row.
+        jdbc.sql("""
+                INSERT INTO ordering.order_reject_reasons (code, display_order, requires_note, active)
+                VALUES ('RETIRED_TEST_REASON', 99, false, false)
+                ON CONFLICT (code) DO UPDATE SET active = false
+                """).update();
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        assertThatThrownBy(() -> tx(() -> outcomes.reject(
+                        TENANT,
+                        orderId,
+                        new OrderOutcomeService.RejectCommand(
+                                "d-1",
+                                "RETIRED_TEST_REASON",
+                                null,
+                                "HORECAOS_OPERATIONS",
+                                "USER",
+                                "sharif",
+                                clock.instant(),
+                                null))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("retired");
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    @DisplayName(
+            "OTHER without a note is refused; free text used to carry that information and the registry must not lose it")
+    void otherWithoutANoteIsRefused() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        assertThatThrownBy(() -> tx(() -> outcomes.reject(
+                        TENANT,
+                        orderId,
+                        new OrderOutcomeService.RejectCommand(
+                                "d-1", "OTHER", null, "HORECAOS_OPERATIONS", "USER", "sharif", clock.instant(), null))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("note");
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+
+        // A blank note is exactly as uninformative as none: whitespace must not
+        // count as having said something.
+        assertThatThrownBy(() -> tx(() -> outcomes.reject(
+                        TENANT,
+                        orderId,
+                        new OrderOutcomeService.RejectCommand(
+                                "d-2",
+                                "OTHER",
+                                "   ",
+                                "HORECAOS_OPERATIONS",
+                                "USER",
+                                "sharif",
+                                clock.instant(),
+                                null))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("OTHER with a note is accepted, and the note is what the registry would otherwise have lost")
+    void otherWithANoteIsAccepted() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        tx(() -> outcomes.reject(
+                TENANT,
+                orderId,
+                new OrderOutcomeService.RejectCommand(
+                        "d-1",
+                        "OTHER",
+                        "клиент оскорблял оператора по телефону",
+                        "HORECAOS_OPERATIONS",
+                        "USER",
+                        "sharif",
+                        clock.instant(),
+                        null)));
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.REJECTED);
+    }
+
+    private String auditReasonFor(UUID orderId) {
+        return jdbc.sql("""
+                SELECT reason FROM audit.audit_events
+                WHERE target_id = :orderId AND action_code = 'ordering.order.approval-decision'
+                ORDER BY occurred_at DESC LIMIT 1
+                """).param("orderId", orderId).query(String.class).single();
+    }
+
     @Test
     @DisplayName("a completed order records how it was completed, not merely that it was")
     void completionRecordsHow() {
@@ -1241,6 +1455,7 @@ class OrderAmendmentAndOutcomeTests {
                 "operator",
                 "OPERATOR_DECISION",
                 clock.instant(),
+                null,
                 null);
     }
 

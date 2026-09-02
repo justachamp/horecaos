@@ -3563,6 +3563,7 @@ class CartCheckoutAndOrderTests {
                 "operator",
                 "OPERATOR_DECISION",
                 clock.instant(),
+                null,
                 null);
     }
 

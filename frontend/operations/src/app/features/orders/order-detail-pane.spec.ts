@@ -9,9 +9,27 @@ import { I18n } from '../../core/i18n/i18n';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderDetailPane } from './order-detail-pane';
 import { OrderDetailResponse, OrderTimelineEntry } from './order-detail';
+import { RejectReasonOption } from './order-reject-reason-dialog';
+import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+/** See `order-queue.spec.ts`'s identical fixture for why this is a small, made-up list rather than the platform's real eight. */
+const FAKE_REJECT_REASONS: readonly RejectReasonOption[] = [
+  {
+    code: 'ITEM_UNAVAILABLE',
+    displayOrder: 1,
+    requiresNote: false,
+    labels: { ru: 'Нет в наличии', 'uz-Latn': 'Mavjud emas', en: 'Item unavailable' },
+  },
+  {
+    code: 'OTHER',
+    displayOrder: 8,
+    requiresNote: true,
+    labels: { ru: 'Другое', 'uz-Latn': 'Boshqa', en: 'Other' },
+  },
+];
 const ORDER_PATH = '/api/v1/tenants/t1/brands/b1/locations/l1/orders/order-1';
 const TIMELINE_PATH = `${ORDER_PATH}/timeline`;
 
@@ -83,6 +101,7 @@ function configure(options: {
   get?: ReturnType<typeof vi.fn>;
   actionsApi?: Partial<OrderActionsApi>;
   revealApi?: Partial<OrderRevealApi>;
+  rejectReasonsApi?: Partial<RejectReasonsApi>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -101,6 +120,10 @@ function configure(options: {
       },
       { provide: OrderActionsApi, useValue: options.actionsApi ?? {} },
       { provide: OrderRevealApi, useValue: options.revealApi ?? {} },
+      {
+        provide: RejectReasonsApi,
+        useValue: options.rejectReasonsApi ?? { list: () => Promise.resolve(FAKE_REJECT_REASONS) },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -284,6 +307,117 @@ describe('OrderDetailPane: approve/reject idempotency and the lost-race render',
 
     const callsAfter = get.mock.calls.filter((c: unknown[]) => c[0] === ORDER_PATH).length;
     expect(callsAfter).toBeGreaterThan(callsBefore);
+  });
+});
+
+describe('OrderDetailPane: reject dialog is the curated picker (wave 24)', () => {
+  it('fetches GET .../orders/reject-reasons, opens the picker (not the free-text dialog), and submits the chosen code', async () => {
+    const reject = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    const rejectReasonsList = vi.fn().mockResolvedValue(FAKE_REJECT_REASONS);
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      actionsApi: { reject },
+      rejectReasonsApi: { list: rejectReasonsList },
+    });
+    const fixture = await render();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // REJECT is actions[1] in the fixture — the overflow menu, not primary.
+    (
+      host.querySelector('[data-testid="order-detail-overflow-trigger"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-detail-action-REJECT"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(rejectReasonsList).toHaveBeenCalledWith(FAKE_SCOPE);
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-reject-reason-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector(
+        '[data-testid="order-reject-reason-option-ITEM_UNAVAILABLE"]',
+      ) as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      expect.any(String),
+      'ITEM_UNAVAILABLE',
+      undefined,
+    );
+  });
+
+  it('OTHER refuses to submit with no note, then sends code and note once one is entered', async () => {
+    const reject = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      actionsApi: { reject },
+      rejectReasonsApi: { list: () => Promise.resolve(FAKE_REJECT_REASONS) },
+    });
+    const fixture = await render();
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-overflow-trigger"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-detail-action-REJECT"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    (
+      host.querySelector('[data-testid="order-reject-reason-option-OTHER"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-reject-reason-note-required"]')).not.toBeNull();
+
+    const noteField = host.querySelector(
+      '[data-testid="order-reject-reason-note"]',
+    ) as HTMLTextAreaElement;
+    noteField.value = 'подозрительный заказ';
+    noteField.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reject-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      expect.any(String),
+      'OTHER',
+      'подозрительный заказ',
+    );
   });
 });
 

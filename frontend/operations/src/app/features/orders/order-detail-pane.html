@@ -415,13 +415,21 @@
     </section>
   }
 
-  @if (dialog()) {
+  @if (dialog() === 'cancel') {
     <q-order-reason-dialog
-      [titleKey]="dialogTitleKey()"
-      [confirmLabelKey]="dialogConfirmLabelKey()"
-      [noteEnabled]="dialogNoteEnabled()"
+      titleKey="orders.dialog.cancel.title"
+      confirmLabelKey="orders.action.cancel"
+      [noteEnabled]="true"
       [busy]="busy()"
-      (confirm)="onDialogConfirm($event)"
+      (confirm)="onCancelDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'reject') {
+    <q-order-reject-reason-dialog
+      [reasons]="rejectReasons()"
+      [busy]="busy()"
+      (confirm)="onRejectDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }

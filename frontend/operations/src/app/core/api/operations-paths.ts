@@ -78,6 +78,14 @@ export const operationsPaths = {
     return `${this.order(scope, orderId)}/approval-decisions`;
   },
 
+  /**
+   * The curated list the reject dialog picks from (wave 24, V0119) — platform
+   * reference data, the same eight reasons for every tenant.
+   */
+  orderRejectReasons(scope: LocationScope): string {
+    return `${this.orders(scope)}/reject-reasons`;
+  },
+
   /** Move a confirmed order along the kitchen path. Mutation: key and `If-Match`. */
   orderStateActions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/state-actions`;

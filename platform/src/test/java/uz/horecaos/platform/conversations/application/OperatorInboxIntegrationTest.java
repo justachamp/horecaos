@@ -171,6 +171,10 @@ class OperatorInboxIntegrationTest {
                 new ThrowingAuthorizationService(),
                 entitlements,
                 new NoSummaryOrderDirectory(),
+                new uz.horecaos.platform.ordering.application.RejectReasonDirectoryAdapter(
+                        new uz.horecaos.platform.ordering.application.RejectReasonQueryService(
+                                new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore(
+                                        jdbc))),
                 new NoOpContactDirectory(),
                 new NoOpStopListPort(),
                 new ThrowingStockAvailabilityPort(),
@@ -183,7 +187,8 @@ class OperatorInboxIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$");
+                "^\\+?998\\d{9}$",
+                Duration.ofHours(6));
     }
 
     private static final String HANDOFF_WITH_RETURN_YAML = """

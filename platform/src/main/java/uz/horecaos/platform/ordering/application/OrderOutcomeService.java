@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -40,6 +41,7 @@ public class OrderOutcomeService {
 
     private final OrderStateService orderState;
     private final OrderOutcomeReasonService reasons;
+    private final RejectReasonQueryService rejectReasons;
     private final JdbcOrderStore orders;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
@@ -47,11 +49,13 @@ public class OrderOutcomeService {
     public OrderOutcomeService(
             OrderStateService orderState,
             OrderOutcomeReasonService reasons,
+            RejectReasonQueryService rejectReasons,
             JdbcOrderStore orders,
             FieldProtection protection,
             ObjectMapper objectMapper) {
         this.orderState = orderState;
         this.reasons = reasons;
+        this.rejectReasons = rejectReasons;
         this.orders = orders;
         this.protection = protection;
         this.objectMapper = objectMapper;
@@ -115,6 +119,39 @@ public class OrderOutcomeService {
                 command.actorId(),
                 command.correlationId(),
                 outcome);
+    }
+
+    /**
+     * Rejects an order under a reason from the platform's curated list (wave
+     * 24, V0119) — the free-text {@code reasonCode} on {@code decide}'s own
+     * {@code REJECT} action, closed.
+     *
+     * <p>Unlike {@link #cancel}, the reason here decides nothing about the
+     * consequence: every rejection already carries the same fixed disposition,
+     * liability party and refund posture ({@link OrderStateService#decide}),
+     * because the restaurant refused before anything was committed regardless
+     * of which of the eight reasons applied. What the registry decides is
+     * narrower and just as real — whether this code exists, is still offered,
+     * and (for {@code OTHER}) whether a note came with it — which is exactly
+     * {@link RejectReasonQueryService#validateForDecision}.
+     */
+    @Transactional
+    public OrderStateService.DecisionResult reject(UUID tenantId, UUID orderId, RejectCommand command) {
+        rejectReasons.validateForDecision(command.reasonCode(), command.note());
+
+        return orderState.decide(
+                tenantId,
+                orderId,
+                new OrderStateService.DecisionCommand(
+                        command.decisionId(),
+                        OrderStateService.DecisionAction.REJECT,
+                        command.decisionChannel(),
+                        command.actorType(),
+                        command.actorId(),
+                        command.reasonCode(),
+                        command.issuedAt(),
+                        command.correlationId(),
+                        encryptNote(tenantId, orderId, command.note())));
     }
 
     /**
@@ -219,5 +256,24 @@ public class OrderOutcomeService {
             @Nullable String note,
             String actorType,
             String actorId,
+            @Nullable String correlationId) {}
+
+    /**
+     * A rejection under the platform's curated reason list.
+     *
+     * @param decisionId stable across retries of one human decision, same
+     *                    contract as {@link OrderStateService.DecisionCommand}
+     * @param reasonCode one of {@code ordering.order_reject_reasons.code}
+     * @param note        required when the reason does — {@code OTHER} today —
+     *                    optional otherwise, and always encrypted before storage
+     */
+    public record RejectCommand(
+            String decisionId,
+            String reasonCode,
+            @Nullable String note,
+            String decisionChannel,
+            String actorType,
+            String actorId,
+            Instant issuedAt,
             @Nullable String correlationId) {}
 }
