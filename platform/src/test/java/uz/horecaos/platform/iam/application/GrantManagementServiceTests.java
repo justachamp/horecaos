@@ -475,6 +475,85 @@ class GrantManagementServiceTests {
                 .doesNotContain(revoked);
     }
 
+    /**
+     * V0127: the whole reason {@code includeInactive} exists — staff-and-access.md
+     * §2's suspended-row caption and §11.2's restore action both need the
+     * revoked grant back, not just its absence.
+     */
+    @Test
+    void includeInactiveAlsoReturnsRevokedGrants() {
+        UUID kept = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-3", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Kept", null),
+                OWNER);
+        UUID revoked = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-4", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Revoked", null),
+                OWNER);
+        service.revoke(TENANT, revoked, OWNER, "Left the company");
+
+        assertThat(service.listForTenant(TENANT, false))
+                .as("the default parameter value must still mean active-only")
+                .extracting(GrantManagementService.GrantView::id)
+                .contains(kept)
+                .doesNotContain(revoked);
+
+        assertThat(service.listForTenant(TENANT, true))
+                .extracting(GrantManagementService.GrantView::id)
+                .contains(kept, revoked);
+    }
+
+    /**
+     * V0127: a revocation carries its own reason and actor, kept apart from
+     * the grant's own {@code reason} — the argument the whole migration exists
+     * for.
+     */
+    @Test
+    void aRevokedGrantReportsItsOwnRevocationReasonSeparatelyFromWhyItWasGranted() {
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-5",
+                        "location-staff",
+                        ResourceScope.location(TENANT, BRAND, LOCATION),
+                        "Hired for the evening shift",
+                        null),
+                OWNER);
+        service.revoke(TENANT, grantId, OWNER, "Left the company");
+
+        GrantManagementService.GrantView view = service.listForTenant(TENANT, true).stream()
+                .filter(candidate -> candidate.id().equals(grantId))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(view.reason()).isEqualTo("Hired for the evening shift");
+        assertThat(view.status()).isEqualTo("REVOKED");
+        assertThat(view.revokedBy()).isEqualTo(OWNER);
+        assertThat(view.revokedReason()).isEqualTo("Left the company");
+        assertThat(view.revokedAt()).isEqualTo(CLOCK_INSTANT);
+        assertThat(view.validFrom()).isEqualTo(CLOCK_INSTANT);
+    }
+
+    @Test
+    void anActiveGrantCarriesNoRevocationFields() {
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-6",
+                        "location-staff",
+                        ResourceScope.location(TENANT, BRAND, LOCATION),
+                        "Onboarded",
+                        null),
+                OWNER);
+
+        GrantManagementService.GrantView view = service.listForTenant(TENANT).stream()
+                .filter(candidate -> candidate.id().equals(grantId))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(view.revokedAt()).isNull();
+        assertThat(view.revokedBy()).isNull();
+        assertThat(view.revokedReason()).isNull();
+    }
+
     // ----------------------------------------------------------------- Gap A: grant()/revoke() already work at
     // PLATFORM scope
 

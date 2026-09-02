@@ -3,8 +3,10 @@ package uz.horecaos.platform.integration.web.telegram;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -84,4 +86,23 @@ public class TelegramStaffLinkCodeController {
      * can read.
      */
     public record LinkCodeResponse(String code, String command) {}
+
+    /**
+     * Every staff Telegram link in the tenant — administrative, not
+     * self-service, so it is gated on {@link Capability#IAM_GRANT_MANAGE}
+     * rather than the broadly-held issue capability above: a manager reading
+     * whether Aziza has linked her account is a staff-administration question
+     * (staff-and-access.md §9.1's People screen and §9.2's Безопасность tab),
+     * not something the self-link capability was ever meant to expose.
+     */
+    @GetMapping("/links")
+    @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "List staff Telegram links in the tenant",
+            description = "Which principal each linked Telegram account acts as. No display name or "
+                    + "username is stored (V0105) — only the numeric Telegram user id — so this is "
+                    + "linked/not-linked evidence, not an identity lookup.")
+    public List<TelegramStaffLinkService.StaffLinkView> listLinks(@PathVariable UUID tenantId) {
+        return links.listForTenant(tenantId);
+    }
 }

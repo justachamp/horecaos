@@ -260,8 +260,12 @@ class JdbcAuthorizationServiceTests {
     @Test
     void aRevokedGrantStopsApplyingImmediately() {
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
-        jdbc.sql("UPDATE iam.grants SET status = 'REVOKED' WHERE principal_subject = 'staff-1'")
-                .update();
+        // V0127's ck_grant_revocation_pair requires the trio whenever status is REVOKED.
+        jdbc.sql("""
+                UPDATE iam.grants
+                   SET status = 'REVOKED', revoked_at = now(), revoked_by = 'test', revoked_reason = 'test'
+                 WHERE principal_subject = 'staff-1'
+                """).update();
 
         assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
                 .isFalse();

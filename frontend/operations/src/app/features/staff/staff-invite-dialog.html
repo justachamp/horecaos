@@ -1,0 +1,22 @@
+<div class="invite-dialog__backdrop" data-testid="staff-invite-dialog">
+  <div
+    class="invite-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'staff.inviteDialog.title' | t"
+  >
+    <h2 class="q-emphasis invite-dialog__title">{{ 'staff.inviteDialog.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'staff.inviteDialog.body' | t }}</p>
+    <p class="q-caption invite-dialog__hint">{{ 'staff.inviteDialog.workaround' | t }}</p>
+    <div class="invite-dialog__actions">
+      <button
+        type="button"
+        class="invite-dialog__dismiss"
+        (click)="close()"
+        data-testid="staff-invite-dialog-close"
+      >
+        {{ 'staff.dialog.close' | t }}
+      </button>
+    </div>
+  </div>
+</div>

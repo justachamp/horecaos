@@ -1,0 +1,74 @@
+<div class="access-dialog__backdrop" data-testid="staff-access-dialog">
+  <div
+    class="access-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="
+      (mode() === 'suspend'
+        ? 'staff.accessDialog.suspend.title'
+        : 'staff.accessDialog.restore.title'
+      ) | t
+    "
+  >
+    <h2 class="q-emphasis access-dialog__title">
+      {{
+        (mode() === 'suspend'
+          ? 'staff.accessDialog.suspend.title'
+          : 'staff.accessDialog.restore.title'
+        ) | t
+      }}
+    </h2>
+
+    <p class="q-body-sm">
+      {{
+        (mode() === 'suspend'
+          ? 'staff.accessDialog.suspend.body'
+          : 'staff.accessDialog.restore.body'
+        ) | t: { count: affectedJobCount() }
+      }}
+    </p>
+
+    @if (mode() === 'suspend') {
+      <p class="q-caption access-dialog__warning">{{ 'staff.accessDialog.suspend.caveat' | t }}</p>
+    }
+
+    <label class="access-dialog__field">
+      <span class="q-body-sm">{{ 'staff.accessDialog.reason.label' | t }}</span>
+      <input
+        type="text"
+        class="access-dialog__input"
+        [value]="reason()"
+        (input)="setReason($any($event.target).value)"
+        [placeholder]="'staff.accessDialog.reason.placeholder' | t"
+        [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+        maxlength="1000"
+        data-testid="staff-access-dialog-reason"
+      />
+      @if (reasonMissing()) {
+        <span class="q-caption access-dialog__error">{{
+          'staff.accessDialog.reason.required' | t
+        }}</span>
+      }
+    </label>
+
+    @if (serverError(); as message) {
+      <p class="q-body-sm access-dialog__error" role="alert">{{ message }}</p>
+    }
+
+    <div class="access-dialog__actions">
+      <button type="button" class="access-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'staff.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="access-dialog__confirm"
+        [class.access-dialog__confirm--destructive]="mode() === 'suspend'"
+        (click)="confirm()"
+        [disabled]="busy()"
+        data-testid="staff-access-dialog-confirm"
+      >
+        {{ (mode() === 'suspend' ? 'staff.action.suspend' : 'staff.action.restore') | t }}
+      </button>
+    </div>
+  </div>
+</div>

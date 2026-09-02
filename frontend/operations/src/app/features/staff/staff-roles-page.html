@@ -1,0 +1,87 @@
+<div class="page">
+  <h1 class="q-title">{{ 'staff.roles.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'staff.roles.lead' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied">{{ 'staff.people.denied' | t }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'staff.roles.column.name' | t }}</th>
+          <th class="q-caption">{{ 'staff.roles.column.level' | t }}</th>
+          <th class="q-caption">{{ 'staff.roles.column.covers' | t }}</th>
+          <th class="q-caption">{{ 'staff.roles.column.holders' | t }}</th>
+        </tr>
+      </thead>
+      @for (row of rows(); track row.role.code) {
+        <tbody>
+          <tr class="row" (click)="toggle(row.role.code)">
+            <td class="q-body-sm">
+              <span class="q-emphasis">{{ roleLabel(row.role.code) }}</span>
+              @if (roleDescription(row.role.code); as description) {
+                <p class="q-caption role-description">{{ description }}</p>
+              }
+            </td>
+            <td class="q-body-sm">
+              <span class="chip">{{ scopeLevelLabel(row.role.scopeType) }}</span>
+            </td>
+            <td class="q-body-sm">{{ row.areas.join(', ') }}</td>
+            <td class="q-body-sm">
+              <button type="button" class="text-button" (click)="$event.stopPropagation()">
+                {{ row.holderCount }}
+              </button>
+            </td>
+          </tr>
+          @if (expandedCode() === row.role.code) {
+            <tr class="detail-row">
+              <td colspan="4">
+                <div class="detail">
+                  <div class="detail__column">
+                    <p class="q-caption detail__heading">{{ 'staff.roles.canDo' | t }}</p>
+                    <ul class="q-body-sm">
+                      @for (sentence of canDoSentences(row.role); track sentence) {
+                        <li>{{ sentence }}</li>
+                      }
+                    </ul>
+                  </div>
+                  <div class="detail__column">
+                    <p class="q-caption detail__heading">{{ 'staff.roles.cannotDo' | t }}</p>
+                    <ul class="q-body-sm detail__muted">
+                      @for (sentence of cannotSentences(row.role); track sentence) {
+                        <li>{{ sentence }}</li>
+                      }
+                    </ul>
+                  </div>
+                  <div class="detail__column">
+                    <p class="q-caption detail__heading">{{ 'staff.roles.holders' | t }}</p>
+                    @if (holdersOf(row.role.code).length === 0) {
+                      <p class="q-body-sm detail__muted">{{ 'staff.roles.holders.none' | t }}</p>
+                    } @else {
+                      <table class="holders">
+                        @for (
+                          holder of holdersOf(row.role.code);
+                          track holder.principalSubject + holder.scopeText
+                        ) {
+                          <tr class="holders__row" (click)="openPerson(holder.principalSubject)">
+                            <td class="q-mono">{{ holder.principalSubject }}</td>
+                            <td>{{ holder.scopeText }}</td>
+                            <td class="q-caption">{{ holder.since }}</td>
+                          </tr>
+                        }
+                      </table>
+                    }
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      }
+    </table>
+  }
+</div>

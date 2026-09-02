@@ -137,6 +137,34 @@ public class TelegramStaffLinkService {
                 .optional();
     }
 
+    /**
+     * Every Telegram link in one tenant, for staff administration
+     * (staff-and-access.md's callout that "a staff row's Telegram state is
+     * real data worth showing" — the People screen and the person record's
+     * Безопасность tab both render this rather than inventing a "last seen"
+     * this table does not carry).
+     *
+     * <p>One principal may in principle hold more than one link (nothing here
+     * forbids re-linking from a second Telegram account), so this returns
+     * every row rather than collapsing to one-per-subject; a caller that wants
+     * "is this person linked at all" checks for any match on
+     * {@code principalSubject}.
+     */
+    public List<StaffLinkView> listForTenant(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT principal_subject, telegram_user_id, created_at
+                FROM integration.telegram_staff_links
+                WHERE tenant_id = :tenantId
+                ORDER BY created_at
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> new StaffLinkView(
+                        row.getString("principal_subject"),
+                        row.getLong("telegram_user_id"),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
     /** Every tenant this Telegram account is linked into, for the DM tenant-picker (ADR 0060 §3). */
     public List<TenantLink> tenantsFor(long telegramUserId) {
         return jdbc.sql("""
@@ -157,4 +185,7 @@ public class TelegramStaffLinkService {
     public record PendingStaffLink(UUID id, UUID tenantId, String principalSubject) {}
 
     public record TenantLink(UUID tenantId, String principalSubject) {}
+
+    /** One Telegram account bound to one principal, for the staff administration read. */
+    public record StaffLinkView(String principalSubject, long telegramUserId, Instant linkedAt) {}
 }

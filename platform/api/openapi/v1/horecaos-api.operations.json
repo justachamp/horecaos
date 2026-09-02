@@ -4809,6 +4809,22 @@
         },
         "type" : "object"
       },
+      "StaffLinkView" : {
+        "properties" : {
+          "linkedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "principalSubject" : {
+            "type" : "string"
+          },
+          "telegramUserId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "StaffLogoutRequest" : {
         "properties" : {
           "refreshToken" : {
@@ -14034,6 +14050,38 @@
           }
         },
         "summary" : "Issue a staff Telegram identity-link code",
+        "tags" : [ "Telegram staff linking" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/staff/telegram/links" : {
+      "get" : {
+        "description" : "Which principal each linked Telegram account acts as. No display name or username is stored (V0105) — only the numeric Telegram user id — so this is linked/not-linked evidence, not an identity lookup.",
+        "operationId" : "listLinks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StaffLinkView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List staff Telegram links in the tenant",
         "tags" : [ "Telegram staff linking" ]
       }
     }

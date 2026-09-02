@@ -1103,4 +1103,149 @@ export const messagesRu: MessageCatalogue = {
   'customers.merge.searchPlaceholder': 'Поиск по имени или телефону',
   'customers.merge.search': 'Найти',
   'customers.merge.confirm': 'Объединить',
+  // ------------------------------------------------------------------- staff
+  'staff.people.title': 'Люди',
+  'staff.people.lead':
+    'Кто работает, что каждый может делать, и у кого есть доступ, которого быть не должно.',
+  'staff.people.loading': 'Загрузка списка',
+  'staff.people.denied': 'Нет доступа к этому разделу',
+  'staff.people.emptyRule':
+    'У человека есть одна или несколько должностей, и каждая должность дана где-то — во всей компании, в одном бренде или в одном филиале. Должность, данная в одном филиале, работает только там.',
+  'staff.people.noMatches': 'Никого не найдено',
+
+  'staff.action.invite': 'Пригласить',
+  'staff.action.addJob': 'Изменить должность',
+  'staff.action.suspend': 'Приостановить доступ',
+  'staff.action.restore': 'Вернуть доступ',
+  'staff.action.remove': 'Убрать',
+
+  'staff.chip.you': 'Вы',
+
+  'staff.view.all': 'Все',
+  'staff.view.byBranch': 'По филиалам',
+
+  'staff.filter.all': 'Все ({count})',
+  'staff.filter.active': 'Активные ({count})',
+  'staff.filter.suspended': 'Приостановлены ({count})',
+  'staff.filter.search.placeholder': 'Поиск по идентификатору',
+  'staff.filter.reset': 'Сбросить фильтры',
+
+  'staff.group.companyWide': 'Вся компания',
+  'staff.group.noActiveJob': 'Без действующей должности',
+
+  'staff.column.person': 'Сотрудник',
+  'staff.column.person.notBuilt':
+    'Имя и телефон пока не сохраняются — показан идентификатор учётной записи',
+  'staff.column.job': 'Должность',
+  'staff.column.job.none': '—',
+  'staff.column.scope': 'Где работает',
+  'staff.column.access': 'Доступ',
+
+  'staff.status.ok': 'Всё в порядке',
+  'staff.status.revoked': 'Доступ отозван',
+  'staff.status.expiring': 'Заканчивается',
+
+  'staff.row.revoked.reason': 'Доступ отозван: {reason}',
+  'staff.row.revoked.noReason': 'Доступ отозван',
+  'staff.row.expiring': 'Заканчивается {date}',
+
+  'staff.telegram.linked': 'Telegram привязан',
+  'staff.telegram.notLinked': 'Telegram не привязан',
+
+  'staff.scope.company': 'Вся компания',
+  'staff.scope.brand': 'Бренд',
+  'staff.scope.location': 'Филиал',
+  'staff.scope.platform': 'Платформа',
+  'staff.scope.unknown': 'Неизвестно',
+
+  'staff.outcome.allSucceeded': 'Выполнено: {count}',
+  'staff.outcome.partial': 'Выполнено {succeeded} из {total}',
+
+  'staff.dialog.cancel': 'Отмена',
+  'staff.dialog.close': 'Закрыть',
+
+  'staff.jobDialog.title': 'Должность',
+  'staff.jobDialog.role.label': 'Должность',
+  'staff.jobDialog.role.placeholder': 'Выберите должность',
+  'staff.jobDialog.role.hint': 'Здесь только те должности, которые вы можете назначить сами.',
+  'staff.jobDialog.scope.label': 'Где',
+  'staff.jobDialog.scope.placeholder': 'Выберите филиал',
+  'staff.jobDialog.validUntil.label': 'До какого числа',
+  'staff.jobDialog.validUntil.hint': 'Временный доступ. Оставьте пустым для постоянного доступа.',
+  'staff.jobDialog.reason.label': 'Почему?',
+  'staff.jobDialog.reason.placeholder': 'Например: перевод в Юнусабад',
+  'staff.jobDialog.reason.required': 'Причина обязательна',
+  'staff.jobDialog.canDo': 'Сможет',
+  'staff.jobDialog.cannotDo': 'Не сможет',
+  'staff.jobDialog.confirm': 'Назначить',
+
+  'staff.accessDialog.suspend.title': 'Приостановить доступ',
+  'staff.accessDialog.suspend.body':
+    'Будет отозвано назначений: {count}. Человек больше не сможет ничего делать в системе.',
+  'staff.accessDialog.suspend.caveat':
+    'Войти она пока сможет — экран будет пустым. Причина обязательна, она попадёт в журнал.',
+  'staff.accessDialog.restore.title': 'Вернуть доступ',
+  'staff.accessDialog.restore.body':
+    'Будет восстановлено назначений: {count}, как они были на момент последнего отзыва.',
+  'staff.accessDialog.reason.label': 'Почему?',
+  'staff.accessDialog.reason.placeholder': 'Например: перевод в Юнусабад',
+  'staff.accessDialog.reason.required': 'Причина обязательна',
+
+  'staff.inviteDialog.title': 'Пригласить',
+  'staff.inviteDialog.body':
+    'Самостоятельное приглашение по телефону пока не построено: платформа умеет создавать учётную запись только для владельца компании при подключении, а не для рядового сотрудника.',
+  'staff.inviteDialog.workaround':
+    'Чтобы дать доступ человеку, у которого уже есть учётная запись, откройте его карточку и добавьте должность.',
+
+  'staff.detail.back': 'Назад к списку',
+  'staff.detail.notFound': 'Такого сотрудника нет',
+  'staff.detail.denied': 'У вас нет доступа к правам этого сотрудника',
+  'staff.detail.identity.notBuilt': 'Имя, телефон и фото пока не сохраняются',
+  'staff.detail.since': 'В системе с {date}',
+  'staff.detail.tab.access': 'Доступ',
+  'staff.detail.tab.security': 'Безопасность',
+  'staff.detail.access.empty': 'У этого человека пока нет ни одной должности.',
+  'staff.detail.canDo.show': 'Что можно делать',
+  'staff.detail.canDo.hide': 'Скрыть',
+  'staff.detail.field.validFrom': 'Действует с',
+  'staff.detail.field.validUntil': 'До',
+  'staff.detail.field.indefinite': 'Бессрочно',
+  'staff.detail.field.grantedBy': 'Назначил',
+  'staff.detail.field.reason': 'Причина',
+  'staff.detail.field.revokedReason': 'Причина отзыва',
+  'staff.detail.field.subject': 'Внутренний идентификатор',
+  'staff.detail.field.telegram': 'Telegram',
+  'staff.detail.security.notBuilt':
+    'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
+
+  'staff.role.tenant-owner': 'Владелец',
+  'staff.role.tenant-owner.description': 'Полный доступ ко всей компании.',
+  'staff.role.tenant-admin': 'Администратор',
+  'staff.role.tenant-admin.description': 'Всё, что у владельца, кроме денег и тарифа.',
+  'staff.role.tenant-finance': 'Финансы',
+  'staff.role.tenant-finance.description': 'Деньги и коммерческие настройки, без меню.',
+  'staff.role.support-agent': 'Оператор поддержки',
+  'staff.role.support-agent.description': 'Отвечает клиентам, не трогает меню и цены.',
+  'staff.role.brand-manager': 'Менеджер бренда',
+  'staff.role.brand-manager.description': 'Ведёт меню и рекламу одного бренда.',
+  'staff.role.courier-dispatcher': 'Диспетчер',
+  'staff.role.courier-dispatcher.description': 'Распределяет заказы между курьерами бренда.',
+  'staff.role.location-manager': 'Управляющий филиалом',
+  'staff.role.location-manager.description': 'Управляет одним филиалом целиком.',
+  'staff.role.location-staff': 'Сотрудник филиала',
+  'staff.role.location-staff.description': 'Работает с заказами на месте.',
+
+  'staff.roles.title': 'Должности',
+  'staff.roles.lead': 'Что позволяет каждая должность, прежде чем отдать её человеку.',
+  'staff.roles.column.name': 'Должность',
+  'staff.roles.column.level': 'Уровень',
+  'staff.roles.column.covers': 'Что охватывает',
+  'staff.roles.column.holders': 'Сколько человек',
+  'staff.roles.canDo': 'Что можно делать',
+  'staff.roles.cannotDo': 'Чего нельзя',
+  'staff.roles.holders': 'Кто занимает',
+  'staff.roles.holders.none': 'Пока никто',
+
+  'staff.shell.people': 'Люди',
+  'staff.shell.roles': 'Должности',
 };

@@ -200,6 +200,40 @@ export const routes: Routes = [
         ],
       },
       {
+        // Staff (operations IA §9.1, staff-and-access.md): a shell — like
+        // `settings-shell.ts` — for two screens that must not dock beside
+        // each other, unlike a person's own Карточка, which docks beside the
+        // Люди list the same way `orders/:orderId` docks beside the queue.
+        //
+        // `roles` is declared before the empty (Люди) child so it is tried
+        // first: Angular's default 'prefix' match on `path: ''` always
+        // succeeds and then hands the remaining segment down to Люди's own
+        // `:subjectId` child, which would otherwise swallow the literal
+        // segment "roles" as if it were a principal subject.
+        path: 'staff',
+        loadComponent: () => import('./features/staff/staff-shell').then((m) => m.StaffShell),
+        children: [
+          {
+            path: 'roles',
+            loadComponent: () =>
+              import('./features/staff/staff-roles-page').then((m) => m.StaffRolesPage),
+          },
+          {
+            path: '',
+            loadComponent: () => import('./features/staff/staff-page').then((m) => m.StaffPage),
+            children: [
+              {
+                path: ':subjectId',
+                loadComponent: () =>
+                  import('./features/staff/staff-member-detail-pane').then(
+                    (m) => m.StaffMemberDetailPane,
+                  ),
+              },
+            ],
+          },
+        ],
+      },
+      {
         path: 'catalog',
         loadComponent: () => import('./features/catalog/catalog-shell').then((m) => m.CatalogShell),
         children: [
@@ -325,6 +359,7 @@ function placeholderRoutes(): Routes {
     '/couriers',
     '/customers',
   ]);
+  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/staff']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

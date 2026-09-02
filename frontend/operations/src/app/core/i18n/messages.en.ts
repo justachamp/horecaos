@@ -1126,6 +1126,151 @@ export const messagesEn = {
   'customers.merge.searchPlaceholder': 'Search by name or phone',
   'customers.merge.search': 'Search',
   'customers.merge.confirm': 'Merge',
+  // ------------------------------------------------------------------- staff
+  'staff.people.title': 'People',
+  'staff.people.lead':
+    'Who works here, what each of them may do, and who has access they should not.',
+  'staff.people.loading': 'Loading the list',
+  'staff.people.denied': 'No access to this section',
+  'staff.people.emptyRule':
+    'A person has one or more jobs, and each job is given somewhere — the whole company, one brand, or one location. A job given at one location works only there.',
+  'staff.people.noMatches': 'Nobody found',
+
+  'staff.action.invite': 'Invite',
+  'staff.action.addJob': 'Change job',
+  'staff.action.suspend': 'Suspend access',
+  'staff.action.restore': 'Restore access',
+  'staff.action.remove': 'Remove',
+
+  'staff.chip.you': 'You',
+
+  'staff.view.all': 'All',
+  'staff.view.byBranch': 'By branch',
+
+  'staff.filter.all': 'All ({count})',
+  'staff.filter.active': 'Active ({count})',
+  'staff.filter.suspended': 'Suspended ({count})',
+  'staff.filter.search.placeholder': 'Search by identifier',
+  'staff.filter.reset': 'Reset filters',
+
+  'staff.group.companyWide': 'Whole company',
+  'staff.group.noActiveJob': 'No current job',
+
+  'staff.column.person': 'Person',
+  'staff.column.person.notBuilt':
+    'Name and phone are not stored yet — showing the account identifier',
+  'staff.column.job': 'Job',
+  'staff.column.job.none': '—',
+  'staff.column.scope': 'Where',
+  'staff.column.access': 'Access',
+
+  'staff.status.ok': 'All fine',
+  'staff.status.revoked': 'Access revoked',
+  'staff.status.expiring': 'Expiring soon',
+
+  'staff.row.revoked.reason': 'Access revoked: {reason}',
+  'staff.row.revoked.noReason': 'Access revoked',
+  'staff.row.expiring': 'Expires {date}',
+
+  'staff.telegram.linked': 'Telegram linked',
+  'staff.telegram.notLinked': 'Telegram not linked',
+
+  'staff.scope.company': 'Whole company',
+  'staff.scope.brand': 'Brand',
+  'staff.scope.location': 'Location',
+  'staff.scope.platform': 'Platform',
+  'staff.scope.unknown': 'Unknown',
+
+  'staff.outcome.allSucceeded': 'Done: {count}',
+  'staff.outcome.partial': 'Done {succeeded} of {total}',
+
+  'staff.dialog.cancel': 'Cancel',
+  'staff.dialog.close': 'Close',
+
+  'staff.jobDialog.title': 'Job',
+  'staff.jobDialog.role.label': 'Job',
+  'staff.jobDialog.role.placeholder': 'Choose a job',
+  'staff.jobDialog.role.hint': 'Only jobs you may assign yourself are listed here.',
+  'staff.jobDialog.scope.label': 'Where',
+  'staff.jobDialog.scope.placeholder': 'Choose a location',
+  'staff.jobDialog.validUntil.label': 'Until',
+  'staff.jobDialog.validUntil.hint': 'Temporary access. Leave blank for permanent access.',
+  'staff.jobDialog.reason.label': 'Why?',
+  'staff.jobDialog.reason.placeholder': 'For example: moved to the Yunusobod branch',
+  'staff.jobDialog.reason.required': 'A reason is required',
+  'staff.jobDialog.canDo': 'Will be able to',
+  'staff.jobDialog.cannotDo': "Won't be able to",
+  'staff.jobDialog.confirm': 'Assign',
+
+  'staff.accessDialog.suspend.title': 'Suspend access',
+  'staff.accessDialog.suspend.body':
+    'This will revoke {count} assignment(s). The person will no longer be able to do anything in the system.',
+  'staff.accessDialog.suspend.caveat':
+    'They will still be able to sign in — the screen will just be empty. A reason is required and goes into the log.',
+  'staff.accessDialog.restore.title': 'Restore access',
+  'staff.accessDialog.restore.body':
+    'This will restore {count} assignment(s), as they were at the last revocation.',
+  'staff.accessDialog.reason.label': 'Why?',
+  'staff.accessDialog.reason.placeholder': 'For example: moved to the Yunusobod branch',
+  'staff.accessDialog.reason.required': 'A reason is required',
+
+  'staff.inviteDialog.title': 'Invite',
+  'staff.inviteDialog.body':
+    'Self-service invitation by phone is not built yet: the platform can only create an account for the tenant owner during onboarding, not for an ordinary staff member.',
+  'staff.inviteDialog.workaround':
+    'To give access to someone who already has an account, open their record and add a job.',
+
+  'staff.detail.back': 'Back to the list',
+  'staff.detail.notFound': 'No such person',
+  'staff.detail.denied': "No access to this person's rights",
+  'staff.detail.identity.notBuilt': 'Name, phone and photo are not stored yet',
+  'staff.detail.since': 'On the system since {date}',
+  'staff.detail.tab.access': 'Access',
+  'staff.detail.tab.security': 'Security',
+  'staff.detail.access.empty': 'This person has no job yet.',
+  'staff.detail.canDo.show': 'What they can do',
+  'staff.detail.canDo.hide': 'Hide',
+  'staff.detail.field.validFrom': 'Since',
+  'staff.detail.field.validUntil': 'Until',
+  'staff.detail.field.indefinite': 'Indefinite',
+  'staff.detail.field.grantedBy': 'Granted by',
+  'staff.detail.field.reason': 'Reason',
+  'staff.detail.field.revokedReason': 'Revocation reason',
+  'staff.detail.field.subject': 'Internal identifier',
+  'staff.detail.field.telegram': 'Telegram',
+  'staff.detail.security.notBuilt':
+    'Sign-in method, last sign-in and terminal PIN are not tracked yet',
+
+  'staff.role.tenant-owner': 'Owner',
+  'staff.role.tenant-owner.description': 'Full access to the whole company.',
+  'staff.role.tenant-admin': 'Administrator',
+  'staff.role.tenant-admin.description': 'Everything the owner has, except money and the plan.',
+  'staff.role.tenant-finance': 'Finance',
+  'staff.role.tenant-finance.description': 'Money and commercial settings, no menu.',
+  'staff.role.support-agent': 'Support agent',
+  'staff.role.support-agent.description': 'Answers customers, never touches the menu or prices.',
+  'staff.role.brand-manager': 'Brand manager',
+  'staff.role.brand-manager.description': "Runs one brand's menu and marketing.",
+  'staff.role.courier-dispatcher': 'Dispatcher',
+  'staff.role.courier-dispatcher.description': "Assigns the brand's couriers to orders.",
+  'staff.role.location-manager': 'Location manager',
+  'staff.role.location-manager.description': 'Runs one location end to end.',
+  'staff.role.location-staff': 'Location staff',
+  'staff.role.location-staff.description': 'Works the order feed on the floor.',
+
+  'staff.roles.title': 'Jobs',
+  'staff.roles.lead': 'What each job actually permits, before it is handed to someone.',
+  'staff.roles.column.name': 'Job',
+  'staff.roles.column.level': 'Level',
+  'staff.roles.column.covers': 'Covers',
+  'staff.roles.column.holders': 'Holders',
+  'staff.roles.canDo': 'What it can do',
+  'staff.roles.cannotDo': "What it can't do",
+  'staff.roles.holders': 'Who holds it',
+  'staff.roles.holders.none': 'Nobody yet',
+
+  'staff.shell.people': 'People',
+  'staff.shell.roles': 'Jobs',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

@@ -1327,10 +1327,16 @@ export interface GrantView {
   grantedBy?: string;
   id?: string;
   principalSubject?: string;
+  reason?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  revokedReason?: string;
   roleCode?: string;
   scopeId?: string;
   scopeType?: string;
   status?: string;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export interface GuestBillResponse {
@@ -2982,6 +2988,12 @@ export interface RevisionResponse {
   totalMinor?: number;
 }
 
+export interface RoleDescriptor {
+  capabilities?: Array<string>;
+  code?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
 export interface RollbackScopeRequest {
   expectedVersion?: number;
   reason: string;
@@ -3347,6 +3359,12 @@ export interface SortOrderRequest {
 
 export interface SseEmitter {
   timeout?: number;
+}
+
+export interface StaffLinkView {
+  linkedAt?: string;
+  principalSubject?: string;
+  telegramUserId?: number;
 }
 
 export interface StaffLogoutRequest {
@@ -3870,7 +3888,11 @@ export interface Operations {
   "draftVersion_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_5": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } }; body: ActivateRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "entitlements": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": EntitlementSnapshotResponse } };
+<<<<<<< HEAD
   "list_8": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<GrantView> } };
+=======
+  "list_7": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
+>>>>>>> wave32-opsstaff
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
   "revoke": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
   "linkKeycloakOrganization": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/identity/keycloak-organization"; request: { parameters: { path: { tenantId: string } }; body: LinkKeycloakOrganizationRequest }; responses: { "200": TenantView } };
@@ -3909,7 +3931,12 @@ export interface Operations {
   "start_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: PosSyncRunControllerStartRequest }; responses: { "200": {  } } };
   "reconcileCapabilities": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/capability-reconciliation"; request: { parameters: { path: { tenantId: string } }; body: ReconcileRequest }; responses: { "200": {  } } };
   "differences": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/differences"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": PageDifferenceView } };
+<<<<<<< HEAD
   "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };
+=======
+  "roles": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/roles"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RoleDescriptor> } };
+  "list_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };
+>>>>>>> wave32-opsstaff
   "create_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } }; body: CreateChannelRequest }; responses: { "200": ChannelView } };
   "archive_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };
   "replaceFulfillmentModes": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/fulfillment-modes"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: boolean } }; responses: { "200": unknown } };
@@ -4173,6 +4200,7 @@ export interface Operations {
   "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
   "slaBuckets": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": SlaResponse } };
   "issue": { method: "POST"; path: "/api/v1/tenants/{tenantId}/staff/telegram/link-codes"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": LinkCodeResponse } };
+  "listLinks": { method: "GET"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StaffLinkView> } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle_5": { method: "HEAD"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

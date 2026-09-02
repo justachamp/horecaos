@@ -1,0 +1,45 @@
+.invite-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(22, 22, 22, 0.5);
+  z-index: 50;
+}
+
+.invite-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.invite-dialog__title {
+  margin: 0;
+}
+
+.invite-dialog__hint {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.invite-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.invite-dialog__dismiss {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: 14px;
+}
