@@ -13,6 +13,19 @@
   succeeds, and `OnboardingFullRunIntegrationTests` proves a realistic
   cash-only pickup tenant reaches `READY` on every step with a real ADR 0025
   grant in `iam.grants`. The stuck-run alert is wired end to end.
+  As of 2026-09-02 (wave 23), `OnboardingService.activate` closes the gap wave
+  21's `activateBrand`/`activateLocation` endpoints only gave a manual remedy
+  for: the moment a platform administrator approves `TENANT_ACTIVATE`, every
+  `DRAFT` brand and location the tenant owns is lifted to `ACTIVE` in the same
+  transaction as the tenant itself — gated to `DRAFT` alone, so a unit
+  suspended after go-live is never resurrected by a later run, and placed at
+  activation because it is the one onboarding moment with a real authenticated
+  actor bound (every other step runs from the background scheduler).
+  `OnboardingFullRunIntegrationTests` now seeds its fixture the way
+  `TenantControlPlaneService.createBrand`/`createLocation` actually leave a
+  unit — `DRAFT` — and proves the customer-visible fact the gap hid: the
+  activated location is found by `JdbcStorefrontPickupLocationStore.nearestTo`,
+  the same query pickup discovery serves.
   All five onboarding facts
   (`TenantOnboardingStarted`, `TenantOnboardingStepCompleted`,
   `TenantOnboardingFailed`, `TenantReady`, `TenantActivated`) are published
