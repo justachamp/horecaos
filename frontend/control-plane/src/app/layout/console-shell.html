@@ -8,15 +8,18 @@
   </div>
 
   <ul class="rail-sections">
-    @for (section of sections(); track section.id) {
+    @for (row of sections(); track row.section.id) {
+      @if (row.groupHeader) {
+        <li class="rail-group q-caption" role="presentation">{{ i18n.t(row.groupHeader) }}</li>
+      }
       <li>
         <a
           class="q-body-sm rail-link"
-          [routerLink]="section.route"
+          [routerLink]="row.section.route"
           routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: section.route === '/' }"
+          [routerLinkActiveOptions]="{ exact: row.section.route === '/' }"
         >
-          {{ i18n.t(section.labelKey) }}
+          {{ i18n.t(row.section.labelKey) }}
         </a>
       </li>
     }

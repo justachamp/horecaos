@@ -1,0 +1,105 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+}
+
+.state {
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.quickActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.action {
+  border: 1px solid var(--q-hairline);
+  padding: 8px 16px;
+  color: var(--q-ink);
+  text-decoration: none;
+}
+
+.action:hover {
+  background: var(--q-surface-1);
+}
+
+.panel {
+  margin-top: 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 24px;
+  max-width: 760px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+  margin: 16px 0 0;
+}
+
+.cell {
+  background: var(--q-canvas);
+  padding: 10px 12px;
+}
+
+.label {
+  color: var(--q-ink-subtle);
+}
+
+.value {
+  color: var(--q-ink);
+  margin: 4px 0 0;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.brandList,
+.entitlementList {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.entitlementList li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--q-hairline);
+  padding-bottom: 8px;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  margin-left: 8px;
+}
+
+.pill-ACTIVE {
+  color: var(--q-success-text);
+  border-color: var(--q-success);
+}
+
+.pill-DRAFT {
+  color: var(--q-warning-text);
+  border-color: var(--q-warning);
+}
+
+.pill-SUSPENDED,
+.pill-ARCHIVED {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}

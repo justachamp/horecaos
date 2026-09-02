@@ -134,6 +134,52 @@ class TenantControlPlaneServiceTests {
     }
 
     @Test
+    void listsTenantsForTheControlPlaneDirectoryButRefusesAnyoneNotPlatformAdmin() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        TenantControlPlaneService service = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> platformAdmin);
+
+        var first = service.createTenant(new CreateTenantCommand(
+                "directory-a",
+                "Directory A LLC",
+                "Directory A",
+                "UZS",
+                "Asia/Tashkent",
+                CustomerIdentityMode.TENANT_SHARED));
+        var second = service.createTenant(new CreateTenantCommand(
+                "directory-b",
+                "Directory B LLC",
+                "Directory B",
+                "UZS",
+                "Asia/Tashkent",
+                CustomerIdentityMode.TENANT_SHARED));
+
+        assertThat(service.listTenants(null, 50))
+                .as("the directory holds every tenant this platform-admin session created")
+                .extracting(TenantControlPlaneService.TenantSummaryView::id)
+                .contains(first.id(), second.id());
+
+        AuthenticatedActor tenantOwner = new AuthenticatedActor("tenant-owner", Set.of(), Map.of());
+        TenantControlPlaneService asOwner = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> tenantOwner, denyAll(), false),
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> tenantOwner);
+        assertThatThrownBy(() -> asOwner.listTenants(null, 50))
+                .as("the directory is a cross-tenant read; organization membership in one tenant "
+                        + "must never substitute for platform scope")
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void activatesADraftBrandAndLocationAndIsIdempotent() {
         InMemoryStore store = new InMemoryStore();
         AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
@@ -206,6 +252,26 @@ class TenantControlPlaneServiceTests {
             return tenants.values().stream()
                     .filter(tenant -> tenant.slug().equals(slug))
                     .findFirst();
+        }
+
+        @Override
+        public List<TenantControlPlaneStore.TenantSummary> listTenants(
+                @org.jspecify.annotations.Nullable TenantId afterTenantId, int limit) {
+            return tenants.values().stream()
+                    .sorted(java.util.Comparator.comparing(tenant -> tenant.id().value()))
+                    .filter(tenant ->
+                            afterTenantId == null || tenant.id().value().compareTo(afterTenantId.value()) > 0)
+                    .limit(limit)
+                    .map(tenant -> new TenantControlPlaneStore.TenantSummary(
+                            tenant.id(),
+                            tenant.slug(),
+                            tenant.legalName(),
+                            tenant.displayName(),
+                            tenant.defaultCurrency().getCurrencyCode(),
+                            tenant.defaultTimezone().getId(),
+                            tenant.status(),
+                            Instant.EPOCH))
+                    .toList();
         }
 
         @Override

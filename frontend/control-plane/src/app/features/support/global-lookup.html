@@ -1,0 +1,28 @@
+<h1 class="q-title">{{ i18n.t('globalLookup.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('globalLookup.lead') }}</p>
+
+<div class="notice">
+  <p class="q-caption">{{ i18n.t('globalLookup.gap') }}</p>
+</div>
+
+<form class="picker" (submit)="search($event)">
+  <label class="q-caption">{{ i18n.t('globalLookup.slug') }}</label>
+  <input class="q-body-sm" type="text" [value]="slug()" (input)="slug.set($any($event.target).value)" />
+  <button type="submit" [disabled]="slug().trim().length === 0">{{ i18n.t('globalLookup.search') }}</button>
+</form>
+
+@if (searching()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (error(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (searched()) {
+  @if (notFound()) {
+    <p class="q-body-sm state">{{ i18n.t('globalLookup.notFound') }}</p>
+  } @else if (result(); as tenant) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ tenant.displayName }}</h2>
+      <p class="q-body-sm muted">{{ tenant.legalName }} &middot; {{ tenant.slug }} &middot; {{ tenant.status }}</p>
+      <a class="q-body-sm" [routerLink]="['/tenants', tenant.id]">{{ i18n.t('globalLookup.open') }} →</a>
+    </section>
+  }
+}

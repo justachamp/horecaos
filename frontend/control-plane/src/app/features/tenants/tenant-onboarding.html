@@ -1,0 +1,124 @@
+<h1 class="q-title">{{ i18n.t('onboarding.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('onboarding.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  @if (actionError(); as message) {
+    <p class="q-body-sm error">{{ message }}</p>
+  }
+
+  @if (run(); as view) {
+    <section class="panel">
+      <div class="runHead">
+        <span class="q-subhead">{{ i18n.t('onboarding.run.status') }}: {{ view.run.status }}</span>
+        <span class="q-body-sm muted">{{ i18n.t('onboarding.run.phase') }}: {{ view.run.currentPhase }}</span>
+      </div>
+      @if (view.run.lastError) {
+        <p class="q-body-sm error">{{ view.run.lastError }}</p>
+      }
+
+      @if (view.outstandingRequired.length > 0) {
+        <p class="q-body-sm outstanding">
+          {{ i18n.t('onboarding.outstanding') }}: {{ view.outstandingRequired.join(', ') }}
+        </p>
+      }
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('onboarding.column.step') }}</th>
+            <th class="q-caption">{{ i18n.t('onboarding.column.phase') }}</th>
+            <th class="q-caption">{{ i18n.t('onboarding.column.status') }}</th>
+            <th class="q-caption">{{ i18n.t('onboarding.column.required') }}</th>
+            <th class="q-caption">{{ i18n.t('onboarding.column.detail') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (step of view.steps; track step.stepKey) {
+            <tr>
+              <td class="q-body-sm">{{ step.stepKey }}</td>
+              <td class="q-body-sm">{{ step.phase }}</td>
+              <td class="q-body-sm">
+                <span class="pill" [class]="'pill-' + step.status">{{ step.status }}</span>
+              </td>
+              <td class="q-body-sm">{{ step.required ? i18n.t('onboarding.required.yes') : i18n.t('onboarding.required.no') }}</td>
+              <td class="q-body-sm muted">{{ step.detail ?? step.errorCode ?? '' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.resume.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('onboarding.resume.lead') }}</p>
+      <form class="inlineForm" (submit)="resume($event)">
+        <input
+          class="q-body-sm"
+          type="text"
+          [placeholder]="i18n.t('onboarding.reason.placeholder')"
+          [value]="resumeReason()"
+          (input)="resumeReason.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="resuming() || resumeReason().trim().length === 0">
+          {{ resuming() ? i18n.t('onboarding.resume.submitting') : i18n.t('onboarding.resume.submit') }}
+        </button>
+      </form>
+      @if (resumeMessage(); as message) {
+        <p class="q-body-sm success">{{ message }}</p>
+      }
+    </section>
+
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.activate.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('onboarding.activate.lead') }}</p>
+      <form class="inlineForm" (submit)="activate($event)">
+        <input
+          class="q-body-sm"
+          type="text"
+          [placeholder]="i18n.t('onboarding.reason.placeholder')"
+          [value]="activateReason()"
+          (input)="activateReason.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="activating() || activateReason().trim().length === 0">
+          {{ activating() ? i18n.t('onboarding.activate.submitting') : i18n.t('onboarding.activate.submit') }}
+        </button>
+      </form>
+
+      @if (activationOutcomeKey(); as outcome) {
+        @if (outcome === 'ACTIVATED') {
+          <p class="q-body-sm success">{{ i18n.t('onboarding.activate.outcome.activated') }}</p>
+        } @else if (outcome === 'AWAITING_APPROVAL') {
+          <p class="q-body-sm pending">
+            {{ i18n.t('onboarding.activate.outcome.awaitingApproval') }}
+            @if (pendingApprovalId(); as requestId) {
+              <span class="q-tnum"> ({{ requestId }})</span>
+            }
+          </p>
+        } @else {
+          <p class="q-body-sm error">{{ i18n.t('onboarding.activate.outcome.notReady') }}</p>
+        }
+      }
+    </section>
+  } @else {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.start.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('onboarding.start.lead') }}</p>
+      <form class="inlineForm" (submit)="startRun($event)">
+        <input
+          class="q-body-sm"
+          type="email"
+          [placeholder]="i18n.t('onboarding.start.ownerEmail')"
+          [value]="ownerEmail()"
+          (input)="ownerEmail.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="starting()">
+          {{ starting() ? i18n.t('onboarding.start.submitting') : i18n.t('onboarding.start.submit') }}
+        </button>
+      </form>
+    </section>
+  }
+}

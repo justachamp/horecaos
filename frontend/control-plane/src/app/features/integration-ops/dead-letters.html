@@ -1,0 +1,46 @@
+<h1 class="q-title">{{ i18n.t('deadLetters.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('deadLetters.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  @if (actionError(); as message) {
+    <p class="q-body-sm error">{{ message }}</p>
+  }
+  @if (actionMessage(); as message) {
+    <p class="q-body-sm success">{{ message }}</p>
+  }
+
+  @if (events().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('deadLetters.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('deadLetters.column.event') }}</th>
+          <th class="q-caption">{{ i18n.t('deadLetters.column.type') }}</th>
+          <th class="q-caption">{{ i18n.t('deadLetters.column.attempts') }}</th>
+          <th class="q-caption">{{ i18n.t('deadLetters.column.error') }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (event of events(); track event.eventId) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ event.eventId }}</td>
+            <td class="q-body-sm">{{ event.eventType }}</td>
+            <td class="q-body-sm q-tnum">{{ event.attemptCount }}</td>
+            <td class="q-body-sm muted">{{ event.lastErrorCode }}</td>
+            <td class="q-body-sm">
+              <button type="button" [disabled]="retrying() === event.eventId" (click)="retry(event.eventId)">
+                {{ retrying() === event.eventId ? i18n.t('deadLetters.retry.submitting') : i18n.t('deadLetters.retry.action') }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

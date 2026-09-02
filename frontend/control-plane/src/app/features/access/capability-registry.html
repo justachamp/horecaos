@@ -1,0 +1,35 @@
+<h1 class="q-title">{{ i18n.t('capabilityRegistry.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('capabilityRegistry.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <input
+    class="q-body-sm filter"
+    type="text"
+    [placeholder]="i18n.t('capabilityRegistry.filter')"
+    [value]="filter()"
+    (input)="filter.set($any($event.target).value)"
+  />
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('capabilityRegistry.column.code') }}</th>
+        <th class="q-caption">{{ i18n.t('capabilityRegistry.column.resource') }}</th>
+        <th class="q-caption">{{ i18n.t('capabilityRegistry.column.action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (capability of filtered(); track capability.code) {
+        <tr>
+          <td class="q-body-sm q-tnum">{{ capability.code }}</td>
+          <td class="q-body-sm">{{ capability.resourceType }}</td>
+          <td class="q-body-sm">{{ capability.action }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

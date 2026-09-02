@@ -148,25 +148,6 @@
         },
         "type" : "object"
       },
-      "AdvanceScopeRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "targetState" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "targetState" ],
-        "type" : "object"
-      },
       "AmendRequest" : {
         "properties" : {
           "applyImmediately" : {
@@ -690,25 +671,6 @@
         },
         "type" : "object"
       },
-      "ChangeProgramStatusRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "PLANNING", "ACTIVE", "COMPLETED", "ABANDONED" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "status" ],
-        "type" : "object"
-      },
       "CloseRequest" : {
         "properties" : {
           "endReason" : {
@@ -788,84 +750,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "CommercialAdminControllerAdjustmentRequest" : {
-        "properties" : {
-          "approvedBy" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "entitlementKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "periodKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "quantityDelta" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "sourceReference" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "approvedBy", "entitlementKey", "periodKey", "reason" ],
-        "type" : "object"
-      },
-      "CommercialAdminControllerDraftVersionRequest" : {
-        "properties" : {
-          "billingPeriod" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "entitlements" : {
-            "items" : {
-              "$ref" : "#/components/schemas/EntitlementLineRequest"
-            },
-            "type" : "array"
-          },
-          "priceMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "termsReference" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "billingPeriod", "currency", "reason" ],
-        "type" : "object"
-      },
-      "CommercialAdminControllerReasonRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason" ],
         "type" : "object"
       },
       "CompleteRequest" : {
@@ -1166,25 +1050,6 @@
         },
         "type" : "object"
       },
-      "CoverageRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "undecidedSources" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "reason" ],
-        "type" : "object"
-      },
       "CoverageResponse" : {
         "properties" : {
           "awaitingProvider" : {
@@ -1246,59 +1111,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "CreatePlanRequest" : {
-        "properties" : {
-          "code" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "name" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "code", "name", "reason" ],
-        "type" : "object"
-      },
-      "CreateProgramRequest" : {
-        "properties" : {
-          "name" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "policyVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "sourceEnvironment" : {
-            "example" : "delever-production",
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "targetEnvironment" : {
-            "example" : "horecaos-production",
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "name", "reason", "sourceEnvironment", "targetEnvironment" ],
         "type" : "object"
       },
       "CreateTemplateRequest" : {
@@ -1370,115 +1182,6 @@
         },
         "type" : "object"
       },
-      "CutoverDecisionRequest" : {
-        "properties" : {
-          "approvalRequestId" : {
-            "description" : "The ADR 0027 maker-checker request this decision discharges",
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "evidence" : {
-            "additionalProperties" : {
-              "type" : "string"
-            },
-            "minProperties" : 1,
-            "type" : "object"
-          },
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "requestedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "requestedBy" : {
-            "maxLength" : 255,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "targetState" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "evidence", "reason", "requestedBy", "targetState" ],
-        "type" : "object"
-      },
-      "CutoverDecisionView" : {
-        "properties" : {
-          "approvalRequestId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "decidedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "decidedBy" : {
-            "type" : "string"
-          },
-          "decision" : {
-            "enum" : [ "APPROVED", "REFUSED", "WITHDRAWN", "EXPIRED" ],
-            "type" : "string"
-          },
-          "fromState" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "reason" : {
-            "type" : "string"
-          },
-          "requestedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "requestedBy" : {
-            "type" : "string"
-          },
-          "scopeId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "scopeVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "toState" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "Divergence" : {
-        "properties" : {
-          "entitlementKey" : {
-            "type" : "string"
-          },
-          "periodKey" : {
-            "type" : "string"
-          },
-          "recomputed" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "stored" : {
-            "format" : "int64",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "DownloadResponse" : {
         "properties" : {
           "url" : {
@@ -1543,38 +1246,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "EntitlementLineRequest" : {
-        "properties" : {
-          "enabled" : {
-            "type" : "boolean"
-          },
-          "enforcementMode" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "entitlementKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "limit" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "overageUnitPriceMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "resetPeriod" : {
-            "type" : "string"
-          },
-          "warnThresholdBasisPoints" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "enforcementMode", "entitlementKey" ],
         "type" : "object"
       },
       "EstimateResponse" : {
@@ -1718,30 +1389,6 @@
           }
         },
         "required" : [ "purpose" ],
-        "type" : "object"
-      },
-      "FinishRunRequest" : {
-        "properties" : {
-          "checksum" : {
-            "example" : "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "pattern" : "[0-9a-f]{64}",
-            "type" : "string"
-          },
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "status" ],
         "type" : "object"
       },
       "FiscalDocumentControllerResolutionRequest" : {
@@ -2513,58 +2160,6 @@
         },
         "type" : "object"
       },
-      "MigrationRunView" : {
-        "properties" : {
-          "checksum" : {
-            "type" : "string"
-          },
-          "counters" : {
-            "$ref" : "#/components/schemas/RunCountersView"
-          },
-          "finishedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "runType" : {
-            "enum" : [ "BACKFILL", "CATCH_UP", "REMEDIATION", "RECONCILIATION" ],
-            "type" : "string"
-          },
-          "scopeId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "sourceWatermark" : {
-            "type" : "string"
-          },
-          "startedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "startedBy" : {
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ],
-            "type" : "string"
-          },
-          "targetWatermark" : {
-            "type" : "string"
-          },
-          "transformationVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "ModeBindingResponse" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -2809,45 +2404,6 @@
           }
         },
         "required" : [ "accuracyMeters", "capturedAt", "latitude", "longitude" ],
-        "type" : "object"
-      },
-      "OpenScopeRequest" : {
-        "properties" : {
-          "brandId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "capability" : {
-            "enum" : [ "TENANCY", "IDENTITY", "CUSTOMERS", "MEDIA", "CATALOG", "INVENTORY", "PRICING", "ORDERS", "PAYMENTS", "FULFILLMENT", "NOTIFICATIONS", "CONFIGURATION", "REPORTING" ],
-            "type" : "string"
-          },
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "sourceOwner" : {
-            "example" : "DELEVER",
-            "minLength" : 1,
-            "pattern" : "[A-Z0-9][A-Z0-9_]{0,31}",
-            "type" : "string"
-          },
-          "targetOwner" : {
-            "example" : "HORECAOS_ORDERING",
-            "minLength" : 1,
-            "pattern" : "[A-Z0-9][A-Z0-9_]{0,31}",
-            "type" : "string"
-          },
-          "tenantId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "capability", "reason", "sourceOwner", "targetOwner", "tenantId" ],
         "type" : "object"
       },
       "OpenShiftRequest" : {
@@ -3339,86 +2895,11 @@
         },
         "type" : "object"
       },
-      "OverrideRequest" : {
-        "properties" : {
-          "approvedBy" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "enabled" : {
-            "type" : "boolean"
-          },
-          "entitlementKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "limit" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "validUntil" : {
-            "format" : "date-time",
-            "type" : "string"
-          }
-        },
-        "required" : [ "approvedBy", "entitlementKey", "reason", "validUntil" ],
-        "type" : "object"
-      },
-      "OwnershipView" : {
-        "properties" : {
-          "capability" : {
-            "enum" : [ "TENANCY", "IDENTITY", "CUSTOMERS", "MEDIA", "CATALOG", "INVENTORY", "PRICING", "ORDERS", "PAYMENTS", "FULFILLMENT", "NOTIFICATIONS", "CONFIGURATION", "REPORTING" ],
-            "type" : "string"
-          },
-          "legacyMayWrite" : {
-            "type" : "boolean"
-          },
-          "readMode" : {
-            "enum" : [ "LEGACY", "SHADOW_COMPARE", "CANARY_TARGET", "TARGET" ],
-            "type" : "string"
-          },
-          "scopeId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "state" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          },
-          "targetMayWrite" : {
-            "type" : "boolean"
-          },
-          "writeMode" : {
-            "enum" : [ "LEGACY_ONLY", "LEGACY_WITH_TARGET_SHADOW", "TARGET_ONLY" ],
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "PageRemedyResponse" : {
         "properties" : {
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/RemedyResponse"
-            },
-            "type" : "array"
-          },
-          "nextCursor" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "PageScopeView" : {
-        "properties" : {
-          "items" : {
-            "items" : {
-              "$ref" : "#/components/schemas/ScopeView"
             },
             "type" : "array"
           },
@@ -3508,44 +2989,6 @@
         },
         "type" : "object"
       },
-      "ProgramView" : {
-        "properties" : {
-          "completedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "name" : {
-            "type" : "string"
-          },
-          "policyVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "sourceEnvironment" : {
-            "type" : "string"
-          },
-          "startedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "PLANNING", "ACTIVE", "COMPLETED", "ABANDONED" ],
-            "type" : "string"
-          },
-          "targetEnvironment" : {
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "ProvenanceResponse" : {
         "properties" : {
           "asOf" : {
@@ -3584,57 +3027,6 @@
             "type" : "array"
           },
           "timezone" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "QuarantineBacklogView" : {
-        "properties" : {
-          "openItems" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "scopeId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "QuarantineItemView" : {
-        "properties" : {
-          "entityType" : {
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "legacyId" : {
-            "type" : "string"
-          },
-          "reasonCode" : {
-            "type" : "string"
-          },
-          "resolutionCode" : {
-            "type" : "string"
-          },
-          "resolvedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "resolvedBy" : {
-            "type" : "string"
-          },
-          "runId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "sanitizedEvidenceReference" : {
-            "type" : "string"
-          },
-          "status" : {
             "type" : "string"
           }
         },
@@ -4268,23 +3660,6 @@
         },
         "type" : "object"
       },
-      "ResolveQuarantineRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "resolutionCode" : {
-            "example" : "REIMPORTED_AFTER_SOURCE_FIX",
-            "minLength" : 1,
-            "pattern" : "[A-Z][A-Z0-9_]{0,63}",
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "resolutionCode" ],
-        "type" : "object"
-      },
       "ResolveResponse" : {
         "properties" : {
           "accountId" : {
@@ -4328,21 +3703,6 @@
             "type" : "integer"
           }
         },
-        "type" : "object"
-      },
-      "ResumeScopeRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason" ],
         "type" : "object"
       },
       "RetryRequest" : {
@@ -4538,21 +3898,6 @@
         },
         "type" : "object"
       },
-      "RollbackScopeRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason" ],
-        "type" : "object"
-      },
       "RotateMerchantBindingSecretRequest" : {
         "properties" : {
           "reason" : {
@@ -4719,31 +4064,6 @@
         },
         "type" : "object"
       },
-      "RunCountersView" : {
-        "properties" : {
-          "created" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "quarantined" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "scanned" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "skipped" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "updated" : {
-            "format" : "int64",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "ScopeGrant" : {
         "properties" : {
           "capabilities" : {
@@ -4759,61 +4079,6 @@
           },
           "scope" : {
             "$ref" : "#/components/schemas/ResourceScope"
-          }
-        },
-        "type" : "object"
-      },
-      "ScopeView" : {
-        "properties" : {
-          "brandId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "capability" : {
-            "enum" : [ "TENANCY", "IDENTITY", "CUSTOMERS", "MEDIA", "CATALOG", "INVENTORY", "PRICING", "ORDERS", "PAYMENTS", "FULFILLMENT", "NOTIFICATIONS", "CONFIGURATION", "REPORTING" ],
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "programId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "readMode" : {
-            "enum" : [ "LEGACY", "SHADOW_COMPARE", "CANARY_TARGET", "TARGET" ],
-            "type" : "string"
-          },
-          "sourceOwner" : {
-            "type" : "string"
-          },
-          "state" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          },
-          "stateEnteredAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "targetOwner" : {
-            "type" : "string"
-          },
-          "tenantId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "writeMode" : {
-            "enum" : [ "LEGACY_ONLY", "LEGACY_WITH_TARGET_SHADOW", "TARGET_ONLY" ],
-            "type" : "string"
           }
         },
         "type" : "object"
@@ -5114,31 +4379,6 @@
         },
         "type" : "object"
       },
-      "SignatureRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 512,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason" ],
-        "type" : "object"
-      },
-      "SignatureResponse" : {
-        "properties" : {
-          "definitionDigest" : {
-            "type" : "string"
-          },
-          "metricCode" : {
-            "type" : "string"
-          },
-          "signedBy" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "SlaResponse" : {
         "properties" : {
           "buckets" : {
@@ -5256,49 +4496,6 @@
           }
         },
         "required" : [ "password", "username" ],
-        "type" : "object"
-      },
-      "StartRunRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "runType" : {
-            "enum" : [ "BACKFILL", "CATCH_UP", "REMEDIATION", "RECONCILIATION" ],
-            "type" : "string"
-          },
-          "startedBy" : {
-            "maxLength" : 255,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "transformationVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "reason", "runType", "startedBy" ],
-        "type" : "object"
-      },
-      "StartSubscriptionRequest" : {
-        "properties" : {
-          "planVersionId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "trialDays" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "planVersionId", "reason" ],
         "type" : "object"
       },
       "StatementResponse" : {
@@ -5473,25 +4670,6 @@
           }
         },
         "required" : [ "reason", "reasonCode" ],
-        "type" : "object"
-      },
-      "SuspendScopeRequest" : {
-        "properties" : {
-          "expectedVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "holdingState" : {
-            "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "holdingState", "reason" ],
         "type" : "object"
       },
       "TableRequest" : {
@@ -5753,34 +4931,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "TransitionRequest" : {
-        "properties" : {
-          "cancelAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "expectedVersion" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "status" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "suspensionReason" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "status" ],
         "type" : "object"
       },
       "Unavailable" : {
@@ -6310,7 +5460,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
       "get" : {
-        "operationId" : "get_5",
+        "operationId" : "get_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7007,7 +6157,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend" : {
       "post" : {
-        "operationId" : "suspend_3",
+        "operationId" : "suspend_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7344,7 +6494,7 @@
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments" : {
       "post" : {
         "description" : "A manual penalty is never written on this call alone: it returns the approval request and writes nothing until a second person decides.",
-        "operationId" : "adjust_2",
+        "operationId" : "adjust_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7477,7 +6627,7 @@
     "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments" : {
       "post" : {
         "description" : "One account, one signed amount, one reason. Above the configured threshold it needs an ADR 0027 approval and returns PENDING until a second person decides it. There is no paired form and no transfer: two offsetting adjustments are two separate approved acts.",
-        "operationId" : "adjust_1",
+        "operationId" : "adjust",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7801,7 +6951,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}" : {
       "get" : {
-        "operationId" : "get_4",
+        "operationId" : "get_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7838,7 +6988,7 @@
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE binding resolves for a payment. Permitted from DRAFT or SUSPENDED; refused if this legal entity already has a different ACTIVE binding for the same provider.",
-        "operationId" : "activate_2",
+        "operationId" : "activate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7983,7 +7133,7 @@
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend" : {
       "post" : {
         "description" : "Stops the binding from resolving for a new payment. Nothing about a payment it already settled changes. Permitted from ACTIVE only.",
-        "operationId" : "suspend_2",
+        "operationId" : "suspend_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -8504,1187 +7654,6 @@
         },
         "summary" : "Remedy totals, per type, split by who moved the money",
         "tags" : [ "Order remedies" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation" : {
-      "post" : {
-        "description" : "Irreversible: the version and its entitlements become immutable at the database. Refused when the approver is the version's author.",
-        "operationId" : "activate_1",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "planVersionId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CommercialAdminControllerReasonRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "OK"
-          }
-        },
-        "summary" : "Make a plan version live",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/plans" : {
-      "post" : {
-        "operationId" : "createPlan",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CreatePlanRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "additionalProperties" : { },
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Register a plan",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/plans/{planId}/versions" : {
-      "post" : {
-        "description" : "Always a new version, never an edit. The price is integer minor units of the version's currency; for UZS a minor unit is one whole som.",
-        "operationId" : "draftVersion",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "planId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CommercialAdminControllerDraftVersionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "additionalProperties" : { },
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Draft a new version of a plan",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/tenants/{tenantId}/entitlement-overrides" : {
-      "post" : {
-        "description" : "Time-bounded is not optional. An open-ended override is a plan change made without changing the plan, and it outlives everyone who remembers why it was granted.",
-        "operationId" : "override",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/OverrideRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "additionalProperties" : { },
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Grant a time-bounded entitlement override",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/tenants/{tenantId}/subscription-transitions" : {
-      "post" : {
-        "description" : "Suspension degrades what may be added and deletes nothing. The expected version is required, so two operators deciding at once settle at one outcome.",
-        "operationId" : "transition",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/TransitionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "OK"
-          }
-        },
-        "summary" : "Move a subscription's status",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/tenants/{tenantId}/subscriptions" : {
-      "post" : {
-        "description" : "Manual assignment. ADR 0021's first slice does not automate recurring billing, and an operator's name against a subscription is an honest record of that rather than a placeholder.",
-        "operationId" : "startSubscription",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/StartSubscriptionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "additionalProperties" : { },
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Put a tenant on a plan version",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/tenants/{tenantId}/usage-adjustments" : {
-      "post" : {
-        "description" : "The only way a consumed figure ever changes. The movements that produced the original number stay exactly as they were recorded, which is what makes the correction defensible rather than merely applied.",
-        "operationId" : "adjust",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CommercialAdminControllerAdjustmentRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "additionalProperties" : { },
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Correct a metered figure with a signed adjustment",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/commercial/tenants/{tenantId}/usage-rebuilds" : {
-      "post" : {
-        "description" : "Returns the periods whose cached figure disagreed, which should be empty. A non-empty answer is the alert an aggregate cache exists to make possible; a counter updated in place could never produce one.",
-        "operationId" : "rebuild",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "items" : {
-                    "$ref" : "#/components/schemas/Divergence"
-                  },
-                  "type" : "array"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Recompute every cached total from the ledger",
-        "tags" : [ "Commercial administration" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/ownership" : {
-      "get" : {
-        "description" : "Most specific scope wins: location, then brand, then tenant. A capability no scope covers resolves to legacy ownership, never to unowned, because a capability the migration has not reached is not thereby unowned.",
-        "operationId" : "resolve_2",
-        "parameters" : [ {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "capability",
-          "required" : true,
-          "schema" : {
-            "enum" : [ "TENANCY", "IDENTITY", "CUSTOMERS", "MEDIA", "CATALOG", "INVENTORY", "PRICING", "ORDERS", "PAYMENTS", "FULFILLMENT", "NOTIFICATIONS", "CONFIGURATION", "REPORTING" ],
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "brandId",
-          "required" : false,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "locationId",
-          "required" : false,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/OwnershipView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Resolve capability ownership at a tenant, brand, or branch",
-        "tags" : [ "Migration ownership" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/programs" : {
-      "post" : {
-        "description" : "The program pins the approved mapping and quarantine policy version it executes, so a later revision cannot retroactively change what an already-running migration was allowed to do.",
-        "operationId" : "create_2",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CreateProgramRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProgramView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Register a migration program",
-        "tags" : [ "Migration programs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/programs/{programId}" : {
-      "get" : {
-        "operationId" : "get_3",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "programId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProgramView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Get a migration program",
-        "tags" : [ "Migration programs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/programs/{programId}/scopes" : {
-      "get" : {
-        "operationId" : "listScopes",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "programId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "description" : "The nextCursor of the previous page",
-          "in" : "query",
-          "name" : "cursor",
-          "required" : false,
-          "schema" : {
-            "description" : "The nextCursor of the previous page",
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "limit",
-          "required" : false,
-          "schema" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/PageScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "List the scopes of a program, oldest first",
-        "tags" : [ "Migration programs" ]
-      },
-      "post" : {
-        "description" : "Retrying with the same claim returns the scope it already opened: the three claim indexes make a second row at one specificity unrepresentable, and two rows answering one ownership question is two writers.",
-        "operationId" : "openScope",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "programId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/OpenScopeRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Open a capability scope under a program",
-        "tags" : [ "Migration programs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/programs/{programId}/status" : {
-      "post" : {
-        "description" : "Completing is refused while any scope the program opened is short of RETIRED: a completed program reads as \"this estate is off the legacy system\", and saying that while a capability still has a legacy writer is what gets an old database decommissioned with live traffic on it.",
-        "operationId" : "changeStatus",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "programId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/ChangeProgramStatusRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProgramView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Start, complete, or abandon a program",
-        "tags" : [ "Migration programs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/quarantine-items/{itemId}/resolution" : {
-      "post" : {
-        "description" : "The resolution code says how it was settled — re-imported after a source fix, mapped by hand under review, or accepted as not migratable. The status stays two-valued so the gates keep asking one question.",
-        "operationId" : "resolve_1",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "itemId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/ResolveQuarantineRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/QuarantineItemView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Settle a quarantined legacy row",
-        "tags" : [ "Migration quarantine" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/runs/{runId}" : {
-      "get" : {
-        "operationId" : "get_2",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "runId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/MigrationRunView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Get a run and its counters",
-        "tags" : [ "Migration runs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/runs/{runId}/outcome" : {
-      "post" : {
-        "operationId" : "finish",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "runId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/FinishRunRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/MigrationRunView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Complete, fail, or cancel a run",
-        "tags" : [ "Migration runs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}" : {
-      "get" : {
-        "description" : "The ETag carries the scope version, which every transition below requires back as expectedVersion.",
-        "operationId" : "get_1",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Get a capability scope",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/coverage" : {
-      "post" : {
-        "operationId" : "republishCoverage",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CoverageRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Republish the scope's undecided-source count",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover" : {
-      "post" : {
-        "description" : "The gates are re-evaluated in this transaction rather than trusted from whenever the scope reached CUTOVER_READY: a critical difference found overnight stops a window approved yesterday evening.",
-        "operationId" : "cutOver",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CutoverDecisionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Approve a cutover and transfer ownership to the target",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/cutover-refusals" : {
-      "post" : {
-        "operationId" : "refuseCutover",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/CutoverDecisionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CutoverDecisionView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Refuse a proposed cutover, leaving the scope where it is",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/quarantine" : {
-      "get" : {
-        "operationId" : "backlog",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/QuarantineBacklogView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "How many quarantine items of this scope are still open",
-        "tags" : [ "Migration quarantine" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions" : {
-      "post" : {
-        "operationId" : "resume_2",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/ResumeScopeRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Resume a held scope into the state it was suspended from",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/rollbacks" : {
-      "post" : {
-        "description" : "Reachable from TARGET_OWNED and CANARY. Not gated on reconciliation: a critical difference is the reason to roll back, so requiring a clear one would remove the escape exactly when it is needed.",
-        "operationId" : "rollBack",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/RollbackScopeRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Reverse a cutover, returning the writer to legacy",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/runs" : {
-      "post" : {
-        "description" : "A new run of a type that already has a live one is refused rather than queued, and the refusal names the run that is already going.",
-        "operationId" : "start_1",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/StartRunRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/MigrationRunView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Start a run over a scope",
-        "tags" : [ "Migration runs" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/suspensions" : {
-      "post" : {
-        "description" : "PAUSED is a decision somebody made and BLOCKED_RECONCILIATION is one evidence forced. The operator resuming it needs to know which.",
-        "operationId" : "suspend_1",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/SuspendScopeRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Pause a scope, or block it on reconciliation",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/migration/scopes/{scopeId}/transitions" : {
-      "post" : {
-        "description" : "TARGET_OWNED is not reachable here. Taking target ownership goes through the cutover endpoint, which records who approved it and on what evidence before the write mode moves.",
-        "operationId" : "advance",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "scopeId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "header",
-          "name" : "Idempotency-Key",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/AdvanceScopeRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ScopeView"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Advance a scope to its next state",
-        "tags" : [ "Migration scopes" ]
-      }
-    },
-    "/api/v1/platform-admin/reporting/metric-signatures/{metricCode}" : {
-      "post" : {
-        "description" : "Refused if the version is already signed. A second signature over the same words says nothing new, and replacing the first would lose who actually decided; a changed definition is a new version instead.",
-        "operationId" : "sign",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "metricCode",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/SignatureRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/SignatureResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Record that finance has signed this metric version",
-        "tags" : [ "Metric signatures" ]
       }
     },
     "/api/v1/session/context" : {
@@ -14947,17 +12916,11 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Migration programs and the capability scopes under them",
-    "name" : "Migration programs"
-  }, {
     "description" : "Which optional messages a customer receives, per class and channel",
     "name" : "Notification preferences"
   }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
-  }, {
-    "description" : "Plans, subscriptions, overrides, and usage corrections",
-    "name" : "Commercial administration"
   }, {
     "description" : "Seating, rounds, the running bill, and settlement",
     "name" : "Dine-in sessions"
@@ -14992,9 +12955,6 @@
     "description" : "Engagements, shift approval, settlement, and delivery cost",
     "name" : "Courier operations"
   }, {
-    "description" : "Recording finance sign-off on a metric version",
-    "name" : "Metric signatures"
-  }, {
     "description" : "Presigned upload lifecycle for catalog and brand imagery",
     "name" : "Media"
   }, {
@@ -15016,9 +12976,6 @@
     "description" : "Per-tenant, per-brand, per-locale message wording and its versions",
     "name" : "Notification templates"
   }, {
-    "description" : "Backfill, catch-up, remediation, and reconciliation runs",
-    "name" : "Migration runs"
-  }, {
     "description" : "Opening and closing the window in which a courier's position is collected",
     "name" : "Courier duty and telemetry"
   }, {
@@ -15034,9 +12991,6 @@
     "description" : "Capability grants and session context",
     "name" : "Authorization"
   }, {
-    "description" : "Which system may write a capability, at a resolved scope",
-    "name" : "Migration ownership"
-  }, {
     "description" : "Which legal entity settles under which provider account (ADR 0013, ADR 0026)",
     "name" : "Merchant bindings"
   }, {
@@ -15049,17 +13003,11 @@
     "description" : "Production stations and routing rules",
     "name" : "Kitchen configuration"
   }, {
-    "description" : "Legacy rows held back, and how they were settled",
-    "name" : "Migration quarantine"
-  }, {
     "description" : "Production tickets, the buffer, and station advances",
     "name" : "Kitchen board"
   }, {
     "description" : "Binary availability and stock listing at a location",
     "name" : "Inventory"
-  }, {
-    "description" : "Capability ownership, its transitions, and cutover decisions",
-    "name" : "Migration scopes"
   }, {
     "description" : "Unreported receipts, blocked work, and receipt coverage",
     "name" : "Fiscal documents"

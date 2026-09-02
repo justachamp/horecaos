@@ -1,0 +1,21 @@
+<h1 class="q-title">{{ i18n.t('capabilityMatrix.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('capabilityMatrix.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (adapters().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('capabilityMatrix.empty') }}</p>
+} @else {
+  @for (adapter of adapters(); track adapter.providerType) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ adapter.providerType }}</h2>
+      <div class="chips">
+        @for (capability of adapter.declaredCapabilities; track capability) {
+          <span class="chip">{{ capability }}</span>
+        }
+      </div>
+    </section>
+  }
+}

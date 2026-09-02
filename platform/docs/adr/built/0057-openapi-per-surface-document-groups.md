@@ -14,10 +14,11 @@
 - Deciders: platform owner (requested the split), Claude (grouping design)
 - Depends on: 0031, 0040
 - Supersedes / Superseded by: —
-- Open inputs: whether `platform-admin` and the courier's own self-service endpoints
-  (today folded into `operations` by elimination, not by a considered decision) deserve
-  their own group once a frontend consumes either. Owner: platform owner; revisit when
-  `frontend/` gains a platform-admin app or a courier app distinct from `mobile/`.
+- Open inputs: whether the courier's own self-service endpoints (still folded into
+  `operations` by elimination, not by a considered decision) deserve their own group once
+  a frontend consumes them. Owner: platform owner; revisit when `frontend/` gains a
+  courier app distinct from `mobile/`. The `platform-admin` half of this question is
+  resolved — ADR 0066 moved it to `control-plane` once wave 28 built that frontend.
 
 ## Context
 

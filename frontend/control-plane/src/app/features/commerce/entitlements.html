@@ -1,0 +1,113 @@
+<h1 class="q-title">{{ i18n.t('entitlements.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('entitlements.lead') }}</p>
+
+<form class="picker" (submit)="load(); $event.preventDefault()">
+  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
+  <input
+    class="q-body-sm"
+    type="text"
+    [value]="tenantId()"
+    (input)="tenantId.set($any($event.target).value)"
+  />
+  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
+</form>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (snapshot(); as snap) {
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('entitlements.subscription.title') }}</h2>
+    @if (subscription(); as sub) {
+      <p class="q-body-sm">{{ sub.status }} &middot; {{ i18n.t('entitlements.subscription.since') }} {{ i18n.day(asDate(sub.startedAt)) }}</p>
+    } @else {
+      <p class="q-body-sm muted">{{ i18n.t('entitlements.subscription.none') }}</p>
+    }
+  </section>
+
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('entitlements.list.title') }}</h2>
+    @if (snap.entitlements.length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('entitlements.list.empty') }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
+            <th class="q-caption">{{ i18n.t('entitlements.column.limit') }}</th>
+            <th class="q-caption">{{ i18n.t('entitlements.column.mode') }}</th>
+            <th class="q-caption">{{ i18n.t('entitlements.column.source') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entitlement of snap.entitlements; track entitlement.entitlementKey) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ entitlement.entitlementKey }}</td>
+              <td class="q-body-sm q-tnum">{{ entitlement.limit ?? '—' }}</td>
+              <td class="q-body-sm">{{ entitlement.effectiveMode }}</td>
+              <td class="q-body-sm muted">{{ entitlement.source }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+
+  @if (usage(); as u) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('entitlements.usage.title') }} &middot; {{ u.period }}</h2>
+      <ul class="usageList">
+        @for (counter of u.counters | keyvalue; track counter.key) {
+          <li class="q-body-sm">
+            <span class="q-tnum">{{ counter.key }}</span>
+            <span class="q-tnum">{{ counter.value }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (session.has('COMMERCIAL_OVERRIDE_APPROVE')) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('entitlements.override.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('entitlements.override.lead') }}</p>
+      <form class="inlineForm" (submit)="submitOverride($event)">
+        <input
+          class="q-body-sm"
+          type="text"
+          [placeholder]="i18n.t('entitlements.override.key')"
+          [value]="overrideKey()"
+          (input)="overrideKey.set($any($event.target).value)"
+        />
+        <input
+          class="q-body-sm"
+          type="number"
+          [placeholder]="i18n.t('entitlements.override.limit')"
+          [value]="overrideLimit()"
+          (input)="overrideLimit.set($any($event.target).value)"
+        />
+        <input
+          class="q-body-sm"
+          type="date"
+          [placeholder]="i18n.t('entitlements.override.validUntil')"
+          [value]="overrideValidUntil()"
+          (input)="overrideValidUntil.set($any($event.target).value)"
+        />
+        <input
+          class="q-body-sm"
+          type="text"
+          [placeholder]="i18n.t('entitlements.override.approvedBy')"
+          [value]="overrideApprovedBy()"
+          (input)="overrideApprovedBy.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="!canSubmitOverride()">
+          {{ overrideSubmitting() ? i18n.t('onboarding.start.submitting') : i18n.t('entitlements.override.submit') }}
+        </button>
+      </form>
+      @if (overrideMessage(); as message) {
+        <p class="q-body-sm">{{ message }}</p>
+      }
+    </section>
+  }
+}

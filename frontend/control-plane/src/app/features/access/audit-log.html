@@ -1,0 +1,43 @@
+<h1 class="q-title">{{ i18n.t('auditLog.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('auditLog.lead') }}</p>
+
+<form class="picker" (submit)="load($event)">
+  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
+  <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
+</form>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (searched()) {
+  @if (events().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('auditLog.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('auditLog.column.when') }}</th>
+          <th class="q-caption">{{ i18n.t('auditLog.column.action') }}</th>
+          <th class="q-caption">{{ i18n.t('auditLog.column.actor') }}</th>
+          <th class="q-caption">{{ i18n.t('auditLog.column.target') }}</th>
+          <th class="q-caption">{{ i18n.t('auditLog.column.outcome') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (event of events(); track event.id) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ i18n.dateTime(asDate(event.recordedAt)) }}</td>
+            <td class="q-body-sm">{{ event.actionCode }}</td>
+            <td class="q-body-sm">
+              {{ event.actorType === 'SYSTEM' ? i18n.t('auditLog.actor.system') : event.actorDisplay ?? event.actorSubject }}
+            </td>
+            <td class="q-body-sm muted">{{ event.targetType }}</td>
+            <td class="q-body-sm">{{ event.outcome }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

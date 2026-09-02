@@ -1,0 +1,43 @@
+<h1 class="q-title">{{ i18n.t('referenceData.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('referenceData.lead') }}</p>
+
+<div class="notice">
+  <p class="q-caption">{{ i18n.t('referenceData.gap') }}</p>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (data(); as d) {
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('referenceData.countries') }}</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('referenceData.column.country') }}</th>
+          <th class="q-caption">{{ i18n.t('referenceData.column.currency') }}</th>
+          <th class="q-caption">{{ i18n.t('referenceData.column.timezone') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (country of d.countries; track country.code) {
+          <tr>
+            <td class="q-body-sm">{{ country.name }} ({{ country.code }})</td>
+            <td class="q-body-sm q-tnum">{{ country.defaultCurrency }}</td>
+            <td class="q-body-sm">{{ country.defaultTimezone }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('referenceData.locales') }}</h2>
+    <ul class="localeList">
+      @for (locale of d.locales; track locale.code) {
+        <li class="q-body-sm">{{ locale.displayName }} ({{ locale.code }})</li>
+      }
+    </ul>
+  </section>
+}

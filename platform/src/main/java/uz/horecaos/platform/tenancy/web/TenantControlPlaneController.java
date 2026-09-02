@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import uz.horecaos.platform.iam.api.Capability;
@@ -39,6 +40,7 @@ import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 @RestController
@@ -68,6 +70,33 @@ public class TenantControlPlaneController {
                 .buildAndExpand(tenant.id())
                 .toUri();
         return ResponseEntity.created(location).body(tenant);
+    }
+
+    /**
+     * The control-plane tenant directory (IA 2.1), oldest first.
+     *
+     * <p>Keyset-paginated by {@code id}, the same unsigned-cursor shortcut
+     * {@code AuditController}, {@code FailureOperationsController}, and the
+     * migration console's own list already take (ADR 0031 asks for a signed
+     * cursor and the platform has no {@code CursorSigner} bean yet).
+     */
+    @GetMapping
+    @RequiresCapability(value = Capability.TENANT_READ, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "List every tenant",
+            description = "Platform-admin only. No plan, business type, country, or health score "
+                    + "is returned because none of those exist in the schema yet.")
+    Page<TenantControlPlaneService.TenantSummaryView> listTenants(
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page") UUID cursor,
+            @RequestParam(required = false) Integer limit) {
+
+        int pageSize = Page.limitOrDefault(limit);
+        List<TenantControlPlaneService.TenantSummaryView> items =
+                service.listTenants(cursor == null ? null : new TenantId(cursor), pageSize);
+
+        String nextCursor =
+                items.size() < pageSize ? null : items.getLast().id().toString();
+        return new Page<>(items, nextCursor);
     }
 
     @GetMapping("/{tenantId}")
