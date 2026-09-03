@@ -116,6 +116,15 @@ export const NAVIGATION: readonly NavGroup[] = [
         spec: 'operations-spec/catalog.md',
       },
       {
+        // frontend-information-architecture.md §6: all eight rows tiered, six
+        // of them tier 2 (6.3 Loyalty and 6.6 Referrals are tier 3 and own no
+        // route at all — see marketing-shell.ts's own doc).
+        path: '/marketing',
+        label: 'shell.nav.marketing',
+        badge: null,
+        spec: 'frontend-information-architecture.md §6 (Marketing)',
+      },
+      {
         path: '/places',
         label: 'shell.nav.places',
         badge: null,

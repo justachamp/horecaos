@@ -736,6 +736,158 @@
         },
         "type" : "object"
       },
+      "AudienceDetailResponse" : {
+        "properties" : {
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "predicates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AudiencePredicateResponse"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AudiencePredicateRequest" : {
+        "properties" : {
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "dateHigh" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "dateLow" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "numericHigh" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "numericLow" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "operator" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "textValues" : {
+            "items" : {
+              "minLength" : 1,
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "type" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "operator", "type" ],
+        "type" : "object"
+      },
+      "AudiencePredicateResponse" : {
+        "properties" : {
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "dateHigh" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "dateLow" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "numericHigh" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "numericLow" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "operator" : {
+            "type" : "string"
+          },
+          "textValues" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AudienceSummaryResponse" : {
+        "properties" : {
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AuditEventView" : {
         "properties" : {
           "actionCode" : {
@@ -1273,6 +1425,116 @@
           }
         },
         "required" : [ "reasonCode", "supervisorName" ],
+        "type" : "object"
+      },
+      "CampaignResponse" : {
+        "properties" : {
+          "approvedBy" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "benefitOfferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "blockedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "consentPurpose" : {
+            "type" : "string"
+          },
+          "costCeilingMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "estimatedCostHighMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "estimatedCostLowMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "estimatedDeliverySeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "estimatedRecipients" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loyaltyAccrualRuleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "pausedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recipientCap" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reservedCostMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reservedRecipients" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "snapshotId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "spentCostMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "CandidateView" : {
@@ -2350,6 +2612,56 @@
         },
         "type" : "object"
       },
+      "CreateCampaignRequest" : {
+        "properties" : {
+          "audienceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "benefitOfferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channel" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "consentPurpose" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "costCeilingMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z]{3}$",
+            "type" : "string"
+          },
+          "loyaltyAccrualRuleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "recipientCap" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "templateKey" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "audienceId", "channel", "consentPurpose", "currency", "name", "templateKey" ],
+        "type" : "object"
+      },
       "CreateCartRequest" : {
         "properties" : {
           "channel" : {
@@ -3124,6 +3436,29 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "DefineAudienceRequest" : {
+        "properties" : {
+          "description" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "predicates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AudiencePredicateRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "name", "predicates" ],
         "type" : "object"
       },
       "DeliveryFeeView" : {
@@ -4856,6 +5191,14 @@
         "properties" : {
           "reason" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LiftSuppressionResponse" : {
+        "properties" : {
+          "lifted" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -8955,6 +9298,19 @@
         },
         "type" : "object"
       },
+      "RedefineAudienceRequest" : {
+        "properties" : {
+          "predicates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AudiencePredicateRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "predicates" ],
+        "type" : "object"
+      },
       "ReferenceData" : {
         "properties" : {
           "countries" : {
@@ -11580,6 +11936,47 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SuppressionListItemResponse" : {
+        "properties" : {
+          "appliedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "appliedByType" : {
+            "type" : "string"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "liftedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "statedReason" : {
+            "type" : "string"
+          },
+          "suppressionId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -28708,6 +29105,90 @@
         "tags" : [ "Reservations" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences" : {
+      "get" : {
+        "operationId" : "listAudiences",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AudienceSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every audience the brand has defined, newest first",
+        "tags" : [ "Marketing" ]
+      },
+      "post" : {
+        "description" : "A named, versioned predicate set from the closed catalogue — never a query. Gated the same as authoring a campaign, because targeting is part of composing one (ADR 0044 declares no separate authoring capability for audiences). An empty predicate list is refused: an audience with none is every customer of the brand, and that must be asked for rather than defaulted to by leaving a form empty.",
+        "operationId" : "defineAudience",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DefineAudienceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AudienceDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Define an audience",
+        "tags" : [ "Marketing" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/snapshots/{snapshotId}/exports" : {
       "post" : {
         "description" : "Metrics and account ids only. No contact value crosses this endpoint and none can. The export is itself an audited fact carrying the requester, the audience version, the row count, and the stated purpose, because an unrestricted download of the customer base is how a tenant's list ends up on a competitor's desk. Nothing here uploads a segment to a third party: that is a disclosure to a new controller, not a feature.",
@@ -28767,6 +29248,105 @@
         "tags" : [ "Marketing" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}" : {
+      "get" : {
+        "operationId" : "readAudience",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "audienceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AudienceDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One audience with the predicates its current definition version holds",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}/predicates" : {
+      "put" : {
+        "description" : "Never an edit of the old predicates — the definition version bumps, and every snapshot already built against the old version keeps meaning what it meant when it was built.",
+        "operationId" : "redefineAudience",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "audienceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RedefineAudienceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AudienceDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace an audience's predicate set",
+        "tags" : [ "Marketing" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}/snapshots" : {
       "post" : {
         "description" : "Applies the predicates, then subtracts lifecycle, consent, suppression, frequency cap, and endpoint, recording the reason per exclusion. The member count is an upper bound: the same five checks run again per recipient at send, so the delivered count is always lower.",
@@ -28819,6 +29399,135 @@
           }
         },
         "summary" : "Evaluate an audience into an immutable snapshot",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns" : {
+      "get" : {
+        "operationId" : "listCampaigns",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CampaignResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every campaign the brand has drafted, sent, or stopped, newest first",
+        "tags" : [ "Marketing" ]
+      },
+      "post" : {
+        "description" : "References an audience, a channel, and an ADR 0020 template key. Nothing here defines a discount or mints points: the campaign editor selects from an existing ADR 0018 offer or ADR 0046 accrual rule and has no field in which to invent one. DRAFT until estimated, submitted, and approved — nothing here sends anything.",
+        "operationId" : "createCampaign",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCampaignRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a campaign",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}" : {
+      "get" : {
+        "description" : "Everything the detail screen renders honestly from: the four-eyes state (createdBy/approvedBy), the estimate as a range and not a promise, the reserved/spent split, and blockedCount/pausedAt for a paused send.",
+        "operationId" : "readCampaign",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One campaign's full lifecycle state",
         "tags" : [ "Marketing" ]
       }
     },
@@ -29153,6 +29862,52 @@
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions" : {
+      "get" : {
+        "description" : "Brand-scoped rows and the tenant-wide ones together — the same widening the eligibility check itself applies, because a customer who complained to a regulator did not complain about one brand's newsletter. activeOnly (default true) excludes anything already lifted or expired.",
+        "operationId" : "listSuppressions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "activeOnly",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/SuppressionListItemResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's suppressions, newest first",
+        "tags" : [ "Marketing" ]
+      },
       "post" : {
         "description" : "A deliverability or abuse fact, distinct from ADR 0015 consent and outranking it. PLATFORM_BLOCK is refused here: it is how HorecaOS stops a tenant messaging somebody who complained to a regulator, and a tenant operator who could set it could also lift it.",
         "operationId" : "suppress",
@@ -29196,6 +29951,61 @@
           }
         },
         "summary" : "Record a suppression",
+        "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions/{suppressionId}/lifts" : {
+      "post" : {
+        "description" : "Leaves the row and names who lifted it — nothing here deletes evidence of a past refusal. A PLATFORM_BLOCK is refused here for the same reason it is refused on the way in: a tenant operator who could lift the one suppression only the control plane may set could re-enable messaging somebody who complained to a regulator.",
+        "operationId" : "liftSuppression",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "suppressionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OperationsMarketingControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LiftSuppressionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift a suppression",
         "tags" : [ "Marketing" ]
       }
     },

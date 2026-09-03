@@ -1,0 +1,38 @@
+.marketing-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.marketing-shell__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  flex: none;
+  overflow-x: auto;
+}
+
+.marketing-shell__tab {
+  padding: 12px 12px 10px;
+  color: var(--q-ink-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.marketing-shell__tab:hover {
+  color: var(--q-ink);
+}
+
+.marketing-shell__tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+}
+
+.marketing-shell__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

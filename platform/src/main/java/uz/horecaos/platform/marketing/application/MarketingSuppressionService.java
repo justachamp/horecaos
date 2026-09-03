@@ -3,6 +3,7 @@ package uz.horecaos.platform.marketing.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -52,6 +53,18 @@ public class MarketingSuppressionService {
     }
 
     /**
+     * A brand's suppressions, newest first — brand-scoped and tenant-wide
+     * together, read-only, and unaudited: listing is not the sensitive act, lifting
+     * one is (see {@link #lift}).
+     *
+     * @param activeOnly when true, excludes anything already lifted or expired
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcEngagementStore.SuppressionRow> list(UUID tenantId, UUID brandId, boolean activeOnly) {
+        return engagement.listByBrand(tenantId, brandId, activeOnly, clock.instant());
+    }
+
+    /**
      * Records a suppression.
      *
      * @param brandId null to suppress across every brand of the tenant. A customer
@@ -63,7 +76,7 @@ public class MarketingSuppressionService {
     @Transactional
     public UUID suppress(
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             UUID accountId,
             @Nullable MarketingChannel channel,
             SuppressionReason reason,
@@ -143,16 +156,35 @@ public class MarketingSuppressionService {
     /**
      * Lifts a suppression, leaving the row and naming who lifted it.
      *
+     * @param actorType who is lifting it. A {@link SuppressionReason#PLATFORM_BLOCK}
+     *                  is refused to anything other than {@link #ACTOR_CONTROL_PLANE},
+     *                  mirroring {@link #suppress}'s own refusal: a tenant operator
+     *                  who could lift the one suppression only the control plane may
+     *                  set could re-enable messaging somebody who complained to a
+     *                  regulator, which is the exact failure {@code PLATFORM_BLOCK}
+     *                  exists to prevent.
      * @return true when a suppression was open and is now closed
      */
     @Transactional
     public boolean lift(
-            UUID tenantId, UUID suppressionId, UUID liftedBy, ActorRef actor, String reason, String correlationId) {
+            UUID tenantId,
+            UUID suppressionId,
+            UUID liftedBy,
+            String actorType,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
         var suppression = engagement
                 .findSuppression(tenantId, suppressionId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No suppression %s belongs to this tenant".formatted(suppressionId)));
+
+        if (SuppressionReason.valueOf(suppression.reason()).isControlPlaneOnly()
+                && !ACTOR_CONTROL_PLANE.equals(actorType)) {
+            throw new IllegalArgumentException(
+                    "%s is settable, and liftable, only by the control plane".formatted(suppression.reason()));
+        }
 
         Instant now = clock.instant();
         boolean lifted = engagement.liftSuppression(tenantId, suppressionId, liftedBy, reason, now);

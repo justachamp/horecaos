@@ -1,12 +1,14 @@
 package uz.horecaos.platform.marketing.infrastructure.persistence;
 
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,7 +118,7 @@ public class JdbcEngagementStore {
 
     public UUID recordSuppression(
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             UUID accountId,
             @Nullable String channel,
             String reason,
@@ -267,28 +269,61 @@ public class JdbcEngagementStore {
                 """).params(parameters).update() == 1;
     }
 
+    private static final String SUPPRESSION_COLUMNS = """
+            id, brand_id, customer_account_id, channel, reason, applied_by_type,
+            stated_reason, applied_at, expires_at, lifted_at
+            """;
+
     public Optional<SuppressionRow> findSuppression(UUID tenantId, UUID suppressionId) {
-        return jdbc.sql("""
-                SELECT id, brand_id, customer_account_id, channel, reason, applied_at,
-                       expires_at, lifted_at
-                  FROM marketing.suppressions
-                 WHERE tenant_id = :tenantId AND id = :id
-                """)
+        return jdbc.sql("SELECT " + SUPPRESSION_COLUMNS
+                        + " FROM marketing.suppressions WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
                 .param("id", suppressionId)
-                .query((ResultSet row, int number) -> new SuppressionRow(
-                        row.getObject("id", UUID.class),
-                        row.getObject("brand_id", UUID.class),
-                        row.getObject("customer_account_id", UUID.class),
-                        row.getString("channel"),
-                        row.getString("reason"),
-                        // applied_at is NOT NULL DEFAULT now() (V0043), unlike
-                        // expires_at and lifted_at below, so it is read directly
-                        // rather than through the null-forwarding instant() helper.
-                        row.getObject("applied_at", OffsetDateTime.class).toInstant(),
-                        instant(row.getObject("expires_at", OffsetDateTime.class)),
-                        instant(row.getObject("lifted_at", OffsetDateTime.class))))
+                .query(JdbcEngagementStore::suppressionRow)
                 .optional();
+    }
+
+    /**
+     * A brand's suppressions, newest first — brand-scoped rows and the
+     * tenant-wide ones (a null {@code brand_id}) together, the same "matches, or
+     * is unscoped" widening {@link #hasActiveSuppression} applies, because a
+     * customer who complained to a regulator did not complain about one brand's
+     * newsletter.
+     *
+     * @param activeOnly when true, excludes anything already lifted or expired
+     */
+    public List<SuppressionRow> listByBrand(UUID tenantId, UUID brandId, boolean activeOnly, Instant now) {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("tenantId", tenantId);
+        parameters.put("brandId", brandId);
+        parameters.put("now", utc(now));
+
+        String activeFilter = activeOnly ? " AND lifted_at IS NULL AND (expires_at IS NULL OR expires_at > :now)" : "";
+
+        return jdbc.sql("SELECT " + SUPPRESSION_COLUMNS + " FROM marketing.suppressions"
+                        + " WHERE tenant_id = :tenantId AND (brand_id = :brandId OR brand_id IS NULL)"
+                        + activeFilter
+                        + " ORDER BY applied_at DESC")
+                .params(parameters)
+                .query(JdbcEngagementStore::suppressionRow)
+                .list();
+    }
+
+    private static SuppressionRow suppressionRow(ResultSet row, int number) throws SQLException {
+        return new SuppressionRow(
+                row.getObject("id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("customer_account_id", UUID.class),
+                row.getString("channel"),
+                row.getString("reason"),
+                row.getString("applied_by_type"),
+                row.getString("stated_reason"),
+                // applied_at is NOT NULL DEFAULT now() (V0043), unlike
+                // expires_at and lifted_at below, so it is read directly
+                // rather than through the null-forwarding instant() helper.
+                row.getObject("applied_at", OffsetDateTime.class).toInstant(),
+                instant(row.getObject("expires_at", OffsetDateTime.class)),
+                instant(row.getObject("lifted_at", OffsetDateTime.class)));
     }
 
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
@@ -301,10 +336,12 @@ public class JdbcEngagementStore {
 
     public record SuppressionRow(
             UUID id,
-            UUID brandId,
+            @Nullable UUID brandId,
             UUID customerAccountId,
-            String channel,
+            @Nullable String channel,
             String reason,
+            String appliedByType,
+            @Nullable String statedReason,
             Instant appliedAt,
             @Nullable Instant expiresAt,
             @Nullable Instant liftedAt) {}

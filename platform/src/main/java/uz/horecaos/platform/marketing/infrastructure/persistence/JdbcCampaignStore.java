@@ -69,22 +69,39 @@ public class JdbcCampaignStore {
                 """).params(parameters).update();
     }
 
+    /** The columns {@link #campaignRow} reads, shared by {@link #find} and {@link #listByBrand}. */
+    private static final String CAMPAIGN_COLUMNS = """
+            id, tenant_id, brand_id, name, channel, consent_purpose, status,
+            audience_id, audience_snapshot_id, template_key, timezone,
+            recipient_cap, estimated_recipients, estimated_cost_low_minor,
+            estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
+            reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
+            benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
+            blocked_count, paused_at, created_at, updated_at, version
+            """;
+
     public Optional<CampaignRow> find(UUID tenantId, UUID campaignId) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, brand_id, name, channel, consent_purpose, status,
-                       audience_id, audience_snapshot_id, template_key, timezone,
-                       recipient_cap, estimated_recipients, estimated_cost_low_minor,
-                       estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
-                       reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
-                       benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
-                       blocked_count, paused_at, version
-                  FROM marketing.campaigns
-                 WHERE tenant_id = :tenantId AND id = :id
-                """)
+        return jdbc.sql("SELECT " + CAMPAIGN_COLUMNS
+                        + " FROM marketing.campaigns WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
                 .param("id", campaignId)
                 .query(JdbcCampaignStore::campaignRow)
                 .optional();
+    }
+
+    /**
+     * Every campaign a brand owns, newest first — the operations Campaigns
+     * screen's own list (ADR 0044 read-side gap: the lifecycle endpoints all
+     * assumed a campaign id already in hand, and nothing could list one back).
+     */
+    public List<CampaignRow> listByBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("SELECT " + CAMPAIGN_COLUMNS
+                        + " FROM marketing.campaigns WHERE tenant_id = :tenantId AND brand_id = :brandId"
+                        + " ORDER BY created_at DESC")
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcCampaignStore::campaignRow)
+                .list();
     }
 
     /**
@@ -564,6 +581,10 @@ public class JdbcCampaignStore {
                 row.getObject("approved_by", UUID.class),
                 row.getInt("blocked_count"),
                 instant(row.getObject("paused_at", OffsetDateTime.class)),
+                // Both NOT NULL DEFAULT now() (V0043), read directly rather than
+                // through the null-forwarding instant() helper.
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getObject("updated_at", OffsetDateTime.class).toInstant(),
                 row.getInt("version"));
     }
 
@@ -621,6 +642,8 @@ public class JdbcCampaignStore {
             UUID approvedBy,
             int blockedCount,
             @Nullable Instant pausedAt,
+            Instant createdAt,
+            Instant updatedAt,
             int version) {}
 
     /** A campaign identity without its whole row — what a cross-tenant sweep reads. */

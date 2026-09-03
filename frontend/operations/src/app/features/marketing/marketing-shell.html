@@ -1,0 +1,43 @@
+<div class="marketing-shell">
+  <nav class="marketing-shell__tabs" [attr.aria-label]="'marketing.nav.label' | t">
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/promotions"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.promotions' | t }}</a
+    >
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/promo-codes"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.promoCodes' | t }}</a
+    >
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/campaigns"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.campaigns' | t }}</a
+    >
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/automations"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.automations' | t }}</a
+    >
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/content"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.content' | t }}</a
+    >
+    <a
+      class="marketing-shell__tab q-body-sm"
+      routerLink="/marketing/storefront"
+      routerLinkActive="marketing-shell__tab--active"
+      >{{ 'marketing.nav.storefront' | t }}</a
+    >
+  </nav>
+  <div class="marketing-shell__body">
+    <router-outlet />
+  </div>
+</div>

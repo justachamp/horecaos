@@ -89,6 +89,9 @@ class MarketingCampaignTests {
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
+    /** A second brand of the same tenant — wave 37's read-model cross-brand checks. */
+    private static final UUID OTHER_BRAND = UUID.randomUUID();
+
     private static final String PURPOSE = "MARKETING_PROMOTIONS";
 
     /** 14:00 in Tashkent: outside quiet hours, so nothing is deferred by accident. */
@@ -807,6 +810,241 @@ class MarketingCampaignTests {
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.PAUSED);
     }
 
+    // ------------------------------------------------------- read model (wave 37)
+
+    @Test
+    @DisplayName("listing audiences returns only this brand's, newest first")
+    void listAudiencesReturnsThisBrandsAudiencesNewestFirst() {
+        UUID first = everybodyRegistered();
+        // created_at is stamped from the service clock, not wall-clock now(); a
+        // frozen clock would give both rows the exact same instant and leave
+        // "newest first" untestable, so the clock is advanced for real between
+        // them, the same technique the quiet-hours tests use.
+        wire(NOW.plusSeconds(60));
+        UUID second = everybodyRegistered();
+        // A sibling brand's audience must not leak into this brand's list.
+        audiences.define(
+                TENANT,
+                OTHER_BRAND,
+                "Other brand's audience",
+                null,
+                List.of(AudiencePredicate.numeric(PredicateType.ORDER_COUNT, PredicateOperator.AT_LEAST, 0L, null)),
+                UUID.fromString(author.subject()),
+                "corr");
+
+        List<UUID> ids = audiences.list(TENANT, BRAND).stream()
+                .map(JdbcAudienceStore.AudienceRow::id)
+                .toList();
+
+        assertThat(ids).containsExactly(second, first);
+    }
+
+    @Test
+    @DisplayName("reading an audience returns the predicates its current definition version holds")
+    void getAudienceReturnsItsPredicates() {
+        UUID audience = everybodyRegistered();
+
+        var detail = audiences.get(TENANT, BRAND, audience);
+
+        assertThat(detail.audience().id()).isEqualTo(audience);
+        assertThat(detail.predicates()).hasSize(1);
+        assertThat(detail.predicates().getFirst().type()).isEqualTo(PredicateType.ORDER_COUNT);
+    }
+
+    @Test
+    @DisplayName("reading a sibling brand's audience is refused")
+    void getAudienceRefusesASiblingBrand() {
+        UUID audience = everybodyRegistered();
+
+        assertThatThrownBy(() -> audiences.get(TENANT, OTHER_BRAND, audience))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("belongs to this brand");
+    }
+
+    @Test
+    @DisplayName("redefining an audience bumps its definition version and replaces its predicates")
+    void redefineBumpsTheDefinitionVersionAndReplacesPredicates() {
+        UUID audience = everybodyRegistered();
+        int versionBefore = audiences.get(TENANT, BRAND, audience).audience().definitionVersion();
+
+        audiences.redefine(
+                TENANT,
+                BRAND,
+                audience,
+                List.of(AudiencePredicate.numeric(PredicateType.RECENCY_DAYS, PredicateOperator.AT_MOST, 30L, null)));
+
+        var after = audiences.get(TENANT, BRAND, audience);
+        assertThat(after.audience().definitionVersion()).isEqualTo(versionBefore + 1);
+        assertThat(after.predicates()).singleElement().satisfies(predicate -> {
+            assertThat(predicate.type()).isEqualTo(PredicateType.RECENCY_DAYS);
+            assertThat(predicate.numericLow()).isEqualTo(30L);
+        });
+    }
+
+    @Test
+    @DisplayName("redefining a sibling brand's audience is refused, leaving it unchanged")
+    void redefineRefusesASiblingBrand() {
+        UUID audience = everybodyRegistered();
+        int versionBefore = audiences.get(TENANT, BRAND, audience).audience().definitionVersion();
+
+        assertThatThrownBy(() -> audiences.redefine(
+                        TENANT,
+                        OTHER_BRAND,
+                        audience,
+                        List.of(AudiencePredicate.numeric(
+                                PredicateType.RECENCY_DAYS, PredicateOperator.AT_MOST, 30L, null))))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(audiences.get(TENANT, BRAND, audience).audience().definitionVersion())
+                .isEqualTo(versionBefore);
+    }
+
+    @Test
+    @DisplayName("listing campaigns returns only this brand's, newest first")
+    void listCampaignsReturnsThisBrandsCampaignsNewestFirst() {
+        UUID first = draftCampaign(100_000L);
+        // See listAudiencesReturnsThisBrandsAudiencesNewestFirst's own comment:
+        // created_at comes from the service clock, so it is advanced for real.
+        wire(NOW.plusSeconds(60));
+        UUID second = draftCampaign(100_000L);
+        UUID otherBrandAudience = audiences.define(
+                TENANT,
+                OTHER_BRAND,
+                "Other brand's audience",
+                null,
+                List.of(AudiencePredicate.numeric(PredicateType.ORDER_COUNT, PredicateOperator.AT_LEAST, 0L, null)),
+                UUID.fromString(author.subject()),
+                "corr");
+        campaigns.create(
+                TENANT,
+                OTHER_BRAND,
+                "Other brand's campaign",
+                MarketingChannel.SMS,
+                PURPOSE,
+                otherBrandAudience,
+                "MARKETING_PROMOTION",
+                100,
+                100_000L,
+                "UZS",
+                null,
+                null,
+                UUID.fromString(author.subject()));
+
+        List<UUID> ids = campaigns.list(TENANT, BRAND).stream()
+                .map(JdbcCampaignStore.CampaignRow::id)
+                .toList();
+
+        assertThat(ids).containsExactly(second, first);
+    }
+
+    @Test
+    @DisplayName("listing suppressions includes brand-scoped and tenant-wide rows, but not a sibling brand's")
+    void listSuppressionsWidensToTenantWideRows() {
+        UUID account = customer("+998906666666", "ru", true);
+        UUID brandScoped = suppressions.suppress(
+                TENANT,
+                BRAND,
+                account,
+                MarketingChannel.SMS,
+                SuppressionReason.HARD_BOUNCE,
+                MarketingSuppressionService.ACTOR_PROVIDER,
+                null,
+                ActorRef.service("sms-gateway"),
+                "Bounced",
+                "corr");
+        UUID tenantWide = suppressions.suppress(
+                TENANT,
+                null,
+                account,
+                null,
+                SuppressionReason.COMPLAINT,
+                MarketingSuppressionService.ACTOR_CUSTOMER,
+                null,
+                ActorRef.user(account.toString(), null),
+                "Complained",
+                "corr");
+
+        List<UUID> forBrand = suppressions.list(TENANT, BRAND, false).stream()
+                .map(JdbcEngagementStore.SuppressionRow::id)
+                .toList();
+        assertThat(forBrand).containsExactlyInAnyOrder(brandScoped, tenantWide);
+
+        // A sibling brand sees the tenant-wide complaint, never the other
+        // brand's own bounce — a bounced number on one brand's sender says
+        // nothing about a different brand's.
+        List<UUID> forOtherBrand = suppressions.list(TENANT, OTHER_BRAND, false).stream()
+                .map(JdbcEngagementStore.SuppressionRow::id)
+                .toList();
+        assertThat(forOtherBrand).containsExactly(tenantWide);
+    }
+
+    @Test
+    @DisplayName("listing suppressions with activeOnly excludes a lifted one")
+    void listSuppressionsActiveOnlyExcludesLifted() {
+        UUID account = customer("+998907777777", "ru", true);
+        UUID suppressionId = suppressions.suppress(
+                TENANT,
+                BRAND,
+                account,
+                MarketingChannel.SMS,
+                SuppressionReason.OPERATOR_BLOCK,
+                MarketingSuppressionService.ACTOR_OPERATOR,
+                UUID.fromString(author.subject()),
+                author,
+                "Abusive messages reported",
+                "corr");
+
+        assertThat(suppressions.list(TENANT, BRAND, true)).hasSize(1);
+
+        boolean lifted = suppressions.lift(
+                TENANT,
+                suppressionId,
+                UUID.fromString(approver.subject()),
+                MarketingSuppressionService.ACTOR_OPERATOR,
+                approver,
+                "False positive",
+                "corr");
+        assertThat(lifted).isTrue();
+
+        assertThat(suppressions.list(TENANT, BRAND, true))
+                .as("a lifted suppression drops out of the active-only view")
+                .isEmpty();
+        assertThat(suppressions.list(TENANT, BRAND, false))
+                .as("but the row itself survives — evidence, not deleted")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a PLATFORM_BLOCK cannot be lifted by anyone but the control plane")
+    void liftRefusesAPlatformBlockFromATenantActor() {
+        UUID account = customer("+998908888888", "ru", true);
+        UUID suppressionId = suppressions.suppress(
+                TENANT,
+                null,
+                account,
+                null,
+                SuppressionReason.PLATFORM_BLOCK,
+                MarketingSuppressionService.ACTOR_CONTROL_PLANE,
+                null,
+                ActorRef.service("control-plane"),
+                "Regulatory complaint",
+                "corr");
+
+        assertThatThrownBy(() -> suppressions.lift(
+                        TENANT,
+                        suppressionId,
+                        UUID.fromString(approver.subject()),
+                        MarketingSuppressionService.ACTOR_OPERATOR,
+                        approver,
+                        "Trying anyway",
+                        "corr"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(suppressions.list(TENANT, BRAND, true))
+                .as("still active: a tenant actor's attempt did not lift it")
+                .hasSize(1);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private UUID readyCampaign(long ceilingMinor) {
@@ -1036,6 +1274,11 @@ class MarketingCampaignTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'pilot-brand', 'Pilot brand', 'ACTIVE')
                 """).param("id", BRAND).param("tenantId", TENANT).update();
+
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
+                VALUES (:id, :tenantId, 'OTHER', 'other-brand', 'Other brand', 'ACTIVE')
+                """).param("id", OTHER_BRAND).param("tenantId", TENANT).update();
     }
 
     private void truncate() {

@@ -48,11 +48,11 @@ describe('Shell', () => {
 
   it('renders every navigation entry', () => {
     const items = fixture.nativeElement.querySelectorAll('.rail__item');
-    // Thirteen since wave 34 added Finance to the Business group (IA §8,
-    // 8.1 and 8.2 only — the tier legend gives Marketing §6 no P-tier row at
-    // all this wave, so it has no rail entry, the same silent omission
-    // Settings 10.11 gets).
-    expect(items.length).toBe(13);
+    // Fourteen since wave 37 added Marketing to the Business group: the IA
+    // §6 tier legend gave it no P-tier row, but the owner directed the
+    // tier-2 build this wave, so it now gets a rail entry the same way
+    // Finance's own tier-2 rows did not stop Finance from getting one.
+    expect(items.length).toBe(14);
   });
 
   it('hides the late indicator when nothing is late', () => {
