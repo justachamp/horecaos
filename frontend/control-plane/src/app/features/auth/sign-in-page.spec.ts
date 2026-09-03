@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
+import { RETURN_TO_KEY } from '../../core/auth/guards';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { SignInPage } from './sign-in-page';
@@ -35,6 +36,7 @@ describe('SignInPage', () => {
     // clearing storage keeps every assertion below against that default
     // rather than whatever a previous test file's locale switch left behind.
     localStorage.clear();
+    sessionStorage.clear();
 
     await TestBed.configureTestingModule({
       imports: [SignInPage],
@@ -87,7 +89,7 @@ describe('SignInPage', () => {
     expect(auth.signIn).toHaveBeenCalledWith('aziza', 'correct horse');
   });
 
-  it('loads the session context and navigates to the console root on success', async () => {
+  it('loads the session context and navigates to the console root when there was no remembered deep link', async () => {
     auth.signIn.mockResolvedValue(undefined);
     typeInto('username', 'aziza');
     typeInto('password', 'correct horse');
@@ -98,6 +100,35 @@ describe('SignInPage', () => {
     await fixture.whenStable();
 
     expect(session.load).toHaveBeenCalledOnce();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/');
+  });
+
+  it('navigates back to the deep link authGuard remembered before sign-in, and clears it', async () => {
+    sessionStorage.setItem(RETURN_TO_KEY, '/tenants/t-1/brands');
+    auth.signIn.mockResolvedValue(undefined);
+    typeInto('username', 'aziza');
+    typeInto('password', 'correct horse');
+
+    fixture.nativeElement
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
+    await fixture.whenStable();
+
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/tenants/t-1/brands');
+    expect(sessionStorage.getItem(RETURN_TO_KEY)).toBeNull();
+  });
+
+  it('ignores a stored value that is not a same-document path, to avoid becoming an open redirect', async () => {
+    sessionStorage.setItem(RETURN_TO_KEY, '//evil.example.com/phish');
+    auth.signIn.mockResolvedValue(undefined);
+    typeInto('username', 'aziza');
+    typeInto('password', 'correct horse');
+
+    fixture.nativeElement
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
+    await fixture.whenStable();
+
     expect(router.navigateByUrl).toHaveBeenCalledWith('/');
   });
 

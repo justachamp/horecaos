@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
+import { RETURN_TO_KEY } from '../../core/auth/guards';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 
@@ -196,10 +197,7 @@ export class SignInPage {
       // reasoning the app initializer applied when this load ran there,
       // after a redirect completed, instead of here.
       await this.session.load();
-      // Always the root: this console's shell has no notion of a deep link to
-      // return to yet, matching the parity the old redirect flow already had
-      // — it always sent the operator back to `${origin}/` too.
-      void this.router.navigateByUrl('/');
+      void this.router.navigateByUrl(takeReturnTo());
     } catch (failure) {
       this.errorMessage.set(this.messageFor(failure));
     } finally {
@@ -219,4 +217,25 @@ export class SignInPage {
     }
     return this.i18n.t('error.UNKNOWN');
   }
+}
+
+/**
+ * Reads and clears the deep link `authGuard` (or `sessionRefreshInterceptor`,
+ * after a mid-session 401 outlives a silent refresh) saved before sending
+ * the operator to sign in.
+ */
+function takeReturnTo(): string {
+  let target = '/';
+  try {
+    const saved = globalThis.sessionStorage?.getItem(RETURN_TO_KEY);
+    // Only same-document paths. A stored absolute URL would make this an
+    // open redirect operated by whatever could write to sessionStorage.
+    if (saved && saved.startsWith('/') && !saved.startsWith('//')) {
+      target = saved;
+    }
+    globalThis.sessionStorage?.removeItem(RETURN_TO_KEY);
+  } catch {
+    // No storage: land on the default.
+  }
+  return target;
 }

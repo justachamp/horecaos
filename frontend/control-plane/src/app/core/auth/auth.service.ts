@@ -26,9 +26,16 @@ import { StaffTokenStore } from './staff-token-store';
  */
 export type AuthStatus = 'starting' | 'signed-in' | 'signed-out';
 
-const SIGN_IN_PATH = '/api/v1/control-plane/auth/sessions';
-const REFRESH_PATH = '/api/v1/control-plane/auth/sessions/refresh';
-const SIGN_OUT_PATH = '/api/v1/control-plane/auth/sessions/current';
+/**
+ * Exported so `interceptors.ts`'s `sessionRefreshInterceptor` can recognise a
+ * request as part of the sign-in handshake itself and leave it alone: a 401
+ * from `REFRESH_PATH` must never trigger another silent refresh, or a
+ * genuinely expired refresh token turns one failed request into an infinite
+ * loop of refresh attempts instead of a clean sign-out.
+ */
+export const SIGN_IN_PATH = '/api/v1/control-plane/auth/sessions';
+export const REFRESH_PATH = '/api/v1/control-plane/auth/sessions/refresh';
+export const SIGN_OUT_PATH = '/api/v1/control-plane/auth/sessions/current';
 
 /**
  * Refresh this far before the access token actually expires, so an in-flight
@@ -78,15 +85,26 @@ export class AuthService extends AccessTokenSource {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
-   * Nothing to rehydrate. Tokens are in-memory only (ADR 0035), so a fresh
-   * page load never has a session to restore — see {@link StaffTokenStore}'s
-   * own doc for why that trade-off is accepted rather than worked around.
-   * Kept as a method, and still returning the status, so the application
-   * initialiser and the guard need no change in shape from before ADR 0062.
+   * Bootstraps from whatever {@link StaffTokenStore} already holds.
+   *
+   * The access token is always empty on a fresh page load — it is memory-only
+   * — but the refresh token now survives one in `sessionStorage` (see that
+   * class's own doc for why). When there is one, this redeems it before the
+   * first route resolves (`app.config.ts`'s `provideAppInitializer` awaits
+   * this), so a reload or a pasted deep link restores the session silently
+   * and the router simply resolves whatever URL the operator was already on
+   * — nothing here has to remember it. When there is nothing stored, or the
+   * platform refuses what was stored, this settles to `signed-out` exactly as
+   * it always did, and `authGuard` takes it from there: it remembers the
+   * destination and sends the operator to `/login`.
    */
-  initialise(): AuthStatus {
-    this.state.set('signed-out');
-    return 'signed-out';
+  async initialise(): Promise<AuthStatus> {
+    if (this.tokens.refreshToken() === null) {
+      this.state.set('signed-out');
+      return 'signed-out';
+    }
+    await this.refresh();
+    return this.state();
   }
 
   /** Exchanges credentials for a session. Throws `ApiError` on refusal — the sign-in page reads `error.code`. */
@@ -97,16 +115,39 @@ export class AuthService extends AccessTokenSource {
   }
 
   /**
+   * The in-flight refresh call, shared rather than duplicated.
+   *
+   * A laptop waking from sleep can have several screens' worth of requests
+   * discover the expired access token within the same tick — see
+   * `sessionRefreshInterceptor`, which calls this from every one of them.
+   * Without this, each would start its own refresh grant; a Keycloak refresh
+   * token is not guaranteed safe to redeem twice at once, so the second and
+   * third callers could be told the token they are holding was already used
+   * and sign out an operator whose session was, in fact, perfectly fine.
+   */
+  private refreshInFlight: Promise<boolean> | null = null;
+
+  /**
    * Proxies the refresh grant through the backend. Returns false rather than
    * throwing on a lapsed session, because every caller of this method already
    * has exactly one thing to do about "no" — send the operator back to
    * sign-in — and a caught exception type is not needed to decide that.
    */
   async refresh(): Promise<boolean> {
+    if (this.refreshInFlight !== null) {
+      return this.refreshInFlight;
+    }
     const refreshToken = this.tokens.refreshToken();
     if (refreshToken === null) {
       return false;
     }
+    this.refreshInFlight = this.performRefresh(refreshToken).finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
+  private async performRefresh(refreshToken: string): Promise<boolean> {
     try {
       const body: StaffRefreshRequest = { refreshToken };
       const session = await firstValueFrom(this.api.post<StaffSessionResponse>(REFRESH_PATH, body));
