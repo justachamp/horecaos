@@ -83,21 +83,52 @@ public class JdbcAudienceStore {
 
     public Optional<AudienceRow> findAudience(UUID tenantId, UUID audienceId) {
         return jdbc.sql("""
-                SELECT id, tenant_id, brand_id, name, status, definition_version, created_by
+                SELECT id, tenant_id, brand_id, name, description, status, definition_version,
+                       created_by, created_at, updated_at
                   FROM marketing.audiences
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)
                 .param("id", audienceId)
-                .query((ResultSet row, int number) -> new AudienceRow(
-                        row.getObject("id", UUID.class),
-                        row.getObject("tenant_id", UUID.class),
-                        row.getObject("brand_id", UUID.class),
-                        row.getString("name"),
-                        row.getString("status"),
-                        row.getInt("definition_version"),
-                        row.getObject("created_by", UUID.class)))
+                .query(JdbcAudienceStore::audienceRow)
                 .optional();
+    }
+
+    /**
+     * Every audience a brand owns, newest first — the operations Campaigns
+     * screen's targeting picker and its own audience list (ADR 0044 read-side
+     * gap: the service could already define and re-define an audience, and
+     * nothing could list one back).
+     */
+    public List<AudienceRow> listByBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, name, description, status, definition_version,
+                       created_by, created_at, updated_at
+                  FROM marketing.audiences
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                 ORDER BY created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcAudienceStore::audienceRow)
+                .list();
+    }
+
+    private static AudienceRow audienceRow(ResultSet row, int number) throws SQLException {
+        return new AudienceRow(
+                row.getObject("id", UUID.class),
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getString("name"),
+                row.getString("description"),
+                row.getString("status"),
+                row.getInt("definition_version"),
+                row.getObject("created_by", UUID.class),
+                // Both NOT NULL DEFAULT now() (V0043), so read directly rather than
+                // through the null-forwarding instant() helper — the same discipline
+                // JdbcEngagementStore#findSuppression applies to applied_at.
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getObject("updated_at", OffsetDateTime.class).toInstant());
     }
 
     /**
@@ -481,7 +512,16 @@ public class JdbcAudienceStore {
     }
 
     public record AudienceRow(
-            UUID id, UUID tenantId, UUID brandId, String name, String status, int definitionVersion, UUID createdBy) {}
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            UUID createdBy,
+            Instant createdAt,
+            Instant updatedAt) {}
 
     /**
      * A projection row with the account's lifecycle state beside it.

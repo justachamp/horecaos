@@ -5,16 +5,24 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,11 +32,18 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.marketing.application.AudienceService;
+import uz.horecaos.platform.marketing.application.AudienceService.AudienceDetail;
 import uz.horecaos.platform.marketing.application.CampaignService;
 import uz.horecaos.platform.marketing.application.MarketingSuppressionService;
+import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
+import uz.horecaos.platform.marketing.domain.PredicateOperator;
+import uz.horecaos.platform.marketing.domain.PredicateType;
 import uz.horecaos.platform.marketing.domain.SuppressionReason;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAudienceStore.AudienceRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRow;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore.SuppressionRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -73,6 +88,127 @@ public class OperationsMarketingController {
         this.suppressions = suppressions;
         this.campaignStore = campaignStore;
         this.currentActor = currentActor;
+    }
+
+    @PostMapping("/audiences")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Define an audience",
+            description = "A named, versioned predicate set from the closed catalogue — never a "
+                    + "query. Gated the same as authoring a campaign, because targeting is part "
+                    + "of composing one (ADR 0044 declares no separate authoring capability for "
+                    + "audiences). An empty predicate list is refused: an audience with none is "
+                    + "every customer of the brand, and that must be asked for rather than "
+                    + "defaulted to by leaving a form empty.")
+    public ResponseEntity<AudienceDetailResponse> defineAudience(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody DefineAudienceRequest body) {
+
+        List<AudiencePredicate> predicates = body.predicates().stream()
+                .map(AudiencePredicateRequest::toDomain)
+                .toList();
+        UUID audienceId = audiences.define(
+                tenantId, brandId, body.name(), body.description(), predicates, actorId(), correlationId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(AudienceDetailResponse.of(audiences.get(tenantId, brandId, audienceId)));
+    }
+
+    @GetMapping("/audiences")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "Every audience the brand has defined, newest first")
+    public ResponseEntity<List<AudienceSummaryResponse>> listAudiences(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        return ResponseEntity.ok(audiences.list(tenantId, brandId).stream()
+                .map(AudienceSummaryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/audiences/{audienceId}")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "One audience with the predicates its current definition version holds")
+    public ResponseEntity<AudienceDetailResponse> readAudience(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID audienceId) {
+
+        return ResponseEntity.ok(AudienceDetailResponse.of(audiences.get(tenantId, brandId, audienceId)));
+    }
+
+    @PutMapping("/audiences/{audienceId}/predicates")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Replace an audience's predicate set",
+            description = "Never an edit of the old predicates — the definition version bumps, "
+                    + "and every snapshot already built against the old version keeps meaning "
+                    + "what it meant when it was built.")
+    public ResponseEntity<AudienceDetailResponse> redefineAudience(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID audienceId,
+            @Valid @RequestBody RedefineAudienceRequest body) {
+
+        List<AudiencePredicate> predicates = body.predicates().stream()
+                .map(AudiencePredicateRequest::toDomain)
+                .toList();
+        audiences.redefine(tenantId, brandId, audienceId, predicates);
+        return ResponseEntity.ok(AudienceDetailResponse.of(audiences.get(tenantId, brandId, audienceId)));
+    }
+
+    @PostMapping("/campaigns")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Draft a campaign",
+            description = "References an audience, a channel, and an ADR 0020 template key. "
+                    + "Nothing here defines a discount or mints points: the campaign editor "
+                    + "selects from an existing ADR 0018 offer or ADR 0046 accrual rule and has "
+                    + "no field in which to invent one. DRAFT until estimated, submitted, and "
+                    + "approved — nothing here sends anything.")
+    public ResponseEntity<CampaignResponse> createCampaign(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateCampaignRequest body) {
+
+        UUID campaignId = campaigns.create(
+                tenantId,
+                brandId,
+                body.name(),
+                channel(body.channel()),
+                body.consentPurpose(),
+                body.audienceId(),
+                body.templateKey(),
+                body.recipientCap(),
+                body.costCeilingMinor(),
+                body.currency(),
+                body.benefitOfferId(),
+                body.loyaltyAccrualRuleId(),
+                actorId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(CampaignResponse.of(campaigns.require(tenantId, campaignId)));
+    }
+
+    @GetMapping("/campaigns")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(summary = "Every campaign the brand has drafted, sent, or stopped, newest first")
+    public ResponseEntity<List<CampaignResponse>> listCampaigns(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        return ResponseEntity.ok(campaigns.list(tenantId, brandId).stream()
+                .map(CampaignResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/campaigns/{campaignId}")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "One campaign's full lifecycle state",
+            description = "Everything the detail screen renders honestly from: the four-eyes "
+                    + "state (createdBy/approvedBy), the estimate as a range and not a promise, "
+                    + "the reserved/spent split, and blockedCount/pausedAt for a paused send.")
+    public ResponseEntity<CampaignResponse> readCampaign(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
+
+        CampaignRow campaign = campaigns.require(tenantId, campaignId);
+        if (!campaign.brandId().equals(brandId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
+        }
+        return ResponseEntity.ok(CampaignResponse.of(campaign));
     }
 
     @PostMapping("/audiences/{audienceId}/snapshots")
@@ -325,6 +461,56 @@ public class OperationsMarketingController {
                 new SuppressionResponse(id, reason.name(), reason.lifetime().isEmpty()));
     }
 
+    @GetMapping("/suppressions")
+    @RequiresCapability(value = Capability.SUPPRESSION_MANAGE, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The brand's suppressions, newest first",
+            description = "Brand-scoped rows and the tenant-wide ones together — the same "
+                    + "widening the eligibility check itself applies, because a customer who "
+                    + "complained to a regulator did not complain about one brand's newsletter. "
+                    + "activeOnly (default true) excludes anything already lifted or expired.")
+    public ResponseEntity<List<SuppressionListItemResponse>> listSuppressions(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @RequestParam(defaultValue = "true") boolean activeOnly) {
+
+        return ResponseEntity.ok(suppressions.list(tenantId, brandId, activeOnly).stream()
+                .map(SuppressionListItemResponse::of)
+                .toList());
+    }
+
+    @PostMapping("/suppressions/{suppressionId}/lifts")
+    @RequiresCapability(value = Capability.SUPPRESSION_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Lift a suppression",
+            description = "Leaves the row and names who lifted it — nothing here deletes "
+                    + "evidence of a past refusal. A PLATFORM_BLOCK is refused here for the same "
+                    + "reason it is refused on the way in: a tenant operator who could lift the "
+                    + "one suppression only the control plane may set could re-enable messaging "
+                    + "somebody who complained to a regulator.")
+    public ResponseEntity<LiftSuppressionResponse> liftSuppression(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID suppressionId,
+            @Valid @RequestBody ReasonRequest body) {
+
+        boolean lifted = suppressions.lift(
+                tenantId,
+                suppressionId,
+                actorId(),
+                MarketingSuppressionService.ACTOR_OPERATOR,
+                actor(),
+                body.reason(),
+                correlationId());
+
+        if (!lifted) {
+            // The service already threw INVALID_REQUEST above for "does not exist" —
+            // a false here can only mean the row was found and was already lifted.
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This suppression is already lifted");
+        }
+        return ResponseEntity.ok(new LiftSuppressionResponse(true));
+    }
+
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);
     }
@@ -365,6 +551,22 @@ public class OperationsMarketingController {
             return SuppressionReason.valueOf(value);
         } catch (IllegalArgumentException unknown) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, value + " is not a suppression reason");
+        }
+    }
+
+    private static PredicateType predicateType(String value) {
+        try {
+            return PredicateType.valueOf(value);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, value + " is not a predicate type");
+        }
+    }
+
+    private static PredicateOperator predicateOperator(String value) {
+        try {
+            return PredicateOperator.valueOf(value);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, value + " is not a predicate operator");
         }
     }
 
@@ -420,4 +622,240 @@ public class OperationsMarketingController {
             @Size(max = 500) String statedReason) {}
 
     public record SuppressionResponse(UUID suppressionId, String reason, boolean permanent) {}
+
+    /** One closed-catalogue predicate, on the wire. Mirrors {@link AudiencePredicate}. */
+    public record AudiencePredicateRequest(
+            @NotBlank String type,
+            @NotBlank String operator,
+            @Nullable Long numericLow,
+            @Nullable Long numericHigh,
+            @Nullable LocalDate dateLow,
+            @Nullable LocalDate dateHigh,
+            @Nullable List<@NotBlank String> textValues,
+            @Nullable UUID audienceId) {
+
+        AudiencePredicate toDomain() {
+            try {
+                return new AudiencePredicate(
+                        predicateType(type),
+                        predicateOperator(operator),
+                        numericLow,
+                        numericHigh,
+                        dateLow,
+                        dateHigh,
+                        textValues,
+                        audienceId);
+            } catch (IllegalArgumentException invalidShape) {
+                // predicateType/predicateOperator already threw their own
+                // VALIDATION_FAILED for an unrecognised name; this catches the
+                // domain constructor's own shape checks (wrong value kind, an
+                // inverted range, an unsupported locale) so both failure modes
+                // reach the caller as the same stable code.
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, invalidShape.getMessage());
+            }
+        }
+    }
+
+    public record AudiencePredicateResponse(
+            String type,
+            String operator,
+            @Nullable Long numericLow,
+            @Nullable Long numericHigh,
+            @Nullable LocalDate dateLow,
+            @Nullable LocalDate dateHigh,
+            @Nullable List<String> textValues,
+            @Nullable UUID audienceId) {
+
+        static AudiencePredicateResponse of(AudiencePredicate predicate) {
+            return new AudiencePredicateResponse(
+                    predicate.type().name(),
+                    predicate.operator().name(),
+                    predicate.numericLow(),
+                    predicate.numericHigh(),
+                    predicate.dateLow(),
+                    predicate.dateHigh(),
+                    predicate.textValues(),
+                    predicate.audienceId());
+        }
+    }
+
+    public record DefineAudienceRequest(
+            @NotBlank @Size(max = 120) String name,
+            @Nullable @Size(max = 500) String description,
+            @NotEmpty List<@Valid AudiencePredicateRequest> predicates) {}
+
+    public record RedefineAudienceRequest(@NotEmpty List<@Valid AudiencePredicateRequest> predicates) {}
+
+    public record AudienceSummaryResponse(
+            UUID audienceId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            UUID createdBy,
+            Instant createdAt,
+            Instant updatedAt) {
+
+        static AudienceSummaryResponse of(AudienceRow row) {
+            return new AudienceSummaryResponse(
+                    row.id(),
+                    row.name(),
+                    row.description(),
+                    row.status(),
+                    row.definitionVersion(),
+                    row.createdBy(),
+                    row.createdAt(),
+                    row.updatedAt());
+        }
+    }
+
+    public record AudienceDetailResponse(
+            UUID audienceId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            UUID createdBy,
+            Instant createdAt,
+            Instant updatedAt,
+            List<AudiencePredicateResponse> predicates) {
+
+        static AudienceDetailResponse of(AudienceDetail detail) {
+            AudienceRow audience = detail.audience();
+            return new AudienceDetailResponse(
+                    audience.id(),
+                    audience.name(),
+                    audience.description(),
+                    audience.status(),
+                    audience.definitionVersion(),
+                    audience.createdBy(),
+                    audience.createdAt(),
+                    audience.updatedAt(),
+                    detail.predicates().stream()
+                            .map(AudiencePredicateResponse::of)
+                            .toList());
+        }
+    }
+
+    /**
+     * A campaign to draft.
+     *
+     * @param channel one of {@link MarketingChannel}'s names
+     * @param costCeilingMinor required when the channel carries marginal cost
+     *                         (SMS, EMAIL); refused as null there by {@link
+     *                         CampaignService#create}, not by this validator,
+     *                         because the rule depends on the channel
+     */
+    public record CreateCampaignRequest(
+            @NotBlank @Size(max = 120) String name,
+            @NotBlank String channel,
+            @NotBlank @Size(max = 64) String consentPurpose,
+            @NotNull UUID audienceId,
+            @NotBlank @Size(max = 64) String templateKey,
+            @Positive int recipientCap,
+            @Nullable @PositiveOrZero Long costCeilingMinor,
+            @NotBlank @Pattern(regexp = "^[A-Za-z]{3}$") String currency,
+            @Nullable UUID benefitOfferId,
+            @Nullable UUID loyaltyAccrualRuleId) {}
+
+    /**
+     * A campaign's full lifecycle state — what the detail screen renders the
+     * four-eyes state, the estimate, and a paused send's cost from.
+     *
+     * @param pausedAt when the block-rate guard (or an operator's own pause)
+     *                 stopped this campaign, or null; the campaign's own
+     *                 blockedCount is what a resume reports the cost of
+     */
+    public record CampaignResponse(
+            UUID campaignId,
+            String name,
+            String channel,
+            String consentPurpose,
+            String status,
+            UUID audienceId,
+            @Nullable UUID snapshotId,
+            String templateKey,
+            String timezone,
+            int recipientCap,
+            @Nullable Integer estimatedRecipients,
+            @Nullable Long estimatedCostLowMinor,
+            @Nullable Long estimatedCostHighMinor,
+            @Nullable Long estimatedDeliverySeconds,
+            @Nullable Long costCeilingMinor,
+            long reservedCostMinor,
+            long spentCostMinor,
+            int reservedRecipients,
+            @Nullable String currency,
+            @Nullable UUID benefitOfferId,
+            @Nullable UUID loyaltyAccrualRuleId,
+            UUID createdBy,
+            @Nullable UUID approvedBy,
+            int blockedCount,
+            @Nullable Instant pausedAt,
+            Instant createdAt,
+            Instant updatedAt,
+            int version) {
+
+        static CampaignResponse of(CampaignRow row) {
+            return new CampaignResponse(
+                    row.id(),
+                    row.name(),
+                    row.channel(),
+                    row.consentPurpose(),
+                    row.status().name(),
+                    row.audienceId(),
+                    row.snapshotId(),
+                    row.templateKey(),
+                    row.timezone(),
+                    row.recipientCap(),
+                    row.estimatedRecipients(),
+                    row.estimatedCostLowMinor(),
+                    row.estimatedCostHighMinor(),
+                    row.estimatedDeliverySeconds(),
+                    row.costCeilingMinor(),
+                    row.reservedCostMinor(),
+                    row.spentCostMinor(),
+                    row.reservedRecipients(),
+                    row.currency(),
+                    row.benefitOfferId(),
+                    row.loyaltyAccrualRuleId(),
+                    row.createdBy(),
+                    row.approvedBy(),
+                    row.blockedCount(),
+                    row.pausedAt(),
+                    row.createdAt(),
+                    row.updatedAt(),
+                    row.version());
+        }
+    }
+
+    /** One suppression as the list screen shows it — more than {@link SuppressionResponse} carries, on purpose. */
+    public record SuppressionListItemResponse(
+            UUID suppressionId,
+            @Nullable UUID brandId,
+            UUID customerAccountId,
+            @Nullable String channel,
+            String reason,
+            String appliedByType,
+            @Nullable String statedReason,
+            Instant appliedAt,
+            @Nullable Instant expiresAt,
+            @Nullable Instant liftedAt) {
+
+        static SuppressionListItemResponse of(SuppressionRow row) {
+            return new SuppressionListItemResponse(
+                    row.id(),
+                    row.brandId(),
+                    row.customerAccountId(),
+                    row.channel(),
+                    row.reason(),
+                    row.appliedByType(),
+                    row.statedReason(),
+                    row.appliedAt(),
+                    row.expiresAt(),
+                    row.liftedAt());
+        }
+    }
+
+    public record LiftSuppressionResponse(boolean lifted) {}
 }

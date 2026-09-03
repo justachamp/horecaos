@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
@@ -373,6 +374,12 @@ public class CampaignService {
                 .build());
 
         return new ResumeOutcome(resumed, suppressed);
+    }
+
+    /** Every campaign a brand owns, newest first. */
+    @Transactional(readOnly = true)
+    public List<CampaignRow> list(UUID tenantId, UUID brandId) {
+        return campaigns.listByBrand(tenantId, brandId);
     }
 
     public CampaignRow require(UUID tenantId, UUID campaignId) {

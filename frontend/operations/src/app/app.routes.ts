@@ -256,6 +256,70 @@ export const routes: Routes = [
         ],
       },
       {
+        // Marketing (wave 37, frontend-information-architecture.md §6): a
+        // sub-nav shell over six tier-2 tabs, the same shape `finance`'s and
+        // `delivery`'s own shells use. Only `campaigns` (§6.4) has a real
+        // backend to render — ADR 0044's audiences, campaign lifecycle, and
+        // suppression machinery — with audience targeting and suppression
+        // management folded into it rather than routed separately, since
+        // neither is its own IA row. The other five route to the shared
+        // `NotBuiltPage`: §6.1/6.2 have a schema (V0093) and no authoring
+        // service or controller above it; §6.5/6.7/6.8 have neither schema
+        // nor service. See `marketing-shell.ts`'s own doc.
+        path: 'marketing',
+        loadComponent: () =>
+          import('./features/marketing/marketing-shell').then((m) => m.MarketingShell),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'campaigns' },
+          {
+            path: 'promotions',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §6.1 (Promotions)' },
+          },
+          {
+            path: 'promo-codes',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §6.2 (Promo codes)' },
+          },
+          {
+            path: 'campaigns',
+            loadComponent: () =>
+              import('./features/marketing/campaigns/campaigns-page').then((m) => m.CampaignsPage),
+            children: [
+              // Docks beside the campaign list, same reasoning as the order
+              // board's own detail child route.
+              {
+                path: ':campaignId',
+                loadComponent: () =>
+                  import('./features/marketing/campaigns/campaign-detail-pane').then(
+                    (m) => m.CampaignDetailPane,
+                  ),
+              },
+            ],
+          },
+          {
+            path: 'automations',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §6.5 (Automations)' },
+          },
+          {
+            path: 'content',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §6.7 (Content)' },
+          },
+          {
+            path: 'storefront',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'frontend-information-architecture.md §6.8 (Storefront merchandising)' },
+          },
+        ],
+      },
+      {
         path: 'catalog',
         loadComponent: () => import('./features/catalog/catalog-shell').then((m) => m.CatalogShell),
         children: [
@@ -407,6 +471,7 @@ function placeholderRoutes(): Routes {
     '/staff',
     '/statistics',
     '/finance',
+    '/marketing',
   ]);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),

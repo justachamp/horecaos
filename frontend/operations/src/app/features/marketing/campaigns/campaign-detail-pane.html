@@ -1,0 +1,221 @@
+<div class="pane">
+  <header class="pane__head">
+    <button
+      type="button"
+      class="pane__close"
+      (click)="close()"
+      [attr.aria-label]="'marketing.campaign.close' | t"
+    >
+      ×
+    </button>
+    @if (campaign(); as c) {
+      <h2 class="q-subhead">{{ c.name }}</h2>
+      <span class="status-badge">{{ statusLabelKey(c.status) | t }}</span>
+    }
+  </header>
+
+  @if (loading()) {
+    <p class="q-body-sm" data-testid="campaign-detail-loading">
+      {{ 'marketing.campaigns.loading' | t }}
+    </p>
+  } @else if (loadError(); as error) {
+    <div class="error-band" role="alert">
+      <span class="q-body-sm">{{ error }}</span>
+    </div>
+  } @else if (campaign(); as c) {
+    <div class="pane__body">
+      <dl class="facts">
+        <dt>{{ 'marketing.campaign.field.channel' | t }}</dt>
+        <dd>{{ channelLabelKey(c.channel) | t }}</dd>
+
+        <dt>{{ 'marketing.campaign.field.recipientCap' | t }}</dt>
+        <dd class="q-tnum">{{ c.recipientCap }}</dd>
+
+        <dt>{{ 'marketing.campaign.field.estimatedRecipients' | t }}</dt>
+        <dd class="q-tnum">
+          {{ c.estimatedRecipients ?? '—' }}
+          @if (c.estimatedRecipients !== null) {
+            <span class="q-caption">{{ 'marketing.campaign.field.upperBoundHint' | t }}</span>
+          }
+        </dd>
+
+        <dt>{{ 'marketing.campaign.field.estimatedCost' | t }}</dt>
+        <dd class="q-tnum">
+          @if (c.estimatedCostLowMinor !== null && c.estimatedCostHighMinor !== null) {
+            {{ c.estimatedCostLowMinor }}–{{ c.estimatedCostHighMinor }} {{ c.currency }}
+            <span class="q-caption">{{ 'marketing.campaign.field.rangeHint' | t }}</span>
+          } @else {
+            {{ 'marketing.campaign.field.costUnknown' | t }}
+          }
+        </dd>
+
+        <dt>{{ 'marketing.campaign.field.estimatedDelivery' | t }}</dt>
+        <dd>
+          @if (c.estimatedDeliverySeconds !== null) {
+            {{ c.estimatedDeliverySeconds }} {{ 'marketing.campaign.field.seconds' | t }}
+            <span class="q-caption">{{ 'marketing.campaign.field.deliveryHint' | t }}</span>
+          } @else {
+            {{ 'marketing.campaign.field.deliveryUnknown' | t }}
+          }
+        </dd>
+
+        <dt>{{ 'marketing.campaign.field.costCeiling' | t }}</dt>
+        <dd class="q-tnum">
+          {{ c.costCeilingMinor !== null ? c.costCeilingMinor + ' ' + c.currency : '—' }}
+        </dd>
+
+        <dt>{{ 'marketing.campaign.field.spent' | t }}</dt>
+        <dd class="q-tnum">{{ c.spentCostMinor }} {{ c.currency }}</dd>
+
+        <dt>{{ 'marketing.campaign.field.reserved' | t }}</dt>
+        <dd class="q-tnum">
+          {{ c.reservedCostMinor }} {{ c.currency }} · {{ c.reservedRecipients }}
+        </dd>
+      </dl>
+
+      @if (c.status === 'PAUSED') {
+        <div class="pause-banner" role="status">
+          {{ 'marketing.campaign.paused.blockedCount' | t: { count: c.blockedCount } }}
+        </div>
+      }
+
+      @if (lastResumeCost(); as cost) {
+        <div class="resume-note" role="status">
+          {{ 'marketing.campaign.resume.suppressedCost' | t: { count: cost } }}
+        </div>
+      }
+
+      @if (actionError(); as error) {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+
+      <section class="actions">
+        @switch (c.status) {
+          @case ('DRAFT') {
+            <button type="button" [disabled]="actionSubmitting()" (click)="runEstimate()">
+              {{
+                c.estimatedRecipients === null
+                  ? ('marketing.campaign.action.estimate' | t)
+                  : ('marketing.campaign.action.reestimate' | t)
+              }}
+            </button>
+            @if (c.estimatedRecipients !== null) {
+              <button type="button" [disabled]="actionSubmitting()" (click)="submit()">
+                {{ 'marketing.campaign.action.submit' | t }}
+              </button>
+            }
+          }
+          @case ('IN_REVIEW') {
+            @if (isAuthor()) {
+              <p class="four-eyes-hint q-body-sm" data-testid="four-eyes-maker">
+                {{ 'marketing.campaign.fourEyes.awaitingSignature' | t }}
+              </p>
+            } @else {
+              <button
+                type="button"
+                data-testid="approve-action"
+                [disabled]="actionSubmitting()"
+                (click)="openReasonPrompt('approve')"
+              >
+                {{ 'marketing.campaign.action.approve' | t }}
+              </button>
+            }
+          }
+          @case ('APPROVED') {
+            <button type="button" [disabled]="actionSubmitting()" (click)="launch()">
+              {{ 'marketing.campaign.action.launch' | t }}
+            </button>
+          }
+          @case ('SCHEDULED') {
+            <button type="button" [disabled]="actionSubmitting()" (click)="launch()">
+              {{ 'marketing.campaign.action.launch' | t }}
+            </button>
+          }
+          @case ('SENDING') {
+            <button
+              type="button"
+              [disabled]="actionSubmitting()"
+              (click)="openReasonPrompt('halt')"
+            >
+              {{ 'marketing.campaign.action.halt' | t }}
+            </button>
+          }
+          @case ('PAUSED') {
+            <button
+              type="button"
+              [disabled]="actionSubmitting()"
+              (click)="openReasonPrompt('resume')"
+            >
+              {{ 'marketing.campaign.action.resume' | t }}
+            </button>
+            <button
+              type="button"
+              [disabled]="actionSubmitting()"
+              (click)="openReasonPrompt('halt')"
+            >
+              {{ 'marketing.campaign.action.halt' | t }}
+            </button>
+          }
+        }
+      </section>
+
+      <section class="recipients">
+        <h3 class="q-caption">{{ 'marketing.campaign.recipients.title' | t }}</h3>
+        @if (recipients().length === 0) {
+          <p class="q-body-sm">{{ 'marketing.campaign.recipients.empty' | t }}</p>
+        } @else {
+          <table class="recipients__table">
+            <thead>
+              <tr>
+                <th>{{ 'marketing.campaign.recipients.column.status' | t }}</th>
+                <th>{{ 'marketing.campaign.recipients.column.reason' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (recipient of recipients(); track recipient.customerAccountId) {
+                <tr>
+                  <td>{{ recipient.terminalStatus ?? recipient.status }}</td>
+                  <td>
+                    {{
+                      recipient.refusalReason ? (refusalLabelKey(recipient.refusalReason) | t) : '—'
+                    }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    </div>
+  }
+</div>
+
+@if (showReasonPrompt(); as kind) {
+  <div class="dialog-backdrop" (click)="closeReasonPrompt()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ reasonPromptTitleKey(kind) | t }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaign.reasonPrompt.reason' | t }}</span>
+        <input
+          type="text"
+          [value]="reasonText()"
+          (input)="reasonText.set($any($event.target).value)"
+        />
+      </label>
+      <div class="dialog__actions">
+        <button type="button" (click)="closeReasonPrompt()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          [disabled]="actionSubmitting() || reasonText().trim().length === 0"
+          (click)="confirmReasonPrompt()"
+        >
+          {{ 'marketing.campaign.reasonPrompt.confirm' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

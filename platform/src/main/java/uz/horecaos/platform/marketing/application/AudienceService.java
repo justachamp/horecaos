@@ -97,9 +97,41 @@ public class AudienceService {
     }
 
     @Transactional
-    public int redefine(UUID tenantId, UUID audienceId, List<AudiencePredicate> predicates) {
+    public int redefine(UUID tenantId, UUID brandId, UUID audienceId, List<AudiencePredicate> predicates) {
         requireWorkablePredicates(predicates);
-        return audiences.replacePredicates(tenantId, audienceId, predicates, clock.instant());
+        AudienceRow audience = requireOwnedByBrand(tenantId, brandId, audienceId);
+        return audiences.replacePredicates(tenantId, audience.id(), predicates, clock.instant());
+    }
+
+    /** Every audience the brand owns, newest first. */
+    @Transactional(readOnly = true)
+    public List<AudienceRow> list(UUID tenantId, UUID brandId) {
+        return audiences.listByBrand(tenantId, brandId);
+    }
+
+    /** One audience with the predicate set its current definition version holds. */
+    @Transactional(readOnly = true)
+    public AudienceDetail get(UUID tenantId, UUID brandId, UUID audienceId) {
+        AudienceRow audience = requireOwnedByBrand(tenantId, brandId, audienceId);
+        List<AudiencePredicate> predicates =
+                audiences.loadPredicates(tenantId, audienceId, audience.definitionVersion());
+        return new AudienceDetail(audience, predicates);
+    }
+
+    private AudienceRow requireOwnedByBrand(UUID tenantId, UUID brandId, UUID audienceId) {
+        AudienceRow audience = audiences
+                .findAudience(tenantId, audienceId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No audience %s belongs to this tenant".formatted(audienceId)));
+        // Mirrors buildSnapshot's own check: the endpoint declares a BRAND-scoped
+        // capability, so the caller was authorised for the brand in the URL, and
+        // everything here then works from the audience's OWN brand read off the
+        // row. Skipping this would let AUDIENCE_READ for one brand read, or
+        // CAMPAIGN_AUTHOR for one brand redefine, a sibling brand's segment.
+        if (!audience.brandId().equals(brandId)) {
+            throw new IllegalArgumentException("No audience %s belongs to this brand".formatted(audienceId));
+        }
+        return audience;
     }
 
     /**
@@ -301,4 +333,7 @@ public class AudienceService {
             int candidateCount,
             int memberCount,
             @Nullable Instant metricWatermarkAt) {}
+
+    /** An audience together with the predicates its current definition version holds. */
+    public record AudienceDetail(AudienceRow audience, List<AudiencePredicate> predicates) {}
 }

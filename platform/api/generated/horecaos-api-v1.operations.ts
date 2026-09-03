@@ -119,6 +119,51 @@ export interface AttemptResponse {
   uncertainOutcome?: boolean;
 }
 
+export interface AudienceDetailResponse {
+  audienceId?: string;
+  createdAt?: string;
+  createdBy?: string;
+  definitionVersion?: number;
+  description?: string;
+  name?: string;
+  predicates?: Array<AudiencePredicateResponse>;
+  status?: string;
+  updatedAt?: string;
+}
+
+export interface AudiencePredicateRequest {
+  audienceId?: string;
+  dateHigh?: string;
+  dateLow?: string;
+  numericHigh?: number;
+  numericLow?: number;
+  operator: string;
+  textValues?: Array<string>;
+  type: string;
+}
+
+export interface AudiencePredicateResponse {
+  audienceId?: string;
+  dateHigh?: string;
+  dateLow?: string;
+  numericHigh?: number;
+  numericLow?: number;
+  operator?: string;
+  textValues?: Array<string>;
+  type?: string;
+}
+
+export interface AudienceSummaryResponse {
+  audienceId?: string;
+  createdAt?: string;
+  createdBy?: string;
+  definitionVersion?: number;
+  description?: string;
+  name?: string;
+  status?: string;
+  updatedAt?: string;
+}
+
 export interface AvailabilityDecision {
   available?: boolean;
   unavailableItems?: Array<Unavailable>;
@@ -222,6 +267,37 @@ export interface BucketResponse {
 export interface BypassRequest {
   reasonCode: string;
   supervisorName: string;
+}
+
+export interface CampaignResponse {
+  approvedBy?: string;
+  audienceId?: string;
+  benefitOfferId?: string;
+  blockedCount?: number;
+  campaignId?: string;
+  channel?: string;
+  consentPurpose?: string;
+  costCeilingMinor?: number;
+  createdAt?: string;
+  createdBy?: string;
+  currency?: string;
+  estimatedCostHighMinor?: number;
+  estimatedCostLowMinor?: number;
+  estimatedDeliverySeconds?: number;
+  estimatedRecipients?: number;
+  loyaltyAccrualRuleId?: string;
+  name?: string;
+  pausedAt?: string;
+  recipientCap?: number;
+  reservedCostMinor?: number;
+  reservedRecipients?: number;
+  snapshotId?: string;
+  spentCostMinor?: number;
+  status?: string;
+  templateKey?: string;
+  timezone?: string;
+  updatedAt?: string;
+  version?: number;
 }
 
 export interface CapabilityView {
@@ -406,6 +482,19 @@ export interface CoverageResponse {
   warning?: string;
 }
 
+export interface CreateCampaignRequest {
+  audienceId: string;
+  benefitOfferId?: string;
+  channel: string;
+  consentPurpose: string;
+  costCeilingMinor?: number;
+  currency: string;
+  loyaltyAccrualRuleId?: string;
+  name: string;
+  recipientCap?: number;
+  templateKey: string;
+}
+
 export interface CreateCustomerRequest {
   brandId: string;
   displayName?: string;
@@ -490,6 +579,12 @@ export interface DateOfBirthRequest {
 
 export interface DateOfBirthResponse {
   dateOfBirth?: string;
+}
+
+export interface DefineAudienceRequest {
+  description?: string;
+  name: string;
+  predicates: Array<AudiencePredicateRequest>;
 }
 
 export interface DispatchResponse {
@@ -662,6 +757,10 @@ export interface LiabilityResponse {
 
 export interface LiftBlacklistRequest {
   reason?: string;
+}
+
+export interface LiftSuppressionResponse {
+  lifted?: boolean;
 }
 
 export interface LineBody {
@@ -1282,6 +1381,10 @@ export interface RecipientResponse {
   terminalStatus?: string;
 }
 
+export interface RedefineAudienceRequest {
+  predicates: Array<AudiencePredicateRequest>;
+}
+
 export interface ReferenceMatchResponse {
   bindingId?: string;
   locationId?: string;
@@ -1771,6 +1874,19 @@ export interface StockItemResponse {
   trackingMode?: string;
 }
 
+export interface SuppressionListItemResponse {
+  appliedAt?: string;
+  appliedByType?: string;
+  brandId?: string;
+  channel?: string;
+  customerAccountId?: string;
+  expiresAt?: string;
+  liftedAt?: string;
+  reason?: string;
+  statedReason?: string;
+  suppressionId?: string;
+}
+
 export interface SuppressionRequest {
   channel?: string;
   customerAccountId: string;
@@ -2046,8 +2162,15 @@ export interface Operations {
   "find": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } } }; responses: { "200": ReservationResponse } };
   "stateAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: ReservationControllerStateActionRequest }; responses: { "200": ReservationResponse } };
   "availability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<AvailabilityResponse> } };
+  "listAudiences": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AudienceSummaryResponse> } };
+  "defineAudience": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DefineAudienceRequest }; responses: { "200": AudienceDetailResponse } };
   "export": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/snapshots/{snapshotId}/exports"; request: { parameters: { path: { brandId: string; snapshotId: string; tenantId: string } }; body: ExportRequest }; responses: { "200": Array<string> } };
+  "readAudience": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}"; request: { parameters: { path: { audienceId: string; brandId: string; tenantId: string } } }; responses: { "200": AudienceDetailResponse } };
+  "redefineAudience": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}/predicates"; request: { parameters: { path: { audienceId: string; brandId: string; tenantId: string } }; body: RedefineAudienceRequest }; responses: { "200": AudienceDetailResponse } };
   "buildSnapshot": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/audiences/{audienceId}/snapshots"; request: { parameters: { path: { audienceId: string; brandId: string; tenantId: string } }; body: SnapshotRequest }; responses: { "200": SnapshotResponse } };
+  "listCampaigns": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CampaignResponse> } };
+  "createCampaign": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCampaignRequest }; responses: { "200": CampaignResponse } };
+  "readCampaign": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": CampaignResponse } };
   "approve": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/approvals"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": unknown } };
   "estimate": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/estimates"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": EstimateResponse } };
   "halt": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/halts"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": unknown } };
@@ -2055,7 +2178,9 @@ export interface Operations {
   "recipients": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/recipients"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<RecipientResponse> } };
   "resume": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/resumptions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": ResumeResponse } };
   "submit": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "listSuppressions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { activeOnly?: boolean } } }; responses: { "200": Array<SuppressionListItemResponse> } };
   "suppress": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SuppressionRequest }; responses: { "200": SuppressionResponse } };
+  "liftSuppression": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions/{suppressionId}/lifts"; request: { parameters: { path: { brandId: string; suppressionId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": LiftSuppressionResponse } };
   "list_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TemplateResponse> } };
   "create": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTemplateRequest }; responses: { "200": NotificationTemplateControllerIdResponse } };
   "addVersion": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } }; body: AddVersionRequest }; responses: { "200": NotificationTemplateControllerVersionResponse } };

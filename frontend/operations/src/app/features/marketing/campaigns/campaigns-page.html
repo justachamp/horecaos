@@ -1,0 +1,502 @@
+<div class="campaigns" [class.campaigns--docked]="docked()">
+  <section class="main">
+    <header class="main__head">
+      <h1 class="q-subhead">{{ 'marketing.campaigns.title' | t }}</h1>
+      <nav class="main__subnav" [attr.aria-label]="'marketing.campaigns.tab.campaigns' | t">
+        <button
+          type="button"
+          class="main__subnav-item"
+          [class.main__subnav-item--active]="view() === 'campaigns'"
+          (click)="switchView('campaigns')"
+        >
+          {{ 'marketing.campaigns.tab.campaigns' | t }}
+        </button>
+        <button
+          type="button"
+          class="main__subnav-item"
+          [class.main__subnav-item--active]="view() === 'audiences'"
+          (click)="switchView('audiences')"
+        >
+          {{ 'marketing.campaigns.tab.audiences' | t }}
+        </button>
+        <button
+          type="button"
+          class="main__subnav-item"
+          [class.main__subnav-item--active]="view() === 'suppressions'"
+          (click)="switchView('suppressions')"
+        >
+          {{ 'marketing.campaigns.tab.suppressions' | t }}
+        </button>
+      </nav>
+    </header>
+
+    <div class="main__body">
+      @if (loading()) {
+        <div class="skeleton" [attr.aria-label]="'marketing.campaigns.loading' | t">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="skeleton__row"></div>
+          }
+        </div>
+      } @else if (denied()) {
+        <p class="q-body-sm" data-testid="campaigns-denied">
+          {{ 'marketing.campaigns.denied' | t }}
+        </p>
+      } @else {
+        @if (loadError(); as error) {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ error }}</span>
+          </div>
+        }
+
+        @switch (view()) {
+          @case ('campaigns') {
+            <div class="section-toolbar">
+              <button type="button" (click)="openCreateCampaign()">
+                {{ 'marketing.campaigns.create.action' | t }}
+              </button>
+            </div>
+            <table class="campaigns__table">
+              <thead>
+                <tr>
+                  <th>{{ 'marketing.campaigns.column.name' | t }}</th>
+                  <th>{{ 'marketing.campaigns.column.channel' | t }}</th>
+                  <th>{{ 'marketing.campaigns.column.status' | t }}</th>
+                  <th>{{ 'marketing.campaigns.column.recipients' | t }}</th>
+                  <th>{{ 'marketing.campaigns.column.cost' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (campaign of campaigns(); track campaign.campaignId) {
+                  <tr
+                    class="row-clickable"
+                    tabindex="0"
+                    data-testid="campaign-row"
+                    (click)="openCampaign(campaign)"
+                    (keydown.enter)="openCampaign(campaign)"
+                  >
+                    <td>
+                      {{ campaign.name }}
+                      @if (fourEyesHint(campaign); as hint) {
+                        <div class="q-caption row-hint">{{ hint | t }}</div>
+                      }
+                    </td>
+                    <td>{{ channelLabelKey(campaign.channel) | t }}</td>
+                    <td>
+                      <span class="status-badge">{{ statusLabelKey(campaign.status) | t }}</span>
+                    </td>
+                    <td class="q-tnum">{{ campaign.estimatedRecipients ?? '—' }}</td>
+                    <td class="q-tnum">
+                      @if (
+                        campaign.estimatedCostLowMinor !== null &&
+                        campaign.estimatedCostHighMinor !== null
+                      ) {
+                        {{ campaign.estimatedCostLowMinor }}–{{ campaign.estimatedCostHighMinor }}
+                        {{ campaign.currency }}
+                      } @else {
+                        —
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5">
+                      <p class="q-body-sm" data-testid="campaigns-empty">
+                        {{ 'marketing.campaigns.empty' | t }}
+                      </p>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('audiences') {
+            <div class="section-toolbar">
+              <button type="button" (click)="openCreateAudience()">
+                {{ 'marketing.audiences.create.action' | t }}
+              </button>
+            </div>
+            <table class="campaigns__table">
+              <thead>
+                <tr>
+                  <th>{{ 'marketing.audiences.column.name' | t }}</th>
+                  <th>{{ 'marketing.audiences.column.description' | t }}</th>
+                  <th>{{ 'marketing.audiences.column.status' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (audience of audiences(); track audience.audienceId) {
+                  <tr data-testid="audience-row">
+                    <td>{{ audience.name }}</td>
+                    <td>{{ audience.description ?? '—' }}</td>
+                    <td>{{ audience.status }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="3">
+                      <p class="q-body-sm" data-testid="audiences-empty">
+                        {{ 'marketing.audiences.empty' | t }}
+                      </p>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('suppressions') {
+            <div class="section-toolbar">
+              <label class="q-body-sm">
+                <input
+                  type="checkbox"
+                  [checked]="suppressionsActiveOnly()"
+                  (change)="toggleSuppressionsActiveOnly()"
+                />
+                {{ 'marketing.suppressions.activeOnlyToggle' | t }}
+              </label>
+            </div>
+            @if (suppressionsError(); as error) {
+              <div class="error-band" role="alert">
+                <span class="q-body-sm">{{ error }}</span>
+              </div>
+            }
+            @if (suppressionsLoading()) {
+              <p class="q-body-sm">{{ 'marketing.campaigns.loading' | t }}</p>
+            } @else {
+              <table class="campaigns__table">
+                <thead>
+                  <tr>
+                    <th>{{ 'marketing.suppressions.column.channel' | t }}</th>
+                    <th>{{ 'marketing.suppressions.column.reason' | t }}</th>
+                    <th>{{ 'marketing.suppressions.column.appliedBy' | t }}</th>
+                    <th>{{ 'marketing.suppressions.column.statedReason' | t }}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (suppression of suppressions(); track suppression.suppressionId) {
+                    <tr data-testid="suppression-row">
+                      <td>{{ suppression.channel ?? '—' }}</td>
+                      <td>{{ suppression.reason }}</td>
+                      <td>{{ suppression.appliedByType }}</td>
+                      <td>{{ suppression.statedReason ?? '—' }}</td>
+                      <td>
+                        @if (suppression.liftedAt === null) {
+                          <button type="button" (click)="openLift(suppression)">
+                            {{ 'marketing.suppressions.lift.action' | t }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="5">
+                        <p class="q-body-sm" data-testid="suppressions-empty">
+                          {{ 'marketing.suppressions.empty' | t }}
+                        </p>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          }
+        }
+      }
+    </div>
+  </section>
+
+  <aside class="dock" [attr.aria-hidden]="docked() ? null : 'true'">
+    <router-outlet (activate)="docked.set(true)" (deactivate)="docked.set(false)" />
+  </aside>
+</div>
+
+@if (showCreateCampaign()) {
+  <div class="dialog-backdrop" (click)="closeCreateCampaign()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.campaigns.create.title' | t }}</h2>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.name' | t }}</span>
+        <input
+          type="text"
+          [value]="newCampaignName()"
+          (input)="newCampaignName.set($any($event.target).value)"
+        />
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.audience' | t }}</span>
+        @if (audiences().length === 0) {
+          <p class="q-caption">{{ 'marketing.campaigns.create.audience.empty' | t }}</p>
+        } @else {
+          <select
+            [value]="newCampaignAudienceId()"
+            (change)="newCampaignAudienceId.set($any($event.target).value)"
+          >
+            @for (audience of audiences(); track audience.audienceId) {
+              <option [value]="audience.audienceId">{{ audience.name }}</option>
+            }
+          </select>
+        }
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.channel' | t }}</span>
+        <select
+          [value]="newCampaignChannel()"
+          (change)="
+            newCampaignChannel.set($any($event.target).value); newCampaignTemplateKey.set('')
+          "
+        >
+          @for (channel of channels; track channel.value) {
+            <option [value]="channel.value">{{ channelLabelKey(channel.value) | t }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.template' | t }}</span>
+        @if (templatesForChannel().length > 0) {
+          <select
+            [value]="newCampaignTemplateKey()"
+            (change)="newCampaignTemplateKey.set($any($event.target).value)"
+          >
+            <option value="">—</option>
+            @for (template of templatesForChannel(); track template.templateKey) {
+              <option [value]="template.templateKey">{{ template.templateKey }}</option>
+            }
+          </select>
+        } @else {
+          <input
+            type="text"
+            [value]="newCampaignTemplateKey()"
+            (input)="newCampaignTemplateKey.set($any($event.target).value)"
+          />
+          <p class="q-caption">{{ 'marketing.campaigns.create.template.manualHint' | t }}</p>
+        }
+      </label>
+
+      @if (selectedTemplate(); as template) {
+        <p class="q-caption">
+          {{
+            'marketing.campaigns.create.consentPurpose'
+              | t: { purpose: template.consentPurpose ?? '—' }
+          }}
+        </p>
+      }
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.recipientCap' | t }}</span>
+        <input
+          type="number"
+          [value]="newCampaignRecipientCap()"
+          (input)="newCampaignRecipientCap.set(+$any($event.target).value)"
+        />
+      </label>
+
+      @if (channelCarriesMarginalCost()) {
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.campaigns.create.costCeiling' | t }}</span>
+          <input
+            type="number"
+            [value]="newCampaignCostCeilingMinor()"
+            (input)="
+              newCampaignCostCeilingMinor.set(
+                $any($event.target).value ? +$any($event.target).value : null
+              )
+            "
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.campaigns.create.currency' | t }}</span>
+          <input
+            type="text"
+            [value]="newCampaignCurrency()"
+            (input)="newCampaignCurrency.set($any($event.target).value)"
+          />
+        </label>
+      }
+
+      @if (createCampaignError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      }
+
+      <div class="dialog__actions">
+        <button type="button" (click)="closeCreateCampaign()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button type="button" [disabled]="!canCreateCampaign()" (click)="submitCreateCampaign()">
+          {{ 'marketing.campaigns.create.submit' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (showCreateAudience()) {
+  <div class="dialog-backdrop" (click)="closeCreateAudience()">
+    <div class="dialog dialog--wide" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.audiences.create.title' | t }}</h2>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.audiences.create.name' | t }}</span>
+        <input
+          type="text"
+          [value]="newAudienceName()"
+          (input)="newAudienceName.set($any($event.target).value)"
+        />
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.audiences.create.description' | t }}</span>
+        <input
+          type="text"
+          [value]="newAudienceDescription()"
+          (input)="newAudienceDescription.set($any($event.target).value)"
+        />
+      </label>
+
+      <h3 class="q-caption">{{ 'marketing.audiences.create.predicates' | t }}</h3>
+
+      @for (row of newAudiencePredicates(); track $index) {
+        <div class="predicate-row">
+          <select
+            [value]="row.type"
+            (change)="onPredicateTypeChange($index, $any($event.target).value)"
+          >
+            @for (descriptor of predicateTypes; track descriptor.type) {
+              <option [value]="descriptor.type">{{ descriptor.labelKey | t }}</option>
+            }
+          </select>
+
+          <select
+            [value]="row.operator"
+            (change)="updatePredicateRow($index, { operator: $any($event.target).value })"
+          >
+            @for (operator of operatorsForRow(row); track operator) {
+              <option [value]="operator">{{ operatorLabelKey(operator) | t }}</option>
+            }
+          </select>
+
+          @switch (valueKindOfRow(row)) {
+            @case ('NUMERIC') {
+              <input
+                type="number"
+                [attr.placeholder]="'marketing.predicate.field.numericLow' | t"
+                [value]="row.numericLow"
+                (input)="
+                  updatePredicateRow($index, {
+                    numericLow: $any($event.target).value ? +$any($event.target).value : null,
+                  })
+                "
+              />
+              @if (row.operator === 'BETWEEN') {
+                <input
+                  type="number"
+                  [attr.placeholder]="'marketing.predicate.field.numericHigh' | t"
+                  [value]="row.numericHigh"
+                  (input)="
+                    updatePredicateRow($index, {
+                      numericHigh: $any($event.target).value ? +$any($event.target).value : null,
+                    })
+                  "
+                />
+              }
+            }
+            @case ('DATE_RANGE') {
+              <input
+                type="date"
+                [value]="row.dateLow"
+                (input)="updatePredicateRow($index, { dateLow: $any($event.target).value || null })"
+              />
+              <input
+                type="date"
+                [value]="row.dateHigh"
+                (input)="
+                  updatePredicateRow($index, { dateHigh: $any($event.target).value || null })
+                "
+              />
+            }
+            @case ('TEXT_SET') {
+              <input
+                type="text"
+                [attr.placeholder]="'marketing.predicate.field.textValues' | t"
+                [value]="row.textValuesCsv"
+                (input)="updatePredicateRow($index, { textValuesCsv: $any($event.target).value })"
+              />
+              @if (fixedValuesOfRow(row); as fixed) {
+                <span class="q-caption">
+                  {{
+                    'marketing.predicate.field.fixedValuesHint' | t: { values: fixed.join(', ') }
+                  }}
+                </span>
+              }
+            }
+            @case ('AUDIENCE') {
+              <select
+                [value]="row.audienceId"
+                (change)="updatePredicateRow($index, { audienceId: $any($event.target).value })"
+              >
+                <option value="">—</option>
+                @for (audience of audiences(); track audience.audienceId) {
+                  <option [value]="audience.audienceId">{{ audience.name }}</option>
+                }
+              </select>
+            }
+          }
+
+          @if (newAudiencePredicates().length > 1) {
+            <button type="button" (click)="removePredicateRow($index)">
+              {{ 'marketing.audiences.create.removePredicate' | t }}
+            </button>
+          }
+        </div>
+      }
+
+      <button type="button" (click)="addPredicateRow()">
+        {{ 'marketing.audiences.create.addPredicate' | t }}
+      </button>
+
+      @if (createAudienceError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      }
+
+      <div class="dialog__actions">
+        <button type="button" (click)="closeCreateAudience()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button type="button" [disabled]="!canCreateAudience()" (click)="submitCreateAudience()">
+          {{ 'marketing.audiences.create.submit' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (liftingId()) {
+  <div class="dialog-backdrop" (click)="closeLift()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.suppressions.lift.title' | t }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.suppressions.lift.reason' | t }}</span>
+        <input
+          type="text"
+          [value]="liftReason()"
+          (input)="liftReason.set($any($event.target).value)"
+        />
+      </label>
+      @if (liftError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      }
+      <div class="dialog__actions">
+        <button type="button" (click)="closeLift()">{{ 'marketing.dialog.cancel' | t }}</button>
+        <button
+          type="button"
+          [disabled]="liftSubmitting() || liftReason().trim().length === 0"
+          (click)="submitLift()"
+        >
+          {{ 'marketing.suppressions.lift.submit' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
