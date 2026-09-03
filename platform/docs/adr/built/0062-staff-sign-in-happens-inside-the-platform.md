@@ -4,7 +4,9 @@
 - Implementation status: Built — both staff apps sign in on their own page
   (wave 18); the backend exchanges credentials with Keycloak's direct grant on
   the `horecaos-staff-login` confidential client, refresh and sign-out proxy
-  through the backend, failures are uniform (wrong password, unknown user, and
+  through the backend (since wave 35 the refresh token persists in
+  sessionStorage — reload, deep links, and sleep-expired sessions restore or
+  redirect cleanly; the access token stays in-memory only), failures are uniform (wrong password, unknown user, and
   a brute-force-locked account answer identically — verified against live
   Keycloak, which itself cannot distinguish them), a required action answers
   `ACCOUNT_ACTION_REQUIRED`, and sign-in is ADR 0033 rate-limited. The public
