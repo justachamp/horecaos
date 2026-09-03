@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +24,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
 import uz.horecaos.platform.iam.api.TenantRoleCatalog;
 import uz.horecaos.platform.iam.application.GrantManagementService;
@@ -81,6 +83,83 @@ public class GrantController {
         }
         return authorization.viewFor(actor.subject(), tenantId);
     }
+
+    /**
+     * "Can this principal do this, on this resource, and why" (control-plane
+     * IA 7.3), for a subject the caller names rather than themselves.
+     *
+     * <p>Reuses exactly what {@link #sessionContext} already reuses for the
+     * signed-in principal: {@link AuthorizationService#viewFor}, which is the
+     * grants cache's own read (ADR 0003). The difference is authorization
+     * over who may ask the question. {@code /session/context} needs none,
+     * because a principal reading its own capabilities cannot see anything a
+     * 403 would not already have told it; reading a colleague's capability
+     * set is a different act and requires platform-admin.
+     *
+     * <p>{@code capability} is optional. Naming one adds the direct yes/no
+     * answer ({@code granted}) on top of the full view, computed the same
+     * way the server itself decides every mutation ({@link
+     * AuthorizationService#has}) rather than by re-deriving it from the
+     * capability set client-side.
+     */
+    @GetMapping("/control-plane/access-debugger")
+    @RequiresCapability(value = Capability.PLATFORM_ADMIN, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Explain a named principal's effective access",
+            description = "platform-admin only: this reveals another principal's grants, which is a "
+                    + "different act from a principal reading its own session context.")
+    AccessDebugResponse debugAccess(
+            @RequestParam String subject,
+            @RequestParam(required = false) @Nullable UUID tenantId,
+            @RequestParam(required = false) @Nullable UUID brandId,
+            @RequestParam(required = false) @Nullable UUID locationId,
+            @RequestParam(required = false) @Nullable Capability capability) {
+
+        CapabilityView view = viewForNullableTenant(subject, tenantId);
+        Boolean granted = capability == null
+                ? null
+                : authorization.has(subject, capability, scopeOf(tenantId, brandId, locationId));
+        return new AccessDebugResponse(view, capability, granted);
+    }
+
+    /**
+     * {@link AuthorizationService#viewFor} is declared to take a non-null
+     * tenant id, but its one production implementation already branches on a
+     * null one — {@link #sessionContext} passes a possibly-absent {@code
+     * tenantId} through to it today for exactly the platform-scope case this
+     * debugger also needs. Isolated here rather than widening the shared
+     * interface, which several unrelated test doubles across other modules
+     * implement with a non-null parameter and would stop compiling.
+     */
+    @SuppressWarnings("NullAway")
+    private CapabilityView viewForNullableTenant(String subject, @Nullable UUID tenantId) {
+        return authorization.viewFor(subject, tenantId);
+    }
+
+    /** Neither PLATFORM, TENANT, BRAND, nor LOCATION is assumed; the caller's own identifiers decide it. */
+    private static ResourceScope scopeOf(@Nullable UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
+        if (tenantId == null) {
+            return ResourceScope.platform();
+        }
+        if (brandId == null) {
+            return ResourceScope.tenant(tenantId);
+        }
+        if (locationId == null) {
+            return ResourceScope.brand(tenantId, brandId);
+        }
+        return ResourceScope.location(tenantId, brandId, locationId);
+    }
+
+    /**
+     * @param requestedCapability echoes what the caller asked about, absent when
+     *                            they only wanted the effective view
+     * @param granted             null when requestedCapability is null; otherwise the
+     *                            server's own {@link AuthorizationService#has} answer
+     */
+    public record AccessDebugResponse(
+            CapabilityView view,
+            @Nullable Capability requestedCapability,
+            @Nullable Boolean granted) {}
 
     @GetMapping("/control-plane/tenants/{tenantId}/grants")
     @RequiresCapability(Capability.IAM_GRANT_MANAGE)
