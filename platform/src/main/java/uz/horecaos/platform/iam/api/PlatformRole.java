@@ -132,6 +132,11 @@ public enum PlatformRole {
                     COURIER_RATECARD_READ,
                     COURIER_TYPE_MANAGE,
                     COURIER_PAYOUT_AUTHORISE,
+                    // Finance 8.3/8.4/8.5's worklists — see TENANT_FINANCE's own comment
+                    // on the same three.
+                    COURIER_CASH_READ,
+                    COURIER_SETTLEMENT_READ,
+                    PARTNER_INVOICE_READ,
                     TENANT_READ,
                     TENANT_WRITE,
                     TENANT_ONBOARDING_MANAGE,
@@ -369,6 +374,13 @@ public enum PlatformRole {
                     // so closing and releasing are never the same pair of hands.
                     COURIER_LEDGER_READ,
                     COURIER_SETTLEMENT_CLOSE,
+                    // Finance 8.3/8.4/8.5's worklists: the whole fleet's cash exposure,
+                    // settlement periods awaiting a payout, and imported partner
+                    // invoices awaiting a match — none of which is the branch cashier's
+                    // COURIER_CASH_CONFIRM or a settlement action.
+                    COURIER_CASH_READ,
+                    COURIER_SETTLEMENT_READ,
+                    PARTNER_INVOICE_READ,
                     COURIER_ADJUSTMENT_APPROVE,
                     DELIVERY_COST_READ,
                     PARTNER_INVOICE_MANAGE,

@@ -242,27 +242,39 @@ public class JdbcDeliveryCostStore {
     }
 
     public Optional<InvoiceRow> findInvoice(UUID tenantId, UUID invoiceId) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, provider_code, provider_invoice_ref, legal_entity_id,
-                       period_start, period_end, total_minor, currency, status, imported_by
-                  FROM fulfillment.partner_delivery_invoices
-                 WHERE tenant_id = :tenantId AND id = :id
-                """)
+        return jdbc.sql(SELECT_INVOICE + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
                 .param("id", invoiceId)
-                .query((ResultSet rs, int rowNumber) -> new InvoiceRow(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getString("provider_code"),
-                        rs.getString("provider_invoice_ref"),
-                        rs.getObject("legal_entity_id", UUID.class),
-                        rs.getObject("period_start", LocalDate.class),
-                        rs.getObject("period_end", LocalDate.class),
-                        rs.getLong("total_minor"),
-                        rs.getString("currency"),
-                        rs.getString("status"),
-                        rs.getString("imported_by")))
+                .query(JdbcDeliveryCostStore::mapInvoice)
                 .optional();
+    }
+
+    /**
+     * Every partner delivery invoice for the tenant — Finance 8.4's
+     * reconciliation worklist. {@code IMPORTED} (not yet matched against
+     * HorecaOS's own shipments) sorts first, largest total first, because that
+     * is the invoice a finance operator is most exposed on until it is matched.
+     */
+    public List<InvoiceRow> listInvoices(UUID tenantId, @Nullable String status, int limit) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("limit", limit);
+
+        StringBuilder filter = new StringBuilder(" WHERE tenant_id = :tenantId");
+        if (status != null) {
+            filter.append(" AND status = :status");
+            params.put("status", status);
+        }
+
+        return jdbc.sql(SELECT_INVOICE + filter + """
+                 ORDER BY CASE status WHEN 'IMPORTED' THEN 0 WHEN 'DISPUTED' THEN 1
+                                       WHEN 'MATCHED' THEN 2 ELSE 3 END,
+                          total_minor DESC, imported_at DESC
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query(JdbcDeliveryCostStore::mapInvoice)
+                .list();
     }
 
     // -------------------------------------------------------------------- rows
@@ -350,6 +362,27 @@ public class JdbcDeliveryCostStore {
                    currency, charge_type, match_status, variance_minor, reason_code
               FROM fulfillment.partner_delivery_invoice_lines
             """;
+
+    private static final String SELECT_INVOICE = """
+            SELECT id, tenant_id, provider_code, provider_invoice_ref, legal_entity_id,
+                   period_start, period_end, total_minor, currency, status, imported_by
+              FROM fulfillment.partner_delivery_invoices
+            """;
+
+    private static InvoiceRow mapInvoice(ResultSet rs, int rowNumber) throws SQLException {
+        return new InvoiceRow(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("provider_code"),
+                rs.getString("provider_invoice_ref"),
+                rs.getObject("legal_entity_id", UUID.class),
+                rs.getObject("period_start", LocalDate.class),
+                rs.getObject("period_end", LocalDate.class),
+                rs.getLong("total_minor"),
+                rs.getString("currency"),
+                rs.getString("status"),
+                rs.getString("imported_by"));
+    }
 
     private static CostLineRow mapLine(ResultSet rs, int rowNumber) throws SQLException {
         return new CostLineRow(

@@ -181,6 +181,19 @@ public class PlanCatalogService {
         return plans.listActiveVersions();
     }
 
+    /**
+     * One plan version by id, whatever its activation state.
+     *
+     * <p>Unlike {@link #activeVersions}, this answers for a version a
+     * subscription still references after a newer one activated — Finance 8.6
+     * names the plan a tenant is actually on, not only the ones currently
+     * quotable.
+     */
+    public PlanVersion versionOf(UUID planVersionId) {
+        return plans.findVersion(planVersionId)
+                .orElseThrow(() -> new IllegalArgumentException("No plan version " + planVersionId));
+    }
+
     public Map<String, PlanEntitlement> entitlementsOf(UUID planVersionId) {
         return plans.entitlementsOf(planVersionId);
     }

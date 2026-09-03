@@ -32,6 +32,7 @@ import uz.horecaos.platform.commercial.api.LimitCheck;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsageMovement;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
@@ -151,6 +152,33 @@ class CommercialPlatformTests {
                 .isInstanceOf(ApiException.class)
                 .as("the person who typed a price is the last person able to notice a " + "misplaced digit in it")
                 .hasMessageContaining("other than its author");
+    }
+
+    @Test
+    void versionOfAnswersForAVersionEvenAfterANewerOneActivates() {
+        UUID firstVersionId = activateNetworkPlan();
+        UUID planId = jdbc.sql("SELECT plan_id FROM commercial.plan_versions WHERE id = :id")
+                .param("id", firstVersionId)
+                .query(UUID.class)
+                .single();
+        UUID secondVersionId = draftNetworkVersion(planId);
+        plans.activate(secondVersionId, ActorRef.user(APPROVER, null), "a repriced term", "corr");
+
+        assertThat(plans.versionOf(firstVersionId).id())
+                .as("Finance 8.6 names the plan version a live subscription still references, "
+                        + "not only the currently quotable one")
+                .isEqualTo(firstVersionId);
+        // activate() does not retire the version it supersedes — both stay in
+        // activeVersions() — which is exactly why versionOf (not a filter over
+        // activeVersions()) is the right read for a subscription pinned to either.
+        assertThat(plans.activeVersions())
+                .extracting(PlanVersion::id)
+                .containsExactlyInAnyOrder(firstVersionId, secondVersionId);
+    }
+
+    @Test
+    void versionOfRefusesAnUnknownId() {
+        assertThatThrownBy(() -> plans.versionOf(UUID.randomUUID())).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

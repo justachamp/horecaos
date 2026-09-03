@@ -820,6 +820,83 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    /**
+     * Per-variant sales, summed over the range — Reports 7.7's «Продажи» tab.
+     *
+     * <p>{@code fact_order_line} carries no fulfilment type of its own (a line is
+     * priced, not delivered), so the delivery/pickup split the spec asks for is a
+     * join back to {@code fact_order} on the same tenant, business date and order
+     * id — both facts are written together by {@code DayAggregator} for exactly
+     * this shape of read, and both are partitioned by {@code business_date}, so
+     * the join stays inside the range's own partitions rather than scanning the
+     * whole history.
+     *
+     * <p>Grouped and bounded, on the same footing as {@link #readOrders}: a
+     * capped, magnitude-ordered read serves the tab at pilot scale, and a
+     * cursor-paginated feed is follow-up work for whenever a tenant's catalogue
+     * needs it.
+     */
+    public List<VariantSalesRow> readVariantSales(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("limit", limit);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND l.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
+                       sum(l.quantity)::integer AS total_quantity,
+                       sum(l.gross_som) AS total_gross_som,
+                       sum(l.net_som) AS total_net_som,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::integer AS delivery_quantity,
+                       sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::bigint AS delivery_net_som,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP')::integer AS pickup_quantity,
+                       sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'PICKUP')::bigint AS pickup_net_som
+                  FROM reporting.fact_order_line l
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
+                 WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY l.variant_id, l.category_id
+                 ORDER BY total_net_som DESC, l.variant_id
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new VariantSalesRow(
+                        row.getObject("variant_id", UUID.class),
+                        row.getObject("category_id", UUID.class),
+                        row.getString("product_name"),
+                        row.getInt("total_quantity"),
+                        row.getLong("total_gross_som"),
+                        row.getLong("total_net_som"),
+                        row.getObject("delivery_quantity", Integer.class),
+                        row.getObject("delivery_net_som", Long.class),
+                        row.getObject("pickup_quantity", Integer.class),
+                        row.getObject("pickup_net_som", Long.class)))
+                .list();
+    }
+
+    /** One product's summed sales in range — see {@link #readVariantSales}. */
+    public record VariantSalesRow(
+            @Nullable UUID variantId,
+            @Nullable UUID categoryId,
+            String productName,
+            int totalQuantity,
+            long totalGrossSom,
+            long totalNetSom,
+            @Nullable Integer deliveryQuantity,
+            @Nullable Long deliveryNetSom,
+            @Nullable Integer pickupQuantity,
+            @Nullable Long pickupNetSom) {}
+
     /** Which end of an order-grain read to serve — see {@link #readOrders}. */
     public enum OrderSort {
         DATE_DESC,

@@ -42,4 +42,9 @@ export const reportsPaths = {
   orderOutcomes(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/order-outcomes`;
   },
+
+  /** Per-variant sales behind 7.7's «Продажи» tab — wave 39. */
+  variantSales(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/variant-sales`;
+  },
 } as const;

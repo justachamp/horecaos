@@ -1,0 +1,125 @@
+<div class="delivery-cost">
+  <h1 class="q-title">{{ 'finance.deliveryCost.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'finance.deliveryCost.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <div class="controls">
+        <label class="field">
+          <span class="q-caption">{{ 'finance.deliveryCost.basisLabel' | t }}</span>
+          <select [value]="basis()" (change)="onBasisChange($any($event.target).value)">
+            <option value="ACCRUED">{{ basisLabel('ACCRUED') }}</option>
+            <option value="INVOICED">{{ basisLabel('INVOICED') }}</option>
+            <option value="SETTLED">{{ basisLabel('SETTLED') }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'finance.deliveryCost.from' | t }}</span>
+          <input type="date" [value]="from()" (change)="from.set($any($event.target).value); reloadRange()" />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'finance.deliveryCost.to' | t }}</span>
+          <input type="date" [value]="to()" (change)="to.set($any($event.target).value); reloadRange()" />
+        </label>
+      </div>
+
+      @if (report(); as r) {
+        <div class="totals">
+          <div class="total-tile">
+            <span class="q-caption">{{ 'finance.deliveryCost.internal' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ money(r.internalMinor, 'UZS') }}</span>
+          </div>
+          <div class="total-tile">
+            <span class="q-caption">{{ 'finance.deliveryCost.partner' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ money(r.partnerMinor, 'UZS') }}</span>
+          </div>
+          <div class="total-tile total-tile--primary">
+            <span class="q-caption">{{ 'finance.deliveryCost.total' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ money(r.totalMinor, 'UZS') }}</span>
+          </div>
+        </div>
+        @if (r.shipmentsWithoutThisBasis > 0) {
+          <p class="q-caption note">
+            {{ 'finance.deliveryCost.missingBasis' | t: { count: r.shipmentsWithoutThisBasis } }}
+          </p>
+        }
+      }
+
+      <h2 class="q-subhead invoices-title">{{ 'finance.deliveryCost.invoices.title' | t }}</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.deliveryCost.invoices.provider' | t }}</th>
+            <th class="q-caption">{{ 'finance.deliveryCost.invoices.reference' | t }}</th>
+            <th class="q-caption num">{{ 'finance.deliveryCost.invoices.total' | t }}</th>
+            <th class="q-caption">{{ 'finance.deliveryCost.invoices.status' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invoice of invoices(); track invoice.invoiceId) {
+            <tr class="row" (click)="toggleInvoice(invoice)">
+              <td class="q-body-sm">{{ invoice.providerCode }}</td>
+              <td class="q-body-sm q-mono">{{ invoice.providerInvoiceRef }}</td>
+              <td class="q-body-sm q-tnum num">{{ money(invoice.totalMinor, invoice.currency) }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge" [class]="'status-badge--' + invoice.status.toLowerCase()">
+                  {{ invoiceStatusLabel(invoice.status) }}
+                </span>
+              </td>
+            </tr>
+            @if (openInvoiceId() === invoice.invoiceId) {
+              <tr class="detail-row">
+                <td colspan="4">
+                  @if (openInvoiceDetail(); as detail) {
+                    <table class="lines-table">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">{{ 'finance.deliveryCost.lines.shipmentRef' | t }}</th>
+                          <th class="q-caption num">{{ 'finance.deliveryCost.lines.amount' | t }}</th>
+                          <th class="q-caption">{{ 'finance.deliveryCost.lines.matchStatus' | t }}</th>
+                          <th class="q-caption num">{{ 'finance.deliveryCost.lines.variance' | t }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (line of detail.lines; track line.lineId) {
+                          <tr>
+                            <td class="q-body-sm q-mono">{{ line.providerShipmentRef }}</td>
+                            <td class="q-body-sm q-tnum num">{{ money(line.amountMinor, line.currency) }}</td>
+                            <td class="q-body-sm">{{ line.matchStatus }}</td>
+                            <td class="q-body-sm q-tnum num">
+                              {{ line.varianceMinor === null ? '—' : money(line.varianceMinor, line.currency) }}
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+                  }
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">{{ 'finance.deliveryCost.invoices.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</div>

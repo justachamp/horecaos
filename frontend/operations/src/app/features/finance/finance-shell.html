@@ -12,6 +12,30 @@
       routerLinkActive="finance-shell__tab--active"
       >{{ 'finance.nav.fiscal' | t }}</a
     >
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/cash"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.cash' | t }}</a
+    >
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/delivery-cost"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.deliveryCost' | t }}</a
+    >
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/payouts"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.payouts' | t }}</a
+    >
+    <a
+      class="finance-shell__tab q-body-sm"
+      routerLink="/finance/subscription"
+      routerLinkActive="finance-shell__tab--active"
+      >{{ 'finance.nav.subscription' | t }}</a
+    >
   </nav>
   <div class="finance-shell__body">
     <router-outlet />

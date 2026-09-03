@@ -1,0 +1,139 @@
+.cash {
+  max-width: 900px;
+}
+
+.subtitle {
+  color: var(--q-ink-muted);
+  margin: 4px 0 16px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.num {
+  text-align: right;
+}
+
+.actions {
+  text-align: right;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: 12px;
+}
+
+.status-badge--pending,
+.status-badge--declared {
+  border-color: var(--q-warning);
+  color: var(--q-warning-text);
+}
+
+.status-badge--variance_raised {
+  border-color: var(--q-error);
+  color: var(--q-error-text);
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+  padding: 20px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.error-text {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+}
+
+.panel {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primary,
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}

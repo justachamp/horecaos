@@ -16,7 +16,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('FinanceShell', () => {
-  it('renders a sub-nav link for each pilot-tier Finance screen, and no more', async () => {
+  it('renders a sub-nav link for every Finance screen this app builds — 8.1/8.2 (tier P) plus 8.3-8.6 (tier 2, wave 39)', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
@@ -36,6 +36,13 @@ describe('FinanceShell', () => {
     const labels = [...harness.routeNativeElement!.querySelectorAll('.finance-shell__tab')].map(
       (el) => el.textContent?.trim(),
     );
-    expect(labels).toEqual(['Платежи и расчёты', 'Фискализация']);
+    expect(labels).toEqual([
+      'Платежи и расчёты',
+      'Фискализация',
+      'Инкассация',
+      'Стоимость доставки',
+      'Выплаты курьерам',
+      'Подписка',
+    ]);
   });
 });

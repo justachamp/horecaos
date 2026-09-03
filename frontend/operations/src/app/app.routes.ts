@@ -84,27 +84,65 @@ export const routes: Routes = [
       },
       {
         // The Customers section (frontend-information-architecture.md §5):
-        // the CRM grid docks its detail the same way `orders`/`locations` do.
+        // `CustomersShell` (wave 39) is a small tab strip — the same shape
+        // `staff-shell.ts` uses — over 5.1/5.2 (unchanged below, still
+        // docking `:accountId` the same way `orders`/`locations` do) plus
+        // this wave's two tier-2 additions, 5.3 Segments and 5.4 Reviews.
+        // `segments` and `reviews` are declared *before* the empty-path
+        // `CustomersPage` child for the same reason `staff-shell`'s `roles`
+        // is declared before its own empty-path child: Angular tries this
+        // array in order, and `CustomersPage`'s own `:accountId` child would
+        // otherwise swallow either literal segment as an account id.
         path: 'customers',
         loadComponent: () =>
-          import('./features/customers/customers-page').then((m) => m.CustomersPage),
+          import('./features/customers/customers-shell').then((m) => m.CustomersShell),
         children: [
-          // Bulk CSV import with retained provenance (§5.1) is honestly not
-          // built: the backend has no generic import pipeline, only the
-          // SendPulse-specific one (ADR 0059 stage 3), which is a different
-          // source and a different shape entirely. Declared before
-          // `:accountId` for the same reason `orders/new` is declared before
-          // `:orderId` — "import" must be a destination, not an account id.
           {
-            path: 'import',
+            path: 'segments',
+            loadComponent: () =>
+              import('./features/customers/segments/segments-page').then((m) => m.SegmentsPage),
+          },
+          // 5.4 Reviews: statistics.md's own skip table and the IA's §5.4 row
+          // both point at the same gap — no review/feedback entity, no
+          // owning ADR (marketing.md's Отзывы analytics is a chart over data
+          // that does not exist either). Honest not-built rather than a
+          // service-recovery kanban with nothing behind it.
+          {
+            path: 'reviews',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §5.1 (bulk CSV import)' },
+            data: {
+              spec:
+                'frontend-information-architecture.md §5.4 (Reviews) — no review/feedback entity, ' +
+                'no owning ADR',
+            },
           },
           {
-            path: ':accountId',
+            path: '',
             loadComponent: () =>
-              import('./features/customers/customer-detail-pane').then((m) => m.CustomerDetailPane),
+              import('./features/customers/customers-page').then((m) => m.CustomersPage),
+            children: [
+              // Bulk CSV import with retained provenance (§5.1) is honestly
+              // not built: the backend has no generic import pipeline, only
+              // the SendPulse-specific one (ADR 0059 stage 3), which is a
+              // different source and a different shape entirely. Declared
+              // before `:accountId` for the same reason `orders/new` is
+              // declared before `:orderId` — "import" must be a
+              // destination, not an account id.
+              {
+                path: 'import',
+                loadComponent: () =>
+                  import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+                data: { spec: 'frontend-information-architecture.md §5.1 (bulk CSV import)' },
+              },
+              {
+                path: ':accountId',
+                loadComponent: () =>
+                  import('./features/customers/customer-detail-pane').then(
+                    (m) => m.CustomerDetailPane,
+                  ),
+              },
+            ],
           },
         ],
       },
@@ -238,6 +276,13 @@ export const routes: Routes = [
               import('./features/staff/staff-roles-page').then((m) => m.StaffRolesPage),
           },
           {
+            // 9.3 Activity & audit (wave 39): declared before the empty-path
+            // Люди child for the same reason `roles` is.
+            path: 'activity',
+            loadComponent: () =>
+              import('./features/staff/activity-log-page').then((m) => m.ActivityLogPage),
+          },
+          {
             path: '',
             loadComponent: () => import('./features/staff/staff-page').then((m) => m.StaffPage),
             children: [
@@ -253,11 +298,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // Finance (wave 34, IA §8): only 8.1 Payments & settlements and 8.2
-        // Fiscal receipts are pilot-tier — the IA's own tier legend gives
-        // 8.3-8.6 "Wave 2", the same as the whole of Marketing §6, so this
-        // shell carries two tabs and not six. See `finance-shell.ts`'s own
-        // doc and `operations-spec/finance.md` §0.
+        // Finance (IA §8): 8.1/8.2 (tier P, wave 34) plus all four tier-2
+        // rows (wave 39) — see `finance-shell.ts`'s own doc.
         path: 'finance',
         loadComponent: () => import('./features/finance/finance-shell').then((m) => m.FinanceShell),
         children: [
@@ -271,6 +313,34 @@ export const routes: Routes = [
             path: 'fiscal',
             loadComponent: () =>
               import('./features/finance/fiscal/fiscal-page').then((m) => m.FiscalPage),
+          },
+          {
+            path: 'cash',
+            loadComponent: () =>
+              import('./features/finance/cash/cash-reconciliation-page').then(
+                (m) => m.CashReconciliationPage,
+              ),
+          },
+          {
+            path: 'delivery-cost',
+            loadComponent: () =>
+              import('./features/finance/delivery-cost/delivery-cost-page').then(
+                (m) => m.DeliveryCostPage,
+              ),
+          },
+          {
+            path: 'payouts',
+            loadComponent: () =>
+              import('./features/finance/payouts/courier-payouts-page').then(
+                (m) => m.CourierPayoutsPage,
+              ),
+          },
+          {
+            path: 'subscription',
+            loadComponent: () =>
+              import('./features/finance/subscription/subscription-page').then(
+                (m) => m.SubscriptionPage,
+              ),
           },
         ],
       },
@@ -401,11 +471,10 @@ export const routes: Routes = [
         ],
       },
       {
-        // Reports (IA PART 2 §7, tier P rows only): 7.1 Business overview and
-        // 7.2 Order reports. `ReportsShell` owns the shared filter bar and the
-        // two-tab strip between them — see its own doc for why the other
-        // eight §7 screens stay the shared `NotBuiltPage` below rather than
-        // growing tabs here.
+        // Reports (IA PART 2 §7): 7.1 Business overview and 7.2 Order
+        // reports (tier P, wave 33) plus every tier-2 row (wave 39) —
+        // `ReportsShell` owns the shared filter bar and the tab strip across
+        // all of them. 7.8/7.10 are tier 3 and carry no tab at all.
         path: 'statistics',
         loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
         children: [
@@ -421,6 +490,85 @@ export const routes: Routes = [
             path: 'orders',
             loadComponent: () =>
               import('./features/reports/order-reports-page').then((m) => m.OrderReportsPage),
+          },
+          {
+            // 7.3 Branch & SLA reports: real, over `.../queries` grouped by
+            // LOCATION and `.../sla-buckets` — see `branch-sla-report-page.ts`.
+            path: 'branches',
+            loadComponent: () =>
+              import('./features/reports/branch-sla-report-page').then(
+                (m) => m.BranchSlaReportPage,
+              ),
+          },
+          {
+            // 7.7 Product analytics: «Продажи» is real (`.../variant-sales`,
+            // new this wave); ABC/XYZ stay named-not-built inline — see
+            // `product-analytics-page.ts`.
+            path: 'products',
+            loadComponent: () =>
+              import('./features/reports/product-analytics-page').then(
+                (m) => m.ProductAnalyticsPage,
+              ),
+          },
+          // 7.4 Courier reports: `delivery_cost_variance.v1`'s own registry
+          // entry declares `sourceAvailable: false` — ADR 0043's tender and
+          // delivery facts do not exist in `reporting` yet, so an analytics
+          // cut over courier performance has nothing to read even though
+          // ADR 0042's courier module itself (shifts, ledger, settlement) is
+          // real — see Finance 8.3-8.5, which reads that module directly.
+          {
+            path: 'couriers',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec:
+                'frontend-information-architecture.md §7.4 (Courier reports) — reporting.fact_delivery ' +
+                'does not exist (ADR 0043)',
+            },
+          },
+          // 7.5 Staff reports: `reporting.fact_order` carries no operator
+          // attribution column at all (ADR 0039's own `created_by_actor_id`
+          // landed on `ordering.orders`, not copied into the reporting fact
+          // yet), so 7.5 cannot join to a staff dimension.
+          {
+            path: 'staff',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec:
+                'frontend-information-architecture.md §7.5 (Staff reports) — fact_order has no ' +
+                'operator attribution column',
+            },
+          },
+          // 7.6 Customer analytics: none of its six published-formula tiles
+          // (new customers, basket depth, LTV, …) is a registered metric —
+          // ADR 0043's own status line names ABC/XYZ/RFM and forecasting as
+          // not built, and Band D's funnel needs `analytics.events`, which
+          // cannot be backfilled. RFM itself is real, in Customers 5.3.
+          {
+            path: 'customers',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec:
+                'frontend-information-architecture.md §7.6 (Customer analytics) — no registered ' +
+                'metric for any of its tiles; RFM lives in Customers 5.3 instead',
+            },
+          },
+          // 7.9 Marketing reports: promo-code redemption needs
+          // reporting.fact_promotion_redemption, which does not exist (no
+          // promotions ADR at all, per statistics.md §7); the campaign tab
+          // would need a campaign list/summary read this wave does not add,
+          // to stay out of Marketing §6's own surface (a sibling wave).
+          {
+            path: 'marketing',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec:
+                'frontend-information-architecture.md §7.9 (Marketing reports) — no promotions ADR, ' +
+                'no fact_promotion_redemption',
+            },
           },
         ],
       },

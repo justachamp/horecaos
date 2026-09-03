@@ -102,15 +102,35 @@ public class JdbcAudienceStore {
      */
     public List<AudienceRow> listByBrand(UUID tenantId, UUID brandId) {
         return jdbc.sql("""
-                SELECT id, tenant_id, brand_id, name, description, status, definition_version,
-                       created_by, created_at, updated_at
-                  FROM marketing.audiences
-                 WHERE tenant_id = :tenantId AND brand_id = :brandId
-                 ORDER BY created_at DESC
+                SELECT a.id, a.tenant_id, a.brand_id, a.name, a.description, a.status,
+                       a.definition_version, a.created_by, a.created_at, a.updated_at,
+                       s.member_count AS last_member_count, s.completed_at AS last_completed_at
+                  FROM marketing.audiences a
+                  LEFT JOIN LATERAL (
+                      SELECT member_count, completed_at
+                        FROM marketing.audience_snapshots
+                       WHERE tenant_id = a.tenant_id AND audience_id = a.id AND status = 'READY'
+                       ORDER BY completed_at DESC NULLS LAST
+                       LIMIT 1
+                  ) s ON true
+                 WHERE a.tenant_id = :tenantId AND a.brand_id = :brandId
+                 ORDER BY a.created_at DESC
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .query(JdbcAudienceStore::audienceRow)
+                .query((ResultSet row, int number) -> new AudienceRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getString("name"),
+                        row.getString("description"),
+                        row.getString("status"),
+                        row.getInt("definition_version"),
+                        row.getObject("created_by", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("updated_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("last_member_count", Integer.class),
+                        instant(row.getObject("last_completed_at", OffsetDateTime.class))))
                 .list();
     }
 
@@ -128,7 +148,9 @@ public class JdbcAudienceStore {
                 // through the null-forwarding instant() helper — the same discipline
                 // JdbcEngagementStore#findSuppression applies to applied_at.
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
-                row.getObject("updated_at", OffsetDateTime.class).toInstant());
+                row.getObject("updated_at", OffsetDateTime.class).toInstant(),
+                null,
+                null);
     }
 
     /**
@@ -511,6 +533,13 @@ public class JdbcAudienceStore {
         return List.of((String[]) array.getArray());
     }
 
+    /**
+     * @param lastReach       the latest READY snapshot's member count, populated
+     *                        only by {@link #listByBrand} — the Segments list
+     *                        answers "who did this last reach" without opening
+     *                        every row; single-row lookups leave it null
+     * @param lastEvaluatedAt when that snapshot completed; null alongside
+     */
     public record AudienceRow(
             UUID id,
             UUID tenantId,
@@ -521,7 +550,9 @@ public class JdbcAudienceStore {
             int definitionVersion,
             UUID createdBy,
             Instant createdAt,
-            Instant updatedAt) {}
+            Instant updatedAt,
+            @Nullable Integer lastReach,
+            @Nullable Instant lastEvaluatedAt) {}
 
     /**
      * A projection row with the account's lifecycle state beside it.

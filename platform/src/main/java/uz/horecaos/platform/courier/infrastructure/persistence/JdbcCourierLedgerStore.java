@@ -105,6 +105,37 @@ public class JdbcCourierLedgerStore {
                 .optional();
     }
 
+    /**
+     * Every settlement period across the tenant's whole fleet — Finance 8.5's
+     * payout worklist, which asks "who is owed" rather than "what is one
+     * courier's history" the way {@link #periodsOf} does.
+     *
+     * <p>{@code OPEN} periods have nothing to act on yet and sort last; {@code
+     * CLOSED} — statement hashed, payout not yet authorised — sorts first by the
+     * largest amount payable, because that is the period a shift supervisor
+     * should close out before a smaller one.
+     */
+    public List<PeriodRow> listPeriods(UUID tenantId, @Nullable SettlementPeriodStatus status, int limit) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("limit", limit);
+
+        StringBuilder filter = new StringBuilder(" WHERE tenant_id = :tenantId");
+        if (status != null) {
+            filter.append(" AND status = :status");
+            params.put("status", status.name());
+        }
+
+        return jdbc.sql(SELECT_PERIOD + filter + """
+                 ORDER BY CASE status WHEN 'CLOSED' THEN 0 WHEN 'SETTLED' THEN 1 ELSE 2 END,
+                          amount_payable_minor DESC, period_end DESC
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query(JdbcCourierLedgerStore::mapPeriod)
+                .list();
+    }
+
     public List<PeriodRow> periodsOf(UUID tenantId, UUID courierId) {
         return jdbc.sql(SELECT_PERIOD + """
                  WHERE tenant_id = :tenantId AND courier_id = :courierId

@@ -5,25 +5,12 @@ import { ApiClient } from '../api/api-client';
 import { ScopeGrant, SessionContext } from './session-context';
 
 /**
- * The signed-in operator's tenant and their own scopes within it — for the
- * Staff section (staff-and-access.md §9.1–9.4), which is tenant-wide by
- * nature (a manager sees the whole company grouped by branch, not one
- * branch's queue) and so has no use for {@link CurrentLocation}'s
- * single-location resolution.
- *
- * Unlike {@link CurrentBrand}/{@link CurrentLocation}, the tenant does not
- * need to be *derived* from `scopes` — `CapabilityView.activeTenantId`
- * already names it directly (`GrantController.sessionContext`'s own doc:
- * resolved from the token's signed organization claim). This exists anyway,
- * as a sibling rather than a fourth copy of the same fetch-once pattern, so
- * the Staff section does not reach into `CurrentLocation`'s location-shaped
- * cache for a fact that is not about a location.,
-import { SessionContext } from './session-context';
-
-/**
- * The operator's own tenant, for the screens under Finance that ask a
- * question no brand or location narrows — an order's payment, or the
- * tenant-wide fiscal worklist (`operations-spec/finance.md` §8.1, §8.2).
+ * The signed-in operator's tenant, for every screen that asks a question no
+ * brand or location narrows — the Staff section (staff-and-access.md
+ * §9.1–9.4), which is tenant-wide by nature (a manager sees the whole
+ * company grouped by branch, not one branch's queue), and Finance's own
+ * screens, an order's payment or the tenant-wide fiscal worklist
+ * (`operations-spec/finance.md` §8.1, §8.2).
  *
  * **Why this is not `CurrentBrand` or `CurrentLocation`.** Both of those
  * derive their answer from a `BRAND`- or `LOCATION`-scoped grant in

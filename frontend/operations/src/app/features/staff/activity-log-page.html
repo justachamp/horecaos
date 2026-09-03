@@ -1,0 +1,145 @@
+<div class="activity">
+  <h1 class="q-title">{{ 'staff.activity.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'staff.activity.subtitle' | t }}</p>
+  <p class="q-caption read-note">{{ 'staff.activity.readIsLogged' | t }}</p>
+
+  <div class="filters">
+    <div class="class-pills">
+      <button
+        type="button"
+        class="pill"
+        [class.pill--on]="classFilter() === 'ALL'"
+        (click)="setClassFilter('ALL')"
+      >
+        {{ 'staff.activity.class.ALL' | t }}
+      </button>
+      <button
+        type="button"
+        class="pill"
+        [class.pill--on]="classFilter() === 'BUSINESS'"
+        (click)="setClassFilter('BUSINESS')"
+      >
+        {{ 'staff.activity.class.BUSINESS' | t }}
+      </button>
+      <button
+        type="button"
+        class="pill"
+        [class.pill--on]="classFilter() === 'SECURITY'"
+        (click)="setClassFilter('SECURITY')"
+      >
+        {{ 'staff.activity.class.SECURITY' | t }}
+      </button>
+    </div>
+
+    <select class="range-select" [value]="rangeDays()" (change)="setRangeDays($any($event.target).valueAsNumber ?? 7)">
+      <option [value]="1">{{ 'staff.activity.range.today' | t }}</option>
+      <option [value]="7">{{ 'staff.activity.range.7d' | t }}</option>
+      <option [value]="30">{{ 'staff.activity.range.30d' | t }}</option>
+    </select>
+
+    <input
+      type="text"
+      class="text-filter"
+      [value]="actorFilter()"
+      (input)="onActorInput($any($event.target).value)"
+      (change)="applyTextFilters()"
+      [placeholder]="'staff.activity.filter.actor' | t"
+    />
+    <input
+      type="text"
+      class="text-filter"
+      [value]="correlationFilter()"
+      (input)="onCorrelationInput($any($event.target).value)"
+      (change)="applyTextFilters()"
+      [placeholder]="'staff.activity.filter.correlation' | t"
+    />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'staff.activity.column.when' | t }}</th>
+            <th class="q-caption">{{ 'staff.activity.column.who' | t }}</th>
+            <th class="q-caption">{{ 'staff.activity.column.what' | t }}</th>
+            <th class="q-caption">{{ 'staff.activity.column.where' | t }}</th>
+            <th class="q-caption">{{ 'staff.activity.column.outcome' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of events(); track event.id) {
+            <tr class="row" (click)="openEvent(event)">
+              <td class="q-body-sm q-mono">{{ event.recordedAt }}</td>
+              <td class="q-body-sm">
+                <span class="actor-icon" [class]="'actor-icon--' + event.actorType.toLowerCase()"></span>
+                {{ actorLabel(event) }}
+              </td>
+              <td class="q-body-sm q-mono">{{ event.actionCode }}</td>
+              <td class="q-body-sm">{{ scopeLabel(event) }}</td>
+              <td class="q-body-sm">
+                <span class="outcome-badge" [class]="'outcome-badge--' + event.outcome.toLowerCase()">
+                  {{ event.outcome }}
+                </span>
+              </td>
+            </tr>
+            @if (openEventId() === event.id) {
+              <tr class="detail-row">
+                <td colspan="5">
+                  @if (detailLoading()) {
+                    <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+                  } @else if (openDetail(); as detail) {
+                    <div class="detail-grid">
+                      <span class="q-caption">{{ 'staff.activity.detail.reason' | t }}</span>
+                      <span class="q-body-sm">{{ detail.reason ?? '—' }}</span>
+                      <span class="q-caption">{{ 'staff.activity.detail.correlationId' | t }}</span>
+                      <span class="q-body-sm q-mono">{{ detail.correlationId }}</span>
+                      <span class="q-caption">{{ 'staff.activity.detail.target' | t }}</span>
+                      <span class="q-body-sm">{{ detail.targetType ?? '—' }} · {{ detail.targetId ?? '—' }}</span>
+                      <span class="q-caption">{{ 'staff.activity.detail.capability' | t }}</span>
+                      <span class="q-body-sm q-mono">{{ detail.capabilityUsed ?? '—' }}</span>
+                    </div>
+                    @if (changeEntries(detail).length > 0) {
+                      <div class="diff">
+                        <span class="q-caption">{{ 'staff.activity.detail.changes' | t }}</span>
+                        @for (entry of changeEntries(detail); track entry[0]) {
+                          <div class="diff-row">
+                            <span class="q-body-sm q-mono diff-row__field">{{ entry[0] }}</span>
+                            <span class="q-body-sm diff-row__value">{{ formatFieldChange(entry[1]) }}</span>
+                          </div>
+                        }
+                      </div>
+                    }
+                  } @else {
+                    <p class="q-body-sm muted">{{ 'staff.activity.detail.unavailable' | t }}</p>
+                  }
+                  <button type="button" class="secondary close-drawer" (click)="closeDrawer()">
+                    {{ 'staff.activity.detail.close' | t }}
+                  </button>
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">{{ 'staff.activity.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</div>

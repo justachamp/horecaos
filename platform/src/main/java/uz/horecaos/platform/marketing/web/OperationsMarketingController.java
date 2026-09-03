@@ -694,7 +694,9 @@ public class OperationsMarketingController {
             int definitionVersion,
             UUID createdBy,
             Instant createdAt,
-            Instant updatedAt) {
+            Instant updatedAt,
+            @Nullable Integer lastReach,
+            @Nullable Instant lastEvaluatedAt) {
 
         static AudienceSummaryResponse of(AudienceRow row) {
             return new AudienceSummaryResponse(
@@ -705,7 +707,9 @@ public class OperationsMarketingController {
                     row.definitionVersion(),
                     row.createdBy(),
                     row.createdAt(),
-                    row.updatedAt());
+                    row.updatedAt(),
+                    row.lastReach(),
+                    row.lastEvaluatedAt());
         }
     }
 

@@ -1,0 +1,102 @@
+<div class="cash">
+  <h1 class="q-title">{{ 'finance.cash.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'finance.cash.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.cash.column.status' | t }}</th>
+            <th class="q-caption num">{{ 'finance.cash.column.expected' | t }}</th>
+            <th class="q-caption num">{{ 'finance.cash.column.declared' | t }}</th>
+            <th class="q-caption num">{{ 'finance.cash.column.confirmed' | t }}</th>
+            <th class="q-caption num">{{ 'finance.cash.column.variance' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of handovers(); track row.handoverId) {
+            <tr>
+              <td class="q-body-sm">
+                <span class="status-badge" [class]="'status-badge--' + row.status.toLowerCase()">
+                  {{ statusLabel(row.status) }}
+                </span>
+              </td>
+              <td class="q-body-sm q-tnum num">{{ money(row.expectedMinor, row.currency) }}</td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.declaredMinor === null ? '—' : money(row.declaredMinor, row.currency) }}
+              </td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.confirmedMinor === null ? '—' : money(row.confirmedMinor, row.currency) }}
+              </td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.varianceMinor === null ? '—' : money(row.varianceMinor, row.currency) }}
+              </td>
+              <td class="q-body-sm actions">
+                @if (row.status === 'DECLARED' || row.status === 'PENDING') {
+                  <button type="button" class="secondary" (click)="startConfirm(row)">
+                    {{ 'finance.cash.confirm.action' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">{{ 'finance.cash.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  @if (confirmingId()) {
+    <div class="panel">
+      <h2 class="q-subhead">{{ 'finance.cash.confirm.title' | t }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ 'finance.cash.confirm.amount' | t }}</span>
+        <input
+          type="number"
+          [value]="confirmAmount()"
+          (input)="confirmAmount.set($any($event.target).value)"
+        />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ 'finance.cash.confirm.reason' | t }}</span>
+        <input
+          type="text"
+          [value]="confirmReason()"
+          (input)="confirmReason.set($any($event.target).value)"
+        />
+      </label>
+      @if (confirmError(); as message) {
+        <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+      }
+      <div class="panel__actions">
+        <button type="button" class="secondary" (click)="cancelConfirm()">
+          {{ 'customers.segments.cancel' | t }}
+        </button>
+        <button type="button" class="primary" [disabled]="!canConfirm()" (click)="submitConfirm()">
+          {{
+            confirmBusy() ? ('customers.segments.builder.saving' | t) : ('finance.cash.confirm.submit' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+</div>
