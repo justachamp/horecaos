@@ -118,6 +118,52 @@ public class JdbcCourierRateCardStore {
                 == 1;
     }
 
+    /**
+     * Every rate card the brand has authored, newest version first (IA 3.4,
+     * Тариф курьера). A summary, not the component ladder — the detail view
+     * asks {@link #findCard} for that, the same split {@link #resolve} and
+     * {@link #findCard} already draw between "which card" and "what is in it".
+     */
+    public List<CardSummaryRow> list(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, brand_id, location_id, courier_type_id, code, card_version,
+                       status, currency, effective_from, effective_to
+                  FROM fulfillment.courier_rate_cards
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                 ORDER BY code, card_version DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((ResultSet rs, int rowNumber) -> new CardSummaryRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getObject("location_id", UUID.class),
+                        rs.getObject("courier_type_id", UUID.class),
+                        rs.getString("code"),
+                        rs.getInt("card_version"),
+                        rs.getString("status"),
+                        rs.getString("currency"),
+                        JdbcCourierStore.instant(rs.getObject("effective_from", java.time.OffsetDateTime.class)),
+                        JdbcCourierStore.instant(rs.getObject("effective_to", java.time.OffsetDateTime.class))))
+                .list();
+    }
+
+    /**
+     * @param locationId    null applies to every location in the brand
+     * @param courierTypeId null applies to every courier type
+     */
+    public record CardSummaryRow(
+            UUID id,
+            UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID courierTypeId,
+            String code,
+            int cardVersion,
+            String status,
+            String currency,
+            @Nullable Instant effectiveFrom,
+            @Nullable Instant effectiveTo) {}
+
     public Optional<RateCard> findCard(UUID tenantId, UUID cardId) {
         Optional<CardHeader> header = jdbc.sql("""
                 SELECT id, card_version, currency, status

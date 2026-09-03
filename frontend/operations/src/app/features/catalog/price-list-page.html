@@ -1,0 +1,119 @@
+<div class="price-list">
+  @if (loading()) {
+    <div class="price-list__skeleton" [attr.aria-label]="'catalog.priceList.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="price-list__denied" data-testid="price-list-denied">
+      <p class="q-body-sm">{{ 'catalog.priceList.denied' | t }}</p>
+    </div>
+  } @else {
+    <div class="price-list__toolbar">
+      @if (actionError(); as error) {
+        <span class="price-list__error">{{ error }}</span>
+      }
+      <button
+        type="button"
+        class="price-list__add"
+        (click)="openCreateForm()"
+        data-testid="price-list-add"
+      >
+        {{ 'catalog.priceList.add' | t }}
+      </button>
+    </div>
+
+    @if (loadError(); as error) {
+      <div class="price-list__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="price-list__table">
+      <thead>
+        <tr>
+          <th>{{ 'catalog.priceList.column.name' | t }}</th>
+          <th>{{ 'catalog.priceList.column.currency' | t }}</th>
+          <th>{{ 'catalog.priceList.column.status' | t }}</th>
+          <th class="price-list__num-col">{{ 'catalog.priceList.column.priority' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (book of books(); track book.priceBookId) {
+          <tr data-testid="price-book-row">
+            <td>{{ book.name }}</td>
+            <td class="q-tnum">{{ book.currency }}</td>
+            <td>
+              <span class="status-badge">{{ book.status }}</span>
+            </td>
+            <td class="price-list__num-col q-tnum">{{ book.priority }}</td>
+            <td class="price-list__actions">
+              @if (book.status === 'DRAFT') {
+                <button
+                  type="button"
+                  class="price-list__action"
+                  [disabled]="!canAssignToBrand(book)"
+                  (click)="assignToBrand(book)"
+                  data-testid="price-book-assign"
+                >
+                  {{ 'catalog.priceList.assignBrand' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="price-list__action price-list__action--activate"
+                  [disabled]="!canActivate(book)"
+                  (click)="activate(book)"
+                  data-testid="price-book-activate"
+                >
+                  {{ 'catalog.priceList.activate' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="price-list__empty" data-testid="price-list-empty">
+              {{ 'catalog.priceList.empty' | t }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (showCreateForm()) {
+    <div class="price-list__modal-backdrop" (click)="closeCreateForm()">
+      <div class="price-list__modal" (click)="$event.stopPropagation()">
+        <h3 class="q-subhead">{{ 'catalog.priceList.add' | t }}</h3>
+        <label class="price-list__field">
+          {{ 'catalog.priceList.column.name' | t }}
+          <input
+            type="text"
+            [value]="newBookName()"
+            (input)="newBookName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="price-list__field">
+          {{ 'catalog.priceList.column.currency' | t }}
+          <input
+            type="text"
+            [value]="newBookCurrency()"
+            (input)="newBookCurrency.set($any($event.target).value)"
+          />
+        </label>
+        <div class="price-list__modal-actions">
+          <button type="button" (click)="closeCreateForm()">
+            {{ 'catalog.priceList.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="price-list__submit"
+            [disabled]="!canCreate()"
+            (click)="submitCreate()"
+            data-testid="price-list-submit"
+          >
+            {{ 'catalog.priceList.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

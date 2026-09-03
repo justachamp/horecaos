@@ -2,6 +2,13 @@
   <section class="queue" [attr.aria-label]="'orders.title' | t">
     <header class="queue__head">
       <h1 class="q-subhead">{{ 'orders.title' | t }}</h1>
+      <a
+        class="queue__drafts-link q-body-sm"
+        routerLink="/orders/drafts"
+        routerLinkActive="queue__drafts-link--active"
+        data-testid="orders-drafts-link"
+        >{{ 'orders.drafts.link' | t }}</a
+      >
     </header>
 
     <!-- The queue table lives here. It scrolls its own body under this fixed

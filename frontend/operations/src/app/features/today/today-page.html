@@ -1,6 +1,13 @@
 <div class="today">
   <div class="today__toolbar">
     <h1 class="q-title">{{ 'shell.nav.today' | t }}</h1>
+    <a
+      class="today__my-work-link q-body-sm"
+      routerLink="/today/my-work"
+      data-testid="today-my-work-link"
+    >
+      {{ 'today.myWork.link' | t }}
+    </a>
     <div class="today__status">
       @if (formatUpdatedAt(); as stamp) {
         <span class="today__stamp q-caption q-tnum" [class.today__stamp--pulse]="refreshing()">

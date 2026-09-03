@@ -1,0 +1,57 @@
+<div class="policy">
+  @if (loading()) {
+    <div class="policy__skeleton" [attr.aria-label]="'delivery.policy.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="policy__denied" data-testid="policy-denied">
+      <p class="q-body-sm">{{ 'delivery.policy.denied' | t }}</p>
+    </div>
+  } @else if (loadError(); as error) {
+    <div class="policy__error-band" role="alert">
+      <span class="q-body-sm">{{ error }}</span>
+    </div>
+  } @else if (policy(); as p) {
+    <div class="policy__scope" data-testid="policy-scope">
+      {{ 'delivery.policy.resolvedAt' | t: { scope: p.winningScope } }}
+    </div>
+
+    <dl class="policy__rows">
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.shiftEnforcement' | t }}</dt>
+        <dd>{{ shiftEnforcementLabel(p.shiftEnforcement) }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.cashCeiling' | t }}</dt>
+        <dd class="q-tnum">{{ sumLabel(p.cashCeilingMinor) }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.penaltyThreshold' | t }}</dt>
+        <dd class="q-tnum">{{ sumLabel(p.penaltyApprovalThresholdMinor) }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.reverificationDays' | t }}</dt>
+        <dd class="q-tnum">{{ p.reverificationDays }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.warningDays' | t }}</dt>
+        <dd class="q-tnum">{{ p.warningDays }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.settlementPeriodDays' | t }}</dt>
+        <dd class="q-tnum">{{ p.settlementPeriodDays }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.graceSeconds' | t }}</dt>
+        <dd class="q-tnum">{{ p.graceSeconds }}</dd>
+      </div>
+      <div class="policy__row">
+        <dt>{{ 'delivery.policy.confirmationPointRetentionDays' | t }}</dt>
+        <dd class="q-tnum">{{ p.confirmationPointRetentionDays }}</dd>
+      </div>
+    </dl>
+
+    <div class="policy__not-built">
+      <p class="q-body-sm">{{ 'delivery.policy.notBuilt' | t }}</p>
+      <p class="q-caption">{{ 'delivery.policy.readOnly' | t }}</p>
+    </div>
+  }
+</div>

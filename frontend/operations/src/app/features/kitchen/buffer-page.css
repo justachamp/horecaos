@@ -1,0 +1,106 @@
+.buffer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.buffer__notice-band,
+.buffer__error-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.buffer__notice-band {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.buffer__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.buffer__notice-dismiss {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: inherit;
+}
+
+.buffer__board {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.buffer__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.buffer__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.buffer__table td {
+  padding: 10px 12px;
+  font-size: 14px;
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.chip--muted {
+  color: var(--q-ink-subtle);
+}
+
+.buffer__actions {
+  text-align: right;
+}
+
+.buffer__release {
+  padding: 4px 12px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.buffer__release:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.buffer__empty,
+.buffer__denied {
+  padding: 32px;
+  text-align: center;
+}
+
+.buffer__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.buffer__skeleton-row {
+  height: 40px;
+  background: var(--q-surface-1);
+}

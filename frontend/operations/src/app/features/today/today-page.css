@@ -19,6 +19,16 @@
   margin-bottom: 24px;
 }
 
+.today__my-work-link {
+  color: var(--q-ink-muted);
+  text-decoration: none;
+}
+
+.today__my-work-link:hover {
+  color: var(--q-primary);
+  text-decoration: underline;
+}
+
 .today__status {
   display: flex;
   align-items: center;

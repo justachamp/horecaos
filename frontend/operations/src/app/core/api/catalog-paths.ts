@@ -134,6 +134,11 @@ export const catalogPaths = {
   publicationActivate(scope: BrandScope, publicationId: string): string {
     return `${this.base(scope)}/publications/${encodeURIComponent(publicationId)}/activate`;
   },
+
+  /** Every publication the brand has produced, newest first (IA 4.6, Region 3). Query param `limit`. */
+  publicationHistory(scope: BrandScope): string {
+    return `${this.base(scope)}/publications`;
+  },
 } as const;
 
 export const pricingPaths = {
@@ -159,5 +164,25 @@ export const pricingPaths = {
   /** Sets what a variant costs in a given book. */
   variantPrice(scope: BrandScope, priceBookId: string, variantId: string): string {
     return `${this.priceBook(scope, priceBookId)}/variant-prices/${encodeURIComponent(variantId)}`;
+  },
+
+  /** Applies a price book to the whole brand — the fallback every location/channel resolves to. */
+  assignBrand(scope: BrandScope, priceBookId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/assignments/brand`;
+  },
+
+  /** Applies a price book to one branch, beating the brand-wide book there. */
+  assignLocation(scope: BrandScope, priceBookId: string, locationId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/assignments/locations/${encodeURIComponent(locationId)}`;
+  },
+
+  /** Applies a price book to one sales channel, outranking a branch assignment. */
+  assignChannel(scope: BrandScope, priceBookId: string, channelId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/assignments/channels/${encodeURIComponent(channelId)}`;
+  },
+
+  /** Puts a draft book in front of customers. Mutation: `If-Match` with the book's version. */
+  activation(scope: BrandScope, priceBookId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/activation`;
   },
 } as const;

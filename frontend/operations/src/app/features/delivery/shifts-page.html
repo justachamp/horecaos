@@ -1,0 +1,76 @@
+<div class="shifts">
+  @if (loading()) {
+    <div class="shifts__skeleton" [attr.aria-label]="'delivery.shifts.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="shifts__denied" data-testid="shifts-denied">
+      <p class="q-body-sm">{{ 'delivery.shifts.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="shifts__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="shifts__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="shifts__table">
+      <thead>
+        <tr>
+          <th>{{ 'delivery.shifts.column.courier' | t }}</th>
+          <th>{{ 'delivery.shifts.column.status' | t }}</th>
+          <th>{{ 'delivery.shifts.column.openedAt' | t }}</th>
+          <th>{{ 'delivery.shifts.column.closedAt' | t }}</th>
+          <th class="shifts__num-col">{{ 'delivery.shifts.column.paid' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (shift of shifts(); track shift.shiftId) {
+          <tr data-testid="shift-row">
+            <td class="q-tnum">{{ shift.courierId }}</td>
+            <td>
+              <span class="status-badge">{{ statusLabel(shift.status) }}</span>
+            </td>
+            <td class="q-tnum">{{ openedAtLabel(shift) }}</td>
+            <td class="q-tnum">{{ closedAtLabel(shift) }}</td>
+            <td class="shifts__num-col q-tnum">{{ paidLabel(shift) }}</td>
+            <td class="shifts__actions">
+              @if (shift.status === 'OPEN') {
+                <button
+                  type="button"
+                  class="shifts__action"
+                  [disabled]="!canClose(shift)"
+                  (click)="close(shift)"
+                  data-testid="shift-close"
+                >
+                  {{ 'delivery.shifts.close' | t }}
+                </button>
+              }
+              @if (shift.status === 'AWAITING_APPROVAL') {
+                <button
+                  type="button"
+                  class="shifts__action shifts__action--approve"
+                  [disabled]="!canApprove(shift)"
+                  (click)="approve(shift)"
+                  data-testid="shift-approve"
+                >
+                  {{ 'delivery.shifts.approve' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="shifts__empty" data-testid="shifts-empty">
+              {{ 'delivery.shifts.empty' | t }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

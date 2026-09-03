@@ -88,6 +88,26 @@ public class JdbcCourierShiftStore {
     }
 
     /**
+     * The branch's shifts, newest first — open, closed and everything between
+     * (IA 3.5, Посещаемость). This is a roster read, not the dispatch fleet
+     * enumeration below: it exists to show a manager who is on, who has gone
+     * home, and whose hours are sitting in {@code AWAITING_APPROVAL}.
+     */
+    public List<ShiftRow> atLocation(UUID tenantId, UUID brandId, UUID locationId, int limit) {
+        return jdbc.sql(SELECT_SHIFT + """
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                 ORDER BY opened_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("limit", limit)
+                .query(JdbcCourierShiftStore::mapShift)
+                .list();
+    }
+
+    /**
      * Everybody who has declared themselves working at this branch, with the two
      * dispatch numbers their vehicle class carries and what they have already
      * done this shift (ADR 0042).

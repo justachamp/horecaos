@@ -514,6 +514,59 @@ class CartCheckoutAndOrderTests {
         assertThat(moved.getMessage()).contains("rebuild and reprice");
     }
 
+    // ---------------------------------------------------------------- drafts
+
+    @Test
+    @DisplayName("drafts lists carts newest first, excludes CONVERTED, and counts lines")
+    void draftsListsUnconvertedCartsNewestFirstWithLineCounts() {
+        UUID oldest = openCart();
+        putLine(oldest, "a", burgerVariant, 1);
+
+        clock.advance(Duration.ofMinutes(5));
+        UUID expired = openCart();
+        putLine(expired, "a", burgerVariant, 1);
+        putLine(expired, "b", burgerVariant, 2);
+        jdbc.sql("UPDATE ordering.carts SET status = 'EXPIRED' WHERE id = :id")
+                .param("id", expired)
+                .update();
+
+        clock.advance(Duration.ofMinutes(5));
+        UUID converted = readyCart();
+        tx(() -> checkout.checkout(checkoutCommand(converted, "idem-drafts-test")));
+
+        List<JdbcCartStore.DraftCartRow> drafts = cartStore.listDrafts(TENANT, BRAND, LOCATION, null, null, null, 50);
+
+        assertThat(drafts)
+                .as("a converted cart is not a draft — nobody abandoned that basket")
+                .extracting(JdbcCartStore.DraftCartRow::cartId)
+                .doesNotContain(converted)
+                .containsExactly(expired, oldest);
+
+        JdbcCartStore.DraftCartRow expiredRow = drafts.stream()
+                .filter(row -> row.cartId().equals(expired))
+                .findFirst()
+                .orElseThrow();
+        assertThat(expiredRow.lineCount()).isEqualTo(2);
+        assertThat(expiredRow.status()).isEqualTo(CartStatus.EXPIRED);
+        assertThat(expiredRow.channelId()).isEqualTo(storefrontChannel);
+        assertThat(expiredRow.customerAccountId()).isEqualTo(CUSTOMER);
+    }
+
+    @Test
+    @DisplayName("drafts respects the created-at window a caller narrows it to")
+    void draftsRespectsTheDateRange() {
+        UUID early = openCart();
+        Instant boundary = clock.instant().plus(Duration.ofMinutes(1));
+        clock.advance(Duration.ofMinutes(2));
+        UUID late = openCart();
+
+        List<JdbcCartStore.DraftCartRow> fromBoundary =
+                cartStore.listDrafts(TENANT, BRAND, LOCATION, boundary, null, null, 50);
+
+        assertThat(fromBoundary).extracting(JdbcCartStore.DraftCartRow::cartId).containsExactly(late);
+        assertThat(fromBoundary).extracting(JdbcCartStore.DraftCartRow::cartId).doesNotContain(early);
+    }
+
     // ------------------------------------------------ published modifier rules
 
     /**

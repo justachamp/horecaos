@@ -19,6 +19,10 @@ export interface AcceptanceResponse {
   totalMinor?: number;
 }
 
+export interface ActivateRateCardRequest {
+  reason: string;
+}
+
 export interface AddAddressRequest {
   coordinateSource: "NOT_GEOCODED" | "LANDMARK_ONLY" | "GEOCODER" | "CUSTOMER_PIN" | "OPERATOR_PIN" | "LEGACY_UNSOURCED";
   deliveryInstructions?: string;
@@ -302,7 +306,7 @@ export interface CampaignResponse {
 
 export interface CapabilityView {
   activeTenantId?: string;
-  capabilities?: Array<"TENANT_READ" | "TENANT_WRITE" | "TENANT_ONBOARDING_MANAGE" | "BRAND_READ" | "BRAND_WRITE" | "LOCATION_READ" | "LOCATION_WRITE" | "LEGAL_ENTITY_READ" | "LEGAL_ENTITY_MANAGE" | "CHANNEL_READ" | "CHANNEL_MANAGE" | "SERVICEABILITY_MANAGE" | "LOCATION_SERVICE_STATE_CHANGE" | "CATALOG_READ" | "CATALOG_AUTHOR" | "CATALOG_PUBLISH" | "OFFERING_MANAGE" | "MEDIA_READ" | "MEDIA_UPLOAD" | "INVENTORY_READ" | "INVENTORY_ADJUST" | "PRICING_READ" | "PRICING_AUTHOR" | "PRICING_ACTIVATE" | "ORDER_READ" | "ORDER_APPROVE" | "ORDER_ADVANCE" | "ORDER_CANCEL" | "ORDER_STATE_OVERRIDE" | "ORDER_AMEND" | "ORDER_OUTCOME_REASON_MANAGE" | "ORDER_ACCEPTANCE_POLICY_MANAGE" | "PAYMENT_READ" | "PAYMENT_INITIATE" | "PAYMENT_ATTEMPT_RESOLVE" | "PAYMENT_MERCHANT_BINDING_MANAGE" | "FISCAL_DOCUMENT_READ" | "FISCAL_DOCUMENT_RESOLVE" | "REFUND_REQUEST" | "REFUND_APPROVE" | "REFUND_EXECUTE" | "RECOVERY_CASE_MANAGE" | "RECOVERY_REMEDY_APPROVE" | "DELIVERY_PLAN_READ" | "DELIVERY_ZONE_READ" | "DELIVERY_ZONE_MANAGE" | "DELIVERY_ZONE_ACTIVATE" | "DELIVERY_TARIFF_READ" | "DELIVERY_TARIFF_MANAGE" | "DELIVERY_TARIFF_ACTIVATE" | "DELIVERY_FEE_EVIDENCE_READ" | "DELIVERY_MANUAL_ASSIGN" | "SHIPMENT_CANCEL" | "COURIER_POSITION_READ" | "COURIER_TRACK_REVEAL" | "COURIER_DUTY_MANAGE" | "KITCHEN_STATION_MANAGE" | "KITCHEN_TICKET_READ" | "KITCHEN_TICKET_ADVANCE" | "KITCHEN_TICKET_RECALL" | "KITCHEN_TICKET_RELEASE" | "KITCHEN_TICKET_RELEASE_OVERRIDE" | "DINEIN_FLOORPLAN_MANAGE" | "RESERVATION_READ" | "RESERVATION_MANAGE" | "DINEIN_SESSION_READ" | "DINEIN_SESSION_MANAGE" | "DINEIN_SESSION_FORCE_CLOSE" | "DINEIN_QR_ROTATE" | "MARKETPLACE_ORDER_RECEIVE" | "MARKETPLACE_MENU_PUSH" | "MARKETPLACE_AVAILABILITY_PUSH" | "MARKETPLACE_HANDOVER_BYPASS" | "MARKETPLACE_ORDER_CREATE_MANUAL" | "MARKETPLACE_LIVENESS_READ" | "CUSTOMER_READ" | "CUSTOMER_MANAGE" | "CUSTOMER_PII_REVEAL" | "CUSTOMER_IMPORT" | "INTEGRATION_INSTALLATION_MANAGE" | "INTEGRATION_BINDING_ACTIVATE" | "INTEGRATION_TELEGRAM_LINK_ISSUE" | "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE" | "POS_SYNC_READ" | "POS_SYNC_EXECUTE" | "POS_SYNC_APPLY" | "POS_EXPORT_READ" | "POS_EXPORT_RESOLVE" | "INTEGRATION_FAILURE_READ" | "INTEGRATION_FAILURE_RETRY" | "INTEGRATION_FAILURE_RESOLVE" | "NOTIFICATION_TEMPLATE_AUTHOR" | "NOTIFICATION_TEMPLATE_ACTIVATE" | "NOTIFICATION_READ" | "NOTIFICATION_RETRY" | "CONTROL_PLANE_ALERT_RAISE" | "AUDIENCE_READ" | "AUDIENCE_EXPORT" | "CAMPAIGN_AUTHOR" | "CAMPAIGN_APPROVE" | "SUPPRESSION_MANAGE" | "COMMERCIAL_SUBSCRIPTION_MANAGE" | "COMMERCIAL_OVERRIDE_APPROVE" | "COMMERCIAL_PLAN_READ" | "COMMERCIAL_PLAN_MANAGE" | "COMMERCIAL_PLAN_ACTIVATE" | "COMMERCIAL_USAGE_READ" | "COMMERCIAL_USAGE_ADJUST" | "LOYALTY_READ" | "LOYALTY_ADJUST" | "LOYALTY_POLICY_MANAGE" | "IAM_GRANT_MANAGE" | "REPORTING_READ" | "METRIC_MANAGE" | "AUDIT_READ" | "APPROVAL_POLICY_MANAGE" | "APPROVAL_DECIDE" | "MIGRATION_READ" | "MIGRATION_SCOPE_MANAGE" | "MIGRATION_RUN_EXECUTE" | "MIGRATION_CUTOVER_APPROVE" | "MIGRATION_QUARANTINE_RESOLVE" | "COURIER_SHIFT_OPEN" | "COURIER_SHIFT_BREAK" | "COURIER_SHIFT_APPROVE" | "COURIER_READ" | "COURIER_ENGAGEMENT_MANAGE" | "COURIER_REGISTRATION_VERIFY" | "COURIER_REGISTRATION_REVEAL" | "COURIER_RATECARD_MANAGE" | "COURIER_ADJUSTMENT_CREATE" | "COURIER_ADJUSTMENT_APPROVE" | "COURIER_CASH_CONFIRM" | "COURIER_LEDGER_READ" | "COURIER_SETTLEMENT_CLOSE" | "COURIER_PAYOUT_AUTHORISE" | "DELIVERY_COST_READ" | "PARTNER_INVOICE_MANAGE" | "CONVERSATION_FLOW_MANAGE" | "CONVERSATION_INBOX_MANAGE" | "PLATFORM_ADMIN">;
+  capabilities?: Array<"TENANT_READ" | "TENANT_WRITE" | "TENANT_ONBOARDING_MANAGE" | "BRAND_READ" | "BRAND_WRITE" | "LOCATION_READ" | "LOCATION_WRITE" | "LEGAL_ENTITY_READ" | "LEGAL_ENTITY_MANAGE" | "CHANNEL_READ" | "CHANNEL_MANAGE" | "SERVICEABILITY_MANAGE" | "LOCATION_SERVICE_STATE_CHANGE" | "CATALOG_READ" | "CATALOG_AUTHOR" | "CATALOG_PUBLISH" | "OFFERING_MANAGE" | "MEDIA_READ" | "MEDIA_UPLOAD" | "INVENTORY_READ" | "INVENTORY_ADJUST" | "PRICING_READ" | "PRICING_AUTHOR" | "PRICING_ACTIVATE" | "ORDER_READ" | "ORDER_APPROVE" | "ORDER_ADVANCE" | "ORDER_CANCEL" | "ORDER_STATE_OVERRIDE" | "ORDER_AMEND" | "ORDER_OUTCOME_REASON_MANAGE" | "ORDER_ACCEPTANCE_POLICY_MANAGE" | "PAYMENT_READ" | "PAYMENT_INITIATE" | "PAYMENT_ATTEMPT_RESOLVE" | "PAYMENT_MERCHANT_BINDING_MANAGE" | "FISCAL_DOCUMENT_READ" | "FISCAL_DOCUMENT_RESOLVE" | "REFUND_REQUEST" | "REFUND_APPROVE" | "REFUND_EXECUTE" | "RECOVERY_CASE_MANAGE" | "RECOVERY_REMEDY_APPROVE" | "DELIVERY_PLAN_READ" | "DELIVERY_ZONE_READ" | "DELIVERY_ZONE_MANAGE" | "DELIVERY_ZONE_ACTIVATE" | "DELIVERY_TARIFF_READ" | "DELIVERY_TARIFF_MANAGE" | "DELIVERY_TARIFF_ACTIVATE" | "DELIVERY_FEE_EVIDENCE_READ" | "DELIVERY_MANUAL_ASSIGN" | "SHIPMENT_CANCEL" | "COURIER_POSITION_READ" | "COURIER_TRACK_REVEAL" | "COURIER_DUTY_MANAGE" | "KITCHEN_STATION_MANAGE" | "KITCHEN_TICKET_READ" | "KITCHEN_TICKET_ADVANCE" | "KITCHEN_TICKET_RECALL" | "KITCHEN_TICKET_RELEASE" | "KITCHEN_TICKET_RELEASE_OVERRIDE" | "KITCHEN_TICKET_HANDOVER" | "DINEIN_FLOORPLAN_MANAGE" | "RESERVATION_READ" | "RESERVATION_MANAGE" | "DINEIN_SESSION_READ" | "DINEIN_SESSION_MANAGE" | "DINEIN_SESSION_FORCE_CLOSE" | "DINEIN_QR_ROTATE" | "MARKETPLACE_ORDER_RECEIVE" | "MARKETPLACE_MENU_PUSH" | "MARKETPLACE_AVAILABILITY_PUSH" | "MARKETPLACE_HANDOVER_BYPASS" | "MARKETPLACE_ORDER_CREATE_MANUAL" | "MARKETPLACE_LIVENESS_READ" | "CUSTOMER_READ" | "CUSTOMER_MANAGE" | "CUSTOMER_PII_REVEAL" | "CUSTOMER_IMPORT" | "INTEGRATION_INSTALLATION_MANAGE" | "INTEGRATION_BINDING_ACTIVATE" | "INTEGRATION_TELEGRAM_LINK_ISSUE" | "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE" | "POS_SYNC_READ" | "POS_SYNC_EXECUTE" | "POS_SYNC_APPLY" | "POS_EXPORT_READ" | "POS_EXPORT_RESOLVE" | "INTEGRATION_FAILURE_READ" | "INTEGRATION_FAILURE_RETRY" | "INTEGRATION_FAILURE_RESOLVE" | "NOTIFICATION_TEMPLATE_AUTHOR" | "NOTIFICATION_TEMPLATE_ACTIVATE" | "NOTIFICATION_READ" | "NOTIFICATION_RETRY" | "CONTROL_PLANE_ALERT_RAISE" | "AUDIENCE_READ" | "AUDIENCE_EXPORT" | "CAMPAIGN_AUTHOR" | "CAMPAIGN_APPROVE" | "SUPPRESSION_MANAGE" | "COMMERCIAL_SUBSCRIPTION_MANAGE" | "COMMERCIAL_OVERRIDE_APPROVE" | "COMMERCIAL_PLAN_READ" | "COMMERCIAL_PLAN_MANAGE" | "COMMERCIAL_PLAN_ACTIVATE" | "COMMERCIAL_USAGE_READ" | "COMMERCIAL_USAGE_ADJUST" | "LOYALTY_READ" | "LOYALTY_ADJUST" | "LOYALTY_POLICY_MANAGE" | "IAM_GRANT_MANAGE" | "REPORTING_READ" | "METRIC_MANAGE" | "AUDIT_READ" | "APPROVAL_POLICY_MANAGE" | "APPROVAL_DECIDE" | "MIGRATION_READ" | "MIGRATION_SCOPE_MANAGE" | "MIGRATION_RUN_EXECUTE" | "MIGRATION_CUTOVER_APPROVE" | "MIGRATION_QUARANTINE_RESOLVE" | "COURIER_SHIFT_OPEN" | "COURIER_SHIFT_BREAK" | "COURIER_SHIFT_APPROVE" | "COURIER_SHIFT_READ" | "COURIER_READ" | "COURIER_ENGAGEMENT_MANAGE" | "COURIER_REGISTRATION_VERIFY" | "COURIER_REGISTRATION_REVEAL" | "COURIER_TYPE_MANAGE" | "COURIER_RATECARD_MANAGE" | "COURIER_RATECARD_READ" | "COURIER_ADJUSTMENT_CREATE" | "COURIER_ADJUSTMENT_APPROVE" | "COURIER_CASH_CONFIRM" | "COURIER_LEDGER_READ" | "COURIER_SETTLEMENT_CLOSE" | "COURIER_PAYOUT_AUTHORISE" | "DELIVERY_COST_READ" | "PARTNER_INVOICE_MANAGE" | "CONVERSATION_FLOW_MANAGE" | "CONVERSATION_INBOX_MANAGE" | "PLATFORM_ADMIN">;
   contextVersion?: number;
   scopes?: Array<ScopeGrant>;
   subject?: string;
@@ -447,10 +451,32 @@ export interface CourierPin {
   speedMps?: number;
 }
 
+export interface CourierPolicyResponse {
+  cashCeilingMinor?: number;
+  confirmationPointRetentionDays?: number;
+  graceSeconds?: number;
+  penaltyApprovalThresholdMinor?: number;
+  policyId?: string;
+  policyVersion?: number;
+  reverificationDays?: number;
+  settlementPeriodDays?: number;
+  shiftEnforcement?: string;
+  warningDays?: number;
+  winningScope?: string;
+}
+
 export interface CourierResponse {
   courierId?: string;
   engagementId?: string;
   status?: string;
+}
+
+export interface CourierShiftControllerShiftResponse {
+  dutyState?: string;
+  enforcementMode?: string;
+  shiftId?: string;
+  status?: string;
+  version?: number;
 }
 
 export interface CourierTypeResponse {
@@ -493,6 +519,16 @@ export interface CreateCampaignRequest {
   name: string;
   recipientCap?: number;
   templateKey: string;
+}
+
+export interface CreateCourierTypeRequest {
+  code: string;
+  displayName: string;
+  maxConcurrentAssignments?: number;
+  maxDistanceMeters?: number;
+  minDistanceMeters?: number;
+  offerTtlSeconds?: number;
+  vehicleClass: string;
 }
 
 export interface CreateCustomerRequest {
@@ -597,6 +633,18 @@ export interface DispatchResponse {
 
 export interface DownloadResponse {
   url?: string;
+}
+
+export interface DraftCartResponse {
+  cartId?: string;
+  channelId?: string;
+  createdAt?: string;
+  customerAccountId?: string;
+  expiresAt?: string;
+  guestReferenceHash?: string;
+  lineCount?: number;
+  locationId?: string;
+  status?: string;
 }
 
 export interface DutySessionResponse {
@@ -939,6 +987,16 @@ export interface ModeBindingResponse {
   sharedWithLocationCount?: number;
 }
 
+export interface NewRateCardRequest {
+  brandId: string;
+  cardVersion?: number;
+  code: string;
+  components: Array<RateComponentRequest>;
+  courierTypeId?: string;
+  currency?: string;
+  locationId?: string;
+}
+
 export interface NoteResponse {
   lineId?: string;
   note?: string;
@@ -1024,6 +1082,18 @@ export interface OperationsCourierControllerAdjustmentResponse {
   approvalRequestId?: string;
   entryId?: string;
   written?: boolean;
+}
+
+export interface OperationsCourierControllerShiftResponse {
+  approvalRequestId?: string;
+  breakSeconds?: number;
+  closedAt?: string;
+  courierId?: string;
+  dutyState?: string;
+  openedAt?: string;
+  paidSeconds?: number;
+  shiftId?: string;
+  status?: string;
 }
 
 export interface OperationsMarketingControllerReasonRequest {
@@ -1362,6 +1432,45 @@ export interface QuoteResponse {
   totalMinor?: number;
 }
 
+export interface RateCardDetailResponse {
+  cardId?: string;
+  cardVersion?: number;
+  components?: Array<RateComponentResponse>;
+  currency?: string;
+}
+
+export interface RateCardSummaryResponse {
+  brandId?: string;
+  cardId?: string;
+  cardVersion?: number;
+  code?: string;
+  courierTypeId?: string;
+  currency?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  locationId?: string;
+  status?: string;
+}
+
+export interface RateComponentRequest {
+  amountMinor?: number;
+  bandFromMeters?: number;
+  bandToMeters?: number;
+  componentType: string;
+  minimumPaidSeconds?: number;
+  priority?: number;
+}
+
+export interface RateComponentResponse {
+  amountMinor?: number;
+  bandFromMeters?: number;
+  bandToMeters?: number;
+  componentId?: string;
+  componentType?: string;
+  minimumPaidSeconds?: number;
+  priority?: number;
+}
+
 export interface RePresentationRequest {
   language?: string;
   presentation?: string;
@@ -1680,7 +1789,7 @@ export interface RuleResponse {
 }
 
 export interface ScopeGrant {
-  capabilities?: Array<"TENANT_READ" | "TENANT_WRITE" | "TENANT_ONBOARDING_MANAGE" | "BRAND_READ" | "BRAND_WRITE" | "LOCATION_READ" | "LOCATION_WRITE" | "LEGAL_ENTITY_READ" | "LEGAL_ENTITY_MANAGE" | "CHANNEL_READ" | "CHANNEL_MANAGE" | "SERVICEABILITY_MANAGE" | "LOCATION_SERVICE_STATE_CHANGE" | "CATALOG_READ" | "CATALOG_AUTHOR" | "CATALOG_PUBLISH" | "OFFERING_MANAGE" | "MEDIA_READ" | "MEDIA_UPLOAD" | "INVENTORY_READ" | "INVENTORY_ADJUST" | "PRICING_READ" | "PRICING_AUTHOR" | "PRICING_ACTIVATE" | "ORDER_READ" | "ORDER_APPROVE" | "ORDER_ADVANCE" | "ORDER_CANCEL" | "ORDER_STATE_OVERRIDE" | "ORDER_AMEND" | "ORDER_OUTCOME_REASON_MANAGE" | "ORDER_ACCEPTANCE_POLICY_MANAGE" | "PAYMENT_READ" | "PAYMENT_INITIATE" | "PAYMENT_ATTEMPT_RESOLVE" | "PAYMENT_MERCHANT_BINDING_MANAGE" | "FISCAL_DOCUMENT_READ" | "FISCAL_DOCUMENT_RESOLVE" | "REFUND_REQUEST" | "REFUND_APPROVE" | "REFUND_EXECUTE" | "RECOVERY_CASE_MANAGE" | "RECOVERY_REMEDY_APPROVE" | "DELIVERY_PLAN_READ" | "DELIVERY_ZONE_READ" | "DELIVERY_ZONE_MANAGE" | "DELIVERY_ZONE_ACTIVATE" | "DELIVERY_TARIFF_READ" | "DELIVERY_TARIFF_MANAGE" | "DELIVERY_TARIFF_ACTIVATE" | "DELIVERY_FEE_EVIDENCE_READ" | "DELIVERY_MANUAL_ASSIGN" | "SHIPMENT_CANCEL" | "COURIER_POSITION_READ" | "COURIER_TRACK_REVEAL" | "COURIER_DUTY_MANAGE" | "KITCHEN_STATION_MANAGE" | "KITCHEN_TICKET_READ" | "KITCHEN_TICKET_ADVANCE" | "KITCHEN_TICKET_RECALL" | "KITCHEN_TICKET_RELEASE" | "KITCHEN_TICKET_RELEASE_OVERRIDE" | "DINEIN_FLOORPLAN_MANAGE" | "RESERVATION_READ" | "RESERVATION_MANAGE" | "DINEIN_SESSION_READ" | "DINEIN_SESSION_MANAGE" | "DINEIN_SESSION_FORCE_CLOSE" | "DINEIN_QR_ROTATE" | "MARKETPLACE_ORDER_RECEIVE" | "MARKETPLACE_MENU_PUSH" | "MARKETPLACE_AVAILABILITY_PUSH" | "MARKETPLACE_HANDOVER_BYPASS" | "MARKETPLACE_ORDER_CREATE_MANUAL" | "MARKETPLACE_LIVENESS_READ" | "CUSTOMER_READ" | "CUSTOMER_MANAGE" | "CUSTOMER_PII_REVEAL" | "CUSTOMER_IMPORT" | "INTEGRATION_INSTALLATION_MANAGE" | "INTEGRATION_BINDING_ACTIVATE" | "INTEGRATION_TELEGRAM_LINK_ISSUE" | "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE" | "POS_SYNC_READ" | "POS_SYNC_EXECUTE" | "POS_SYNC_APPLY" | "POS_EXPORT_READ" | "POS_EXPORT_RESOLVE" | "INTEGRATION_FAILURE_READ" | "INTEGRATION_FAILURE_RETRY" | "INTEGRATION_FAILURE_RESOLVE" | "NOTIFICATION_TEMPLATE_AUTHOR" | "NOTIFICATION_TEMPLATE_ACTIVATE" | "NOTIFICATION_READ" | "NOTIFICATION_RETRY" | "CONTROL_PLANE_ALERT_RAISE" | "AUDIENCE_READ" | "AUDIENCE_EXPORT" | "CAMPAIGN_AUTHOR" | "CAMPAIGN_APPROVE" | "SUPPRESSION_MANAGE" | "COMMERCIAL_SUBSCRIPTION_MANAGE" | "COMMERCIAL_OVERRIDE_APPROVE" | "COMMERCIAL_PLAN_READ" | "COMMERCIAL_PLAN_MANAGE" | "COMMERCIAL_PLAN_ACTIVATE" | "COMMERCIAL_USAGE_READ" | "COMMERCIAL_USAGE_ADJUST" | "LOYALTY_READ" | "LOYALTY_ADJUST" | "LOYALTY_POLICY_MANAGE" | "IAM_GRANT_MANAGE" | "REPORTING_READ" | "METRIC_MANAGE" | "AUDIT_READ" | "APPROVAL_POLICY_MANAGE" | "APPROVAL_DECIDE" | "MIGRATION_READ" | "MIGRATION_SCOPE_MANAGE" | "MIGRATION_RUN_EXECUTE" | "MIGRATION_CUTOVER_APPROVE" | "MIGRATION_QUARANTINE_RESOLVE" | "COURIER_SHIFT_OPEN" | "COURIER_SHIFT_BREAK" | "COURIER_SHIFT_APPROVE" | "COURIER_READ" | "COURIER_ENGAGEMENT_MANAGE" | "COURIER_REGISTRATION_VERIFY" | "COURIER_REGISTRATION_REVEAL" | "COURIER_RATECARD_MANAGE" | "COURIER_ADJUSTMENT_CREATE" | "COURIER_ADJUSTMENT_APPROVE" | "COURIER_CASH_CONFIRM" | "COURIER_LEDGER_READ" | "COURIER_SETTLEMENT_CLOSE" | "COURIER_PAYOUT_AUTHORISE" | "DELIVERY_COST_READ" | "PARTNER_INVOICE_MANAGE" | "CONVERSATION_FLOW_MANAGE" | "CONVERSATION_INBOX_MANAGE" | "PLATFORM_ADMIN">;
+  capabilities?: Array<"TENANT_READ" | "TENANT_WRITE" | "TENANT_ONBOARDING_MANAGE" | "BRAND_READ" | "BRAND_WRITE" | "LOCATION_READ" | "LOCATION_WRITE" | "LEGAL_ENTITY_READ" | "LEGAL_ENTITY_MANAGE" | "CHANNEL_READ" | "CHANNEL_MANAGE" | "SERVICEABILITY_MANAGE" | "LOCATION_SERVICE_STATE_CHANGE" | "CATALOG_READ" | "CATALOG_AUTHOR" | "CATALOG_PUBLISH" | "OFFERING_MANAGE" | "MEDIA_READ" | "MEDIA_UPLOAD" | "INVENTORY_READ" | "INVENTORY_ADJUST" | "PRICING_READ" | "PRICING_AUTHOR" | "PRICING_ACTIVATE" | "ORDER_READ" | "ORDER_APPROVE" | "ORDER_ADVANCE" | "ORDER_CANCEL" | "ORDER_STATE_OVERRIDE" | "ORDER_AMEND" | "ORDER_OUTCOME_REASON_MANAGE" | "ORDER_ACCEPTANCE_POLICY_MANAGE" | "PAYMENT_READ" | "PAYMENT_INITIATE" | "PAYMENT_ATTEMPT_RESOLVE" | "PAYMENT_MERCHANT_BINDING_MANAGE" | "FISCAL_DOCUMENT_READ" | "FISCAL_DOCUMENT_RESOLVE" | "REFUND_REQUEST" | "REFUND_APPROVE" | "REFUND_EXECUTE" | "RECOVERY_CASE_MANAGE" | "RECOVERY_REMEDY_APPROVE" | "DELIVERY_PLAN_READ" | "DELIVERY_ZONE_READ" | "DELIVERY_ZONE_MANAGE" | "DELIVERY_ZONE_ACTIVATE" | "DELIVERY_TARIFF_READ" | "DELIVERY_TARIFF_MANAGE" | "DELIVERY_TARIFF_ACTIVATE" | "DELIVERY_FEE_EVIDENCE_READ" | "DELIVERY_MANUAL_ASSIGN" | "SHIPMENT_CANCEL" | "COURIER_POSITION_READ" | "COURIER_TRACK_REVEAL" | "COURIER_DUTY_MANAGE" | "KITCHEN_STATION_MANAGE" | "KITCHEN_TICKET_READ" | "KITCHEN_TICKET_ADVANCE" | "KITCHEN_TICKET_RECALL" | "KITCHEN_TICKET_RELEASE" | "KITCHEN_TICKET_RELEASE_OVERRIDE" | "KITCHEN_TICKET_HANDOVER" | "DINEIN_FLOORPLAN_MANAGE" | "RESERVATION_READ" | "RESERVATION_MANAGE" | "DINEIN_SESSION_READ" | "DINEIN_SESSION_MANAGE" | "DINEIN_SESSION_FORCE_CLOSE" | "DINEIN_QR_ROTATE" | "MARKETPLACE_ORDER_RECEIVE" | "MARKETPLACE_MENU_PUSH" | "MARKETPLACE_AVAILABILITY_PUSH" | "MARKETPLACE_HANDOVER_BYPASS" | "MARKETPLACE_ORDER_CREATE_MANUAL" | "MARKETPLACE_LIVENESS_READ" | "CUSTOMER_READ" | "CUSTOMER_MANAGE" | "CUSTOMER_PII_REVEAL" | "CUSTOMER_IMPORT" | "INTEGRATION_INSTALLATION_MANAGE" | "INTEGRATION_BINDING_ACTIVATE" | "INTEGRATION_TELEGRAM_LINK_ISSUE" | "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE" | "POS_SYNC_READ" | "POS_SYNC_EXECUTE" | "POS_SYNC_APPLY" | "POS_EXPORT_READ" | "POS_EXPORT_RESOLVE" | "INTEGRATION_FAILURE_READ" | "INTEGRATION_FAILURE_RETRY" | "INTEGRATION_FAILURE_RESOLVE" | "NOTIFICATION_TEMPLATE_AUTHOR" | "NOTIFICATION_TEMPLATE_ACTIVATE" | "NOTIFICATION_READ" | "NOTIFICATION_RETRY" | "CONTROL_PLANE_ALERT_RAISE" | "AUDIENCE_READ" | "AUDIENCE_EXPORT" | "CAMPAIGN_AUTHOR" | "CAMPAIGN_APPROVE" | "SUPPRESSION_MANAGE" | "COMMERCIAL_SUBSCRIPTION_MANAGE" | "COMMERCIAL_OVERRIDE_APPROVE" | "COMMERCIAL_PLAN_READ" | "COMMERCIAL_PLAN_MANAGE" | "COMMERCIAL_PLAN_ACTIVATE" | "COMMERCIAL_USAGE_READ" | "COMMERCIAL_USAGE_ADJUST" | "LOYALTY_READ" | "LOYALTY_ADJUST" | "LOYALTY_POLICY_MANAGE" | "IAM_GRANT_MANAGE" | "REPORTING_READ" | "METRIC_MANAGE" | "AUDIT_READ" | "APPROVAL_POLICY_MANAGE" | "APPROVAL_DECIDE" | "MIGRATION_READ" | "MIGRATION_SCOPE_MANAGE" | "MIGRATION_RUN_EXECUTE" | "MIGRATION_CUTOVER_APPROVE" | "MIGRATION_QUARANTINE_RESOLVE" | "COURIER_SHIFT_OPEN" | "COURIER_SHIFT_BREAK" | "COURIER_SHIFT_APPROVE" | "COURIER_SHIFT_READ" | "COURIER_READ" | "COURIER_ENGAGEMENT_MANAGE" | "COURIER_REGISTRATION_VERIFY" | "COURIER_REGISTRATION_REVEAL" | "COURIER_TYPE_MANAGE" | "COURIER_RATECARD_MANAGE" | "COURIER_RATECARD_READ" | "COURIER_ADJUSTMENT_CREATE" | "COURIER_ADJUSTMENT_APPROVE" | "COURIER_CASH_CONFIRM" | "COURIER_LEDGER_READ" | "COURIER_SETTLEMENT_CLOSE" | "COURIER_PAYOUT_AUTHORISE" | "DELIVERY_COST_READ" | "PARTNER_INVOICE_MANAGE" | "CONVERSATION_FLOW_MANAGE" | "CONVERSATION_INBOX_MANAGE" | "PLATFORM_ADMIN">;
   roleCode?: string;
   scope?: ResourceScope;
 }
@@ -1765,14 +1874,6 @@ export interface SettingsResponse {
   qrMode?: string;
   serviceChargeRateBp?: number;
   turnaroundMinutes?: number;
-  version?: number;
-}
-
-export interface ShiftResponse {
-  dutyState?: string;
-  enforcementMode?: string;
-  shiftId?: string;
-  status?: string;
   version?: number;
 }
 
@@ -2037,7 +2138,7 @@ export interface WordingResponse {
 
 export interface Operations {
   "declareCash": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/cash-handovers/{handoverId}/declaration"; request: { parameters: { path: { brandId: string; handoverId: string; locationId: string; tenantId: string } }; body: CashDeclarationRequest }; responses: { "200": unknown } };
-  "open_2": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OpenShiftRequest }; responses: { "200": ShiftResponse } };
+  "open_2": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OpenShiftRequest }; responses: { "200": CourierShiftControllerShiftResponse } };
   "startBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_2": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
@@ -2065,12 +2166,15 @@ export interface Operations {
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
   "suspend_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
   "verify_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/verify"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: VerifyRequest }; responses: { "200": EngagementResponse } };
+  "courierPolicy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": CourierPolicyResponse } };
   "closePeriod": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/close"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: CloseperiodRequest }; responses: { "200": StatementResponse } };
   "authorisePayout": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/payouts"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: PayoutRequest }; responses: { "200": PayoutResponse } };
   "statement": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/statement"; request: { parameters: { path: { periodId: string; tenantId: string } } }; responses: { "200": {  } } };
+  "courierShifts": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; limit?: number; locationId: string } } }; responses: { "200": Array<OperationsCourierControllerShiftResponse> } };
   "approveShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/approve"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ApproveHoursRequest }; responses: { "200": unknown } };
   "closeShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/close"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ManagerCloseRequest }; responses: { "200": unknown } };
   "types": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-types"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CourierTypeResponse> } };
+  "createType": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-types"; request: { parameters: { path: { tenantId: string } }; body: CreateCourierTypeRequest }; responses: { "200": CourierTypeResponse } };
   "roster": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RosterEntryResponse> } };
   "register_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers"; request: { parameters: { path: { tenantId: string } }; body: RegisterCourierRequest }; responses: { "200": CourierResponse } };
   "adjust_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: OperationsCourierControllerAdjustmentRequest }; responses: { "200": OperationsCourierControllerAdjustmentResponse } };
@@ -2099,6 +2203,10 @@ export interface Operations {
   "importInvoice": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string } }; body: ImportInvoiceRequest }; responses: { "200": { [key: string]: string } } };
   "match": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/match"; request: { parameters: { path: { invoiceId: string; tenantId: string } }; body: MatchRequest }; responses: { "200": MatchReport } };
   "evidence": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/quotes/{quoteId}/delivery-fee-evidence"; request: { parameters: { path: { quoteId: string; tenantId: string } } }; responses: { "200": Array<EvidenceView> } };
+  "rateCards": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards"; request: { parameters: { path: { tenantId: string }; query: { brandId: string } } }; responses: { "200": Array<RateCardSummaryResponse> } };
+  "authorRateCard": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards"; request: { parameters: { path: { tenantId: string } }; body: NewRateCardRequest }; responses: { "200": { [key: string]: string } } };
+  "rateCard": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards/{cardId}"; request: { parameters: { path: { cardId: string; tenantId: string } } }; responses: { "200": RateCardDetailResponse } };
+  "activateRateCard": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards/{cardId}/activation"; request: { parameters: { path: { cardId: string; tenantId: string } }; body: ActivateRateCardRequest }; responses: { "200": unknown } };
   "unverified": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/remedies/unverified"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; settlingHours?: number } } }; responses: { "200": PageRemedyResponse } };
   "verify": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/remedies/{remedyId}/verification"; request: { parameters: { path: { remedyId: string; tenantId: string } }; body: OperationsRemedyControllerVerificationRequest }; responses: { "200": OperationsRemedyControllerVerificationResponse } };
   "liability": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/loyalty-liability"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LiabilityResponse> } };
@@ -2136,6 +2244,7 @@ export interface Operations {
   "start": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/ticket-items/{itemId}/start"; request: { parameters: { path: { brandId: string; itemId: string; locationId: string; tenantId: string } } }; responses: { "200": ItemResponse } };
   "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; stream?: string } } }; responses: { "200": BoardResponse } };
   "ticket": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets/{ticketId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; ticketId: string } } }; responses: { "200": TicketResponse } };
+  "handOver": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets/{ticketId}/hand-over"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; ticketId: string } } }; responses: { "200": TicketResponse } };
   "release": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets/{ticketId}/release"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; ticketId: string } }; body: ReleaseRequest }; responses: { "200": TicketResponse } };
   "reschedule": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets/{ticketId}/release-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; ticketId: string } }; body: RescheduleRequest }; responses: { "200": TicketResponse } };
   "fleet": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/operations/couriers/positions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": FleetResponse } };
@@ -2143,6 +2252,7 @@ export interface Operations {
   "open_3": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/operations/streams"; request: { parameters: { header: { "Last-Event-Id"?: string }; path: { brandId: string; locationId: string; tenantId: string }; query: { channels: Array<string>; scope?: string } } }; responses: { "200": SseEmitter } };
   "list_5": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; status?: Array<string> } } }; responses: { "200": Array<OperationsOrderControllerOrderSummaryResponse> } };
   "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": OrderCountsResponse } };
+  "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };
   "detail_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { revision?: number } } }; responses: { "200": OrderDetailResponse } };
   "listAmendments": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<AmendmentResponse> } };

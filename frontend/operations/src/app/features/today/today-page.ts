@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -41,10 +42,22 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * `IN_PROGRESS_ORDER_STATUSES`), and the brand's location roster Settings
  * 10.2 already reads. See `live-board.ts` for the full accounting and the
  * three-step degrade a partial grant produces.
+ *
+ * **IA 0.2 (My work) is an honest not-built page, linked from the toolbar
+ * here.** Its whole "Owns" list depends on data this build does not have:
+ * `created_by_actor_id`/`accepted_by_actor_id` do not exist on
+ * `ordering.orders` at all (ADR 0039, orders.md §11.5 — "blocks... the
+ * operator leaderboard"), so "my own queue" cannot be filtered, and even
+ * `staff-and-access.md`'s own placement of these statistics on Home 0.2
+ * assumes a staff person record (§11.1) that does not exist either — every
+ * name would render as a raw Keycloak subject UUID. UI personalization
+ * (interface language, a column picker) is listed under the same "Личные
+ * данные... Not built — §11.1" line. Nothing here can be built as a partial
+ * screen without fabricating data this backend cannot produce.
  */
 @Component({
   selector: 'q-today-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './today-page.html',
   styleUrl: './today-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

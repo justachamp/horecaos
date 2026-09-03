@@ -481,6 +481,108 @@ class CourierCompensationTests {
         assertThat(roster.getFirst().courier().engagementStatus()).isEqualTo("SUSPENDED_OPERATIONAL");
     }
 
+    // -------------------------------------------- courier types & rates (§3.4)
+
+    @Test
+    @DisplayName("a newly authored courier type is readable by id and in the tenant's list")
+    void aNewCourierTypeIsReadableAndListed() {
+        UUID carTypeId = UUID.randomUUID();
+        courierStore.insertType(
+                new JdbcCourierStore.CourierTypeRow(carTypeId, TENANT, "CAR", "Car", "CAR", 0, null, 6, 90, "ACTIVE"));
+
+        var found = courierStore.findType(TENANT, carTypeId).orElseThrow();
+        assertThat(found.displayName()).isEqualTo("Car");
+        assertThat(found.maxConcurrentAssignments()).isEqualTo(6);
+
+        assertThat(courierStore.listTypes(TENANT))
+                .as("the fixture's Scooter type and the freshly authored Car both belong to this tenant")
+                .extracting(JdbcCourierStore.CourierTypeRow::code)
+                .contains("SCOOTER", "CAR");
+    }
+
+    @Test
+    @DisplayName("the rate card list carries every card the brand has authored, its detail carries the ladder")
+    void rateCardListAndDetailAgreeWithTheFixtureCard() {
+        var summaries = rateCardStore.list(TENANT, BRAND);
+
+        assertThat(summaries)
+                .as("seedRateCard() authors and activates exactly one card for this brand")
+                .hasSize(1);
+        var summary = summaries.getFirst();
+        assertThat(summary.id()).isEqualTo(rateCardId);
+        assertThat(summary.status()).isEqualTo("ACTIVE");
+        assertThat(summary.courierTypeId())
+                .as("seedRateCard() applies brand-wide, to every courier type")
+                .isNull();
+
+        RateCard detail = rateCardStore.findCard(TENANT, summary.id()).orElseThrow();
+        assertThat(detail.components()).isNotEmpty();
+    }
+
+    // ------------------------------------------------------- shifts (§3.5)
+
+    @Test
+    @DisplayName("the branch's shift list carries an open shift and its close reason once approved")
+    void shiftListCarriesAnOpenThenClosedShift() {
+        ShiftRow opened = shifts.open(new CourierShiftService.OpenShift(
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "on shift", null, UZS));
+
+        assertThat(shiftStore.atLocation(TENANT, BRAND, branch, 50))
+                .as("the roster read must see the shift the courier just opened")
+                .extracting(ShiftRow::id)
+                .contains(opened.id());
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, opened.id(), ShiftActor.MANAGER, manager(), "END_OF_SERVICE", "closing up", null, UZS));
+
+        ShiftRow closed = shiftStore.atLocation(TENANT, BRAND, branch, 50).stream()
+                .filter(row -> row.id().equals(opened.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(closed.status()).isEqualTo(ShiftStatus.AWAITING_APPROVAL);
+        assertThat(closed.closeReasonCode()).isEqualTo("END_OF_SERVICE");
+    }
+
+    // ------------------------------------------------------- policy (§3.9)
+
+    @Test
+    @DisplayName("resolveWithIdentity carries the resolver's own policy id and version, for a caller to pin")
+    void resolveWithIdentityCarriesTheResolvedPolicyIdentity() {
+        CourierPolicyResolver resolver = new CourierPolicyResolver(policies);
+
+        var resolved = resolver.resolveWithIdentity(ResourceScope.tenant(TENANT));
+
+        // The fixture's own resolver always answers with ADR 0042's provisional
+        // values (a policy exists here, deliberately, so the identity below is
+        // real rather than the DEFAULTS_ID fallback that fires only when the
+        // underlying PolicyResolver has nothing at all).
+        assertThat(resolved.document()).isEqualTo(CourierCompensationPolicy.DEFAULTS);
+        assertThat(resolved.policyId()).isNotNull();
+        assertThat(resolved.policyVersion()).isEqualTo(3);
+        assertThat(resolved.winningScope()).isEqualTo(ResourceScope.ScopeType.TENANT);
+    }
+
+    @Test
+    @DisplayName("resolveWithIdentity falls back to ADR 0042's provisional defaults when nothing resolves")
+    void resolveWithIdentityFallsBackToDefaultsWhenNothingConfigured() {
+        CourierPolicyResolver resolver = new CourierPolicyResolver(new PolicyResolver() {
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
+                return Optional.empty();
+            }
+
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
+                return Optional.empty();
+            }
+        });
+
+        var resolved = resolver.resolveWithIdentity(ResourceScope.tenant(TENANT));
+
+        assertThat(resolved.document()).isEqualTo(CourierCompensationPolicy.DEFAULTS);
+        assertThat(resolved.policyId()).isEqualTo(CourierPolicyResolver.DEFAULTS_ID);
+    }
+
     // ------------------------------------------------------ registration lapse
 
     @Test

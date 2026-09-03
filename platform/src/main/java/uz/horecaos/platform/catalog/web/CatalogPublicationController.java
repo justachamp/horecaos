@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -35,10 +37,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CatalogPublicationController {
 
     private final CatalogPublicationService publication;
+    private final JdbcCatalogStore store;
     private final CurrentActor currentActor;
 
-    public CatalogPublicationController(CatalogPublicationService publication, CurrentActor currentActor) {
+    public CatalogPublicationController(
+            CatalogPublicationService publication, JdbcCatalogStore store, CurrentActor currentActor) {
         this.publication = publication;
+        this.store = store;
         this.currentActor = currentActor;
     }
 
@@ -58,6 +63,21 @@ public class CatalogPublicationController {
         } catch (IllegalArgumentException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         }
+    }
+
+    @GetMapping("/publications")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The brand's publication history (IA 4.6, Region 3)",
+            description = "Newest first, every status including REJECTED — a rejected publication "
+                    + "is recorded on purpose so 'why did publishing fail an hour ago' has an "
+                    + "answer.")
+    public ResponseEntity<List<PublicationHistoryResponse>> history(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @RequestParam(defaultValue = "50") int limit) {
+
+        return ResponseEntity.ok(store.listPublications(tenantId, brandId, Math.min(limit, 200)).stream()
+                .map(PublicationHistoryResponse::of)
+                .toList());
     }
 
     @PostMapping("/catalogs/{catalogId}/publications")
@@ -146,6 +166,31 @@ public class CatalogPublicationController {
                     finding.entityId(),
                     finding.entityCode(),
                     finding.detail());
+        }
+    }
+
+    public record PublicationHistoryResponse(
+            UUID publicationId,
+            String channel,
+            String status,
+            String contentHash,
+            @Nullable UUID createdBy,
+            Instant createdAt,
+            @Nullable Instant activatedAt,
+            @Nullable Instant retiredAt,
+            int itemCount) {
+
+        static PublicationHistoryResponse of(JdbcCatalogStore.PublicationHistoryRow row) {
+            return new PublicationHistoryResponse(
+                    row.publicationId(),
+                    row.channel(),
+                    row.status().name(),
+                    row.contentHash(),
+                    row.createdBy(),
+                    row.createdAt(),
+                    row.activatedAt(),
+                    row.retiredAt(),
+                    row.itemCount());
         }
     }
 

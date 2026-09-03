@@ -1,0 +1,47 @@
+.vdu {
+  height: 100%;
+  overflow: auto;
+  background: var(--q-ink);
+  padding: 24px;
+}
+
+.vdu__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.vdu__card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--q-surface-1);
+  color: var(--q-canvas);
+  border-radius: var(--q-radius);
+  border: 2px solid transparent;
+}
+
+.vdu__card--ready {
+  border-color: var(--q-success);
+}
+
+.vdu__card--warning {
+  border-color: var(--q-warning);
+}
+
+.vdu__card--danger {
+  border-color: var(--q-error);
+}
+
+.vdu__empty,
+.vdu__denied,
+.vdu__loading {
+  color: var(--q-canvas);
+  font-size: 20px;
+  text-align: center;
+  padding: 48px;
+}

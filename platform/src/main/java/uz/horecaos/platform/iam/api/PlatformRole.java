@@ -129,6 +129,8 @@ public enum PlatformRole {
                     // COURIER_SETTLEMENT_CLOSE, which finance holds, so no one person
                     // both closes a period and releases its money.
                     COURIER_RATECARD_MANAGE,
+                    COURIER_RATECARD_READ,
+                    COURIER_TYPE_MANAGE,
                     COURIER_PAYOUT_AUTHORISE,
                     TENANT_READ,
                     TENANT_WRITE,
@@ -195,6 +197,7 @@ public enum PlatformRole {
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
                     KITCHEN_TICKET_RELEASE_OVERRIDE,
+                    KITCHEN_TICKET_HANDOVER,
                     DINEIN_FLOORPLAN_MANAGE,
                     DINEIN_QR_ROTATE,
                     DINEIN_SESSION_READ,
@@ -315,6 +318,7 @@ public enum PlatformRole {
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
                     KITCHEN_TICKET_RELEASE_OVERRIDE,
+                    KITCHEN_TICKET_HANDOVER,
                     DINEIN_FLOORPLAN_MANAGE,
                     DINEIN_QR_ROTATE,
                     DINEIN_SESSION_READ,
@@ -457,6 +461,7 @@ public enum PlatformRole {
                     // at home, and directing when a self-employed person works is the
                     // fact pattern that reclassifies the engagement.
                     COURIER_SHIFT_APPROVE,
+                    COURIER_SHIFT_READ,
                     COURIER_CASH_CONFIRM,
                     COURIER_ADJUSTMENT_CREATE,
                     // ADR 0046: answering a customer at the counter about their points.
@@ -486,6 +491,7 @@ public enum PlatformRole {
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
                     KITCHEN_TICKET_RELEASE_OVERRIDE,
+                    KITCHEN_TICKET_HANDOVER,
                     // ADR 0047: the floor plan is the physical property of this branch,
                     // and a walkout is this shift's cash shortfall.
                     DINEIN_FLOORPLAN_MANAGE,
@@ -554,6 +560,7 @@ public enum PlatformRole {
                     // what happened on it, but does not approve them and never opens a
                     // shift on somebody's behalf.
                     COURIER_SHIFT_APPROVE,
+                    COURIER_SHIFT_READ,
                     COURIER_ADJUSTMENT_CREATE,
                     DELIVERY_COST_READ,
                     LOCATION_READ,

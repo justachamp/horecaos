@@ -1,0 +1,89 @@
+<div class="expo">
+  <div class="expo__note-band" role="note">
+    <span class="q-body-sm">{{ 'kitchen.expo.noCodeVerification' | t }}</span>
+  </div>
+
+  @if (actionNotice(); as notice) {
+    <div class="expo__notice-band" role="alert">
+      <span class="q-body-sm">{{ notice }}</span>
+      <button type="button" class="expo__notice-dismiss" (click)="dismissNotice()">×</button>
+    </div>
+  }
+
+  @if (lastError(); as error) {
+    <div class="expo__error-band" role="alert">
+      <span class="q-body-sm">{{ error.code }}</span>
+    </div>
+  }
+
+  <div class="expo__board">
+    @if (!firstLoadComplete()) {
+      <div class="expo__skeleton" [attr.aria-label]="'kitchen.loading' | t">
+        @for (i of [1, 2, 3]; track i) {
+          <div class="expo__skeleton-card"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="expo__denied" data-testid="expo-denied">
+        <p class="q-body-sm">{{ 'kitchen.denied' | t }}</p>
+      </div>
+    } @else {
+      @for (ticket of tickets(); track ticket.ticketId) {
+        <div class="ticket" data-testid="expo-ticket">
+          <div class="ticket__header">
+            <div class="ticket__number">
+              <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
+              @if (ticket.channelCode) {
+                <span class="chip chip--muted">{{ ticket.channelCode }}</span>
+              }
+            </div>
+            <button
+              type="button"
+              class="ticket__handover"
+              [disabled]="isBusy(ticket)"
+              (click)="handOver(ticket)"
+              data-testid="expo-handover"
+            >
+              {{ 'kitchen.expo.handOver' | t }}
+            </button>
+          </div>
+          <table class="ticket__items">
+            <thead>
+              <tr>
+                <th>{{ 'kitchen.item.column.line' | t }}</th>
+                <th>{{ 'kitchen.item.column.station' | t }}</th>
+                <th class="expo__num-col">{{ 'kitchen.item.column.quantity' | t }}</th>
+                <th>{{ 'kitchen.item.column.status' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of ticket.items; track item.itemId) {
+                <tr>
+                  <td>
+                    @if (lineFor(ticket, item); as line) {
+                      <div>{{ line.productName }}</div>
+                      @if (line.variantName) {
+                        <div class="q-caption">{{ line.variantName }}</div>
+                      }
+                    } @else {
+                      <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
+                    }
+                  </td>
+                  <td>{{ stationLabel(item.stationId) }}</td>
+                  <td class="expo__num-col q-tnum">{{ item.quantity }}</td>
+                  <td>
+                    <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @empty {
+        <div class="expo__empty">
+          <p class="q-body-sm" data-testid="expo-empty">{{ 'kitchen.expo.empty' | t }}</p>
+        </div>
+      }
+    }
+  </div>
+</div>

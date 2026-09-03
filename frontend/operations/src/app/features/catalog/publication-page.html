@@ -1,0 +1,136 @@
+<div class="publication">
+  @if (loading()) {
+    <div class="publication__skeleton" [attr.aria-label]="'catalog.publication.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="publication__denied" data-testid="publication-denied">
+      <p class="q-body-sm">{{ 'catalog.publication.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="publication__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="publication__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (lastResult(); as result) {
+      <div
+        class="publication__result-band"
+        [class.publication__result-band--rejected]="result.status === 'REJECTED'"
+        role="status"
+        data-testid="publication-result"
+      >
+        <span class="q-body-sm">
+          {{
+            'catalog.publication.result' | t: { status: result.status, hash: result.contentHash }
+          }}
+        </span>
+        <button type="button" class="publication__dismiss" (click)="dismissResult()">×</button>
+      </div>
+    }
+
+    <!-- Region 1: readiness -->
+    <section class="publication__section" data-testid="publication-readiness">
+      <h2 class="q-subhead">
+        @if (report()?.publishable) {
+          {{ 'catalog.publication.readiness.clean' | t }}
+        } @else {
+          {{
+            'catalog.publication.readiness.blockers' | t: { count: report()?.findings?.length ?? 0 }
+          }}
+        }
+      </h2>
+      <ul class="publication__findings">
+        @for (finding of findingsByCode(); track finding.code) {
+          <li
+            class="publication__finding"
+            [class.publication__finding--blocker]="finding.severity === 'BLOCKER'"
+          >
+            <span class="publication__finding-code">{{ finding.code }}</span>
+            <span class="publication__finding-count q-tnum">×{{ finding.count }}</span>
+          </li>
+        } @empty {
+          <li class="publication__finding-empty">{{ 'catalog.publication.readiness.none' | t }}</li>
+        }
+      </ul>
+    </section>
+
+    <!-- Region 2: channels -->
+    <section class="publication__section">
+      <h2 class="q-subhead">{{ 'catalog.publication.channels.title' | t }}</h2>
+      <div class="publication__channels">
+        @for (channel of channels(); track channel.id) {
+          <div class="publication__channel" data-testid="publication-channel">
+            <div class="publication__channel-header">
+              <span class="q-emphasis">{{ channel.displayName }}</span>
+              <span class="chip chip--muted">{{ channel.systemType }}</span>
+            </div>
+            <button
+              type="button"
+              class="publication__publish"
+              [disabled]="publishingChannel() !== null"
+              (click)="publish(channel)"
+              data-testid="publication-publish"
+            >
+              {{ 'catalog.publication.channels.publish' | t }}
+            </button>
+          </div>
+        } @empty {
+          <p class="q-body-sm">{{ 'catalog.publication.channels.empty' | t }}</p>
+        }
+      </div>
+    </section>
+
+    <!-- Region 3: history -->
+    <section class="publication__section">
+      <h2 class="q-subhead">{{ 'catalog.publication.history.title' | t }}</h2>
+      <table class="publication__table">
+        <thead>
+          <tr>
+            <th>{{ 'catalog.publication.history.column.when' | t }}</th>
+            <th>{{ 'catalog.publication.history.column.channel' | t }}</th>
+            <th>{{ 'catalog.publication.history.column.status' | t }}</th>
+            <th>{{ 'catalog.publication.history.column.hash' | t }}</th>
+            <th class="publication__num-col">
+              {{ 'catalog.publication.history.column.items' | t }}
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of history(); track entry.publicationId) {
+            <tr data-testid="publication-history-row">
+              <td class="q-tnum">{{ timeLabel(entry.createdAt) }}</td>
+              <td>{{ entry.channel }}</td>
+              <td>
+                <span class="status-badge">{{ entry.status }}</span>
+              </td>
+              <td class="q-tnum">{{ entry.contentHash.slice(0, 8) }}</td>
+              <td class="publication__num-col q-tnum">{{ entry.itemCount }}</td>
+              <td class="publication__actions">
+                <button
+                  type="button"
+                  class="publication__rollback"
+                  [disabled]="!canRollback(entry)"
+                  (click)="rollback(entry)"
+                  data-testid="publication-rollback"
+                >
+                  {{ 'catalog.publication.history.rollback' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="publication__empty">
+                {{ 'catalog.publication.history.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</div>

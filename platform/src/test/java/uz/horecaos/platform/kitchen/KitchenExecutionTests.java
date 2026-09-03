@@ -384,10 +384,7 @@ class KitchenExecutionTests {
 
         tickets.start(TENANT, item.id(), "cook", null);
         tickets.ready(TENANT, item.id(), "cook", null);
-        // Handover itself is not built in this slice, so the terminal state is
-        // reached directly. The rule under test is about the state, not the route
-        // to it.
-        store.transitionTicket(TENANT, ticket.id(), TicketStatus.READY, TicketStatus.HANDED_OVER, NOON);
+        assertThat(tickets.handOver(TENANT, ticket.id(), "expo", null)).isPresent();
 
         Throwable failure = catchThrowable(() -> tickets.recall(TENANT, item.id(), "WRONG_TICKET", "expo", null));
 
@@ -400,6 +397,46 @@ class KitchenExecutionTests {
         assertThat(audit.facts)
                 .anyMatch(fact -> "kitchen.ticket.recall".equals(fact.actionCode())
                         && fact.outcome() == AuditFact.Outcome.REJECTED);
+    }
+
+    // --------------------------------------------------------------- hand-over
+
+    @Test
+    @DisplayName("hand-over moves a ready ticket to HANDED_OVER, and a second press is not an error")
+    void ticketLeavesThePassOnceAndASecondPressIsNotAnError() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-032", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+
+        tickets.start(TENANT, item.id(), "cook", null);
+        tickets.ready(TENANT, item.id(), "cook", null);
+
+        var first = tickets.handOver(TENANT, ticket.id(), "expo", null);
+        assertThat(first).isPresent();
+        assertThat(first.orElseThrow().status()).isEqualTo(TicketStatus.HANDED_OVER);
+
+        // The caller wanted the ticket off the pass, and it already is — a second
+        // press is a settled state, not a failure, the same shape `fire`'s own
+        // idempotence takes on a second "release now".
+        var second = tickets.handOver(TENANT, ticket.id(), "expo", null);
+        assertThat(second).isEmpty();
+        assertThat(tickets.require(TENANT, ticket.id()).status()).isEqualTo(TicketStatus.HANDED_OVER);
+    }
+
+    @Test
+    @DisplayName("hand-over refuses a ticket that is not yet READY")
+    void handOverRefusesATicketStillCooking() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-033", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        var outcome = tickets.handOver(TENANT, ticket.id(), "expo", null);
+
+        assertThat(outcome)
+                .as("nothing was ready to hand over, so the ticket must not silently become HANDED_OVER")
+                .isEmpty();
+        assertThat(tickets.require(TENANT, ticket.id()).status()).isNotEqualTo(TicketStatus.HANDED_OVER);
     }
 
     // ------------------------------------------------------------------- release

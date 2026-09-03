@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { TPipe } from '../../core/i18n/t.pipe';
 import { OrderQueue } from './order-queue';
@@ -26,10 +26,14 @@ import { OrderQueue } from './order-queue';
  * The board is expected to shed its lower-value columns as the dock opens rather
  * than growing a horizontal scrollbar. That is the queue's job, not this
  * component's; the grid below simply guarantees the queue keeps a usable width.
+ *
+ * IA 1.4 (Drafts and abandoned carts) reaches the same dock through a header
+ * link rather than the tab strip: a cart is not an order status, and putting
+ * it in `order-tabs.ts`'s severity partition would misrepresent it as one.
  */
 @Component({
   selector: 'q-orders-page',
-  imports: [RouterOutlet, TPipe, OrderQueue],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, OrderQueue],
   templateUrl: './orders-page.html',
   styleUrl: './orders-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

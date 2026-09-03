@@ -1,0 +1,72 @@
+<div class="buffer">
+  @if (actionNotice(); as notice) {
+    <div class="buffer__notice-band" role="alert">
+      <span class="q-body-sm">{{ notice }}</span>
+      <button type="button" class="buffer__notice-dismiss" (click)="dismissNotice()">×</button>
+    </div>
+  }
+
+  @if (lastError(); as error) {
+    <div class="buffer__error-band" role="alert">
+      <span class="q-body-sm">{{ error.code }}</span>
+    </div>
+  }
+
+  <div class="buffer__board">
+    @if (!firstLoadComplete()) {
+      <div class="buffer__skeleton" [attr.aria-label]="'kitchen.loading' | t">
+        @for (i of [1, 2, 3]; track i) {
+          <div class="buffer__skeleton-row"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="buffer__denied" data-testid="buffer-denied">
+        <p class="q-body-sm">{{ 'kitchen.denied' | t }}</p>
+      </div>
+    } @else {
+      <table class="buffer__table">
+        <thead>
+          <tr>
+            <th>{{ 'kitchen.buffer.column.ticket' | t }}</th>
+            <th>{{ 'kitchen.buffer.column.releaseMode' | t }}</th>
+            <th>{{ 'kitchen.buffer.column.releaseAt' | t }}</th>
+            <th>{{ 'kitchen.buffer.column.targetReady' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (ticket of tickets(); track ticket.ticketId) {
+            <tr data-testid="buffer-row">
+              <td>
+                <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
+                @if (ticket.channelCode) {
+                  <span class="chip chip--muted">{{ ticket.channelCode }}</span>
+                }
+              </td>
+              <td>{{ releaseModeLabel(ticket.releaseMode) }}</td>
+              <td class="q-tnum">{{ releaseAtLabel(ticket) ?? '—' }}</td>
+              <td class="q-tnum">{{ targetReadyLabel(ticket) ?? '—' }}</td>
+              <td class="buffer__actions">
+                <button
+                  type="button"
+                  class="buffer__release"
+                  [disabled]="isBusy(ticket)"
+                  (click)="releaseNow(ticket)"
+                  data-testid="buffer-release"
+                >
+                  {{ 'kitchen.buffer.releaseNow' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="buffer__empty" data-testid="buffer-empty">
+                <p class="q-body-sm">{{ 'kitchen.buffer.empty' | t }}</p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

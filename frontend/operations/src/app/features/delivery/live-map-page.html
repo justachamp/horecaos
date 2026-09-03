@@ -1,0 +1,66 @@
+<div class="live-map">
+  <div class="live-map__toolbar">
+    @if (formatUpdatedAt(); as stamp) {
+      <span class="q-caption">{{ stamp }}</span>
+    }
+    <button
+      type="button"
+      class="live-map__refresh"
+      (click)="manualRefresh()"
+      data-testid="live-map-refresh"
+    >
+      {{ 'delivery.liveMap.refresh' | t }}
+    </button>
+  </div>
+
+  @if (lastError(); as error) {
+    <div class="live-map__error-band" role="alert">
+      <span class="q-body-sm">{{ error.code }}</span>
+    </div>
+  }
+
+  @if (!firstLoadComplete()) {
+    <div class="live-map__skeleton" [attr.aria-label]="'delivery.liveMap.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="live-map__denied" data-testid="live-map-denied">
+      <p class="q-body-sm">{{ 'delivery.liveMap.denied' | t }}</p>
+    </div>
+  } @else {
+    <table class="live-map__table">
+      <thead>
+        <tr>
+          <th>{{ 'delivery.liveMap.column.courier' | t }}</th>
+          <th>{{ 'delivery.liveMap.column.position' | t }}</th>
+          <th class="live-map__num-col">{{ 'delivery.liveMap.column.activeOrders' | t }}</th>
+          <th>{{ 'delivery.liveMap.column.battery' | t }}</th>
+          <th>{{ 'delivery.liveMap.column.capturedAt' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (pin of pins(); track pin.courierId) {
+          <tr data-testid="live-map-pin">
+            <td class="q-tnum">{{ pin.courierId }}</td>
+            <td class="q-tnum">{{ coordinateLabel(pin) }}</td>
+            <td class="live-map__num-col q-tnum">{{ pin.activeAssignmentCount }}</td>
+            <td class="q-tnum">{{ batteryLabel(pin) }}</td>
+            <td class="q-tnum">{{ capturedAtLabel(pin.capturedAt) }}</td>
+          </tr>
+        }
+        @for (courier of withoutPin(); track courier.courierId) {
+          <tr class="live-map__coarse" data-testid="live-map-coarse">
+            <td class="q-tnum">{{ courier.courierId }}</td>
+            <td colspan="3" class="q-caption">{{ coarseReasonLabel(courier.reason) }}</td>
+            <td class="q-tnum">{{ capturedAtLabel(courier.lastFixAt) }}</td>
+          </tr>
+        }
+        @if (pins().length === 0 && withoutPin().length === 0) {
+          <tr>
+            <td colspan="5" class="live-map__empty" data-testid="live-map-empty">
+              <p class="q-body-sm">{{ 'delivery.liveMap.empty' | t }}</p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

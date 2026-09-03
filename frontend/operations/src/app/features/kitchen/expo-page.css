@@ -1,0 +1,144 @@
+.expo {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.expo__note-band,
+.expo__notice-band,
+.expo__error-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.expo__note-band {
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+}
+
+.expo__notice-band {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.expo__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.expo__notice-dismiss {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: inherit;
+}
+
+.expo__board {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticket {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.ticket__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--q-surface-1);
+}
+
+.ticket__number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.chip--muted {
+  color: var(--q-ink-subtle);
+}
+
+.ticket__handover {
+  padding: 6px 14px;
+  border: 1px solid var(--q-success);
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ticket__handover:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.ticket__items {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ticket__items th {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.ticket__items td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.expo__num-col {
+  text-align: right;
+}
+
+.expo__empty,
+.expo__denied {
+  padding: 32px;
+  text-align: center;
+}
+
+.expo__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.expo__skeleton-card {
+  height: 48px;
+  background: var(--q-surface-1);
+}

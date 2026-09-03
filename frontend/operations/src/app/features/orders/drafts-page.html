@@ -1,0 +1,73 @@
+<div class="drafts">
+  @if (loading()) {
+    <div class="drafts__skeleton" [attr.aria-label]="'orders.drafts.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="drafts__denied" data-testid="drafts-denied">
+      <p class="q-body-sm">{{ 'orders.drafts.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="drafts__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <section class="drafts__breakdown" data-testid="drafts-breakdown">
+      <h2 class="q-subhead">{{ 'orders.drafts.breakdown.title' | t }}</h2>
+      <div class="drafts__bars">
+        @for (slice of abandonmentByChannel(); track slice.channelId) {
+          <div class="drafts__bar-row">
+            <span class="drafts__bar-label">{{ slice.channelName }}</span>
+            <span class="drafts__bar-count q-tnum">{{ slice.count }}</span>
+          </div>
+        } @empty {
+          <p class="q-body-sm">{{ 'orders.drafts.breakdown.empty' | t }}</p>
+        }
+      </div>
+    </section>
+
+    <table class="drafts__table">
+      <thead>
+        <tr>
+          <th>{{ 'orders.drafts.column.cart' | t }}</th>
+          <th>{{ 'orders.drafts.column.createdAt' | t }}</th>
+          <th>{{ 'orders.drafts.column.channel' | t }}</th>
+          <th>{{ 'orders.drafts.column.owner' | t }}</th>
+          <th class="drafts__num-col">{{ 'orders.drafts.column.lines' | t }}</th>
+          <th>{{ 'orders.drafts.column.status' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (draft of drafts(); track draft.cartId) {
+          <tr data-testid="draft-row">
+            <td class="q-tnum">{{ draft.cartId.slice(0, 8) }}</td>
+            <td class="q-tnum">{{ timeLabel(draft.createdAt) }}</td>
+            <td>{{ channelName(draft.channelId) }}</td>
+            <td>{{ ownerLabel(draft) }}</td>
+            <td class="drafts__num-col q-tnum">{{ draft.lineCount }}</td>
+            <td>
+              <span class="status-badge">{{ statusLabel(draft.status) }}</span>
+            </td>
+            <td class="drafts__actions">
+              @if (draft.customerAccountId) {
+                <a
+                  class="drafts__open-customer"
+                  [routerLink]="['/customers', draft.customerAccountId]"
+                  data-testid="draft-open-customer"
+                  >{{ 'orders.drafts.openCustomer' | t }}</a
+                >
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="7" class="drafts__empty" data-testid="drafts-empty">
+              {{ 'orders.drafts.empty' | t }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

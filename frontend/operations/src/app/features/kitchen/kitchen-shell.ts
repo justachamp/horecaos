@@ -6,10 +6,11 @@ import { TPipe } from '../../core/i18n/t.pipe';
 /**
  * The Kitchen section's frame: a sub-nav strip over a routed child.
  *
- * IA §2 assigns two P-tier screens to Kitchen — 2.1 Kitchen queue (KDS) and
- * 2.5 Stop list — the same "siblings an author moves between" shape
- * `catalog-shell.ts` already established for Catalog's four P-tier screens,
- * reused here rather than re-invented.
+ * IA §2's P-tier screens — 2.1 Kitchen queue (KDS) and 2.5 Stop list — and
+ * wave 38's tier-2 additions — 2.2 Buffer, 2.3 Expo/handover, 2.4 Display
+ * board (VDU) — share the same "siblings an author moves between" shape
+ * `catalog-shell.ts` already established for Catalog's screens. 2.6
+ * Capacity & buffer settings stays tier 3 and is not one of these tabs.
  *
  * **On the "device shell" in IA §2's own heading.** The spec calls for a
  * third template — a fullscreen, no-sidebar, touch-first shell for the KDS —

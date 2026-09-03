@@ -335,6 +335,43 @@ public class KitchenTicketService {
         return kitchen.findTicket(tenantId, ticketId);
     }
 
+    /**
+     * Custody transfer: the ticket leaves the pass, given to the customer or a
+     * courier (IA 2.3, the Раздача screen).
+     *
+     * <p>The provider handover-code verification the operations spec asks for
+     * (ADR 0040) is not built — this is the roll-up's own gate and nothing
+     * else, the same honest reduction {@code recall} already documents for the
+     * opposite edge. A second press is not an error: the caller wanted the
+     * ticket off the pass, and it is off the pass.
+     *
+     * @return the ticket as it stands afterwards, or empty when it was no
+     *         longer {@code READY}
+     */
+    @Transactional
+    public Optional<TicketRow> handOver(UUID tenantId, UUID ticketId, String actorId, @Nullable String correlationId) {
+
+        Instant now = clock.instant();
+        Optional<Integer> won =
+                kitchen.transitionTicket(tenantId, ticketId, TicketStatus.READY, TicketStatus.HANDED_OVER, now);
+        if (won.isEmpty()) {
+            return Optional.empty();
+        }
+        kitchen.recordEvent(
+                tenantId,
+                ticketId,
+                null,
+                TicketStatus.READY.name(),
+                TicketStatus.HANDED_OVER.name(),
+                "STATION_ACTION",
+                "USER",
+                actorId,
+                null,
+                correlationId,
+                now);
+        return kitchen.findTicket(tenantId, ticketId);
+    }
+
     /** A person at the branch pressing "release now" on a buffered ticket. */
     @Transactional
     public TicketRow releaseNow(

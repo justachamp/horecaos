@@ -46,6 +46,11 @@ export const operationsPaths = {
     return `${this.orders(scope)}/counts`;
   },
 
+  /** Carts started and never converted (IA 1.4, orders.md §6). Query params: `from`, `to`, `channelId`. */
+  orderDrafts(scope: LocationScope): string {
+    return `${this.orders(scope)}/drafts`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
@@ -177,8 +182,8 @@ export const operationsPaths = {
    * The kitchen board (ADR 0041, `KitchenBoardController`) — on
    * {@link LEGACY_TENANT_PREFIX} like `orders`, not on the ADR 0031 prefix,
    * because it was built alongside the orders controller and follows the
-   * same path shape. `stream` is `live` (2.1's queue), `buffer` (2.2, not
-   * built this wave) or `pass` (2.3, not built this wave).
+   * same path shape. `stream` is `live` (2.1's queue), `buffer` (2.2 — the
+   * held tickets) or `pass` (2.3 — the ready tickets, Раздача).
    */
   kitchenTickets(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/tickets`;
@@ -189,9 +194,14 @@ export const operationsPaths = {
     return `${this.kitchenTickets(scope)}/${encodeURIComponent(ticketId)}`;
   },
 
-  /** Fire a held ticket now. Mutation: key and `If-Match`. Not used by 2.1 (buffer is 2.2, not built). */
+  /** Fire a held ticket now (2.2's manual release). Mutation: key and `If-Match`. */
   kitchenTicketRelease(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTicket(scope, ticketId)}/release`;
+  },
+
+  /** Custody transfer off the pass (2.3, Раздача). Mutation: key required, no body. */
+  kitchenTicketHandOver(scope: LocationScope, ticketId: string): string {
+    return `${this.kitchenTicket(scope, ticketId)}/hand-over`;
   },
 
   /** One production line, at the station it routed to. */
@@ -230,6 +240,21 @@ export const operationsPaths = {
   /** Return a carried plan to the sourcing pool. Same mutation shape as {@link dispatchAssign}. */
   dispatchUnassign(scope: LocationScope, planId: string): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/unassign`;
+  },
+
+  /**
+   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
+   * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
+   * sub-path rather than beside `dispatch`, matching the controller's own
+   * `RequestMapping`.
+   */
+  courierPositions(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/positions`;
+  },
+
+  /** Open one courier's stored track for a stated purpose. Mutation: key required, audited. */
+  courierTrackReveals(scope: LocationScope, courierId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
   },
   /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
@@ -365,6 +390,31 @@ export const courierPaths = {
   /** Suspend an engagement for an operational reason. Mutation: key required. */
   courierEngagementSuspend(tenantId: string, engagementId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-engagements/${encodeURIComponent(engagementId)}/suspend`;
+  },
+
+  /** Every rate card the brand has authored (IA 3.4). Query param `brandId`. Same path for `POST` (author). */
+  rateCards(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/rate-cards`;
+  },
+
+  /** One rate card with its band ladder. */
+  rateCard(tenantId: string, cardId: string): string {
+    return `${this.rateCards(tenantId)}/${encodeURIComponent(cardId)}`;
+  },
+
+  /** Put a draft rate card in front of couriers. Mutation: key required. */
+  rateCardActivation(tenantId: string, cardId: string): string {
+    return `${this.rateCard(tenantId, cardId)}/activation`;
+  },
+
+  /** The branch's shifts, newest first (IA 3.5). Query params: `brandId`, `locationId`, `limit`. */
+  courierShifts(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-shifts`;
+  },
+
+  /** The courier compensation policy in force (IA 3.9). Query params: optional `brandId`, `locationId`. */
+  courierPolicy(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-policy`;
   },
 } as const;
 

@@ -1,0 +1,247 @@
+<div class="rates">
+  @if (loading()) {
+    <div class="rates__skeleton" [attr.aria-label]="'delivery.rates.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="rates__denied" data-testid="rates-denied">
+      <p class="q-body-sm">{{ 'delivery.rates.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="rates__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <section class="rates__section">
+      <div class="rates__section-header">
+        <h2 class="q-subhead">{{ 'delivery.rates.types.title' | t }}</h2>
+        <button
+          type="button"
+          class="rates__add"
+          (click)="openTypeForm()"
+          data-testid="rates-add-type"
+        >
+          {{ 'delivery.rates.types.add' | t }}
+        </button>
+      </div>
+      <table class="rates__table">
+        <thead>
+          <tr>
+            <th>{{ 'delivery.rates.types.column.code' | t }}</th>
+            <th>{{ 'delivery.rates.types.column.name' | t }}</th>
+            <th>{{ 'delivery.rates.types.column.vehicleClass' | t }}</th>
+            <th class="rates__num-col">{{ 'delivery.rates.types.column.minDistance' | t }}</th>
+            <th class="rates__num-col">{{ 'delivery.rates.types.column.maxConcurrent' | t }}</th>
+            <th class="rates__num-col">{{ 'delivery.rates.types.column.offerTtl' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (type of types(); track type.courierTypeId) {
+            <tr data-testid="courier-type-row">
+              <td class="q-tnum">{{ type.code }}</td>
+              <td>{{ type.displayName }}</td>
+              <td>{{ type.vehicleClass }}</td>
+              <td class="rates__num-col q-tnum">{{ type.minDistanceMeters }}</td>
+              <td class="rates__num-col q-tnum">{{ type.maxConcurrentAssignments }}</td>
+              <td class="rates__num-col q-tnum">{{ type.offerTtlSeconds }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="rates__empty">{{ 'delivery.rates.types.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="rates__section">
+      <div class="rates__section-header">
+        <h2 class="q-subhead">{{ 'delivery.rates.cards.title' | t }}</h2>
+        <button
+          type="button"
+          class="rates__add"
+          (click)="openCardForm()"
+          data-testid="rates-add-card"
+        >
+          {{ 'delivery.rates.cards.add' | t }}
+        </button>
+      </div>
+      @if (activateError(); as error) {
+        <div class="rates__error-band" role="alert">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+      <table class="rates__table">
+        <thead>
+          <tr>
+            <th>{{ 'delivery.rates.cards.column.code' | t }}</th>
+            <th>{{ 'delivery.rates.cards.column.scope' | t }}</th>
+            <th>{{ 'delivery.rates.cards.column.status' | t }}</th>
+            <th>{{ 'delivery.rates.cards.column.currency' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (card of rateCards(); track card.cardId) {
+            <tr data-testid="rate-card-row">
+              <td class="q-tnum">{{ card.code }} v{{ card.cardVersion }}</td>
+              <td>{{ cardScopeLabel(card) }}</td>
+              <td>
+                <span class="status-badge">{{ card.status }}</span>
+              </td>
+              <td class="q-tnum">{{ card.currency }}</td>
+              <td class="rates__actions">
+                @if (card.status === 'DRAFT') {
+                  <button
+                    type="button"
+                    class="rates__activate"
+                    [disabled]="!canActivate(card)"
+                    (click)="activate(card)"
+                    data-testid="rate-card-activate"
+                  >
+                    {{ 'delivery.rates.cards.activate' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="rates__empty">{{ 'delivery.rates.cards.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  @if (showTypeForm()) {
+    <div class="rates__modal-backdrop" (click)="closeTypeForm()">
+      <div class="rates__modal" (click)="$event.stopPropagation()">
+        <h3 class="q-subhead">{{ 'delivery.rates.types.add' | t }}</h3>
+        @if (typeError(); as error) {
+          <p class="rates__form-error">{{ error }}</p>
+        }
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.code' | t }}
+          <input
+            type="text"
+            [value]="newTypeCode()"
+            (input)="newTypeCode.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.name' | t }}
+          <input
+            type="text"
+            [value]="newTypeDisplayName()"
+            (input)="newTypeDisplayName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.vehicleClass' | t }}
+          <select
+            [value]="newTypeVehicleClass()"
+            (change)="newTypeVehicleClass.set($any($event.target).value)"
+          >
+            <option value="FOOT">FOOT</option>
+            <option value="BICYCLE">BICYCLE</option>
+            <option value="SCOOTER">SCOOTER</option>
+            <option value="MOTORCYCLE">MOTORCYCLE</option>
+            <option value="CAR">CAR</option>
+          </select>
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.minDistance' | t }}
+          <input
+            type="number"
+            [value]="newTypeMinDistance()"
+            (input)="newTypeMinDistance.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.maxConcurrent' | t }}
+          <input
+            type="number"
+            [value]="newTypeMaxConcurrent()"
+            (input)="newTypeMaxConcurrent.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.offerTtl' | t }}
+          <input
+            type="number"
+            [value]="newTypeOfferTtl()"
+            (input)="newTypeOfferTtl.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <div class="rates__modal-actions">
+          <button type="button" (click)="closeTypeForm()">{{ 'delivery.rates.cancel' | t }}</button>
+          <button
+            type="button"
+            class="rates__submit"
+            [disabled]="!canCreateType()"
+            (click)="submitType()"
+            data-testid="rates-submit-type"
+          >
+            {{ 'delivery.rates.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showCardForm()) {
+    <div class="rates__modal-backdrop" (click)="closeCardForm()">
+      <div class="rates__modal" (click)="$event.stopPropagation()">
+        <h3 class="q-subhead">{{ 'delivery.rates.cards.add' | t }}</h3>
+        @if (cardError(); as error) {
+          <p class="rates__form-error">{{ error }}</p>
+        }
+        <label class="rates__field">
+          {{ 'delivery.rates.cards.column.code' | t }}
+          <input
+            type="text"
+            [value]="newCardCode()"
+            (input)="newCardCode.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.cards.column.currency' | t }}
+          <input
+            type="text"
+            [value]="newCardCurrency()"
+            (input)="newCardCurrency.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.cards.perOrder' | t }}
+          <input
+            type="number"
+            [value]="newCardPerOrderMinor()"
+            (input)="newCardPerOrderMinor.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.cards.perShift' | t }}
+          <input
+            type="number"
+            [value]="newCardPerShiftMinor()"
+            (input)="newCardPerShiftMinor.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <div class="rates__modal-actions">
+          <button type="button" (click)="closeCardForm()">{{ 'delivery.rates.cancel' | t }}</button>
+          <button
+            type="button"
+            class="rates__submit"
+            [disabled]="!canCreateCard()"
+            (click)="submitCard()"
+            data-testid="rates-submit-card"
+          >
+            {{ 'delivery.rates.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

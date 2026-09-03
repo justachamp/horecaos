@@ -388,6 +388,19 @@ public enum Capability {
     KITCHEN_TICKET_RELEASE_OVERRIDE("kitchen.ticket.release.override", "kitchen", "ticket.release.override"),
 
     /**
+     * ADR 0041: custody transfer — the ticket leaves the pass, given to the
+     * customer or a courier.
+     *
+     * <p>Expo and manager, the same as {@link #KITCHEN_TICKET_RECALL} and for a
+     * related reason: once this fires, {@code KITCHEN_TICKET_RECALL} refuses,
+     * because the food has physically left the building. Separate from {@link
+     * #KITCHEN_TICKET_ADVANCE} because marking a line ready is a station's own
+     * report on its own work, while releasing the whole ticket is the pass
+     * deciding the order is out the door.
+     */
+    KITCHEN_TICKET_HANDOVER("kitchen.ticket.handover", "kitchen", "ticket.handover"),
+
+    /**
      * ADR 0047: authoring a branch's sections and tables, and configuring what a
      * scanned code does there.
      *
@@ -978,6 +991,14 @@ public enum Capability {
     COURIER_SHIFT_APPROVE("courier.shift.approve", "courier", "shift.approve"),
 
     /**
+     * ADR 0042: reading the branch's shifts — open, closed, and awaiting
+     * approval (IA 3.5, Посещаемость). A courier reads their own shift through
+     * {@link #COURIER_SHIFT_OPEN}'s own path; this is the branch-wide list a
+     * manager or dispatcher needs to see who is on and who is owed approval.
+     */
+    COURIER_SHIFT_READ("courier.shift.read", "courier", "shift.read"),
+
+    /**
      * ADR 0042: reading the in-house roster — one courier or the whole fleet,
      * with its type, status, engagement standing and current load. Never the
      * decrypted legal name: {@code display_reference} is what this capability's
@@ -1009,8 +1030,24 @@ public enum Capability {
      */
     COURIER_REGISTRATION_REVEAL("courier.registration.reveal", "courier", "registration.reveal"),
 
+    /**
+     * ADR 0042: defining a vehicle class — its dispatch numbers, not its pay.
+     * Separate from {@link #COURIER_RATECARD_MANAGE}: a type is what a courier
+     * drives, a rate card is what they are paid, and the two are decided by
+     * different people at different tempos.
+     */
+    COURIER_TYPE_MANAGE("courier.type.manage", "courier", "type.manage"),
+
     /** ADR 0042: authoring and activating courier rate cards. */
     COURIER_RATECARD_MANAGE("courier.ratecard.manage", "courier", "ratecard.manage"),
+
+    /**
+     * ADR 0042: reading rate cards — which one applies where, and its band
+     * ladder. Separate from {@link #COURIER_RATECARD_MANAGE} on the same
+     * pattern as every other read/write split in this module: a manager
+     * checking what a courier is paid does not need the power to change it.
+     */
+    COURIER_RATECARD_READ("courier.ratecard.read", "courier", "ratecard.read"),
 
     /**
      * ADR 0042: requesting a bonus or a penalty, and approving one.

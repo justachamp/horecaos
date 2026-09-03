@@ -4,8 +4,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +28,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
+import uz.horecaos.platform.courier.application.CourierPolicyResolver;
+import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService.RosterEntry;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
@@ -32,15 +38,25 @@ import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
 import uz.horecaos.platform.courier.application.PartnerInvoiceService;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.CostBasis;
+import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
 import uz.horecaos.platform.courier.domain.PayoutMethod;
+import uz.horecaos.platform.courier.domain.RateCard;
+import uz.horecaos.platform.courier.domain.RateComponent;
+import uz.horecaos.platform.courier.domain.RateComponentType;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore.CardSummaryRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -69,6 +85,10 @@ public class OperationsCourierController {
     private final JdbcCourierLedgerStore ledger;
     private final CourierRosterQueryService rosterQuery;
     private final JdbcCourierStore courierStore;
+    private final CourierRateCardService rateCards;
+    private final JdbcCourierRateCardStore rateCardStore;
+    private final JdbcCourierShiftStore shiftStore;
+    private final CourierPolicyResolver policyResolver;
     private final CurrentActor currentActor;
 
     public OperationsCourierController(
@@ -82,6 +102,10 @@ public class OperationsCourierController {
             JdbcCourierLedgerStore ledger,
             CourierRosterQueryService rosterQuery,
             JdbcCourierStore courierStore,
+            CourierRateCardService rateCards,
+            JdbcCourierRateCardStore rateCardStore,
+            JdbcCourierShiftStore shiftStore,
+            CourierPolicyResolver policyResolver,
             CurrentActor currentActor) {
         this.engagements = engagements;
         this.shifts = shifts;
@@ -93,6 +117,10 @@ public class OperationsCourierController {
         this.ledger = ledger;
         this.rosterQuery = rosterQuery;
         this.courierStore = courierStore;
+        this.rateCards = rateCards;
+        this.rateCardStore = rateCardStore;
+        this.shiftStore = shiftStore;
+        this.policyResolver = policyResolver;
         this.currentActor = currentActor;
     }
 
@@ -119,6 +147,143 @@ public class OperationsCourierController {
         return ResponseEntity.ok(courierStore.listTypes(tenantId).stream()
                 .map(CourierTypeResponse::of)
                 .toList());
+    }
+
+    @PostMapping("/courier-types")
+    @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Define a vehicle class (IA 3.4)",
+            description = "The two dispatch numbers — minimum distance and the offer TTL — and "
+                    + "not a courier's pay, which is a rate card and a separate act.")
+    public ResponseEntity<CourierTypeResponse> createType(
+            @PathVariable UUID tenantId, @Valid @RequestBody CreateCourierTypeRequest body) {
+
+        UUID typeId = UUID.randomUUID();
+        courierStore.insertType(new CourierTypeRow(
+                typeId,
+                tenantId,
+                body.code(),
+                body.displayName(),
+                body.vehicleClass(),
+                body.minDistanceMeters(),
+                body.maxDistanceMeters(),
+                body.maxConcurrentAssignments(),
+                body.offerTtlSeconds(),
+                "ACTIVE"));
+
+        return ResponseEntity.ok(
+                CourierTypeResponse.of(courierStore.findType(tenantId, typeId).orElseThrow()));
+    }
+
+    // ------------------------------------------------------------ rate cards
+
+    @GetMapping("/rate-cards")
+    @RequiresCapability(Capability.COURIER_RATECARD_READ)
+    @Operation(summary = "Every rate card the brand has authored (IA 3.4, Тариф курьера)")
+    public ResponseEntity<List<RateCardSummaryResponse>> rateCards(
+            @PathVariable UUID tenantId, @RequestParam UUID brandId) {
+
+        return ResponseEntity.ok(rateCardStore.list(tenantId, brandId).stream()
+                .map(RateCardSummaryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/rate-cards/{cardId}")
+    @RequiresCapability(Capability.COURIER_RATECARD_READ)
+    @Operation(summary = "One rate card, with its band ladder")
+    public ResponseEntity<RateCardDetailResponse> rateCard(@PathVariable UUID tenantId, @PathVariable UUID cardId) {
+
+        return rateCardStore
+                .findCard(tenantId, cardId)
+                .map(card -> ResponseEntity.ok(RateCardDetailResponse.of(card)))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such rate card: " + cardId));
+    }
+
+    @PostMapping("/rate-cards")
+    @RequiresCapability(value = Capability.COURIER_RATECARD_MANAGE, mutating = true)
+    @Operation(
+            summary = "Author a draft rate card",
+            description = "A draft prices nobody until it is activated, so a season's tariff can "
+                    + "be built during service without moving a live one.")
+    public ResponseEntity<Map<String, UUID>> authorRateCard(
+            @PathVariable UUID tenantId, @Valid @RequestBody NewRateCardRequest body) {
+
+        UUID cardId = rateCards.author(new CourierRateCardService.NewRateCard(
+                tenantId,
+                body.brandId(),
+                body.locationId(),
+                body.courierTypeId(),
+                body.code(),
+                body.cardVersion(),
+                body.currency(),
+                body.components().stream()
+                        .map(c -> new RateComponent(
+                                UUID.randomUUID(),
+                                RateComponentType.valueOf(c.componentType()),
+                                c.priority(),
+                                c.amountMinor(),
+                                c.bandFromMeters(),
+                                c.bandToMeters(),
+                                c.minimumPaidSeconds()))
+                        .toList()));
+
+        return ResponseEntity.ok(Map.of("cardId", cardId));
+    }
+
+    @PostMapping("/rate-cards/{cardId}/activation")
+    @RequiresCapability(value = Capability.COURIER_RATECARD_MANAGE, mutating = true)
+    @Operation(
+            summary = "Put a rate card in front of couriers",
+            description = "Supersedes any earlier active card with the same code, in the same "
+                    + "transaction — two active versions of one code would make an accrual depend "
+                    + "on which row a query happened to read first.")
+    public ResponseEntity<Void> activateRateCard(
+            @PathVariable UUID tenantId, @PathVariable UUID cardId, @Valid @RequestBody ActivateRateCardRequest body) {
+
+        rateCards.activate(tenantId, cardId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
+    }
+
+    // -------------------------------------------------------------------- shifts
+
+    @GetMapping("/courier-shifts")
+    @RequiresCapability(Capability.COURIER_SHIFT_READ)
+    @Operation(
+            summary = "The branch's shifts, newest first (IA 3.5, Посещаемость)",
+            description = "Open, closed and everything between — including AWAITING_APPROVAL, "
+                    + "which is the manager's own worklist on this screen.")
+    public ResponseEntity<List<ShiftResponse>> courierShifts(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        return ResponseEntity.ok(shiftStore.atLocation(tenantId, brandId, locationId, Math.min(limit, 500)).stream()
+                .map(ShiftResponse::of)
+                .toList());
+    }
+
+    // ------------------------------------------------------------------- policy
+
+    @GetMapping("/courier-policy")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(
+            summary = "The courier compensation policy in force (IA 3.9)",
+            description = "Omit brandId/locationId for the tenant-wide resolution; supply either "
+                    + "to see what a specific brand or location actually resolves. Read-only this "
+                    + "wave — couriers.md §16 also names GPS gates, the kitchen-ready-only toggle, "
+                    + "reveal-location timing and the telemetry gate default, none of which any "
+                    + "policy document backs yet.")
+    public ResponseEntity<CourierPolicyResponse> courierPolicy(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) UUID brandId,
+            @RequestParam(required = false) UUID locationId) {
+
+        ResourceScope scope = locationId != null && brandId != null
+                ? ResourceScope.location(tenantId, brandId, locationId)
+                : brandId != null ? ResourceScope.brand(tenantId, brandId) : ResourceScope.tenant(tenantId);
+
+        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
     }
 
     // ------------------------------------------------------------- engagement
@@ -534,6 +699,149 @@ public class OperationsCourierController {
                     row.maxDistanceMeters(),
                     row.maxConcurrentAssignments(),
                     row.offerTtlSeconds());
+        }
+    }
+
+    record CreateCourierTypeRequest(
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String displayName,
+            @NotBlank String vehicleClass,
+            @PositiveOrZero int minDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
+            @Positive int maxConcurrentAssignments,
+            @Positive int offerTtlSeconds) {}
+
+    record RateCardSummaryResponse(
+            UUID cardId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID courierTypeId,
+            String code,
+            int cardVersion,
+            String status,
+            String currency,
+            @Nullable Instant effectiveFrom,
+            @Nullable Instant effectiveTo) {
+
+        static RateCardSummaryResponse of(CardSummaryRow row) {
+            return new RateCardSummaryResponse(
+                    row.id(),
+                    row.brandId(),
+                    row.locationId(),
+                    row.courierTypeId(),
+                    row.code(),
+                    row.cardVersion(),
+                    row.status(),
+                    row.currency(),
+                    row.effectiveFrom(),
+                    row.effectiveTo());
+        }
+    }
+
+    record RateComponentResponse(
+            UUID componentId,
+            String componentType,
+            int priority,
+            long amountMinor,
+            @Nullable Integer bandFromMeters,
+            @Nullable Integer bandToMeters,
+            @Nullable Integer minimumPaidSeconds) {
+
+        static RateComponentResponse of(RateComponent component) {
+            return new RateComponentResponse(
+                    component.id(),
+                    component.type().name(),
+                    component.priority(),
+                    component.amountMinor(),
+                    component.bandFromMeters(),
+                    component.bandToMeters(),
+                    component.minimumPaidSeconds());
+        }
+    }
+
+    record RateCardDetailResponse(
+            UUID cardId, int cardVersion, String currency, List<RateComponentResponse> components) {
+
+        static RateCardDetailResponse of(RateCard card) {
+            return new RateCardDetailResponse(
+                    card.id(),
+                    card.version(),
+                    card.currency(),
+                    card.components().stream().map(RateComponentResponse::of).toList());
+        }
+    }
+
+    record RateComponentRequest(
+            @NotBlank String componentType,
+            int priority,
+            long amountMinor,
+            @Nullable Integer bandFromMeters,
+            @Nullable Integer bandToMeters,
+            @Nullable Integer minimumPaidSeconds) {}
+
+    record NewRateCardRequest(
+            @NotNull UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID courierTypeId,
+            @NotBlank @Size(max = 48) String code,
+            @Positive int cardVersion,
+            @Size(min = 3, max = 3) String currency,
+            @NotEmpty List<RateComponentRequest> components) {}
+
+    record ActivateRateCardRequest(@NotBlank String reason) {}
+
+    record ShiftResponse(
+            UUID shiftId,
+            UUID courierId,
+            String status,
+            String dutyState,
+            Instant openedAt,
+            @Nullable Instant closedAt,
+            @Nullable Long paidSeconds,
+            long breakSeconds,
+            @Nullable UUID approvalRequestId) {
+
+        static ShiftResponse of(ShiftRow shift) {
+            return new ShiftResponse(
+                    shift.id(),
+                    shift.courierId(),
+                    shift.status().name(),
+                    shift.dutyState().name(),
+                    shift.openedAt(),
+                    shift.closedAt(),
+                    shift.paidSeconds(),
+                    shift.breakSeconds(),
+                    shift.approvalRequestId());
+        }
+    }
+
+    record CourierPolicyResponse(
+            int reverificationDays,
+            int warningDays,
+            int settlementPeriodDays,
+            long cashCeilingMinor,
+            long penaltyApprovalThresholdMinor,
+            String shiftEnforcement,
+            int graceSeconds,
+            int confirmationPointRetentionDays,
+            String winningScope,
+            UUID policyId,
+            int policyVersion) {
+
+        static CourierPolicyResponse of(ResolvedPolicy<CourierCompensationPolicy> resolved) {
+            var doc = resolved.document();
+            return new CourierPolicyResponse(
+                    doc.reverificationDays(),
+                    doc.warningDays(),
+                    doc.settlementPeriodDays(),
+                    doc.cashCeilingMinor(),
+                    doc.penaltyApprovalThresholdMinor(),
+                    doc.shiftEnforcement().name(),
+                    doc.graceSeconds(),
+                    doc.confirmationPointRetentionDays(),
+                    resolved.winningScope().name(),
+                    resolved.policyId(),
+                    resolved.policyVersion());
         }
     }
 

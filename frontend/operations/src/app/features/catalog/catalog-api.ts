@@ -22,6 +22,7 @@ import {
   ProductCreated,
   ProductDetail,
   ProductSummary,
+  PublicationHistoryEntry,
   PublicationResult,
   SetOfferingRequest,
   SortOrderRequest,
@@ -258,6 +259,21 @@ export class CatalogApi {
       {
         params: { channel },
       },
+    );
+  }
+
+  /** Republishes an earlier snapshot; never edits history. Refused server-side on a REJECTED target. */
+  rollback(scope: BrandScope, publicationId: string): Observable<PublicationResult> {
+    return this.api.post<undefined, PublicationResult>(
+      catalogPaths.publicationActivate(scope, publicationId),
+      command(undefined),
+    );
+  }
+
+  /** IA 4.6 Region 3 — every publication the brand has produced, newest first. */
+  listPublicationHistory(scope: BrandScope): Observable<readonly PublicationHistoryEntry[]> {
+    return unwrap(
+      this.api.get<readonly PublicationHistoryEntry[]>(catalogPaths.publicationHistory(scope)),
     );
   }
 }

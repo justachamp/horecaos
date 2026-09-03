@@ -36,6 +36,15 @@ describe('CatalogShell', () => {
     const labels = [...harness.routeNativeElement!.querySelectorAll('.catalog-shell__tab')].map(
       (el) => el.textContent?.trim(),
     );
-    expect(labels).toEqual(['Товары', 'Категории', 'Меню', 'Импорт']);
+    expect(labels).toEqual([
+      'Товары',
+      'Категории',
+      'Меню',
+      'Импорт',
+      'Публикация',
+      'Цены',
+      'Справочники',
+      'Правила автодобавления',
+    ]);
   });
 });
