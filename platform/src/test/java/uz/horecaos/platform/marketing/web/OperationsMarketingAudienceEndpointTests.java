@@ -36,14 +36,15 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
- * The HTTP surface added this wave for Customers 5.3's segment builder:
- * defining, listing, reading, and redefining an ADR 0044 audience.
+ * The HTTP surface Customers 5.3's segment builder rides on: defining,
+ * listing, reading, and redefining an ADR 0044 audience — including the
+ * list's {@code lastReach} column, which joins each audience to its latest
+ * READY snapshot and must serialize as an explicit null before any snapshot
+ * exists.
  *
- * <p>{@code AUDIENCE_READ} covers both defining an audience and reading the
- * segments already defined (its own doc comment says so), and it is held by
- * {@code tenant-admin} and {@code brand-manager} — deliberately not by
- * {@code tenant-owner}, who holds {@code AUDIENCE_EXPORT} instead. That
- * separation is proven here, not assumed.
+ * <p>Defining and redefining are gated by {@code CAMPAIGN_AUTHOR} (ADR 0044
+ * declares no separate authoring capability for audiences), reading by
+ * {@code AUDIENCE_READ}; an actor holding neither is refused by name.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -56,7 +57,7 @@ class OperationsMarketingAudienceEndpointTests {
     // subject to parse as one (a Keycloak subject is a UUID in this deployment),
     // and defineAudience/redefineAudience both resolve the author through it.
     private static final String ADMINISTRATOR = "018f9b20-4000-7000-8000-0000000000ea";
-    private static final String OWNER = "018f9b20-4000-7000-8000-0000000000eb";
+    private static final String UNGRANTED = "018f9b20-4000-7000-8000-0000000000eb";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -98,13 +99,12 @@ class OperationsMarketingAudienceEndpointTests {
         seedTenantAndBrand();
         roleRegistry.synchronize();
         grant(ADMINISTRATOR, PlatformRole.TENANT_ADMIN);
-        grant(OWNER, PlatformRole.TENANT_OWNER);
     }
 
     @Test
-    void anOwnerCannotDefineOrListAudiences() throws Exception {
+    void anActorWithoutAMarketingGrantCannotDefineOrListAudiences() throws Exception {
         MvcResult refusedDefine = mvc.perform(post(audiencesPath())
-                        .with(tokenFor(OWNER))
+                        .with(tokenFor(UNGRANTED))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "define-refused-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(defineBody()))
@@ -112,10 +112,10 @@ class OperationsMarketingAudienceEndpointTests {
         assertThat(refusedDefine.getResponse().getStatus()).isEqualTo(403);
         assertThat(refusedDefine.getResponse().getContentAsString())
                 .contains("INSUFFICIENT_CAPABILITY")
-                .contains(Capability.AUDIENCE_READ.code());
+                .contains(Capability.CAMPAIGN_AUTHOR.code());
 
         MvcResult refusedList =
-                mvc.perform(get(audiencesPath()).with(tokenFor(OWNER))).andReturn();
+                mvc.perform(get(audiencesPath()).with(tokenFor(UNGRANTED))).andReturn();
         assertThat(refusedList.getResponse().getStatus()).isEqualTo(403);
     }
 
@@ -127,7 +127,7 @@ class OperationsMarketingAudienceEndpointTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(defineBody()))
                 .andReturn();
-        assertThat(defined.getResponse().getStatus()).isEqualTo(200);
+        assertThat(defined.getResponse().getStatus()).isEqualTo(201);
         String audienceId = idFrom(defined.getResponse().getContentAsString(), "audienceId");
 
         MvcResult listed =
@@ -151,7 +151,7 @@ class OperationsMarketingAudienceEndpointTests {
                 // is already at version 2, not 1.
                 .contains("\"definitionVersion\":2");
 
-        MvcResult redefined = mvc.perform(put(audiencesPath() + "/" + audienceId)
+        MvcResult redefined = mvc.perform(put(audiencesPath() + "/" + audienceId + "/predicates")
                         .with(tokenFor(ADMINISTRATOR))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "redefine-ok-1")
                         .contentType(MediaType.APPLICATION_JSON)
