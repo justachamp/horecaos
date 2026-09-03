@@ -230,6 +230,10 @@ export const routes: Routes = [
                   ),
               },
             ],
+          },
+        ],
+      },
+      {
         // Finance (wave 34, IA §8): only 8.1 Payments & settlements and 8.2
         // Fiscal receipts are pilot-tier — the IA's own tier legend gives
         // 8.3-8.6 "Wave 2", the same as the whole of Marketing §6, so this
@@ -400,10 +404,10 @@ function placeholderRoutes(): Routes {
     '/delivery',
     '/couriers',
     '/customers',
+    '/staff',
+    '/statistics',
+    '/finance',
   ]);
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/staff']);
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/statistics']);
-  const built = new Set(['/today', '/orders', '/inbox', '/settings', '/catalog', '/finance']);
   return NAV_ITEMS.filter((item) => !built.has(item.path)).map((item) => ({
     path: item.path.slice(1),
     loadComponent: () => import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
