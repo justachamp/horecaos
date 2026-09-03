@@ -9,11 +9,11 @@ import { signal } from '@angular/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { AuthService, AuthStatus } from './auth.service';
-import { authGuard, requiresCapability } from './guards';
+import { RETURN_TO_KEY, authGuard, requiresCapability } from './guards';
 import { Capability } from './capability';
 import { SessionContextService } from './session-context.service';
 
-/** The two arguments a CanActivateFn takes and this console's guards ignore. */
+/** The two arguments a CanActivateFn takes; most of this console's guards ignore both. */
 const ROUTE = {} as ActivatedRouteSnapshot;
 const STATE = {} as RouterStateSnapshot;
 
@@ -39,13 +39,14 @@ describe('authGuard', () => {
 
   beforeEach(() => {
     auth = new FakeAuth();
+    sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
     });
   });
 
-  function run(): boolean | UrlTree {
-    return TestBed.runInInjectionContext(() => authGuard(ROUTE, STATE)) as boolean | UrlTree;
+  function run(state: RouterStateSnapshot = STATE): boolean | UrlTree {
+    return TestBed.runInInjectionContext(() => authGuard(ROUTE, state)) as boolean | UrlTree;
   }
 
   it('lets a signed-in operator through', () => {
@@ -65,6 +66,17 @@ describe('authGuard', () => {
     const result = run();
     expect(result).toBeInstanceOf(UrlTree);
     expect(String(result)).toBe('/login');
+  });
+
+  it('remembers the deep link so a reload or a pasted link survives a sign-in', () => {
+    // A page load that finds no session — no stored refresh token, or one
+    // the platform refused (see AuthService.initialise()) — reaches this
+    // guard exactly like an unattended navigation would. Without this, that
+    // operator lands on the console root after signing back in and has to
+    // find their way back to whatever they had open.
+    auth.state.set('signed-out');
+    run({ url: '/tenants/t-1/brands' } as RouterStateSnapshot);
+    expect(sessionStorage.getItem(RETURN_TO_KEY)).toBe('/tenants/t-1/brands');
   });
 });
 

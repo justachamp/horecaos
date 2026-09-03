@@ -43,12 +43,19 @@ export const authGuard: CanActivateFn = (_route, state): boolean | UrlTree => {
   return router.parseUrl('/login');
 };
 
-function rememberReturnTo(url: string): void {
+/**
+ * Remembers a destination for {@link SignInPage} to return to.
+ *
+ * Exported so `sessionRefreshInterceptor` can call this too — a 401 that
+ * survives a silent refresh loses the session exactly the way an unguarded
+ * navigation does, and deserves the same "come back here" treatment.
+ */
+export function rememberReturnTo(url: string): void {
   try {
     globalThis.sessionStorage?.setItem(RETURN_TO_KEY, url);
   } catch {
     // Storage can be unavailable — a locked-down kiosk profile, or a private
     // window with quota exhausted. Losing the deep link is a worse landing
-    // page, not a failed sign-in, so it must not throw.
+    // page, not a failed sign-in or a failed redirect, so it must not throw.
   }
 }

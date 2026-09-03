@@ -1,8 +1,11 @@
 import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Observable, catchError, throwError } from 'rxjs';
+import { Router } from '@angular/router';
+import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
 
 import { AccessTokenSource } from '../auth/access-token-source';
+import { AuthService, REFRESH_PATH, SIGN_IN_PATH, SIGN_OUT_PATH } from '../auth/auth.service';
+import { rememberReturnTo } from '../auth/guards';
 import { PLATFORM_API_REQUEST } from './api-client';
 import { ApiError, toProblem } from './problem';
 
@@ -88,3 +91,66 @@ function handleProblems(request: HttpRequest<unknown>, next: HttpHandlerFn): Obs
     }),
   );
 }
+
+/** Platform requests this interceptor must never try to silently refresh — see the doc on `AuthService`'s exported path constants. */
+const AUTH_SESSION_PATHS: readonly string[] = [SIGN_IN_PATH, REFRESH_PATH, SIGN_OUT_PATH];
+
+function isAuthSessionRequest(url: string): boolean {
+  return AUTH_SESSION_PATHS.some((path) => url.endsWith(path));
+}
+
+/**
+ * Turns a mid-session 401 into one silent refresh-and-retry, so an expired
+ * access token never reaches a screen as a raw error.
+ *
+ * The common trigger is the one named in the incident this exists to fix: a
+ * laptop sleeps past `AuthService`'s own proactive refresh timer, wakes, and
+ * whatever screen was open finds out its access token expired the hard way,
+ * from a 401, instead of the easy way, from the timer. Refusing to leave that
+ * as a rendered error is the whole point — the operator should see either
+ * their screen, unchanged, or `/login`, never a Problem Details toast for a
+ * session that is fixable in one round trip.
+ *
+ * Registered in `app.config.ts` between `correlationIdInterceptor` and
+ * `bearerTokenInterceptor`, ahead of both on the way out and so behind both
+ * on the way back: this must see the `ApiError` that `problemDetailsInterceptor`
+ * (last on the way out, first back) already built, so it never re-parses a
+ * Problem Details body itself, and a retried request must still pass forward
+ * through `bearerTokenInterceptor` so it picks up the fresh token
+ * `AuthService.refresh()` just wrote to `StaffTokenStore` rather than
+ * replaying the stale one. Excluded from the sign-in/refresh/sign-out
+ * endpoints themselves (`isAuthSessionRequest`) — without that, a refresh
+ * token Keycloak has genuinely revoked would turn its own 401 into another
+ * refresh attempt, forever.
+ */
+export const sessionRefreshInterceptor: HttpInterceptorFn = (request, next) => {
+  if (!request.context.get(PLATFORM_API_REQUEST) || isAuthSessionRequest(request.url)) {
+    return next(request);
+  }
+
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return next(request).pipe(
+    catchError((failure: unknown) => {
+      if (!(failure instanceof ApiError) || failure.status !== 401) {
+        return throwError(() => failure);
+      }
+
+      return from(auth.refresh()).pipe(
+        switchMap((refreshed) => {
+          if (refreshed) {
+            return next(request);
+          }
+          // The session is already cleared — `AuthService.refresh()` did that
+          // on its own failure — so this only has to preserve where the
+          // operator was headed and hand them to `/login`, the same
+          // treatment `authGuard` gives an unguarded navigation.
+          rememberReturnTo(router.url);
+          void router.navigateByUrl('/login');
+          return throwError(() => failure);
+        }),
+      );
+    }),
+  );
+};

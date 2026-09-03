@@ -10,6 +10,7 @@ import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from 
 import { routes } from './app.routes';
 import { bearerTokenInterceptor } from './core/api/bearer-token.interceptor';
 import { correlationIdInterceptor } from './core/api/correlation-id.interceptor';
+import { sessionRefreshInterceptor } from './core/api/session-refresh.interceptor';
 import { Auth } from './core/auth/auth';
 import { I18n } from './core/i18n/i18n';
 
@@ -29,10 +30,15 @@ export const appConfig: ApplicationConfig = {
 
     provideHttpClient(
       withInterceptors([
-        // Order matters. The correlation id goes on first so that it is present
-        // on every request, including one the bearer interceptor sends with no
-        // token because there is not one yet.
+        // Order matters. The correlation id goes on first so that it is
+        // present on every request, including one the bearer interceptor
+        // sends with no token because there is not one yet.
+        // `sessionRefreshInterceptor` goes ahead of `bearerTokenInterceptor`
+        // so that a request it retries passes forward through the bearer
+        // interceptor again and picks up a freshly refreshed token, not the
+        // stale one the first attempt carried.
         correlationIdInterceptor,
+        sessionRefreshInterceptor,
         bearerTokenInterceptor,
       ]),
     ),
@@ -41,12 +47,18 @@ export const appConfig: ApplicationConfig = {
      * `Auth.initialise()` completes before the first route is resolved, so
      * the guard reads a settled status rather than doing async work of its
      * own. Before ADR 0062 this was `provideHorecaOSAuth()` plus whatever the
-     * OIDC library's own bootstrap needed; `initialise()` now makes no
-     * network call and always settles to `signed-out` — a fresh load never
-     * has a session to restore (tokens are in-memory only, ADR 0035).
+     * OIDC library's own bootstrap needed; today it redeems whatever refresh
+     * token `StaffTokenStore` finds waiting in `sessionStorage` — see that
+     * class's own doc and `Auth.initialise()`'s. A cold start with nothing
+     * stored, or a stored token the platform refuses, both settle to
+     * `signed-out` exactly as before, and `authGuard` sends the operator to
+     * `/login` with `returnTo` set.
      */
     provideAppInitializer(() => {
-      inject(Auth).initialise();
+      const auth = inject(Auth);
+      return (async () => {
+        await auth.initialise();
+      })();
     }),
 
     // The stored locale is applied to <html lang> before the first paint.

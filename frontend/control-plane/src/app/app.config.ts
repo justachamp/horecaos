@@ -13,9 +13,11 @@ import {
   bearerTokenInterceptor,
   correlationIdInterceptor,
   problemDetailsInterceptor,
+  sessionRefreshInterceptor,
 } from './core/api/interceptors';
 import { AccessTokenSource } from './core/auth/access-token-source';
 import { AuthService } from './core/auth/auth.service';
+import { SessionContextService } from './core/auth/session-context.service';
 import { APP_CONFIG, resolveAppConfig } from './core/config/app-config';
 
 export const appConfig: ApplicationConfig = {
@@ -31,14 +33,19 @@ export const appConfig: ApplicationConfig = {
      *
      * Interceptor order is the order they run in on the way out, and it
      * matters. Correlation first so the identifier exists on every request;
-     * the bearer token next; Problem Details last, so it is the innermost
-     * wrapper on the way back and no other interceptor sees a raw
-     * HttpErrorResponse.
+     * `sessionRefreshInterceptor` next, so a request it retries still passes
+     * forward through the bearer token interceptor and picks up a freshly
+     * refreshed token; the bearer token itself next; Problem Details last, so
+     * it is the innermost wrapper on the way back, no other interceptor sees
+     * a raw `HttpErrorResponse`, and `sessionRefreshInterceptor` — earlier on
+     * the way out, later on the way back — receives the `ApiError` Problem
+     * Details already built rather than a raw response of its own to parse.
      */
     provideHttpClient(
       withFetch(),
       withInterceptors([
         correlationIdInterceptor,
+        sessionRefreshInterceptor,
         bearerTokenInterceptor,
         problemDetailsInterceptor,
       ]),
@@ -52,14 +59,17 @@ export const appConfig: ApplicationConfig = {
      * `AuthService.initialise()` completes before the first route is
      * resolved, so the guard reads a settled status signal rather than doing
      * async work of its own. Before ADR 0062 this was the step that finished
-     * a Keycloak redirect and could itself fail; `initialise()` now makes no
-     * network call and always settles to `signed-out` — a fresh load never
-     * has a session to restore (tokens are in-memory only, ADR 0035) — so
-     * this stays for the ordering guarantee alone. `session.load()` runs from
-     * here only when there already is a session to describe, which after ADR
-     * 0062 is never on a cold start; {@link SignInPage} calls it itself once
-     * sign-in succeeds, the same "rail cannot render without it" reasoning
-     * this used to apply after a redirect completed.
+     * a Keycloak redirect and could itself fail; today it redeems whatever
+     * refresh token `StaffTokenStore` finds waiting in `sessionStorage` — see
+     * that class's own doc and `AuthService.initialise()`'s. When that
+     * succeeds, `session.load()` runs here too, before the first route
+     * resolves, for the same reason {@link SignInPage} awaits it after a
+     * manual sign-in: `ConsoleShell`'s rail and every `requiresCapability`
+     * guard need it loaded, and a route resolved before it is loaded reads
+     * every capability as absent and bounces to `/denied`. A cold start with
+     * nothing stored, or a stored token the platform refuses, both settle to
+     * `signed-out` exactly as before, and `authGuard` sends the operator to
+     * `/login` with `returnTo` set.
      */
     provideAppInitializer(() => {
       // The injection happens before the first await. An `inject()` after one
@@ -67,9 +77,13 @@ export const appConfig: ApplicationConfig = {
       // runtime error in a code path that only executes at start-up — so it
       // reaches production looking like a blank page.
       const auth = inject(AuthService);
+      const session = inject(SessionContextService);
 
       return (async () => {
-        await auth.initialise();
+        const status = await auth.initialise();
+        if (status === 'signed-in') {
+          await session.load();
+        }
       })();
     }),
   ],
