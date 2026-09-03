@@ -1,0 +1,31 @@
+<h1 class="q-title">{{ i18n.t('policyDefaults.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('policyDefaults.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (tenantVisibleKeys().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('policyDefaults.empty') }}</p>
+} @else {
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('policyDefaults.column.key') }}</th>
+        <th class="q-caption">{{ i18n.t('policyDefaults.column.default') }}</th>
+        <th class="q-caption">{{ i18n.t('policyDefaults.column.module') }}</th>
+        <th class="q-caption">{{ i18n.t('policyDefaults.column.description') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (key of tenantVisibleKeys(); track key.code) {
+        <tr>
+          <td class="q-body-sm q-tnum">{{ key.code }}</td>
+          <td class="q-body-sm q-tnum">{{ key.defaultValue ?? '—' }}</td>
+          <td class="q-body-sm">{{ key.owningModule }}</td>
+          <td class="q-body-sm muted">{{ key.description }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

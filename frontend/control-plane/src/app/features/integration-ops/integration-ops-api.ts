@@ -25,12 +25,16 @@ export interface FailureSummary {
 export class IntegrationOpsApi {
   private readonly api = inject(ApiClient);
 
-  async outboxFailures(status = 'DEAD_LETTER', limit = 50): Promise<Page<FailureSummary>> {
+  async outboxFailures(
+    status = 'DEAD_LETTER',
+    limit = 50,
+    tenantId?: string,
+  ): Promise<Page<FailureSummary>> {
     return firstValueFrom(
       this.api.getPage<FailureSummary>(
         '/api/v1/control-plane/integration/failures/outbox',
         { limit },
-        { query: { status } },
+        { query: { status, tenantId } },
       ),
     );
   }

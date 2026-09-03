@@ -1,0 +1,92 @@
+<h1 class="q-title">{{ i18n.t('configurationPolicy.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('configurationPolicy.lead') }}</p>
+
+@if (loadingKeys()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (keysError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('configurationPolicy.picker.title') }}</h2>
+    <form class="pickerForm" (submit)="resolve($event)">
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('configurationPolicy.picker.key') }}</span>
+        <select class="q-body-sm" [value]="keyCode()" (change)="keyCode.set($any($event.target).value)">
+          <option value="">{{ i18n.t('configurationPolicy.picker.keyPlaceholder') }}</option>
+          @for (key of keys(); track key.code) {
+            <option [value]="key.code">{{ key.code }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('configurationPolicy.picker.scopeType') }}</span>
+        <select class="q-body-sm" [value]="scopeType()" (change)="scopeType.set($any($event.target).value)">
+          <option value="PLATFORM">{{ i18n.t('configurationPolicy.scope.platform') }}</option>
+          <option value="TENANT">{{ i18n.t('configurationPolicy.scope.tenant') }}</option>
+          <option value="BRAND">{{ i18n.t('configurationPolicy.scope.brand') }}</option>
+          <option value="LOCATION">{{ i18n.t('configurationPolicy.scope.location') }}</option>
+        </select>
+      </label>
+
+      @if (scopeType() !== 'PLATFORM') {
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('configurationPolicy.picker.tenantId') }}</span>
+          <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+        </label>
+      }
+      @if (scopeType() === 'BRAND' || scopeType() === 'LOCATION') {
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('configurationPolicy.picker.brandId') }}</span>
+          <input class="q-body-sm" type="text" [value]="brandId()" (input)="brandId.set($any($event.target).value)" />
+        </label>
+      }
+      @if (scopeType() === 'LOCATION') {
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('configurationPolicy.picker.locationId') }}</span>
+          <input class="q-body-sm" type="text" [value]="locationId()" (input)="locationId.set($any($event.target).value)" />
+        </label>
+      }
+
+      <button type="submit" class="primary" [disabled]="!canResolve()">
+        {{ resolving() ? i18n.t('configurationPolicy.picker.resolving') : i18n.t('configurationPolicy.picker.resolve') }}
+      </button>
+    </form>
+
+    @if (resolveError(); as message) {
+      <p class="q-body-sm error">{{ message }}</p>
+    }
+  </section>
+
+  @if (resolution(); as trace) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('configurationPolicy.result.title') }}</h2>
+      <dl class="facts">
+        <dt class="q-caption">{{ i18n.t('configurationPolicy.result.value') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ trace.value ?? '—' }}</dd>
+        <dt class="q-caption">{{ i18n.t('configurationPolicy.result.source') }}</dt>
+        <dd class="q-body-sm">{{ trace.source }}</dd>
+        <dt class="q-caption">{{ i18n.t('configurationPolicy.result.winningScope') }}</dt>
+        <dd class="q-body-sm">{{ trace.winningScope ?? '—' }}</dd>
+      </dl>
+
+      <h3 class="q-emphasis levelsTitle">{{ i18n.t('configurationPolicy.result.levels') }}</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('configurationPolicy.result.column.scope') }}</th>
+            <th class="q-caption">{{ i18n.t('configurationPolicy.result.column.outcome') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (level of trace.inspectedLevels; track level.scopeType) {
+            <tr>
+              <td class="q-body-sm">{{ level.scopeType }}</td>
+              <td class="q-body-sm">{{ level.outcome }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+}

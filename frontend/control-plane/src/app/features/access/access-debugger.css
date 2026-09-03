@@ -1,0 +1,98 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.pickerForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  border: 1px solid var(--q-hairline);
+  padding: 6px 8px;
+  min-width: 200px;
+}
+
+button.primary {
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--q-error-text);
+  margin-top: 8px;
+}
+
+.panel {
+  margin-top: 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  max-width: 760px;
+}
+
+.answer {
+  font-weight: 600;
+}
+
+.answer.granted {
+  color: var(--q-success-text);
+}
+
+.answer.denied {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.table {
+  margin-top: 8px;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.table thead tr,
+.table tbody tr {
+  background: var(--q-canvas);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.capabilities {
+  font-family: var(--q-font-mono);
+  font-size: 12px;
+}

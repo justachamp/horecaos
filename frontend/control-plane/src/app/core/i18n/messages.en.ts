@@ -17,40 +17,63 @@ export const en = {
 
   'nav.overview': 'Overview',
 
+  'nav.group.overview': 'Overview',
+  'nav.alertsIncidents': 'Alerts & incidents',
+
   'nav.group.tenants': 'Tenants',
   'nav.tenants': 'Tenants',
+  'nav.configurationPolicy': 'Configuration & policy',
 
   'nav.group.providers': 'Providers',
   'nav.providers': 'Provider registry',
   'nav.providerCapabilities': 'Capability matrix',
   'nav.installations': 'Installations',
+  'nav.contractsVersions': 'Contracts & versions',
+  'nav.sandboxContractTests': 'Sandbox & contract tests',
 
   'nav.group.integrationOps': 'Integration operations',
   'nav.messageFlow': 'Message flow',
   'nav.deadLetters': 'Dead letters & replay',
+  'nav.webhookDeliveries': 'Webhook deliveries',
+  'nav.errorTaxonomy': 'Error taxonomy',
 
   'nav.group.commerce': 'Commerce',
   'nav.entitlements': 'Entitlements',
+  'nav.planCatalog': 'Plan catalog',
+  'nav.moduleCatalog': 'Module catalog',
+  'nav.usageMetering': 'Metering & usage',
+  'nav.invoicesWallet': 'Invoices & wallet',
 
   'nav.group.compliance': 'Compliance & fiscal',
   'nav.fiscalization': 'Fiscalization operations',
   'nav.fiscalReference': 'Fiscal reference',
+  'nav.residencyHosting': 'Residency & hosting',
+  'nav.piiClassification': 'PII & data classification',
+  'nav.platformApprovals': 'Approvals',
 
   'nav.group.access': 'Access & security',
   'nav.staff': 'Staff & roles',
   'nav.capabilityRegistry': 'Capability registry',
   'nav.secrets': 'Secrets',
   'nav.auditLog': 'Audit log',
+  'nav.accessDebugger': 'Effective access debugger',
 
   'nav.group.platformConfig': 'Platform configuration',
   'nav.featureFlags': 'Feature flags & rollout',
+  'nav.businessTypes': 'Business types',
   'nav.referenceData': 'Reference data',
+  'nav.notificationProviders': 'Notification providers & template moderation',
+  'nav.policyDefaults': 'Policy defaults',
 
   'nav.group.migration': 'Migration & cutover',
   'nav.migrationRuns': 'Migration runs',
+  'nav.idMappingExplorer': 'ID mapping explorer',
+  'nav.dualRunComparison': 'Dual-run comparison',
+  'nav.cutoverChecklist': 'Cutover checklist',
 
   'nav.group.support': 'Support',
   'nav.globalLookup': 'Global lookup',
+  'nav.tenantIssueQueue': 'Tenant issue queue',
 
   'shell.skipToContent': 'Skip to content',
   'shell.signedInAs': 'Signed in as',
@@ -138,6 +161,7 @@ export const en = {
   'tenantDetail.action.brands': 'Brands & locations',
   'tenantDetail.action.legalEntities': 'Legal entities',
   'tenantDetail.action.onboarding': 'Onboarding',
+  'tenantDetail.action.identity': 'Identity & realm',
   'tenantDetail.action.impersonation': 'Impersonate',
 
   'tenantDetail.facts.title': 'Tenant facts',
@@ -420,6 +444,168 @@ export const en = {
   'globalLookup.search': 'Search',
   'globalLookup.notFound': 'No tenant with that slug.',
   'globalLookup.open': 'Open tenant',
+
+  'alertsIncidents.notBuilt.body':
+    'No persisted alert record exists anywhere in this build. A control-band signal is logged and counted (ControlPlaneAlertPort v1) and nothing else — there is no store to list, filter, or route from.',
+
+  'tenantIdentity.title': 'Identity & realm',
+  'tenantIdentity.lead': 'This tenant’s Keycloak organization link (ADR 0009).',
+  'tenantIdentity.organization.title': 'Keycloak organization',
+  'tenantIdentity.organization.id': 'Organization id',
+  'tenantIdentity.status': 'Tenant status',
+  'tenantIdentity.notLinked': 'No Keycloak organization has been linked to this tenant yet.',
+  'tenantIdentity.gap':
+    'Staff client, courier client, and break-glass configuration are fixed at deploy time and are not modeled as a queryable, per-tenant entity — they are not shown here. Drift findings between HorecaOS and Keycloak appear in the Audit log, not on this screen.',
+
+  'configurationPolicy.title': 'Configuration & policy',
+  'configurationPolicy.lead': 'Resolve any configuration key at any scope, and see why it resolved that way (ADR 0030).',
+  'configurationPolicy.picker.title': 'Resolve a key',
+  'configurationPolicy.picker.key': 'Key',
+  'configurationPolicy.picker.keyPlaceholder': 'Choose a key…',
+  'configurationPolicy.picker.scopeType': 'Scope',
+  'configurationPolicy.scope.platform': 'Platform',
+  'configurationPolicy.scope.tenant': 'Tenant',
+  'configurationPolicy.scope.brand': 'Brand',
+  'configurationPolicy.scope.location': 'Location',
+  'configurationPolicy.picker.tenantId': 'Tenant id',
+  'configurationPolicy.picker.brandId': 'Brand id',
+  'configurationPolicy.picker.locationId': 'Location id',
+  'configurationPolicy.picker.resolve': 'Resolve',
+  'configurationPolicy.picker.resolving': 'Resolving…',
+  'configurationPolicy.result.title': 'Result',
+  'configurationPolicy.result.value': 'Value',
+  'configurationPolicy.result.source': 'Source',
+  'configurationPolicy.result.winningScope': 'Winning scope',
+  'configurationPolicy.result.levels': 'Levels inspected',
+  'configurationPolicy.result.column.scope': 'Scope',
+  'configurationPolicy.result.column.outcome': 'Outcome',
+
+  'contractsVersions.title': 'Contracts & versions',
+  'contractsVersions.lead': 'The ADR 0032 event/schema contract registry: every event this build may publish.',
+  'contractsVersions.gap': 'Adapter versions, deprecations, and consumer compatibility are not modeled anywhere in this build and are not shown here.',
+  'contractsVersions.column.event': 'Event',
+  'contractsVersions.column.module': 'Producing module',
+  'contractsVersions.column.topic': 'Topic',
+  'contractsVersions.column.retention': 'Retention',
+  'contractsVersions.column.classification': 'Classification',
+
+  'sandboxContractTests.notBuilt.body':
+    'No recorded-fixture replay harness exists in this build. ADR 0007’s provider contract testing half stays unbuilt; POS sync runs compare a live provider catalogue against HorecaOS, which is a different question from replaying a recorded fixture against an adapter in isolation.',
+
+  'webhookDeliveries.notBuilt.body':
+    'No inbound or outbound webhook delivery record is persisted anywhere in this build. Telegram’s webhook is received and processed inline; there is no delivery history to list or redeliver from, and HorecaOS pushes no webhooks of its own to providers.',
+
+  'errorTaxonomy.notBuilt.body':
+    'No single registry maps a raw provider failure to an operator-legible cause and fix. What exists are three narrower, unrelated vocabularies for different purposes — retry classification, transport-level provider codes, and aggregator order-rejection codes — and none of them is this row’s cause-and-fix mapping.',
+
+  'planCatalog.title': 'Plan catalog',
+  'planCatalog.lead': 'Every activated plan version: price, billing period, and its entitlement lines (ADR 0021).',
+  'planCatalog.gap': '6/12-month term discounts, trials, and an activation deposit are not modeled as distinct fields anywhere in this build — billing period is the one term tracked.',
+  'planCatalog.empty': 'No activated plan versions yet.',
+  'planCatalog.column.plan': 'Plan',
+  'planCatalog.column.price': 'Price',
+  'planCatalog.column.billingPeriod': 'Billing period',
+  'planCatalog.column.resetPeriod': 'Reset period',
+  'planCatalog.showEntitlements': 'Show entitlements',
+  'planCatalog.hideEntitlements': 'Hide entitlements',
+  'planCatalog.noEntitlements': 'This version carries no entitlement lines.',
+
+  'moduleCatalog.notBuilt.body':
+    'There is no "module" concept anywhere in the commercial domain — plans, plan versions, plan entitlements, subscriptions, and metered usage are modeled, never an independently sellable module with its own per-brand/per-branch/per-kiosk/per-courier billing unit.',
+
+  'usageMetering.title': 'Metering & usage',
+  'usageMetering.lead': 'Counted units per entitlement key and period for one tenant, measured against what was adjusted by hand (ADR 0021).',
+  'usageMetering.empty': 'No metered usage recorded for this tenant.',
+  'usageMetering.column.period': 'Period',
+  'usageMetering.column.measured': 'Measured',
+  'usageMetering.column.adjusted': 'Adjusted',
+  'usageMetering.column.consumed': 'Consumed',
+
+  'invoicesWallet.notBuilt.body':
+    'No invoice or prepaid wallet ledger is modeled anywhere in this build. Usage metering carries the measured and adjusted quantities a bill would be defended with, but nothing turns that into a subscription invoice, a top-up, a balance, or a credit-expiry row.',
+
+  'residencyHosting.notBuilt.body':
+    'A tenant carries only a default currency and timezone — no country or hosting-region assignment exists in the schema, confirmed by the tenant directory’s own server-side note. The platform-wide half of this row (which countries HorecaOS markets to) is real and already shown at Reference data; the missing half is the per-tenant assignment this row is actually about.',
+
+  'piiClassification.notBuilt.body':
+    'ADR 0029’s field classification is real internal machinery that decides what the platform encrypts, but it is not a queryable registry — there is no retention-schedule table, no export-egress audit log, and no DSAR/erasure workflow anywhere in this build.',
+
+  'platformApprovals.notBuilt.body':
+    'The maker-checker queue itself is real and already reachable from Staff & roles for IAM grants. Residency change, bulk export, and retention override — the three actions this row names — do not exist anywhere in this codebase to raise an approval request, so there is nothing this screen could show that 7.1 does not already show identically.',
+
+  'accessDebugger.title': 'Effective access debugger',
+  'accessDebugger.lead': 'What a named principal may do, and why — the same decision the server itself makes on every request (ADR 0003 + ADR 0025).',
+  'accessDebugger.subject': 'Subject',
+  'accessDebugger.tenantId': 'Tenant id (optional)',
+  'accessDebugger.brandId': 'Brand id (optional)',
+  'accessDebugger.locationId': 'Location id (optional)',
+  'accessDebugger.capability': 'Capability to check (optional)',
+  'accessDebugger.check': 'Check',
+  'accessDebugger.checking': 'Checking…',
+  'accessDebugger.answer.title': 'Answer',
+  'accessDebugger.answer.yes': 'Granted',
+  'accessDebugger.answer.no': 'Not granted',
+  'accessDebugger.grants.title': 'Effective grants',
+  'accessDebugger.grants.empty': 'This principal holds no grants.',
+  'accessDebugger.column.scope': 'Scope',
+  'accessDebugger.column.role': 'Role',
+  'accessDebugger.column.capabilities': 'Capabilities',
+
+  'businessTypes.notBuilt.body':
+    'There is no BusinessType anywhere in the tenancy schema or domain code — the tenant directory’s own server-side note says so directly. A tenant carries no business-type assignment today, so there is nothing to browse and no defaults to show.',
+
+  'notificationProviders.notBuilt.body':
+    'There is no platform-wide SMS gateway or sender-alias registry to browse, and no provider-side template moderation state — the notification template controller’s own documentation says ADR 0020’s full approval workflow is deferred. Both halves this row needs are unbuilt.',
+
+  'policyDefaults.title': 'Policy defaults',
+  'policyDefaults.lead': 'Platform-level defaults a tenant may see and inherit (ADR 0030).',
+  'policyDefaults.empty': 'No tenant-visible configuration keys are declared.',
+  'policyDefaults.column.key': 'Key',
+  'policyDefaults.column.default': 'Default',
+  'policyDefaults.column.module': 'Module',
+  'policyDefaults.column.description': 'Description',
+
+  'idMappingExplorer.title': 'ID mapping explorer',
+  'idMappingExplorer.lead': 'The legacy-to-target identity crosswalk for one migration scope (ADR 0024).',
+  'idMappingExplorer.scopeId': 'Scope id',
+  'idMappingExplorer.entityType': 'Entity type',
+  'idMappingExplorer.search': 'Search',
+  'idMappingExplorer.empty': 'No mappings recorded for this scope and entity type.',
+  'idMappingExplorer.column.legacyId': 'Legacy id',
+  'idMappingExplorer.column.targetId': 'Target id',
+  'idMappingExplorer.column.status': 'Status',
+  'idMappingExplorer.column.created': 'Recorded',
+
+  'dualRunComparison.title': 'Dual-run comparison',
+  'dualRunComparison.lead': 'Legacy vs. HorecaOS output, rule by rule, for one reconciliation run (ADR 0024).',
+  'dualRunComparison.runId': 'Run id',
+  'dualRunComparison.search': 'Search',
+  'dualRunComparison.empty': 'No reconciliation results recorded for this run.',
+  'dualRunComparison.column.rule': 'Rule',
+  'dualRunComparison.column.dimension': 'Dimension',
+  'dualRunComparison.column.severity': 'Severity',
+  'dualRunComparison.column.expected': 'Expected',
+  'dualRunComparison.column.actual': 'Actual',
+  'dualRunComparison.column.status': 'Status',
+
+  'cutoverChecklist.title': 'Cutover checklist',
+  'cutoverChecklist.lead': 'Go/no-go per capability scope, read from each scope’s own state (ADR 0024).',
+  'cutoverChecklist.scopes.title': 'Scopes',
+  'cutoverChecklist.column.readiness': 'Readiness',
+  'cutoverChecklist.readiness.go': 'Go',
+  'cutoverChecklist.readiness.blocked': 'Blocked',
+  'cutoverChecklist.readiness.pending': 'In progress',
+
+  'tenantIssueQueue.title': 'Tenant issue queue',
+  'tenantIssueQueue.lead': 'Open problems for one tenant, with linked evidence.',
+  'tenantIssueQueue.gap': 'Expired credentials are not shown: nothing in this build declares an expiry threshold for a rotated secret, and inventing one here would show a judgement nobody made.',
+  'tenantIssueQueue.empty': 'No open issues for this tenant.',
+  'tenantIssueQueue.deadLetters.title': 'Dead-lettered events',
+  'tenantIssueQueue.deadLetters.empty': 'No dead-lettered events for this tenant.',
+  'tenantIssueQueue.deadLetters.fullScreen': 'Open in Dead letters & replay →',
+  'tenantIssueQueue.fiscal.title': 'Blocked fiscal documents',
+  'tenantIssueQueue.fiscal.empty': 'Nothing blocked for this tenant.',
+  'tenantIssueQueue.fiscal.fullScreen': 'Open in Fiscalization operations →',
 
   'money.uzsSuffix': "so'm",
 

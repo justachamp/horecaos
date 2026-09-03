@@ -246,7 +246,8 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
     }
 
     /** Everything one reconciliation run found, most severe first. */
-    public List<ReconciliationResultRow> listForRun(UUID tenantId, UUID runId, MigrationPageCursor after, int limit) {
+    public List<ReconciliationResultRow> listForRun(
+            UUID tenantId, UUID runId, @Nullable MigrationPageCursor after, int limit) {
         return jdbc.sql(SELECT_RESULT + """
                  WHERE tenant_id = :tenantId AND run_id = :runId
                    AND (CAST(:afterId AS uuid) IS NULL

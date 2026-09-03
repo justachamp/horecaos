@@ -40,9 +40,22 @@ export interface PlatformInstallationView {
   readonly lastSecretRotatedAt: string | null;
 }
 
+/** EventContractController.EventContractResponse (ADR 0032). */
+export interface EventContractView {
+  readonly eventType: string;
+  readonly eventVersion: number;
+  readonly producingModule: string;
+  readonly topic: string;
+  readonly partitionKey: string;
+  readonly retention: 'BUSINESS_FACT' | 'COMMAND' | 'DIAGNOSTIC' | 'SIGNAL' | (string & {});
+  readonly classification: 'PUBLIC' | 'INTERNAL' | (string & {});
+  readonly description: string;
+}
+
 /**
  * The platform-scope, cross-tenant provider reads IA §3 needs
- * (`PlatformIntegrationAdminController`, `PosCapabilityMatrixController`).
+ * (`PlatformIntegrationAdminController`, `PosCapabilityMatrixController`,
+ * `EventContractController`).
  */
 @Injectable({ providedIn: 'root' })
 export class ProvidersApi {
@@ -66,6 +79,13 @@ export class ProvidersApi {
         cursor,
         limit,
       }),
+    );
+  }
+
+  /** IA 3.4 Contracts & versions -- the ADR 0032 event/schema contract half only; see the screen's own doc comment. */
+  async listEventContracts(): Promise<EventContractView[]> {
+    return firstValueFrom(
+      this.api.get<EventContractView[]>('/api/v1/control-plane/event-contracts'),
     );
   }
 }

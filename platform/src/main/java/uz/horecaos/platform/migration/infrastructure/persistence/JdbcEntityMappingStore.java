@@ -191,7 +191,7 @@ public class JdbcEntityMappingStore {
 
     /** One scope's crosswalk for one entity type, oldest first. */
     public List<EntityMappingRow> listForScope(
-            UUID tenantId, UUID scopeId, String entityType, MigrationPageCursor after, int limit) {
+            UUID tenantId, UUID scopeId, String entityType, @Nullable MigrationPageCursor after, int limit) {
         return jdbc.sql(SELECT_MAPPING + """
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND entity_type = :entityType

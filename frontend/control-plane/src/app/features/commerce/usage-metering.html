@@ -1,0 +1,46 @@
+<h1 class="q-title">{{ i18n.t('usageMetering.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('usageMetering.lead') }}</p>
+
+<form class="picker" (submit)="load($event)">
+  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
+  <input
+    class="q-body-sm"
+    type="text"
+    [value]="tenantId()"
+    (input)="tenantId.set($any($event.target).value)"
+  />
+  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
+</form>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (searched()) {
+  @if (periods().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('usageMetering.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
+          <th class="q-caption">{{ i18n.t('usageMetering.column.period') }}</th>
+          <th class="q-caption">{{ i18n.t('usageMetering.column.measured') }}</th>
+          <th class="q-caption">{{ i18n.t('usageMetering.column.adjusted') }}</th>
+          <th class="q-caption">{{ i18n.t('usageMetering.column.consumed') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (period of periods(); track period.entitlementKey + period.periodKey) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ period.entitlementKey }}</td>
+            <td class="q-body-sm q-tnum">{{ period.periodKey }}</td>
+            <td class="q-body-sm q-tnum">{{ period.measuredQuantity }}</td>
+            <td class="q-body-sm q-tnum">{{ period.adjustedQuantity }}</td>
+            <td class="q-body-sm q-tnum">{{ period.consumedQuantity }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

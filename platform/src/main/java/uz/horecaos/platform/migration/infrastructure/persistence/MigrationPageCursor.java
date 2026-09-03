@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Where the previous page of a migration list ended (ADR 0031).
@@ -33,7 +34,7 @@ public record MigrationPageCursor(Instant at, UUID id) {
      * <p>A {@link HashMap} rather than {@code Map.of}, which rejects the nulls
      * that the first page of every list is made of.
      */
-    static Map<String, Object> params(MigrationPageCursor cursor) {
+    static Map<String, Object> params(@Nullable MigrationPageCursor cursor) {
         Map<String, Object> params = new HashMap<>();
         params.put("afterAt", cursor == null ? null : MigrationColumns.utc(cursor.at()));
         params.put("afterId", cursor == null ? null : cursor.id());

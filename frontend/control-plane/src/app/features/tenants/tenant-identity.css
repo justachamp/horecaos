@@ -1,0 +1,49 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.panel {
+  margin-top: 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  max-width: 640px;
+}
+
+.facts {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 16px;
+  row-gap: 8px;
+}
+
+.facts dt {
+  color: var(--q-ink-subtle);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.notice {
+  margin-top: 12px;
+  color: var(--q-ink-subtle);
+  max-width: 640px;
+}

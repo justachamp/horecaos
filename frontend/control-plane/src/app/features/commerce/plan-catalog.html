@@ -1,0 +1,64 @@
+<h1 class="q-title">{{ i18n.t('planCatalog.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('planCatalog.lead') }}</p>
+<p class="q-caption notice">{{ i18n.t('planCatalog.gap') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (plans().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('planCatalog.empty') }}</p>
+} @else {
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('planCatalog.column.plan') }}</th>
+        <th class="q-caption">{{ i18n.t('planCatalog.column.price') }}</th>
+        <th class="q-caption">{{ i18n.t('planCatalog.column.billingPeriod') }}</th>
+        <th class="q-caption"></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (plan of plans(); track plan.planVersionId) {
+        <tr>
+          <td class="q-body-sm">{{ plan.planCode }} <span class="muted q-tnum">v{{ plan.versionNumber }}</span></td>
+          <td class="q-body-sm q-tnum">{{ i18n.money(plan.price) }}</td>
+          <td class="q-body-sm">{{ plan.billingPeriod }}</td>
+          <td class="q-body-sm">
+            <button type="button" (click)="toggle(plan.planVersionId)">
+              {{ expanded() === plan.planVersionId ? i18n.t('planCatalog.hideEntitlements') : i18n.t('planCatalog.showEntitlements') }}
+            </button>
+          </td>
+        </tr>
+        @if (expanded() === plan.planVersionId) {
+          <tr>
+            <td class="q-body-sm" colspan="4">
+              @if (plan.entitlements.length === 0) {
+                <p class="q-body-sm muted">{{ i18n.t('planCatalog.noEntitlements') }}</p>
+              } @else {
+                <table class="innerTable">
+                  <thead>
+                    <tr>
+                      <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
+                      <th class="q-caption">{{ i18n.t('entitlements.column.limit') }}</th>
+                      <th class="q-caption">{{ i18n.t('planCatalog.column.resetPeriod') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (line of plan.entitlements; track line.entitlementKey) {
+                      <tr>
+                        <td class="q-body-sm q-tnum">{{ line.entitlementKey }}</td>
+                        <td class="q-body-sm q-tnum">{{ line.limit ?? '—' }}</td>
+                        <td class="q-body-sm">{{ line.resetPeriod }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+}

@@ -1,0 +1,74 @@
+<h1 class="q-title">{{ i18n.t('accessDebugger.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('accessDebugger.lead') }}</p>
+
+<form class="pickerForm" (submit)="debug($event)">
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('accessDebugger.subject') }}</span>
+    <input class="q-body-sm" type="text" [value]="subject()" (input)="subject.set($any($event.target).value)" required />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('accessDebugger.tenantId') }}</span>
+    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('accessDebugger.brandId') }}</span>
+    <input class="q-body-sm" type="text" [value]="brandId()" (input)="brandId.set($any($event.target).value)" />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('accessDebugger.locationId') }}</span>
+    <input class="q-body-sm" type="text" [value]="locationId()" (input)="locationId.set($any($event.target).value)" />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('accessDebugger.capability') }}</span>
+    <input class="q-body-sm" type="text" [value]="capability()" (input)="capability.set($any($event.target).value)" />
+  </label>
+  <button type="submit" class="primary" [disabled]="!canSubmit()">
+    {{ loading() ? i18n.t('accessDebugger.checking') : i18n.t('accessDebugger.check') }}
+  </button>
+</form>
+
+@if (loadError(); as message) {
+  <p class="q-body-sm error">{{ message }}</p>
+}
+
+@if (result(); as response) {
+  @if (response.requestedCapability !== null) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('accessDebugger.answer.title') }}</h2>
+      <p class="q-body answer" [class.granted]="response.granted === true" [class.denied]="response.granted === false">
+        {{ response.granted ? i18n.t('accessDebugger.answer.yes') : i18n.t('accessDebugger.answer.no') }}
+      </p>
+    </section>
+  }
+
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('accessDebugger.grants.title') }}</h2>
+    @if (response.view.scopes.length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('accessDebugger.grants.empty') }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('accessDebugger.column.scope') }}</th>
+            <th class="q-caption">{{ i18n.t('accessDebugger.column.role') }}</th>
+            <th class="q-caption">{{ i18n.t('accessDebugger.column.capabilities') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (grant of response.view.scopes; track grant.roleCode + grant.scope.type + (grant.scope.tenantId ?? '')) {
+            <tr>
+              <td class="q-body-sm">
+                {{ grant.scope.type }}
+                @if (grant.scope.tenantId) {
+                  <span class="muted q-tnum">{{ grant.scope.tenantId }}</span>
+                }
+              </td>
+              <td class="q-body-sm">{{ grant.roleCode }}</td>
+              <td class="q-body-sm capabilities">{{ grant.capabilities.join(', ') }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+}

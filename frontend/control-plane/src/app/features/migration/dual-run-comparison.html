@@ -1,0 +1,51 @@
+<h1 class="q-title">{{ i18n.t('dualRunComparison.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('dualRunComparison.lead') }}</p>
+
+<form class="pickerForm" (submit)="search($event)">
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('dualRunComparison.runId') }}</span>
+    <input class="q-body-sm" type="text" [value]="runId()" (input)="runId.set($any($event.target).value)" required />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('entitlements.tenantId') }}</span>
+    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" required />
+  </label>
+  <button type="submit" class="primary" [disabled]="!canSearch()">
+    {{ loading() ? i18n.t('tenants.loading') : i18n.t('dualRunComparison.search') }}
+  </button>
+</form>
+
+@if (loadError(); as message) {
+  <p class="q-body-sm error">{{ message }}</p>
+} @else if (searched()) {
+  @if (results().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('dualRunComparison.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.rule') }}</th>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.dimension') }}</th>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.severity') }}</th>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.expected') }}</th>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.actual') }}</th>
+          <th class="q-caption">{{ i18n.t('dualRunComparison.column.status') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (result of results(); track result.resultId) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ result.ruleCode }}</td>
+            <td class="q-body-sm">{{ result.dimensionKey || '—' }}</td>
+            <td class="q-body-sm">
+              <span class="pill" [class]="'pill-' + result.severity">{{ result.severity }}</span>
+            </td>
+            <td class="q-body-sm q-tnum">{{ result.expected ?? '—' }}</td>
+            <td class="q-body-sm q-tnum">{{ result.actual ?? '—' }}</td>
+            <td class="q-body-sm">{{ result.status }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

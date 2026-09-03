@@ -1,0 +1,95 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--q-error-text);
+}
+
+.panel {
+  margin-top: 16px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+}
+
+.programForm {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.programForm input {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.programForm button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.programForm button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.table {
+  margin-top: 12px;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.table thead tr,
+.table tbody tr {
+  background: var(--q-canvas);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+}
+
+.pill-go {
+  color: var(--q-success-text);
+  border-color: var(--q-success);
+}
+
+.pill-blocked {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.pill-pending {
+  color: var(--q-warning-text);
+  border-color: var(--q-warning);
+}
