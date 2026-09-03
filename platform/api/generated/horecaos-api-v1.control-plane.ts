@@ -125,6 +125,33 @@ export interface AttachedModifierGroupView {
   sortOrder?: number;
 }
 
+export interface AuditEventDetail {
+  actionCode?: string;
+  actorDisplay?: string;
+  actorSubject?: string;
+  actorType?: string;
+  approvalRequestId?: string;
+  auditClass?: string;
+  capabilityUsed?: string;
+  causationId?: string;
+  changeDocument?: {  };
+  correlationId?: string;
+  evidenceReference?: string;
+  id?: string;
+  occurredAt?: string;
+  onBehalfOfSubject?: string;
+  outcome?: string;
+  reason?: string;
+  recordedAt?: string;
+  requestId?: string;
+  scopeId?: string;
+  scopeType?: string;
+  targetId?: string;
+  targetType?: string;
+  targetVersion?: number;
+  tenantId?: string;
+}
+
 export interface AuditEventView {
   actionCode?: string;
   actorDisplay?: string;
@@ -288,6 +315,49 @@ export interface CommercialAdminControllerDraftVersionRequest {
 
 export interface CommercialAdminControllerReasonRequest {
   reason: string;
+}
+
+export interface CommercialControlPlaneControllerEntitlementSnapshotResponse {
+  entitlements?: Array<CommercialControlPlaneControllerResolvedEntitlement>;
+  hash?: string;
+  resolvedAt?: string;
+  subscriptionId?: string;
+  tenantId?: string;
+}
+
+export interface CommercialControlPlaneControllerResolvedEntitlement {
+  declaredMode?: string;
+  effectiveMode?: string;
+  enabled?: boolean;
+  entitlementKey?: string;
+  limit?: number;
+  overageUnitPrice?: ApiMoney;
+  resetPeriod?: string;
+  source?: string;
+}
+
+export interface CommercialControlPlaneControllerSubscriptionResponse {
+  currentPeriodEnd?: string;
+  currentPeriodStart?: string;
+  planVersionId?: string;
+  startAt?: string;
+  status?: string;
+  subscriptionId?: string;
+  suspensionReason?: string;
+  trialEndAt?: string;
+  version?: number;
+}
+
+export interface CommercialControlPlaneControllerUsageResponse {
+  adjustedQuantity?: number;
+  consumedQuantity?: number;
+  entitlementKey?: string;
+  lastEventAt?: string;
+  measuredQuantity?: number;
+  movementCount?: number;
+  periodEnd?: string;
+  periodKey?: string;
+  periodStart?: string;
 }
 
 export interface ConnectField {
@@ -572,14 +642,6 @@ export interface EntitlementLineRequest {
   overageUnitPriceMinor?: number;
   resetPeriod?: string;
   warnThresholdBasisPoints?: number;
-}
-
-export interface EntitlementSnapshotResponse {
-  entitlements?: Array<ResolvedEntitlement>;
-  hash?: string;
-  resolvedAt?: string;
-  subscriptionId?: string;
-  tenantId?: string;
 }
 
 export interface ExceptionRequest {
@@ -1310,17 +1372,6 @@ export interface ResolveQuarantineRequest {
   resolutionCode: string;
 }
 
-export interface ResolvedEntitlement {
-  declaredMode?: string;
-  effectiveMode?: string;
-  enabled?: boolean;
-  entitlementKey?: string;
-  limit?: number;
-  overageUnitPrice?: ApiMoney;
-  resetPeriod?: string;
-  source?: string;
-}
-
 export interface ResolvedPricesResponse {
   amountsMinor?: { [key: string]: number };
   currency?: string;
@@ -1535,18 +1586,6 @@ export interface StepView {
   stepKey?: string;
 }
 
-export interface SubscriptionResponse {
-  currentPeriodEnd?: string;
-  currentPeriodStart?: string;
-  planVersionId?: string;
-  startAt?: string;
-  status?: string;
-  subscriptionId?: string;
-  suspensionReason?: string;
-  trialEndAt?: string;
-  version?: number;
-}
-
 export interface SuspendScopeRequest {
   expectedVersion?: number;
   holdingState: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
@@ -1662,18 +1701,6 @@ export interface TranslateRequest {
   name: string;
 }
 
-export interface UsageResponse {
-  adjustedQuantity?: number;
-  consumedQuantity?: number;
-  entitlementKey?: string;
-  lastEventAt?: string;
-  measuredQuantity?: number;
-  movementCount?: number;
-  periodEnd?: string;
-  periodKey?: string;
-  periodStart?: string;
-}
-
 export interface ValidationResponse {
   findings?: Array<FindingView>;
   publishable?: boolean;
@@ -1764,7 +1791,8 @@ export interface Operations {
   "endDate": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies/{policyId}/expiry"; request: { parameters: { path: { policyId: string; tenantId: string } }; body: EndPolicyRequest }; responses: { "200": PolicyResponse } };
   "pending": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-requests"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PagePendingApprovalResponse } };
   "decide": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-requests/{requestId}/decision"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: ApprovalRequestControllerDecisionRequest }; responses: { "200": ApprovalRequestControllerDecisionResponse } };
-  "search": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/audit-events"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; actorSubject?: string; auditClass?: string; from?: string; limit?: number; targetId?: string; to?: string } } }; responses: { "200": PageAuditEventView } };
+  "search": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/audit-events"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; actorSubject?: string; auditClass?: string; correlationId?: string; from?: string; limit?: number; outcome?: string; scopeId?: string; scopeType?: string; targetId?: string; to?: string } } }; responses: { "200": PageAuditEventView } };
+  "detail_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/audit-events/{eventId}"; request: { parameters: { path: { eventId: string; tenantId: string } } }; responses: { "200": AuditEventDetail } };
   "getBrands": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
   "createBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } }; body: CreateOperatingUnitRequest }; responses: { "200": BrandView } };
   "activateBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
@@ -1825,7 +1853,7 @@ export interface Operations {
   "bind_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerBindLocationRequest }; responses: { "200": unknown } };
   "draftVersion_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } }; body: ActivateRequest }; responses: { "200": ServiceZoneControllerVersionView } };
-  "entitlements": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": EntitlementSnapshotResponse } };
+  "entitlements": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerEntitlementSnapshotResponse } };
   "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
   "revoke": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
@@ -1875,8 +1903,8 @@ export interface Operations {
   "replacePaymentMethods": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/payment-methods"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: boolean } }; responses: { "200": unknown } };
   "importContacts": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: ImportRequest }; responses: { "200": SendPulseImportReport } };
   "report": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": SendPulseImportReport } };
-  "subscription": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/subscription"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SubscriptionResponse } };
-  "usage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<UsageResponse> } };
+  "subscription": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/subscription"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerSubscriptionResponse } };
+  "usage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialControlPlaneControllerUsageResponse> } };
   "activate": { method: "POST"; path: "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation"; request: { parameters: { path: { planVersionId: string } }; body: CommercialAdminControllerReasonRequest }; responses: { "200": unknown } };
   "createPlan": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans"; request: { parameters: Record<string, never>; body: CreatePlanRequest }; responses: { "200": {  } } };
   "draftVersion": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans/{planId}/versions"; request: { parameters: { path: { planId: string } }; body: CommercialAdminControllerDraftVersionRequest }; responses: { "200": {  } } };

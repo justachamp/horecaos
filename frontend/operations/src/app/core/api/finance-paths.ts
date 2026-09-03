@@ -90,4 +90,69 @@ export const financePaths = {
   fiscalDocumentUnblocks(tenantId: string, documentId: string): string {
     return `${TENANT}/${enc(tenantId)}/fiscal/documents/${enc(documentId)}/unblocks`;
   },
+
+  // ---------------------------------------------------------- 8.3 Cash reconciliation
+
+  /** `OperationsCourierController.cashHandovers` / the fleet worklist — wave 39. */
+  cashHandovers(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/cash-handovers`;
+  },
+
+  cashHandoverConfirm(tenantId: string, handoverId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/cash-handovers/${enc(handoverId)}/confirm`;
+  },
+
+  // ---------------------------------------------------------- 8.4 Delivery cost reconciliation
+
+  /** `OperationsCourierController.deliveryCosts` — already built (wave 34-adjacent, ADR 0042). */
+  deliveryCosts(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/delivery-costs`;
+  },
+
+  /** `.partnerInvoices` — the worklist — wave 39. */
+  partnerInvoices(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/partner-delivery-invoices`;
+  },
+
+  partnerInvoice(tenantId: string, invoiceId: string): string {
+    return `${financePaths.partnerInvoices(tenantId)}/${enc(invoiceId)}`;
+  },
+
+  // ---------------------------------------------------------- 8.5 Courier payouts
+
+  courierLedger(tenantId: string, courierId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/couriers/${enc(courierId)}/ledger`;
+  },
+
+  /** `.settlementPeriods` — the fleet worklist — wave 39. */
+  settlementPeriods(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/courier-settlement-periods`;
+  },
+
+  settlementPeriodClose(tenantId: string, periodId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/courier-settlement-periods/${enc(periodId)}/close`;
+  },
+
+  settlementPeriodStatement(tenantId: string, periodId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/courier-settlement-periods/${enc(periodId)}/statement`;
+  },
+
+  settlementPeriodPayouts(tenantId: string, periodId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/courier-settlement-periods/${enc(periodId)}/payouts`;
+  },
+
+  // ---------------------------------------------------------- 8.6 Subscription & billing
+
+  /** `CommercialOperationsController` — the merchant's own read, wave 39. */
+  commercialSubscription(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/subscription`;
+  },
+
+  commercialEntitlements(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/entitlements`;
+  },
+
+  commercialUsage(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/usage`;
+  },
 } as const;

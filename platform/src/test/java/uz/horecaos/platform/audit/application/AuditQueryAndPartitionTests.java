@@ -29,6 +29,7 @@ class AuditQueryAndPartitionTests {
 
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121301");
     private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121302");
+    private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121303");
 
     private static TestDatabase.Handle db;
 
@@ -60,8 +61,9 @@ class AuditQueryAndPartitionTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
-        queries = new AuditQueryService(jdbc);
-        recorder = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        JsonMapper objectMapper = JsonMapper.builder().build();
+        queries = new AuditQueryService(jdbc, objectMapper);
+        recorder = new JdbcAuditRecorder(jdbc, objectMapper);
         partitions = new AuditPartitionManager(jdbc, clock);
 
         insertTenant(TENANT, "tenant-audit-query");
@@ -73,8 +75,8 @@ class AuditQueryAndPartitionTests {
         record("tenant.suspended", TENANT, "operator-1");
         record("tenant.suspended", OTHER_TENANT, "operator-2");
 
-        var results =
-                queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null));
+        var results = queries.search(new AuditQueryService.AuditQuery(
+                TENANT, null, null, null, null, null, null, null, null, null, null, null));
 
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().actorSubject()).isEqualTo("operator-1");
@@ -84,7 +86,8 @@ class AuditQueryAndPartitionTests {
     void anotherTenantsEvidenceIsNeverReturned() {
         record("tenant.suspended", OTHER_TENANT, "operator-2");
 
-        assertThat(queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null)))
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, null)))
                 .as("an audit trail readable across tenants is a second copy of the data it protects")
                 .isEmpty();
     }
@@ -96,7 +99,7 @@ class AuditQueryAndPartitionTests {
         record("brand.created", TENANT, "operator-2");
 
         assertThat(queries.search(new AuditQueryService.AuditQuery(
-                        TENANT, "operator-1", "brand.created", null, null, null, null, null)))
+                        TENANT, "operator-1", "brand.created", null, null, null, null, null, null, null, null, null)))
                 .hasSize(1);
     }
 
@@ -106,7 +109,8 @@ class AuditQueryAndPartitionTests {
             record("brand.created", TENANT, "operator-1");
         }
 
-        assertThat(queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, 10_000)))
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, 10_000)))
                 .hasSizeLessThanOrEqualTo(AuditQueryService.MAXIMUM_PAGE);
     }
 
@@ -114,13 +118,71 @@ class AuditQueryAndPartitionTests {
     void theChangeDocumentIsNotReturnedInAList() {
         record("tenant.suspended", TENANT, "operator-1");
 
-        var view = queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null))
+        var view = queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, null))
                 .getFirst();
 
         assertThat(view.getClass().getRecordComponents())
                 .as("redacted structure is still revealing in bulk, so it is a separate audited read")
                 .noneMatch(component ->
                         component.getName().toLowerCase(Locale.ROOT).contains("change"));
+    }
+
+    @Test
+    void outcomeScopeAndCorrelationFiltersEachNarrowTheSearch() {
+        recorder.record(AuditFact.of("order.cancel", AuditClass.BUSINESS)
+                .by(ActorRef.user("operator-1", null))
+                .at(ResourceScope.tenant(TENANT))
+                .outcome(AuditFact.Outcome.REJECTED)
+                .because("test")
+                .correlatedBy("bulk-run-1")
+                .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
+                .build());
+        recorder.record(AuditFact.of("order.cancel", AuditClass.BUSINESS)
+                .by(ActorRef.user("operator-1", null))
+                .at(ResourceScope.brand(TENANT, BRAND))
+                .because("test")
+                .correlatedBy("bulk-run-1")
+                .occurredAt(Instant.parse("2026-08-20T09:05:00Z"))
+                .build());
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, "REJECTED", null, null, null, null, null, null)))
+                .as("only the rejected row matches")
+                .hasSize(1);
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, "BRAND", BRAND, null, null, null, null)))
+                .as("only the brand-scoped row matches")
+                .hasSize(1);
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, "bulk-run-1", null, null, null)))
+                .as("a bulk action's N rows all share one correlation id — the «Часть массового действия» chip")
+                .hasSize(2);
+    }
+
+    @Test
+    void detailReturnsTheChangeDocumentAndIsScopedToItsTenant() {
+        UUID eventId = UUID.randomUUID();
+        recorder.record(AuditFact.of("order.cancel", AuditClass.BUSINESS)
+                .id(eventId)
+                .by(ActorRef.user("operator-1", null))
+                .at(ResourceScope.tenant(TENANT))
+                .because("Customer no longer answering")
+                .changed(java.util.Map.of("status", java.util.Map.of("before", "CONFIRMED", "after", "CANCELLED")))
+                .correlatedBy("detail-test-1")
+                .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
+                .build());
+
+        var found = queries.findDetail(TENANT, eventId);
+        assertThat(found).isPresent();
+        assertThat(found.get().changeDocument()).containsKey("status");
+        assertThat(found.get().reason()).isEqualTo("Customer no longer answering");
+
+        assertThat(queries.findDetail(OTHER_TENANT, eventId))
+                .as("another tenant's id does not resolve this event")
+                .isEmpty();
     }
 
     @Test

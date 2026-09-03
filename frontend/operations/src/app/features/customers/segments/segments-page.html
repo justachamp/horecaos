@@ -1,0 +1,219 @@
+<div class="segments">
+  <div class="header">
+    <h1 class="q-title">{{ 'customers.segments.title' | t }}</h1>
+    <button type="button" class="primary" (click)="openCreate()">
+      {{ 'customers.segments.create.action' | t }}
+    </button>
+  </div>
+  <p class="q-body-sm subtitle">{{ 'customers.segments.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.segments.column.name' | t }}</th>
+            <th class="q-caption">{{ 'customers.segments.column.description' | t }}</th>
+            <th class="q-caption num">{{ 'customers.segments.column.lastReach' | t }}</th>
+            <th class="q-caption">{{ 'customers.segments.column.updatedAt' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (segment of segments(); track segment.audienceId) {
+            <tr>
+              <td class="q-body-sm">
+                <button type="button" class="link" (click)="openEdit(segment)">
+                  {{ segment.name }}
+                </button>
+              </td>
+              <td class="q-body-sm muted">{{ segment.description ?? '—' }}</td>
+              <td class="q-body-sm q-tnum num">{{ segment.lastReach ?? '—' }}</td>
+              <td class="q-body-sm q-tnum">{{ formatUpdatedAt(segment.updatedAt) }}</td>
+              <td class="q-body-sm actions">
+                <button type="button" class="secondary" (click)="startSnapshot(segment)">
+                  {{ 'customers.segments.snapshot.action' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">{{ 'customers.segments.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  @if (snapshottingId(); as audienceId) {
+    <div class="panel snapshot-panel">
+      <h2 class="q-subhead">{{ 'customers.segments.snapshot.title' | t }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ 'customers.segments.snapshot.channel' | t }}</span>
+        <select
+          [value]="snapshotChannel()"
+          (change)="snapshotChannel.set($any($event.target).value)"
+        >
+          <option value="SMS">SMS</option>
+          <option value="EMAIL">Email</option>
+          <option value="PUSH">Push</option>
+          <option value="MESSAGING_APP">Telegram</option>
+        </select>
+      </label>
+      @if (snapshotError(); as message) {
+        <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+      }
+      @if (snapshotResult(); as result) {
+        <p class="q-body-sm result-text">
+          {{ 'customers.segments.snapshot.result' | t: { count: result.members } }}
+        </p>
+      }
+      <div class="panel__actions">
+        <button type="button" class="secondary" (click)="cancelSnapshot()">
+          {{ 'customers.segments.cancel' | t }}
+        </button>
+        <button type="button" class="primary" [disabled]="snapshotBusy()" (click)="confirmSnapshot()">
+          {{
+            snapshotBusy()
+              ? ('customers.segments.snapshot.building' | t)
+              : ('customers.segments.snapshot.confirm' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (builderOpen()) {
+    <div class="panel builder-panel">
+      <h2 class="q-subhead">
+        {{
+          (editingAudienceId() ? 'customers.segments.builder.editTitle' : 'customers.segments.builder.createTitle')
+            | t
+        }}
+      </h2>
+
+      <label class="field">
+        <span class="q-caption">{{ 'customers.segments.builder.name' | t }}</span>
+        <input type="text" [value]="name()" (input)="name.set($any($event.target).value)" />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ 'customers.segments.builder.description' | t }}</span>
+        <input
+          type="text"
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+        />
+      </label>
+
+      <div class="predicates">
+        <span class="q-caption">{{ 'customers.segments.builder.predicates' | t }}</span>
+        @for (row of rows(); track $index) {
+          <div class="predicate-row">
+            <select
+              class="predicate-row__type"
+              [value]="row.type"
+              (change)="updateRow($index, { type: $any($event.target).value })"
+            >
+              @for (type of predicateTypes; track type) {
+                <option [value]="type">{{ typeLabel(type) }}</option>
+              }
+            </select>
+            <select
+              class="predicate-row__operator"
+              [value]="row.operator"
+              (change)="updateRow($index, { operator: $any($event.target).value })"
+            >
+              @for (operator of operatorsFor(row.type); track operator) {
+                <option [value]="operator">{{ operatorLabel(operator) }}</option>
+              }
+            </select>
+
+            @switch (valueKindOf(row.type)) {
+              @case ('NUMERIC') {
+                <input
+                  type="number"
+                  class="predicate-row__value"
+                  [value]="row.numericLow"
+                  (input)="updateRow($index, { numericLow: $any($event.target).value })"
+                />
+                @if (row.operator === 'BETWEEN') {
+                  <span class="q-caption">—</span>
+                  <input
+                    type="number"
+                    class="predicate-row__value"
+                    [value]="row.numericHigh"
+                    (input)="updateRow($index, { numericHigh: $any($event.target).value })"
+                  />
+                }
+              }
+              @case ('DATE_RANGE') {
+                <input
+                  type="date"
+                  class="predicate-row__value"
+                  [value]="row.dateLow"
+                  (input)="updateRow($index, { dateLow: $any($event.target).value })"
+                />
+                <span class="q-caption">—</span>
+                <input
+                  type="date"
+                  class="predicate-row__value"
+                  [value]="row.dateHigh"
+                  (input)="updateRow($index, { dateHigh: $any($event.target).value })"
+                />
+              }
+              @case ('TEXT_SET') {
+                <input
+                  type="text"
+                  class="predicate-row__value predicate-row__value--wide"
+                  [value]="row.textValues"
+                  [placeholder]="'customers.segments.builder.textValuesPlaceholder' | t"
+                  (input)="updateRow($index, { textValues: $any($event.target).value })"
+                />
+              }
+            }
+
+            <button
+              type="button"
+              class="predicate-row__remove"
+              [disabled]="rows().length <= 1"
+              (click)="removeRow($index)"
+            >
+              ×
+            </button>
+          </div>
+        }
+        <button type="button" class="secondary add-row" (click)="addRow()">
+          {{ 'customers.segments.builder.addPredicate' | t }}
+        </button>
+      </div>
+
+      @if (saveError(); as message) {
+        <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+      }
+
+      <div class="panel__actions">
+        <button type="button" class="secondary" (click)="closeBuilder()">
+          {{ 'customers.segments.cancel' | t }}
+        </button>
+        <button type="button" class="primary" [disabled]="!canSave()" (click)="save()">
+          {{ saving() ? ('customers.segments.builder.saving' | t) : ('customers.segments.builder.save' | t) }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

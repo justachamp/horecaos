@@ -352,6 +352,92 @@
         },
         "type" : "object"
       },
+      "AuditEventDetail" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "actorDisplay" : {
+            "type" : "string"
+          },
+          "actorSubject" : {
+            "type" : "string"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "auditClass" : {
+            "type" : "string"
+          },
+          "capabilityUsed" : {
+            "type" : "string"
+          },
+          "causationId" : {
+            "type" : "string"
+          },
+          "changeDocument" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "correlationId" : {
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "onBehalfOfSubject" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "recordedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestId" : {
+            "type" : "string"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "type" : "string"
+          },
+          "targetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "targetType" : {
+            "type" : "string"
+          },
+          "targetVersion" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AuditEventView" : {
         "properties" : {
           "actionCode" : {
@@ -874,6 +960,132 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "CommercialControlPlaneControllerEntitlementSnapshotResponse" : {
+        "properties" : {
+          "entitlements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CommercialControlPlaneControllerResolvedEntitlement"
+            },
+            "type" : "array"
+          },
+          "hash" : {
+            "type" : "string"
+          },
+          "resolvedAt" : {
+            "type" : "string"
+          },
+          "subscriptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CommercialControlPlaneControllerResolvedEntitlement" : {
+        "properties" : {
+          "declaredMode" : {
+            "type" : "string"
+          },
+          "effectiveMode" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "entitlementKey" : {
+            "type" : "string"
+          },
+          "limit" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "overageUnitPrice" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "resetPeriod" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CommercialControlPlaneControllerSubscriptionResponse" : {
+        "properties" : {
+          "currentPeriodEnd" : {
+            "type" : "string"
+          },
+          "currentPeriodStart" : {
+            "type" : "string"
+          },
+          "planVersionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "startAt" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "subscriptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "suspensionReason" : {
+            "type" : "string"
+          },
+          "trialEndAt" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CommercialControlPlaneControllerUsageResponse" : {
+        "properties" : {
+          "adjustedQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "consumedQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "entitlementKey" : {
+            "type" : "string"
+          },
+          "lastEventAt" : {
+            "type" : "string"
+          },
+          "measuredQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "movementCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "periodEnd" : {
+            "type" : "string"
+          },
+          "periodKey" : {
+            "type" : "string"
+          },
+          "periodStart" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ConnectField" : {
@@ -1835,31 +2047,6 @@
           }
         },
         "required" : [ "enforcementMode", "entitlementKey" ],
-        "type" : "object"
-      },
-      "EntitlementSnapshotResponse" : {
-        "properties" : {
-          "entitlements" : {
-            "items" : {
-              "$ref" : "#/components/schemas/ResolvedEntitlement"
-            },
-            "type" : "array"
-          },
-          "hash" : {
-            "type" : "string"
-          },
-          "resolvedAt" : {
-            "type" : "string"
-          },
-          "subscriptionId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "tenantId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "ExceptionRequest" : {
@@ -4138,36 +4325,6 @@
         "required" : [ "reason", "resolutionCode" ],
         "type" : "object"
       },
-      "ResolvedEntitlement" : {
-        "properties" : {
-          "declaredMode" : {
-            "type" : "string"
-          },
-          "effectiveMode" : {
-            "type" : "string"
-          },
-          "enabled" : {
-            "type" : "boolean"
-          },
-          "entitlementKey" : {
-            "type" : "string"
-          },
-          "limit" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "overageUnitPrice" : {
-            "$ref" : "#/components/schemas/ApiMoney"
-          },
-          "resetPeriod" : {
-            "type" : "string"
-          },
-          "source" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "ResolvedPricesResponse" : {
         "properties" : {
           "amountsMinor" : {
@@ -4802,41 +4959,6 @@
         },
         "type" : "object"
       },
-      "SubscriptionResponse" : {
-        "properties" : {
-          "currentPeriodEnd" : {
-            "type" : "string"
-          },
-          "currentPeriodStart" : {
-            "type" : "string"
-          },
-          "planVersionId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "startAt" : {
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "subscriptionId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "suspensionReason" : {
-            "type" : "string"
-          },
-          "trialEndAt" : {
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int64",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "SuspendScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
@@ -5184,42 +5306,6 @@
           }
         },
         "required" : [ "entityId", "entityType", "locale", "name" ],
-        "type" : "object"
-      },
-      "UsageResponse" : {
-        "properties" : {
-          "adjustedQuantity" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "consumedQuantity" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "entitlementKey" : {
-            "type" : "string"
-          },
-          "lastEventAt" : {
-            "type" : "string"
-          },
-          "measuredQuantity" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "movementCount" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "periodEnd" : {
-            "type" : "string"
-          },
-          "periodKey" : {
-            "type" : "string"
-          },
-          "periodStart" : {
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "ValidationResponse" : {
@@ -6641,6 +6727,35 @@
           }
         }, {
           "in" : "query",
+          "name" : "outcome",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scopeType",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scopeId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "correlationId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "from",
           "required" : false,
           "schema" : {
@@ -6677,6 +6792,43 @@
           }
         },
         "summary" : "Search audit evidence within a tenant",
+        "tags" : [ "Audit" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/audit-events/{eventId}" : {
+      "get" : {
+        "description" : "The diff a settings or an order dispute is actually resolved with. Excluded from the list response on purpose (ADR 0027 §11.13): a change document can carry redacted structure that is still revealing in bulk, so retrieving it is a separate, individually audited read.",
+        "operationId" : "detail_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "eventId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuditEventDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One event's full record, including the change document",
         "tags" : [ "Audit" ]
       }
     },
@@ -9717,7 +9869,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/EntitlementSnapshotResponse"
+                  "$ref" : "#/components/schemas/CommercialControlPlaneControllerEntitlementSnapshotResponse"
                 }
               }
             },
@@ -11800,7 +11952,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/SubscriptionResponse"
+                  "$ref" : "#/components/schemas/CommercialControlPlaneControllerSubscriptionResponse"
                 }
               }
             },
@@ -11830,7 +11982,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/UsageResponse"
+                    "$ref" : "#/components/schemas/CommercialControlPlaneControllerUsageResponse"
                   },
                   "type" : "array"
                 }

@@ -185,6 +185,43 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/variant-sales")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Per-variant sales behind 7.7's «Продажи» tab",
+            description = "One row per product variant, summed over the range and split by "
+                    + "delivery vs. pickup, straight off reporting.fact_order_line joined to its "
+                    + "own order for the fulfilment type. Not a registry metric: the registry's "
+                    + "one-value-per-slice contract does not express a per-product breakdown, the "
+                    + "same reason order-grain reads get their own endpoint rather than folding "
+                    + "into /queries.")
+    public ResponseEntity<VariantSalesListResponse> variantSales(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) Integer limit) {
+
+        var result = queries.variantSales(tenantId, from, to, orEmpty(locationId), clampVariantLimit(limit));
+        return ResponseEntity.ok(new VariantSalesListResponse(
+                result.rows().stream().map(VariantSalesRowResponse::of).toList(),
+                result.maybeMore(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    private static final int VARIANT_SALES_DEFAULT_LIMIT = 200;
+    private static final int VARIANT_SALES_MAX_LIMIT = 500;
+
+    private static int clampVariantLimit(@Nullable Integer requested) {
+        if (requested == null) {
+            return VARIANT_SALES_DEFAULT_LIMIT;
+        }
+        if (requested < 1) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "limit must be at least 1", Map.of());
+        }
+        return Math.min(requested, VARIANT_SALES_MAX_LIMIT);
+    }
+
     private static JdbcReportingStore.OrderSort orderSort(String requested) {
         try {
             return JdbcReportingStore.OrderSort.valueOf(requested);
@@ -374,6 +411,37 @@ public class ReportingController {
      *                  {@code ReportQueryService.OrderListResult}
      */
     public record OrderListResponse(List<OrderRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /** One product's summed sales in range. */
+    public record VariantSalesRowResponse(
+            @Nullable UUID variantId,
+            @Nullable UUID categoryId,
+            String productName,
+            int totalQuantity,
+            long totalGrossSom,
+            long totalNetSom,
+            @Nullable Integer deliveryQuantity,
+            @Nullable Long deliveryNetSom,
+            @Nullable Integer pickupQuantity,
+            @Nullable Long pickupNetSom) {
+
+        static VariantSalesRowResponse of(JdbcReportingStore.VariantSalesRow row) {
+            return new VariantSalesRowResponse(
+                    row.variantId(),
+                    row.categoryId(),
+                    row.productName(),
+                    row.totalQuantity(),
+                    row.totalGrossSom(),
+                    row.totalNetSom(),
+                    row.deliveryQuantity(),
+                    row.deliveryNetSom(),
+                    row.pickupQuantity(),
+                    row.pickupNetSom());
+        }
+    }
+
+    public record VariantSalesListResponse(
+            List<VariantSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
 
     /** One (terminal status, cancellation reason) bucket. */
     public record OutcomeRowResponse(

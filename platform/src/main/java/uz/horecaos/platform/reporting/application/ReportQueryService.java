@@ -165,6 +165,22 @@ public class ReportQueryService {
     }
 
     /**
+     * Per-variant sales for Reports 7.7's «Продажи» tab. See {@code
+     * JdbcReportingStore#readVariantSales} for the delivery/pickup split.
+     */
+    @Transactional(readOnly = true)
+    public VariantSalesResult variantSales(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(tenantId, from, to, locationIds, limit);
+        return new VariantSalesResult(
+                rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
      * Every terminal status in range, split by cancellation reason — the
      * funnel's drop-offs and the cancellation panel's reason breakdown from one
      * read. See {@code JdbcReportingStore#readOrderOutcomes}.
@@ -364,6 +380,9 @@ public class ReportQueryService {
      *                  rows beyond it, not a claim that there are
      */
     public record OrderListResult(List<JdbcReportingStore.OrderRow> rows, boolean maybeMore, Provenance provenance) {}
+
+    public record VariantSalesResult(
+            List<JdbcReportingStore.VariantSalesRow> rows, boolean maybeMore, Provenance provenance) {}
 
     public record OutcomeResult(List<JdbcReportingStore.OutcomeRow> rows, Provenance provenance) {}
 

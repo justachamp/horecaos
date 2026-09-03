@@ -131,6 +131,26 @@ export interface OutcomeListResponse {
 /** Which axis {@link ReportingApi.orders} bounds and sorts its read by. */
 export type OrderSort = 'DATE_DESC' | 'DURATION_DESC' | 'LATENESS_DESC';
 
+/** One product's summed sales in range — 7.7's «Продажи» tab. Mirrors `ReportingController.VariantSalesRowResponse`. */
+export interface VariantSalesRowResponse {
+  readonly variantId: string | null;
+  readonly categoryId: string | null;
+  readonly productName: string;
+  readonly totalQuantity: number;
+  readonly totalGrossSom: number;
+  readonly totalNetSom: number;
+  readonly deliveryQuantity: number | null;
+  readonly deliveryNetSom: number | null;
+  readonly pickupQuantity: number | null;
+  readonly pickupNetSom: number | null;
+}
+
+export interface VariantSalesListResponse {
+  readonly rows: readonly VariantSalesRowResponse[];
+  readonly maybeMore: boolean;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -226,6 +246,23 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           channelCode: params.channelCode,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  async variantSales(
+    tenantId: string,
+    params: RangeParams & { readonly limit?: number },
+  ): Promise<VariantSalesListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          limit: params.limit,
         },
       }),
     );

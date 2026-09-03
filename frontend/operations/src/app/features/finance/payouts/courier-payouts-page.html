@@ -1,0 +1,144 @@
+<div class="payouts">
+  <h1 class="q-title">{{ 'finance.payouts.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'finance.payouts.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payouts.column.period' | t }}</th>
+            <th class="q-caption">{{ 'finance.payouts.column.status' | t }}</th>
+            <th class="q-caption num">{{ 'finance.payouts.column.delivered' | t }}</th>
+            <th class="q-caption num">{{ 'finance.payouts.column.onTime' | t }}</th>
+            <th class="q-caption num">{{ 'finance.payouts.column.payable' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (period of periods(); track period.periodId) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ period.periodStart }} – {{ period.periodEnd }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge" [class]="'status-badge--' + period.status.toLowerCase()">
+                  {{ statusLabel(period.status) }}
+                </span>
+                @if (period.complianceFlag) {
+                  <span class="compliance-flag q-caption">{{ 'finance.payouts.complianceFlag' | t }}</span>
+                }
+              </td>
+              <td class="q-body-sm q-tnum num">{{ period.deliveredCount }}</td>
+              <td class="q-body-sm q-tnum num">{{ period.onTimeCount }}</td>
+              <td class="q-body-sm q-tnum num">{{ money(period.amountPayableMinor, period.currency) }}</td>
+              <td class="q-body-sm actions">
+                @if (period.status === 'OPEN' || period.status === 'CLOSING') {
+                  <button type="button" class="secondary" (click)="startClose(period)">
+                    {{ 'finance.payouts.close.action' | t }}
+                  </button>
+                }
+                @if (period.status === 'CLOSED') {
+                  <button type="button" class="secondary" (click)="startPayout(period)">
+                    {{ 'finance.payouts.authorise.action' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">{{ 'finance.payouts.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="ledger-lookup">
+        <h2 class="q-subhead">{{ 'finance.payouts.ledger.title' | t }}</h2>
+        <div class="lookup-row">
+          <input
+            type="text"
+            [value]="courierIdInput()"
+            (input)="courierIdInput.set($any($event.target).value)"
+            [placeholder]="'finance.payouts.ledger.placeholder' | t"
+          />
+          <button type="button" class="secondary" [disabled]="ledgerLoading()" (click)="lookupLedger()">
+            {{ 'finance.payouts.ledger.lookup' | t }}
+          </button>
+        </div>
+        @if (ledgerError(); as message) {
+          <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+        }
+        @if (ledger(); as l) {
+          <p class="q-body-sm balance">
+            {{ 'finance.payouts.ledger.balance' | t }}:
+            <span class="q-tnum">{{ money(l.balanceMinor, 'UZS') }}</span>
+          </p>
+          <table class="table ledger-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'finance.payouts.ledger.column.type' | t }}</th>
+                <th class="q-caption num">{{ 'finance.payouts.ledger.column.amount' | t }}</th>
+                <th class="q-caption">{{ 'finance.payouts.ledger.column.occurredAt' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of l.entries; track entry.entryId) {
+                <tr>
+                  <td class="q-body-sm">{{ entry.entryType }}</td>
+                  <td class="q-body-sm q-tnum num">{{ money(entry.amountMinor, entry.currency) }}</td>
+                  <td class="q-body-sm q-tnum">{{ entry.occurredAt }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+  }
+
+  @if (actingPeriodId()) {
+    <div class="panel">
+      <h2 class="q-subhead">
+        {{ (actionKind() === 'close' ? 'finance.payouts.close.title' : 'finance.payouts.authorise.title') | t }}
+      </h2>
+      @if (actionKind() === 'payout') {
+        <label class="field">
+          <span class="q-caption">{{ 'finance.payouts.authorise.method' | t }}</span>
+          <select [value]="payoutMethod()" (change)="payoutMethod.set($any($event.target).value)">
+            <option value="CASH_AT_BRANCH">{{ 'finance.payouts.method.CASH_AT_BRANCH' | t }}</option>
+            <option value="BANK_TRANSFER">{{ 'finance.payouts.method.BANK_TRANSFER' | t }}</option>
+            <option value="CARD_TRANSFER">{{ 'finance.payouts.method.CARD_TRANSFER' | t }}</option>
+          </select>
+        </label>
+      }
+      <label class="field">
+        <span class="q-caption">{{ 'finance.payouts.reason' | t }}</span>
+        <input type="text" [value]="actionReason()" (input)="actionReason.set($any($event.target).value)" />
+      </label>
+      @if (actionError(); as message) {
+        <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+      }
+      <div class="panel__actions">
+        <button type="button" class="secondary" (click)="cancelAction()">
+          {{ 'customers.segments.cancel' | t }}
+        </button>
+        <button type="button" class="primary" [disabled]="!canSubmitAction()" (click)="submitAction()">
+          {{ actionBusy() ? ('customers.segments.builder.saving' | t) : ('finance.payouts.confirm' | t) }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

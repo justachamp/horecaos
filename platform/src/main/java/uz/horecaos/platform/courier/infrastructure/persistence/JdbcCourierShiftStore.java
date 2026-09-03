@@ -341,6 +341,44 @@ public class JdbcCourierShiftStore {
                 .optional();
     }
 
+    /**
+     * Every cash handover for a tenant, worst-first — Finance 8.3's cash
+     * reconciliation worklist.
+     *
+     * <p>{@code PENDING} (the courier has not declared yet) and {@code DECLARED}
+     * (declared, awaiting the cashier's count) sort ahead of the settled
+     * outcomes, and within {@code DECLARED} the largest unresolved variance
+     * exposure — {@code expected_minor} until a count exists — sorts first: that
+     * is the handover most worth a cashier's attention before the shift's
+     * courier leaves.
+     */
+    public List<HandoverRow> listHandovers(
+            UUID tenantId, @Nullable String status, @Nullable UUID locationId, int limit) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("limit", limit);
+
+        StringBuilder filter = new StringBuilder(" WHERE tenant_id = :tenantId");
+        if (status != null) {
+            filter.append(" AND status = :status");
+            params.put("status", status);
+        }
+        if (locationId != null) {
+            filter.append(" AND location_id = :locationId");
+            params.put("locationId", locationId);
+        }
+
+        return jdbc.sql(SELECT_HANDOVER + filter + """
+                 ORDER BY CASE status WHEN 'PENDING' THEN 0 WHEN 'DECLARED' THEN 1
+                                       WHEN 'VARIANCE_RAISED' THEN 2 ELSE 3 END,
+                          expected_minor DESC, created_at
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query(JdbcCourierShiftStore::mapHandover)
+                .list();
+    }
+
     public Optional<HandoverRow> findHandoverByShift(UUID tenantId, UUID shiftId) {
         return jdbc.sql(SELECT_HANDOVER + " WHERE tenant_id = :tenantId AND shift_id = :shiftId")
                 .param("tenantId", tenantId)

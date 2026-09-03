@@ -101,6 +101,71 @@ public class JdbcAudienceStore {
     }
 
     /**
+     * Every audience defined for a brand, most recently touched first, each
+     * beside its latest completed snapshot's reach.
+     *
+     * <p>The snapshot columns are a {@code LEFT JOIN LATERAL} rather than a
+     * second round trip per row: Customers 5.3 lists audiences to decide which
+     * one to open, and a list that cannot say "last reached 4,102 people" is a
+     * list of names nobody can act on without opening every row.
+     */
+    public List<AudienceSummaryRow> listAudiences(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT a.id, a.name, a.description, a.status, a.definition_version,
+                       a.created_by, a.created_at, a.updated_at,
+                       s.member_count AS last_member_count, s.completed_at AS last_completed_at
+                  FROM marketing.audiences a
+                  LEFT JOIN LATERAL (
+                      SELECT member_count, completed_at
+                        FROM marketing.audience_snapshots
+                       WHERE tenant_id = a.tenant_id AND audience_id = a.id AND status = 'READY'
+                       ORDER BY completed_at DESC NULLS LAST
+                       LIMIT 1
+                  ) s ON true
+                 WHERE a.tenant_id = :tenantId AND a.brand_id = :brandId
+                 ORDER BY a.updated_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new AudienceSummaryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("name"),
+                        row.getString("description"),
+                        row.getString("status"),
+                        row.getInt("definition_version"),
+                        row.getObject("created_by", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("updated_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("last_member_count", Integer.class),
+                        instant(row.getObject("last_completed_at", OffsetDateTime.class))))
+                .list();
+    }
+
+    /** One audience's own record, with its description — {@link #findAudience} omits it for callers that need only identity. */
+    public Optional<AudienceDetailRow> findAudienceDetail(UUID tenantId, UUID audienceId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, name, description, status, definition_version,
+                       created_by, created_at, updated_at
+                  FROM marketing.audiences
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", audienceId)
+                .query((ResultSet row, int number) -> new AudienceDetailRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getString("name"),
+                        row.getString("description"),
+                        row.getString("status"),
+                        row.getInt("definition_version"),
+                        row.getObject("created_by", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("updated_at", OffsetDateTime.class).toInstant()))
+                .optional();
+    }
+
+    /**
      * Replaces an audience's predicate set, bumping its definition version.
      *
      * <p>The old rows are deleted rather than kept. That is the one place this
@@ -482,6 +547,32 @@ public class JdbcAudienceStore {
 
     public record AudienceRow(
             UUID id, UUID tenantId, UUID brandId, String name, String status, int definitionVersion, UUID createdBy) {}
+
+    /** One row of {@link #listAudiences}: an audience beside its latest reach. */
+    public record AudienceSummaryRow(
+            UUID id,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            UUID createdBy,
+            Instant createdAt,
+            Instant updatedAt,
+            @Nullable Integer lastSnapshotMemberCount,
+            @Nullable Instant lastSnapshotCompletedAt) {}
+
+    /** One audience's own record, for Customers 5.3's detail view. */
+    public record AudienceDetailRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            UUID createdBy,
+            Instant createdAt,
+            Instant updatedAt) {}
 
     /**
      * A projection row with the account's lifecycle state beside it.

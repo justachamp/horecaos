@@ -1,0 +1,69 @@
+<div class="products">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.products.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'reports.products.column.name' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.deliveryQty' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.deliverySum' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.pickupQty' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.pickupSum' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.totalQty' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.totalSum' | t }}</th>
+            <th class="q-caption num">{{ 'reports.products.column.share' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.key) {
+            <tr>
+              <td class="q-body-sm">{{ row.name }}</td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.deliveryQuantity === null ? '—' : formatCountValue(row.deliveryQuantity) }}
+              </td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.deliveryNetSom === null ? '—' : formatMoneyValue(row.deliveryNetSom) }}
+              </td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.pickupQuantity === null ? '—' : formatCountValue(row.pickupQuantity) }}
+              </td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.pickupNetSom === null ? '—' : formatMoneyValue(row.pickupNetSom) }}
+              </td>
+              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
+              <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="8">{{ 'reports.empty.period' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (maybeMore()) {
+        <p class="q-caption">{{ 'reports.products.maybeMore' | t }}</p>
+      }
+      <p class="q-body-sm not-built-note">{{ 'reports.products.abcXyzNotBuilt' | t }}</p>
+    }
+  }
+</div>

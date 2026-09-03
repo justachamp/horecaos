@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,8 +29,12 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.marketing.application.AudienceService;
 import uz.horecaos.platform.marketing.application.CampaignService;
 import uz.horecaos.platform.marketing.application.MarketingSuppressionService;
+import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
+import uz.horecaos.platform.marketing.domain.PredicateOperator;
+import uz.horecaos.platform.marketing.domain.PredicateType;
 import uz.horecaos.platform.marketing.domain.SuppressionReason;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAudienceStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -60,6 +67,7 @@ public class OperationsMarketingController {
     private final CampaignService campaigns;
     private final MarketingSuppressionService suppressions;
     private final JdbcCampaignStore campaignStore;
+    private final JdbcAudienceStore audienceStore;
     private final CurrentActor currentActor;
 
     public OperationsMarketingController(
@@ -67,12 +75,109 @@ public class OperationsMarketingController {
             CampaignService campaigns,
             MarketingSuppressionService suppressions,
             JdbcCampaignStore campaignStore,
+            JdbcAudienceStore audienceStore,
             CurrentActor currentActor) {
         this.audiences = audiences;
         this.campaigns = campaigns;
         this.suppressions = suppressions;
         this.campaignStore = campaignStore;
+        this.audienceStore = audienceStore;
         this.currentActor = currentActor;
+    }
+
+    // ---------------------------------------------------------------- audiences,
+    // Customers 5.3's segment builder over ADR 0044's closed predicate catalogue
+
+    @GetMapping("/audiences")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every segment defined for this brand",
+            description = "Most recently touched first, each beside its latest completed "
+                    + "snapshot's reach — a saved-segment entity Customers 5.3 lists to decide "
+                    + "which one to open or hand to a campaign (Marketing 6.4).")
+    public ResponseEntity<List<AudienceSummaryResponse>> audienceList(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        return ResponseEntity.ok(audienceStore.listAudiences(tenantId, brandId).stream()
+                .map(AudienceSummaryResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/audiences/{audienceId}")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND)
+    @Operation(summary = "One segment's predicates, for the builder to reopen and edit")
+    public ResponseEntity<AudienceDetailResponse> audienceDetail(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID audienceId) {
+
+        var audience = audienceStore
+                .findAudienceDetail(tenantId, audienceId)
+                .filter(row -> row.brandId().equals(brandId))
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No audience %s belongs to this brand".formatted(audienceId)));
+
+        List<AudiencePredicate> predicates =
+                audienceStore.loadPredicates(tenantId, audienceId, audience.definitionVersion());
+        return ResponseEntity.ok(AudienceDetailResponse.of(audience, predicates));
+    }
+
+    @PostMapping("/audiences")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Define a new segment",
+            description = "The RFM builder (recency, frequency, monetary, registration source, "
+                    + "birthday window) over ADR 0044's closed predicate catalogue. An audience "
+                    + "needs at least one predicate: an empty definition is the whole customer "
+                    + "base, and that must be asked for rather than defaulted to.")
+    public ResponseEntity<DefineAudienceResponse> defineAudience(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody DefineAudienceRequest body) {
+
+        try {
+            UUID audienceId = audiences.define(
+                    tenantId,
+                    brandId,
+                    body.name(),
+                    body.description(),
+                    body.predicates().stream()
+                            .map(AudiencePredicateRequest::toDomain)
+                            .toList(),
+                    actorId(),
+                    correlationId());
+            return ResponseEntity.ok(new DefineAudienceResponse(audienceId));
+        } catch (IllegalArgumentException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        }
+    }
+
+    @PutMapping("/audiences/{audienceId}")
+    @RequiresCapability(value = Capability.AUDIENCE_READ, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Replace a segment's predicates",
+            description = "Bumps the audience's definition_version. A snapshot already built "
+                    + "under an earlier version keeps recording that version, so a dispute about "
+                    + "who a past send targeted is answered against the definition of the day.")
+    public ResponseEntity<RedefineAudienceResponse> redefineAudience(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID audienceId,
+            @Valid @RequestBody RedefineAudienceRequest body) {
+
+        var audience = audienceStore
+                .findAudienceDetail(tenantId, audienceId)
+                .filter(row -> row.brandId().equals(brandId))
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No audience %s belongs to this brand".formatted(audienceId)));
+
+        try {
+            int version = audiences.redefine(
+                    tenantId,
+                    audience.id(),
+                    body.predicates().stream()
+                            .map(AudiencePredicateRequest::toDomain)
+                            .toList());
+            return ResponseEntity.ok(new RedefineAudienceResponse(version));
+        } catch (IllegalArgumentException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        }
     }
 
     @PostMapping("/audiences/{audienceId}/snapshots")
@@ -367,6 +472,130 @@ public class OperationsMarketingController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, value + " is not a suppression reason");
         }
     }
+
+    /** One saved segment, beside its latest completed snapshot's reach. */
+    public record AudienceSummaryResponse(
+            UUID audienceId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            Instant createdAt,
+            Instant updatedAt,
+            @Nullable Integer lastReach,
+            @Nullable Instant lastEvaluatedAt) {
+
+        static AudienceSummaryResponse of(JdbcAudienceStore.AudienceSummaryRow row) {
+            return new AudienceSummaryResponse(
+                    row.id(),
+                    row.name(),
+                    row.description(),
+                    row.status(),
+                    row.definitionVersion(),
+                    row.createdAt(),
+                    row.updatedAt(),
+                    row.lastSnapshotMemberCount(),
+                    row.lastSnapshotCompletedAt());
+        }
+    }
+
+    /** One segment's full definition, for the builder to reopen. */
+    public record AudienceDetailResponse(
+            UUID audienceId,
+            String name,
+            @Nullable String description,
+            String status,
+            int definitionVersion,
+            Instant createdAt,
+            Instant updatedAt,
+            List<AudiencePredicateResponse> predicates) {
+
+        static AudienceDetailResponse of(JdbcAudienceStore.AudienceDetailRow row, List<AudiencePredicate> predicates) {
+            return new AudienceDetailResponse(
+                    row.id(),
+                    row.name(),
+                    row.description(),
+                    row.status(),
+                    row.definitionVersion(),
+                    row.createdAt(),
+                    row.updatedAt(),
+                    predicates.stream().map(AudiencePredicateResponse::of).toList());
+        }
+    }
+
+    public record AudiencePredicateResponse(
+            String type,
+            String operator,
+            @Nullable Long numericLow,
+            @Nullable Long numericHigh,
+            @Nullable LocalDate dateLow,
+            @Nullable LocalDate dateHigh,
+            @Nullable List<String> textValues,
+            @Nullable UUID audienceId) {
+
+        static AudiencePredicateResponse of(AudiencePredicate predicate) {
+            return new AudiencePredicateResponse(
+                    predicate.type().name(),
+                    predicate.operator().name(),
+                    predicate.numericLow(),
+                    predicate.numericHigh(),
+                    predicate.dateLow(),
+                    predicate.dateHigh(),
+                    predicate.textValues(),
+                    predicate.audienceId());
+        }
+    }
+
+    /**
+     * One predicate over the wire, from ADR 0044's closed catalogue.
+     *
+     * <p>Unknown {@code type}/{@code operator} names and a value shape the type
+     * rejects both fail here as {@code VALIDATION_FAILED} rather than reaching
+     * {@link AudiencePredicate}'s constructor as an unchecked exception — the
+     * distinction between "you asked for something that does not exist" and a
+     * platform error is the whole reason the error code exists.
+     */
+    public record AudiencePredicateRequest(
+            @NotBlank String type,
+            @NotBlank String operator,
+            @Nullable Long numericLow,
+            @Nullable Long numericHigh,
+            @Nullable LocalDate dateLow,
+            @Nullable LocalDate dateHigh,
+            @Nullable List<String> textValues,
+            @Nullable UUID audienceId) {
+
+        AudiencePredicate toDomain() {
+            try {
+                PredicateType predicateType = PredicateType.valueOf(type());
+                PredicateOperator predicateOperator = PredicateOperator.valueOf(operator());
+                return new AudiencePredicate(
+                        predicateType,
+                        predicateOperator,
+                        numericLow(),
+                        numericHigh(),
+                        dateLow(),
+                        dateHigh(),
+                        textValues(),
+                        audienceId());
+            } catch (IllegalArgumentException invalid) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+            }
+        }
+    }
+
+    public record DefineAudienceRequest(
+            @NotBlank @Size(max = 120) String name,
+            @Size(max = 500) @Nullable String description,
+            @NotNull List<@Valid AudiencePredicateRequest> predicates) {}
+
+    public record RedefineAudienceRequest(@NotNull List<@Valid AudiencePredicateRequest> predicates) {}
+
+    /** Carries nothing but a generated id — no personal data of any kind. */
+    public record DefineAudienceResponse(UUID audienceId) {}
+
+    /** Carries nothing but a version counter — no personal data of any kind. */
+    public record RedefineAudienceResponse(int definitionVersion) {}
 
     /**
      * What channel and consent purpose to evaluate the audience against.

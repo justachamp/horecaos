@@ -1,0 +1,107 @@
+<div class="subscription">
+  <h1 class="q-title">{{ 'finance.subscription.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'finance.subscription.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (subscription(); as s) {
+        <div class="plan-card">
+          <div class="plan-card__row">
+            <span class="q-subhead">{{ s.planCode }} · v{{ s.planVersionNumber }}</span>
+            <span class="status-badge">{{ statusLabel(s.status) }}</span>
+          </div>
+          <div class="plan-card__price q-data-lg q-tnum">
+            {{ money(s.price) }} <span class="q-caption">/ {{ s.billingPeriod }}</span>
+          </div>
+          <p class="q-body-sm">
+            {{ 'finance.subscription.period' | t }}: {{ s.currentPeriodStart }} – {{ s.currentPeriodEnd }}
+          </p>
+          @if (s.trialEndAt) {
+            <p class="q-body-sm muted">{{ 'finance.subscription.trialEnds' | t }}: {{ s.trialEndAt }}</p>
+          }
+          @if (s.suspensionReason) {
+            <p class="q-body-sm suspension">{{ s.suspensionReason }}</p>
+          }
+        </div>
+      } @else if (subscriptionDenied()) {
+        <p class="q-body-sm denied">{{ 'finance.subscription.planDenied' | t }}</p>
+      } @else {
+        <p class="q-body-sm muted">{{ 'finance.subscription.noSubscription' | t }}</p>
+      }
+
+      @if (entitlements(); as e) {
+        <h2 class="q-subhead section-title">{{ 'finance.subscription.entitlements.title' | t }}</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'finance.subscription.entitlements.key' | t }}</th>
+              <th class="q-caption num">{{ 'finance.subscription.entitlements.limit' | t }}</th>
+              <th class="q-caption">{{ 'finance.subscription.entitlements.mode' | t }}</th>
+              <th class="q-caption">{{ 'finance.subscription.entitlements.source' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entitlement of e.entitlements; track entitlement.entitlementKey) {
+              <tr>
+                <td class="q-body-sm q-mono">{{ entitlement.entitlementKey }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ entitlement.limit === null ? '—' : entitlement.limit }}
+                </td>
+                <td class="q-body-sm">{{ entitlement.effectiveMode }}</td>
+                <td class="q-body-sm muted">{{ entitlement.source }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="4">{{ 'finance.subscription.entitlements.empty' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <h2 class="q-subhead section-title">{{ 'finance.subscription.usage.title' | t }}</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.subscription.usage.key' | t }}</th>
+            <th class="q-caption">{{ 'finance.subscription.usage.period' | t }}</th>
+            <th class="q-caption num">{{ 'finance.subscription.usage.measured' | t }}</th>
+            <th class="q-caption num">{{ 'finance.subscription.usage.adjusted' | t }}</th>
+            <th class="q-caption num">{{ 'finance.subscription.usage.consumed' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of usage(); track row.entitlementKey + row.periodKey) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ row.entitlementKey }}</td>
+              <td class="q-body-sm">{{ row.periodStart }} – {{ row.periodEnd }}</td>
+              <td class="q-body-sm q-tnum num">{{ row.measuredQuantity }}</td>
+              <td class="q-body-sm q-tnum num">{{ row.adjustedQuantity }}</td>
+              <td class="q-body-sm q-tnum num">{{ row.consumedQuantity }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">{{ 'finance.subscription.usage.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <p class="q-body-sm not-built-note">{{ 'finance.subscription.notBuiltNote' | t }}</p>
+    }
+  }
+</div>

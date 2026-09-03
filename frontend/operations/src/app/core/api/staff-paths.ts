@@ -42,6 +42,20 @@ export const staffPaths = {
   brandLocations(tenantId: string, brandId: string): string {
     return `${this.brands(tenantId)}/${enc(brandId)}/locations`;
   },
+
+  /**
+   * `AuditController.operationsSearch`/`.operationsDetail` — 9.3's activity
+   * log, added this wave on the `/api/v1/operations/**` prefix (the
+   * pre-existing control-plane route this wave mirrors was never reachable
+   * from this app's OpenAPI group; ADR 0057).
+   */
+  auditEvents(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/audit-events`;
+  },
+
+  auditEvent(tenantId: string, eventId: string): string {
+    return `${this.auditEvents(tenantId)}/${enc(eventId)}`;
+  },
 } as const;
 
 function enc(value: string): string {

@@ -1,0 +1,101 @@
+.branches {
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.num {
+  text-align: right;
+}
+
+.sla-title {
+  margin-top: 32px;
+}
+
+.sla-table {
+  overflow-x: auto;
+}
+
+.sla-cell {
+  position: relative;
+}
+
+.sla-cell__share {
+  display: block;
+  color: var(--q-ink-subtle);
+}
+
+/* Green-to-red ramp keyed to the bucket, per statistics.md §2.3: read the shape of a row without reading numbers. */
+.sla-cell--under_30 {
+  background: color-mix(in srgb, var(--q-success, #1a7f37) 12%, transparent);
+}
+.sla-cell--m30_35 {
+  background: color-mix(in srgb, var(--q-success, #1a7f37) 6%, transparent);
+}
+.sla-cell--m35_40 {
+  background: transparent;
+}
+.sla-cell--m40_50 {
+  background: color-mix(in srgb, var(--q-warning) 10%, transparent);
+}
+.sla-cell--m50_60 {
+  background: color-mix(in srgb, var(--q-warning) 20%, transparent);
+}
+.sla-cell--over_60 {
+  background: color-mix(in srgb, var(--q-error) 15%, transparent);
+}
+
+.bucket-version {
+  margin-top: 8px;
+  color: var(--q-ink-subtle);
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}

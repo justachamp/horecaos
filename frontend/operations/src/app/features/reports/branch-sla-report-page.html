@@ -1,0 +1,88 @@
+<div class="branches">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.branches.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('singleLocation') {
+      <p class="q-body-sm muted">{{ 'reports.branches.singleLocation' | t }}</p>
+    }
+    @case ('ready') {
+      <h2 class="q-subhead">{{ 'reports.branches.leaderboard.title' | t }}</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.orders' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.revenue' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.averageCheck' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.cancelShare' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.prepTime' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of branchRows(); track row.locationId) {
+            <tr>
+              <td class="q-body-sm">{{ row.name }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orderCount) }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.grossSom) }}</td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom) }}
+              </td>
+              <td class="q-body-sm q-tnum num">{{ row.cancelShare }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatPrep(row.prepMedianSeconds) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <h2 class="q-subhead sla-title">{{ 'reports.branches.sla.title' | t }}</h2>
+      <table class="table sla-table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
+            @for (bucket of slaBucketCodes; track bucket) {
+              <th class="q-caption num">{{ bucketLabel(bucket) }}</th>
+            }
+            <th class="q-caption num">{{ 'reports.branches.sla.total' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of slaRows(); track row.locationId) {
+            <tr>
+              <td class="q-body-sm">{{ row.name }}</td>
+              @for (bucket of slaBucketCodes; track bucket) {
+                <td
+                  class="q-body-sm q-tnum num sla-cell"
+                  [class]="'sla-cell--' + bucket.toLowerCase()"
+                >
+                  {{ row.buckets[bucket].count }}
+                  <span class="sla-cell__share q-caption">{{ row.buckets[bucket].sharePercent }}%</span>
+                </td>
+              }
+              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.total) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <p class="q-caption bucket-version">
+        {{ 'reports.branches.sla.version' | t: { version: slaBucketSetVersion } }}
+      </p>
+    }
+  }
+</div>

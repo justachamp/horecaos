@@ -34,11 +34,17 @@ import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
 import uz.horecaos.platform.courier.domain.PayoutMethod;
+import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.HandoverRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.web.api.ApiException;
@@ -69,6 +75,8 @@ public class OperationsCourierController {
     private final JdbcCourierLedgerStore ledger;
     private final CourierRosterQueryService rosterQuery;
     private final JdbcCourierStore courierStore;
+    private final JdbcCourierShiftStore shiftStore;
+    private final JdbcDeliveryCostStore deliveryCostStore;
     private final CurrentActor currentActor;
 
     public OperationsCourierController(
@@ -82,6 +90,8 @@ public class OperationsCourierController {
             JdbcCourierLedgerStore ledger,
             CourierRosterQueryService rosterQuery,
             JdbcCourierStore courierStore,
+            JdbcCourierShiftStore shiftStore,
+            JdbcDeliveryCostStore deliveryCostStore,
             CurrentActor currentActor) {
         this.engagements = engagements;
         this.shifts = shifts;
@@ -93,6 +103,8 @@ public class OperationsCourierController {
         this.ledger = ledger;
         this.rosterQuery = rosterQuery;
         this.courierStore = courierStore;
+        this.shiftStore = shiftStore;
+        this.deliveryCostStore = deliveryCostStore;
         this.currentActor = currentActor;
     }
 
@@ -222,6 +234,24 @@ public class OperationsCourierController {
         return ResponseEntity.accepted().build();
     }
 
+    @GetMapping("/cash-handovers")
+    @RequiresCapability(Capability.COURIER_CASH_READ)
+    @Operation(
+            summary = "The fleet's cash handover worklist — Finance 8.3",
+            description = "PENDING and DECLARED first, largest expected amount first: the "
+                    + "handovers most worth a cashier's attention before the shift's courier "
+                    + "leaves. Optionally filtered to one branch or one status.")
+    public ResponseEntity<List<CashHandoverResponse>> cashHandovers(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID locationId,
+            @RequestParam(defaultValue = "100") int limit) {
+
+        return ResponseEntity.ok(shiftStore.listHandovers(tenantId, status, locationId, Math.min(limit, 500)).stream()
+                .map(CashHandoverResponse::of)
+                .toList());
+    }
+
     @PostMapping("/cash-handovers/{handoverId}/confirm")
     @RequiresCapability(value = Capability.COURIER_CASH_CONFIRM, mutating = true)
     @Operation(summary = "Confirm the cash actually received")
@@ -285,6 +315,23 @@ public class OperationsCourierController {
 
     // ------------------------------------------------------------- settlement
 
+    @GetMapping("/courier-settlement-periods")
+    @RequiresCapability(Capability.COURIER_SETTLEMENT_READ)
+    @Operation(
+            summary = "Every settlement period across the fleet — Finance 8.5's payout worklist",
+            description = "CLOSED periods (statement hashed, payout not yet authorised) sort "
+                    + "first by the largest amount payable. Optionally filtered to one status.")
+    public ResponseEntity<List<SettlementPeriodResponse>> settlementPeriods(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "100") int limit) {
+
+        SettlementPeriodStatus parsed = status == null ? null : parseSettlementStatus(status);
+        return ResponseEntity.ok(ledger.listPeriods(tenantId, parsed, Math.min(limit, 500)).stream()
+                .map(SettlementPeriodResponse::of)
+                .toList());
+    }
+
     @PostMapping("/courier-settlement-periods/{periodId}/close")
     @RequiresCapability(value = Capability.COURIER_SETTLEMENT_CLOSE, mutating = true)
     @Operation(
@@ -346,6 +393,36 @@ public class OperationsCourierController {
         return ResponseEntity.ok(deliveryCosts.report(tenantId, parseBasis(basis), from, to));
     }
 
+    @GetMapping("/partner-delivery-invoices")
+    @RequiresCapability(Capability.PARTNER_INVOICE_READ)
+    @Operation(
+            summary = "Every imported partner delivery invoice — Finance 8.4's reconciliation worklist",
+            description = "IMPORTED (not yet matched against HorecaOS's own shipments) sorts "
+                    + "first, largest total first. Optionally filtered to one status.")
+    public ResponseEntity<List<PartnerInvoiceResponse>> partnerInvoices(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "100") int limit) {
+
+        return ResponseEntity.ok(deliveryCostStore.listInvoices(tenantId, status, Math.min(limit, 500)).stream()
+                .map(PartnerInvoiceResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/partner-delivery-invoices/{invoiceId}")
+    @RequiresCapability(Capability.PARTNER_INVOICE_READ)
+    @Operation(summary = "One partner invoice, with its lines and their match state")
+    public ResponseEntity<PartnerInvoiceDetailResponse> partnerInvoiceDetail(
+            @PathVariable UUID tenantId, @PathVariable UUID invoiceId) {
+
+        InvoiceRow invoice = deliveryCostStore
+                .findInvoice(tenantId, invoiceId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No invoice %s for this tenant".formatted(invoiceId)));
+        List<InvoiceLineRow> lines = deliveryCostStore.linesOfInvoice(tenantId, invoiceId);
+        return ResponseEntity.ok(PartnerInvoiceDetailResponse.of(invoice, lines));
+    }
+
     @PostMapping("/partner-delivery-invoices")
     @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
     @Operation(summary = "Import a partner delivery invoice")
@@ -384,6 +461,14 @@ public class OperationsCourierController {
 
         return ResponseEntity.ok(
                 partnerInvoices.match(tenantId, invoiceId, body.shipmentsByProviderRef(), actor(), body.reason()));
+    }
+
+    private static SettlementPeriodStatus parseSettlementStatus(String status) {
+        try {
+            return SettlementPeriodStatus.valueOf(status);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown settlement period status: " + status);
+        }
     }
 
     private static @Nullable CostBasis parseBasis(@Nullable String basis) {
@@ -562,4 +647,140 @@ public class OperationsCourierController {
     record StatementResponse(UUID periodId, String statementHash, long amountPayableMinor, boolean complianceFlag) {}
 
     record PayoutResponse(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
+
+    /** One cash handover — Finance 8.3. */
+    record CashHandoverResponse(
+            UUID handoverId,
+            UUID shiftId,
+            UUID courierId,
+            UUID locationId,
+            String status,
+            String currency,
+            long expectedMinor,
+            @Nullable Long declaredMinor,
+            @Nullable Long confirmedMinor,
+            @Nullable Long varianceMinor,
+            @Nullable String declaredAt,
+            @Nullable String confirmedBy,
+            @Nullable String confirmedAt,
+            @Nullable String reasonCode) {
+
+        static CashHandoverResponse of(HandoverRow row) {
+            return new CashHandoverResponse(
+                    row.id(),
+                    row.shiftId(),
+                    row.courierId(),
+                    row.locationId(),
+                    row.status(),
+                    row.currency(),
+                    row.expectedMinor(),
+                    row.declaredMinor(),
+                    row.confirmedMinor(),
+                    row.varianceMinor(),
+                    row.declaredAt() == null ? null : row.declaredAt().toString(),
+                    row.confirmedBy(),
+                    row.confirmedAt() == null ? null : row.confirmedAt().toString(),
+                    row.reasonCode());
+        }
+    }
+
+    /** One settlement period — Finance 8.5. */
+    record SettlementPeriodResponse(
+            UUID periodId,
+            UUID courierId,
+            String periodStart,
+            String periodEnd,
+            String status,
+            String currency,
+            long grossEarningsMinor,
+            long adjustmentsMinor,
+            long cashHeldMinor,
+            long amountPayableMinor,
+            int deliveredCount,
+            int onTimeCount,
+            boolean complianceFlag,
+            @Nullable String statementHash,
+            @Nullable String closedAt,
+            @Nullable String settledAt) {
+
+        static SettlementPeriodResponse of(JdbcCourierLedgerStore.PeriodRow row) {
+            return new SettlementPeriodResponse(
+                    row.id(),
+                    row.courierId(),
+                    row.periodStart().toString(),
+                    row.periodEnd().toString(),
+                    row.status().name(),
+                    row.currency(),
+                    row.grossEarningsMinor(),
+                    row.adjustmentsMinor(),
+                    row.cashHeldMinor(),
+                    row.amountPayableMinor(),
+                    row.deliveredCount(),
+                    row.onTimeCount(),
+                    row.complianceFlag(),
+                    row.statementHash(),
+                    row.closedAt() == null ? null : row.closedAt().toString(),
+                    row.settledAt() == null ? null : row.settledAt().toString());
+        }
+    }
+
+    /** One partner delivery invoice, on the reconciliation worklist — Finance 8.4. */
+    record PartnerInvoiceResponse(
+            UUID invoiceId,
+            String providerCode,
+            String providerInvoiceRef,
+            @Nullable UUID legalEntityId,
+            String periodStart,
+            String periodEnd,
+            long totalMinor,
+            String currency,
+            String status) {
+
+        static PartnerInvoiceResponse of(InvoiceRow row) {
+            return new PartnerInvoiceResponse(
+                    row.id(),
+                    row.providerCode(),
+                    row.providerInvoiceRef(),
+                    row.legalEntityId(),
+                    row.periodStart().toString(),
+                    row.periodEnd().toString(),
+                    row.totalMinor(),
+                    row.currency(),
+                    row.status());
+        }
+    }
+
+    record PartnerInvoiceLineResponse(
+            UUID lineId,
+            String providerShipmentRef,
+            @Nullable UUID shipmentId,
+            long amountMinor,
+            String currency,
+            String chargeType,
+            String matchStatus,
+            @Nullable Long varianceMinor,
+            @Nullable String reasonCode) {
+
+        static PartnerInvoiceLineResponse of(InvoiceLineRow row) {
+            return new PartnerInvoiceLineResponse(
+                    row.id(),
+                    row.providerShipmentRef(),
+                    row.shipmentId(),
+                    row.amountMinor(),
+                    row.currency(),
+                    row.chargeType().name(),
+                    row.matchStatus().name(),
+                    row.varianceMinor(),
+                    row.reasonCode());
+        }
+    }
+
+    record PartnerInvoiceDetailResponse(PartnerInvoiceResponse invoice, List<PartnerInvoiceLineResponse> lines) {
+
+        static PartnerInvoiceDetailResponse of(InvoiceRow invoice, List<InvoiceLineRow> lines) {
+            return new PartnerInvoiceDetailResponse(
+                    PartnerInvoiceResponse.of(invoice),
+                    lines.stream().map(PartnerInvoiceLineResponse::of).toList());
+        }
+    }
 }

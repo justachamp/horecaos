@@ -1,0 +1,19 @@
+<div class="shell">
+  <nav class="shell__tabs" [attr.aria-label]="'customers.nav.label' | t">
+    <a
+      class="shell__tab"
+      routerLink="/customers"
+      routerLinkActive="shell__tab--on"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      {{ 'customers.nav.list' | t }}
+    </a>
+    <a class="shell__tab" routerLink="/customers/segments" routerLinkActive="shell__tab--on">
+      {{ 'customers.nav.segments' | t }}
+    </a>
+    <a class="shell__tab" routerLink="/customers/reviews" routerLinkActive="shell__tab--on">
+      {{ 'customers.nav.reviews' | t }}
+    </a>
+  </nav>
+  <router-outlet />
+</div>

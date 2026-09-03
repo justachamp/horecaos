@@ -1051,6 +1051,32 @@ public enum Capability {
     PARTNER_INVOICE_MANAGE("partner.invoice.manage", "partner", "invoice.manage"),
 
     /**
+     * ADR 0042: reading the tenant's cash handover worklist — Finance 8.3's cash
+     * reconciliation. Separate from {@link #COURIER_CASH_CONFIRM}, which the
+     * branch cashier alone holds: a finance operator sees the whole fleet's
+     * exposure without gaining the branch's own power to say what was actually
+     * counted.
+     */
+    COURIER_CASH_READ("courier.cash.read", "courier", "cash.read"),
+
+    /**
+     * ADR 0042: reading settlement periods across the tenant's fleet — Finance
+     * 8.5's payout worklist. Separate from {@link #COURIER_SETTLEMENT_CLOSE} and
+     * {@link #COURIER_PAYOUT_AUTHORISE} for the same reason {@link
+     * #COURIER_LEDGER_READ} is separate from acting on a ledger: seeing who is
+     * owed is not the power to close a period or release money.
+     */
+    COURIER_SETTLEMENT_READ("courier.settlement.read", "courier", "settlement.read"),
+
+    /**
+     * ADR 0042: reading imported partner delivery invoices — Finance 8.4's
+     * reconciliation worklist. Separate from {@link #PARTNER_INVOICE_MANAGE},
+     * which imports and matches: a finance operator reading the worklist does
+     * not need the power to alter what it says.
+     */
+    PARTNER_INVOICE_READ("partner.invoice.read", "partner", "invoice.read"),
+
+    /**
      * ADR 0059: authoring the next version of a brand's flow document, and
      * activating it. YAML is the only authoring surface — this is what gates
      * the control-plane endpoint that accepts it, in the {@link
