@@ -82,6 +82,8 @@ class IdempotentResponseClassificationTests {
             "CommercialAdminController#adjust",
             // A courier invoice id.
             "OperationsCourierController#importInvoice",
+            // A rate card id (IA 3.4) -- nothing about a person.
+            "OperationsCourierController#authorRateCard",
             // A grant id, and whether a revocation changed anything.
             "GrantController#grant",
             "GrantController#revoke",

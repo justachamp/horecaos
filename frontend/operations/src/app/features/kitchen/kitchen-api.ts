@@ -80,14 +80,46 @@ export interface StationResponse {
 export class KitchenApi {
   private readonly api = inject(ApiClient);
 
-  /** `stream=live`: FIRED + IN_PRODUCTION + READY — the KDS queue, §2.1. */
-  async board(scope: LocationScope, limit = 200): Promise<BoardResponse> {
+  /**
+   * `stream=live` (default): FIRED + IN_PRODUCTION + READY — the KDS queue,
+   * §2.1. `stream=buffer`: HELD tickets, oldest fire time first — the buffer,
+   * §2.2. `stream=pass`: READY tickets — the expo/handover queue, §2.3.
+   */
+  async board(
+    scope: LocationScope,
+    stream: 'live' | 'buffer' | 'pass' = 'live',
+    limit = 200,
+  ): Promise<BoardResponse> {
     const result = await firstValueFrom(
       this.api.get<BoardResponse>(operationsPaths.kitchenTickets(scope), {
-        params: { stream: 'live', limit },
+        params: { stream, limit },
       }),
     );
     return result.value;
+  }
+
+  /** Fire a buffered ticket now (§2.2's manual release). A second press is not an error. */
+  release(
+    scope: LocationScope,
+    ticketId: string,
+    expectedVersion: number,
+    reasonCode: string,
+  ): Observable<TicketResponse> {
+    return this.api.post<{ expectedVersion: number; reasonCode: string }, TicketResponse>(
+      operationsPaths.kitchenTicketRelease(scope, ticketId),
+      command({ expectedVersion, reasonCode }),
+    );
+  }
+
+  /**
+   * Custody transfer off the pass (§2.3, Раздача). A second press is not an
+   * error — the caller wanted the ticket off the pass, and it already is.
+   */
+  handOver(scope: LocationScope, ticketId: string): Observable<TicketResponse> {
+    return this.api.post<Record<string, never>, TicketResponse>(
+      operationsPaths.kitchenTicketHandOver(scope, ticketId),
+      command({}),
+    );
   }
 
   async stations(scope: LocationScope): Promise<readonly StationResponse[]> {

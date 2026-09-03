@@ -593,6 +593,52 @@ class CatalogPublicationTests {
     }
 
     @Test
+    @DisplayName("the publication history lists every publication newest first, retired ones included")
+    void publicationHistoryListsEveryPublicationNewestFirst() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-11", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        var first = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        // A second service instance, its clock a minute later: `publication`'s own
+        // clock is frozen (set up above) so that two publishes issued back to back
+        // in the same test would otherwise carry the identical `created_at` and
+        // the "newest first" property under test would not be observable.
+        var laterPublication = new CatalogPublicationService(
+                store,
+                new CatalogValidator(),
+                new CatalogSnapshotLoader(store, media, allPriced(), LOCALE),
+                new JdbcSalesChannelStore(jdbc),
+                Clock.fixed(Instant.parse("2026-08-21T10:01:00Z"), ZoneOffset.UTC));
+        var second = laterPublication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        var history = store.listPublications(TENANT, BRAND, 50);
+
+        assertThat(history)
+                .as("newest first: the republish that retired the first publication comes first")
+                .extracting(JdbcCatalogStore.PublicationHistoryRow::publicationId)
+                .containsExactly(second.publicationId(), first.publicationId());
+
+        var retiredFirst = history.stream()
+                .filter(row -> row.publicationId().equals(first.publicationId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(retiredFirst.status()).isEqualTo(PublicationStatus.RETIRED);
+        assertThat(retiredFirst.retiredAt()).isNotNull();
+        assertThat(retiredFirst.itemCount()).isPositive();
+
+        var liveSecond = history.stream()
+                .filter(row -> row.publicationId().equals(second.publicationId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(liveSecond.status()).isEqualTo(PublicationStatus.PUBLISHED);
+        assertThat(liveSecond.activatedAt()).isNotNull();
+    }
+
+    @Test
     @DisplayName("an unchanged catalog republishes to the same content hash")
     void contentHashIsStableForUnchangedContent() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);

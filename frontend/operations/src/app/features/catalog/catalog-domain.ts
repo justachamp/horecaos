@@ -334,3 +334,34 @@ export interface ResolvedPrices {
 export interface PriceRequest {
   readonly amountMinor: number;
 }
+
+/** `CreatePriceBookRequest`. */
+export interface CreatePriceBookRequest {
+  readonly name: string;
+  readonly currency: string;
+  readonly validFrom?: string | null;
+  readonly validUntil?: string | null;
+  readonly priority?: number;
+}
+
+/** `AssignmentRequest`. */
+export interface PriceBookAssignmentRequest {
+  readonly priority?: number;
+  readonly validFrom?: string | null;
+  readonly validUntil?: string | null;
+}
+
+// ------------------------------------------------------------ CatalogPublicationController (history)
+
+/** `PublicationHistoryResponse`, IA 4.6 Region 3. */
+export interface PublicationHistoryEntry {
+  readonly publicationId: string;
+  readonly channel: string;
+  readonly status: PublicationStatus;
+  readonly contentHash: string;
+  readonly createdBy?: string | null;
+  readonly createdAt: string;
+  readonly activatedAt?: string | null;
+  readonly retiredAt?: string | null;
+  readonly itemCount: number;
+}

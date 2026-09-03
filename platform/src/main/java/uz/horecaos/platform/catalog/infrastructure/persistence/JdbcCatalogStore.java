@@ -1230,6 +1230,60 @@ public class JdbcCatalogStore {
                 .update();
     }
 
+    /**
+     * Every publication the brand has ever produced, newest first (IA 4.6,
+     * Region 3 — publication history). A {@code REJECTED} row is kept and
+     * returned like any other: the service records rejections deliberately so
+     * "why did publishing fail an hour ago" has an answer, and a list that
+     * hid the row that answers it would defeat the point.
+     */
+    public List<PublicationHistoryRow> listPublications(UUID tenantId, UUID brandId, int limit) {
+        return jdbc.sql("""
+                SELECT p.id, p.channel, p.status, p.content_hash, p.created_by,
+                       p.created_at, p.activated_at, p.retired_at,
+                       (SELECT count(*) FROM catalog.publication_items i
+                         WHERE i.publication_id = p.id) AS item_count
+                  FROM catalog.publications p
+                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
+                 ORDER BY p.created_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("limit", limit)
+                .query((row, number) -> new PublicationHistoryRow(
+                        row.getObject("id", UUID.class),
+                        row.getString("channel"),
+                        PublicationStatus.valueOf(row.getString("status")),
+                        row.getString("content_hash"),
+                        row.getObject("created_by", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        instantOrNull(row.getObject("activated_at", OffsetDateTime.class)),
+                        instantOrNull(row.getObject("retired_at", OffsetDateTime.class)),
+                        row.getInt("item_count")))
+                .list();
+    }
+
+    private static @Nullable Instant instantOrNull(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    /**
+     * One row of the publication history.
+     *
+     * @param createdBy null when the publishing actor could not be resolved to a UUID
+     */
+    public record PublicationHistoryRow(
+            UUID publicationId,
+            String channel,
+            PublicationStatus status,
+            String contentHash,
+            @Nullable UUID createdBy,
+            Instant createdAt,
+            @Nullable Instant activatedAt,
+            @Nullable Instant retiredAt,
+            int itemCount) {}
+
     public Optional<PublicationRow> findPublication(UUID tenantId, UUID brandId, UUID publicationId) {
         return jdbc.sql("""
                 SELECT id, status, content_hash, catalog_id, channel

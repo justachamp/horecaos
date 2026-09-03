@@ -30,6 +30,9 @@
 
 .queue__head {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--q-hairline);
   background: var(--q-canvas);
@@ -37,6 +40,17 @@
 
 .queue__head h1 {
   margin: 0;
+}
+
+.queue__drafts-link {
+  color: var(--q-ink-muted);
+  text-decoration: none;
+}
+
+.queue__drafts-link:hover,
+.queue__drafts-link--active {
+  color: var(--q-primary);
+  text-decoration: underline;
 }
 
 .queue__body {

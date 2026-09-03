@@ -180,6 +180,27 @@ public class KitchenBoardController {
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
     }
 
+    @PostMapping("/tickets/{ticketId}/hand-over")
+    @RequiresCapability(value = Capability.KITCHEN_TICKET_HANDOVER, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Hand a ready ticket to the customer or courier",
+            description = "IA 2.3 (Раздача). A second press is not an error: the caller wanted "
+                    + "the ticket off the pass, and it is off the pass. The provider "
+                    + "handover-code verification the spec asks for is ADR 0040 and not built — "
+                    + "this endpoint is the roll-up's own gate and nothing else.")
+    public ResponseEntity<TicketResponse> handOver(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID ticketId) {
+
+        atLocation(tenantId, ticketId, locationId);
+        TicketRow after = tickets.handOver(
+                        tenantId, ticketId, currentActor.get().subject(), null)
+                .orElseGet(() -> tickets.require(tenantId, ticketId));
+        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
+    }
+
     @PostMapping("/ticket-items/{itemId}/start")
     @RequiresCapability(value = Capability.KITCHEN_TICKET_ADVANCE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(summary = "Start one line at one station")

@@ -39,6 +39,18 @@ export const routes: Routes = [
         path: 'today',
         loadComponent: () => import('./features/today/today-page').then((m) => m.TodayPage),
       },
+      // IA 0.2 (My work): an honest not-built page, linked from 0.1's own
+      // toolbar — see `today-page.ts`'s doc for why every field it would
+      // show depends on data (order attribution, a staff person record)
+      // this build does not have.
+      {
+        path: 'today/my-work',
+        loadComponent: () =>
+          import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+        data: {
+          spec: 'frontend-information-architecture.md §0.2 (My work) — no attribution or staff-identity data',
+        },
+      },
       {
         path: 'orders',
         loadComponent: () => import('./features/orders/orders-page').then((m) => m.OrdersPage),
@@ -52,6 +64,13 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
             data: { spec: 'operations-spec/orders.md §5 (New order)' },
+          },
+          // IA 1.4: carts started and never converted. Declared before
+          // `:orderId` for the same reason `new` is — "drafts" must be a
+          // destination, not an order whose id happens to be the word drafts.
+          {
+            path: 'drafts',
+            loadComponent: () => import('./features/orders/drafts-page').then((m) => m.DraftsPage),
           },
           // The detail is a *child* of the board, not a sibling. That is what
           // makes it dock beside the queue instead of replacing it, and what
@@ -284,6 +303,37 @@ export const routes: Routes = [
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
             data: { spec: 'operations-spec/catalog.md §4.11 (Import: Excel and POS)' },
           },
+          {
+            path: 'publication',
+            loadComponent: () =>
+              import('./features/catalog/publication-page').then((m) => m.PublicationPage),
+          },
+          {
+            path: 'prices',
+            loadComponent: () =>
+              import('./features/catalog/price-list-page').then((m) => m.PriceListPage),
+          },
+          // catalog.md §4.13: every vocabulary on this screen is honestly
+          // "not built — ADR 0016" except Бренды, which already belongs to
+          // tenancy and is not duplicated here — the spec's own instruction
+          // is that nothing on this screen should be built before its
+          // disposition is decided.
+          {
+            path: 'reference-data',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: { spec: 'operations-spec/catalog.md §4.13 (Reference data)' },
+          },
+          // catalog.md's own parity table: "Unowned; closest ADR 0018/0019.
+          // Needs a decision before design." Zero backend anywhere.
+          {
+            path: 'auto-add',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec: 'frontend-information-architecture.md §4.9 (Auto-add rules) — no backend',
+            },
+          },
         ],
       },
       {
@@ -332,6 +382,18 @@ export const routes: Routes = [
               import('./features/kitchen/kitchen-queue-page').then((m) => m.KitchenQueuePage),
           },
           {
+            path: 'buffer',
+            loadComponent: () => import('./features/kitchen/buffer-page').then((m) => m.BufferPage),
+          },
+          {
+            path: 'expo',
+            loadComponent: () => import('./features/kitchen/expo-page').then((m) => m.ExpoPage),
+          },
+          {
+            path: 'vdu',
+            loadComponent: () => import('./features/kitchen/vdu-page').then((m) => m.VduPage),
+          },
+          {
             path: 'stop-list',
             loadComponent: () =>
               import('./features/kitchen/stop-list-page').then((m) => m.StopListPage),
@@ -354,6 +416,11 @@ export const routes: Routes = [
               import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
           },
           {
+            path: 'map',
+            loadComponent: () =>
+              import('./features/delivery/live-map-page').then((m) => m.LiveMapPage),
+          },
+          {
             path: 'zones',
             loadComponent: () =>
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
@@ -364,6 +431,23 @@ export const routes: Routes = [
               import('./features/delivery/delivery-tariffs-page').then(
                 (m) => m.DeliveryTariffsPage,
               ),
+          },
+          {
+            path: 'courier-rates',
+            loadComponent: () =>
+              import('./features/delivery/courier-types-rates-page').then(
+                (m) => m.CourierTypesRatesPage,
+              ),
+          },
+          {
+            path: 'shifts',
+            loadComponent: () =>
+              import('./features/delivery/shifts-page').then((m) => m.ShiftsPage),
+          },
+          {
+            path: 'courier-policy',
+            loadComponent: () =>
+              import('./features/delivery/courier-policy-page').then((m) => m.CourierPolicyPage),
           },
           {
             path: 'dispatch-rules',

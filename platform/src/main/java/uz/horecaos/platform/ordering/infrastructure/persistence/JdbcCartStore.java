@@ -363,6 +363,80 @@ public class JdbcCartStore {
                 .optional();
     }
 
+    /**
+     * Carts started and never converted (IA 1.4, operations-spec/orders.md
+     * §6): {@code ACTIVE}, {@code EXPIRED} or {@code ABANDONED}, with no
+     * {@code converted_order_id}. Newest first — this is a log, not a queue.
+     *
+     * <p>{@code lineCount} only, not a first-line preview: the product name
+     * behind a cart line lives in the catalog module's schema, and resolving
+     * it here would be a cross-module join inside a persistence adapter this
+     * module does not own. The abandonment-by-channel breakdown the screen is
+     * built around needs none of it.
+     */
+    public List<DraftCartRow> listDrafts(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            @Nullable UUID channelId,
+            int limit) {
+        return jdbc.sql("""
+                SELECT cart.id, cart.created_at, cart.channel_id, cart.location_id,
+                       cart.customer_account_id, cart.guest_reference_hash,
+                       cart.expires_at, cart.status,
+                       (SELECT count(*) FROM ordering.cart_lines line
+                         WHERE line.tenant_id = cart.tenant_id AND line.cart_id = cart.id) AS line_count
+                  FROM ordering.carts cart
+                 WHERE cart.tenant_id = :tenantId
+                   AND cart.brand_id = :brandId
+                   AND cart.location_id = :locationId
+                   AND cart.status IN ('ACTIVE', 'EXPIRED', 'ABANDONED')
+                   AND cart.converted_order_id IS NULL
+                   AND (:from::timestamptz IS NULL OR cart.created_at >= :from)
+                   AND (:to::timestamptz IS NULL OR cart.created_at < :to)
+                   AND (:channelId::uuid IS NULL OR cart.channel_id = :channelId)
+                 ORDER BY cart.created_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("from", from == null ? null : utc(from))
+                .param("to", to == null ? null : utc(to))
+                .param("channelId", channelId)
+                .param("limit", limit)
+                .query((row, number) -> new DraftCartRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("channel_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class),
+                        row.getString("guest_reference_hash"),
+                        row.getObject("expires_at", OffsetDateTime.class).toInstant(),
+                        CartStatus.valueOf(row.getString("status")),
+                        row.getInt("line_count")))
+                .list();
+    }
+
+    /**
+     * One row of the drafts list.
+     *
+     * @param customerAccountId null for a guest cart
+     * @param guestReferenceHash null for an account cart — never the raw reference
+     */
+    public record DraftCartRow(
+            UUID cartId,
+            Instant createdAt,
+            UUID channelId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
+            Instant expiresAt,
+            CartStatus status,
+            int lineCount) {}
+
     /** Sweeps carts past their TTL so an abandoned basket stops looking live. */
     public int expireStaleCarts(Instant now) {
         return jdbc.sql("""

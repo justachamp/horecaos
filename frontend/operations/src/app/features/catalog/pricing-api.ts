@@ -4,7 +4,13 @@ import { Observable, map } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { BrandScope, pricingPaths } from '../../core/api/catalog-paths';
 import { command } from '../../core/api/idempotency';
-import { PriceBookSummary, PriceRequest, ResolvedPrices } from './catalog-domain';
+import {
+  CreatePriceBookRequest,
+  PriceBookAssignmentRequest,
+  PriceBookSummary,
+  PriceRequest,
+  ResolvedPrices,
+} from './catalog-domain';
 
 /**
  * `GET/PUT .../pricing/**` — `PriceAuthoringController` (ADR 0018). Same
@@ -59,6 +65,66 @@ export class PricingApi {
     return this.api.put<PriceRequest, PriceBookSummary>(
       pricingPaths.variantPrice(scope, priceBookId, variantId),
       command({ amountMinor }),
+    );
+  }
+
+  /** IA 4.8a — a draft book, priced by nothing until it is activated. */
+  createPriceBook(
+    scope: BrandScope,
+    request: CreatePriceBookRequest,
+  ): Observable<PriceBookSummary> {
+    return this.api.post<CreatePriceBookRequest, PriceBookSummary>(
+      pricingPaths.priceBooks(scope),
+      command(request),
+    );
+  }
+
+  /** The fallback every location and channel resolves to when nothing more specific applies. */
+  assignToBrand(
+    scope: BrandScope,
+    priceBookId: string,
+    request: PriceBookAssignmentRequest,
+  ): Observable<PriceBookSummary> {
+    return this.api.put<PriceBookAssignmentRequest, PriceBookSummary>(
+      pricingPaths.assignBrand(scope, priceBookId),
+      command(request),
+    );
+  }
+
+  assignToLocation(
+    scope: BrandScope,
+    priceBookId: string,
+    locationId: string,
+    request: PriceBookAssignmentRequest,
+  ): Observable<PriceBookSummary> {
+    return this.api.put<PriceBookAssignmentRequest, PriceBookSummary>(
+      pricingPaths.assignLocation(scope, priceBookId, locationId),
+      command(request),
+    );
+  }
+
+  assignToChannel(
+    scope: BrandScope,
+    priceBookId: string,
+    channelId: string,
+    request: PriceBookAssignmentRequest,
+  ): Observable<PriceBookSummary> {
+    return this.api.put<PriceBookAssignmentRequest, PriceBookSummary>(
+      pricingPaths.assignChannel(scope, priceBookId, channelId),
+      command(request),
+    );
+  }
+
+  /** Puts a draft book in front of customers. `expectedVersion` becomes `If-Match`. */
+  activate(
+    scope: BrandScope,
+    priceBookId: string,
+    expectedVersion: number,
+  ): Observable<PriceBookSummary> {
+    return this.api.post<undefined, PriceBookSummary>(
+      pricingPaths.activation(scope, priceBookId),
+      command(undefined),
+      { expectedVersion },
     );
   }
 }

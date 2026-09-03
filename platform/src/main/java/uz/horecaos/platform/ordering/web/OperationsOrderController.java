@@ -36,6 +36,7 @@ import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
@@ -66,6 +67,7 @@ public class OperationsOrderController {
     private final OrderOutcomeService outcomes;
     private final OrderAmendmentService amendments;
     private final RejectReasonQueryService rejectReasons;
+    private final JdbcCartStore carts;
     private final CurrentActor currentActor;
 
     public OperationsOrderController(
@@ -74,12 +76,14 @@ public class OperationsOrderController {
             OrderOutcomeService outcomes,
             OrderAmendmentService amendments,
             RejectReasonQueryService rejectReasons,
+            JdbcCartStore carts,
             CurrentActor currentActor) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
         this.amendments = amendments;
         this.rejectReasons = rejectReasons;
+        this.carts = carts;
         this.currentActor = currentActor;
     }
 
@@ -119,6 +123,27 @@ public class OperationsOrderController {
     public ResponseEntity<OrderCountsResponse> counts(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
         return ResponseEntity.ok(OrderCountsResponse.of(orderQuery.counts(tenantId, brandId, locationId)));
+    }
+
+    @GetMapping("/drafts")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Carts started and never converted (IA 1.4)",
+            description = "orders.md §6: ACTIVE, EXPIRED or ABANDONED carts with no converted "
+                    + "order, newest first. This is a log, not a queue — no action here converts "
+                    + "a cart into an order, because nobody agreed to that basket.")
+    public ResponseEntity<List<DraftCartResponse>> drafts(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(required = false) UUID channelId,
+            @RequestParam(defaultValue = "200") @jakarta.validation.constraints.Max(500) int limit) {
+
+        return ResponseEntity.ok(carts.listDrafts(tenantId, brandId, locationId, from, to, channelId, limit).stream()
+                .map(DraftCartResponse::of)
+                .toList());
     }
 
     @GetMapping("/{orderId}")
@@ -1154,6 +1179,40 @@ public class OperationsOrderController {
                     row.cancelled(),
                     row.totalNonTerminal(),
                     row.total());
+        }
+    }
+
+    /**
+     * One row of the drafts list (IA 1.4).
+     *
+     * @param customerAccountId null for a guest cart — the caller resolves an
+     *                          account cart's owner through IA 5.2, never
+     *                          rendered here directly
+     * @param guestReferenceHash a keyed hash, never the reference itself — a
+     *                           guest cart is not attributable to a person
+     */
+    public record DraftCartResponse(
+            UUID cartId,
+            Instant createdAt,
+            UUID channelId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
+            Instant expiresAt,
+            String status,
+            int lineCount) {
+
+        static DraftCartResponse of(JdbcCartStore.DraftCartRow row) {
+            return new DraftCartResponse(
+                    row.cartId(),
+                    row.createdAt(),
+                    row.channelId(),
+                    row.locationId(),
+                    row.customerAccountId(),
+                    row.guestReferenceHash(),
+                    row.expiresAt(),
+                    row.status().name(),
+                    row.lineCount());
         }
     }
 

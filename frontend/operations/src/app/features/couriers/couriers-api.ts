@@ -80,6 +80,101 @@ export interface SuspendEngagementRequest {
   readonly reason: string;
 }
 
+/** Mirrors `OperationsCourierController.CreateCourierTypeRequest` (IA 3.4). */
+export interface CreateCourierTypeRequest {
+  readonly code: string;
+  readonly displayName: string;
+  readonly vehicleClass: string;
+  readonly minDistanceMeters: number;
+  readonly maxDistanceMeters?: number | null;
+  readonly maxConcurrentAssignments: number;
+  readonly offerTtlSeconds: number;
+}
+
+/** Mirrors `OperationsCourierController.RateCardSummaryResponse`. */
+export interface RateCardSummaryResponse {
+  readonly cardId: string;
+  readonly brandId: string;
+  readonly locationId?: string | null;
+  readonly courierTypeId?: string | null;
+  readonly code: string;
+  readonly cardVersion: number;
+  readonly status: 'DRAFT' | 'ACTIVE' | 'SUPERSEDED';
+  readonly currency: string;
+  readonly effectiveFrom?: string | null;
+  readonly effectiveTo?: string | null;
+}
+
+/** Mirrors `OperationsCourierController.RateComponentResponse`. */
+export interface RateComponentView {
+  readonly componentId: string;
+  /** `PER_SHIFT_FIXED` | `PER_ORDER` | `PER_KM_BAND` | `PER_ORDER_MINIMUM`. */
+  readonly componentType: string;
+  readonly priority: number;
+  readonly amountMinor: number;
+  readonly bandFromMeters?: number | null;
+  readonly bandToMeters?: number | null;
+  readonly minimumPaidSeconds?: number | null;
+}
+
+/** Mirrors `OperationsCourierController.RateCardDetailResponse`. */
+export interface RateCardDetailResponse {
+  readonly cardId: string;
+  readonly cardVersion: number;
+  readonly currency: string;
+  readonly components: readonly RateComponentView[];
+}
+
+/** Mirrors `OperationsCourierController.RateComponentRequest`. */
+export interface RateComponentRequest {
+  readonly componentType: string;
+  readonly priority: number;
+  readonly amountMinor: number;
+  readonly bandFromMeters?: number | null;
+  readonly bandToMeters?: number | null;
+  readonly minimumPaidSeconds?: number | null;
+}
+
+/** Mirrors `OperationsCourierController.NewRateCardRequest`. */
+export interface NewRateCardRequest {
+  readonly brandId: string;
+  readonly locationId?: string | null;
+  readonly courierTypeId?: string | null;
+  readonly code: string;
+  readonly cardVersion: number;
+  readonly currency: string;
+  readonly components: readonly RateComponentRequest[];
+}
+
+/** Mirrors `OperationsCourierController.ShiftResponse` (IA 3.5). */
+export interface ShiftView {
+  readonly shiftId: string;
+  readonly courierId: string;
+  /** `OPEN` | `CLOSE_REQUESTED` | `RECONCILING` | `AWAITING_APPROVAL` | `CLOSED` | `AUTO_CLOSED` | `SETTLED`. */
+  readonly status: string;
+  readonly dutyState: string;
+  readonly openedAt: string;
+  readonly closedAt?: string | null;
+  readonly paidSeconds?: number | null;
+  readonly breakSeconds: number;
+  readonly approvalRequestId?: string | null;
+}
+
+/** Mirrors `OperationsCourierController.CourierPolicyResponse` (IA 3.9). */
+export interface CourierPolicyView {
+  readonly reverificationDays: number;
+  readonly warningDays: number;
+  readonly settlementPeriodDays: number;
+  readonly cashCeilingMinor: number;
+  readonly penaltyApprovalThresholdMinor: number;
+  readonly shiftEnforcement: 'ENFORCED' | 'ADVISORY' | 'OFF';
+  readonly graceSeconds: number;
+  readonly confirmationPointRetentionDays: number;
+  readonly winningScope: string;
+  readonly policyId: string;
+  readonly policyVersion: number;
+}
+
 /**
  * The in-house roster (operations §3.3 Couriers) — `OperationsCourierController`
  * (ADR 0042), tenant-scoped.
@@ -135,5 +230,108 @@ export class CouriersApi {
         command(request),
       ),
     );
+  }
+
+  // ------------------------------------------------------------- IA 3.4
+
+  async createType(
+    tenantId: string,
+    request: CreateCourierTypeRequest,
+  ): Promise<CourierTypeResponse> {
+    return firstValueFrom(
+      this.api.post<CreateCourierTypeRequest, CourierTypeResponse>(
+        courierPaths.courierTypes(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  async rateCards(tenantId: string, brandId: string): Promise<readonly RateCardSummaryResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly RateCardSummaryResponse[]>(courierPaths.rateCards(tenantId), {
+        params: { brandId },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  async rateCard(tenantId: string, cardId: string): Promise<RateCardDetailResponse> {
+    const result = await firstValueFrom(
+      this.api.get<RateCardDetailResponse>(courierPaths.rateCard(tenantId, cardId)),
+    );
+    return result.value;
+  }
+
+  async authorRateCard(tenantId: string, request: NewRateCardRequest): Promise<{ cardId: string }> {
+    return firstValueFrom(
+      this.api.post<NewRateCardRequest, { cardId: string }>(
+        courierPaths.rateCards(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  async activateRateCard(tenantId: string, cardId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.rateCardActivation(tenantId, cardId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------- IA 3.5
+
+  async shifts(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    limit = 200,
+  ): Promise<readonly ShiftView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ShiftView[]>(courierPaths.courierShifts(tenantId), {
+        params: { brandId, locationId, limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  async closeShift(
+    tenantId: string,
+    shiftId: string,
+    reasonCode: string,
+    reason: string,
+    currency: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reasonCode: string; reason: string; currency: string }, void>(
+        `${courierPaths.courierShifts(tenantId)}/${encodeURIComponent(shiftId)}/close`,
+        command({ reasonCode, reason, currency }),
+      ),
+    );
+  }
+
+  async approveShift(tenantId: string, shiftId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string; approvalRequestId?: string | null }, void>(
+        `${courierPaths.courierShifts(tenantId)}/${encodeURIComponent(shiftId)}/approve`,
+        command({ reason }),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------- IA 3.9
+
+  async policy(
+    tenantId: string,
+    brandId?: string,
+    locationId?: string,
+  ): Promise<CourierPolicyView> {
+    const result = await firstValueFrom(
+      this.api.get<CourierPolicyView>(courierPaths.courierPolicy(tenantId), {
+        params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) },
+      }),
+    );
+    return result.value;
   }
 }

@@ -1,0 +1,23 @@
+<div class="vdu">
+  @if (!firstLoadComplete()) {
+    <div class="vdu__loading" [attr.aria-label]="'kitchen.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="vdu__denied" data-testid="vdu-denied">{{ 'kitchen.denied' | t }}</div>
+  } @else {
+    <div class="vdu__grid">
+      @for (ticket of tickets(); track ticket.ticketId) {
+        <div
+          class="vdu__card"
+          [class.vdu__card--ready]="ticket.status === 'READY'"
+          [class.vdu__card--danger]="severityTone(ticket) === 'danger'"
+          [class.vdu__card--warning]="severityTone(ticket) === 'warning'"
+          data-testid="vdu-card"
+        >
+          {{ ticket.sequenceLabel }}
+        </div>
+      } @empty {
+        <div class="vdu__empty" data-testid="vdu-empty">{{ 'kitchen.expo.empty' | t }}</div>
+      }
+    </div>
+  }
+</div>
