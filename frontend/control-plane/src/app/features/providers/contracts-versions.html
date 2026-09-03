@@ -1,0 +1,32 @@
+<h1 class="q-title">{{ i18n.t('contractsVersions.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('contractsVersions.lead') }}</p>
+<p class="q-caption notice">{{ i18n.t('contractsVersions.gap') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('contractsVersions.column.event') }}</th>
+        <th class="q-caption">{{ i18n.t('contractsVersions.column.module') }}</th>
+        <th class="q-caption">{{ i18n.t('contractsVersions.column.topic') }}</th>
+        <th class="q-caption">{{ i18n.t('contractsVersions.column.retention') }}</th>
+        <th class="q-caption">{{ i18n.t('contractsVersions.column.classification') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (contract of contracts(); track contract.eventType + contract.eventVersion) {
+        <tr>
+          <td class="q-body-sm q-tnum">{{ contract.eventType }} v{{ contract.eventVersion }}</td>
+          <td class="q-body-sm">{{ contract.producingModule }}</td>
+          <td class="q-body-sm q-tnum">{{ contract.topic }}</td>
+          <td class="q-body-sm">{{ contract.retention }}</td>
+          <td class="q-body-sm">{{ contract.classification }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

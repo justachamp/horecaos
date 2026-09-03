@@ -67,12 +67,13 @@ describe('ConsoleShell', () => {
   });
 
   it('adds a section once its capability is held', () => {
-    // TENANT_READ gates both Tenants (IA 2.1) and Global lookup (IA 10.1):
-    // both are tenant-lookup screens, and the latter's own real capability
-    // (tenant-by-slug) is the same one the directory list uses.
+    // TENANT_READ gates Tenants (IA 2.1), Global lookup (IA 10.1), and
+    // Tenant issue queue (IA 10.2): all three are tenant-lookup screens, and
+    // the latter two's own real capability (tenant-by-slug / outbox and
+    // fiscal reads scoped by tenant) is the same one their fuller screens use.
     session.held.set(new Set<string>(['TENANT_READ']));
     fixture.detectChanges();
-    expect(railLabels()).toEqual(['Обзор', 'Клиенты', 'Глобальный поиск']);
+    expect(railLabels()).toEqual(['Обзор', 'Клиенты', 'Глобальный поиск', 'Очередь проблем клиента']);
   });
 
   it('never renders more rail links than routed sections, however much is granted', () => {
@@ -86,6 +87,7 @@ describe('ConsoleShell', () => {
         'BRAND_READ',
         'LEGAL_ENTITY_READ',
         'COMMERCIAL_PLAN_READ',
+        'COMMERCIAL_USAGE_READ',
         'INTEGRATION_INSTALLATION_MANAGE',
         'INTEGRATION_FAILURE_READ',
         'POS_SYNC_READ',
@@ -93,12 +95,13 @@ describe('ConsoleShell', () => {
         'FISCAL_DOCUMENT_READ',
         'IAM_GRANT_MANAGE',
         'AUDIT_READ',
+        'APPROVAL_DECIDE',
         'MIGRATION_READ',
         'PLATFORM_ADMIN',
       ]),
     );
     fixture.detectChanges();
-    expect(railLabels()).toHaveLength(18);
+    expect(railLabels()).toHaveLength(39);
   });
 
   it('names the operator in the rail', () => {

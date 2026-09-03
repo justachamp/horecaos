@@ -54,6 +54,34 @@ export interface CapabilityDescriptor {
   readonly action: string;
 }
 
+/** CapabilityView.ScopeGrant -- one scope a debugged principal holds. */
+export interface DebugScopeGrant {
+  readonly scope: {
+    readonly type: 'PLATFORM' | 'TENANT' | 'BRAND' | 'LOCATION';
+    readonly tenantId: string | null;
+    readonly brandId: string | null;
+    readonly locationId: string | null;
+  };
+  readonly roleCode: string;
+  readonly capabilities: readonly string[];
+}
+
+/** GrantController.CapabilityView -- the same shape session/context returns, for a named subject. */
+export interface DebugCapabilityView {
+  readonly subject: string;
+  readonly activeTenantId: string | null;
+  readonly capabilities: readonly string[];
+  readonly scopes: readonly DebugScopeGrant[];
+  readonly contextVersion: number;
+}
+
+/** GrantController.AccessDebugResponse (IA 7.3). */
+export interface AccessDebugResponse {
+  readonly view: DebugCapabilityView;
+  readonly requestedCapability: string | null;
+  readonly granted: boolean | null;
+}
+
 /** AuditQueryService.AuditEventView. */
 export interface AuditEventView {
   readonly id: string;
@@ -173,6 +201,21 @@ export class AccessApi {
   async auditEvents(tenantId: string): Promise<Page<AuditEventView>> {
     return firstValueFrom(
       this.api.getPage<AuditEventView>(`/api/v1/control-plane/tenants/${tenantId}/audit-events`),
+    );
+  }
+
+  /** IA 7.3 Effective access debugger. `capability` is optional; naming one adds the direct yes/no answer. */
+  async debugAccess(
+    subject: string,
+    tenantId?: string,
+    brandId?: string,
+    locationId?: string,
+    capability?: string,
+  ): Promise<AccessDebugResponse> {
+    return firstValueFrom(
+      this.api.get<AccessDebugResponse>('/api/v1/control-plane/access-debugger', {
+        query: { subject, tenantId, brandId, locationId, capability },
+      }),
     );
   }
 }

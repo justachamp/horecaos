@@ -1,0 +1,67 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.notice {
+  margin-top: 8px;
+  color: var(--q-ink-subtle);
+  max-width: 640px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.table {
+  margin-top: 16px;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.table thead tr,
+.table tbody tr {
+  background: var(--q-canvas);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.innerTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+
+.innerTable th,
+.innerTable td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.innerTable th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}

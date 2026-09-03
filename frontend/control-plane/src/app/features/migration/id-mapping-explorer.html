@@ -1,0 +1,51 @@
+<h1 class="q-title">{{ i18n.t('idMappingExplorer.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('idMappingExplorer.lead') }}</p>
+
+<form class="pickerForm" (submit)="search($event)">
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('idMappingExplorer.scopeId') }}</span>
+    <input class="q-body-sm" type="text" [value]="scopeId()" (input)="scopeId.set($any($event.target).value)" required />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('entitlements.tenantId') }}</span>
+    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" required />
+  </label>
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('idMappingExplorer.entityType') }}</span>
+    <input class="q-body-sm" type="text" [value]="entityType()" (input)="entityType.set($any($event.target).value)" required />
+  </label>
+  <button type="submit" class="primary" [disabled]="!canSearch()">
+    {{ loading() ? i18n.t('tenants.loading') : i18n.t('idMappingExplorer.search') }}
+  </button>
+</form>
+
+@if (loadError(); as message) {
+  <p class="q-body-sm error">{{ message }}</p>
+} @else if (searched()) {
+  @if (mappings().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('idMappingExplorer.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('idMappingExplorer.column.legacyId') }}</th>
+          <th class="q-caption">{{ i18n.t('idMappingExplorer.column.targetId') }}</th>
+          <th class="q-caption">{{ i18n.t('idMappingExplorer.column.status') }}</th>
+          <th class="q-caption">{{ i18n.t('idMappingExplorer.column.created') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (mapping of mappings(); track mapping.mappingId) {
+          <tr>
+            <td class="q-body-sm q-tnum">{{ mapping.legacyId }}</td>
+            <td class="q-body-sm q-tnum">{{ mapping.targetId ?? '—' }}</td>
+            <td class="q-body-sm">
+              <span class="pill" [class]="'pill-' + mapping.status">{{ mapping.status }}</span>
+            </td>
+            <td class="q-body-sm q-tnum">{{ i18n.day(asDate(mapping.createdAt)) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

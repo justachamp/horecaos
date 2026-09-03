@@ -14,40 +14,63 @@ export const ru: Messages = {
 
   'nav.overview': 'Обзор',
 
+  'nav.group.overview': 'Обзор',
+  'nav.alertsIncidents': 'Оповещения и инциденты',
+
   'nav.group.tenants': 'Клиенты',
   'nav.tenants': 'Клиенты',
+  'nav.configurationPolicy': 'Конфигурация и политики',
 
   'nav.group.providers': 'Провайдеры',
   'nav.providers': 'Реестр провайдеров',
   'nav.providerCapabilities': 'Матрица возможностей',
   'nav.installations': 'Подключения',
+  'nav.contractsVersions': 'Контракты и версии',
+  'nav.sandboxContractTests': 'Песочница и контрактные тесты',
 
   'nav.group.integrationOps': 'Интеграционные операции',
   'nav.messageFlow': 'Поток сообщений',
   'nav.deadLetters': 'Недоставленные и повтор',
+  'nav.webhookDeliveries': 'Доставка вебхуков',
+  'nav.errorTaxonomy': 'Классификация ошибок',
 
   'nav.group.commerce': 'Коммерция',
   'nav.entitlements': 'Права по тарифу',
+  'nav.planCatalog': 'Каталог тарифов',
+  'nav.moduleCatalog': 'Каталог модулей',
+  'nav.usageMetering': 'Учёт использования',
+  'nav.invoicesWallet': 'Счета и кошелёк',
 
   'nav.group.compliance': 'Комплаенс и фискализация',
   'nav.fiscalization': 'Фискализация',
   'nav.fiscalReference': 'Фискальный справочник',
+  'nav.residencyHosting': 'Резидентность и размещение',
+  'nav.piiClassification': 'Классификация персональных данных',
+  'nav.platformApprovals': 'Согласования',
 
   'nav.group.access': 'Доступ и безопасность',
   'nav.staff': 'Сотрудники и роли',
   'nav.capabilityRegistry': 'Реестр прав',
   'nav.secrets': 'Секреты',
   'nav.auditLog': 'Журнал аудита',
+  'nav.accessDebugger': 'Отладчик доступа',
 
   'nav.group.platformConfig': 'Настройки платформы',
   'nav.featureFlags': 'Флаги функций',
+  'nav.businessTypes': 'Типы бизнеса',
   'nav.referenceData': 'Справочные данные',
+  'nav.notificationProviders': 'Провайдеры уведомлений и модерация шаблонов',
+  'nav.policyDefaults': 'Значения политик по умолчанию',
 
   'nav.group.migration': 'Миграция и переход',
   'nav.migrationRuns': 'Миграционные запуски',
+  'nav.idMappingExplorer': 'Сопоставление идентификаторов',
+  'nav.dualRunComparison': 'Сравнение параллельных прогонов',
+  'nav.cutoverChecklist': 'Чек-лист перехода',
 
   'nav.group.support': 'Поддержка',
   'nav.globalLookup': 'Глобальный поиск',
+  'nav.tenantIssueQueue': 'Очередь проблем клиента',
 
   'shell.skipToContent': 'Перейти к содержимому',
   'shell.signedInAs': 'Вы вошли как',
@@ -129,6 +152,7 @@ export const ru: Messages = {
   'tenantDetail.action.brands': 'Бренды и точки',
   'tenantDetail.action.legalEntities': 'Юридические лица',
   'tenantDetail.action.onboarding': 'Подключение',
+  'tenantDetail.action.identity': 'Идентификация и realm',
   'tenantDetail.action.impersonation': 'Войти от имени',
 
   'tenantDetail.facts.title': 'Сведения о клиенте',
@@ -411,6 +435,168 @@ export const ru: Messages = {
   'globalLookup.search': 'Найти',
   'globalLookup.notFound': 'Клиента с таким слагом нет.',
   'globalLookup.open': 'Открыть клиента',
+
+  'alertsIncidents.notBuilt.body':
+    'Нигде в этой сборке нет сохраняемой записи оповещений. Сигнал контрольной полосы записывается в лог и счётчик (ControlPlaneAlertPort v1) — и ничего больше: хранилища для списка, фильтра или маршрутизации нет.',
+
+  'tenantIdentity.title': 'Идентификация и realm',
+  'tenantIdentity.lead': 'Привязка этого клиента к организации Keycloak (ADR 0009).',
+  'tenantIdentity.organization.title': 'Организация Keycloak',
+  'tenantIdentity.organization.id': 'Id организации',
+  'tenantIdentity.status': 'Статус клиента',
+  'tenantIdentity.notLinked': 'К этому клиенту ещё не привязана организация Keycloak.',
+  'tenantIdentity.gap':
+    'Клиент сотрудников, клиент курьеров и режим экстренного доступа задаются на этапе развёртывания и нигде не смоделированы как доступная для запроса сущность на клиента — здесь они не показаны. Расхождения между HorecaOS и Keycloak отображаются в журнале аудита, а не на этом экране.',
+
+  'configurationPolicy.title': 'Конфигурация и политики',
+  'configurationPolicy.lead': 'Рассчитайте любой ключ конфигурации на любом уровне и узнайте, почему получилось именно так (ADR 0030).',
+  'configurationPolicy.picker.title': 'Рассчитать ключ',
+  'configurationPolicy.picker.key': 'Ключ',
+  'configurationPolicy.picker.keyPlaceholder': 'Выберите ключ…',
+  'configurationPolicy.picker.scopeType': 'Уровень',
+  'configurationPolicy.scope.platform': 'Платформа',
+  'configurationPolicy.scope.tenant': 'Клиент',
+  'configurationPolicy.scope.brand': 'Бренд',
+  'configurationPolicy.scope.location': 'Точка',
+  'configurationPolicy.picker.tenantId': 'Id клиента',
+  'configurationPolicy.picker.brandId': 'Id бренда',
+  'configurationPolicy.picker.locationId': 'Id точки',
+  'configurationPolicy.picker.resolve': 'Рассчитать',
+  'configurationPolicy.picker.resolving': 'Расчёт…',
+  'configurationPolicy.result.title': 'Результат',
+  'configurationPolicy.result.value': 'Значение',
+  'configurationPolicy.result.source': 'Источник',
+  'configurationPolicy.result.winningScope': 'Определивший уровень',
+  'configurationPolicy.result.levels': 'Проверенные уровни',
+  'configurationPolicy.result.column.scope': 'Уровень',
+  'configurationPolicy.result.column.outcome': 'Результат',
+
+  'contractsVersions.title': 'Контракты и версии',
+  'contractsVersions.lead': 'Реестр контрактов событий/схем ADR 0032: все события, которые может публиковать эта сборка.',
+  'contractsVersions.gap': 'Версии адаптеров, устаревания и совместимость потребителей нигде в этой сборке не смоделированы и здесь не показаны.',
+  'contractsVersions.column.event': 'Событие',
+  'contractsVersions.column.module': 'Модуль-источник',
+  'contractsVersions.column.topic': 'Топик',
+  'contractsVersions.column.retention': 'Хранение',
+  'contractsVersions.column.classification': 'Классификация',
+
+  'sandboxContractTests.notBuilt.body':
+    'В этой сборке нет механизма воспроизведения записанных фикстур. Контрактное тестирование провайдеров из ADR 0007 остаётся нереализованным; синхронизация POS сравнивает живой каталог провайдера с HorecaOS — это другой вопрос, чем воспроизведение записанной фикстуры для отдельного адаптера.',
+
+  'webhookDeliveries.notBuilt.body':
+    'Нигде в этой сборке не сохраняется запись о входящей или исходящей доставке вебхука. Вебхук Telegram принимается и обрабатывается сразу же; истории доставки для списка или повторной отправки нет, и HorecaOS не отправляет провайдерам собственных вебхуков.',
+
+  'errorTaxonomy.notBuilt.body':
+    'Единого реестра, сопоставляющего сырую ошибку провайдера с понятной оператору причиной и решением, нет. Существуют три более узких, не связанных друг с другом словаря для разных целей — классификация повторов, коды провайдеров на уровне транспорта и коды отклонения заказов агрегаторов, — и ни один из них не является нужным этому пункту сопоставлением причины и решения.',
+
+  'planCatalog.title': 'Каталог тарифов',
+  'planCatalog.lead': 'Каждая активированная версия тарифа: цена, период оплаты и её строки прав (ADR 0021).',
+  'planCatalog.gap': 'Скидки за срок 6/12 месяцев, пробный период и депозит активации нигде в этой сборке не смоделированы как отдельные поля — отслеживается только период оплаты.',
+  'planCatalog.empty': 'Активированных версий тарифов пока нет.',
+  'planCatalog.column.plan': 'Тариф',
+  'planCatalog.column.price': 'Цена',
+  'planCatalog.column.billingPeriod': 'Период оплаты',
+  'planCatalog.column.resetPeriod': 'Период сброса',
+  'planCatalog.showEntitlements': 'Показать права',
+  'planCatalog.hideEntitlements': 'Скрыть права',
+  'planCatalog.noEntitlements': 'В этой версии нет строк прав.',
+
+  'moduleCatalog.notBuilt.body':
+    'Нигде в коммерческом домене нет понятия «модуль» — смоделированы тарифы, версии тарифов, строки прав тарифов, подписки и учтённое использование, но не независимо продаваемый модуль со своей единицей оплаты на бренд/точку/киоск/курьерский сервис.',
+
+  'usageMetering.title': 'Учёт использования',
+  'usageMetering.lead': 'Учтённые единицы по ключу права и периоду для одного клиента — измеренное значение против того, что было скорректировано вручную (ADR 0021).',
+  'usageMetering.empty': 'Для этого клиента не зафиксировано учтённого использования.',
+  'usageMetering.column.period': 'Период',
+  'usageMetering.column.measured': 'Измерено',
+  'usageMetering.column.adjusted': 'Скорректировано',
+  'usageMetering.column.consumed': 'Использовано',
+
+  'invoicesWallet.notBuilt.body':
+    'Нигде в этой сборке не смоделирован ни счёт, ни кошелёк с предоплатой. Учёт использования содержит измеренные и скорректированные значения, которыми можно обосновать счёт, но ничто не превращает их в счёт по подписке, пополнение, баланс или строку истечения бонусов.',
+
+  'residencyHosting.notBuilt.body':
+    'У клиента есть только валюта и часовой пояс по умолчанию — привязки к стране или региону размещения в схеме нет, что подтверждает собственное серверное примечание справочника клиентов. Платформенная часть этого пункта (в какие страны выходит HorecaOS) реальна и уже показана в «Справочных данных»; недостающая часть — это привязка на уровне клиента, о которой на самом деле идёт речь в этом пункте.',
+
+  'piiClassification.notBuilt.body':
+    'Классификация полей по ADR 0029 — реальный внутренний механизм, определяющий, что платформа шифрует, но это не доступный для запроса реестр: нигде в этой сборке нет таблицы сроков хранения, журнала аудита экспорта или процесса удаления/предоставления персональных данных по запросу.',
+
+  'platformApprovals.notBuilt.body':
+    'Сама очередь согласований maker-checker реальна и уже доступна из раздела «Сотрудники и роли» для предоставления IAM. Изменение резидентности, массовый экспорт и переопределение сроков хранения — три действия, названные в этом пункте, — нигде в этом коде не существуют как действия, создающие запрос на согласование, поэтому этот экран не может показать ничего, чего уже одинаково не показывает раздел 7.1.',
+
+  'accessDebugger.title': 'Отладчик доступа',
+  'accessDebugger.lead': 'Что может делать указанный субъект и почему — то же решение, которое сервер принимает при каждом запросе (ADR 0003 + ADR 0025).',
+  'accessDebugger.subject': 'Субъект',
+  'accessDebugger.tenantId': 'Id клиента (необязательно)',
+  'accessDebugger.brandId': 'Id бренда (необязательно)',
+  'accessDebugger.locationId': 'Id точки (необязательно)',
+  'accessDebugger.capability': 'Право для проверки (необязательно)',
+  'accessDebugger.check': 'Проверить',
+  'accessDebugger.checking': 'Проверка…',
+  'accessDebugger.answer.title': 'Ответ',
+  'accessDebugger.answer.yes': 'Разрешено',
+  'accessDebugger.answer.no': 'Не разрешено',
+  'accessDebugger.grants.title': 'Действующие права',
+  'accessDebugger.grants.empty': 'У этого субъекта нет прав.',
+  'accessDebugger.column.scope': 'Уровень',
+  'accessDebugger.column.role': 'Роль',
+  'accessDebugger.column.capabilities': 'Права',
+
+  'businessTypes.notBuilt.body':
+    'Нигде в схеме или коде домена клиентов нет типа бизнеса — собственное серверное примечание справочника клиентов говорит об этом прямо. У клиента сегодня нет привязки к типу бизнеса, поэтому нечего просматривать и нет значений по умолчанию для показа.',
+
+  'notificationProviders.notBuilt.body':
+    'Нет платформенного реестра SMS-шлюзов или отправительских алиасов для просмотра, и нет статуса модерации шаблонов на стороне провайдера — собственная документация контроллера шаблонов уведомлений говорит, что полный процесс согласования из ADR 0020 отложен. Обе части, нужные этому пункту, не реализованы.',
+
+  'policyDefaults.title': 'Значения политик по умолчанию',
+  'policyDefaults.lead': 'Значения платформенного уровня по умолчанию, которые клиент может увидеть и унаследовать (ADR 0030).',
+  'policyDefaults.empty': 'Ключей конфигурации, видимых клиенту, не объявлено.',
+  'policyDefaults.column.key': 'Ключ',
+  'policyDefaults.column.default': 'По умолчанию',
+  'policyDefaults.column.module': 'Модуль',
+  'policyDefaults.column.description': 'Описание',
+
+  'idMappingExplorer.title': 'Сопоставление идентификаторов',
+  'idMappingExplorer.lead': 'Соответствие идентификаторов легаси-системы и HorecaOS для одной области миграции (ADR 0024).',
+  'idMappingExplorer.scopeId': 'Id области',
+  'idMappingExplorer.entityType': 'Тип сущности',
+  'idMappingExplorer.search': 'Найти',
+  'idMappingExplorer.empty': 'Для этой области и типа сущности сопоставлений не зафиксировано.',
+  'idMappingExplorer.column.legacyId': 'Id в легаси-системе',
+  'idMappingExplorer.column.targetId': 'Id в HorecaOS',
+  'idMappingExplorer.column.status': 'Статус',
+  'idMappingExplorer.column.created': 'Зафиксировано',
+
+  'dualRunComparison.title': 'Сравнение параллельных прогонов',
+  'dualRunComparison.lead': 'Легаси-система против HorecaOS, правило за правилом, для одного прогона сверки (ADR 0024).',
+  'dualRunComparison.runId': 'Id прогона',
+  'dualRunComparison.search': 'Найти',
+  'dualRunComparison.empty': 'Для этого прогона результатов сверки не зафиксировано.',
+  'dualRunComparison.column.rule': 'Правило',
+  'dualRunComparison.column.dimension': 'Измерение',
+  'dualRunComparison.column.severity': 'Серьёзность',
+  'dualRunComparison.column.expected': 'Ожидалось',
+  'dualRunComparison.column.actual': 'Фактически',
+  'dualRunComparison.column.status': 'Статус',
+
+  'cutoverChecklist.title': 'Чек-лист перехода',
+  'cutoverChecklist.lead': 'Готовность к переходу по каждой области возможностей — из собственного состояния каждой области (ADR 0024).',
+  'cutoverChecklist.scopes.title': 'Области',
+  'cutoverChecklist.column.readiness': 'Готовность',
+  'cutoverChecklist.readiness.go': 'Готово',
+  'cutoverChecklist.readiness.blocked': 'Заблокировано',
+  'cutoverChecklist.readiness.pending': 'В процессе',
+
+  'tenantIssueQueue.title': 'Очередь проблем клиента',
+  'tenantIssueQueue.lead': 'Открытые проблемы одного клиента со связанными доказательствами.',
+  'tenantIssueQueue.gap': 'Просроченные учётные данные не показываются: нигде в этой сборке не задан порог истечения для обновлённого секрета, и придумывать его здесь означало бы показать решение, которое никто не принимал.',
+  'tenantIssueQueue.empty': 'Для этого клиента нет открытых проблем.',
+  'tenantIssueQueue.deadLetters.title': 'Недоставленные события',
+  'tenantIssueQueue.deadLetters.empty': 'Для этого клиента нет недоставленных событий.',
+  'tenantIssueQueue.deadLetters.fullScreen': 'Открыть в разделе «Недоставленные и повтор» →',
+  'tenantIssueQueue.fiscal.title': 'Заблокированные фискальные документы',
+  'tenantIssueQueue.fiscal.empty': 'Для этого клиента ничего не заблокировано.',
+  'tenantIssueQueue.fiscal.fullScreen': 'Открыть в разделе «Фискализация» →',
 
   'money.uzsSuffix': 'сўм',
 

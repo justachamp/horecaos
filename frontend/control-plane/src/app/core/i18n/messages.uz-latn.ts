@@ -14,40 +14,63 @@ export const uzLatn: Messages = {
 
   'nav.overview': 'Umumiy ko‘rinish',
 
+  'nav.group.overview': 'Umumiy ko‘rinish',
+  'nav.alertsIncidents': 'Ogohlantirishlar va hodisalar',
+
   'nav.group.tenants': 'Mijozlar',
   'nav.tenants': 'Mijozlar',
+  'nav.configurationPolicy': 'Konfiguratsiya va siyosat',
 
   'nav.group.providers': 'Provayderlar',
   'nav.providers': 'Provayderlar reyestri',
   'nav.providerCapabilities': 'Imkoniyatlar matritsasi',
   'nav.installations': 'Ulanishlar',
+  'nav.contractsVersions': 'Shartnomalar va versiyalar',
+  'nav.sandboxContractTests': 'Sinov muhiti va shartnoma testlari',
 
   'nav.group.integrationOps': 'Integratsiya operatsiyalari',
   'nav.messageFlow': 'Xabarlar oqimi',
   'nav.deadLetters': 'Yetkazilmagan xabarlar',
+  'nav.webhookDeliveries': 'Webhook yetkazib berishlar',
+  'nav.errorTaxonomy': 'Xatolar tasnifi',
 
   'nav.group.commerce': 'Tijorat',
   'nav.entitlements': 'Tarif huquqlari',
+  'nav.planCatalog': 'Tariflar katalogi',
+  'nav.moduleCatalog': 'Modullar katalogi',
+  'nav.usageMetering': 'Foydalanishni hisoblash',
+  'nav.invoicesWallet': 'Hisob-fakturalar va hamyon',
 
   'nav.group.compliance': 'Muvofiqlik va fiskalizatsiya',
   'nav.fiscalization': 'Fiskalizatsiya',
   'nav.fiscalReference': 'Fiskal ma’lumotnoma',
+  'nav.residencyHosting': 'Rezidentlik va joylashuv',
+  'nav.piiClassification': 'Shaxsiy ma’lumotlar tasnifi',
+  'nav.platformApprovals': 'Tasdiqlashlar',
 
   'nav.group.access': 'Kirish va xavfsizlik',
   'nav.staff': 'Xodimlar va rollar',
   'nav.capabilityRegistry': 'Huquqlar reyestri',
   'nav.secrets': 'Maxfiy ma’lumotlar',
   'nav.auditLog': 'Audit jurnali',
+  'nav.accessDebugger': 'Kirish huquqini tekshirish',
 
   'nav.group.platformConfig': 'Platforma sozlamalari',
   'nav.featureFlags': 'Funksiya bayroqlari',
+  'nav.businessTypes': 'Biznes turlari',
   'nav.referenceData': 'Ma’lumotnoma',
+  'nav.notificationProviders': 'Bildirishnoma provayderlari va shablon moderatsiyasi',
+  'nav.policyDefaults': 'Siyosat standart qiymatlari',
 
   'nav.group.migration': 'Migratsiya va o‘tish',
   'nav.migrationRuns': 'Migratsiya jarayonlari',
+  'nav.idMappingExplorer': 'ID moslashtirish',
+  'nav.dualRunComparison': 'Parallel ishga tushirishlarni solishtirish',
+  'nav.cutoverChecklist': 'O‘tish nazorat ro‘yxati',
 
   'nav.group.support': 'Qo‘llab-quvvatlash',
   'nav.globalLookup': 'Global qidiruv',
+  'nav.tenantIssueQueue': 'Mijoz muammolari navbati',
 
   'shell.skipToContent': 'Asosiy qismga o‘tish',
   'shell.signedInAs': 'Kirgan foydalanuvchi',
@@ -129,6 +152,7 @@ export const uzLatn: Messages = {
   'tenantDetail.action.brands': 'Brendlar va joylar',
   'tenantDetail.action.legalEntities': 'Yuridik shaxslar',
   'tenantDetail.action.onboarding': 'Ulash',
+  'tenantDetail.action.identity': 'Identifikatsiya va realm',
   'tenantDetail.action.impersonation': 'Nomidan kirish',
 
   'tenantDetail.facts.title': 'Mijoz ma’lumotlari',
@@ -411,6 +435,168 @@ export const uzLatn: Messages = {
   'globalLookup.search': 'Qidirish',
   'globalLookup.notFound': 'Bunday slagli mijoz yo‘q.',
   'globalLookup.open': 'Mijozni ochish',
+
+  'alertsIncidents.notBuilt.body':
+    'Ushbu build ichida hech qanday saqlanadigan ogohlantirish yozuvi yo‘q. Boshqaruv diapazoni signali faqat jurnalga yoziladi va sanaladi (ControlPlaneAlertPort v1) — boshqa hech narsa yo‘q: ro‘yxat, filtr yoki yo‘naltirish uchun saqlash joyi mavjud emas.',
+
+  'tenantIdentity.title': 'Identifikatsiya va realm',
+  'tenantIdentity.lead': 'Ushbu mijozning Keycloak tashkilotiga ulanishi (ADR 0009).',
+  'tenantIdentity.organization.title': 'Keycloak tashkiloti',
+  'tenantIdentity.organization.id': 'Tashkilot identifikatori',
+  'tenantIdentity.status': 'Mijoz holati',
+  'tenantIdentity.notLinked': 'Bu mijozga hali Keycloak tashkiloti ulanmagan.',
+  'tenantIdentity.gap':
+    'Xodimlar mijozi, kuryerlar mijozi va favqulodda kirish sozlamalari joylashtirish vaqtida belgilanadi va ushbu kodda mijoz bo‘yicha so‘rov qilinadigan obyekt sifatida modellashtirilmagan — ular bu yerda ko‘rsatilmaydi. HorecaOS va Keycloak o‘rtasidagi farqlar audit jurnalida ko‘rinadi, bu ekranda emas.',
+
+  'configurationPolicy.title': 'Konfiguratsiya va siyosat',
+  'configurationPolicy.lead': 'Har qanday konfiguratsiya kalitini har qanday darajada hisoblang va u nima uchun shunday natija berganini ko‘ring (ADR 0030).',
+  'configurationPolicy.picker.title': 'Kalitni hisoblash',
+  'configurationPolicy.picker.key': 'Kalit',
+  'configurationPolicy.picker.keyPlaceholder': 'Kalitni tanlang…',
+  'configurationPolicy.picker.scopeType': 'Daraja',
+  'configurationPolicy.scope.platform': 'Platforma',
+  'configurationPolicy.scope.tenant': 'Mijoz',
+  'configurationPolicy.scope.brand': 'Brend',
+  'configurationPolicy.scope.location': 'Joy',
+  'configurationPolicy.picker.tenantId': 'Mijoz identifikatori',
+  'configurationPolicy.picker.brandId': 'Brend identifikatori',
+  'configurationPolicy.picker.locationId': 'Joy identifikatori',
+  'configurationPolicy.picker.resolve': 'Hisoblash',
+  'configurationPolicy.picker.resolving': 'Hisoblanmoqda…',
+  'configurationPolicy.result.title': 'Natija',
+  'configurationPolicy.result.value': 'Qiymat',
+  'configurationPolicy.result.source': 'Manba',
+  'configurationPolicy.result.winningScope': 'Aniqlovchi daraja',
+  'configurationPolicy.result.levels': 'Tekshirilgan darajalar',
+  'configurationPolicy.result.column.scope': 'Daraja',
+  'configurationPolicy.result.column.outcome': 'Natija',
+
+  'contractsVersions.title': 'Shartnomalar va versiyalar',
+  'contractsVersions.lead': 'ADR 0032 hodisa/sxema shartnomalari reyestri: ushbu build e’lon qilishi mumkin bo‘lgan barcha hodisalar.',
+  'contractsVersions.gap': 'Adapter versiyalari, eskirganlik va iste’molchilar moslashuvi ushbu buildda hech qayerda modellashtirilmagan va bu yerda ko‘rsatilmaydi.',
+  'contractsVersions.column.event': 'Hodisa',
+  'contractsVersions.column.module': 'Ishlab chiqaruvchi modul',
+  'contractsVersions.column.topic': 'Mavzu (topic)',
+  'contractsVersions.column.retention': 'Saqlash muddati',
+  'contractsVersions.column.classification': 'Tasnif',
+
+  'sandboxContractTests.notBuilt.body':
+    'Ushbu buildda yozib olingan fikstsuralarni qayta ishga tushirish mexanizmi mavjud emas. ADR 0007 dagi provayder shartnoma testlash qismi hali qurilmagan; POS sinxronizatsiyasi jonli provayder katalogini HorecaOS bilan solishtiradi — bu alohida adapterni yozib olingan fikstsura bilan solishtirishdan boshqa masala.',
+
+  'webhookDeliveries.notBuilt.body':
+    'Ushbu buildda kiruvchi yoki chiquvchi webhook yetkazib berish yozuvi hech qayerda saqlanmaydi. Telegram webhooki bevosita qabul qilinib qayta ishlanadi; ro‘yxat yoki qayta yuborish uchun yetkazib berish tarixi yo‘q, va HorecaOS provayderlarga o‘z webhooklarini yubormaydi.',
+
+  'errorTaxonomy.notBuilt.body':
+    'Provayderning xom xatosini operator tushunadigan sabab va yechimga bog‘laydigan yagona reyestr mavjud emas. Turli maqsadlar uchun uchta tor va bir-biriga bog‘liq bo‘lmagan lug‘at mavjud — qayta urinish tasnifi, transport darajasidagi provayder kodlari va agregator buyurtmasini rad etish kodlari — va ularning hech biri ushbu band talab qiladigan sabab-yechim moslashtirishi emas.',
+
+  'planCatalog.title': 'Tariflar katalogi',
+  'planCatalog.lead': 'Har bir faollashtirilgan tarif versiyasi: narxi, to‘lov davri va uning huquq qatorlari (ADR 0021).',
+  'planCatalog.gap': '6/12 oylik muddat chegirmalari, sinov muddati va faollashtirish depoziti ushbu buildda alohida maydon sifatida modellashtirilmagan — faqat to‘lov davri kuzatiladi.',
+  'planCatalog.empty': 'Hali faollashtirilgan tarif versiyalari yo‘q.',
+  'planCatalog.column.plan': 'Tarif',
+  'planCatalog.column.price': 'Narx',
+  'planCatalog.column.billingPeriod': 'To‘lov davri',
+  'planCatalog.column.resetPeriod': 'Qayta hisoblash davri',
+  'planCatalog.showEntitlements': 'Huquqlarni ko‘rsatish',
+  'planCatalog.hideEntitlements': 'Huquqlarni yashirish',
+  'planCatalog.noEntitlements': 'Bu versiyada huquq qatorlari yo‘q.',
+
+  'moduleCatalog.notBuilt.body':
+    'Tijorat domenida hech qayerda "modul" tushunchasi yo‘q — tariflar, tarif versiyalari, tarif huquq qatorlari, obunalar va hisoblangan foydalanish modellashtirilgan, lekin brend/filial/kiosk/kuryer xizmati bo‘yicha o‘z to‘lov birligiga ega mustaqil sotiladigan modul yo‘q.',
+
+  'usageMetering.title': 'Foydalanishni hisoblash',
+  'usageMetering.lead': 'Bitta mijoz uchun huquq kaliti va davr bo‘yicha hisoblangan birliklar — o‘lchangan qiymat qo‘lda tuzatilgan qiymatga qarshi (ADR 0021).',
+  'usageMetering.empty': 'Bu mijoz uchun hisoblangan foydalanish qayd etilmagan.',
+  'usageMetering.column.period': 'Davr',
+  'usageMetering.column.measured': 'O‘lchangan',
+  'usageMetering.column.adjusted': 'Tuzatilgan',
+  'usageMetering.column.consumed': 'Sarflangan',
+
+  'invoicesWallet.notBuilt.body':
+    'Ushbu buildda hech qayerda hisob-faktura yoki oldindan to‘lov hamyoni daftari modellashtirilmagan. Foydalanishni hisoblash hisob-fakturani asoslash uchun kerak bo‘lgan o‘lchangan va tuzatilgan qiymatlarni olib yuradi, lekin hech narsa ularni obuna hisob-fakturasiga, to‘ldirishga, balansga yoki bonus muddati tugashi qatoriga aylantirmaydi.',
+
+  'residencyHosting.notBuilt.body':
+    'Mijozda faqat standart valyuta va vaqt mintaqasi bor — sxemada mamlakat yoki joylashuv hududi biriktirilmagan, bu mijozlar reyestrining o‘z server tomonidagi izohi bilan tasdiqlanadi. Ushbu bandning platforma darajasidagi qismi (HorecaOS qaysi mamlakatlarga xizmat ko‘rsatadi) haqiqiy va allaqachon "Ma’lumotnoma" bo‘limida ko‘rsatilgan; yetishmayotgan qism — bu band aslida haqida bo‘lgan mijoz darajasidagi biriktirishdir.',
+
+  'piiClassification.notBuilt.body':
+    'ADR 0029 maydon tasnifi platforma nimani shifrlashini belgilaydigan haqiqiy ichki mexanizm, lekin u so‘rov qilinadigan reyestr emas — ushbu buildda hech qayerda saqlash muddati jadvali, eksport audit jurnali yoki shaxsiy ma’lumotlarni o‘chirish/taqdim etish jarayoni yo‘q.',
+
+  'platformApprovals.notBuilt.body':
+    'Maker-checker tasdiqlash navbatining o‘zi haqiqiy va IAM huquqlari uchun allaqachon "Xodimlar va rollar" bo‘limidan foydalanish mumkin. Rezidentlikni o‘zgartirish, ommaviy eksport va saqlash muddatini bekor qilish — ushbu bandda nomlangan uchta amal — ushbu kodda tasdiqlash so‘rovini yaratadigan amal sifatida mavjud emas, shuning uchun bu ekran 7.1 bo‘limi allaqachon bir xil ko‘rsatayotganidan boshqa hech narsani ko‘rsata olmaydi.',
+
+  'accessDebugger.title': 'Kirish huquqini tekshirish',
+  'accessDebugger.lead': 'Nomlangan subyekt nima qila olishi va nima uchun — server har bir so‘rovda qabul qiladigan xuddi shu qaror (ADR 0003 + ADR 0025).',
+  'accessDebugger.subject': 'Subyekt',
+  'accessDebugger.tenantId': 'Mijoz identifikatori (ixtiyoriy)',
+  'accessDebugger.brandId': 'Brend identifikatori (ixtiyoriy)',
+  'accessDebugger.locationId': 'Joy identifikatori (ixtiyoriy)',
+  'accessDebugger.capability': 'Tekshiriladigan huquq (ixtiyoriy)',
+  'accessDebugger.check': 'Tekshirish',
+  'accessDebugger.checking': 'Tekshirilmoqda…',
+  'accessDebugger.answer.title': 'Javob',
+  'accessDebugger.answer.yes': 'Ruxsat berilgan',
+  'accessDebugger.answer.no': 'Ruxsat berilmagan',
+  'accessDebugger.grants.title': 'Amaldagi huquqlar',
+  'accessDebugger.grants.empty': 'Bu subyektda huquqlar yo‘q.',
+  'accessDebugger.column.scope': 'Daraja',
+  'accessDebugger.column.role': 'Rol',
+  'accessDebugger.column.capabilities': 'Huquqlar',
+
+  'businessTypes.notBuilt.body':
+    'Mijozlar sxemasi yoki domen kodida hech qayerda BusinessType yo‘q — mijozlar reyestrining o‘z server tomonidagi izohi buni to‘g‘ridan-to‘g‘ri aytadi. Bugungi kunda mijozda biznes turi biriktirilmagan, shuning uchun ko‘rish uchun hech narsa va ko‘rsatish uchun standart qiymatlar yo‘q.',
+
+  'notificationProviders.notBuilt.body':
+    'Ko‘rish uchun platforma darajasidagi SMS shlyuz yoki jo‘natuvchi taxallus reyestri yo‘q, va provayder tomonidagi shablon moderatsiyasi holati yo‘q — bildirishnoma shabloni kontrollerining o‘z hujjati ADR 0020 ning to‘liq tasdiqlash jarayoni kechiktirilganini aytadi. Ushbu band uchun kerakli ikkala qism ham qurilmagan.',
+
+  'policyDefaults.title': 'Siyosat standart qiymatlari',
+  'policyDefaults.lead': 'Mijoz ko‘rishi va meros qilib olishi mumkin bo‘lgan platforma darajasidagi standart qiymatlar (ADR 0030).',
+  'policyDefaults.empty': 'Mijozga ko‘rinadigan konfiguratsiya kalitlari e’lon qilinmagan.',
+  'policyDefaults.column.key': 'Kalit',
+  'policyDefaults.column.default': 'Standart qiymat',
+  'policyDefaults.column.module': 'Modul',
+  'policyDefaults.column.description': 'Tavsif',
+
+  'idMappingExplorer.title': 'ID moslashtirish',
+  'idMappingExplorer.lead': 'Bitta migratsiya doirasi uchun legacy va HorecaOS identifikatorlarini o‘zaro moslashtirish (ADR 0024).',
+  'idMappingExplorer.scopeId': 'Doira identifikatori',
+  'idMappingExplorer.entityType': 'Obyekt turi',
+  'idMappingExplorer.search': 'Qidirish',
+  'idMappingExplorer.empty': 'Bu doira va obyekt turi uchun moslashtirishlar qayd etilmagan.',
+  'idMappingExplorer.column.legacyId': 'Legacy identifikatori',
+  'idMappingExplorer.column.targetId': 'HorecaOS identifikatori',
+  'idMappingExplorer.column.status': 'Holat',
+  'idMappingExplorer.column.created': 'Qayd etilgan',
+
+  'dualRunComparison.title': 'Parallel ishga tushirishlarni solishtirish',
+  'dualRunComparison.lead': 'Legacy tizim va HorecaOS natijalari — qoida bo‘yicha qoida, bitta moslashtirish jarayoni uchun (ADR 0024).',
+  'dualRunComparison.runId': 'Jarayon identifikatori',
+  'dualRunComparison.search': 'Qidirish',
+  'dualRunComparison.empty': 'Bu jarayon uchun moslashtirish natijalari qayd etilmagan.',
+  'dualRunComparison.column.rule': 'Qoida',
+  'dualRunComparison.column.dimension': 'O‘lcham',
+  'dualRunComparison.column.severity': 'Jiddiylik',
+  'dualRunComparison.column.expected': 'Kutilgan',
+  'dualRunComparison.column.actual': 'Haqiqiy',
+  'dualRunComparison.column.status': 'Holat',
+
+  'cutoverChecklist.title': 'O‘tish nazorat ro‘yxati',
+  'cutoverChecklist.lead': 'Har bir imkoniyat doirasi bo‘yicha o‘tishga tayyorlik — har bir doiraning o‘z holatidan olingan (ADR 0024).',
+  'cutoverChecklist.scopes.title': 'Doiralar',
+  'cutoverChecklist.column.readiness': 'Tayyorlik',
+  'cutoverChecklist.readiness.go': 'Tayyor',
+  'cutoverChecklist.readiness.blocked': 'Bloklangan',
+  'cutoverChecklist.readiness.pending': 'Jarayonda',
+
+  'tenantIssueQueue.title': 'Mijoz muammolari navbati',
+  'tenantIssueQueue.lead': 'Bitta mijoz uchun bog‘liq dalillar bilan ochiq muammolar.',
+  'tenantIssueQueue.gap': 'Muddati o‘tgan hisob ma’lumotlari ko‘rsatilmaydi: ushbu buildda yangilangan sirning amal qilish muddati chegarasi hech qayerda belgilanmagan, va buni bu yerda o‘ylab topish hech kim qabul qilmagan qarorni ko‘rsatgan bo‘lardi.',
+  'tenantIssueQueue.empty': 'Bu mijoz uchun ochiq muammolar yo‘q.',
+  'tenantIssueQueue.deadLetters.title': 'Yetkazilmagan hodisalar',
+  'tenantIssueQueue.deadLetters.empty': 'Bu mijoz uchun yetkazilmagan hodisalar yo‘q.',
+  'tenantIssueQueue.deadLetters.fullScreen': '«Yetkazilmagan xabarlar» bo‘limida ochish →',
+  'tenantIssueQueue.fiscal.title': 'Bloklangan fiskal hujjatlar',
+  'tenantIssueQueue.fiscal.empty': 'Bu mijoz uchun hech narsa bloklanmagan.',
+  'tenantIssueQueue.fiscal.fullScreen': '«Fiskalizatsiya» bo‘limida ochish →',
 
   'money.uzsSuffix': 'so‘m',
 

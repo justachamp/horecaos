@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
+import { Money } from '../../core/api/money';
 
 /** CommercialControlPlaneController.EntitlementSnapshotResponse (read side, ADR 0021). */
 export interface EntitlementSnapshot {
@@ -41,6 +42,45 @@ export interface PlanView {
   readonly id: string;
   readonly name: string;
   readonly status: string;
+}
+
+/** CommercialControlPlaneController.EntitlementLine. */
+export interface PlanEntitlementLineView {
+  readonly entitlementKey: string;
+  readonly limit: number | null;
+  readonly enabled: boolean | null;
+  readonly enforcementMode: string;
+  readonly resetPeriod: string;
+  readonly warnThresholdBasisPoints: number | null;
+  readonly overageUnitPrice: Money | null;
+}
+
+/**
+ * CommercialControlPlaneController.PlanVersionResponse -- what `GET
+ * /control-plane/plans` actually returns (IA 5.1 Plan catalog). Kept
+ * separate from {@link PlanView}/{@link listPlans}, which mirror a different,
+ * narrower shape nothing in this build's screens has ever called.
+ */
+export interface PlanVersionView {
+  readonly planVersionId: string;
+  readonly planCode: string;
+  readonly versionNumber: number;
+  readonly price: Money;
+  readonly billingPeriod: string;
+  readonly entitlements: readonly PlanEntitlementLineView[];
+}
+
+/** CommercialControlPlaneController.UsageResponse (IA 5.4 Metering & usage). */
+export interface UsagePeriodView {
+  readonly entitlementKey: string;
+  readonly periodKey: string;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly measuredQuantity: number;
+  readonly adjustedQuantity: number;
+  readonly consumedQuantity: number;
+  readonly movementCount: number;
+  readonly lastEventAt: string | null;
 }
 
 /**
@@ -91,6 +131,18 @@ export class CommerceApi {
 
   async listPlans(): Promise<PlanView[]> {
     return firstValueFrom(this.api.get<PlanView[]>('/api/v1/control-plane/plans'));
+  }
+
+  /** IA 5.1 Plan catalog -- the activated plan versions themselves, correctly typed. */
+  async listPlanCatalogue(): Promise<PlanVersionView[]> {
+    return firstValueFrom(this.api.get<PlanVersionView[]>('/api/v1/control-plane/plans'));
+  }
+
+  /** IA 5.4 Metering & usage -- every metered period for a tenant, correctly typed as the array the server returns. */
+  async listUsage(tenantId: string): Promise<UsagePeriodView[]> {
+    return firstValueFrom(
+      this.api.get<UsagePeriodView[]>(`/api/v1/control-plane/tenants/${tenantId}/usage`),
+    );
   }
 
   // ------------------------------------------------------- platform-admin writes

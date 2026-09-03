@@ -36,6 +36,34 @@ export interface ScopeView {
   readonly version: number;
 }
 
+/** MigrationEvidenceController.EntityMappingResponse (IA 9.2 ID mapping explorer). */
+export interface EntityMappingView {
+  readonly mappingId: string;
+  readonly entityType: string;
+  readonly legacyId: string;
+  readonly targetId: string | null;
+  readonly status: 'MAPPED' | 'QUARANTINED' | 'SUPERSEDED' | (string & {});
+  readonly supersededByMappingId: string | null;
+  readonly runId: string;
+  readonly createdAt: string;
+}
+
+/** MigrationEvidenceController.ReconciliationResultResponse (IA 9.3 Dual-run comparison). */
+export interface ReconciliationResultView {
+  readonly resultId: string;
+  readonly ruleCode: string;
+  readonly ruleVersion: number;
+  readonly dimensionKey: string;
+  readonly severity: 'CRITICAL' | 'WARNING' | 'INFO' | (string & {});
+  readonly measureKind: string;
+  readonly expected: number | null;
+  readonly actual: number | null;
+  readonly difference: number | null;
+  readonly status: 'OPEN' | 'APPROVED' | 'RESOLVED' | (string & {});
+  readonly approvedBy: string | null;
+  readonly resolvedAt: string | null;
+}
+
 /**
  * IA 9.1 Migration runs -- `MigrationProgramController` (ADR 0024), now
  * reachable from control-plane after ADR 0066 moved `/api/v1/platform-admin/**`
@@ -84,6 +112,46 @@ export class MigrationApi {
         cursor,
         limit,
       }),
+    );
+  }
+
+  /** IA 9.4 Cutover checklist -- one scope's own detail, for the go/no-go read. */
+  async getScope(scopeId: string, tenantId: string): Promise<ScopeView> {
+    return firstValueFrom(
+      this.api.get<ScopeView>(`/api/v1/platform-admin/migration/scopes/${scopeId}`, {
+        query: { tenantId },
+      }),
+    );
+  }
+
+  /** IA 9.2 ID mapping explorer -- one scope's legacy-to-target crosswalk for one entity type. */
+  async listEntityMappings(
+    scopeId: string,
+    tenantId: string,
+    entityType: string,
+    limit = 50,
+  ): Promise<Page<EntityMappingView>> {
+    return firstValueFrom(
+      this.api.getPage<EntityMappingView>(
+        `/api/v1/platform-admin/migration/scopes/${scopeId}/entity-mappings`,
+        { limit },
+        { query: { tenantId, entityType } },
+      ),
+    );
+  }
+
+  /** IA 9.3 Dual-run comparison -- one reconciliation run's per-rule diff. */
+  async listReconciliationResults(
+    runId: string,
+    tenantId: string,
+    limit = 50,
+  ): Promise<Page<ReconciliationResultView>> {
+    return firstValueFrom(
+      this.api.getPage<ReconciliationResultView>(
+        `/api/v1/platform-admin/migration/runs/${runId}/reconciliation-results`,
+        { limit },
+        { query: { tenantId } },
+      ),
     );
   }
 

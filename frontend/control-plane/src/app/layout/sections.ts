@@ -6,14 +6,15 @@ import { MessageKey } from '../core/i18n/messages.en';
  * `docs/frontend-information-architecture.md` PART 1 in the platform
  * repository -- the authority for what this app is and is not.
  *
- * Every P-tier row of that document (the first single-location pilot's 23
- * control-plane screens) has a route here. A screen the backend cannot
- * support yet still gets a route -- it renders the "not built" state rather
- * than being hidden, because a grey rail item invites "is this broken?" while
- * an absent one invites nothing. 2-tier and 3-tier rows (wave 2 and wave 3)
- * are deliberately absent: a navigation entry that leads nowhere is worse
- * than one that does not exist yet, and unlike the P-tier gaps above, nobody
- * is waiting on these this wave.
+ * Every P-tier row (the first single-location pilot's 23 control-plane
+ * screens, wave 28) and every 2-tier row (wave 2 / Delever parity, wave 36 --
+ * 22 screens) has a route here. A screen the backend cannot support yet
+ * still gets a route -- it renders the "not built" state rather than being
+ * hidden, because a grey rail item invites "is this broken?" while an
+ * absent one invites nothing. 3-tier rows (wave 3, and the single row this
+ * document defers on a decision) are deliberately absent: a navigation
+ * entry that leads nowhere is worse than one that does not exist yet, and
+ * unlike the tier-2 gaps above, nobody is waiting on these this wave.
  *
  * `group` is a rail section heading (IA §1-10), shown once above the first
  * routed item that carries it; items with the same `group` value render
@@ -39,6 +40,15 @@ export interface Section {
 export const SECTIONS: readonly Section[] = [
   { id: 'overview', labelKey: 'nav.overview', route: '/' },
 
+  // IA §1 Overview
+  {
+    id: 'alertsIncidents',
+    labelKey: 'nav.alertsIncidents',
+    route: '/alerts',
+    group: 'nav.group.overview',
+    capability: 'PLATFORM_ADMIN',
+  },
+
   // IA §2 Tenants
   {
     id: 'tenants',
@@ -46,6 +56,13 @@ export const SECTIONS: readonly Section[] = [
     route: '/tenants',
     group: 'nav.group.tenants',
     capability: 'TENANT_READ',
+  },
+  {
+    id: 'configurationPolicy',
+    labelKey: 'nav.configurationPolicy',
+    route: '/tenants/configuration',
+    group: 'nav.group.tenants',
+    capability: 'PLATFORM_ADMIN',
   },
 
   // IA §3 Providers
@@ -70,6 +87,20 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.providers',
     capability: 'INTEGRATION_INSTALLATION_MANAGE',
   },
+  {
+    id: 'contractsVersions',
+    labelKey: 'nav.contractsVersions',
+    route: '/providers/contracts',
+    group: 'nav.group.providers',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
+    id: 'sandboxContractTests',
+    labelKey: 'nav.sandboxContractTests',
+    route: '/providers/sandbox',
+    group: 'nav.group.providers',
+    capability: 'INTEGRATION_INSTALLATION_MANAGE',
+  },
 
   // IA §4 Integration operations
   {
@@ -86,12 +117,54 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.integrationOps',
     capability: 'INTEGRATION_FAILURE_READ',
   },
+  {
+    id: 'webhookDeliveries',
+    labelKey: 'nav.webhookDeliveries',
+    route: '/integration-ops/webhook-deliveries',
+    group: 'nav.group.integrationOps',
+    capability: 'INTEGRATION_FAILURE_READ',
+  },
+  {
+    id: 'errorTaxonomy',
+    labelKey: 'nav.errorTaxonomy',
+    route: '/integration-ops/error-taxonomy',
+    group: 'nav.group.integrationOps',
+    capability: 'INTEGRATION_FAILURE_READ',
+  },
 
   // IA §5 Commerce
   {
     id: 'entitlements',
     labelKey: 'nav.entitlements',
     route: '/commerce/entitlements',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_PLAN_READ',
+  },
+  {
+    id: 'planCatalog',
+    labelKey: 'nav.planCatalog',
+    route: '/commerce/plans',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_PLAN_READ',
+  },
+  {
+    id: 'moduleCatalog',
+    labelKey: 'nav.moduleCatalog',
+    route: '/commerce/modules',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_PLAN_READ',
+  },
+  {
+    id: 'usageMetering',
+    labelKey: 'nav.usageMetering',
+    route: '/commerce/usage',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_USAGE_READ',
+  },
+  {
+    id: 'invoicesWallet',
+    labelKey: 'nav.invoicesWallet',
+    route: '/commerce/invoices',
     group: 'nav.group.commerce',
     capability: 'COMMERCIAL_PLAN_READ',
   },
@@ -110,6 +183,27 @@ export const SECTIONS: readonly Section[] = [
     route: '/compliance/fiscal-reference',
     group: 'nav.group.compliance',
     capability: 'CATALOG_READ',
+  },
+  {
+    id: 'residencyHosting',
+    labelKey: 'nav.residencyHosting',
+    route: '/compliance/residency',
+    group: 'nav.group.compliance',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
+    id: 'piiClassification',
+    labelKey: 'nav.piiClassification',
+    route: '/compliance/pii-classification',
+    group: 'nav.group.compliance',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
+    id: 'platformApprovals',
+    labelKey: 'nav.platformApprovals',
+    route: '/compliance/approvals',
+    group: 'nav.group.compliance',
+    capability: 'APPROVAL_DECIDE',
   },
 
   // IA §7 Access & security
@@ -141,6 +235,13 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.access',
     capability: 'AUDIT_READ',
   },
+  {
+    id: 'accessDebugger',
+    labelKey: 'nav.accessDebugger',
+    route: '/access/debugger',
+    group: 'nav.group.access',
+    capability: 'PLATFORM_ADMIN',
+  },
 
   // IA §8 Platform configuration
   {
@@ -151,9 +252,30 @@ export const SECTIONS: readonly Section[] = [
     capability: 'PLATFORM_ADMIN',
   },
   {
+    id: 'businessTypes',
+    labelKey: 'nav.businessTypes',
+    route: '/platform-config/business-types',
+    group: 'nav.group.platformConfig',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
     id: 'referenceData',
     labelKey: 'nav.referenceData',
     route: '/platform-config/reference-data',
+    group: 'nav.group.platformConfig',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
+    id: 'notificationProviders',
+    labelKey: 'nav.notificationProviders',
+    route: '/platform-config/notification-providers',
+    group: 'nav.group.platformConfig',
+    capability: 'PLATFORM_ADMIN',
+  },
+  {
+    id: 'policyDefaults',
+    labelKey: 'nav.policyDefaults',
+    route: '/platform-config/policy-defaults',
     group: 'nav.group.platformConfig',
     capability: 'PLATFORM_ADMIN',
   },
@@ -166,12 +288,40 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.migration',
     capability: 'MIGRATION_READ',
   },
+  {
+    id: 'idMappingExplorer',
+    labelKey: 'nav.idMappingExplorer',
+    route: '/migration/id-mapping',
+    group: 'nav.group.migration',
+    capability: 'MIGRATION_READ',
+  },
+  {
+    id: 'dualRunComparison',
+    labelKey: 'nav.dualRunComparison',
+    route: '/migration/dual-run-comparison',
+    group: 'nav.group.migration',
+    capability: 'MIGRATION_READ',
+  },
+  {
+    id: 'cutoverChecklist',
+    labelKey: 'nav.cutoverChecklist',
+    route: '/migration/cutover-checklist',
+    group: 'nav.group.migration',
+    capability: 'MIGRATION_READ',
+  },
 
   // IA §10 Support
   {
     id: 'globalLookup',
     labelKey: 'nav.globalLookup',
     route: '/support/lookup',
+    group: 'nav.group.support',
+    capability: 'TENANT_READ',
+  },
+  {
+    id: 'tenantIssueQueue',
+    labelKey: 'nav.tenantIssueQueue',
+    route: '/support/issue-queue',
     group: 'nav.group.support',
     capability: 'TENANT_READ',
   },

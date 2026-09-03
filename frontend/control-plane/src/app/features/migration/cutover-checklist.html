@@ -1,0 +1,85 @@
+<h1 class="q-title">{{ i18n.t('cutoverChecklist.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('cutoverChecklist.lead') }}</p>
+
+<section class="panel">
+  <h2 class="q-subhead">{{ i18n.t('migrationRuns.program.title') }}</h2>
+  <p class="q-body-sm muted">{{ i18n.t('migrationRuns.program.lead') }}</p>
+  <form class="programForm" (submit)="findProgram($event)">
+    <input
+      class="q-body-sm"
+      type="text"
+      [placeholder]="i18n.t('migrationRuns.program.name')"
+      [value]="name()"
+      (input)="name.set($any($event.target).value)"
+    />
+    <input
+      class="q-body-sm"
+      type="text"
+      [placeholder]="i18n.t('migrationRuns.program.source')"
+      [value]="sourceEnvironment()"
+      (input)="sourceEnvironment.set($any($event.target).value)"
+    />
+    <input
+      class="q-body-sm"
+      type="text"
+      [placeholder]="i18n.t('migrationRuns.program.target')"
+      [value]="targetEnvironment()"
+      (input)="targetEnvironment.set($any($event.target).value)"
+    />
+    <input
+      class="q-body-sm"
+      type="number"
+      min="1"
+      [placeholder]="i18n.t('migrationRuns.program.policyVersion')"
+      [value]="policyVersion()"
+      (input)="policyVersion.set($any($event.target).value)"
+    />
+    <input
+      class="q-body-sm"
+      type="text"
+      [placeholder]="i18n.t('onboarding.reason.placeholder')"
+      [value]="reason()"
+      (input)="reason.set($any($event.target).value)"
+    />
+    <button type="submit" class="primary" [disabled]="!canSubmit()">
+      {{ submitting() ? i18n.t('tenants.loading') : i18n.t('migrationRuns.program.submit') }}
+    </button>
+  </form>
+  @if (loadError(); as message) {
+    <p class="q-body-sm error">{{ message }}</p>
+  }
+</section>
+
+@if (program()) {
+  <section class="panel">
+    <h2 class="q-subhead">{{ i18n.t('cutoverChecklist.scopes.title') }}</h2>
+    @if (scopes().length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('migrationRuns.scopes.empty') }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('migrationRuns.column.tenant') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.column.capability') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.column.state') }}</th>
+            <th class="q-caption">{{ i18n.t('cutoverChecklist.column.readiness') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (scope of scopes(); track scope.id) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ scope.tenantId }}</td>
+              <td class="q-body-sm">{{ scope.capability }}</td>
+              <td class="q-body-sm">{{ scope.state }}</td>
+              <td class="q-body-sm">
+                <span class="pill" [class]="'pill-' + checklistState(scope)">
+                  {{ i18n.t(readinessKey(scope)) }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+}
