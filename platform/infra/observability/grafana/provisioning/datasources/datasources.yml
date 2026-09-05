@@ -1,0 +1,17 @@
+# Provisioned rather than clicked in, so a rebuilt Grafana container comes
+# back configured instead of blank. The URL is the Prometheus this overlay
+# starts, reached at platform-app's own address because Prometheus shares
+# that container's network namespace (see compose.observability.yaml and
+# prometheus/prometheus.yml) rather than having one of its own.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: horecaos-prometheus
+    type: prometheus
+    access: proxy
+    url: http://platform-app:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 30s
+    editable: false

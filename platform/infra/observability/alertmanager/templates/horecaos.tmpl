@@ -1,0 +1,24 @@
+{{/*
+    One line per alert in the notification group, in the same shape
+    horecaos-probe.sh already sends: "horecaos TIER: description -> runbook".
+    A firing alert with no runbook annotation is a rule file bug, not
+    something to hide — Prometheus renders the annotation empty rather than
+    failing, so a missing link shows up as a blank arrow instead of a
+    delivery failure, and that is a code review defect to catch, not a
+    template concern.
+
+    This is also what turns the morning route's group_by: [tier] into the
+    digest ADR 0023 describes: several distinct alerts firing inside the
+    same 09:00-09:10 window share one notification, and this range produces
+    one line per alert inside it — the same "one line per alert key" rule
+    horecaos-probe.sh's own defer_to_digest() follows.
+*/}}
+{{ define "horecaos.telegram.message" }}
+{{- range .Alerts }}
+{{- if eq .Status "firing" }}
+horecaos {{ .Labels.tier | toUpper }}: {{ .Annotations.summary }} -> {{ .Annotations.runbook }}
+{{- else }}
+horecaos RECOVERED: {{ .Annotations.summary }}
+{{- end }}
+{{ end }}
+{{ end }}

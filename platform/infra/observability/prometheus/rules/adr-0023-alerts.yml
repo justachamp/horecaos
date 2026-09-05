@@ -1,0 +1,198 @@
+# ADR 0023's alert table, the half of it that a metrics scrape can actually
+# see. Every threshold below is copied from the ADR, not re-derived — the
+# record and infra/observability/horecaos-probe.sh are the two places a
+# number may be changed, and this file is not a third.
+#
+# `tier` is the label alertmanager.yml routes on: night wakes the operator at
+# any hour, trading is loud 09:00-23:30 Asia/Tashkent and falls to the digest
+# outside it, morning is the silent digest always. `runbook` on every rule
+# names the single doc section ADR 0023 requires every alert to link to.
+#
+# What is NOT in this file, and why — read this before adding a rule to close
+# the gap, because each of these already has an owner and duplicating it
+# creates two sources of truth that can disagree:
+#
+#   Platform unreachable         off-box by construction. A process cannot
+#                                 observe that its own host is unreachable;
+#                                 that is the external uptime check
+#                                 (infra/observability/README.md), not this
+#                                 file. horecaos-probe.sh does not evaluate it
+#                                 either, for the same reason.
+#   PostgreSQL down              horecaos-probe.sh runs `pg_isready` directly
+#                                 against the database container. This
+#                                 Prometheus only ever reaches the application,
+#                                 and the application's own polled gauges hold
+#                                 their last value and keep serving them while
+#                                 the database is unreachable (see
+#                                 MessagingBacklogMetrics's caught-and-logged
+#                                 refresh) — so a rule here would read stale
+#                                 numbers and either miss the outage or fire on
+#                                 an old one. Evaluating "is Postgres up" from
+#                                 the one system that degrades gracefully when
+#                                 it isn't is the wrong witness for the alert.
+#   Order flow stalled           partial. The outbox and inbox legs below ARE
+#                                 evaluated here, from the same gauges
+#                                 horecaos-probe.sh reads. The Kafka consumer
+#                                 lag leg is not: no consumer-lag metric is
+#                                 published by the application (Spring Kafka's
+#                                 Micrometer binder is not wired up), and
+#                                 horecaos-probe.sh gets that number by running
+#                                 `kafka-consumer-groups.sh --describe` against
+#                                 the broker directly. Adding a Kafka exporter
+#                                 to get it here is a real option for a later
+#                                 wave; it was not added in this one.
+#   Secrets manager sealed       no application metric exists for OpenBao's
+#                                 seal state — horecaos-probe.sh checks `bao
+#                                 status` directly against the OpenBao
+#                                 container, which is unreachable to a
+#                                 Prometheus that only scrapes the application.
+#   Backup did not run           the backup stamp file lives on the host
+#                                 filesystem outside every container; nothing
+#                                 here can see it.
+#   Data volume above 85%        the application publishes disk_free_bytes /
+#                                 disk_total_bytes, but DataVolumeMetrics's own
+#                                 documentation says exactly why that number is
+#                                 not the one to alert on in production: the
+#                                 application container's filesystem is
+#                                 read-only, so the mounted path tells this
+#                                 process nothing about the host's real data
+#                                 volume. horecaos-probe.sh reads the host with
+#                                 `df -P` directly. A rule here would alert on
+#                                 the wrong quantity, which is worse than no
+#                                 rule.
+#   TLS certificate expiring     horecaos-probe.sh opens a real TLS connection
+#                                 to the public hostname with openssl. Doing
+#                                 that from Prometheus means a blackbox
+#                                 exporter, a new component this wave did not
+#                                 add.
+#   A container autoheal could
+#   not fix (crash loop)         needs container restart counts from the
+#                                 Docker API (`docker inspect`), which is
+#                                 cadvisor-shaped territory and, again, a new
+#                                 component this wave did not add.
+#
+# Every one of the alerts above keeps exactly one evaluator: horecaos-probe.sh.
+# Nothing in this file second-guesses it, and nothing in it goes quiet if the
+# probe's cron entry is ever removed — that would be the alerting equivalent of
+# the outbox gap ADR 0023 warns about, two systems each assuming the other is
+# watching.
+
+groups:
+  - name: adr-0023-night
+    rules:
+      - alert: HorecaosOrderFlowStalled
+        # ADR 0006's relay polls every second and backs off to at most five
+        # minutes across ten attempts — about thirteen and a half minutes
+        # total — so nothing healthy is fifteen minutes old. `for: 1m` is a
+        # debounce against a single bad scrape, not a change to the 900s
+        # figure itself.
+        expr: >
+          horecaos_outbox_oldest_pending_age_seconds >= 900
+          or
+          horecaos_inbox_oldest_pending_age_seconds >= 900
+        for: 1m
+        labels:
+          tier: night
+        annotations:
+          summary: >-
+            order flow stalled: oldest pending outbox/inbox row has been
+            unpublished for {{ $value }}s
+          runbook: docs/runbooks/outbox-not-draining.md
+          note: >-
+            Evaluated here without the Kafka consumer-lag leg; see the header
+            comment in this file for why.
+
+  - name: adr-0023-trading
+    rules:
+      - alert: HorecaosPaymentCallbackFailing
+        # Both providers read any non-200 as a transport failure and retry
+        # until the payment reaches their manual investigation queue. Three in
+        # five minutes separates one malformed arrival from an endpoint that
+        # is down. "non-200" mirrors horecaos-probe.sh's own definition
+        # exactly: anything outside the 2xx status class counts.
+        expr: >
+          sum(increase(http_server_requests_seconds_count{uri=~"^/providers/(payme|click)/.*", status!~"2.."}[5m])) > 3
+        for: 0m
+        labels:
+          tier: trading
+        annotations:
+          summary: >-
+            {{ $value }} non-200 payment callback responses in the last 5
+            minutes
+          runbook: docs/runbooks/payment-callback-failing.md
+
+      - alert: HorecaosProviderCircuitStuckOpen
+        # The breakers half-open automatically after thirty seconds, so ten
+        # minutes continuously open means roughly twenty failed probes and the
+        # provider is genuinely down. Payment and POS breakers only — a
+        # courier partner being down does not stop an order being taken, and
+        # carries no alert per the ADR's own table.
+        expr: >
+          max by (family, provider) (horecaos_provider_circuit_open_duration_seconds{family=~"payment|pos"}) >= 600
+        for: 1m
+        labels:
+          tier: trading
+        annotations:
+          summary: >-
+            the {{ $labels.provider }} circuit has been open for {{ $value }}s
+          runbook: docs/runbooks/provider-circuit-stuck-open.md
+
+      - alert: HorecaosMonetaryDeadLetter
+        # Restricted to monetary topic domains, because ADR 0006 dead-letters
+        # PAYLOAD_INVALID and CONTRACT_UNSUPPORTED immediately by design and
+        # alerting on all of them would page on correct behaviour.
+        #
+        # delta(), not increase(): the underlying gauge is a MultiGauge whose
+        # rows disappear entirely once a dead letter is resolved (see
+        # MessagingBacklogMetrics), so the aggregate can legitimately fall as
+        # well as rise. increase() assumes a monotonic counter and would
+        # inflate a fall-then-rise inside one window into a much larger
+        # number; delta() reports the true net change. The trade-off this
+        # accepts, shared with horecaos-probe.sh's own counter_delta(), is
+        # that a resolution and a fresh arrival landing in the same
+        # five-minute window can partly mask each other. A monetary dead
+        # letter that is not immediately resolved still fires on the next
+        # evaluation, because the gauge stays elevated.
+        expr: >
+          sum(delta(horecaos_outbox_dead_letters{monetary="true"}[5m])) > 0
+          or
+          sum(delta(horecaos_inbox_dead_letters{monetary="true"}[5m])) > 0
+        for: 0m
+        labels:
+          tier: trading
+        annotations:
+          summary: a new monetary dead letter appeared in the last 5 minutes
+          runbook: docs/runbooks/dead-letter-decision.md
+
+      - alert: HorecaosOwnershipFenceBurst
+        # One TargetWritesFencedException is the ADR 0024 gate working
+        # correctly. More than ten in five minutes for one capability means
+        # routing and ownership disagree. Outside a cutover the counter does
+        # not move, so this costs nothing to leave enabled.
+        expr: >
+          sum by (capability) (increase(horecaos_migration_writes_fenced_total[5m])) > 10
+        for: 0m
+        labels:
+          tier: trading
+        annotations:
+          summary: >-
+            {{ $value }} writes fenced in 5 minutes for capability
+            {{ $labels.capability }}
+          runbook: docs/runbooks/migration-scope-fencing-writes.md
+
+  - name: adr-0023-morning
+    rules:
+      - alert: HorecaosOnboardingStalled
+        # The scheduler polls every five seconds and a dead worker's step is
+        # handed back within about five minutes; an hour is ten of those
+        # margins. The gauge's own -1 sentinel ("could not read the database")
+        # never satisfies >= 3600, so it never falsely fires this rule — the
+        # database check is a different alert entirely and one this file does
+        # not evaluate.
+        expr: horecaos_onboarding_runs_stalled_age_seconds >= 3600
+        for: 2m
+        labels:
+          tier: morning
+        annotations:
+          summary: an onboarding run has not moved for {{ $value }}s
+          runbook: docs/runbooks/onboarding-run-stalled.md

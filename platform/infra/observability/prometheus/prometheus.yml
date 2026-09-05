@@ -1,0 +1,59 @@
+# Prometheus configuration for the ADR 0023 collection overlay.
+#
+# There is exactly one scrape target: the application's own
+# /actuator/prometheus, which uz.horecaos.platform.observability publishes
+# already. That endpoint answers only a caller on the container's own
+# loopback (LocalMetricsScrapeMatcher, ADR 0023, ADR 0034) — not a bearer
+# token, not a network allowlist, the literal peer address 127.0.0.1. This
+# Prometheus is therefore run with `network_mode: "service:platform-app"` in
+# compose.observability.yaml, which makes it share the application
+# container's network namespace rather than sit beside it on a bridge: a
+# request this process sends to 127.0.0.1:8080 arrives at the application
+# looking exactly like the `docker compose exec ... wget` the on-box probe
+# already uses, and for the same reason — it genuinely is loopback traffic,
+# not a header anyone could forge. No change to the application's security
+# configuration was needed or made.
+#
+# One consequence of that network mode: this Prometheus's own web port answers
+# on whatever address platform-app is reachable at, not on an address of its
+# own. See the overlay README for how an operator reaches it.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  # ADR 0023's own rule for every label in this system: never a tenant
+  # identifier, bounded label sets. Nothing here adds a label Prometheus
+  # itself does not already attach (job, instance).
+  external_labels:
+    platform: horecaos
+
+rule_files:
+  # Matches adr-0023-alerts.yml and nothing else in that directory —
+  # specifically not rules/rules_test.yml, which is a promtool unit-test
+  # fixture (`rule_files:`/`tests:` schema, not `groups:`) and would fail to
+  # parse as an alerting rule file if the glob ever picked it up.
+  - /etc/prometheus/rules/*-alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            # Reachable because platform-app — whose network namespace this
+            # process shares — is a member of the `public` network, and so is
+            # alertmanager. See compose.observability.yaml.
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: platform-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - 127.0.0.1:8080
+    # Every series this scrape produces already carries whatever job/instance
+    # Prometheus assigns; no relabeling is needed because nothing upstream
+    # sets a tenant or other high-cardinality label (ADR 0023, ADR 0029).
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - 127.0.0.1:9090

@@ -1,0 +1,144 @@
+# /etc/horecaos/alertmanager.yml — root-owned, mode 0600, and not in this
+# repository.
+#
+# This is the ADR 0028 exception this directory already established for
+# /etc/horecaos/alerting.env, extended to Alertmanager: the Telegram bot token
+# and chat id are credentials, and they do not go in git. Alertmanager's own
+# binary has no `--config.expand-env` flag to interpolate them from the
+# process environment at load time (checked against v0.28.1; if a future
+# version adds one, converting this file to a template is a reasonable
+# follow-up, not a requirement), so the file that carries the real values has
+# to be the whole config, kept outside the repository exactly like
+# alerting.env is.
+#
+# Copy, fill in the two placeholders, and:
+#   sudo chown root:root /etc/horecaos/alertmanager.yml
+#   sudo chmod 0600 /etc/horecaos/alertmanager.yml
+#
+# compose.observability.yaml bind-mounts this path (overridable with
+# HORECAOS_ALERTMANAGER_CONFIG) read-only into the container. Validate any
+# edit before trusting it:
+#   docker run --rm --entrypoint amtool \
+#     -v /etc/horecaos/alertmanager.yml:/work/alertmanager.yml:ro \
+#     prom/alertmanager:v0.28.1 check-config /work/alertmanager.yml
+#
+# The same Telegram chat horecaos-probe.sh already pages is the natural
+# choice here too — one phone, and the operator learns one notification
+# format rather than two. They do not have to be the same chat; nothing below
+# assumes it.
+
+global:
+  resolve_timeout: 5m
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+# Alertmanager's day-range syntax treats `monday:sunday` as start-after-end
+# (Sunday sorts before Monday internally) and refuses to load, which is a
+# config validation error, not a runtime one, and amtool check-config is what
+# catches it. Omitting `weekdays` matches every day, which is what ADR 0023
+# actually wants: the pilot has no day it is closed.
+time_intervals:
+  # 09:00–23:30 Asia/Tashkent, exactly ADR 0023's trading-hours window: loud
+  # while restaurants are open, folded into the digest outside it.
+  - name: trading_hours
+    time_intervals:
+      - times:
+          - start_time: "09:00"
+            end_time: "23:30"
+        location: Asia/Tashkent
+  # A ten-minute window at the start of the working day. Grouping every
+  # firing morning-tier alert under one label (`tier`) and constraining
+  # delivery to this window is what makes the morning receiver behave like
+  # horecaos-probe.sh's own digest — one message, read once, rather than a
+  # notification the moment each condition first became true overnight.
+  - name: morning_digest_window
+    time_intervals:
+      - times:
+          - start_time: "09:00"
+            end_time: "09:10"
+        location: Asia/Tashkent
+
+# The root route's receiver is deliberately the quiet one. Every real alert in
+# prometheus/rules/adr-0023-alerts.yml carries an explicit `tier` label and is
+# claimed by one of the three routes below; reaching the root receiver means a
+# rule was added without one, which is a bug in the rule file and not
+# something that should be able to ring the phone at 3am on its own.
+route:
+  receiver: morning
+  group_by: ["tier"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 24h
+  routes:
+    # Night: any hour, no time restriction. ADR 0034 caps this tier at three
+    # and ADR 0023 spends all three; only one of the three — order flow
+    # stalled — is a Prometheus-evaluated rule, and its repeat interval
+    # matches horecaos-probe.sh's own HORECAOS_NIGHT_REPEAT_SECONDS (1800s)
+    # so an operator ignoring one channel does not get a different rhythm
+    # from the other.
+    - matchers:
+        - tier="night"
+      receiver: night
+      group_by: ["alertname"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 30m
+    # Trading: loud only inside the window; a rule that starts firing at 2am
+    # queues silently and is delivered — loudly — the moment trading opens,
+    # rather than being lost. repeat_interval matches
+    # HORECAOS_TRADING_REPEAT_SECONDS (3600s).
+    - matchers:
+        - tier="trading"
+      receiver: trading
+      active_time_intervals: ["trading_hours"]
+      group_by: ["alertname"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+    # Morning: delivered once, in the ten-minute window at the start of the
+    # working day, with every firing morning-tier alert bundled into one
+    # notification by `group_by: [tier]`.
+    - matchers:
+        - tier="morning"
+      receiver: morning
+      active_time_intervals: ["morning_digest_window"]
+      group_by: ["tier"]
+      group_wait: 2m
+      group_interval: 24h
+      repeat_interval: 24h
+
+receivers:
+  - name: night
+    telegram_configs:
+      - bot_token: "<bot token from @BotFather>"
+        chat_id: 123456789 # REPLACE with the real chat id
+        message: '{{ template "horecaos.telegram.message" . }}'
+        parse_mode: HTML
+        disable_notifications: false
+        # Only the night tier reports its own recovery (ADR 0023: "Being
+        # woken and never told whether it fixed itself is how an operator
+        # learns to drive to the office for something that had already
+        # recovered"), exactly mirroring horecaos-probe.sh's clear_alert().
+        send_resolved: true
+
+  - name: trading
+    telegram_configs:
+      - bot_token: "<bot token from @BotFather>"
+        chat_id: 123456789 # REPLACE with the real chat id
+        message: '{{ template "horecaos.telegram.message" . }}'
+        parse_mode: HTML
+        disable_notifications: false
+        send_resolved: false
+
+  - name: morning
+    telegram_configs:
+      - bot_token: "<bot token from @BotFather>"
+        chat_id: 123456789 # REPLACE — the same chat as above
+        # with disable_notifications is the ADR 0023 model: "with Telegram
+        # these are the same sendMessage URL, the quiet one carrying
+        # &disable_notification=true."
+        message: '{{ template "horecaos.telegram.message" . }}'
+        parse_mode: HTML
+        disable_notifications: true
+        send_resolved: false

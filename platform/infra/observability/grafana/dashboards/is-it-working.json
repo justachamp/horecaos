@@ -1,0 +1,220 @@
+{
+  "title": "HorecaOS — is it working",
+  "uid": "horecaos-is-it-working",
+  "description": "ADR 0023's one dashboard. Panels answer the three 3am questions (is it down, is it losing money, is it losing data) from what /actuator/prometheus actually publishes. Nothing on this page pages anyone; alerting.env's Alertmanager routes do that from prometheus/rules/adr-0023-alerts.yml. The bottom-right panel lists what this page deliberately cannot show.",
+  "tags": ["horecaos", "adr-0023"],
+  "timezone": "Asia/Tashkent",
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "App reachable (on-box scrape)",
+      "description": "Whether THIS Prometheus's own scrape of the application succeeded. This is not the external uptime check ADR 0023 requires for the night 'platform unreachable' alert — that check watches the platform from outside the box, on purpose, so that it keeps working when this box does not. Treat this panel as a diagnostic, never as proof the platform is reachable from the internet.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "up{job=\"platform-app\"}", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name", "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Outbox oldest pending age",
+      "description": "Night alert: HorecaosOrderFlowStalled fires at 900s (ADR 0006's relay backs off to at most 5 minutes across 10 attempts, ~13.5 minutes worst case, so nothing healthy reaches 15).",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_outbox_oldest_pending_age_seconds", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 600 }, { "color": "red", "value": 900 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Inbox oldest pending age",
+      "description": "Same alert and threshold as the outbox panel; the two are one night alert with two legs (plus a Kafka consumer-lag leg this dashboard cannot show — see the gaps panel).",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_inbox_oldest_pending_age_seconds", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 600 }, { "color": "red", "value": 900 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Oldest live order age",
+      "description": "Diagnosis, not an alert (ADR 0023 pages on the outbox/inbox age, not on this). Whether a stalled outbox has left a hundred orders sitting in PAYMENT_AUTHORIZING or none.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_orders_oldest_live_age_seconds", "instant": true }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Orders by status (live)",
+      "description": "horecaos.orders.live — orders that have not reached a terminal status, by status. Nothing here pages; it is the diagnosis after the order-flow alert has already fired.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_orders_live", "legendFormat": "{{status}}", "instant": true }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Dead letters by topic domain",
+      "description": "horecaos.outbox.dead.letters and horecaos.inbox.dead.letters. monetary=true rows are the ones the trading-hours HorecaosMonetaryDeadLetter alert watches; outbox rows are always failure_category=\"unclassified\" — ADR 0023's outbox-has-no-classification-column gap, not a display bug.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_outbox_dead_letters", "format": "table", "instant": true },
+        { "refId": "B", "expr": "horecaos_inbox_dead_letters", "format": "table", "instant": true }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "transformations": [{ "id": "merge", "options": {} }]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "HTTP requests by outcome",
+      "description": "Standard Spring Boot request metric, grouped by outcome (SUCCESS/CLIENT_ERROR/SERVER_ERROR/...). ADR 0023 deliberately does not page on a 5xx rate anywhere except the two payment callback roots (see the next panel) — a single request failure here is expected to be on this dashboard and nowhere louder.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (outcome) (rate(http_server_requests_seconds_count[5m]))", "legendFormat": "{{outcome}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Payment callback non-2xx rate",
+      "description": "The one route-specific alert in ADR 0023: more than 3 non-200 responses from /providers/payme/* or /providers/click/* in 5 minutes pages the trading-hours tier (HorecaosPaymentCallbackFailing). Both providers retry any non-200 until the payment reaches their manual investigation queue.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{uri=~\"^/providers/(payme|click)/.*\", status!~\"2..\"}[5m]))",
+          "legendFormat": "non-2xx/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Provider circuit state",
+      "description": "horecaos.provider.circuit.state (0 closed, 1 half open, 2 open, 3 forced/disabled) and how long each has been continuously open. Only payment/pos breakers being open for 10+ minutes page (trading tier); a courier breaker opening is here and nowhere louder, deliberately (ADR 0023).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "horecaos_provider_circuit_state", "format": "table", "instant": true },
+        { "refId": "B", "expr": "horecaos_provider_circuit_open_duration_seconds", "format": "table", "instant": true }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "transformations": [{ "id": "merge", "options": {} }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Fenced writes by capability (cutover only)",
+      "description": "horecaos.migration.writes.fenced. One fenced write is the ADR 0024 ownership gate working correctly; more than 10 in 5 minutes for one capability pages (HorecaosOwnershipFenceBurst) because routing and ownership disagree. Outside a cutover this stays flat at zero.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (capability) (increase(horecaos_migration_writes_fenced_total[5m]))", "legendFormat": "{{capability}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Onboarding stalled age",
+      "description": "horecaos.onboarding.runs.stalled.age.seconds. Morning-tier alert at 3600s; the gauge's own -1 sentinel means 'could not read the database' and is not an age.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [{ "refId": "A", "expr": "horecaos_onboarding_runs_stalled_age_seconds", "instant": true }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1800 }, { "color": "red", "value": 3600 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Free space, application container's own path (NOT the host)",
+      "description": "disk_free_bytes / disk_total_bytes for the path this application container sees. DataVolumeMetrics's own documentation is explicit that on the production VM this container's filesystem is read-only and this figure describes nothing about the host's real data volume — the 85% morning alert is evaluated by horecaos-probe.sh reading the actual host with df -P, not from this panel. Shown here only because it is what makes the disk visible in a rehearsal or staging VM where no probe runs.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "horecaos-prometheus" },
+      "targets": [{ "refId": "A", "expr": "100 * disk_free_bytes / disk_total_bytes", "instant": true }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 15 }, { "color": "red", "value": 5 }] },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 13,
+      "type": "text",
+      "title": "What this dashboard cannot show you",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "options": {
+        "mode": "markdown",
+        "content": "Watched by **horecaos-probe.sh** directly against the host or a container, or by an **off-box service** — not visible to this Prometheus because nothing here scrapes anything but the application:\n\n- **Platform unreachable** — the external uptime check (off-box, by design)\n- **PostgreSQL down** — `pg_isready` against the database container\n- **Kafka consumer lag** — `kafka-consumer-groups.sh --describe` against the broker\n- **OpenBao sealed** — `bao status` against the OpenBao container\n- **Backup did not run** — the host's backup stamp file\n- **Real host disk %** — `df -P` on the host (see the caption on the disk panel to the left)\n- **TLS certificate expiry** — a live TLS handshake against the public hostname\n- **Container crash loops** — Docker restart counts via `docker inspect`\n\nSee `infra/observability/README.md` and `docs/adr/partial/0023-*.md` for why each stays with the probe instead of being duplicated here."
+      }
+    }
+  ]
+}
