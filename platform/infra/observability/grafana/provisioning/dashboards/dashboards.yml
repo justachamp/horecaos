@@ -1,0 +1,16 @@
+# Loads whatever is in grafana/dashboards/ as a provisioned, read-only
+# dashboard. ADR 0023 asks for one dashboard ("a solo operator will keep one
+# dashboard honest and will not keep nine") — provisioning from a file instead
+# of the UI is what stops that number from drifting upward across restarts.
+apiVersion: 1
+
+providers:
+  - name: horecaos
+    orgId: 1
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

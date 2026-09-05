@@ -1,0 +1,217 @@
+# ADR 0023's collection overlay: Prometheus, Alertmanager, and the one
+# Grafana dashboard, none of which exist in compose.production.yaml or in
+# deploy/compose.production.yml.
+#
+# Why this is a separate file rather than an edit to either production
+# compose file
+# -------------------------------------------------------------------------
+# Two trees currently compete to be the production deployment
+# (compose.production.yaml here and deploy/compose.production.yml), and which
+# one wins is a decision this file does not make. Editing either risks
+# colliding with that decision and with whatever else is landing on it at the
+# same time. This file is additive instead: it adds three services and reads
+# two more (platform-app, and the docker networks both trees already define
+# identically — public, core), and touches nothing that exists today.
+#
+# How to attach it, once a tree is chosen
+# ----------------------------------------
+#   export HORECAOS_OBSERVABILITY_DIR=/opt/horecaos/horecaos-platform/infra/observability
+#   docker compose \
+#     -f compose.production.yaml \
+#     -f "$HORECAOS_OBSERVABILITY_DIR/compose.observability.yaml" \
+#     up -d
+# (or the equivalent two -f flags against deploy/compose.production.yml — the
+# service name this file depends on, platform-app, and the network names it
+# joins, public and core, are identical in both trees today). No change to
+# either base file is required. If the network or service names ever diverge
+# between the two trees, this file's `networks:` and `network_mode:` lines are
+# the two places to update.
+#
+# Why every bind mount below is `${HORECAOS_OBSERVABILITY_DIR}/...` and not a
+# plain `./...`: when `docker compose` merges several `-f` files into one
+# project, a relative path in ANY of them resolves against a single project
+# directory — the directory of the FIRST `-f` file — not against the
+# directory of the file that wrote the path. A plain `./prometheus/
+# prometheus.yml` here would therefore resolve against
+# compose.production.yaml's directory (or deploy/compose.production.yml's)
+# and never find this directory at all. This was caught by actually running
+# the merge and inspecting the resolved paths (see the wave's own report),
+# not assumed from how a single-file `docker compose` project behaves.
+# HORECAOS_OBSERVABILITY_DIR defaults to this file's real install location so
+# the export above is a belt-and-braces habit rather than a requirement.
+#
+# How Prometheus reaches a loopback-only endpoint without a code change
+# -----------------------------------------------------------------------
+# /actuator/prometheus answers only a caller whose peer address is genuinely
+# 127.0.0.1 (LocalMetricsScrapeMatcher, ADR 0023 ADR 0034) — not a bearer
+# token, an allowlist, or a header, because a header can be forged by anything
+# that can reach the port and a token depends on Keycloak being up, which is
+# exactly what must not be true of an alert path. horecaos-probe.sh already
+# satisfies this with `docker compose exec platform-app wget ...`, which runs
+# inside that container's own network namespace. `network_mode:
+# "service:platform-app"` below does the same thing for a long-running
+# container instead of a one-shot exec: Prometheus shares platform-app's
+# network namespace entirely, so its scrape of 127.0.0.1:8080 is, from the
+# application's point of view, indistinguishable from traffic that never left
+# the container — because it didn't. This was verified empirically before
+# being relied on here (see the wave's own report), not assumed from the
+# Docker documentation's description of the flag.
+#
+# One consequence: Prometheus's web port (9090) is now reachable at whatever
+# address platform-app answers on, on every network platform-app is a member
+# of (public and core in both trees), rather than at an address of its own.
+# Grafana and Alertmanager reach it at platform-app:9090 for exactly that
+# reason. This is a marginal widening of what could reach that port compared
+# to a Prometheus with its own network identity restricted to `core` alone,
+# and it is accepted for the same reason ADR 0023 accepts the application
+# itself being reachable from `public`: nothing on `public` in this stack has
+# a route in from the internet except the edge on 443, and the edge does not
+# proxy port 9090 to anyone.
+#
+# No published host ports for any of the three services below, which mirrors
+# ADR 0023's own list of what must never have one: "Prometheus, Alertmanager,
+# the dashboard". An operator reaches Grafana the way the record already
+# reaches the diagnostic /actuator/health surface — over WireGuard to the box,
+# then
+#   ssh -L 3000:<grafana container IP>:3000 <operator>@<box>
+# (find the address with `docker compose ps -q grafana | xargs docker inspect
+# --format '{{ (index .NetworkSettings.Networks "horecaos-production_core").IPAddress }}'`
+# — the `index` form because Go's template dot-path cannot walk through a map
+# key containing a hyphen, and the real key is prefixed with the compose
+# project name, horecaos-production in both trees today, joined with an
+# underscore) — rather than through any port this file publishes. See
+# README.md.
+#
+# Deliberately no top-level `name:` and no top-level `networks:` block here.
+# `docker compose -f <base> -f <this file>` merges both into one project —
+# verified for this wave by actually running that merge against both
+# candidate base files (see the wave's own report) — so `public` and `core`
+# below resolve against the base file's own network definitions without this
+# file repeating or overriding them. Declaring `name:` here would instead
+# rename the merged project away from whichever base file set it
+# (`horecaos-production`), which would orphan the real production containers
+# and volumes onto a second, empty project the first time this overlay is
+# attached. If this file is ever run as an independent `docker compose`
+# invocation instead of merged in, `public` and `core` need `external: true`
+# added back with the base project's real network names — not attempted here
+# because the merge is the attachment method this overlay documents and the
+# one the wave 55 outcome is expected to use.
+
+x-logging: &obs-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+x-hardening: &obs-hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    restart: unless-stopped
+    # Shares platform-app's network namespace rather than joining a network of
+    # its own — see the file header for why. Compose infers a start-order
+    # dependency from this alone; the explicit depends_on below additionally
+    # waits for the application to be genuinely healthy, so the first scrape
+    # is not spent on a container still starting.
+    network_mode: "service:platform-app"
+    depends_on:
+      platform-app:
+        condition: service_healthy
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # ADR 0023: "Observability retention is 90 days per ADR 0029 on a disk
+      # shared with PostgreSQL" — the same figure applies here, and it is
+      # this flag rather than a performance nicety that keeps the trace and
+      # metrics store from becoming a second claimant nobody sized.
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.listen-address=0.0.0.0:9090"
+    volumes:
+      - ${HORECAOS_OBSERVABILITY_DIR:-/opt/horecaos/horecaos-platform/infra/observability}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${HORECAOS_OBSERVABILITY_DIR:-/opt/horecaos/horecaos-platform/infra/observability}/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    logging: *obs-logging
+    <<: *obs-hardening
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    # `public` rather than `core`: Alertmanager has to deliver a webhook to
+    # Telegram's API, which needs a route out, and `core` is `internal: true`
+    # in both trees precisely so that PostgreSQL, Kafka, MinIO and OpenBao
+    # never get one. Prometheus (sharing platform-app's namespace, which is a
+    # member of `public` too) reaches it at alertmanager:9093 across this same
+    # network.
+    networks:
+      - public
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      # Not a repository path. See alertmanager/alertmanager.yml.example —
+      # the credentials this file needs (a Telegram bot token and chat id)
+      # are ADR 0028 secrets and the config that carries them lives at this
+      # fixed host path, root-owned and mode 0600, exactly like
+      # /etc/horecaos/alerting.env already does for horecaos-probe.sh.
+      - ${HORECAOS_ALERTMANAGER_CONFIG:-/etc/horecaos/alertmanager.yml}:/etc/alertmanager/alertmanager.yml:ro
+      - ${HORECAOS_OBSERVABILITY_DIR:-/opt/horecaos/horecaos-platform/infra/observability}/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager-data:/alertmanager
+    logging: *obs-logging
+    <<: *obs-hardening
+
+  grafana:
+    image: grafana/grafana-oss:11.4.0
+    restart: unless-stopped
+    # `core`, not `public`: Grafana only ever calls Prometheus, which it
+    # reaches at platform-app:9090 on this same network, and it needs no
+    # route out. No `ports:` is declared for this service anyway (ADR 0023:
+    # Grafana must never have a published port), which is fortunate, because
+    # `internal: true` was verified for this wave to actively prevent Docker's
+    # own port-publish mechanism from working at all — even a loopback-only
+    # `127.0.0.1:PORT:PORT` binding — for a container that is only on such a
+    # network (`docker inspect` shows an empty port mapping rather than an
+    # error). The SSH tunnel below is a different mechanism: sshd on the box
+    # routes to the bridge subnet directly, the way any process in the host's
+    # own network namespace can, which does not go through Docker's
+    # port-publish path at all. That part rests on ordinary Linux bridge
+    # networking rather than on anything specific to Docker's internal-network
+    # flag, and it could not be fully exercised in this sandbox — a
+    # Docker-Desktop-for-Mac install runs dockerd inside a Linux VM, so a
+    # command on the sandbox's own host does not sit in the same network
+    # namespace as the bridge the way sshd on the real, single-OS production
+    # box would.
+    networks:
+      - core
+    environment:
+      GF_SERVER_HTTP_ADDR: 0.0.0.0
+      GF_SERVER_HTTP_PORT: "3000"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # ADR 0028: a Docker secret file, never a literal in this file or in an
+      # env var's value. Grafana reads the `__FILE` suffix convention itself
+      # and never receives the password as an environment variable's value.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana-admin-password
+    secrets:
+      - grafana-admin-password
+    volumes:
+      - ${HORECAOS_OBSERVABILITY_DIR:-/opt/horecaos/horecaos-platform/infra/observability}/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${HORECAOS_OBSERVABILITY_DIR:-/opt/horecaos/horecaos-platform/infra/observability}/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    logging: *obs-logging
+    <<: *obs-hardening
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+
+secrets:
+  grafana-admin-password:
+    file: "${HORECAOS_SECRET_DIR:?set HORECAOS_SECRET_DIR, the same directory the base compose file's own secrets block reads}/grafana-admin-password"

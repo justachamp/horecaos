@@ -1,0 +1,134 @@
+rule_files:
+  - adr-0023-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Order flow stalled: age climbs past 900s and stays there past the 1m `for`.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_outbox_oldest_pending_age_seconds'
+        values: '0 300 600 950 1010 1070'
+      - series: 'horecaos_inbox_oldest_pending_age_seconds'
+        values: '0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorecaosOrderFlowStalled
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HorecaosOrderFlowStalled
+        exp_alerts:
+          - exp_labels:
+              tier: night
+            exp_annotations:
+              summary: "order flow stalled: oldest pending outbox/inbox row has been unpublished for 1070s"
+              runbook: docs/runbooks/outbox-not-draining.md
+              note: "Evaluated here without the Kafka consumer-lag leg; see the header comment in this file for why."
+
+  # Payment callback failing: five non-2xx responses inside 5 minutes trips the
+  # ">3 in 5 minutes" threshold; the same window one minute earlier does not.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{uri="/providers/payme/1", status="500"}'
+        values: '0 1 2 3 4 5'
+      - series: 'http_server_requests_seconds_count{uri="/providers/payme/1", status="200"}'
+        values: '0 10 20 30 40 50'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HorecaosPaymentCallbackFailing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HorecaosPaymentCallbackFailing
+        exp_alerts:
+          - exp_labels:
+              tier: trading
+            exp_annotations:
+              summary: "5 non-200 payment callback responses in the last 5 minutes"
+              runbook: docs/runbooks/payment-callback-failing.md
+
+  # Monetary dead letter: delta() reports the net rise at 2m (0 -> 1), and by
+  # 5m the row has already resolved back to 0 and the window's net delta is
+  # zero again — delta(), not increase(), is what makes that true rather than
+  # inflating the resolved row back into a false positive.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_outbox_dead_letters{topic_domain="ordering", failure_category="unclassified", monetary="true"}'
+        values: '0 0 1 1 1 0'
+      - series: 'horecaos_inbox_dead_letters{topic_domain="ordering", failure_category="UNKNOWN", monetary="true"}'
+        values: '0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HorecaosMonetaryDeadLetter
+        exp_alerts:
+          - exp_labels:
+              tier: trading
+            exp_annotations:
+              summary: a new monetary dead letter appeared in the last 5 minutes
+              runbook: docs/runbooks/dead-letter-decision.md
+      - eval_time: 5m
+        alertname: HorecaosMonetaryDeadLetter
+        exp_alerts: []
+
+  # Ownership fence burst: eleven fenced writes to one capability inside 5
+  # minutes trips the ">10" threshold; six does not.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_migration_writes_fenced_total{capability="ORDER_CREATE"}'
+        values: '0 2 4 6 8 11'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorecaosOwnershipFenceBurst
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HorecaosOwnershipFenceBurst
+        exp_alerts:
+          - exp_labels:
+              tier: trading
+              capability: ORDER_CREATE
+            exp_annotations:
+              summary: "10.999999999999998 writes fenced in 5 minutes for capability ORDER_CREATE"
+              runbook: docs/runbooks/migration-scope-fencing-writes.md
+
+  # Provider circuit stuck open: a payment breaker open continuously past 600s
+  # fires; a POS breaker below the threshold, and a courier breaker (outside
+  # the family filter entirely) at any duration, do not.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_provider_circuit_open_duration_seconds{family="payment", provider="click"}'
+        values: '0 200 400 610 620 630'
+      - series: 'horecaos_provider_circuit_open_duration_seconds{family="courier", provider="yandex"}'
+        values: '0 700 1400 2100 2800 3500'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HorecaosProviderCircuitStuckOpen
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HorecaosProviderCircuitStuckOpen
+        exp_alerts:
+          - exp_labels:
+              tier: trading
+              family: payment
+              provider: click
+            exp_annotations:
+              summary: "the click circuit has been open for 630s"
+              runbook: docs/runbooks/provider-circuit-stuck-open.md
+
+  # Onboarding stalled: the -1 "could not read the database" sentinel never
+  # satisfies the >= 3600 threshold, and a genuinely stalled run past one hour
+  # does.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_onboarding_runs_stalled_age_seconds'
+        values: '-1 -1 3000 3650 3710 3770'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorecaosOnboardingStalled
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HorecaosOnboardingStalled
+        exp_alerts:
+          - exp_labels:
+              tier: morning
+            exp_annotations:
+              summary: "an onboarding run has not moved for 3770s"
+              runbook: docs/runbooks/onboarding-run-stalled.md
