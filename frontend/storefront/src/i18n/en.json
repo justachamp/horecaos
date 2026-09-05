@@ -72,7 +72,7 @@
     "pickup": "Pickup",
     "pickupComingSoon": "Pickup coming soon",
     "welcome": "Welcome!",
-    "welcomeSubtitle": "Welcome to JizBiz's online world!",
+    "welcomeSubtitle": "Welcome to {{brand}}'s online world!",
     "search": "Search...",
     "menu": "Menu 😍",
     "all": "All",

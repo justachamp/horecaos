@@ -78,23 +78,6 @@
   --color-border-default: var(--border-default);
   --shadow-elevated: var(--shadow-elevated-value);
   --shadow-nav: var(--shadow-nav-value);
-
-  // Deprecated aliases -- `cart-confirmation.component.html` is out of scope
-  // for this rename (see the wave that owns it) and still uses these class
-  // names. They point at the same renamed tokens above, so that page stays
-  // themed correctly; drop them once that template migrates to the names
-  // above and no `bg-jizbiz-*`/`text-jizbiz-*`/etc. usage remains.
-  --color-jizbiz-bg: var(--surface-base);
-  --color-jizbiz-surface: var(--surface-raised);
-  --color-jizbiz-surface-2: var(--surface-raised-2);
-  --color-jizbiz-hover: var(--surface-hover);
-  --color-jizbiz-accent: var(--brand-accent);
-  --color-jizbiz-accent-deep: var(--brand-accent-deep);
-  --color-jizbiz-text: var(--text-primary);
-  --color-jizbiz-muted: var(--text-muted);
-  --color-jizbiz-border: var(--border-default);
-  --shadow-jizbiz: var(--shadow-elevated-value);
-  --shadow-jizbiz-nav: var(--shadow-nav-value);
 }
 
 :root,

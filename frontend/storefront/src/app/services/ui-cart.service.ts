@@ -17,7 +17,7 @@ import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 
-const FALLBACK_IMAGE = '/jizbiz/logo/Logo-sq.png';
+const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
 
 /** U+2014. Shown where the platform has not answered, so a zero is never read as free. */
 const UNRESOLVED = '—';

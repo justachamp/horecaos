@@ -72,7 +72,7 @@
     "pickup": "Olib ketish",
     "pickupComingSoon": "Olib ketish tez orada yo'lga qo'yiladi",
     "welcome": "Xush kelibsiz!",
-    "welcomeSubtitle": "JizBiz'ning onlayn olamiga xush kelibsiz!",
+    "welcomeSubtitle": "{{brand}}'ning onlayn olamiga xush kelibsiz!",
     "search": "Qidirish...",
     "menu": "Menyu 😍",
     "all": "Hammasi",

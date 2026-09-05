@@ -1,13 +1,13 @@
-<div class="flex min-h-full flex-col bg-jizbiz-bg pb-52 pt-2 text-jizbiz-text">
+<div class="flex min-h-full flex-col bg-surface-base pb-52 pt-2 text-text-primary">
   <div class="mx-auto w-full max-w-[420px] flex-1">
-    <h1 class="text-xl font-bold text-jizbiz-text">{{ 'cart.confirmTitle' | t }}</h1>
+    <h1 class="text-xl font-bold text-text-primary">{{ 'cart.confirmTitle' | t }}</h1>
 
     <!-- Yetkazib berish manzili -->
     <a
       class="flex w-full items-center gap-3 border-b border-zinc-700/80 py-4 text-left"
       [attr.aria-label]="'cart.changeAddress' | t"
     >
-      <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
@@ -24,7 +24,7 @@
         </svg>
       </span>
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-medium text-jizbiz-text">{{ 'cart.deliveryAddress' | t }}</p>
+        <p class="text-sm font-medium text-text-primary">{{ 'cart.deliveryAddress' | t }}</p>
         <p class="mt-0.5 text-xs text-zinc-400">{{ deliveryAddress }}</p>
       </div>
       <!-- <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,13 +34,13 @@
 
     <!-- Kimga yetkaziladi -->
     <div *ngIf="delivering" class="border-b border-zinc-700/80 pb-4">
-      <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.recipient' | t }}</p>
+      <p class="py-2 text-sm font-bold text-text-primary">{{ 'cart.recipient' | t }}</p>
       <div class="flex flex-col gap-2">
         <input
           type="text"
           name="recipientName"
           autocomplete="name"
-          class="w-full rounded-lg bg-jizbiz-surface-2 px-3 py-2 text-sm text-jizbiz-text placeholder:text-zinc-500"
+          class="w-full rounded-lg bg-surface-raised-2 px-3 py-2 text-sm text-text-primary placeholder:text-zinc-500"
           [attr.aria-label]="'cart.recipientName' | t"
           [placeholder]="'cart.recipientName' | t"
           [(ngModel)]="recipientName"
@@ -51,7 +51,7 @@
           name="recipientPhone"
           autocomplete="tel"
           inputmode="tel"
-          class="w-full rounded-lg bg-jizbiz-surface-2 px-3 py-2 text-sm text-jizbiz-text placeholder:text-zinc-500"
+          class="w-full rounded-lg bg-surface-raised-2 px-3 py-2 text-sm text-text-primary placeholder:text-zinc-500"
           [attr.aria-label]="'cart.recipientPhone' | t"
           [placeholder]="'cart.recipientPhone' | t"
           [(ngModel)]="recipientPhone"
@@ -62,14 +62,14 @@
 
     <!-- To'lov usuli -->
     <div class="border-b border-zinc-700/80">
-      <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.pay' | t }}</p>
+      <p class="py-2 text-sm font-bold text-text-primary">{{ 'cart.pay' | t }}</p>
       <button
         type="button"
         class="flex w-full items-center gap-3 pb-4 text-left"
         [attr.aria-label]="'cart.changePayment' | t"
         (click)="togglePaymentOptions()"
       >
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -80,7 +80,7 @@
           </svg>
         </span>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-jizbiz-text">{{ 'cart.paymentMethod' | t }}</p>
+          <p class="text-sm font-medium text-text-primary">{{ 'cart.paymentMethod' | t }}</p>
           <p class="mt-0.5 text-xs text-zinc-400">{{ paymentMethod }}</p>
         </div>
         <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,13 +95,13 @@
 
       <!-- Payment options panel (below button) -->
       @if (showPaymentOptions) {
-        <div class="rounded-xl border border-zinc-600 bg-jizbiz-bg pb-4 pt-2">
+        <div class="rounded-xl border border-zinc-600 bg-surface-base pb-4 pt-2">
           <div class="divide-y divide-zinc-600">
             @for (opt of paymentOptions(); track opt.id) {
               <label
-                class="flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-jizbiz-hover"
+                class="flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-surface-hover"
               >
-                <span class="flex shrink-0 items-center justify-center text-jizbiz-text">
+                <span class="flex shrink-0 items-center justify-center text-text-primary">
                   @if (opt.icon === 'cash') {
                     <svg class="h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2m2 4h10m-10 4h10m-10-6h10" />
@@ -113,14 +113,14 @@
                     </svg>
                   }
                   @if (opt.icon === 'click') {
-                    <img src="/jizbiz/logo/click.svg" alt="Click" class="h-11 w-11 object-contain" />
+                    <img src="/assets/logo/click.svg" alt="Click" class="h-11 w-11 object-contain" />
                   }
                   @if (opt.icon === 'payme') {
-                    <img src="/jizbiz/logo/payme.jpeg" alt="Payme" class="h-11 w-11 rounded object-contain" />
+                    <img src="/assets/logo/payme.jpeg" alt="Payme" class="h-11 w-11 rounded object-contain" />
                   }
                 </span>
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-jizbiz-text">{{ opt.labelKey | t }}</p>
+                  <p class="text-sm font-medium text-text-primary">{{ opt.labelKey | t }}</p>
                   @if (opt.secondaryKey) {
                     <p class="mt-0.5 text-xs text-zinc-400">{{ opt.secondaryKey | t }}</p>
                   }
@@ -128,8 +128,8 @@
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center">
               <span
                 class="inline-block h-5 w-5 rounded-full border-2 transition-colors"
-                [class.border-jizbiz-accent]="selectedPaymentId === opt.id"
-                [class.bg-jizbiz-accent]="selectedPaymentId === opt.id"
+                [class.border-brand-accent]="selectedPaymentId === opt.id"
+                [class.bg-brand-accent]="selectedPaymentId === opt.id"
                 [class.border-zinc-500]="selectedPaymentId !== opt.id"
                 [class.bg-transparent]="selectedPaymentId !== opt.id"
               ></span>
@@ -151,7 +151,7 @@
     </div>
 
     <!-- To'lov summasi -->
-    <div class="mt-6 rounded-xl bg-jizbiz-accent px-4 py-4 text-white">
+    <div class="mt-6 rounded-xl bg-brand-accent px-4 py-4 text-white">
       <div class="flex items-center justify-between border-b border-white/20 pb-3">
         <span class="text-sm font-bold text-white">{{ 'cart.paymentAmount' | t }}</span>
         <span class="text-sm font-bold text-white">{{ totalWithDelivery }}</span>
@@ -184,7 +184,7 @@
       type="button"
       (click)="submitOrder()"
       [disabled]="submitting() || !cart.cartData() || !selectedPaymentId || noPaymentMethods()"
-      class="flex w-full items-center justify-center rounded-xl bg-jizbiz-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+      class="flex w-full items-center justify-center rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
     >
       @if (submitting()) {
         {{ 'common.loading' | t }}

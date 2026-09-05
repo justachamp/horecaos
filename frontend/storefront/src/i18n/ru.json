@@ -72,7 +72,7 @@
     "pickup": "Самовывоз",
     "pickupComingSoon": "Самовывоз скоро будет доступен",
     "welcome": "Добро пожаловать!",
-    "welcomeSubtitle": "Добро пожаловать в онлайн-мир JizBiz!",
+    "welcomeSubtitle": "Добро пожаловать в онлайн-мир {{brand}}!",
     "search": "Поиск...",
     "menu": "Меню 😍",
     "all": "Всё",

@@ -29,6 +29,7 @@ import { TelegramWebappService } from '../../services/telegram-webapp.service';
 import { hardReloadTelegramEntryPage } from '../../utils/telegram-entry-reload';
 import type { CustomerUiResponse, MenuItem, PopularCategory } from '../../types/home.types';
 import { FEATURES } from '../../core/config/features';
+import { APP_CONFIG } from '../../core/config/app-config';
 import { Session } from '../../core/auth/session';
 
 @Component({
@@ -44,6 +45,8 @@ export class HomeComponent implements OnInit {
   private readonly favourites = inject(FavouritesService);
   private readonly langService = inject(LangService);
   private readonly cartService = inject(UiCartService);
+  /** The tenant's own name, for copy that greets the customer by brand. */
+  protected readonly brandName = inject(APP_CONFIG).brand.displayName;
   private readonly delivery = inject(DeliverySelectionService);
   private readonly router = inject(Router);
   protected readonly telegramWebapp = inject(TelegramWebappService);

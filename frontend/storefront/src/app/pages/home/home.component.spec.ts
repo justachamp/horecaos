@@ -9,6 +9,7 @@ import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { CustomerProfileService } from '../../services/customer-profile.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
+import { APP_CONFIG, type AppConfig } from '../../core/config/app-config';
 import { TranslateService } from '../../services/translate.service';
 import { Session } from '../../core/auth/session';
 import type { CustomerUiResponse } from '../../types/home.types';
@@ -19,6 +20,17 @@ class FakeDeliverySelectionService {
   addressLabel = vi.fn(() => '');
   ensureAddressResolved = vi.fn().mockResolvedValue(undefined);
 }
+
+/** The greeting names the tenant, so the brand has to reach the component. */
+const TEST_APP_CONFIG: AppConfig = {
+  apiBaseUrl: '/api/v1',
+  tenantId: '10000000-0000-0000-0000-000000000001',
+  brandId: '10000000-0000-0000-0000-000000000002',
+  defaultLocationId: '10000000-0000-0000-0000-000000000003',
+  channel: 'STOREFRONT',
+  yandexMapsApiKey: '',
+  brand: { displayName: 'Osh Markazi', theme: { accent: '#000000', accentDeep: '#000000' } },
+};
 
 function emptyMenu(): CustomerUiResponse {
   return {
@@ -57,8 +69,19 @@ class FakeTranslateService {
   get(key: string): string {
     return key;
   }
-  getWithParams(key: string): string {
-    return key;
+  /**
+   * Interpolates for real, unlike `get`.
+   *
+   * A fake that swallowed the parameters would make a brand-name assertion
+   * pass on the key alone and prove nothing about the value reaching the
+   * template -- which is the whole point of the greeting test.
+   */
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    let out = key;
+    for (const value of Object.values(params ?? {})) {
+      out = `${out} ${String(value)}`;
+    }
+    return out;
   }
   current(): Record<string, unknown> {
     return {};
@@ -83,6 +106,7 @@ function setUp() {
       { provide: CustomerProfileService, useValue: profile },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: DeliverySelectionService, useValue: delivery },
+      { provide: APP_CONFIG, useValue: TEST_APP_CONFIG },
     ],
   });
 
@@ -113,6 +137,16 @@ async function mount(fixture: ComponentFixture<unknown>): Promise<void> {
 
 describe('HomeComponent: anonymous visitor', () => {
   beforeEach(() => localStorage.clear());
+
+  it('greets the customer in the configured tenant\'s name, not a hardcoded brand', async () => {
+    const { fixture } = setUp();
+
+    await mount(fixture);
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Osh Markazi');
+    expect(text.toLowerCase()).not.toContain('jizbiz');
+  });
 
   it('renders the published menu with no session at all', async () => {
     const { fixture, comp, menu } = setUp();
