@@ -1,6 +1,6 @@
 # ADR 0061: Production runs on owned hardware first — and stays portable by construction
 
-- Decision status: Accepted
+- Decision status: Superseded
 - Implementation status: Partial — the repo-side artifacts are built and locally
   proven (wave 16): `deploy/compose.production.yml` (pinned images, Caddy edge with
   automatic TLS, three frontend containers, resource limits, hardening),
@@ -41,7 +41,7 @@
   Claude (architecture; researched the amended data-localization regime and the
   in-country provider landscape, 2026-09-01)
 - Depends on: 0023, 0028, 0052, 0054, 0055, 0056, 0057
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: Superseded by ADR 0073
 - Open inputs: the Sarkor server's specs, OS and public IP; DNS control for
   `horecaos.uz`; the container registry choice; production Click/Payme credentials
   and the production bot token (each needed at its own step, none needed to start).

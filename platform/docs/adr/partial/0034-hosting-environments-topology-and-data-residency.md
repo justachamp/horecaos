@@ -1,6 +1,6 @@
 # ADR 0034: Hosting environments, topology, and data residency
 
-- Decision status: Accepted
+- Decision status: Superseded
 - Implementation status: Partial — the topology exists as code. `compose.production.yaml`
   defines the whole colocated stack behind Caddy with per-container log caps, and
   `infra/production` holds `bootstrap.sh`, `deploy.sh`, `run-backup.sh`, `heartbeat.sh`,
@@ -27,7 +27,7 @@
 - Date decided: 2026-08-20; platform, orchestrator, and off-site backups settled 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal
 - Depends on: ADR 0023, ADR 0029
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: Superseded by ADR 0073
 - Open inputs: none
 - Closed inputs: Data residency does not constrain Qoida (business, 2026-08-20); hosting is a colocated server in Uzbekistan (business, 2026-08-23); the orchestrator is Docker Compose on VMs (engineering, 2026-08-23); the platform is operated by one person (business, 2026-08-23); off-site backups ship before the pilot rather than after the migration (operations, 2026-08-23, reversing the 2026-08-21 deferral); Clopos is the pilot tenant's POS (product, 2026-08-23)
 
