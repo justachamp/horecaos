@@ -1,7 +1,7 @@
 # ADR 0023: Production operating model, observability, security, and recovery
 
 - Decision status: Accepted
-- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.horecaos.platform.observability` publishes the gauges; `infra/observability/horecaos-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. `compose.production.yaml` runs the box. **Two Caddyfiles front it as of wave 55**, kept in parity rather than one left to drift: `infra/production/caddy/Caddyfile`, this record's original, and `deploy/infra/caddy/Caddyfile`, ADR 0061's newer registry-pull tree — see `deploy/README.md`'s "Relationship" section for which one a new deploy should actually use and why the other is still kept. Both now carry the edge hardening this record's checklist named as open (body caps and per-binding/per-IP rate limits, the latter needing a purpose-built Caddy image — `infra/production/caddy/Dockerfile` — because stock `caddy:2.10-alpine` has no `rate_limit` directive at all), with one piece still incomplete: see the reverse-proxy checklist line below for the Payme allowlist's actual state. **Four things in this record are not built and are enumerated under "What is not built yet" below**: the off-box half (two external services), the single dashboard, traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Nine checklist items remain open, not the three an earlier revision of this line counted**: the `app`/`worker` role split (one container runs every scheduler today, and the four switches this record names no longer cover them); Prometheus, Alertmanager and the dashboard; the reverse proxy's Payme allowlist (mechanism built, not yet functional — see below); the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
+- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.horecaos.platform.observability` publishes the gauges; `infra/observability/horecaos-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. **Two deployment trees exist as of wave 55**, kept in parity rather than one left to drift: `infra/production/` with `compose.production.yaml`, this record's original, and `deploy/`, ADR 0061's newer registry-pull tree — see `deploy/README.md`'s "Relationship" section for which a new deploy should use and why the other is still kept (the alert, backup and restore fabric is still wired to the original). **Wave 55 closed the edge hardening** this record's checklist named as open: body caps and per-binding/per-IP rate limits on both Caddyfiles, the latter needing a purpose-built image (`infra/production/caddy/Dockerfile`) because stock `caddy:2.10-alpine` carries no `rate_limit` directive at all. The Payme allowlist's *mechanism* is built and **fails closed**, which means it currently rejects every Payme callback, genuine ones included, until the owner supplies the real address list — see the reverse-proxy checklist line. **Wave 58 closed the `app`/`worker` role split's application half**: `horecaos.runtime.role` gates `SchedulingConfiguration`'s single `@EnableScheduling`, so every `@Scheduled` method — thirty-two classes, forty-one methods, not the twenty-one this line once counted — stops uniformly under role `app` regardless of its own switch, and the fourth named switch (`horecaos.messaging.inbox.listener.enabled`, guarding a `@KafkaListener` the split never reached) now carries the same gate. Wave 58 reports rather than papers over two things: the compose wiring that runs a second container is not written, and `PosOrderExportTrigger.dispatchPending` and `RealtimeStreamMaintenance.tick`/`onGrantChanged` hold in-process state tying them to whichever process serves HTTP and SSE, so a strict `app`/`worker` split is **not yet safe to deploy** until they move to a durable handoff — see Runtime shape. **Four things remain unbuilt and are enumerated under "What is not built yet" below**: the off-box half (two external services), the single dashboard, traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Seven checklist items remain open**: Prometheus, Alertmanager and the dashboard; Payme's actual address list; the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture, and the person who carries the pager)
@@ -111,11 +111,53 @@ worker    outbox relay, Kafka inbox consumers, order timers, scheduled jobs
 ```
 
 ADR 0034's five role configurations survive as configuration; the process count
-does not. The switches already exist and are the whole mechanism:
-`horecaos.messaging.outbox.enabled`, `horecaos.messaging.inbox.listener.enabled`,
-`horecaos.ordering.workers.enabled`, and `horecaos.api.idempotency.purge.enabled`. The
-`app` service runs with all four off; `worker` runs with them on and receives no
-proxied traffic. `scheduler` and `integration` remain profiles rather than
+does not. What ran this shape was, until wave 58, four scattered switches this
+record's own Implementation status had already found stale: three guarded one
+`@Scheduled` class each and the fourth guarded a `@KafkaListener`, while
+twenty-plus schedulers added since carried none of the four and simply ran
+wherever the process started. The mechanism is now `horecaos.runtime.role`
+(`app` | `worker` | `both`, default `both`, `RuntimeRole` in
+`uz.horecaos.platform.configuration`): it gates `SchedulingConfiguration`'s one
+`@EnableScheduling` directly, so `app` removes the
+`ScheduledAnnotationBeanPostProcessor` from the context and every `@Scheduled`
+method on every module stops uniformly — including a job added after this
+paragraph was written — regardless of that job's own per-feature switch. It
+additionally gates the two ADR 0006 inbox `@KafkaListener`s
+(`TenancyEventListener`, `FulfillmentCommandListener`) alongside their existing
+`horecaos.messaging.inbox.listener.enabled` switch, which is the fourth switch
+this record named as uncovered. The other three named switches
+(`horecaos.messaging.outbox.enabled`, `horecaos.ordering.workers.enabled`,
+`horecaos.api.idempotency.purge.enabled`) are unchanged: they still exist as
+independent operational kill-switches and now compose with the role (both must
+allow a job to run) rather than substitute for it.
+
+**The compose wiring this leaves for whoever settles `deploy/` vs.
+`platform/infra/production/` (wave 55) is exactly two environment variables and
+a routing decision, nothing more:** an `app` service keeps `HORECAOS_RUNTIME_ROLE`
+unset (or `both`) and stays behind the proxy exactly as today; a `worker`
+service sets `HORECAOS_RUNTIME_ROLE=worker`, carries no `ports:` mapping, and
+receives no proxied traffic, per the runtime shape above. Nothing else in
+either compose file needs to change for the split to take effect.
+
+**Two scheduled jobs are not worker-shaped, and the gate is all-or-nothing, so
+neither has a clean answer yet.** `PosOrderExportTrigger.dispatchPending` drains
+an in-process queue that only the process which served the confirming HTTP
+request ever fills; `RealtimeStreamMaintenance.tick` and its `onGrantChanged`
+listener drive SSE connections that exist only on whichever process is holding
+them open. Setting the `app` container's role to `app` — the strict split this
+runtime shape describes — would silently stop POS ticket dispatch and SSE
+stream maintenance for every request `app` itself served: no error, no failing
+health check, just tickets that never reach a till and dashboards that never
+update. Leaving `app` at `both` avoids that regression but runs every other
+scheduler in `app` too, which gives up the resource separation the split
+exists for. Neither is a real fix; the actual fix is a redesign onto a durable,
+cross-process handoff (an outbox-driven POS export queue; realtime delivery
+that does not depend on which process holds the socket), which is out of this
+record's scope. Until that redesign lands, treat `app: app` / `worker: worker`
+as **not yet safe to deploy** — the split is proven correct for every other
+scheduled job in this build, and incorrect for exactly these two.
+
+`scheduler` and `integration` remain profiles rather than
 containers, so ADR 0028 can still issue an identity per role and grant
 `migration` no provider credentials.
 
@@ -493,7 +535,7 @@ asynchronous and quota-bounded so a report cannot become an outage.
 ## Implementation checklist
 
 - [x] Write the production Compose overlay: three services, no host port mappings except the proxy, log rotation with a hard cap, `restart: unless-stopped`. — `compose.production.yaml`, with the `worker` split still outstanding below.
-- [ ] Split the role switches into `app` and `worker` configuration, and assert in a test that exactly one process runs each scheduler. — Not done, and the gap has widened. The four switches this record names still exist, but the codebase now holds twenty-one `@Scheduled` classes and twenty of them carry their own `@ConditionalOnProperty`: the delivery sourcing scheduler, the fiscal obligation and reporting sweepers, the inbox retry worker, the verification-challenge sweeper, the loyalty sweeper, the kitchen release worker, the telemetry track and stream sweepers, the audit and reporting partition managers, the onboarding scheduler and the identity drift reporter among them. Only three of the four named switches guard a scheduler at all — the fourth guards a Kafka listener — so a `worker` split built against that list would leave most of the schedulers running in `app`. `platform-app` runs with all of them on, so today one container is both roles.
+- [x] Split the role switches into `app` and `worker` configuration, and assert in a test that exactly one process runs each scheduler. — The application half. `horecaos.runtime.role` (`app` | `worker` | `both`, default `both`) is a plain Spring property rather than an ADR 0030 policy key: ADR 0030's own alternatives table already says deployment-time configuration is `@ConfigurationProperties`/profile territory, never a tenant-scoped `PolicyResolver` key, and a process role is exactly that case. `RuntimeRole` and `ConditionalOnWorkerRole` (`uz.horecaos.platform.configuration`) gate `SchedulingConfiguration`'s single `@EnableScheduling` directly, so role `app` removes the `ScheduledAnnotationBeanPostProcessor` from the context and every `@Scheduled` method on every module — thirty-two classes, forty-one methods today, not the twenty-one this line once counted — stops uniformly, regardless of that job's own `@ConditionalOnProperty`; role `worker`/`both`/unset changes nothing (`RuntimeRoleSchedulingTests`). Of the four switches this record names, three (`horecaos.messaging.outbox.enabled`, `horecaos.ordering.workers.enabled`, `horecaos.api.idempotency.purge.enabled`) already guarded a `@Scheduled` class and needed no change — the blanket gate now covers them for free. The fourth, `horecaos.messaging.inbox.listener.enabled`, guards `TenancyEventListener` and `FulfillmentCommandListener`, both `@KafkaListener`s outside `@EnableScheduling`'s reach; both now also carry `@ConditionalOnWorkerRole` (`WorkerRoleAnnotationCoverageTests`), closing exactly the gap this line named. **Every scheduled job in this build was audited for multi-instance safety** (the inventory is wave 58's own report, not repeated here): every mutating one already uses a database lease with a token, `FOR UPDATE ... SKIP LOCKED`, `INSERT ... ON CONFLICT DO NOTHING`, or a conditional version-checked `UPDATE`; `InboxRetryWorker.redriveOnce` is additionally guarded, in-process, against overlapping runs of itself, proven by `InboxRetryWorkerReentrancyTests` rather than newly added. **Not done**: the compose wiring — see Runtime shape for the two environment variables and the routing decision this leaves for wave 55 — and a safe way to run `PosOrderExportTrigger.dispatchPending` and `RealtimeStreamMaintenance` on a strict `app: app` / `worker: worker` split; both hold in-process state tied to the HTTP/SSE-serving process and are not yet redesigned onto a durable handoff, so that specific split is not yet safe to deploy even though the mechanism enabling it is built.
 - [x] Add the missing gauges: outbox and inbox oldest age, dead letters by category, breaker state, orders by state and age, free disk, fence rejections, replicator lag. — All except two. **Outbox dead letters cannot be grouped by category**: the outbox table records only `last_error` free text, so those rows are published as `failure_category="unclassified"` and grouped by topic domain, which is what the alert actually needs. **Replicator lag has nothing to measure** — ADR 0024's replicator does not exist yet.
 - [ ] Stand up Prometheus, Alertmanager, and the single dashboard on the box; deliver alerts off it. — Not done, and the alerts do not wait for it: `horecaos-probe.sh` evaluates them from a direct scrape, so the thresholds live in exactly one place. The consequence is that everything on the "deliberately not an alert" list is measured and currently unwatched, because the dashboard it was supposed to live on does not exist.
 - [x] Implement the alert rules in this record at the stated thresholds and tiers, and nothing else. — `infra/observability/horecaos-probe.sh`, with one exception. **"Platform unreachable" is not evaluated on the box and cannot be**, because a script running on the machine cannot observe that the machine is unreachable; it is the off-box uptime check, specified in `infra/observability/README.md`. Every remaining threshold is overridable by an environment variable so that each can be made to fire on demand, which is how the exit criterion is met without staging an outage. The stuck-circuit alert covers the payment and POS breakers; the courier breakers publish the same gauge and do not page.
