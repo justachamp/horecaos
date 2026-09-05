@@ -29,17 +29,33 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * every job's own switch still decides its own fate exactly as before this class was
  * touched.
  *
- * <p><b>Not every {@code @Scheduled} method is worker-shaped.</b> {@code
- * PosOrderExportTrigger.dispatchPending} drains an in-process queue that only the
- * {@code app} process that handled the confirming HTTP request ever populates, and
- * {@code RealtimeStreamMaintenance.tick}/{@code onGrantChanged} drive SSE connections
- * that only exist on whichever process is holding them open. A deployment that actually
- * splits {@code app} and {@code worker} into separate containers per ADR 0023's runtime
- * shape must keep one of these two running where the coupled HTTP traffic lands — role
- * {@code both} on that container, not {@code worker} — until either is redesigned onto
- * a durable, cross-process handoff. This class cannot express that distinction on its
- * own; it is documented here because this is where the blanket switch lives that would
- * otherwise silently turn both jobs off.
+ * <p><b>Wave 61 closed one of two named exceptions to "every {@code @Scheduled}
+ * method is worker-shaped".</b> {@code PosOrderExportTrigger.dispatchPending}
+ * still drains an in-process queue that only the process which served the
+ * confirming HTTP request ever populates, but {@code
+ * PosOrderExportTrigger.sweepStale} — a second {@code @Scheduled} method on the
+ * same class, counted separately in {@link #DEFAULT_POOL_SIZE} — now reads
+ * {@code integration.pos_order_exports} directly, so any process running this
+ * configuration eventually dispatches any tenant's confirmed order, whether or
+ * not it is the one that confirmed it. A strict {@code app}/{@code worker}
+ * split is therefore safe for POS today: {@code worker} alone dispatches
+ * every order, {@code app} never has to.
+ *
+ * <p>{@code RealtimeStreamMaintenance.tick}/{@code onGrantChanged} remain the
+ * one exception, and for a different reason than POS: they drive an SSE
+ * registry ({@code SseStreamRegistry}) that is deliberately process-local — see
+ * that class's own doc — so there is no row for a second process to read, ever.
+ * The only process that can ever usefully run this tick is the one holding the
+ * socket, which under ADR 0023's runtime shape is {@code app}, never {@code
+ * worker}. Because this class's gate is all-or-nothing, a container running
+ * strict role {@code app} runs no {@code @Scheduled} method at all, this tick
+ * included, and nothing else ever runs it in that container's place — see ADR
+ * 0023's Runtime shape and ADR 0045 for why that is accepted as a documented
+ * deployment constraint (the {@code app} container keeps role {@code both})
+ * rather than answered with a shared subscriber registry ADR 0045 explicitly
+ * defers. This class cannot express a per-job exception on its own; it is
+ * documented here because this is where the blanket switch lives that would
+ * otherwise silently turn every job off, this one included.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
@@ -94,9 +110,12 @@ public class SchedulingConfiguration {
      * one more: {@code AsteriskAmiConnectionSupervisor.ensureConnections},
      * which only decides whether a connection thread needs (re)starting —
      * the AMI session itself runs on its own dedicated thread, not this pool,
-     * for the reason that class's own doc gives.
+     * for the reason that class's own doc gives. Wave 61 added the last one so
+     * far: {@code PosOrderExportTrigger.sweepStale}, the durable backstop that
+     * makes the in-process dispatch queue beside it safe on more than one
+     * replica — see that class's doc and ADR 0023's Runtime shape.
      */
-    static final int DEFAULT_POOL_SIZE = 41;
+    static final int DEFAULT_POOL_SIZE = 42;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

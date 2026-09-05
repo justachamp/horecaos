@@ -1,9 +1,14 @@
 package uz.horecaos.platform.pos.application;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 
 /**
  * What puts a confirmed order in front of a till (ADR 0011, ADR 0019).
@@ -67,9 +73,26 @@ import uz.horecaos.platform.ordering.api.OrderConfirmed;
  * <p>The queue below is a wake-up hint and never the record of intent. The record
  * is the {@code PENDING} row, which is durable; losing a hint costs a delay, and
  * the only thing that can lose one — a process that dies between the commit and
- * the next tick — leaves an export that a sweep over {@code PENDING} rows will
- * pick up once the store can enumerate them. Until it can, a hint lost that way
- * is an order somebody has to notice, which is why the drop is logged loudly.
+ * the next tick, or a hint that lands in one replica's memory while another
+ * replica served the confirming request — leaves an export that {@link
+ * #sweepStale} picks up once the store can enumerate it. The queue therefore
+ * remains a latency optimisation rather than the mechanism the guarantee rests
+ * on: a confirmed order is dispatched eventually regardless of which process
+ * confirmed it, because the sweep does not care who queued the hint, only that a
+ * {@code PENDING} row has sat long enough that its hint — wherever it went —
+ * evidently did not fire here.
+ *
+ * <h2>Why the sweep is safe to run on every replica, unconditionally</h2>
+ *
+ * It changes nothing by itself. {@link #sweepStale} only lists candidates and
+ * calls {@link #dispatch}, which calls {@link PosOrderExportService#send} —
+ * the exact call the fast path makes, protected by the exact same conditional
+ * claim ({@code JdbcPosExportStore#claimForAttempt}) that already keeps two
+ * threads in one process from sending one order twice. A second pattern for
+ * one problem is a second chance to get it subtly wrong (see {@code
+ * DeliverySourcingScheduler}'s own reasoning for reusing {@code OutboxRelay}'s
+ * claim rather than inventing one); this reuses {@code send} itself; there is
+ * no second pattern here at all.
  */
 @Component
 @ConditionalOnProperty(name = "horecaos.pos.export.auto-dispatch", havingValue = "true", matchIfMissing = true)
@@ -78,17 +101,40 @@ public class PosOrderExportTrigger {
     private static final Logger log = LoggerFactory.getLogger(PosOrderExportTrigger.class);
 
     private final PosOrderExportService exports;
+    private final Clock clock;
     private final Queue<Dispatch> pending = new ConcurrentLinkedQueue<>();
     private final int queueLimit;
     private final int batchSize;
+    private final Duration sweepStaleAfter;
+    private final int sweepBatchSize;
+
+    /**
+     * One sweep tick at a time in this process, for the reason {@code
+     * OutboxRelay} and {@code DeliverySourcingScheduler} guard their own ticks:
+     * the poll interval can be shorter than a worst-case batch against a slow
+     * till, and two overlapping sweeps in one JVM would double the work rather
+     * than add a worker.
+     */
+    private final AtomicBoolean sweeping = new AtomicBoolean();
 
     public PosOrderExportTrigger(
             PosOrderExportService exports,
+            Clock clock,
             @Value("${horecaos.pos.export.dispatch-queue-limit:10000}") int queueLimit,
-            @Value("${horecaos.pos.export.dispatch-batch:50}") int batchSize) {
+            @Value("${horecaos.pos.export.dispatch-batch:50}") int batchSize,
+            // Longer than the fast path's dispatch-interval on purpose: under
+            // ordinary single-replica operation the in-process hint always wins
+            // the race, so this threshold is what keeps the sweep a backstop
+            // rather than a second, competing dispatch path that just adds noisy
+            // "claimed elsewhere" outcomes to the log.
+            @Value("${horecaos.pos.export.sweep-stale-after:PT15S}") Duration sweepStaleAfter,
+            @Value("${horecaos.pos.export.sweep-batch:50}") int sweepBatchSize) {
         this.exports = exports;
+        this.clock = clock;
         this.queueLimit = queueLimit;
         this.batchSize = batchSize;
+        this.sweepStaleAfter = sweepStaleAfter;
+        this.sweepBatchSize = sweepBatchSize;
     }
 
     /**
@@ -132,6 +178,47 @@ public class PosOrderExportTrigger {
                 return;
             }
             dispatch(next);
+        }
+    }
+
+    /**
+     * The durable backstop behind the queue above (ADR 0011, ADR 0023's runtime
+     * shape): {@code PENDING} exports whose hint apparently never reached this
+     * process, however that happened.
+     *
+     * <p>This is what makes a multi-replica deployment safe rather than merely
+     * quiet about failing. Before this method existed, an order confirmed on one
+     * replica queued its hint only in that replica's memory; a second replica
+     * running this scheduler had no way to learn the order existed, and the
+     * export sat {@code PENDING} until somebody noticed a ticket never printed.
+     * Every replica now runs this tick and asks the one thing every replica can
+     * see — the database — rather than the one thing only the confirming
+     * replica can see.
+     *
+     * <p>Never claims anything itself; see {@link JdbcPosExportStore#findStalePending}
+     * and this class's own doc for why {@link #dispatch} alone is what makes a
+     * repeat finding safe.
+     */
+    @Scheduled(
+            initialDelayString = "${horecaos.pos.export.sweep-initial-delay:PT15S}",
+            fixedDelayString = "${horecaos.pos.export.sweep-interval:PT15S}")
+    public void sweepStale() {
+        if (!sweeping.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            Instant threshold = clock.instant().minus(sweepStaleAfter);
+            List<JdbcPosExportStore.StaleExport> stale = exports.pendingOlderThan(threshold, sweepBatchSize);
+            if (stale.isEmpty()) {
+                return;
+            }
+            log.info(
+                    "POS export sweep found {} PENDING export(s) older than {}; dispatching from this process",
+                    stale.size(),
+                    sweepStaleAfter);
+            stale.forEach(candidate -> dispatch(new Dispatch(candidate.tenantId(), candidate.exportId())));
+        } finally {
+            sweeping.set(false);
         }
     }
 

@@ -325,6 +325,44 @@ public class JdbcPosExportStore {
                 .list();
     }
 
+    /**
+     * {@code PENDING} exports whose {@code requested_at} predates a threshold —
+     * the durable backstop behind {@code PosOrderExportTrigger}'s in-process
+     * dispatch hint (ADR 0011, ADR 0023's runtime shape).
+     *
+     * <p>The hint queue lives in process memory and is populated only by the
+     * process that committed the confirming transaction. A row still here past
+     * the caller's threshold is one whose hint either never fired (a crash
+     * between commit and the next tick) or fired on a different process than
+     * the one running this sweep — ordinary once {@code app} and {@code worker}
+     * run as separate replicas, since only the replica that served the
+     * confirming HTTP request ever queued that hint.
+     *
+     * <p>Deliberately not a claim. Nothing here changes a row's state or takes a
+     * lock: the safety against two processes sending the same order twice is
+     * {@link #claimForAttempt}'s conditional update, exactly as it already is
+     * for the in-process path. Two sweeps — or a sweep and the hint queue —
+     * noticing the same row at once both call {@code send}, and exactly one of
+     * them wins the claim; the other's call is a harmless, logged no-op. Cross
+     * tenant on purpose: a sweep exists precisely because no single tenant's
+     * hint reached this process, so it has to look at every tenant's PENDING
+     * rows rather than one at a time.
+     */
+    public List<StaleExport> findStalePending(Instant olderThan, int limit) {
+        return jdbc.sql("""
+                SELECT tenant_id, id
+                  FROM integration.pos_order_exports
+                 WHERE state = 'PENDING' AND requested_at <= :olderThan
+                 ORDER BY requested_at
+                 LIMIT :limit
+                """)
+                .param("olderThan", OffsetDateTime.ofInstant(olderThan, ZoneOffset.UTC))
+                .param("limit", limit)
+                .query((row, number) ->
+                        new StaleExport(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
     /** Exports somebody has to look at. The queue a branch's evening depends on. */
     public List<ExportRow> awaitingOperator(UUID tenantId, int limit) {
         return jdbc.sql("""
@@ -361,6 +399,9 @@ public class JdbcPosExportStore {
     private static @Nullable Instant toInstant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
+
+    /** One PENDING export a sweep found, past its staleness threshold. */
+    public record StaleExport(UUID tenantId, UUID exportId) {}
 
     public record NewExport(
             UUID id,
