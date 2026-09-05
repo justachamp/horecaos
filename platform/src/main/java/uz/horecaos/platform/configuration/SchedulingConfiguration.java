@@ -65,9 +65,13 @@ public class SchedulingConfiguration {
      * the last one so far: {@code ConversationRetentionSweeper.sweepOnce},
      * enforcing {@code conversations.conversations.retention_months} — a
      * column that had existed since ADR 0059 stage 1 with nothing behind it,
-     * recorded then as a named ADR 0029 gap rather than built.
+     * recorded then as a named ADR 0029 gap rather than built. ADR 0064 added
+     * one more: {@code AsteriskAmiConnectionSupervisor.ensureConnections},
+     * which only decides whether a connection thread needs (re)starting —
+     * the AMI session itself runs on its own dedicated thread, not this pool,
+     * for the reason that class's own doc gives.
      */
-    static final int DEFAULT_POOL_SIZE = 40;
+    static final int DEFAULT_POOL_SIZE = 41;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

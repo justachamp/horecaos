@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
@@ -104,8 +105,9 @@ class DayCloseAndMetricLayerTests {
         jdbc.sql("""
                 TRUNCATE TABLE reporting.fact_order, reporting.fact_order_line,
                     reporting.fact_refund, reporting.agg_branch_day, reporting.agg_sla_bucket_day,
-                    reporting.business_day_policies, reporting.metric_definitions
+                    reporting.business_day_policies, reporting.metric_definitions, reporting.fact_call_hour
                 """).update();
+        jdbc.sql("TRUNCATE TABLE voice.call_events CASCADE").update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
         jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
@@ -195,6 +197,104 @@ class DayCloseAndMetricLayerTests {
         var aggregate = store.readAggregates(TENANT, DAY, DAY).getFirst();
         assertThat(aggregate.promisedCount()).isEqualTo(1);
         assertThat(aggregate.lateCount()).isEqualTo(1);
+    }
+
+    // ---------------------------------------------------- ADR 0064 call facts
+
+    @Test
+    @DisplayName("call events close through the same pipeline as orders, bucketed by hour and operator")
+    void callFactsAreWrittenThroughTheSameClosePipeline() {
+        UUID installation = UUID.randomUUID();
+        insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(10, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(10, 0, 5));
+        insertCallEvent(installation, "call-1", "ENDED", "alice", 90, tashkent(10, 1, 35));
+        insertCallEvent(installation, "call-2", "OFFERED", null, null, tashkent(10, 30));
+        insertCallEvent(installation, "call-2", "MISSED", null, null, tashkent(10, 30, 20));
+
+        var result = close.close(TENANT, DAY);
+        assertThat(result.callsWritten()).isEqualTo(2);
+
+        List<Map<String, Object>> rows = jdbc.sql("""
+                SELECT hour_of_day, operator_principal_id, offered_count, answered_count, missed_count,
+                       talk_duration_seconds
+                FROM reporting.fact_call_hour
+                WHERE tenant_id = :t AND location_id = :l AND business_date = :day
+                ORDER BY operator_principal_id
+                """)
+                .param("t", TENANT)
+                .param("l", LOCATION)
+                .param("day", DAY)
+                .query()
+                .listOfRows();
+
+        assertThat(rows).hasSize(2);
+        Map<String, Object> unassigned = rows.stream()
+                .filter(row -> "(unassigned)".equals(row.get("operator_principal_id")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(unassigned.get("offered_count")).isEqualTo(2);
+        assertThat(unassigned.get("missed_count")).isEqualTo(1);
+
+        Map<String, Object> alice = rows.stream()
+                .filter(row -> "alice".equals(row.get("operator_principal_id")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(alice.get("answered_count")).isEqualTo(1);
+        Number talkDurationSeconds = (Number) Objects.requireNonNull(alice.get("talk_duration_seconds"));
+        assertThat(talkDurationSeconds.longValue()).isEqualTo(90L);
+    }
+
+    @Test
+    @DisplayName("closing the same day twice reproduces the same call-hour figures")
+    void callFactsAreIdempotentOnARepeatedClose() {
+        UUID installation = UUID.randomUUID();
+        insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(9, 0));
+
+        close.close(TENANT, DAY);
+        long firstCount = jdbc.sql("SELECT count(*) FROM reporting.fact_call_hour WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(Long.class)
+                .single();
+
+        close.close(TENANT, DAY);
+        long secondCount = jdbc.sql("SELECT count(*) FROM reporting.fact_call_hour WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(Long.class)
+                .single();
+
+        assertThat(secondCount).isEqualTo(firstCount);
+    }
+
+    private void insertCallEvent(
+            UUID installationId,
+            String providerCallId,
+            String eventType,
+            @Nullable String operatorPrincipalId,
+            @Nullable Integer durationSeconds,
+            Instant occurredAt) {
+        jdbc.sql("""
+                INSERT INTO voice.call_events
+                    (id, tenant_id, brand_id, location_id, installation_id, provider_call_id, event_type,
+                     direction, operator_principal_id, duration_seconds, occurred_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :installationId, :providerCallId, :eventType,
+                        'INBOUND', :operatorPrincipalId, :durationSeconds, :occurredAt)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("installationId", installationId)
+                .param("providerCallId", providerCallId)
+                .param("eventType", eventType)
+                .param("operatorPrincipalId", operatorPrincipalId)
+                .param("durationSeconds", durationSeconds)
+                .param("occurredAt", occurredAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private static Instant tashkent(int hour, int minute, int second) {
+        return ZonedDateTime.of(DAY, LocalTime.of(hour, minute, second), TASHKENT)
+                .toInstant();
     }
 
     // ------------------------------------------------------------- refunds

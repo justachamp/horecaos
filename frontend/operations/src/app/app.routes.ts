@@ -81,6 +81,16 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/orders/reservations-page').then((m) => m.ReservationsPage),
           },
+          // IA 1.6 — Call centre (ADR 0064, wave 46): presence, the
+          // screen-pop poll, and the branch's call log. No softphone and no
+          // click-to-call — ADR 0064 keeps audio off this platform, and the
+          // page says so. Declared before `:orderId` for the same reason
+          // `new`, `drafts` and `reservations` are.
+          {
+            path: 'call-centre',
+            loadComponent: () =>
+              import('./features/orders/call-centre-page').then((m) => m.CallCentrePage),
+          },
           // The detail is a *child* of the board, not a sibling. That is what
           // makes it dock beside the queue instead of replacing it, and what
           // keeps it deep-linkable and back-button-correct at the same time.

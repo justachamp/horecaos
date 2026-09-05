@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
+import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
@@ -43,10 +44,11 @@ import uz.horecaos.platform.reporting.domain.MetricDefinition;
  * delivered instantly.
  *
  * <p>The source reads — {@link #readSourceOrders}, {@link #readSourceLines},
- * {@link #readSourceRefunds} — are the only statements in the reporting module
- * that touch a module schema, and they are read-only. Everything the read path
- * uses stays inside {@code reporting}, which is what the
- * {@code horecaos_reporting_read} role enforces at the database.
+ * {@link #readSourceRefunds}, {@link #readSourceCallEvents} — are the only
+ * statements in the reporting module that touch a module schema, and they are
+ * read-only. Everything the read path uses stays inside {@code reporting},
+ * which is what the {@code horecaos_reporting_read} role enforces at the
+ * database.
  */
 @Repository
 public class JdbcReportingStore {
@@ -310,6 +312,35 @@ public class JdbcReportingStore {
     }
 
     /**
+     * ADR 0064: the call events behind one business day's call facts.
+     *
+     * <p>{@code occurred_at} is the provider's own event timestamp, exactly the
+     * grain {@link #readSourceOrders} already uses for orders — a business day
+     * is defined once, by {@link BusinessDayBoundary}, and every fact this
+     * store derives is windowed by it the same way.
+     */
+    public List<SourceCallEvent> readSourceCallEvents(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, event_type, operator_principal_id, duration_seconds, occurred_at
+                  FROM voice.call_events
+                 WHERE tenant_id = :tenantId
+                   AND occurred_at >= :from AND occurred_at < :to
+                 ORDER BY occurred_at
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceCallEvent(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("event_type"),
+                        row.getString("operator_principal_id"),
+                        row.getObject("duration_seconds", Integer.class),
+                        row.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /**
      * The orders behind a day's refunds, wherever they sit.
      *
      * <p>Needed because a refund's business date is not the order's, so the close
@@ -393,6 +424,15 @@ public class JdbcReportingStore {
     public record RefundedOrder(
             UUID locationId, UUID legalEntityId, String channelCode, String fulfilmentMode, Instant createdAt) {}
 
+    /** ADR 0064: one row of {@link #readSourceCallEvents}. */
+    public record SourceCallEvent(
+            UUID brandId,
+            UUID locationId,
+            String eventType,
+            @Nullable String operatorPrincipalId,
+            @Nullable Integer durationSeconds,
+            Instant occurredAt) {}
+
     // ---------------------------------------------------------- fact writes
 
     /**
@@ -403,13 +443,74 @@ public class JdbcReportingStore {
      * the old day, where it would be counted twice.
      */
     public void clearDay(UUID tenantId, LocalDate businessDate) {
-        for (String table :
-                List.of("fact_order_line", "fact_order", "fact_refund", "agg_branch_day", "agg_sla_bucket_day")) {
+        for (String table : List.of(
+                "fact_order_line",
+                "fact_order",
+                "fact_refund",
+                "agg_branch_day",
+                "agg_sla_bucket_day",
+                "fact_call_hour")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
                     .update();
         }
+    }
+
+    /** ADR 0064. Mirrors {@link #insertAggregate}'s shape: one row per {@code CallHourFact}. */
+    public void insertCallHourFact(CallHourFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_call_hour
+                    (tenant_id, business_date, hour_of_day, location_id, brand_id, operator_principal_id,
+                     boundary_version, metric_calculation_version, offered_count, answered_count,
+                     missed_count, transferred_count, talk_duration_seconds)
+                VALUES (:tenantId, :businessDate, :hourOfDay, :locationId, :brandId, :operatorPrincipalId,
+                        :boundaryVersion, :calculationVersion, :offered, :answered, :missed, :transferred, :talk)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("businessDate", fact.businessDate())
+                .param("hourOfDay", fact.hourOfDay())
+                .param("locationId", fact.locationId())
+                .param("brandId", fact.brandId())
+                .param("operatorPrincipalId", fact.operatorPrincipalId())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("offered", fact.offeredCount())
+                .param("answered", fact.answeredCount())
+                .param("missed", fact.missedCount())
+                .param("transferred", fact.transferredCount())
+                .param("talk", fact.talkDurationSeconds())
+                .update();
+    }
+
+    /** ADR 0064: one branch's call-stats hours for one business date, for the owner-facing read. */
+    public List<CallHourFact> readCallHourFacts(UUID tenantId, UUID locationId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT tenant_id, brand_id, location_id, business_date, hour_of_day, operator_principal_id,
+                       boundary_version, metric_calculation_version, offered_count, answered_count,
+                       missed_count, transferred_count, talk_duration_seconds
+                FROM reporting.fact_call_hour
+                WHERE tenant_id = :tenantId AND location_id = :locationId AND business_date = :businessDate
+                ORDER BY hour_of_day, operator_principal_id
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("businessDate", businessDate)
+                .query((ResultSet row, int number) -> new CallHourFact(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getString("operator_principal_id"),
+                        row.getInt("boundary_version"),
+                        row.getInt("metric_calculation_version"),
+                        row.getInt("offered_count"),
+                        row.getInt("answered_count"),
+                        row.getInt("missed_count"),
+                        row.getInt("transferred_count"),
+                        row.getLong("talk_duration_seconds")))
+                .list();
     }
 
     /**

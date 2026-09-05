@@ -1,0 +1,129 @@
+.call-centre {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  gap: 16px;
+}
+
+.call-centre__toolbar {
+  display: flex;
+  align-items: center;
+}
+
+.call-centre__toolbar h1 {
+  margin: 0;
+}
+
+.call-centre__state {
+  padding: 24px;
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.call-centre__not-built-note {
+  color: var(--q-ink-subtle);
+  margin: 0;
+}
+
+.call-centre__panel {
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.call-centre__panel-title {
+  margin: 0;
+}
+
+.call-centre__presence-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.call-centre__presence-button {
+  padding: 8px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.call-centre__presence-button--active {
+  background: var(--q-accent, #2563eb);
+  color: #fff;
+  border-color: transparent;
+}
+
+.call-centre__reason-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 320px;
+}
+
+.call-centre__reason-field input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 4px;
+}
+
+.call-centre__presence-current {
+  color: var(--q-ink-subtle);
+}
+
+.call-centre__error {
+  color: var(--q-danger, #b91c1c);
+  margin: 0;
+}
+
+.call-centre__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+}
+
+.call-centre__card-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.call-centre__recent-orders ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.call-centre__log {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.call-centre__log th,
+.call-centre__log td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+button.primary {
+  background: var(--q-accent, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+button.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -51,6 +51,21 @@ public class JdbcOrderDirectory implements OrderDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<RecentOrder> recentForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId, int limit) {
+        return orders.listForCustomer(tenantId, brandId, customerAccountId, null, null, limit).stream()
+                .map(row -> new RecentOrder(
+                        row.orderId(),
+                        row.publicOrderNumber(),
+                        row.locationId(),
+                        row.status().name(),
+                        row.currency(),
+                        row.totalMinor(),
+                        row.createdAt()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Counts counts(UUID tenantId, UUID brandId, UUID locationId) {
         var row = orders.counts(tenantId, brandId, locationId);
         return new Counts(

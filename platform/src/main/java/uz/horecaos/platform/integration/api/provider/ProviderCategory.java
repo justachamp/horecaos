@@ -34,5 +34,14 @@ public enum ProviderCategory {
 
     NOTIFICATION,
     GEOCODING,
+
+    /**
+     * IP telephony (ADR 0064): a hosted SIP/PBX or an Asterisk-class
+     * self-hosted system, behind the normalized call-event vocabulary. Never
+     * carries audio — only offered/answered/ended/missed/transferred events,
+     * caller number, line/DID, and timestamps.
+     */
+    VOICE,
+
     OTHER
 }

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/voice.events/VoiceCallEventRecorded.v1.schema.json",
+  "title": "VoiceCallEventRecorded v1 payload",
+  "description": "One ADR 0064 normalized call event. All five vocabulary words (offered, answered, ended, missed, transferred) share this one schema, discriminated by callEventType, rather than five near-identical schemas ahead of a consumer that needs the difference. Never a caller number, encrypted or not: only resolvedCustomerAccountId, when resolution succeeded, and never anything from operator presence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["callEventId", "installationId", "providerCallId", "brandId", "locationId", "callEventType", "direction"],
+  "properties": {
+    "callEventId": { "type": "string", "format": "uuid" },
+    "installationId": { "type": "string", "format": "uuid" },
+    "providerCallId": { "type": "string", "maxLength": 255 },
+    "brandId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": "string", "format": "uuid" },
+    "callEventType": {
+      "type": "string",
+      "enum": ["OFFERED", "ANSWERED", "ENDED", "MISSED", "TRANSFERRED"]
+    },
+    "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+    "lineDid": { "type": ["string", "null"], "maxLength": 64 },
+    "resolvedCustomerAccountId": { "type": ["string", "null"], "format": "uuid" },
+    "operatorPrincipalId": { "type": ["string", "null"], "maxLength": 255 },
+    "durationSeconds": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}

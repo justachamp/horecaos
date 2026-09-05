@@ -3,18 +3,51 @@
 - Decision status: Accepted — drafted at the owner's direction 2026-09-02 and
   accepted by the owner the same day, after the provider-neutrality amendment;
   the open inputs below gate the build's start, not the decision.
-- Implementation status: Not started — this record only.
+- Implementation status: Partial — VOICE provider category, secret references,
+  and event ingestion with the webhook-dedup/outbox discipline are built; both
+  named adapter kinds exist (a hosted SIP/PBX webhook and an Asterisk-class AMI
+  client) and are proven against a fake PBX in the ADR 0007 genre, never
+  against a live provider account, because none exists (see the 2026-09-05
+  resolution below). Operator presence (ONLINE/PAUSED/WRAP_UP/OFFLINE, audited,
+  channel-neutral) is built and reachable from the operations app. The
+  screen-pop is built: caller resolution against customer identity, a masked
+  display by default, an audited full-number reveal gating the
+  create-customer prefill, and recent orders on a resolved caller's card — all
+  reachable from IA §1.6 (Call centre). Call-to-order provenance is built as a
+  write-once field the operations app sets once it holds both ids. Call facts
+  land in a new `reporting.fact_call_hour` table through the same
+  `DayCloseService.close()` transaction every other ADR 0043 fact uses; the
+  owner-facing read is a dedicated endpoint under the existing
+  `REPORTING_READ` capability, not yet a signed metric in `MetricRegistry`
+  (see Consequences). Not built: call audio or recording of any kind (out of
+  scope by owner direction); a routing adapter that actually drives a live
+  PBX queue's agent login/logout from presence (`CONSUME_PRESENCE` is declared
+  as a capability code neither shipped adapter implements); the recut
+  divergence check does not yet cover call facts the way it covers order
+  facts. An operator can mark themselves on line, have a real inbound call
+  (via the fake PBX) pop a caller's card before they answer, claim it, create
+  an unknown caller as a customer with their number correctly prefilled, and
+  see a missed call the next business day in the branch's call stats — the
+  whole loop the exit criteria describe, minus the "real inbound call" itself.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
-- Deciders: platform owner (direction, provider-neutrality, acceptance), Claude (architecture)
+- Deciders: platform owner (direction, provider-neutrality, acceptance,
+  2026-09-05 first-adapter resolution), Claude (architecture)
 - Depends on: 0004, 0023, 0025, 0026, 0027, 0028, 0029, 0033, 0043, 0059
 - Supersedes / Superseded by: —
-- Open inputs: WHICH provider adapter to build first (the core is
-  provider-neutral by the owner's 2026-09-02 direction — a hosted SIP/PBX
-  common in the market vs a tenant's own Asterisk-class system is now a
-  first-adapter sequencing question, not an architecture one); whether call
-  audio is recorded and the legal posture if so; numbering (per-brand DIDs vs a
-  shared line); the presence model's interaction with shift scheduling.
+- Open inputs: whether call audio is recorded and the legal posture if so
+  (owner; not built, and this record does not decide it); numbering (owner;
+  per-brand DIDs vs a shared line — until resolved, a VOICE installation with
+  more than one active binding is served by whichever binding sorts first by
+  priority, an installation-per-location topology rather than per-DID
+  routing, per `VoiceInstallationLookup`'s own doc); the presence model's
+  interaction with shift scheduling (owner). **Resolved 2026-09-05** (owner):
+  which provider adapter to build first — the owner directed building both
+  named adapter kinds now, a hosted SIP/PBX webhook and an Asterisk-class
+  (self-hosted) event-socket client, rather than sequencing one ahead of the
+  other. Neither has been verified against a real provider account, because
+  the owner has not yet named a hosted vendor or supplied any credentials;
+  both are proven only against the fake PBX this wave built.
 
 ## Context
 
@@ -85,12 +118,12 @@ layer (0043).
 
 ## Implementation checklist
 
-- [ ] VOICE provider category, installation + secret reference, event ingestion with the inbox/outbox discipline
-- [ ] Operator presence model + operations-app control, audited, readable by adapters
-- [ ] Inbound-call resolution → client-card pop in the operations app (polling first)
-- [ ] Call facts into ADR 0043; owner-facing stats surface
-- [ ] Call-to-order provenance
-- [ ] Fake PBX test double in the ADR 0007 genre
+- [x] VOICE provider category, installation + secret reference, event ingestion with the inbox/outbox discipline
+- [x] Operator presence model + operations-app control, audited, readable by adapters
+- [x] Inbound-call resolution → client-card pop in the operations app (polling first)
+- [x] Call facts into ADR 0043; owner-facing stats surface (a dedicated read endpoint under `REPORTING_READ`, not yet a signed `MetricRegistry` entry — see Implementation status above)
+- [x] Call-to-order provenance
+- [x] Fake PBX test double in the ADR 0007 genre (`FakeAsteriskAmiServer`, a real AMI-speaking TCP socket; the hosted-webhook side is proven by hand-constructing the normalized payload directly, since HorecaOS is the server on that side)
 
 ## Exit criteria
 

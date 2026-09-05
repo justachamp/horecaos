@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import uz.horecaos.platform.media.api.MediaEvent;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
+import uz.horecaos.platform.voice.api.VoiceEvent;
 
 /**
  * ADR 0032: an event must have a catalogue entry, a schema file, and a
@@ -75,6 +76,23 @@ class EventCatalogCompletenessTests {
                 .isNotEmpty();
         assertThat(registered)
                 .as("every permitted MediaEvent needs an ADR 0032 catalogue entry")
+                .containsAll(publishable);
+    }
+
+    @Test
+    void everyPublishableVoiceEventIsRegistered() {
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
+
+        List<String> publishable = Arrays.stream(VoiceEvent.class.getPermittedSubclasses())
+                .map(Class::getSimpleName)
+                .toList();
+
+        assertThat(publishable)
+                .as("the scan must actually find the ADR 0064 events it claims to check")
+                .isNotEmpty();
+        assertThat(registered)
+                .as("every permitted VoiceEvent needs an ADR 0032 catalogue entry")
                 .containsAll(publishable);
     }
 

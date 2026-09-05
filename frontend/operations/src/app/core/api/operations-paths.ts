@@ -291,6 +291,43 @@ export const operationsPaths = {
   courierTrackReveals(scope: LocationScope, courierId: string): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
   },
+
+  /**
+   * Operator presence (ADR 0064, `OperatorPresenceController`, IA 1.6) — on
+   * the ADR 0031 prefix. Set/read your own presence at this branch; the
+   * operator id always comes from the caller's own token, never the body.
+   */
+  voicePresence(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/presence`;
+  },
+
+  /** Your own current presence, or the OFFLINE default when you have never set one. */
+  voicePresenceMine(scope: LocationScope): string {
+    return `${this.voicePresence(scope)}/me`;
+  },
+
+  /**
+   * The screen-pop poll (ADR 0064, `ScreenPopController`) — call on the same
+   * 10-second cadence every other live screen in this app uses. No push.
+   */
+  voiceScreenPopCurrent(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/screen-pop/current`;
+  },
+
+  /** Claim a ringing call's card. Mutation: key required. */
+  voiceScreenPopAcknowledgement(scope: LocationScope, callEventId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/screen-pop/${encodeURIComponent(callEventId)}/acknowledgement`;
+  },
+
+  /** An unknown caller's unmasked number, for the create-customer prefill. Audited every call; never for a resolved caller. */
+  voiceScreenPopCallerNumber(scope: LocationScope, callEventId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/screen-pop/${encodeURIComponent(callEventId)}/caller-number`;
+  },
+
+  /** The branch's recent call list (`CallLogController`). */
+  voiceCallLog(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-log`;
+  },
   /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}

@@ -33,6 +33,7 @@ public final class KafkaTopicCatalog {
     public static final String FULFILLMENT_COMMANDS = "fulfillment.commands";
     public static final String FULFILLMENT_EVENTS = "fulfillment.events";
     public static final String REALTIME_SIGNALS = "realtime.signals";
+    public static final String VOICE_EVENTS = "voice.events";
 
     private static final Map<String, TopicSpecification> TOPICS = index(List.of(
             // The production topology has one broker (ADR 0034), so replication
@@ -42,7 +43,11 @@ public final class KafkaTopicCatalog {
             new TopicSpecification(MEDIA_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION),
             new TopicSpecification(FULFILLMENT_COMMANDS, 3, (short) 1, COMMAND_RETENTION),
             new TopicSpecification(FULFILLMENT_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION),
-            new TopicSpecification(REALTIME_SIGNALS, 3, (short) 1, SIGNAL_RETENTION)));
+            new TopicSpecification(REALTIME_SIGNALS, 3, (short) 1, SIGNAL_RETENTION),
+            // ADR 0064. A pilot tenant's call volume is nowhere near ordering's,
+            // so this shares ordering's partition-count reasoning at a smaller
+            // scale rather than fulfillment's.
+            new TopicSpecification(VOICE_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION)));
 
     private KafkaTopicCatalog() {}
 

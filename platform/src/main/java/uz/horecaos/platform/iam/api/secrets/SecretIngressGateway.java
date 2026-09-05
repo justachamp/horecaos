@@ -41,7 +41,8 @@ public class SecretIngressGateway {
             SecretCategory.PROVIDER_POS,
             SecretCategory.PROVIDER_PAYMENT,
             SecretCategory.PROVIDER_DELIVERY,
-            SecretCategory.PROVIDER_NOTIFICATION);
+            SecretCategory.PROVIDER_NOTIFICATION,
+            SecretCategory.PROVIDER_VOICE);
 
     private final SecretWriter writer;
     private final String environment;

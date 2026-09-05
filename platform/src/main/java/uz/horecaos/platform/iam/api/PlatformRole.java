@@ -104,6 +104,16 @@ public enum PlatformRole {
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
                     // this and why.
                     CONVERSATION_INBOX_MANAGE,
+                    // ADR 0064: held here for the same reason CONVERSATION_INBOX_MANAGE
+                    // is — the tenant owner must be able to grant location-manager and
+                    // location-staff, which hold these, without the grant escalation
+                    // check refusing a role that confers more than the granter holds.
+                    VOICE_PRESENCE_READ,
+                    VOICE_PRESENCE_MANAGE,
+                    VOICE_SCREEN_POP_READ,
+                    VOICE_SCREEN_POP_ACKNOWLEDGE,
+                    VOICE_CALL_LOG_READ,
+                    ORDER_PROVENANCE_RECORD,
                     // ADR 0044: the second signature on a send, and the power to lift a
                     // suppression. Both are deliberately away from whoever writes the
                     // campaign — the approver must not be the author, and a marketer who
@@ -279,6 +289,15 @@ public enum PlatformRole {
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
                     // this and why.
                     CONVERSATION_INBOX_MANAGE,
+                    // ADR 0064: same reasoning as TENANT_OWNER's own copy of this block —
+                    // required to grant location-manager/location-staff without tripping
+                    // the "cannot confer more than you hold" escalation check.
+                    VOICE_PRESENCE_READ,
+                    VOICE_PRESENCE_MANAGE,
+                    VOICE_SCREEN_POP_READ,
+                    VOICE_SCREEN_POP_ACKNOWLEDGE,
+                    VOICE_CALL_LOG_READ,
+                    ORDER_PROVENANCE_RECORD,
                     // ADR 0042: taking a courier on, and checking their self-employment
                     // registration is current. The reveal of the registration number
                     // itself is not here; it is granted per person with a purpose.
@@ -551,7 +570,15 @@ public enum PlatformRole {
                     REPORTING_READ,
                     // ADR 0060: the no-POS design center. A branch manager approves,
                     // advances, and 86's from the bot when there is no screen at all.
-                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
+                    // ADR 0064: a supervisor's roster view and the branch's call log,
+                    // plus everything the floor already has below.
+                    VOICE_PRESENCE_READ,
+                    VOICE_PRESENCE_MANAGE,
+                    VOICE_SCREEN_POP_READ,
+                    VOICE_SCREEN_POP_ACKNOWLEDGE,
+                    VOICE_CALL_LOG_READ,
+                    ORDER_PROVENANCE_RECORD)),
 
     /** Works the order feed. Deliberately cannot touch catalogue or money. */
     LOCATION_STAFF(
@@ -579,7 +606,15 @@ public enum PlatformRole {
                     DELIVERY_PLAN_READ,
                     // ADR 0060: whoever holds order.approve on the floor is exactly
                     // who the bot's Approve/Reject buttons are for.
-                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
+                    // ADR 0064: presence is self-service — whoever answers the phone
+                    // marks themselves on line — and the screen-pop card and call log
+                    // are the same floor-level read a line cook's board already is.
+                    VOICE_PRESENCE_MANAGE,
+                    VOICE_SCREEN_POP_READ,
+                    VOICE_SCREEN_POP_ACKNOWLEDGE,
+                    VOICE_CALL_LOG_READ,
+                    ORDER_PROVENANCE_RECORD)),
 
     COURIER_DISPATCHER(
             "courier-dispatcher",

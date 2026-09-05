@@ -1,6 +1,8 @@
 package uz.horecaos.platform.reporting.application;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -11,10 +13,12 @@ import java.util.Set;
 import java.util.UUID;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
+import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.domain.SlaBucketSet;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceCallEvent;
 
 /**
  * Turns a day's facts into the day's aggregates (ADR 0043).
@@ -239,6 +243,90 @@ public final class DayAggregator {
                     lateCount,
                     customers.size(),
                     newCustomers.size());
+        }
+    }
+
+    /**
+     * ADR 0064: one business date's call activity, bucketed by branch, hour,
+     * and operator (the sentinel {@code "(unassigned)"} standing in for a call
+     * this build could not attribute to a specific person — see {@link
+     * CallHourFact}'s own doc).
+     *
+     * <p>Talk duration is summed only from ENDED events that already carry a
+     * computed {@code durationSeconds} — see {@code VoiceEventIngestionService}
+     * for where that number comes from.
+     */
+    public static List<CallHourFact> callHourFacts(
+            UUID tenantId,
+            LocalDate businessDate,
+            ZoneId zone,
+            List<SourceCallEvent> events,
+            int boundaryVersion,
+            int calculationVersion) {
+
+        Map<CallHourKey, CallAccumulator> byKey = new LinkedHashMap<>();
+        for (SourceCallEvent event : events) {
+            int hour = ZonedDateTime.ofInstant(event.occurredAt(), zone).getHour();
+            String operator = event.operatorPrincipalId() == null
+                            || event.operatorPrincipalId().isBlank()
+                    ? "(unassigned)"
+                    : event.operatorPrincipalId();
+            CallHourKey key = new CallHourKey(event.brandId(), event.locationId(), hour, operator);
+            byKey.computeIfAbsent(key, ignored -> new CallAccumulator()).add(event);
+        }
+
+        List<CallHourFact> rows = new ArrayList<>(byKey.size());
+        byKey.forEach((key, accumulated) ->
+                rows.add(accumulated.toRow(tenantId, businessDate, key, boundaryVersion, calculationVersion)));
+
+        rows.sort(Comparator.comparing((CallHourFact row) -> row.locationId().toString())
+                .thenComparingInt(CallHourFact::hourOfDay)
+                .thenComparing(CallHourFact::operatorPrincipalId));
+        return rows;
+    }
+
+    private record CallHourKey(UUID brandId, UUID locationId, int hour, String operatorPrincipalId) {}
+
+    private static final class CallAccumulator {
+        private int offered;
+        private int answered;
+        private int missed;
+        private int transferred;
+        private long talkDurationSeconds;
+
+        void add(SourceCallEvent event) {
+            switch (event.eventType()) {
+                case "OFFERED" -> offered++;
+                case "ANSWERED" -> answered++;
+                case "MISSED" -> missed++;
+                case "TRANSFERRED" -> transferred++;
+                case "ENDED" -> {
+                    if (event.durationSeconds() != null) {
+                        talkDurationSeconds += event.durationSeconds();
+                    }
+                }
+                default -> {
+                    /* an event type this aggregator does not yet know; ignored rather than failing the close */
+                }
+            }
+        }
+
+        CallHourFact toRow(
+                UUID tenantId, LocalDate businessDate, CallHourKey key, int boundaryVersion, int calculationVersion) {
+            return new CallHourFact(
+                    tenantId,
+                    key.brandId(),
+                    key.locationId(),
+                    businessDate,
+                    key.hour(),
+                    key.operatorPrincipalId(),
+                    boundaryVersion,
+                    calculationVersion,
+                    offered,
+                    answered,
+                    missed,
+                    transferred,
+                    talkDurationSeconds);
         }
     }
 }
