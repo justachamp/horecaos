@@ -112,6 +112,17 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
       },
     ],
   },
+  {
+    label: 'settings.nav.group.privacy',
+    items: [
+      {
+        path: 'data-privacy',
+        label: 'settings.nav.dataPrivacy',
+        description: 'settings.home.description.dataPrivacy',
+        builtRoute: true,
+      },
+    ],
+  },
 ];
 
 export const SETTINGS_NAV_ITEMS: readonly SettingsNavItem[] = SETTINGS_NAVIGATION.flatMap(

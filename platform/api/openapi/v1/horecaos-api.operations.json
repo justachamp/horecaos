@@ -290,6 +290,43 @@
         },
         "type" : "object"
       },
+      "ApprovalRequestControllerDecisionRequest" : {
+        "properties" : {
+          "decision" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision", "reason" ],
+        "type" : "object"
+      },
+      "ApprovalRequestControllerDecisionResponse" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decidedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApproveHoursRequest" : {
         "properties" : {
           "approvalRequestId" : {
@@ -4447,6 +4484,20 @@
         },
         "type" : "object"
       },
+      "PagePendingApprovalResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PendingApprovalResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageRemedyResponse" : {
         "properties" : {
           "items" : {
@@ -4655,6 +4706,52 @@
           },
           "payoutId" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PendingApprovalResponse" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mayDecide" : {
+            "type" : "boolean"
+          },
+          "parametersHash" : {
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedBy" : {
+            "type" : "string"
+          },
+          "requiredApproverCapability" : {
+            "type" : "string"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "type" : "string"
+          },
+          "thresholdDescription" : {
             "type" : "string"
           }
         },
@@ -7631,6 +7728,97 @@
         },
         "summary" : "Refresh an operations session",
         "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
+      "get" : {
+        "description" : "The same read as the control-plane route, reachable from the operations frontend so a tenant's own manager can see what is waiting on them.",
+        "operationId" : "operationsPending",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actionCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagePendingApprovalResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the requests waiting for a second signature — Staff 9.4's approvals worklist",
+        "tags" : [ "Approval requests" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision" : {
+      "post" : {
+        "description" : "The same decision as the control-plane route, reachable from the operations frontend. Every rule above still applies: the policy's own approver capability, and the requester refused outright.",
+        "operationId" : "operationsDecide",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve or decline a pending request — Staff 9.4's approvals worklist",
+        "tags" : [ "Approval requests" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/audit-events" : {
@@ -17771,6 +17959,9 @@
   }, {
     "description" : "Server-Sent Events for the live operations surfaces",
     "name" : "Operational streams"
+  }, {
+    "description" : "The maker-checker queue: actions waiting for a second signature",
+    "name" : "Approval requests"
   }, {
     "description" : "Reference search, handover, and liveness",
     "name" : "Marketplace operations"

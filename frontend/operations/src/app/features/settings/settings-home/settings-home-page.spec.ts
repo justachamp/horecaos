@@ -31,6 +31,7 @@ describe('SettingsHomePage', () => {
     expect(labels).toContain('Notifications');
     expect(labels).toContain('Integrations');
     expect(labels).toContain('Reference data');
+    expect(labels).toContain('Data & privacy');
   });
 
   it('badges a screen that has no built route yet', () => {
@@ -55,6 +56,7 @@ describe('SettingsHomePage', () => {
       'Messages',
       'Connections',
       'Reference',
+      'Privacy',
     ]);
   });
 });

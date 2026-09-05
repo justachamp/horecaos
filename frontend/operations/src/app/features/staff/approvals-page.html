@@ -1,0 +1,122 @@
+<div class="approvals">
+  <h1 class="q-title">{{ 'staff.approvals.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'staff.approvals.subtitle' | t }}</p>
+  <p class="q-caption read-note">{{ 'staff.approvals.reasonNote' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'staff.approvals.column.action' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.scope' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.threshold' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.requestedBy' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.requestedAt' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.expiresAt' | t }}</th>
+            <th class="q-caption">{{ 'staff.approvals.column.decide' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (request of pending(); track request.id) {
+            <tr>
+              <td class="q-body-sm">{{ actionLabel(request) }}</td>
+              <td class="q-body-sm">{{ scopeLabel(request) }}</td>
+              <td class="q-body-sm">{{ request.thresholdDescription }}</td>
+              <td class="q-body-sm q-mono">{{ request.requestedBy }}</td>
+              <td class="q-body-sm q-mono">{{ request.requestedAt }}</td>
+              <td class="q-body-sm q-mono">{{ request.expiresAt }}</td>
+              <td class="q-body-sm">
+                @if (request.mayDecide) {
+                  <div class="decide-buttons">
+                    <button type="button" class="approve" (click)="openApprove(request)">
+                      {{ 'staff.approvals.action.approve' | t }}
+                    </button>
+                    <button type="button" class="decline" (click)="openDecline(request)">
+                      {{ 'staff.approvals.action.decline' | t }}
+                    </button>
+                  </div>
+                } @else {
+                  <span class="q-caption cannot-decide">{{
+                    'staff.approvals.cannotDecide' | t
+                  }}</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="7">{{ 'staff.approvals.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  @if (confirmTarget(); as target) {
+    <div class="dialog-backdrop" (click)="cancelConfirm()">
+      <div class="dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <h2 class="q-emphasis">{{ confirmTitleKey(target.decision) | t }}</h2>
+        <dl class="dialog__summary">
+          <dt class="q-caption">{{ 'staff.approvals.column.action' | t }}</dt>
+          <dd class="q-body-sm">{{ actionLabel(target.request) }}</dd>
+          <dt class="q-caption">{{ 'staff.approvals.column.threshold' | t }}</dt>
+          <dd class="q-body-sm">{{ target.request.thresholdDescription }}</dd>
+        </dl>
+
+        <label class="dialog__field">
+          <span class="q-body-sm">{{ 'staff.approvals.reason.label' | t }}</span>
+          <textarea
+            class="dialog__textarea"
+            rows="3"
+            [value]="reason()"
+            (input)="setReason($any($event.target).value)"
+            [attr.aria-invalid]="reasonInvalid() ? 'true' : null"
+            data-testid="approvals-reason"
+          ></textarea>
+          @if (reasonInvalid()) {
+            <span class="q-caption dialog__error">{{ 'staff.approvals.reason.required' | t }}</span>
+          }
+        </label>
+
+        @if (submitError(); as message) {
+          <p class="q-caption dialog__error" role="alert">{{ message }}</p>
+        }
+
+        <div class="dialog__actions">
+          <button
+            type="button"
+            class="secondary"
+            (click)="cancelConfirm()"
+            [disabled]="submitting()"
+          >
+            {{ 'staff.approvals.dialog.dismiss' | t }}
+          </button>
+          <button
+            type="button"
+            [class]="target.decision === 'APPROVE' ? 'approve' : 'decline'"
+            (click)="submitDecision()"
+            [disabled]="submitting()"
+            data-testid="approvals-confirm"
+          >
+            {{ confirmButtonKey(target.decision) | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

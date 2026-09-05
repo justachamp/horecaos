@@ -95,6 +95,19 @@ export interface ApiMoney {
   currency?: string;
 }
 
+export interface ApprovalRequestControllerDecisionRequest {
+  decision: string;
+  reason: string;
+}
+
+export interface ApprovalRequestControllerDecisionResponse {
+  actionCode?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  id?: string;
+  status?: string;
+}
+
 export interface ApproveHoursRequest {
   approvalRequestId?: string;
   reason: string;
@@ -1425,6 +1438,11 @@ export interface PageCustomerSummaryResponse {
   nextCursor?: string;
 }
 
+export interface PagePendingApprovalResponse {
+  items?: Array<PendingApprovalResponse>;
+  nextCursor?: string;
+}
+
 export interface PageRemedyResponse {
   items?: Array<RemedyResponse>;
   nextCursor?: string;
@@ -1497,6 +1515,21 @@ export interface PayoutResponse {
   approvalRequestId?: string;
   authorised?: boolean;
   payoutId?: string;
+}
+
+export interface PendingApprovalResponse {
+  actionCode?: string;
+  expiresAt?: string;
+  id?: string;
+  mayDecide?: boolean;
+  parametersHash?: string;
+  policyVersion?: number;
+  requestedAt?: string;
+  requestedBy?: string;
+  requiredApproverCapability?: string;
+  scopeId?: string;
+  scopeType?: string;
+  thresholdDescription?: string;
 }
 
 export interface PhoneRevealResponse {
@@ -2331,6 +2364,8 @@ export interface Operations {
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
+  "operationsPending": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PagePendingApprovalResponse } };
+  "operationsDecide": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: ApprovalRequestControllerDecisionRequest }; responses: { "200": ApprovalRequestControllerDecisionResponse } };
   "operationsSearch": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/audit-events"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; actorSubject?: string; auditClass?: string; correlationId?: string; from?: string; limit?: number; outcome?: string; scopeId?: string; scopeType?: string; targetId?: string; to?: string } } }; responses: { "200": PageAuditEventView } };
   "operationsDetail": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/audit-events/{eventId}"; request: { parameters: { path: { eventId: string; tenantId: string } } }; responses: { "200": AuditEventDetail } };
   "list_6": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };

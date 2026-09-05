@@ -1,0 +1,131 @@
+<h1 class="q-title">{{ 'settings.dataPrivacy.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.dataPrivacy.lead' | t }}</p>
+
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.retention.title' | t }}</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.category' | t }}</th>
+        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.status' | t }}</th>
+        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.note' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="q-body-sm">
+          {{ 'settings.dataPrivacy.retention.abandonedCarts.category' | t }}
+        </td>
+        <td class="q-body-sm">
+          <span class="status-pill status-pill--not-built">{{
+            'settings.dataPrivacy.retention.status.notEnforced' | t
+          }}</span>
+        </td>
+        <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.abandonedCarts.note' | t }}</td>
+      </tr>
+      <tr>
+        <td class="q-body-sm">
+          {{ 'settings.dataPrivacy.retention.courierLocation.category' | t }}
+        </td>
+        <td class="q-body-sm">
+          <span class="status-pill status-pill--enforced">{{
+            'settings.dataPrivacy.retention.status.enforced' | t
+          }}</span>
+        </td>
+        <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.courierLocation.note' | t }}</td>
+      </tr>
+      <tr>
+        <td class="q-body-sm">
+          {{ 'settings.dataPrivacy.retention.candidateRecords.category' | t }}
+        </td>
+        <td class="q-body-sm">
+          <span class="status-pill status-pill--not-applicable">{{
+            'settings.dataPrivacy.retention.status.notApplicable' | t
+          }}</span>
+        </td>
+        <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.candidateRecords.note' | t }}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.consent.title' | t }}</h2>
+  <p class="q-body-sm">{{ 'settings.dataPrivacy.consent.lead' | t }}</p>
+  <dl class="fields">
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.dataPrivacy.consent.states.label' | t }}</dt>
+      <dd class="q-body-sm">{{ 'settings.dataPrivacy.consent.states.value' | t }}</dd>
+    </div>
+    <div class="field">
+      <dt class="q-caption">{{ 'settings.dataPrivacy.consent.sources.label' | t }}</dt>
+      <dd class="q-body-sm">{{ 'settings.dataPrivacy.consent.sources.value' | t }}</dd>
+    </div>
+  </dl>
+  <p class="q-caption gap-note">{{ 'settings.dataPrivacy.consent.gap' | t }}</p>
+</section>
+
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.requests.title' | t }}</h2>
+  <p class="q-body-sm">
+    {{
+      'notBuilt.body'
+        | t
+          : {
+              spec: 'ADR 0029 (PII protection) — "no data-subject export, correction, anonymisation, retention, legal-hold or proof operation exists anywhere"',
+            }
+    }}
+  </p>
+</section>
+
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.egress.title' | t }}</h2>
+  <p class="q-body-sm">{{ 'settings.dataPrivacy.egress.lead' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.dataPrivacy.egress.column.when' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.egress.column.who' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.egress.column.what' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.egress.column.purpose' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.egress.column.target' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of egressEvents(); track event.id) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ event.recordedAt }}</td>
+              <td class="q-body-sm">{{ actorLabel(event) }}</td>
+              <td class="q-body-sm">{{ actionLabel(event) }}</td>
+              <td class="q-body-sm">{{ event.reason ?? '—' }}</td>
+              <td class="q-body-sm q-mono">{{ targetLabel(event) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'settings.dataPrivacy.egress.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>

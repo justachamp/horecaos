@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -52,14 +51,25 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * operator authors a policy. The policy console exposes those modes and
  * configured scopes separately.
  *
+ * <p>The same read and decide pair is exposed twice: under {@code control-plane}
+ * for HorecaOS staff working a tenant on its behalf, and under {@code
+ * operations} for a tenant's own staff — Staff IA 9.4's approvals worklist,
+ * which had no operations-surface reader or decider at all before this wave
+ * (the control-plane route is not reachable from the operations frontend's
+ * OpenAPI group, ADR 0057; {@code AuditController}'s own {@code
+ * operationsSearch}/{@code operationsDetail} pair set this precedent for
+ * Staff 9.3's activity log). Both routes call the same {@link
+ * ApprovalDecisionService}; nothing about who may decide what differs between
+ * the two audiences, only which app may reach it.
+ *
  * <p><strong>Known limitation.</strong> The console is tenant-scoped, so a
  * principal whose grant is brand- or location-scoped cannot reach it even when
  * the policy names a capability they hold at that level. Brand-scoped requests
  * are decidable here by tenant-scoped staff, whose grant covers the brand; a
- * brand-scoped approvals path is a separate surface.
+ * brand-scoped approvals path is still a separate surface, not built by this
+ * wave either.
  */
 @RestController
-@RequestMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests")
 @Tag(name = "Approval requests", description = "The maker-checker queue: actions waiting for a second signature")
 public class ApprovalRequestController {
 
@@ -71,7 +81,7 @@ public class ApprovalRequestController {
         this.currentActor = currentActor;
     }
 
-    @GetMapping
+    @GetMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT)
     @Operation(
             summary = "List the requests waiting for a second signature",
@@ -84,15 +94,10 @@ public class ApprovalRequestController {
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String actionCode,
             @RequestParam(required = false) Integer limit) {
-
-        List<PendingApprovalResponse> waiting =
-                decisions.pending(tenantId, actionCode, Page.limitOrDefault(limit), subject()).stream()
-                        .map(PendingApprovalResponse::of)
-                        .toList();
-        return Page.last(waiting);
+        return pendingResponse(tenantId, actionCode, limit);
     }
 
-    @PostMapping("/{requestId}/decision")
+    @PostMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests/{requestId}/decision")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT, mutating = true)
     @Operation(
             summary = "Approve or decline a pending request",
@@ -105,7 +110,43 @@ public class ApprovalRequestController {
                     + "Both refusals and decisions are audited.")
     DecisionResponse decide(
             @PathVariable UUID tenantId, @PathVariable UUID requestId, @Valid @RequestBody DecisionRequest body) {
+        return decideAndRespond(tenantId, requestId, body);
+    }
 
+    @GetMapping("/api/v1/operations/tenants/{tenantId}/approval-requests")
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "List the requests waiting for a second signature — Staff 9.4's approvals worklist",
+            description = "The same read as the control-plane route, reachable from the operations "
+                    + "frontend so a tenant's own manager can see what is waiting on them.")
+    Page<PendingApprovalResponse> operationsPending(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String actionCode,
+            @RequestParam(required = false) Integer limit) {
+        return pendingResponse(tenantId, actionCode, limit);
+    }
+
+    @PostMapping("/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision")
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Approve or decline a pending request — Staff 9.4's approvals worklist",
+            description = "The same decision as the control-plane route, reachable from the "
+                    + "operations frontend. Every rule above still applies: the policy's own "
+                    + "approver capability, and the requester refused outright.")
+    DecisionResponse operationsDecide(
+            @PathVariable UUID tenantId, @PathVariable UUID requestId, @Valid @RequestBody DecisionRequest body) {
+        return decideAndRespond(tenantId, requestId, body);
+    }
+
+    private Page<PendingApprovalResponse> pendingResponse(UUID tenantId, String actionCode, Integer limit) {
+        List<PendingApprovalResponse> waiting =
+                decisions.pending(tenantId, actionCode, Page.limitOrDefault(limit), subject()).stream()
+                        .map(PendingApprovalResponse::of)
+                        .toList();
+        return Page.last(waiting);
+    }
+
+    private DecisionResponse decideAndRespond(UUID tenantId, UUID requestId, DecisionRequest body) {
         var decided = decisions.decide(tenantId, requestId, decisionOf(body.decision()), actor(), body.reason());
 
         return new DecisionResponse(

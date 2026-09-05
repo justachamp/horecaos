@@ -867,8 +867,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Mahsulot hali birorta filialda taklif qilinmagan',
   'catalog.editor.availability.stop': 'Toʻxtatish',
   'catalog.editor.availability.resume': 'Qayta yoqish',
-  'catalog.editor.history.notBuilt':
-    'Tarix hali qurilmagan — audit oʻqish endpointi yoʻq (ADR 0027)',
+  'catalog.editor.history.scope':
+    'Faqat shu filialdagi mavjudlik oʻzgarishlari — mahsulot, narx va modifikator tahrirlari hali audit qilinmaydi.',
+  'catalog.editor.history.loading': 'Yuklanmoqda…',
+  'catalog.editor.history.denied': 'Sizda bu tarixni oʻqish huquqi yoʻq.',
+  'catalog.editor.history.empty': 'Bu yerda hali mavjudlik oʻzgarishi qayd etilmagan.',
+  'catalog.editor.history.when': 'Qachon',
+  'catalog.editor.history.who': 'Kim',
+  'catalog.editor.history.variant': 'Variant',
+  'catalog.editor.history.what': 'Nima',
   'catalog.editor.readiness.title': 'Chop etishga tayyorlik',
   'catalog.editor.readiness.clean': 'Chop etishga tayyor',
   'catalog.editor.readiness.blockers': '{count} bloklovchi muammo',
@@ -1864,7 +1871,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.nav.reviews': 'Sharhlar',
 
   'customers.segments.title': 'Segmentlar',
-  'customers.segments.subtitle': 'Mijozlar bazasi bo‘yicha auditoriyalarni yarating, saqlang va qayta ishlating.',
+  'customers.segments.subtitle':
+    'Mijozlar bazasi bo‘yicha auditoriyalarni yarating, saqlang va qayta ishlating.',
   'customers.segments.create.action': 'Yangi segment',
   'customers.segments.column.name': 'Nomi',
   'customers.segments.column.description': 'Tavsif',
@@ -1913,7 +1921,8 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'reports.branches.title': 'Filiallar va SLA hisobotlari',
   'reports.branches.loading': 'Yuklanmoqda…',
-  'reports.branches.singleLocation': 'Bu hisobot filiallarni solishtiradi va bitta filial uchun ma’noga ega emas.',
+  'reports.branches.singleLocation':
+    'Bu hisobot filiallarni solishtiradi va bitta filial uchun ma’noga ega emas.',
   'reports.branches.leaderboard.title': 'Filiallar reytingi',
   'reports.branches.column.name': 'Filial',
   'reports.branches.column.orders': 'Buyurtmalar',
@@ -1941,7 +1950,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.totalQty': 'Soni (jami)',
   'reports.products.column.totalSum': 'Summa (jami)',
   'reports.products.column.share': 'Tushumdagi ulush',
-  'reports.products.maybeMore': 'Mahsulotlar ko‘proq bo‘lishi mumkin — bu chegaralangan o‘qish, to‘liq eksport emas.',
+  'reports.products.maybeMore':
+    'Mahsulotlar ko‘proq bo‘lishi mumkin — bu chegaralangan o‘qish, to‘liq eksport emas.',
   'reports.products.abcXyzNotBuilt':
     'ABC va XYZ tasnifi hali yaratilmagan: reporting’da classification_run jadvali va ro‘yxatga olingan metrika yo‘q (ADR 0043).',
 
@@ -1972,7 +1982,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.cash.confirm.defaultReason': 'Inkassatsiyada tasdiqlandi',
 
   'finance.deliveryCost.title': 'Yetkazib berish tannarxini solishtirish',
-  'finance.deliveryCost.subtitle': 'Provayder hisob-fakturalari va qayd etilgan yetkazib berish tannarxi.',
+  'finance.deliveryCost.subtitle':
+    'Provayder hisob-fakturalari va qayd etilgan yetkazib berish tannarxi.',
   'finance.deliveryCost.basisLabel': 'Asos',
   'finance.deliveryCost.from': 'Dan',
   'finance.deliveryCost.to': 'Gacha',
@@ -1982,7 +1993,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.deliveryCost.internal': 'O‘z kuryerlari',
   'finance.deliveryCost.partner': 'Yetkazib berish xizmati',
   'finance.deliveryCost.total': 'Jami',
-  'finance.deliveryCost.missingBasis': 'Boshqa asosda hisoblangan yetkazib berishlar: {count} — ular jamiga kirmaydi.',
+  'finance.deliveryCost.missingBasis':
+    'Boshqa asosda hisoblangan yetkazib berishlar: {count} — ular jamiga kirmaydi.',
   'finance.deliveryCost.invoices.title': 'Yetkazib berish xizmatlari hisob-fakturalari',
   'finance.deliveryCost.invoices.provider': 'Xizmat',
   'finance.deliveryCost.invoices.reference': 'Hisob-faktura raqami',
@@ -1999,7 +2011,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.deliveryCost.lines.variance': 'Farq',
 
   'finance.payouts.title': 'Kuryer to‘lovlari',
-  'finance.payouts.subtitle': 'Butun park bo‘yicha hisob-kitob davrlari va bitta kuryerning balansi.',
+  'finance.payouts.subtitle':
+    'Butun park bo‘yicha hisob-kitob davrlari va bitta kuryerning balansi.',
   'finance.payouts.column.period': 'Davr',
   'finance.payouts.column.status': 'Holat',
   'finance.payouts.column.delivered': 'Yetkazildi',
@@ -2086,4 +2099,96 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.activity.detail.unavailable': 'O‘zgarish tafsilotlarini yuklab bo‘lmadi.',
   'staff.activity.detail.close': 'Yopish',
   'staff.activity.empty': 'Bu davrda hech narsa sodir bo‘lmagan.',
+
+  // ---------------------------------------------------------------- staff 9.4 (wave 45)
+  'staff.shell.approvals': 'Tasdiqlashlar',
+  'staff.approvals.title': 'Tasdiqlashlar',
+  'staff.approvals.subtitle': 'Ikkinchi imzoni kutayotgan narsalar — va bu sizning ishingiz.',
+  'staff.approvals.reasonNote':
+    'So‘rov nima uchun berilgani bu yerda ko‘rsatilmaydi (ADR 0029) — buni amalning o‘z ekranidan ko‘ring. Ushbu qaror uchun sizning sababingiz majburiy va qayd etiladi.',
+  'staff.approvals.column.action': 'Amal',
+  'staff.approvals.column.scope': 'Qamrov',
+  'staff.approvals.column.threshold': 'Chegara',
+  'staff.approvals.column.requestedBy': 'Kim so‘ragan',
+  'staff.approvals.column.requestedAt': 'Qachon so‘ralgan',
+  'staff.approvals.column.expiresAt': 'Muddati',
+  'staff.approvals.column.decide': 'Qaror',
+  'staff.approvals.scope.tenant': 'Butun kompaniya',
+  'staff.approvals.cannotDecide': 'Bu sizning qaroringiz emas',
+  'staff.approvals.empty': 'Sizni kutayotgan hech narsa yo‘q.',
+  'staff.approvals.action.approve': 'Tasdiqlash',
+  'staff.approvals.action.decline': 'Rad etish',
+  'staff.approvals.confirm.titleApprove': 'Ushbu so‘rovni tasdiqlaysizmi?',
+  'staff.approvals.confirm.titleDecline': 'Ushbu so‘rovni rad etasizmi?',
+  'staff.approvals.reason.label': 'Sizning sababingiz',
+  'staff.approvals.reason.required': 'Sababni kiriting, 1000 belgigacha',
+  'staff.approvals.dialog.dismiss': 'Bekor qilish',
+  'staff.approvals.action.paymentsRemedyRecord': 'Chegaradan yuqori qaytarish yoki kompensatsiya',
+  'staff.approvals.action.paymentsRemedyFutureDiscount':
+    'Xohishga ko‘ra kelgusi buyurtmaga chegirma',
+  'staff.approvals.action.courierAdjustmentCreate': 'Chegaradan yuqori kuryer balansi tuzatishi',
+  'staff.approvals.action.courierManualPenalty': 'Kuryerga nisbatan jarima',
+  'staff.approvals.action.courierPayoutAuthorise': 'Kuryer to‘lovini avtorizatsiya qilish',
+  'staff.approvals.action.tenantActivate': 'Kompaniyani faollashtirish',
+  'staff.approvals.action.integrationFailureResolve': 'Integratsiya xatosini hal qilish',
+  'staff.approvals.action.loyaltyBalanceAdjust': 'Sodiqlik balansini tuzatish',
+
+  // ---------------------------------------------------------------- settings 10.11 (wave 45)
+  'settings.nav.group.privacy': 'Maxfiylik',
+  'settings.nav.dataPrivacy': 'Ma’lumotlar va maxfiylik',
+  'settings.home.description.dataPrivacy':
+    'Saqlash muddatlari, rozilik, ma’lumot subyekti so‘rovlari va mijoz shaxsiy ma’lumotini kim ko‘rgani.',
+  'settings.dataPrivacy.title': 'Ma’lumotlar va maxfiylik',
+  'settings.dataPrivacy.lead':
+    'Restoran shaxsiy ma’lumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning o‘z so‘zlarini kim ko‘rgan.',
+  'settings.dataPrivacy.retention.title': 'Saqlash muddati',
+  'settings.dataPrivacy.retention.column.category': 'Ma’lumot',
+  'settings.dataPrivacy.retention.column.status': 'Holat',
+  'settings.dataPrivacy.retention.column.note': 'Izoh',
+  'settings.dataPrivacy.retention.abandonedCarts.category': 'Tashlab ketilgan savatlar',
+  'settings.dataPrivacy.retention.abandonedCarts.note':
+    'Eskirgan savat muddati o‘tgan deb belgilanadi, lekin hali hech narsa uni o‘chirmaydi yoki anonimlashtirmaydi — amalga oshirilmagan (ADR 0029).',
+  'settings.dataPrivacy.retention.courierLocation.category': 'Kuryer joylashuvi tarixi',
+  'settings.dataPrivacy.retention.courierLocation.note':
+    'Jadval bo‘yicha avtomatik o‘chiriladi, kunlar soni har bir kompaniya uchun sozlanadi (ADR 0045). Bu ekran hozircha sizning kompaniyangiz uchun sozlangan sonni ko‘rsata olmaydi — buning uchun operatsiyaga qaratilgan sozlama yo‘q (ADR 0030).',
+  'settings.dataPrivacy.retention.candidateRecords.category': 'Nomzod yozuvlari',
+  'settings.dataPrivacy.retention.candidateRecords.note':
+    'HorecaOS’da ishga qabul yoki nomzodlar uchun ma’lumot modeli yo‘q — bu yerda saqlash uchun hech narsa yo‘q.',
+  'settings.dataPrivacy.retention.status.notEnforced': 'Amalga oshirilmagan',
+  'settings.dataPrivacy.retention.status.enforced': 'Amalga oshirilgan',
+  'settings.dataPrivacy.retention.status.notApplicable': 'Tegishli emas',
+  'settings.dataPrivacy.consent.title': 'Rozilik',
+  'settings.dataPrivacy.consent.lead':
+    'Rozilik qarori bugun mijozning o‘z hisobida nimani qayd eta oladi.',
+  'settings.dataPrivacy.consent.states.label': 'Qaror',
+  'settings.dataPrivacy.consent.states.value':
+    'Berilgan yoki bekor qilingan — jimlikdan hech qachon xulosa chiqarilmaydi.',
+  'settings.dataPrivacy.consent.sources.label': 'Qayerdan qayd etilgan',
+  'settings.dataPrivacy.consent.sources.value':
+    'Do‘kon oynasi, qo‘llab-quvvatlash xodimi, import, migratsiya yoki API.',
+  'settings.dataPrivacy.consent.gap':
+    'Bu yerda sozlanadigan, kompaniya uchun umumiy rozilik turlari ro‘yxati yo‘q — maqsad va kanal har bir nuqtada (masalan, xabarnoma shablonida) erkin matn sifatida belgilanadi. Mijozning o‘z rozilik tarixi uning shaxsiy yozuvida, bu ekranda emas.',
+  'settings.dataPrivacy.requests.title': 'Ma’lumot subyekti so‘rovlari',
+  'settings.dataPrivacy.egress.title': 'Shaxsiy ma’lumotni ko‘rish va eksport qilish jurnali',
+  'settings.dataPrivacy.egress.lead':
+    'So‘nggi 90 kun ichida xodim mijozning shaxsiy ma’lumotini ko‘rgan yoki eksport qilgan har bir holat, platformaning o‘z audit jurnalidan.',
+  'settings.dataPrivacy.egress.column.when': 'Qachon',
+  'settings.dataPrivacy.egress.column.who': 'Kim',
+  'settings.dataPrivacy.egress.column.what': 'Nima',
+  'settings.dataPrivacy.egress.column.purpose': 'Ko‘rsatilgan maqsad',
+  'settings.dataPrivacy.egress.column.target': 'Yozuv',
+  'settings.dataPrivacy.egress.empty':
+    'Bu davrda hech kim shaxsiy ma’lumotni ko‘rmagan yoki eksport qilmagan.',
+  'settings.dataPrivacy.egress.action.contactRevealed': 'Telefon yoki email ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.addressRevealed': 'Yetkazib berish manzili ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Tug‘ilgan sana ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.blacklistRevealed': 'Bloklash sababi ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.listExported':
+    'Filtrlangan mijozlar ro‘yxati eksport qilindi',
+  'settings.dataPrivacy.egress.action.audienceExported': 'Marketing auditoriyasi eksport qilindi',
+  'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Mijozning buyurtmadagi izohi ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.orderPhoneRevealed':
+    'Buyurtmadagi mijoz telefoni ko‘rsatildi',
+  'settings.dataPrivacy.egress.action.orderAddressRevealed':
+    'Buyurtmadagi mijoz yetkazib berish manzili ko‘rsatildi',
 };
