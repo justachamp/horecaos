@@ -1,0 +1,239 @@
+<div class="promo-codes">
+  <div class="promo-codes__toolbar">
+    <div>
+      <h1 class="q-subhead">{{ 'marketing.promoCodes.title' | t }}</h1>
+      <p class="q-body-sm promo-codes__intro">{{ 'marketing.promoCodes.intro' | t }}</p>
+    </div>
+    @if (!loading() && !denied()) {
+      <button type="button" class="promo-codes__create" (click)="openForm()">
+        {{ 'marketing.promoCodes.create.action' | t }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="promo-codes__skeleton" [attr.aria-label]="'marketing.promoCodes.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="promo-codes__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="promo-codes__denied" data-testid="promo-codes-denied">
+      <p class="q-body-sm">{{ 'marketing.promoCodes.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="promo-codes__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="promo-codes__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (justCreated(); as created) {
+      <div class="promo-codes__reveal" data-testid="promo-codes-reveal">
+        <span class="q-caption">{{ 'marketing.promoCodes.reveal.label' | t }}</span>
+        <span class="q-body promo-codes__reveal-code">{{ created.plaintextCode }}</span>
+        <span class="q-caption promo-codes__reveal-hint">{{ 'marketing.promoCodes.reveal.hint' | t }}</span>
+        <button type="button" (click)="dismissJustCreated()">
+          {{ 'marketing.promoCodes.reveal.dismiss' | t }}
+        </button>
+      </div>
+    }
+
+    <table class="promo-codes__table">
+      <thead>
+        <tr>
+          <th>{{ 'marketing.promoCodes.column.code' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.name' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.shape' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.value' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.minBasket' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.redeemed' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.status' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (code of codes(); track code.couponId) {
+          <tr class="promo-codes-row" data-testid="promo-code-row">
+            <td class="q-tnum promo-codes__hint">···{{ code.codeHint }}</td>
+            <td>{{ code.name }}</td>
+            <td>{{ shapeLabelKey(code.actionType) | t }}</td>
+            <td class="q-tnum">{{ valueLabel(code) }}</td>
+            <td class="q-tnum">
+              {{ code.minBasketMinor === 0 ? '—' : formatWhole(code.minBasketMinor) }}
+            </td>
+            <td class="q-tnum">
+              {{ code.redeemedCount }}{{ code.totalLimit === null ? '' : ' / ' + code.totalLimit }}
+            </td>
+            <td>
+              <span class="status-badge" [class.status-badge--live]="isLive(code.status)">
+                {{ statusLabelKey(code.status) | t }}
+              </span>
+            </td>
+            <td class="promo-codes__action-col">
+              @if (canActivate(code.status)) {
+                <button
+                  type="button"
+                  [disabled]="actingCouponId() === code.couponId"
+                  (click)="activate(code)"
+                >
+                  {{ 'marketing.promoCodes.action.activate' | t }}
+                </button>
+              }
+              @if (canRetire(code.status)) {
+                <button
+                  type="button"
+                  [disabled]="actingCouponId() === code.couponId"
+                  (click)="retire(code)"
+                >
+                  {{ 'marketing.promoCodes.action.retire' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8">
+              <p class="q-body-sm" data-testid="promo-codes-empty">
+                {{ 'marketing.promoCodes.empty' | t }}
+              </p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (showForm()) {
+    <div class="dialog-backdrop" (click)="closeForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'marketing.promoCodes.create.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.name' | t }}</span>
+          <input type="text" [value]="formName()" (input)="formName.set($any($event.target).value)" />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.code' | t }}</span>
+          <input type="text" [value]="formCode()" (input)="formCode.set($any($event.target).value)" />
+          <span class="q-caption promo-codes__field-hint">{{ 'marketing.promoCodes.form.code.hint' | t }}</span>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.shape' | t }}</span>
+          <select [value]="formShape()" (change)="formShape.set($any($event.target).value)">
+            @for (choice of shapeChoices; track choice) {
+              <option [value]="choice">{{ shapeChoiceLabelKey(choice) | t }}</option>
+            }
+          </select>
+        </label>
+
+        @if (formShape() === 'PERCENTAGE_OFF_ORDER') {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.promoCodes.form.percent' | t }}</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              [value]="formPercent()"
+              (input)="formPercent.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+        @if (formShape() === 'FIXED_AMOUNT_OFF_ORDER') {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.promoCodes.form.amount' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="formAmountMinor()"
+              (input)="formAmountMinor.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="formHasCap()"
+            (change)="formHasCap.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.promoCodes.form.hasCap' | t }}</span>
+        </label>
+        @if (formHasCap()) {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.promoCodes.form.cap' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="formMaximumDiscountMinor()"
+              (input)="formMaximumDiscountMinor.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.minBasket' | t }}</span>
+          <input
+            type="number"
+            min="0"
+            [value]="formMinBasketMinor()"
+            (input)="formMinBasketMinor.set(+$any($event.target).value)"
+          />
+        </label>
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="formHasTotalLimit()"
+            (change)="formHasTotalLimit.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.promoCodes.form.hasTotalLimit' | t }}</span>
+        </label>
+        @if (formHasTotalLimit()) {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.promoCodes.form.totalLimit' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="formTotalLimit()"
+              (input)="formTotalLimit.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.perCustomerLimit' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            [value]="formPerCustomerLimit()"
+            (input)="formPerCustomerLimit.set(+$any($event.target).value)"
+          />
+          <span class="q-caption promo-codes__field-hint">{{
+            'marketing.promoCodes.form.perCustomerLimit.hint' | t
+          }}</span>
+        </label>
+
+        @if (formError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeForm()">
+            {{ 'marketing.promoCodes.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canSubmit()" (click)="submit()">
+            {{ 'marketing.promoCodes.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

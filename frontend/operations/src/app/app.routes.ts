@@ -428,11 +428,15 @@ export const routes: Routes = [
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
             data: { spec: 'frontend-information-architecture.md §6.1 (Promotions)' },
           },
+          // 6.2 Promo codes (ADR 0072, wave 60): a marketer's own promo
+          // codes, through the new `PromoCodeController` over V0093's
+          // already-existing `pricing.promotions`/`coupon_codes` schema —
+          // draft (a closed set of three discount shapes), activate, retire.
+          // Unlike 6.3 Loyalty, more than one code may be live at once.
           {
             path: 'promo-codes',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.2 (Promo codes)' },
+              import('./features/marketing/promo-codes/promo-codes-page').then((m) => m.PromoCodesPage),
           },
           // 6.3 Loyalty (ADR 0046, wave 44): the last tier-3 Marketing row
           // this wave built, alongside 6.4 Campaigns' own real backend.

@@ -16,7 +16,14 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * Referrals was the one tier-3 row still out; wave 47 built its reward half
  * (a new ADR, riding on ADR 0046's loyalty ledger).
  *
- * Three tabs now have a real backend to render honestly. 6.4 Campaigns:
+ * Four tabs now have a real backend to render honestly. 6.2 Promo codes
+ * (wave 60, a new ADR 0072): `pricing.promotions` and `pricing.coupon_codes`
+ * (and their siblings) have existed since V0093 with no authoring surface
+ * above them; `PromoCodeController` and `PromoCodesPage` are the first —
+ * draft (a closed set of three discount shapes: percentage off the order,
+ * fixed amount off the order, free delivery), activate, retire. 6.1
+ * Promotions, the general no-code rule-engine screen the same schema could
+ * also serve, remains unbuilt and routes to `NotBuiltPage`. 6.4 Campaigns:
  * ADR 0044's audiences, campaign lifecycle, and suppression machinery, with
  * `RFM targeting` folded in as this row's own audience-definition step rather
  * than a separate IA row. 6.3 Loyalty: `LoyaltyOperationsController`'s
@@ -31,13 +38,13 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * only), and `ReferralOperationsController` reads what has actually
  * happened; website/Telegram acquisition links render as an honest
  * not-built panel inside that same screen — see `ReferralsPage`'s own doc.
- * The other four tabs route to the shared `NotBuiltPage`, each naming its
- * own IA subsection — 6.1 Promotions and 6.2 Promo codes have
- * a schema (`V0093`) and nothing above it (no authoring service, no
- * controller); 6.5 Automations' trigger engine, and 6.7/6.8's merchandising
- * slots, have neither schema nor service. Each is a subsystem in its own
- * right, not a small gap a couple of reserved migrations could close
- * honestly — see wave 44's final report.
+ * The other three tabs route to the shared `NotBuiltPage`, each naming its
+ * own IA subsection — 6.1 Promotions, the general no-code rule-engine
+ * authoring screen `V0093`'s schema could also serve, still has no
+ * controller of its own; 6.5 Automations' trigger engine, and 6.7/6.8's
+ * merchandising slots, have neither schema nor service. Each is a subsystem
+ * in its own right, not a small gap a couple of reserved migrations could
+ * close honestly — see wave 44's final report.
  */
 @Component({
   selector: 'q-marketing-shell',

@@ -1,0 +1,222 @@
+.promo-codes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow: auto;
+}
+
+.promo-codes__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.promo-codes__intro {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+  max-width: 70ch;
+}
+
+.promo-codes__create {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.promo-codes__reveal {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+}
+
+.promo-codes__reveal-code {
+  font-weight: 600;
+  font-family: monospace;
+  letter-spacing: 0.05em;
+}
+
+.promo-codes__reveal-hint {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.promo-codes__reveal button {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.promo-codes__hint {
+  font-family: monospace;
+  color: var(--q-ink-muted);
+}
+
+.promo-codes__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.promo-codes__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.promo-codes-row td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.promo-codes__action-col {
+  text-align: right;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.promo-codes__action-col button {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.status-badge--live {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.promo-codes__denied,
+.promo-codes__skeleton {
+  padding: 16px;
+}
+
+.promo-codes__denied {
+  text-align: center;
+  padding: 32px;
+}
+
+.promo-codes__skeleton-row {
+  height: 32px;
+  margin-bottom: 8px;
+  background: var(--q-surface-1);
+}
+
+.promo-codes__error-band {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 40%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.dialog {
+  background: var(--q-canvas);
+  padding: 20px;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: var(--q-radius);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field input,
+.field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 14px;
+}
+
+.field--checkbox input {
+  padding: 0;
+  width: auto;
+}
+
+.promo-codes__field-hint {
+  color: var(--q-ink-muted);
+}
+
+.dialog__error {
+  color: var(--q-error-text);
+  margin: 0 0 8px;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog__actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dialog__actions button:last-child {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.dialog__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
