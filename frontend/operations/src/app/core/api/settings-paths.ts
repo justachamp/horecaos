@@ -20,10 +20,22 @@ import { LocationScope } from './operations-paths';
  * established for {@link merchantBindings} being called from a control-plane
  * screen before this wave, now mirrored in the other direction.
  *
- * `OPERATIONS`-native additions from this wave: {@link brand}, {@link
- * brands}, {@link locations}, {@link location}, {@link
- * locationServiceSummary} and the four write endpoints it summarises, plus
- * the pre-existing {@link notificationTemplates} tree.
+ * `OPERATIONS`-native additions from the wave that added Brand/Location profile
+ * editing: {@link brand}, {@link brands}, {@link locations}, {@link location},
+ * {@link locationServiceSummary} and the four write endpoints it summarises,
+ * plus the pre-existing {@link notificationTemplates} tree.
+ *
+ * Wave 53 added a second, different kind of move for {@link
+ * integrationInstallations}, {@link integrationSecrets}, {@link
+ * integrationConnectFields} and {@link integrationInstallationRotate}: unlike
+ * every `CONTROL_PLANE` path above, `ProviderInstallationController` and
+ * `SecretIngressController`'s original control-plane-prefixed mappings had no
+ * caller to preserve cross-surface — the control-plane app never called them —
+ * so the platform grew an operations-native mirror
+ * (`OperationsProviderInstallationController`, `OperationsSecretIngressController`)
+ * and this file now points at that instead. The old paths stay published
+ * (`OpenApiContractTests` again) but this app no longer reaches across
+ * surfaces for them.
  */
 const OPERATIONS = '/api/v1/operations';
 const CONTROL_PLANE = '/api/v1/control-plane';
@@ -164,12 +176,23 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.8 Integrations (moved from control-plane)
 
-  /** `ProviderInstallationController` (control-plane surface) — installations, connect fields, rotation. */
+  /**
+   * `OperationsProviderInstallationController` — installations, connect fields, rotation.
+   * Wave 53 moved this off `CONTROL_PLANE`: nothing else in this file's own opening doc
+   * comment applies to it, because unlike the other cross-surface paths above,
+   * `ProviderInstallationController`'s original control-plane-prefixed mapping had no
+   * caller of its own to preserve — it stays published only because `OpenApiContractTests`
+   * forbids dropping a path, not because anything still depends on that URL. This app now
+   * calls the operations-native mirror instead of reaching across surfaces for it.
+   */
   integrationInstallations(scope: LocationScope): string {
-    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/integrations`;
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/integrations`;
   },
 
-  /** `SecretIngressController` — the ADR 0065 write-only door. Same controller family, same surface. */
+  /**
+   * `OperationsSecretIngressController` — the ADR 0065 write-only door, same wave-53 move
+   * as {@link integrationInstallations}.
+   */
   integrationSecrets(scope: LocationScope): string {
     return `${this.integrationInstallations(scope)}/secrets`;
   },

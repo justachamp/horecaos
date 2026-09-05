@@ -15161,7 +15161,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_21",
+        "operationId" : "list_22",
         "responses" : {
           "200" : {
             "content" : {
@@ -15267,7 +15267,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_20",
+        "operationId" : "list_21",
         "responses" : {
           "200" : {
             "content" : {
@@ -15344,7 +15344,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "responses" : {
           "200" : {
             "content" : {
@@ -15820,7 +15820,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_19",
+        "operationId" : "list_20",
         "responses" : {
           "200" : {
             "content" : {
@@ -16104,7 +16104,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17875,7 +17875,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_18",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17969,7 +17969,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_11",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18099,7 +18099,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
       "post" : {
         "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
-        "operationId" : "bind_2",
+        "operationId" : "bind_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19283,7 +19283,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_10",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19413,7 +19413,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
       "post" : {
         "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
-        "operationId" : "bind_1",
+        "operationId" : "bind_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19608,7 +19608,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19772,7 +19772,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19799,7 +19799,7 @@
       },
       "post" : {
         "description" : "The environment is chosen from an approved catalogue; a tenant never supplies a URL, which closes the request-forgery path at the model.",
-        "operationId" : "install",
+        "operationId" : "install_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19839,7 +19839,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields" : {
       "get" : {
         "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen.",
-        "operationId" : "connectFields",
+        "operationId" : "connectFields_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19871,7 +19871,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/secrets" : {
       "post" : {
         "description" : "Writes the value directly into the ADR 0028 secrets manager under a platform-generated reference and returns only that reference. There is no corresponding read endpoint anywhere in the API: pass the returned reference to the installation or merchant-binding call that follows.",
-        "operationId" : "write",
+        "operationId" : "write_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19910,7 +19910,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings" : {
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
-        "operationId" : "bind",
+        "operationId" : "bind_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19958,7 +19958,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/activate" : {
       "post" : {
         "description" : "Refused until the installation has passed a connection check.",
-        "operationId" : "activateBinding",
+        "operationId" : "activateBinding_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20014,7 +20014,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/suspend" : {
       "post" : {
         "description" : "The rollback path: operations return to a manual process while mappings and evidence are retained for reconciliation.",
-        "operationId" : "suspendBinding",
+        "operationId" : "suspendBinding_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20070,7 +20070,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation" : {
       "post" : {
         "description" : "Records append-only preflight evidence: the secret reference must resolve and the wired adapter must declare each capability. POS uses its specialised live discovery endpoint instead.",
-        "operationId" : "reconcileCapabilities_1",
+        "operationId" : "reconcileCapabilities_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20107,7 +20107,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
       "post" : {
         "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file — the docs/runbooks/sendpulse-cutover.md step 9 gap. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
-        "operationId" : "rotateSecret_1",
+        "operationId" : "rotateSecret_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20154,7 +20154,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value" : {
       "post" : {
         "description" : "ADR 0065: generalizes the endpoint above to a tenant that has no way to write a reference by hand. Accepts the new VALUE directly, verifies it (Telegram bot installations only, the same scoping rotateSecret already documents) before it is ever written anywhere, then writes it through the door under a freshly-minted reference and swaps the installation onto it. For every other provider type there is no harmless authenticated call to verify against, so the write proceeds and the installation is left last_connection_status = UNVERIFIED — connected, not silently claimed as confirmed, mirroring the Telegram-only scoping rationale rather than pretending a stronger guarantee.",
-        "operationId" : "rotateSecretByValue",
+        "operationId" : "rotateSecretByValue_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20200,7 +20200,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20726,7 +20726,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21135,7 +21135,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/capability-reconciliation" : {
       "post" : {
         "description" : "Probes the provider with this restaurant's own credential. Capability varies per installation because the credential acts as a staff user the restaurant chose, so this is discovery and not a lookup.",
-        "operationId" : "reconcileCapabilities",
+        "operationId" : "reconcileCapabilities_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21261,7 +21261,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it.",
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22308,7 +22308,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_16",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22376,7 +22376,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25242,6 +25242,434 @@
         },
         "summary" : "Delivery cost at a stated basis",
         "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations" : {
+      "get" : {
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInstallationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List installations, without credentials",
+        "tags" : [ "Provider integrations" ]
+      },
+      "post" : {
+        "description" : "The environment is chosen from an approved catalogue; a tenant never supplies a URL, which closes the request-forgery path at the model.",
+        "operationId" : "install",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Install a provider",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/connect-fields" : {
+      "get" : {
+        "description" : "Identical to the control-plane-prefixed path's own operation; see ProviderInstallationController.connectFields for the full description. Published here too so the operations app's generated client covers what it actually calls.",
+        "operationId" : "connectFields",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Per-adapter connect field declarations (ADR 0065)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/secrets" : {
+      "post" : {
+        "description" : "Writes the value directly into the ADR 0028 secrets manager under a platform-generated reference and returns only that reference. There is no corresponding read endpoint anywhere in the API: pass the returned reference to the installation or merchant-binding call that follows.",
+        "operationId" : "write",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SecretIngressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SecretIngressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Write a provider credential",
+        "tags" : [ "Secret ingress" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "post" : {
+        "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
+        "operationId" : "bind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BindRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind an installation to a brand or location",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/activate" : {
+      "post" : {
+        "description" : "Refused until the installation has passed a connection check.",
+        "operationId" : "activateBinding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a binding",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/suspend" : {
+      "post" : {
+        "description" : "The rollback path: operations return to a manual process while mappings and evidence are retained for reconciliation.",
+        "operationId" : "suspendBinding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a binding",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation" : {
+      "post" : {
+        "description" : "Records append-only preflight evidence: the secret reference must resolve and the wired adapter must declare each capability. POS uses its specialised live discovery endpoint instead.",
+        "operationId" : "reconcileCapabilities",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Reconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reconcile an installation's declared capabilities",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
+        "operationId" : "rotateSecret_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Point an installation's secret reference at a rotated credential",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value" : {
+      "post" : {
+        "description" : "ADR 0065: accepts the new VALUE directly, verifies it (Telegram bot installations only) before it is ever written anywhere, then writes it through the door under a freshly-minted reference and swaps the installation onto it.",
+        "operationId" : "rotateSecretByValue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretValueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate an installation's credential through the write-only door",
+        "tags" : [ "Provider integrations" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/marketplace/liveness" : {
@@ -32409,7 +32837,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
         "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
-        "operationId" : "list_15",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36176,7 +36604,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
