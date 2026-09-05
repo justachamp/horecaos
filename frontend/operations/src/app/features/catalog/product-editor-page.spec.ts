@@ -9,6 +9,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { ActivityLogApi } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
 import { InventoryApi } from './inventory-api';
 import { MediaApi } from './media-api';
@@ -54,7 +55,10 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function configure(catalogApi: Partial<CatalogApi>): void {
+function configure(
+  catalogApi: Partial<CatalogApi>,
+  activityLogApi: Partial<ActivityLogApi> = {},
+): void {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'catalog/products/:productId', component: ProductEditorPage }]),
@@ -90,6 +94,13 @@ function configure(catalogApi: Partial<CatalogApi>): void {
       },
       { provide: MediaApi, useValue: {} },
       { provide: InventoryApi, useValue: {} },
+      {
+        provide: ActivityLogApi,
+        useValue: {
+          search: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+          ...activityLogApi,
+        },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('ru');
@@ -245,5 +256,73 @@ describe('ProductEditorPage', () => {
       expect.objectContaining({ code: 'SMALL', name: 'Маленькая' }),
     );
     expect(host.querySelector('.editor__modifiers')?.textContent).toContain('Размер');
+  });
+
+  it('shows this product’s own availability history, filtered from the location’s audit search', async () => {
+    const search = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: 'evt-1',
+          recordedAt: '2026-09-01T10:00:00Z',
+          tenantId: 't1',
+          auditClass: 'BUSINESS',
+          actionCode: 'catalog.offering.set',
+          actorType: 'USER',
+          actorSubject: 'manager-1',
+          actorDisplay: null,
+          scopeType: 'LOCATION',
+          scopeId: 'l1',
+          targetType: 'LocationOffering',
+          targetId: 'variant-1',
+          outcome: 'SUCCEEDED',
+          reason: 'Set variant availability to UNAVAILABLE',
+          capabilityUsed: 'offering.manage',
+          approvalRequestId: null,
+          correlationId: 'corr-1',
+          occurredAt: '2026-09-01T10:00:00Z',
+        },
+        // A different product's variant at the same location — must not leak in.
+        {
+          id: 'evt-2',
+          recordedAt: '2026-09-01T09:00:00Z',
+          tenantId: 't1',
+          auditClass: 'BUSINESS',
+          actionCode: 'catalog.offering.set',
+          actorType: 'USER',
+          actorSubject: 'manager-1',
+          actorDisplay: null,
+          scopeType: 'LOCATION',
+          scopeId: 'l1',
+          targetType: 'LocationOffering',
+          targetId: 'variant-of-another-product',
+          outcome: 'SUCCEEDED',
+          reason: 'Set variant availability to AVAILABLE',
+          capabilityUsed: 'offering.manage',
+          approvalRequestId: null,
+          correlationId: 'corr-2',
+          occurredAt: '2026-09-01T09:00:00Z',
+        },
+      ],
+      nextCursor: null,
+    });
+    configure({ productDetail: () => of(productDetail()) }, { search });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="editor-tab-HISTORY"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(search).toHaveBeenCalledWith('t1', {
+      actionCode: 'catalog.offering.set',
+      scopeType: 'LOCATION',
+      scopeId: 'l1',
+      limit: 200,
+    });
+    const text = host.querySelector('.editor__section')?.textContent ?? '';
+    expect(text).toContain('Плов, порция');
+    expect(text).toContain('Set variant availability to UNAVAILABLE');
+    expect(text).not.toContain('variant-of-another-product');
   });
 });

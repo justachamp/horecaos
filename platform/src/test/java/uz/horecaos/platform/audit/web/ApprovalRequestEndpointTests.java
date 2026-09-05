@@ -275,10 +275,79 @@ class ApprovalRequestEndpointTests {
                 .doesNotContain("Customer reported a missing item");
     }
 
+    // --- the same two rules, reached through the operations-surface mirror
+    // (Staff IA 9.4's approvals worklist) rather than control-plane. The
+    // service underneath is identical; what is under test here is that the
+    // operations mapping enforces four eyes exactly as strictly as the
+    // control-plane one does, not a second, looser copy of the rule.
+
+    @Test
+    void theRequesterIsRefusedAtTheOperationsEndpointToo() throws Exception {
+        UUID requestId = pendingRequest(TENANT, OWNER, Capability.REFUND_APPROVE);
+
+        MvcResult refused = mvc.perform(operationsDecision(requestId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-ops-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString()).contains("INSUFFICIENT_CAPABILITY");
+        assertThat(status(requestId))
+                .as("the owner holds refund.approve and raised this one; four eyes outranks that "
+                        + "on the operations mapping exactly as it does on control-plane")
+                .isEqualTo("PENDING");
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                 WHERE action_code = 'approval.decision.refused' AND actor_subject = :subject
+                """).param("subject", OWNER).query(Long.class).single())
+                .as("the refusal is recorded even though the decision call threw")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void aSecondPersonHoldingThePolicysCapabilityCanApproveViaOperations() throws Exception {
+        UUID requestId = pendingRequest(TENANT, OWNER, Capability.REFUND_APPROVE);
+
+        MvcResult approved = mvc.perform(operationsDecision(requestId)
+                        .with(tokenFor(FINANCE))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-ops-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+
+        assertThat(approved.getResponse().getStatus()).isEqualTo(200);
+        assertThat(approved.getResponse().getContentAsString()).contains("\"status\":\"APPROVED\"");
+        assertThat(status(requestId)).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void theOperationsQueueIsReadableByTheConsoleAndNobodyElse() throws Exception {
+        pendingRequest(TENANT, OWNER, Capability.REFUND_APPROVE);
+        String queue = "/api/v1/operations/tenants/" + TENANT + "/approval-requests";
+
+        assertThat(mvc.perform(get(queue).with(tokenFor(STAFF)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("a support agent who cannot sign has no business reading what is waiting, "
+                        + "on this mapping either")
+                .isEqualTo(403);
+
+        MvcResult listed = mvc.perform(get(queue).with(tokenFor(FINANCE))).andReturn();
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(listed.getResponse().getContentAsString()).contains(ACTION).contains("\"mayDecide\":true");
+    }
+
     // --- fixtures ---------------------------------------------------------
 
     private static MockHttpServletRequestBuilder decision(UUID requestId) {
         return post("/api/v1/control-plane/tenants/" + TENANT + "/approval-requests/" + requestId + "/decision");
+    }
+
+    private static MockHttpServletRequestBuilder operationsDecision(UUID requestId) {
+        return post("/api/v1/operations/tenants/" + TENANT + "/approval-requests/" + requestId + "/decision");
     }
 
     private static String approveBody() {

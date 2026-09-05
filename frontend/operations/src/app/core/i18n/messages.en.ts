@@ -932,8 +932,15 @@ export const messagesEn = {
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
   'catalog.editor.availability.stop': 'Stop',
   'catalog.editor.availability.resume': 'Resume',
-  'catalog.editor.history.notBuilt':
-    'History is not built yet — no audit-read endpoint exists (ADR 0027)',
+  'catalog.editor.history.scope':
+    'Availability changes at this location only — product, price, and modifier edits are not audited yet.',
+  'catalog.editor.history.loading': 'Loading…',
+  'catalog.editor.history.denied': 'You do not hold the capability to read this history.',
+  'catalog.editor.history.empty': 'No availability change recorded here yet.',
+  'catalog.editor.history.when': 'When',
+  'catalog.editor.history.who': 'Who',
+  'catalog.editor.history.variant': 'Variant',
+  'catalog.editor.history.what': 'What',
   'catalog.editor.readiness.title': 'Ready to publish',
   'catalog.editor.readiness.clean': 'No blockers',
   'catalog.editor.readiness.blockers': '{count} blocking problems',
@@ -2010,7 +2017,8 @@ export const messagesEn = {
 
   'reports.branches.title': 'Branch & SLA reports',
   'reports.branches.loading': 'Loading…',
-  'reports.branches.singleLocation': 'This report compares branches and has nothing to show for a single-location tenant.',
+  'reports.branches.singleLocation':
+    'This report compares branches and has nothing to show for a single-location tenant.',
   'reports.branches.leaderboard.title': 'Branch leaderboard',
   'reports.branches.column.name': 'Branch',
   'reports.branches.column.orders': 'Orders',
@@ -2038,7 +2046,8 @@ export const messagesEn = {
   'reports.products.column.totalQty': 'Qty (total)',
   'reports.products.column.totalSum': 'Sum (total)',
   'reports.products.column.share': 'Revenue share',
-  'reports.products.maybeMore': 'There may be more products than shown — this is a bounded read, not a full export.',
+  'reports.products.maybeMore':
+    'There may be more products than shown — this is a bounded read, not a full export.',
   'reports.products.abcXyzNotBuilt':
     'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
 
@@ -2079,7 +2088,8 @@ export const messagesEn = {
   'finance.deliveryCost.internal': 'In-house',
   'finance.deliveryCost.partner': 'Partner',
   'finance.deliveryCost.total': 'Total',
-  'finance.deliveryCost.missingBasis': '{count} shipments carry cost at a different basis and are not in this total.',
+  'finance.deliveryCost.missingBasis':
+    '{count} shipments carry cost at a different basis and are not in this total.',
   'finance.deliveryCost.invoices.title': 'Partner invoices',
   'finance.deliveryCost.invoices.provider': 'Provider',
   'finance.deliveryCost.invoices.reference': 'Reference',
@@ -2183,6 +2193,95 @@ export const messagesEn = {
   'staff.activity.detail.unavailable': 'The change detail could not be loaded.',
   'staff.activity.detail.close': 'Close',
   'staff.activity.empty': 'Nothing happened in this period.',
+
+  // ---------------------------------------------------------------- staff 9.4 (wave 45)
+  'staff.shell.approvals': 'Approvals',
+  'staff.approvals.title': 'Approvals',
+  'staff.approvals.subtitle': 'What is waiting for a second signature, and yours to give.',
+  'staff.approvals.reasonNote':
+    'The reason the request was raised is not shown here (ADR 0029) — open the action’s own screen for that. Your own reason for this decision is required and is recorded.',
+  'staff.approvals.column.action': 'Action',
+  'staff.approvals.column.scope': 'Scope',
+  'staff.approvals.column.threshold': 'Threshold',
+  'staff.approvals.column.requestedBy': 'Requested by',
+  'staff.approvals.column.requestedAt': 'Requested at',
+  'staff.approvals.column.expiresAt': 'Expires at',
+  'staff.approvals.column.decide': 'Decide',
+  'staff.approvals.scope.tenant': 'Whole company',
+  'staff.approvals.cannotDecide': 'Not yours to decide',
+  'staff.approvals.empty': 'Nothing is waiting on you.',
+  'staff.approvals.action.approve': 'Approve',
+  'staff.approvals.action.decline': 'Decline',
+  'staff.approvals.confirm.titleApprove': 'Approve this request?',
+  'staff.approvals.confirm.titleDecline': 'Decline this request?',
+  'staff.approvals.reason.label': 'Your reason',
+  'staff.approvals.reason.required': 'Enter a reason, up to 1000 characters',
+  'staff.approvals.dialog.dismiss': 'Cancel',
+  'staff.approvals.action.paymentsRemedyRecord': 'Refund or remedy above threshold',
+  'staff.approvals.action.paymentsRemedyFutureDiscount': 'Discretionary future-order discount',
+  'staff.approvals.action.courierAdjustmentCreate': 'Courier ledger adjustment above threshold',
+  'staff.approvals.action.courierManualPenalty': 'Penalty against a courier',
+  'staff.approvals.action.courierPayoutAuthorise': 'Courier payout authorisation',
+  'staff.approvals.action.tenantActivate': 'Tenant activation',
+  'staff.approvals.action.integrationFailureResolve': 'Integration failure resolution',
+  'staff.approvals.action.loyaltyBalanceAdjust': 'Loyalty balance adjustment',
+
+  // ---------------------------------------------------------------- settings 10.11 (wave 45)
+  'settings.nav.group.privacy': 'Privacy',
+  'settings.nav.dataPrivacy': 'Data & privacy',
+  'settings.home.description.dataPrivacy':
+    'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
+  'settings.dataPrivacy.title': 'Data & privacy',
+  'settings.dataPrivacy.lead':
+    'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',
+  'settings.dataPrivacy.retention.title': 'Retention',
+  'settings.dataPrivacy.retention.column.category': 'Data',
+  'settings.dataPrivacy.retention.column.status': 'Status',
+  'settings.dataPrivacy.retention.column.note': 'Note',
+  'settings.dataPrivacy.retention.abandonedCarts.category': 'Abandoned carts',
+  'settings.dataPrivacy.retention.abandonedCarts.note':
+    'A stale cart is marked expired, but nothing deletes or anonymises it yet — not enforced (ADR 0029).',
+  'settings.dataPrivacy.retention.courierLocation.category': 'Courier location history',
+  'settings.dataPrivacy.retention.courierLocation.note':
+    'Deleted automatically on a schedule, in a configurable number of days per tenant (ADR 0045). This screen cannot show your tenant’s configured number yet — no tenant-facing setting exists for it (ADR 0030).',
+  'settings.dataPrivacy.retention.candidateRecords.category': 'Candidate records',
+  'settings.dataPrivacy.retention.candidateRecords.note':
+    'HorecaOS has no recruitment or candidate data model — there is nothing here to retain.',
+  'settings.dataPrivacy.retention.status.notEnforced': 'Not enforced',
+  'settings.dataPrivacy.retention.status.enforced': 'Enforced',
+  'settings.dataPrivacy.retention.status.notApplicable': 'Not applicable',
+  'settings.dataPrivacy.consent.title': 'Consent',
+  'settings.dataPrivacy.consent.lead':
+    'What a consent decision can record today, on a customer’s own account.',
+  'settings.dataPrivacy.consent.states.label': 'Decision',
+  'settings.dataPrivacy.consent.states.value':
+    'Granted or withdrawn — never inferred from silence.',
+  'settings.dataPrivacy.consent.sources.label': 'Recorded from',
+  'settings.dataPrivacy.consent.sources.value':
+    'Storefront, a support agent, an import, migration, or the API.',
+  'settings.dataPrivacy.consent.gap':
+    'There is no tenant-wide catalogue of consent types to configure here — purpose and channel are free text set per touchpoint (a notification template, for example). A customer’s own consent history is on their own record, not on this screen.',
+  'settings.dataPrivacy.requests.title': 'Data subject requests',
+  'settings.dataPrivacy.egress.title': 'Personal-data export & reveal log',
+  'settings.dataPrivacy.egress.lead':
+    'Every time someone on staff revealed or exported a customer’s personal data in the last 90 days, from the platform’s own audit trail.',
+  'settings.dataPrivacy.egress.column.when': 'When',
+  'settings.dataPrivacy.egress.column.who': 'Who',
+  'settings.dataPrivacy.egress.column.what': 'What',
+  'settings.dataPrivacy.egress.column.purpose': 'Stated purpose',
+  'settings.dataPrivacy.egress.column.target': 'Record',
+  'settings.dataPrivacy.egress.empty': 'Nobody revealed or exported personal data in this period.',
+  'settings.dataPrivacy.egress.action.contactRevealed': 'Revealed phone or email',
+  'settings.dataPrivacy.egress.action.addressRevealed': 'Revealed a delivery address',
+  'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Revealed date of birth',
+  'settings.dataPrivacy.egress.action.blacklistRevealed': 'Revealed a blacklist reason',
+  'settings.dataPrivacy.egress.action.listExported': 'Exported a filtered customer list',
+  'settings.dataPrivacy.egress.action.audienceExported': 'Exported a marketing audience',
+  'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Revealed a customer’s order note',
+  'settings.dataPrivacy.egress.action.orderPhoneRevealed':
+    'Revealed a customer’s phone on an order',
+  'settings.dataPrivacy.egress.action.orderAddressRevealed':
+    'Revealed a customer’s delivery address on an order',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

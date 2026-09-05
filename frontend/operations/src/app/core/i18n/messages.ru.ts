@@ -908,8 +908,15 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
   'catalog.editor.availability.stop': 'В стоп',
   'catalog.editor.availability.resume': 'Снять со стопа',
-  'catalog.editor.history.notBuilt':
-    'История пока не построена — нет endpoint для чтения аудита (ADR 0027)',
+  'catalog.editor.history.scope':
+    'Только изменения доступности в этом филиале — правки товара, цены и модификаторов пока не аудируются.',
+  'catalog.editor.history.loading': 'Загрузка…',
+  'catalog.editor.history.denied': 'У вас нет права читать эту историю.',
+  'catalog.editor.history.empty': 'Здесь пока не записано изменений доступности.',
+  'catalog.editor.history.when': 'Когда',
+  'catalog.editor.history.who': 'Кто',
+  'catalog.editor.history.variant': 'Вариант',
+  'catalog.editor.history.what': 'Что',
   'catalog.editor.readiness.title': 'Готовность к публикации',
   'catalog.editor.readiness.clean': 'Готово к публикации',
   'catalog.editor.readiness.blockers': '{count} блокирующих проблем',
@@ -1937,7 +1944,8 @@ export const messagesRu: MessageCatalogue = {
   'customers.nav.reviews': 'Отзывы',
 
   'customers.segments.title': 'Сегменты',
-  'customers.segments.subtitle': 'Постройте, сохраните и используйте повторно аудитории клиентской базы.',
+  'customers.segments.subtitle':
+    'Постройте, сохраните и используйте повторно аудитории клиентской базы.',
   'customers.segments.create.action': 'Новый сегмент',
   'customers.segments.column.name': 'Название',
   'customers.segments.column.description': 'Описание',
@@ -1986,7 +1994,8 @@ export const messagesRu: MessageCatalogue = {
 
   'reports.branches.title': 'Отчёты по филиалам и SLA',
   'reports.branches.loading': 'Загрузка…',
-  'reports.branches.singleLocation': 'Этот отчёт сравнивает филиалы и не имеет смысла для одного филиала.',
+  'reports.branches.singleLocation':
+    'Этот отчёт сравнивает филиалы и не имеет смысла для одного филиала.',
   'reports.branches.leaderboard.title': 'Рейтинг филиалов',
   'reports.branches.column.name': 'Филиал',
   'reports.branches.column.orders': 'Заказы',
@@ -2014,7 +2023,8 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.column.totalQty': 'Кол-во (итого)',
   'reports.products.column.totalSum': 'Сумма (итого)',
   'reports.products.column.share': 'Доля выручки',
-  'reports.products.maybeMore': 'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
+  'reports.products.maybeMore':
+    'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
   'reports.products.abcXyzNotBuilt':
     'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
 
@@ -2104,7 +2114,8 @@ export const messagesRu: MessageCatalogue = {
   'finance.payouts.ledger.column.occurredAt': 'Когда',
 
   'finance.subscription.title': 'Подписка и биллинг',
-  'finance.subscription.subtitle': 'Собственный тариф, права и потребление этого тенанта в HorecaOS.',
+  'finance.subscription.subtitle':
+    'Собственный тариф, права и потребление этого тенанта в HorecaOS.',
   'finance.subscription.status.DRAFT': 'Черновик',
   'finance.subscription.status.TRIALING': 'Пробный период',
   'finance.subscription.status.ACTIVE': 'Активна',
@@ -2160,4 +2171,93 @@ export const messagesRu: MessageCatalogue = {
   'staff.activity.detail.unavailable': 'Не удалось загрузить детали изменения.',
   'staff.activity.detail.close': 'Закрыть',
   'staff.activity.empty': 'За этот период ничего не происходило.',
+
+  // ---------------------------------------------------------------- staff 9.4 (wave 45)
+  'staff.shell.approvals': 'Согласования',
+  'staff.approvals.title': 'Согласования',
+  'staff.approvals.subtitle': 'Что ждёт второй подписи — и от вас.',
+  'staff.approvals.reasonNote':
+    'Причина, по которой заявка была подана, здесь не показывается (ADR 0029) — она доступна в собственном экране действия. Ваша причина этого решения обязательна и записывается.',
+  'staff.approvals.column.action': 'Действие',
+  'staff.approvals.column.scope': 'Область',
+  'staff.approvals.column.threshold': 'Порог',
+  'staff.approvals.column.requestedBy': 'Кто подал',
+  'staff.approvals.column.requestedAt': 'Когда подано',
+  'staff.approvals.column.expiresAt': 'Истекает',
+  'staff.approvals.column.decide': 'Решение',
+  'staff.approvals.scope.tenant': 'Вся компания',
+  'staff.approvals.cannotDecide': 'Не вам решать',
+  'staff.approvals.empty': 'Вас ничего не ждёт.',
+  'staff.approvals.action.approve': 'Одобрить',
+  'staff.approvals.action.decline': 'Отклонить',
+  'staff.approvals.confirm.titleApprove': 'Одобрить эту заявку?',
+  'staff.approvals.confirm.titleDecline': 'Отклонить эту заявку?',
+  'staff.approvals.reason.label': 'Ваша причина',
+  'staff.approvals.reason.required': 'Укажите причину, до 1000 символов',
+  'staff.approvals.dialog.dismiss': 'Отмена',
+  'staff.approvals.action.paymentsRemedyRecord': 'Возврат или компенсация выше порога',
+  'staff.approvals.action.paymentsRemedyFutureDiscount': 'Скидка на будущий заказ по усмотрению',
+  'staff.approvals.action.courierAdjustmentCreate': 'Корректировка баланса курьера выше порога',
+  'staff.approvals.action.courierManualPenalty': 'Штраф курьеру',
+  'staff.approvals.action.courierPayoutAuthorise': 'Авторизация выплаты курьеру',
+  'staff.approvals.action.tenantActivate': 'Активация компании',
+  'staff.approvals.action.integrationFailureResolve': 'Разрешение сбоя интеграции',
+  'staff.approvals.action.loyaltyBalanceAdjust': 'Корректировка баланса лояльности',
+
+  // ---------------------------------------------------------------- settings 10.11 (wave 45)
+  'settings.nav.group.privacy': 'Персональные данные',
+  'settings.nav.dataPrivacy': 'Данные и приватность',
+  'settings.home.description.dataPrivacy':
+    'Хранение данных, согласие, запросы субъектов данных и кто смотрел личные данные клиента.',
+  'settings.dataPrivacy.title': 'Данные и приватность',
+  'settings.dataPrivacy.lead':
+    'Как долго ресторан хранит персональные данные, что здесь значит согласие, и кто смотрел собственные слова клиента.',
+  'settings.dataPrivacy.retention.title': 'Сроки хранения',
+  'settings.dataPrivacy.retention.column.category': 'Данные',
+  'settings.dataPrivacy.retention.column.status': 'Статус',
+  'settings.dataPrivacy.retention.column.note': 'Примечание',
+  'settings.dataPrivacy.retention.abandonedCarts.category': 'Брошенные корзины',
+  'settings.dataPrivacy.retention.abandonedCarts.note':
+    'Устаревшая корзина помечается истёкшей, но пока ничего не удаляет и не обезличивает её — не реализовано (ADR 0029).',
+  'settings.dataPrivacy.retention.courierLocation.category': 'История локации курьера',
+  'settings.dataPrivacy.retention.courierLocation.note':
+    'Удаляется автоматически по расписанию, число дней настраивается на компанию (ADR 0045). Этот экран пока не может показать настроенное для вашей компании число — нет обращённой к компании настройки для этого (ADR 0030).',
+  'settings.dataPrivacy.retention.candidateRecords.category': 'Записи кандидатов',
+  'settings.dataPrivacy.retention.candidateRecords.note':
+    'В HorecaOS нет модели данных для найма или кандидатов — здесь нечего хранить.',
+  'settings.dataPrivacy.retention.status.notEnforced': 'Не реализовано',
+  'settings.dataPrivacy.retention.status.enforced': 'Реализовано',
+  'settings.dataPrivacy.retention.status.notApplicable': 'Не применимо',
+  'settings.dataPrivacy.consent.title': 'Согласие',
+  'settings.dataPrivacy.consent.lead':
+    'Что решение о согласии может фиксировать сегодня, на аккаунте клиента.',
+  'settings.dataPrivacy.consent.states.label': 'Решение',
+  'settings.dataPrivacy.consent.states.value':
+    'Дано или отозвано — никогда не выводится из молчания.',
+  'settings.dataPrivacy.consent.sources.label': 'Зафиксировано из',
+  'settings.dataPrivacy.consent.sources.value':
+    'Витрины, агента поддержки, импорта, миграции или API.',
+  'settings.dataPrivacy.consent.gap':
+    'Здесь нет общего для компании справочника типов согласия — цель и канал задаются свободным текстом на каждой точке (например, в шаблоне уведомления). История согласий конкретного клиента — на его собственной карточке, не на этом экране.',
+  'settings.dataPrivacy.requests.title': 'Запросы субъектов данных',
+  'settings.dataPrivacy.egress.title': 'Журнал выгрузок и просмотров персональных данных',
+  'settings.dataPrivacy.egress.lead':
+    'Каждый случай, когда сотрудник открыл или выгрузил персональные данные клиента за последние 90 дней, из собственного журнала аудита платформы.',
+  'settings.dataPrivacy.egress.column.when': 'Когда',
+  'settings.dataPrivacy.egress.column.who': 'Кто',
+  'settings.dataPrivacy.egress.column.what': 'Что',
+  'settings.dataPrivacy.egress.column.purpose': 'Указанная цель',
+  'settings.dataPrivacy.egress.column.target': 'Запись',
+  'settings.dataPrivacy.egress.empty':
+    'За этот период никто не открывал и не выгружал персональные данные.',
+  'settings.dataPrivacy.egress.action.contactRevealed': 'Открыт телефон или email',
+  'settings.dataPrivacy.egress.action.addressRevealed': 'Открыт адрес доставки',
+  'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Открыта дата рождения',
+  'settings.dataPrivacy.egress.action.blacklistRevealed': 'Открыта причина блокировки',
+  'settings.dataPrivacy.egress.action.listExported': 'Выгружен отфильтрованный список клиентов',
+  'settings.dataPrivacy.egress.action.audienceExported': 'Выгружена маркетинговая аудитория',
+  'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Открыт комментарий клиента к заказу',
+  'settings.dataPrivacy.egress.action.orderPhoneRevealed': 'Открыт телефон клиента в заказе',
+  'settings.dataPrivacy.egress.action.orderAddressRevealed':
+    'Открыт адрес доставки клиента в заказе',
 };

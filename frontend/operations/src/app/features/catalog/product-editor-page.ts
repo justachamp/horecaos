@@ -10,6 +10,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
+import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
 import {
   FiscalClassification,
@@ -80,11 +81,18 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * endpoint, no endpoint to remove a category/catalog membership, no combo
  * groups, no nested/hidden modifiers, no per-aggregator image override, no
  * `catalog.mxik_reference` typeahead (all named ADR 0016/0038 gaps the spec
- * itself lists as not built), and no audit-read endpoint at all — Tab 7 is
- * therefore a named not-built panel, not a fabricated empty list. Product
- * creation, translation, variant/price authoring, modifier-group attachment,
- * fiscal classification, media attachment and location availability are all
- * real, wired writes.
+ * itself lists as not built). Product creation, translation, variant/price
+ * authoring, modifier-group attachment, fiscal classification, media
+ * attachment and location availability are all real, wired writes.
+ *
+ * **Tab 7 (wave 45): real, and narrower than "history" implies.** There was
+ * no audit-read endpoint reachable from this app when this page was first
+ * built; `AuditController`'s operations-surface mirror (Staff 9.3, wave 39)
+ * changed that. But `CatalogAuthoringService` records exactly one audit fact
+ * today — `catalog.offering.set`, this location's own availability toggle —
+ * so this tab shows real, non-fabricated history and nothing invented, while
+ * staying honest that product/variant/price/modifier/fiscal edits are not
+ * audited yet and will not appear here. See `loadHistory`'s own doc.
  *
  * Locale editing uses the plain `ru`/`uz`/`en` convention `toCatalogLocale`
  * documents, not the console's own `Locale` type — see that function's doc.
@@ -103,6 +111,7 @@ export class ProductEditorPage implements OnInit {
   private readonly pricingApi = inject(PricingApi);
   private readonly mediaApi = inject(MediaApi);
   private readonly inventoryApi = inject(InventoryApi);
+  private readonly activityLogApi = inject(ActivityLogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
@@ -129,6 +138,12 @@ export class ProductEditorPage implements OnInit {
   protected readonly priceBookId = signal<string | null>(null);
 
   protected readonly availabilityRows = signal<readonly VariantAvailabilityRow[]>([]);
+
+  protected readonly historyLoading = signal(false);
+  protected readonly historyLoaded = signal(false);
+  protected readonly historyDenied = signal(false);
+  protected readonly historyError = signal<string | null>(null);
+  protected readonly historyEvents = signal<readonly AuditEventView[]>([]);
 
   protected readonly savingField = signal<string | null>(null);
   protected readonly saveNotice = signal<string | null>(null);
@@ -227,6 +242,9 @@ export class ProductEditorPage implements OnInit {
     if (tab === 'AVAILABILITY' && this.availabilityRows().length === 0) {
       void this.loadAvailability();
     }
+    if (tab === 'HISTORY' && !this.historyLoaded()) {
+      void this.loadHistory();
+    }
   }
 
   private async loadModifierLibrary(): Promise<void> {
@@ -258,6 +276,67 @@ export class ProductEditorPage implements OnInit {
     } catch {
       this.availabilityRows.set([]);
     }
+  }
+
+  /**
+   * Tab 7's read — `AuditController.operationsSearch` filtered to this
+   * location's own `catalog.offering.set` facts, then to the variants that
+   * belong to *this* product. The server has no per-product filter (the fact
+   * targets `LocationOffering`/variantId, and its own scope is the location,
+   * not the product), so the narrowing that matters happens here rather than
+   * fetching once per variant — 200 rows for one location is a page, not a
+   * scan, and `AuditController`'s own read is itself audited regardless of
+   * how many results a caller keeps.
+   */
+  private async loadHistory(): Promise<void> {
+    const scope = this.brand.scope();
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    const product = this.product();
+    if (!scope || !locationScope || !product) {
+      return;
+    }
+    this.historyLoading.set(true);
+    this.historyDenied.set(false);
+    this.historyError.set(null);
+    try {
+      const page = await this.activityLogApi.search(scope.tenantId, {
+        actionCode: 'catalog.offering.set',
+        scopeType: 'LOCATION',
+        scopeId: locationScope.locationId,
+        limit: 200,
+      });
+      const variantIds = new Set(product.variants.map((v) => v.variantId));
+      this.historyEvents.set(page.items.filter((event) => variantIds.has(event.targetId ?? '')));
+      this.historyLoaded.set(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        this.historyDenied.set(true);
+      } else {
+        this.historyError.set(
+          error instanceof ApiError
+            ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+            : this.i18n.t('error.unknown.noReference'),
+        );
+      }
+    } finally {
+      this.historyLoading.set(false);
+    }
+  }
+
+  protected variantLabel(variantId: string | null): string {
+    if (!variantId) {
+      return '—';
+    }
+    const variant = this.product()?.variants.find((v) => v.variantId === variantId);
+    if (!variant) {
+      return variantId;
+    }
+    return variant.translations[this.editingLocale()]?.name ?? variant.sku ?? variantId;
+  }
+
+  protected historyActorLabel(event: AuditEventView): string {
+    return event.actorDisplay ?? event.actorSubject ?? '—';
   }
 
   /**

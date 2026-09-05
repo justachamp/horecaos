@@ -21300,6 +21300,97 @@
         "tags" : [ "Staff sign-in" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
+      "get" : {
+        "description" : "The same read as the control-plane route, reachable from the operations frontend so a tenant's own manager can see what is waiting on them.",
+        "operationId" : "operationsPending",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actionCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagePendingApprovalResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the requests waiting for a second signature — Staff 9.4's approvals worklist",
+        "tags" : [ "Approval requests" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision" : {
+      "post" : {
+        "description" : "The same decision as the control-plane route, reachable from the operations frontend. Every rule above still applies: the policy's own approver capability, and the requester refused outright.",
+        "operationId" : "operationsDecide",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve or decline a pending request — Staff 9.4's approvals worklist",
+        "tags" : [ "Approval requests" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/audit-events" : {
       "get" : {
         "description" : "The same read as the control-plane route, reachable from the operations frontend. Reading audit is itself audited.",

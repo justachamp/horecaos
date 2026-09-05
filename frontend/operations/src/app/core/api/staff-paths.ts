@@ -56,6 +56,23 @@ export const staffPaths = {
   auditEvent(tenantId: string, eventId: string): string {
     return `${this.auditEvents(tenantId)}/${enc(eventId)}`;
   },
+
+  /**
+   * `ApprovalRequestController.operationsPending`/`.operationsDecide` — 9.4's
+   * approvals worklist (wave 45), added on the `/api/v1/operations/**` prefix
+   * for the same reason `auditEvents` was: the pre-existing control-plane
+   * route (`ApprovalRequestController.pending`/`.decide`) serves HorecaOS
+   * staff working a tenant on its behalf and was never reachable from this
+   * app's OpenAPI group (ADR 0057). Both mappings call the same
+   * `ApprovalDecisionService`, so nothing about who may decide what differs.
+   */
+  approvalRequests(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/approval-requests`;
+  },
+
+  approvalDecision(tenantId: string, requestId: string): string {
+    return `${this.approvalRequests(tenantId)}/${enc(requestId)}/decision`;
+  },
 } as const;
 
 function enc(value: string): string {

@@ -395,7 +395,39 @@
               </div>
             }
             @case ('HISTORY') {
-              <p class="q-caption editor__section">{{ 'catalog.editor.history.notBuilt' | t }}</p>
+              <div class="editor__section">
+                <p class="q-caption">{{ 'catalog.editor.history.scope' | t }}</p>
+                @if (historyLoading()) {
+                  <p class="q-caption">{{ 'catalog.editor.history.loading' | t }}</p>
+                } @else if (historyDenied()) {
+                  <p class="q-caption">{{ 'catalog.editor.history.denied' | t }}</p>
+                } @else if (historyError(); as message) {
+                  <p class="q-caption" role="alert">{{ message }}</p>
+                } @else if (historyEvents().length === 0) {
+                  <p class="q-caption">{{ 'catalog.editor.history.empty' | t }}</p>
+                } @else {
+                  <table class="editor__table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'catalog.editor.history.when' | t }}</th>
+                        <th>{{ 'catalog.editor.history.who' | t }}</th>
+                        <th>{{ 'catalog.editor.history.variant' | t }}</th>
+                        <th>{{ 'catalog.editor.history.what' | t }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (event of historyEvents(); track event.id) {
+                        <tr>
+                          <td class="q-mono">{{ event.recordedAt }}</td>
+                          <td>{{ historyActorLabel(event) }}</td>
+                          <td>{{ variantLabel(event.targetId) }}</td>
+                          <td>{{ event.reason ?? '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </div>
             }
           }
         </div>

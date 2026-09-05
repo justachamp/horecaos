@@ -263,6 +263,15 @@ export const routes: Routes = [
                 (m) => m.ReferenceDataPage,
               ),
           },
+          {
+            // 10.11 Data & privacy (wave 45): tenant-scoped, unlike every
+            // sibling above — see `data-privacy-page.ts`'s own doc for why.
+            path: 'data-privacy',
+            loadComponent: () =>
+              import('./features/settings/data-privacy/data-privacy-page').then(
+                (m) => m.DataPrivacyPage,
+              ),
+          },
         ],
       },
       {
@@ -290,6 +299,14 @@ export const routes: Routes = [
             path: 'activity',
             loadComponent: () =>
               import('./features/staff/activity-log-page').then((m) => m.ActivityLogPage),
+          },
+          {
+            // 9.4 Approvals (wave 45): the maker-checker worklist over the
+            // shared ADR 0027 model, declared before the empty-path Люди
+            // child for the same reason `roles` and `activity` are.
+            path: 'approvals',
+            loadComponent: () =>
+              import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
           },
           {
             path: '',
