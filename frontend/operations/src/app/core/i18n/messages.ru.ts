@@ -36,6 +36,9 @@ export const messagesRu: MessageCatalogue = {
   'shell.openOrders.aria': 'Активных заказов: {count}',
   'shell.account.signOut': 'Выйти',
   'shell.locale.label': 'Язык',
+  'shell.locationPicker.label': 'Филиал',
+  'shell.locationPicker.status.DRAFT': 'черновик',
+  'shell.locationPicker.status.SUSPENDED': 'приостановлен',
 
   'orders.title': 'Заказы',
   'orders.detail.empty': 'Выберите заказ, чтобы увидеть его здесь.',

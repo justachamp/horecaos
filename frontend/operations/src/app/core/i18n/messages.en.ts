@@ -49,6 +49,9 @@ export const messagesEn = {
   'shell.openOrders.aria': '{count} open orders',
   'shell.account.signOut': 'Sign out',
   'shell.locale.label': 'Language',
+  'shell.locationPicker.label': 'Location',
+  'shell.locationPicker.status.DRAFT': 'draft',
+  'shell.locationPicker.status.SUSPENDED': 'suspended',
 
   'orders.title': 'Orders',
   'orders.detail.empty': 'Select an order to see it here.',

@@ -39,6 +39,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'shell.openOrders.aria': 'Faol buyurtmalar: {count}',
   'shell.account.signOut': 'Chiqish',
   'shell.locale.label': 'Til',
+  'shell.locationPicker.label': 'Filial',
+  'shell.locationPicker.status.DRAFT': 'qoralama',
+  'shell.locationPicker.status.SUSPENDED': 'toʻxtatilgan',
 
   'orders.title': 'Buyurtmalar',
   'orders.detail.empty': 'Bu yerda koʻrish uchun buyurtmani tanlang.',

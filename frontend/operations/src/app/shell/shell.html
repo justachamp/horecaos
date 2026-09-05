@@ -70,18 +70,47 @@
         </a>
       }
 
-      <label class="locale q-caption">
-        <span class="q-visually-hidden">{{ 'shell.locale.label' | t }}</span>
-        <select
-          class="locale__select q-caption"
-          [value]="locale()"
-          (change)="onLocaleChange($any($event.target).value)"
-        >
-          @for (option of locales; track option) {
-            <option [value]="option">{{ option }}</option>
-          }
-        </select>
-      </label>
+      <div class="scope">
+        <!-- Hidden below two options on purpose (settings.md §1.1): a picker
+             with nothing to switch between is noise, and an operator whose
+             scope is one branch must see no change at all. -->
+        @if (locationOptions().length > 1) {
+          <label class="location q-caption">
+            <span class="q-visually-hidden">{{ 'shell.locationPicker.label' | t }}</span>
+            <select
+              class="location__select q-caption"
+              (change)="onLocationChange($any($event.target).value)"
+            >
+              <!-- `[selected]` per option, not `[value]` on the `<select>`
+                   itself: the options arrive asynchronously (the brand's
+                   location list), and a `<select>`'s own `[value]` binding
+                   applied before its matching `<option>` exists is silently
+                   dropped by the browser and never retried once the option
+                   shows up, since Angular sees the bound string as unchanged
+                   on the next cycle. Binding `[selected]` on each `<option>`
+                   has no such race — it and the option are created together. -->
+              @for (option of locationOptions(); track option.id) {
+                <option [value]="option.id" [selected]="option.id === selectedLocationId()">
+                  {{ locationOptionLabel(option) }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
+        <label class="locale q-caption">
+          <span class="q-visually-hidden">{{ 'shell.locale.label' | t }}</span>
+          <select
+            class="locale__select q-caption"
+            [value]="locale()"
+            (change)="onLocaleChange($any($event.target).value)"
+          >
+            @for (option of locales; track option) {
+              <option [value]="option">{{ option }}</option>
+            }
+          </select>
+        </label>
+      </div>
     </header>
 
     <main id="main" class="main" tabindex="-1">

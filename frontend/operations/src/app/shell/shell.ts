@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, HostListener, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { Auth } from '../core/auth/auth';
+import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { NAVIGATION } from './navigation';
@@ -25,6 +26,21 @@ import { ServiceStatus } from './service-status';
  *
  * 3. **The late count is always visible**, on every screen, whatever the
  *    operator is doing. See `service-status.ts`.
+ *
+ * **The location picker (wave 50).** `docs/operations-spec/settings.md`
+ * §1.1 specifies a full scope bar — brand picker, location picker, a level
+ * readout, the selection carried in the URL query — for Settings screens.
+ * This is only the location half, and it lives here rather than under
+ * Settings because `CurrentLocation` is what the other 76 location-scoped
+ * screens (Orders, Kitchen, Delivery, Reservations, Capacity, …) already
+ * depend on: putting the switch where every screen already reads its answer
+ * means none of those screens has to change. No brand picker, no level
+ * readout, no URL query param — an operator whose scope spans more than one
+ * brand is still pinned to whichever one `CurrentBrand` resolves first (see
+ * that class's own doc comment). `CurrentLocation.options()` already hides
+ * itself down to nothing when there is at most one choice, so this template
+ * only has to ask "is there more than one" — see the `.location` block in
+ * `shell.html`.
  */
 @Component({
   selector: 'q-shell',
@@ -36,12 +52,31 @@ import { ServiceStatus } from './service-status';
 export class Shell {
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
+  private readonly currentLocation = inject(CurrentLocation);
   protected readonly auth = inject(Auth);
   protected readonly status = inject(ServiceStatus);
 
   protected readonly navigation = NAVIGATION;
   protected readonly locales = LOCALES;
   protected readonly locale = this.i18n.locale;
+
+  /** Every location the picker may offer — see this class's own doc comment. */
+  protected readonly locationOptions = this.currentLocation.options;
+
+  /** The `<select>`'s current value; `''` while nothing has resolved yet. */
+  protected readonly selectedLocationId = computed(
+    () => this.currentLocation.scope()?.locationId ?? '',
+  );
+
+  constructor() {
+    // The shell mounts before any routed screen does, so kicking off
+    // resolution here — rather than waiting for the first screen to call
+    // `ensureLoaded()` itself — is what lets the picker be populated by the
+    // time an operator with more than one location first looks at it. Safe
+    // to call again from every screen that also depends on `CurrentLocation`:
+    // `ensureLoaded()` memoizes and replays the same promise.
+    void this.currentLocation.ensureLoaded();
+  }
 
   /**
    * F2 starts an order, from anywhere.
@@ -74,6 +109,28 @@ export class Shell {
   protected onLocaleChange(value: string): void {
     if (isLocale(value)) {
       this.i18n.setLocale(value as Locale);
+    }
+  }
+
+  protected onLocationChange(locationId: string): void {
+    this.currentLocation.selectLocation(locationId);
+  }
+
+  /**
+   * `Chilanzar`, or `Chilanzar — suspended`/`Chilanzar — draft` — the inline
+   * status `settings.md` §1.1 asks every location picker to carry for a
+   * `SUSPENDED` or `DRAFT` branch. An `<option>` cannot hold a styled chip,
+   * so this is plain text; the settings-screen version of this picker
+   * (§1.1, not built this wave) can afford the real chip.
+   */
+  protected locationOptionLabel(option: LocationOption): string {
+    switch (option.status) {
+      case 'SUSPENDED':
+        return `${option.displayName} — ${this.i18n.t('shell.locationPicker.status.SUSPENDED')}`;
+      case 'DRAFT':
+        return `${option.displayName} — ${this.i18n.t('shell.locationPicker.status.DRAFT')}`;
+      default:
+        return option.displayName;
     }
   }
 

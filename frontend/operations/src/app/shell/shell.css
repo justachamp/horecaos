@@ -193,10 +193,17 @@
   background: var(--q-error);
 }
 
-.locale {
+/* Houses the (optional) location picker and the always-present locale
+   picker, hugging the right edge together — see `shell.ts`'s doc comment on
+   why the location half of settings.md §1.1's scope bar lives here. */
+.scope {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
+.location__select,
 .locale__select {
   background: var(--q-canvas);
   color: var(--q-ink-muted);
