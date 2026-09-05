@@ -1,10 +1,10 @@
-<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto flex max-w-[420px] flex-col gap-6 px-4 py-6">
     <header class="flex items-center gap-3">
       <button
         type="button"
         (click)="goBack()"
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface text-jizbiz-text transition-opacity hover:opacity-80"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-raised text-text-primary transition-opacity hover:opacity-80"
         [attr.aria-label]="'common.back' | t"
       >
         <svg
@@ -30,7 +30,7 @@
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-12">
         <span
-          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+          class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
         ></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>

@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'jizbiz_tg_entry_reload';
+const STORAGE_KEY = 'app_tg_entry_reload';
 const QUERY_KEY = '_r';
 
 /** Telegram Mini App keeps a stale document; home and login are the usual entry URLs. */

@@ -72,7 +72,7 @@ export class FoodCardComponent {
   });
 
   /** Image URL */
-  image = computed(() => this.item().image ?? '/jizbiz/logo/Logo-sq.png');
+  image = computed(() => this.item().image ?? '/assets/logo/placeholder-item.png');
 
   /** Whether this item is in favourites */
   isFavourite = computed(() => {

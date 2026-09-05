@@ -11,6 +11,7 @@ const CONFIG: AppConfig = {
   defaultLocationId: '10000000-0000-0000-0000-000000000003',
   channel: 'STOREFRONT',
   yandexMapsApiKey: '',
+  brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

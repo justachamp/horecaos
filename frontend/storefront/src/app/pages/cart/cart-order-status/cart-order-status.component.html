@@ -1,10 +1,10 @@
-<div class="relative flex min-h-screen min-h-[100dvh] flex-col bg-jizbiz-bg text-jizbiz-text">
+<div class="relative flex min-h-screen min-h-[100dvh] flex-col bg-surface-base text-text-primary">
   <!-- Header -->
   <header class="flex shrink-0 items-center justify-between px-4 py-4">
     <button
       type="button"
       (click)="close()"
-      class="text-sm font-medium text-jizbiz-text transition-opacity hover:opacity-90"
+      class="text-sm font-medium text-text-primary transition-opacity hover:opacity-90"
       [attr.aria-label]="'common.close' | t"
     >
       {{ 'common.close' | t }}
@@ -29,7 +29,7 @@
   <main class="mx-auto flex w-full max-w-[420px] flex-1 flex-col px-4 pb-28 pt-2">
     @if (loading()) {
       <div class="flex flex-1 flex-col items-center justify-center gap-3 py-12">
-        <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
         <p class="text-sm text-zinc-400">{{ 'common.loading' | t }}</p>
       </div>
     } @else if (loadError()) {
@@ -43,11 +43,11 @@
 
       <div class="flex flex-col items-center gap-2 pb-6 pt-2 text-center">
         <span
-          class="inline-flex items-center rounded-full bg-jizbiz-accent px-4 py-1.5 text-sm font-bold text-white"
+          class="inline-flex items-center rounded-full bg-brand-accent px-4 py-1.5 text-sm font-bold text-white"
         >
           {{ statusLabel() }}
         </span>
-        <h1 class="mt-2 text-lg font-bold text-jizbiz-text">
+        <h1 class="mt-2 text-lg font-bold text-text-primary">
           {{ 'orders.order' | t }} N: {{ o.order_number }}
         </h1>
         @if (placedAtLabel()) {
@@ -60,10 +60,10 @@
         @for (item of lineItems(); track $index) {
           <div class="flex items-center justify-between gap-3 py-3">
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-jizbiz-text">{{ item.name }}</p>
+              <p class="truncate text-sm font-medium text-text-primary">{{ item.name }}</p>
               <p class="text-xs text-zinc-400">{{ item.quantity }} {{ 'common.itemsUnit' | t }}</p>
             </div>
-            <span class="shrink-0 text-sm font-semibold text-jizbiz-text">
+            <span class="shrink-0 text-sm font-semibold text-text-primary">
               {{ formatPrice(lineTotal(item)) }}
             </span>
           </div>
@@ -76,7 +76,7 @@
           <span>{{ 'cart.order' | t }}</span>
           <span>{{ subtotalFormatted() }}</span>
         </div>
-        <div class="flex items-center justify-between text-base font-bold text-jizbiz-text">
+        <div class="flex items-center justify-between text-base font-bold text-text-primary">
           <span>{{ 'cart.totalAmount' | t }}</span>
           <span>{{ totalFormatted() }}</span>
         </div>
@@ -99,7 +99,7 @@
       <button
         type="button"
         (click)="openOrderDetails()"
-        class="w-full rounded-xl bg-jizbiz-surface-2 py-3.5 text-base font-bold text-jizbiz-text transition-opacity hover:opacity-95"
+        class="w-full rounded-xl bg-surface-raised-2 py-3.5 text-base font-bold text-text-primary transition-opacity hover:opacity-95"
       >
         {{ 'orders.orderDetails' | t }}
       </button>

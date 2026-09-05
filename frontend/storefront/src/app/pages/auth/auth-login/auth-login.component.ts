@@ -17,6 +17,7 @@ import { LangService } from '../../../services/lang.service';
 import { TranslateService } from '../../../services/translate.service';
 import { OrdersService } from '../../../services/orders.service';
 import { hardReloadTelegramEntryPage } from '../../../utils/telegram-entry-reload';
+import { APP_CONFIG } from '../../../core/config/app-config';
 import packageJson from '../../../../../package.json';
 
 /** {@code ProfileTelegramComponent}'s own interval, matched here for the same reason: a customer just switched to Telegram and is actively waiting. */
@@ -53,6 +54,10 @@ export class AuthLoginComponent implements OnInit, OnDestroy {
   private readonly ordersService = inject(OrdersService);
   private readonly lang = inject(LangService);
   private readonly translate = inject(TranslateService);
+
+  /** This deployment's own name and mark, for the screen a customer sees before
+   * they have ever signed in -- see `AppConfig.brand`. */
+  readonly brand = inject(APP_CONFIG).brand;
 
   readonly selectedLangId = this.lang.langId;
   readonly appVersion = signal(packageJson.version);

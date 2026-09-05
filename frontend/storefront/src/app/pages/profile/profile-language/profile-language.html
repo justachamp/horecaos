@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto max-w-[420px] px-4 py-6">
     <header class="flex shrink-0 flex-col gap-2 pb-3">
       <button
@@ -11,23 +11,23 @@
         </svg>
         {{ 'common.back' | t }}
       </button>
-      <h1 class="text-center text-xl font-bold text-jizbiz-text">{{ 'profile.language' | t }}</h1>
+      <h1 class="text-center text-xl font-bold text-text-primary">{{ 'profile.language' | t }}</h1>
     </header>
 
     <ul class="flex flex-col">
       @for (lang of languages; track lang.id) {
-        <li class="border-b border-jizbiz-border">
+        <li class="border-b border-border-default">
           <button
             type="button"
             (click)="selectLanguage(lang.id)"
-            class="flex w-full items-center gap-4 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+            class="flex w-full items-center gap-4 py-4 text-left text-text-primary transition-opacity hover:opacity-90"
           >
             <span class="flex h-8 w-8 shrink-0 items-center justify-center text-2xl leading-none" aria-hidden="true">{{ lang.flag }}</span>
             <span class="flex-1 font-medium">{{ lang.label }}</span>
             @if (selectedId() === lang.id) {
-              <span class="h-5 w-5 shrink-0 rounded-full bg-jizbiz-accent" aria-hidden="true"></span>
+              <span class="h-5 w-5 shrink-0 rounded-full bg-brand-accent" aria-hidden="true"></span>
             } @else {
-              <span class="h-5 w-5 shrink-0 rounded-full border-2 border-jizbiz-text" aria-hidden="true"></span>
+              <span class="h-5 w-5 shrink-0 rounded-full border-2 border-text-primary" aria-hidden="true"></span>
             }
           </button>
         </li>

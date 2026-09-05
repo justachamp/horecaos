@@ -2,7 +2,7 @@
 @if (cart.loading()) {
   <div class="flex flex-1 items-center justify-center gap-2 py-12">
     <span
-      class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+      class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
     ></span>
     <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
   </div>
@@ -12,7 +12,7 @@
     <button
       type="button"
       (click)="cart.load()"
-      class="rounded-md bg-jizbiz-surface px-4 py-2 text-sm text-jizbiz-text"
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-text-primary"
     >
       {{ 'common.retry' | t }}
     </button>
@@ -38,7 +38,7 @@
               </div>
             </div>
             <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 py-0.5">
-              <h2 class="pr-1 text-[15px] font-bold leading-snug text-jizbiz-text">{{ item.name }}</h2>
+              <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">{{ item.name }}</h2>
               @if (item.modifiers.length > 0) {
                 <p class="pr-1 text-[12px] leading-snug text-zinc-400">
                   {{ modifiersSummary(item) }}
@@ -49,15 +49,15 @@
                   type="button"
                   (click)="cart.decreaseQuantity(item)"
                   [disabled]="cart.updating() || item.quantity <= 0"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                   [attr.aria-label]="'common.decrease' | t"
                 >
                   −
                 </button>
                 <div
-                  class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-jizbiz-surface-2 px-3 py-2 text-center"
+                  class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
                 >
-                  <span class="text-xs font-bold leading-tight text-jizbiz-text">
+                  <span class="text-xs font-bold leading-tight text-text-primary">
                     {{ item.quantity }} {{ 'common.itemsUnit' | t }}
                   </span>
                   <span
@@ -70,7 +70,7 @@
                   type="button"
                   (click)="cart.increaseQuantity(item)"
                   [disabled]="cart.updating()"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                   [attr.aria-label]="'common.increase' | t"
                 >
                   +
@@ -86,7 +86,7 @@
         <button
           type="button"
           (click)="openComment()"
-          class="flex w-full items-center justify-between rounded-xl bg-jizbiz-surface px-4 py-3 text-left text-sm text-jizbiz-text transition-colors hover:bg-jizbiz-surface-2"
+          class="flex w-full items-center justify-between rounded-xl bg-surface-raised px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-surface-raised-2"
         >
           <span>{{ 'cart.orderComment' | t }}</span>
           <svg
@@ -106,7 +106,7 @@
         </button>
         @if (showCommentInput) {
           <div
-            class="relative z-[1] mt-1.5 overflow-visible rounded-xl border-2 border-jizbiz-text/70 bg-jizbiz-surface p-0.5 focus-within:border-jizbiz-accent"
+            class="relative z-[1] mt-1.5 overflow-visible rounded-xl border-2 border-text-primary/70 bg-surface-raised p-0.5 focus-within:border-brand-accent"
           >
             <textarea
               #commentTextarea
@@ -115,21 +115,21 @@
               rows="3"
               (focus)="onCommentFocus()"
               (blur)="onCommentBlur()"
-              class="block w-full resize-none rounded-lg border-0 bg-transparent px-3.5 py-2.5 text-sm text-jizbiz-text placeholder-zinc-500 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
+              class="block w-full resize-none rounded-lg border-0 bg-transparent px-3.5 py-2.5 text-sm text-text-primary placeholder-zinc-500 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
             ></textarea>
           </div>
         }
       </div>
 
       <!-- Checkout: promo, payment, continue (matches app design) -->
-      <div class="mt-4 rounded-t-[1.25rem] bg-jizbiz-surface-2 px-1 pb-1 pt-4">
+      <div class="mt-4 rounded-t-[1.25rem] bg-surface-raised-2 px-1 pb-1 pt-4">
         <button
           type="button"
-          class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-jizbiz-bg px-4 py-4 text-left transition-opacity hover:opacity-95"
+          class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-surface-base px-4 py-4 text-left transition-opacity hover:opacity-95"
           [attr.aria-label]="'cart.delivery' | t"
         >
           <span
-            class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-jizbiz-accent text-white"
+            class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-accent text-white"
             aria-hidden="true"
           >
             <svg
@@ -147,12 +147,12 @@
             </svg>
           </span>
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-bold text-jizbiz-text">{{ 'cart.deliveryCost' | t }}</p>
-            <p class="mt-2 text-lg font-bold leading-tight text-jizbiz-text">{{ cart.deliveryFee() }}</p>
+            <p class="text-sm font-bold text-text-primary">{{ 'cart.deliveryCost' | t }}</p>
+            <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.deliveryFee() }}</p>
             <p class="mt-1 text-xs leading-snug text-zinc-400"> {{ cart.deliveryTime() }}</p>
           </div>
           <svg
-            class="mt-1 h-5 w-5 shrink-0 text-jizbiz-muted"
+            class="mt-1 h-5 w-5 shrink-0 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -168,11 +168,11 @@
         </button>
         <button
           type="button"
-          class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-jizbiz-bg px-4 py-4 text-left transition-opacity hover:opacity-95"
+          class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-surface-base px-4 py-4 text-left transition-opacity hover:opacity-95"
           [attr.aria-label]="'cart.paymentMethod' | t"
         >
           <span
-            class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-jizbiz-accent text-white"
+            class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-accent text-white"
             aria-hidden="true"
           >
             <svg
@@ -190,11 +190,11 @@
             </svg>
           </span>
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-bold text-jizbiz-text">{{ 'cart.totalAmount' | t }}</p>
-            <p class="mt-2 text-lg font-bold leading-tight text-jizbiz-text">{{ cart.totalAmount() }}</p>
+            <p class="text-sm font-bold text-text-primary">{{ 'cart.totalAmount' | t }}</p>
+            <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.totalAmount() }}</p>
           </div>
           <svg
-            class="mt-1 h-5 w-5 shrink-0 text-jizbiz-muted"
+            class="mt-1 h-5 w-5 shrink-0 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -211,7 +211,7 @@
         <button
           type="button"
           (click)="continue()"
-          class="w-full rounded-2xl bg-jizbiz-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90"
+          class="w-full rounded-2xl bg-brand-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90"
         >
           {{ 'common.continue' | t }}
         </button>
@@ -220,12 +220,12 @@
   </div>
 } @else {
   <div class="mt-6 flex flex-col items-center gap-4 text-center">
-    <img src="/jizbiz/empty-list.svg" alt="Empty" class="h-16 w-16" />
+    <img src="/assets/empty-list.svg" alt="Empty" class="h-16 w-16" />
     <h2 class="text-base font-semibold">{{ 'cart.emptyTitle' | t }}</h2>
     <p class="max-w-[260px] text-sm text-zinc-400">{{ 'cart.emptySubtitle' | t }}</p>
     <a
       routerLink="/home"
-      class="mt-4 block w-full rounded-md bg-jizbiz-surface py-4 text-center text-sm text-jizbiz-text"
+      class="mt-4 block w-full rounded-md bg-surface-raised py-4 text-center text-sm text-text-primary"
     >
       {{ 'cart.addToCart' | t }}
     </a>

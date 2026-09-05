@@ -47,6 +47,42 @@ export interface AppConfig {
 
   /** Yandex Maps browser key, for the address picker. Not a platform secret. */
   readonly yandexMapsApiKey: string;
+
+  /**
+   * How this deployment presents itself: display name, mark, and the accent
+   * colours that carry a brand's identity through the shared token set (see
+   * `styles.scss`'s `--brand-accent`/`--brand-accent-deep`).
+   *
+   * Unlike `tenantId`/`brandId` above, nothing here gates access to a
+   * tenant's data, so a missing or malformed value soft-defaults to a
+   * neutral, ownerless identity instead of failing the whole application --
+   * see `NEUTRAL_BRAND` in `load-config.ts`. It never falls back to the
+   * legacy product this storefront was cloned from.
+   */
+  readonly brand: BrandConfig;
+}
+
+/** A brand's own name, mark, and identity colours. Every field is optional
+ * on the wire; see `NEUTRAL_BRAND` for what fills the gaps. */
+export interface BrandConfig {
+  readonly displayName: string;
+
+  /** Absent means no mark -- render `displayName` as text instead. */
+  readonly logoUrl?: string;
+
+  readonly theme: BrandTheme;
+}
+
+/**
+ * The colour tokens that actually vary by brand: the accent hue and its
+ * pressed/deep variant. Surface, text, border and shadow tokens are shared
+ * app chrome and stay the same for every tenant -- only these two are read
+ * from configuration and applied at runtime (see `applyBrandTheme` /
+ * `BrandThemeService`).
+ */
+export interface BrandTheme {
+  readonly accent: string;
+  readonly accentDeep: string;
 }
 
 export const APP_CONFIG = new InjectionToken<AppConfig>('APP_CONFIG');

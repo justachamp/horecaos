@@ -54,49 +54,78 @@
     'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+// Design tokens, split by what actually varies and why:
+//
+// - `--surface-*`/`--text-*`/`--border-*`/`--shadow-*` are shared app chrome.
+//   They switch between the two blocks below by light/dark mode only, and
+//   are the same for every tenant.
+// - `--brand-accent`/`--brand-accent-deep` are the one thing a brand
+//   actually owns: notice they hold the *same* value in both the dark and
+//   light blocks below, because the hue is the brand's, not the mode's.
+//   `applyBrand()` (see `core/config/apply-brand.ts`) overwrites these two
+//   at runtime from `AppConfig.brand.theme`, before the app first paints --
+//   the values here are only what a tenant with no configured theme sees,
+//   and so are deliberately neutral rather than any one brand's colour.
 @theme inline {
-  --color-jizbiz-bg: var(--jizbiz-bg);
-  --color-jizbiz-surface: var(--jizbiz-surface);
-  --color-jizbiz-surface-2: var(--jizbiz-surface-2);
-  --color-jizbiz-hover: var(--jizbiz-hover);
-  --color-jizbiz-accent: var(--jizbiz-accent);
-  --color-jizbiz-accent-deep: var(--jizbiz-accent-deep);
-  --color-jizbiz-text: var(--jizbiz-text);
-  --color-jizbiz-muted: var(--jizbiz-muted);
-  --color-jizbiz-border: var(--jizbiz-border);
-  --shadow-jizbiz: var(--jizbiz-shadow);
-  --shadow-jizbiz-nav: var(--jizbiz-nav-shadow);
+  --color-surface-base: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-raised-2: var(--surface-raised-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-deep: var(--brand-accent-deep);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-border-default: var(--border-default);
+  --shadow-elevated: var(--shadow-elevated-value);
+  --shadow-nav: var(--shadow-nav-value);
+
+  // Deprecated aliases -- `cart-confirmation.component.html` is out of scope
+  // for this rename (see the wave that owns it) and still uses these class
+  // names. They point at the same renamed tokens above, so that page stays
+  // themed correctly; drop them once that template migrates to the names
+  // above and no `bg-jizbiz-*`/`text-jizbiz-*`/etc. usage remains.
+  --color-jizbiz-bg: var(--surface-base);
+  --color-jizbiz-surface: var(--surface-raised);
+  --color-jizbiz-surface-2: var(--surface-raised-2);
+  --color-jizbiz-hover: var(--surface-hover);
+  --color-jizbiz-accent: var(--brand-accent);
+  --color-jizbiz-accent-deep: var(--brand-accent-deep);
+  --color-jizbiz-text: var(--text-primary);
+  --color-jizbiz-muted: var(--text-muted);
+  --color-jizbiz-border: var(--border-default);
+  --shadow-jizbiz: var(--shadow-elevated-value);
+  --shadow-jizbiz-nav: var(--shadow-nav-value);
 }
 
 :root,
 html[data-theme='dark'] {
   color-scheme: dark;
-  --jizbiz-bg: #111111;
-  --jizbiz-surface: #1f1f1f;
-  --jizbiz-surface-2: #2a2a2a;
-  --jizbiz-hover: #333333;
-  --jizbiz-accent: #833086;
-  --jizbiz-accent-deep: #5c215f;
-  --jizbiz-text: #f5f5f5;
-  --jizbiz-muted: #a898aa;
-  --jizbiz-border: #3f3342;
-  --jizbiz-shadow: 0 0 60px rgba(0, 0, 0, 0.45);
-  --jizbiz-nav-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+  --surface-base: #111111;
+  --surface-raised: #1f1f1f;
+  --surface-raised-2: #2a2a2a;
+  --surface-hover: #333333;
+  --brand-accent: #52525b;
+  --brand-accent-deep: #3f3f46;
+  --text-primary: #f5f5f5;
+  --text-muted: #a898aa;
+  --border-default: #3f3342;
+  --shadow-elevated-value: 0 0 60px rgba(0, 0, 0, 0.45);
+  --shadow-nav-value: 0 20px 40px rgba(0, 0, 0, 0.45);
 }
 
 html[data-theme='light'] {
   color-scheme: light;
-  --jizbiz-bg: #f6f1f7;
-  --jizbiz-surface: #ffffff;
-  --jizbiz-surface-2: #efe6f1;
-  --jizbiz-hover: #e4d6e8;
-  --jizbiz-accent: #833086;
-  --jizbiz-accent-deep: #5c215f;
-  --jizbiz-text: #1c121e;
-  --jizbiz-muted: #6b5a70;
-  --jizbiz-border: #e4d4e6;
-  --jizbiz-shadow: 0 0 48px rgba(92, 33, 95, 0.1);
-  --jizbiz-nav-shadow: 0 12px 28px rgba(92, 33, 95, 0.14);
+  --surface-base: #f6f1f7;
+  --surface-raised: #ffffff;
+  --surface-raised-2: #efe6f1;
+  --surface-hover: #e4d6e8;
+  --brand-accent: #52525b;
+  --brand-accent-deep: #3f3f46;
+  --text-primary: #1c121e;
+  --text-muted: #6b5a70;
+  --border-default: #e4d4e6;
+  --shadow-elevated-value: 0 0 48px rgba(92, 33, 95, 0.1);
+  --shadow-nav-value: 0 12px 28px rgba(92, 33, 95, 0.14);
   --color-zinc-300: #5c4d5f;
   --color-zinc-400: #6b5a70;
   --color-zinc-500: #7a6880;
@@ -123,8 +152,8 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background-color: var(--jizbiz-bg);
-  color: var(--jizbiz-text);
+  background-color: var(--surface-base);
+  color: var(--text-primary);
   font-family: 'Halvar Breit', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   touch-action: manipulation;
@@ -148,7 +177,7 @@ body {
 }
 
 .scrollbar-thumb-zinc-700\/60::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--jizbiz-muted) 60%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 60%, transparent);
   border-radius: 999px;
 }
 
@@ -158,7 +187,7 @@ body {
 
 /* Header back links: purple in light, white in dark (matches page titles). */
 .app-back {
-  color: var(--jizbiz-accent);
+  color: var(--brand-accent);
 }
 
 html[data-theme='dark'] .app-back {

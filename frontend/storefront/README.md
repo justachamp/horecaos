@@ -111,6 +111,10 @@ variables:
 | `APP_DEFAULT_LOCATION_ID` | the local fixture location | `defaultLocationId` |
 | `APP_CHANNEL` | `STOREFRONT` | `channel` |
 | `APP_YANDEX_MAPS_API_KEY` | the shared browser key already in `public/config.json` | `yandexMapsApiKey` |
+| `APP_BRAND_DISPLAY_NAME` | `Storefront` (neutral) | `brand.displayName` |
+| `APP_BRAND_LOGO_URL` | *(empty — renders the name as text instead)* | `brand.logoUrl` |
+| `APP_BRAND_ACCENT` | `#52525b` (neutral grey) | `brand.theme.accent` |
+| `APP_BRAND_ACCENT_DEEP` | `#3f3f46` (neutral grey) | `brand.theme.accentDeep` |
 
 The defaults reproduce the same fixture tenant `public/config.json` already
 holds, so `docker run` with no environment variables set behaves like local
@@ -126,8 +130,38 @@ docker run -p 8080:80 \
   -e APP_DEFAULT_LOCATION_ID=<location-uuid> \
   -e APP_CHANNEL=STOREFRONT \
   -e APP_YANDEX_MAPS_API_KEY=<key> \
+  -e APP_BRAND_DISPLAY_NAME="Tandir House" \
+  -e APP_BRAND_LOGO_URL=https://cdn.example.com/tandir-house/logo.svg \
+  -e APP_BRAND_ACCENT=#c0392b \
+  -e APP_BRAND_ACCENT_DEEP=#7b241c \
   horecaos-storefront
 ```
+
+### Brand identity
+
+`AppConfig.brand` (`displayName`, `logoUrl`, `theme.accent`/`theme.accentDeep`)
+is how a tenant's own name, mark and accent colour reach this one build —
+see the doc comment on `BrandConfig` in `app-config.ts`. Every field is
+optional on the wire and soft-defaults to a neutral, ownerless identity
+(`NEUTRAL_BRAND` in `load-config.ts`) rather than to any one tenant's brand,
+so a deployment that forgets to set one still renders correctly instead of
+failing or showing somebody else's name.
+
+`applyBrand()` (`core/config/apply-brand.ts`) pushes `displayName` onto the
+tab title and `theme.accent`/`theme.accentDeep` onto the `--brand-accent`/
+`--brand-accent-deep` CSS custom properties **before** the app bootstraps, so
+the very first paint already carries the tenant's identity. Every other
+design token (`--surface-*`, `--text-*`, `--border-default`, `--shadow-*` in
+`styles.scss`) is shared app chrome that does not vary by brand — only the
+accent hue is a brand's own.
+
+There is no platform endpoint today that serves brand display data to an
+anonymous storefront session: the `tenant.brands` table backing the
+operations Settings screen stores only `displayName`/`code`/`slug`/`status`
+(no logo, no colours), and it is reachable only through a
+capability-gated operations endpoint, not a public one. Until that exists,
+`brand` belongs in `config.json` — set it per deployment the same way as
+`tenantId`/`brandId` above, rather than reading it from the platform.
 
 ## Development server
 

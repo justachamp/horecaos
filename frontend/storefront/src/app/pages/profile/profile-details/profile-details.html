@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto max-w-[420px] px-4 py-6">
     <header class="flex shrink-0 flex-col gap-2 pb-3">
       <button
@@ -17,14 +17,14 @@
         {{ 'common.back' | t }}
       </button>
       <div class="flex justify-center py-1">
-        <h1 class="text-xl font-bold text-jizbiz-text">{{ 'profile.details' | t }}</h1>
+        <h1 class="text-xl font-bold text-text-primary">{{ 'profile.details' | t }}</h1>
       </div>
     </header>
 
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-12">
         <span
-          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+          class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
         ></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>
@@ -44,7 +44,7 @@
         <!-- Avatar -->
         <div class="flex flex-col items-center gap-3">
           <div
-            class="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-zinc-600 bg-jizbiz-surface"
+            class="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-zinc-600 bg-surface-raised"
           >
             @if (avatarUrl()) {
               <img
@@ -73,7 +73,7 @@
                 class="absolute inset-0 flex items-center justify-center bg-black/60"
               >
                 <span
-                  class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+                  class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
                 ></span>
               </span>
             }
@@ -133,7 +133,7 @@
               [ngModel]="firstName()"
               (ngModelChange)="onFirstNameChange($event)"
               name="firstName"
-              class="w-full rounded-xl border border-zinc-500 bg-jizbiz-surface-2 px-4 py-3 text-jizbiz-text placeholder:text-zinc-500 focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+              class="w-full rounded-xl border border-zinc-500 bg-surface-raised-2 px-4 py-3 text-text-primary placeholder:text-zinc-500 focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
               [placeholder]="'profile.firstNamePlaceholder' | t"
             />
           </div>
@@ -147,7 +147,7 @@
               [ngModel]="lastName()"
               (ngModelChange)="onLastNameChange($event)"
               name="lastName"
-              class="w-full rounded-xl border border-zinc-500 bg-jizbiz-surface-2 px-4 py-3 text-jizbiz-text placeholder:text-zinc-500 focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+              class="w-full rounded-xl border border-zinc-500 bg-surface-raised-2 px-4 py-3 text-text-primary placeholder:text-zinc-500 focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
               [placeholder]="'profile.lastNamePlaceholder' | t"
             />
           </div>
@@ -156,7 +156,7 @@
         <button
           type="submit"
           [disabled]="saving()"
-          class="w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          class="w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           @if (saving()) {
             <span class="inline-flex items-center justify-center gap-2">

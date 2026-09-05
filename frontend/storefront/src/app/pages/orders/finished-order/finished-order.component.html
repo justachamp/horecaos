@@ -1,6 +1,6 @@
 @if (loading()) {
   <div class="mt-6 flex flex-col items-center gap-4 py-8">
-    <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+    <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
     <p class="text-sm text-zinc-400">{{ 'common.loading' | t }}</p>
   </div>
 } @else if (error()) {
@@ -9,19 +9,19 @@
     <button
       type="button"
       (click)="loadOrders()"
-      class="rounded-md bg-jizbiz-surface px-4 py-2 text-sm text-jizbiz-text"
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-text-primary"
     >
       {{ 'common.retry' | t }}
     </button>
   </div>
 } @else if (orders().length === 0) {
   <div class="mt-6 flex flex-col items-center gap-4 text-center">
-    <img src="/jizbiz/empty-list.svg" alt="Empty" class="h-16 w-16" />
+    <img src="/assets/empty-list.svg" alt="Empty" class="h-16 w-16" />
     <h2 class="text-base font-semibold">{{ 'orders.finishedEmptyTitle' | t }}</h2>
     <p class="max-w-[260px] text-sm text-zinc-400">
       {{ 'orders.finishedEmptySubtitle' | t }}
     </p>
-    <a routerLink="/home" class="mt-4 block w-full rounded-md bg-jizbiz-surface py-4 text-center text-sm text-jizbiz-text">
+    <a routerLink="/home" class="mt-4 block w-full rounded-md bg-surface-raised py-4 text-center text-sm text-text-primary">
       {{ 'orders.placeOrder' | t }}
     </a>
   </div>
@@ -33,12 +33,12 @@
         class="flex items-start justify-between gap-2 py-4 first:pt-0"
       >
       <div class="flex flex-col gap-0.5">
-        <span class="text-base font-bold text-jizbiz-text">Order N: {{ order.orderNumber ?? order.id }}</span>
+        <span class="text-base font-bold text-text-primary">Order N: {{ order.orderNumber ?? order.id }}</span>
         <span class="text-sm text-zinc-400">{{ order.itemCount ?? order.subtitle }}@if (order.distanceKm) { | {{ order.distanceKm }} {{ 'common.distanceUnit' | t }} }@else if (order.date) { | {{ order.date }} }</span>
       </div>
       <div class="flex flex-col items-end gap-0.5">
-        <span class="text-sm font-medium text-jizbiz-accent">{{ 'orders.delivered' | t }}</span>
-        <span class="text-base font-bold text-jizbiz-text">{{ order.price }}</span>
+        <span class="text-sm font-medium text-brand-accent">{{ 'orders.delivered' | t }}</span>
+        <span class="text-base font-bold text-text-primary">{{ order.price }}</span>
       </div>
       </a>
     }

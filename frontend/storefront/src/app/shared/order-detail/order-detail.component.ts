@@ -71,7 +71,7 @@ export class OrderDetailComponent implements OnInit {
       const img = i.image;
       return {
         name: String(i.name ?? ''),
-        image: img && typeof img === 'string' ? img : '/jizbiz/logo/Logo-sq.png',
+        image: img && typeof img === 'string' ? img : '/assets/logo/placeholder-item.png',
         quantity: qty,
         unitPrice: format(price),
         variantId: i.variant_id,
