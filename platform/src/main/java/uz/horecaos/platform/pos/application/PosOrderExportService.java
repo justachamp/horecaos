@@ -492,6 +492,17 @@ public class PosOrderExportService {
         return exports.awaitingOperator(tenantId, limit);
     }
 
+    /**
+     * {@code PENDING} exports older than {@code threshold}, across every tenant.
+     *
+     * <p>Read-only, and deliberately not scoped to one tenant: see {@link
+     * JdbcPosExportStore#findStalePending} for why this is a durable sweep
+     * rather than a claim, and why it has to look across tenants at all.
+     */
+    public List<JdbcPosExportStore.StaleExport> pendingOlderThan(Instant threshold, int limit) {
+        return exports.findStalePending(threshold, limit);
+    }
+
     // ------------------------------------------------------------------
 
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {

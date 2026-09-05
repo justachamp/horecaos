@@ -346,6 +346,65 @@ class SseStreamRegistryTests {
         assertThat(registry.openStreams()).isZero();
     }
 
+    // ------------------------------------------------------------- replica independence
+
+    /**
+     * Wave 61's evidence for ADR 0023's runtime shape decision: this registry
+     * needs no cross-process visibility to be correct, because it never assumes
+     * any exists.
+     *
+     * <p>A signal, a tick, and a grants change against one instance must be
+     * invisible to a second — standing in for a second replica that never
+     * happened to hold this particular connection. If this ever failed, either
+     * instance state leaked through a shared static or the clock, or {@code
+     * onSignal}/{@code tick}/{@code closeForPrincipal} started reading something
+     * outside the {@code Connection} the caller itself opened; either way, the
+     * "each replica tends only its own streams" argument in ADR 0023 and ADR
+     * 0045 would be describing code that no longer exists.
+     */
+    @Test
+    @DisplayName("a second registry — standing in for a second replica — sees none of the first's connections")
+    void aSecondReplicaIsCompletelyUnaffectedByTheFirst() {
+        RecordingSink onReplicaA = sink;
+        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), onReplicaA, NOON.plusSeconds(600), null);
+
+        SseStreamRegistry replicaB = newRegistry(List.of(new FleetSnapshotSource()));
+        RecordingSink onReplicaB = new RecordingSink();
+        replicaB.open(TENANT, DISPATCHER, Set.of(queueSubscription()), onReplicaB, NOON.plusSeconds(600), null);
+
+        // A signal, delivered only where A holds a subscriber. Nothing about
+        // this call names A rather than B; it finds A's connection because that
+        // is the only connection this instance was ever given.
+        registry.onSignal(orderQueueSignal(NOON.plusSeconds(1)));
+        registry.tick(NOON.plusSeconds(2));
+        assertThat(onReplicaA.frames)
+                .as("A's own subscriber received A's own signal")
+                .isNotEmpty();
+        assertThat(onReplicaB.frames)
+                .as("B never saw the signal, the tick, or the connection that produced them")
+                .isEmpty();
+
+        // A's connection count and B's are asked independently and must not
+        // secretly share a counter.
+        assertThat(registry.openStreams()).isOne();
+        assertThat(replicaB.openStreams()).isOne();
+
+        // Revoking the principal's grants on A must not touch B's identical
+        // connection for the very same principal — the failure this guards is a
+        // "fix" that closed streams by principal across every replica, which is
+        // exactly the shared subscriber registry ADR 0023 and this wave's brief
+        // both refuse to build.
+        int closedOnA = registry.closeForPrincipal(DISPATCHER, "GRANTS_CHANGED");
+        assertThat(closedOnA).isOne();
+        assertThat(registry.openStreams()).isZero();
+        assertThat(replicaB.openStreams())
+                .as("B's connection for the same principal is B's to close, on B's own tick")
+                .isOne();
+        assertThat(onReplicaB.completed)
+                .as("B's socket was never touched by A's grants-change handling")
+                .isFalse();
+    }
+
     // ---------------------------------------------------------------------- fixtures
 
     private Connection open(Set<Subscription> subscriptions) {

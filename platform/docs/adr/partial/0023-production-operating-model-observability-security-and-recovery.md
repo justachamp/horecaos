@@ -1,7 +1,7 @@
 # ADR 0023: Production operating model, observability, security, and recovery
 
 - Decision status: Accepted
-- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.horecaos.platform.observability` publishes the gauges; `infra/observability/horecaos-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. **Two deployment trees exist as of wave 55**, kept in parity rather than one left to drift: `infra/production/` with `compose.production.yaml`, this record's original, and `deploy/`, ADR 0061's newer registry-pull tree — see `deploy/README.md`'s "Relationship" section for which a new deploy should use and why the other is still kept (the alert, backup and restore fabric is still wired to the original). **Wave 55 closed the edge hardening** this record's checklist named as open: body caps and per-binding/per-IP rate limits on both Caddyfiles, the latter needing a purpose-built image (`infra/production/caddy/Dockerfile`) because stock `caddy:2.10-alpine` carries no `rate_limit` directive at all. The Payme allowlist's *mechanism* is built and **fails closed**, which means it currently rejects every Payme callback, genuine ones included, until the owner supplies the real address list — see the reverse-proxy checklist line. **Wave 58 closed the `app`/`worker` role split's application half**: `horecaos.runtime.role` gates `SchedulingConfiguration`'s single `@EnableScheduling`, so every `@Scheduled` method — thirty-two classes, forty-one methods, not the twenty-one this line once counted — stops uniformly under role `app` regardless of its own switch, and the fourth named switch (`horecaos.messaging.inbox.listener.enabled`, guarding a `@KafkaListener` the split never reached) now carries the same gate. Wave 58 reports rather than papers over two things: the compose wiring that runs a second container is not written, and `PosOrderExportTrigger.dispatchPending` and `RealtimeStreamMaintenance.tick`/`onGrantChanged` hold in-process state tying them to whichever process serves HTTP and SSE, so a strict `app`/`worker` split is **not yet safe to deploy** until they move to a durable handoff — see Runtime shape. **Wave 57 built the collection half**: `infra/observability/compose.observability.yaml` is a self-contained overlay adding Prometheus, Alertmanager and one provisioned Grafana dashboard, composed onto whichever production tree is used rather than baked into either. Six of this record's alerts are evaluated there at their stated thresholds, with `promtool test rules` behavioural assertions; the rest stay solely on `horecaos-probe.sh` because each needs a fact only reachable by checking another container or the host, and two evaluators that can disagree are worse than one. **Three things remain unbuilt and are enumerated under "What is not built yet" below**: the off-box half (two external services), traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Six checklist items remain open**: Payme's actual address list; the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
+- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.horecaos.platform.observability` publishes the gauges; `infra/observability/horecaos-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. **Two deployment trees exist as of wave 55**, kept in parity rather than one left to drift: `infra/production/` with `compose.production.yaml`, this record's original, and `deploy/`, ADR 0061's newer registry-pull tree — see `deploy/README.md`'s "Relationship" section for which a new deploy should use and why the other is still kept (the alert, backup and restore fabric is still wired to the original). **Wave 55 closed the edge hardening** this record's checklist named as open: body caps and per-binding/per-IP rate limits on both Caddyfiles, the latter needing a purpose-built image (`infra/production/caddy/Dockerfile`) because stock `caddy:2.10-alpine` carries no `rate_limit` directive at all. The Payme allowlist's *mechanism* is built and **fails closed**, which means it currently rejects every Payme callback, genuine ones included, until the owner supplies the real address list — see the reverse-proxy checklist line. **Wave 58 closed the `app`/`worker` role split's application half**: `horecaos.runtime.role` gates `SchedulingConfiguration`'s single `@EnableScheduling`, so every `@Scheduled` method — thirty-two classes, forty-one methods, not the twenty-one this line once counted — stops uniformly under role `app` regardless of its own switch, and the fourth named switch (`horecaos.messaging.inbox.listener.enabled`, guarding a `@KafkaListener` the split never reached) now carries the same gate. Wave 58 reports rather than papers over two things: the compose wiring that runs a second container is not written, and `PosOrderExportTrigger.dispatchPending` and `RealtimeStreamMaintenance.tick`/`onGrantChanged` hold in-process state tying them to whichever process serves HTTP and SSE, so a strict `app`/`worker` split is **not yet safe to deploy** until they move to a durable handoff — see Runtime shape. **Wave 61 closed the POS half of that gap and documented the SSE half as an accepted constraint rather than building a shared registry for it**: `PosOrderExportTrigger.sweepStale`, a second `@Scheduled` method on the same class (pool now forty-two, not forty-one), reads `integration.pos_order_exports` for stale `PENDING` rows and dispatches them through the same conditionally-claimed `send()` the in-process queue already used, so any process running this configuration eventually dispatches any tenant's confirmed order — proven by `PosOrderExportCrossInstanceDispatchTests` constructing two independent `PosOrderExportTrigger`/`PosOrderExportService` graphs against one database and confirming through one, dispatching through the other. `RealtimeStreamMaintenance` remains process-affine because `SseStreamRegistry` is deliberately process-local (no row exists for a second process to learn a connection from), so the fix is not a handoff but a documented deployment rule: **`app: both` / `worker: worker` is deployable today; the fully strict `app: app` / `worker: worker` split described below is still not**, for SSE alone — see Runtime shape. **Wave 57 built the collection half**: `infra/observability/compose.observability.yaml` is a self-contained overlay adding Prometheus, Alertmanager and one provisioned Grafana dashboard, composed onto whichever production tree is used rather than baked into either. Six of this record's alerts are evaluated there at their stated thresholds, with `promtool test rules` behavioural assertions; the rest stay solely on `horecaos-probe.sh` because each needs a fact only reachable by checking another container or the host, and two evaluators that can disagree are worse than one. **Three things remain unbuilt and are enumerated under "What is not built yet" below**: the off-box half (two external services), traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Six checklist items remain open**: Payme's actual address list; the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture, and the person who carries the pager)
@@ -139,23 +139,73 @@ service sets `HORECAOS_RUNTIME_ROLE=worker`, carries no `ports:` mapping, and
 receives no proxied traffic, per the runtime shape above. Nothing else in
 either compose file needs to change for the split to take effect.
 
-**Two scheduled jobs are not worker-shaped, and the gate is all-or-nothing, so
-neither has a clean answer yet.** `PosOrderExportTrigger.dispatchPending` drains
-an in-process queue that only the process which served the confirming HTTP
-request ever fills; `RealtimeStreamMaintenance.tick` and its `onGrantChanged`
-listener drive SSE connections that exist only on whichever process is holding
-them open. Setting the `app` container's role to `app` — the strict split this
-runtime shape describes — would silently stop POS ticket dispatch and SSE
-stream maintenance for every request `app` itself served: no error, no failing
-health check, just tickets that never reach a till and dashboards that never
-update. Leaving `app` at `both` avoids that regression but runs every other
-scheduler in `app` too, which gives up the resource separation the split
-exists for. Neither is a real fix; the actual fix is a redesign onto a durable,
-cross-process handoff (an outbox-driven POS export queue; realtime delivery
-that does not depend on which process holds the socket), which is out of this
-record's scope. Until that redesign lands, treat `app: app` / `worker: worker`
-as **not yet safe to deploy** — the split is proven correct for every other
-scheduled job in this build, and incorrect for exactly these two.
+**Wave 61 gave POS a durable handoff and closed its half of this gap.**
+`PosOrderExportTrigger.dispatchPending` still drains an in-process queue that
+only the process which served the confirming HTTP request ever fills, but that
+queue is now a latency optimisation rather than the mechanism the guarantee
+rests on: a second `@Scheduled` method on the same class,
+`PosOrderExportTrigger.sweepStale`, reads `integration.pos_order_exports`
+directly for `PENDING` rows older than a threshold (`horecaos.pos.export.sweep-stale-after`,
+default 15 s) and dispatches them through the identical `send()` call the
+queue uses, claimed by the same conditional update
+(`JdbcPosExportStore.claimForAttempt`) that already made a repeat send safe —
+no new claim mechanism, no lease, no shared registry. Whichever process
+confirmed an order, `worker` now dispatches it within one sweep interval if
+`app` did not already; `PosOrderExportCrossInstanceDispatchTests` confirms one
+`PosOrderExportTrigger`/`PosOrderExportService` object graph opening an export
+and a second, independent object graph — its own queue, its own adapter,
+sharing only the database — dispatching it once the row goes stale, and that
+disabling the sweep's dispatch line makes that test fail on exactly the
+assertion the guarantee depends on. **POS no longer blocks the strict split**:
+`worker: worker` alone dispatches every tenant's confirmed orders, so `app: app`
+costs POS nothing.
+
+**`RealtimeStreamMaintenance` is the one job left, and it has no durable-handoff
+answer because it needs none — and no distributed one either.**
+`tick`/`onGrantChanged` drive `SseStreamRegistry`, which is deliberately
+process-local (see that class's own doc): a stream lives and dies with the
+replica holding its socket, and there is no row anywhere a second replica could
+read to learn a first replica's connection exists. That is not a defect this
+wave introduced or found — it is the ADR 0033/ADR 0045 design, and
+`SseStreamRegistryTests` now includes a dedicated case (wave 61) proving a
+second registry instance is unaffected by a signal, a tick, or a grants change
+against a first. The problem is narrower than "is this safe": the tick is
+*already* per-process-correct, in the sense the alternatives below call out;
+the problem is that this class's blanket `@EnableScheduling` gate is
+all-or-nothing, so role `app` — which is the only role that will ever hold an
+SSE socket under this runtime shape — stops this tick along with the batch
+schedulers it was trying to remove from `app` in the first place, and `worker`
+can never run it usefully because `worker` never holds a socket. Three answers
+were weighed and the third is the one this wave keeps:
+
+1. *Make maintenance per-process and idempotent, so each replica tends only its
+   own streams.* Already true, and not new — it is what makes running this
+   tick on every `app` replica of a future multi-`app` deployment safe without
+   any change. It does not by itself answer which role must run it.
+2. *Route SSE through sticky sessions at the edge*, so exactly one `app`
+   replica ever holds a given client's socket for its life. Solves nothing
+   about the scheduling gate — that replica still needs to run its own tick —
+   and adds a reverse-proxy affinity rule for a single-`app` pilot deployment
+   that does not need it yet.
+3. *Accept the limitation and record it as a deployment-topology constraint.*
+   Chosen. Building anything that lets one process learn about another
+   process's open SSE connections — a shared subscriber registry, pub/sub, a
+   message bus — is precisely the real-time gateway ADR 0045 defers, for
+   reasons that ADR gives and this wave does not revisit.
+
+So: **`app: app` / `worker: worker` is not yet fully deployable.** POS no
+longer blocks it, but SSE maintenance does, in the least dramatic way this
+record can state it — the `app` container must keep role `both` rather than
+`app` for as long as it serves the SSE endpoint, which is what actually
+removes the last blocker: `both` on `app` reintroduces every other scheduled
+job onto `app` too (safe, per this record's own audit, that every mutating job
+tolerates concurrent execution — merely not resource-separated), while
+`worker: worker` still takes on the dedicated load the split was for. The
+deployable configuration today is **`app: both` / `worker: worker`**, not the
+fully strict split this record originally described; closing that last gap
+needs either a per-job scheduling gate finer than this class's single switch,
+or ADR 0045's realtime gateway removing the need for process-held socket state
+at all — neither is this wave's to build.
 
 `scheduler` and `integration` remain profiles rather than
 containers, so ADR 0028 can still issue an identity per role and grant
