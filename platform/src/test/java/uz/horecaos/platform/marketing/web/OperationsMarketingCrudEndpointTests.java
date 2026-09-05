@@ -7,6 +7,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -383,15 +386,21 @@ class OperationsMarketingCrudEndpointTests {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
-                     status, granted_by, reason)
+                     status, granted_by, reason, valid_from)
                 VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :tenantId,
-                        'ACTIVE', 'test-fixture', 'marketing crud endpoint test')
+                        'ACTIVE', 'test-fixture', 'marketing crud endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
                 .param("id", UUID.nameUUIDFromBytes((subject + role.code()).getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", TENANT)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                // Backdated rather than the column's own now(): a grant read
+                // back through JdbcAuthorizationService.grantsFor compares
+                // valid_from against this JVM's Clock.systemUTC(), and under
+                // heavy concurrent fork load the container's own wall clock can
+                // momentarily skew against it.
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }
 

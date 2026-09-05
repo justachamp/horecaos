@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -376,14 +379,20 @@ class FailureInspectionEndpointTests {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
-                     status, granted_by, reason)
+                     status, granted_by, reason, valid_from)
                 VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
-                        'ACTIVE', 'test-fixture', 'failure inspection endpoint test')
+                        'ACTIVE', 'test-fixture', 'failure inspection endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
                 .param("id", UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_SUPPORT.code()).getBytes(UTF_8)))
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_SUPPORT))
+                // Backdated rather than the column's own now(): a grant read
+                // back through JdbcAuthorizationService.grantsFor compares
+                // valid_from against this JVM's Clock.systemUTC(), and under
+                // heavy concurrent fork load the container's own wall clock can
+                // momentarily skew against it.
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }
 

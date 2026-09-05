@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -252,15 +255,24 @@ class MerchantBindingSecretRotationEndpointTests {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
-                     status, granted_by, reason)
+                     status, granted_by, reason, valid_from)
                 VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :tenantId,
-                        'ACTIVE', 'test-fixture', 'merchant binding rotation endpoint test')
+                        'ACTIVE', 'test-fixture', 'merchant binding rotation endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
                 .param("id", UUID.nameUUIDFromBytes((subject + role.code()).getBytes(UTF_8)))
                 .param("tenantId", TENANT)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                // The column defaults to the database's own now(), which under
+                // heavy concurrent fork load can momentarily disagree with this
+                // JVM's clock (ADR pattern established by
+                // JdbcAuthorizationServiceTests/GrantManagementServiceTests): a
+                // grant read back through JdbcAuthorizationService.grantsFor
+                // compares valid_from against Clock.systemUTC(), so backdating on
+                // that same clock keeps the comparison honest regardless of any
+                // skew against the container's own wall clock.
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }
 
