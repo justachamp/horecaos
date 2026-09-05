@@ -74,6 +74,15 @@ class IdempotentResponseClassificationTests {
             "ProviderInstallationController#bind",
             "ProviderInstallationController#activateBinding",
             "ProviderInstallationController#suspendBinding",
+            // Wave 53: the same four operations, unmodified, reachable at the
+            // operations-prefixed mirror of the path above. Every method here
+            // forwards to ProviderInstallationController's own handler, so the
+            // response carries exactly what its reviewed entry already says --
+            // this is one call site, not a new hazard.
+            "OperationsProviderInstallationController#install",
+            "OperationsProviderInstallationController#bind",
+            "OperationsProviderInstallationController#activateBinding",
+            "OperationsProviderInstallationController#suspendBinding",
             // Commercial administration: one newly created identifier each.
             "CommercialAdminController#createPlan",
             "CommercialAdminController#draftVersion",

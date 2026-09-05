@@ -927,6 +927,36 @@
         "required" : [ "bands" ],
         "type" : "object"
       },
+      "BindRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capabilities" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "primaryCapabilities" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "capabilities", "primaryCapabilities" ],
+        "type" : "object"
+      },
       "BindingRequest" : {
         "properties" : {
           "fulfillmentMode" : {
@@ -1712,6 +1742,17 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ConnectField" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "ConsentRequest" : {
@@ -3167,6 +3208,78 @@
           "windowsWritten" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "InstallRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalAccountReference" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "providerType" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "secretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "displayName", "environmentCode", "providerType" ],
+        "type" : "object"
+      },
+      "InstallationView" : {
+        "properties" : {
+          "adapterVersion" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastConnectionStatus" : {
+            "type" : "string"
+          },
+          "lastSecretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "secretReference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -4873,6 +4986,20 @@
         },
         "type" : "object"
       },
+      "PageInstallationView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InstallationView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PagePendingApprovalResponse" : {
         "properties" : {
           "items" : {
@@ -5341,6 +5468,35 @@
         },
         "type" : "object"
       },
+      "ProviderConnectDeclaration" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "type" : "string"
+          },
+          "fields" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectField"
+            },
+            "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ProviderInstallationControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "PublishRequest" : {
         "properties" : {
           "contentsByLocale" : {
@@ -5704,6 +5860,23 @@
             "type" : "string"
           },
           "terminalStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Reconciliation" : {
+        "properties" : {
+          "adapterVersion" : {
+            "type" : "string"
+          },
+          "capabilities" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "connectionStatus" : {
             "type" : "string"
           }
         },
@@ -6611,6 +6784,56 @@
         "required" : [ "reason", "value" ],
         "type" : "object"
       },
+      "RotateSecretRequest" : {
+        "properties" : {
+          "newSecretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "newSecretReference", "reason" ],
+        "type" : "object"
+      },
+      "RotateSecretResponse" : {
+        "properties" : {
+          "botUsername" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "newSecretReference" : {
+            "type" : "string"
+          },
+          "oldSecretReference" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RotateSecretValueRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "value" ],
+        "type" : "object"
+      },
       "RotationRequest" : {
         "properties" : {
           "reason" : {
@@ -6776,6 +6999,34 @@
           },
           "scope" : {
             "$ref" : "#/components/schemas/ResourceScope"
+          }
+        },
+        "type" : "object"
+      },
+      "SecretIngressRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
+            "type" : "string"
+          },
+          "providerType" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "providerType", "value" ],
+        "type" : "object"
+      },
+      "SecretIngressResponse" : {
+        "properties" : {
+          "reference" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -8727,7 +8978,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -8795,7 +9046,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11661,6 +11912,434 @@
         },
         "summary" : "Delivery cost at a stated basis",
         "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations" : {
+      "get" : {
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInstallationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List installations, without credentials",
+        "tags" : [ "Provider integrations" ]
+      },
+      "post" : {
+        "description" : "The environment is chosen from an approved catalogue; a tenant never supplies a URL, which closes the request-forgery path at the model.",
+        "operationId" : "install",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Install a provider",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/connect-fields" : {
+      "get" : {
+        "description" : "Identical to the control-plane-prefixed path's own operation; see ProviderInstallationController.connectFields for the full description. Published here too so the operations app's generated client covers what it actually calls.",
+        "operationId" : "connectFields",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Per-adapter connect field declarations (ADR 0065)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/secrets" : {
+      "post" : {
+        "description" : "Writes the value directly into the ADR 0028 secrets manager under a platform-generated reference and returns only that reference. There is no corresponding read endpoint anywhere in the API: pass the returned reference to the installation or merchant-binding call that follows.",
+        "operationId" : "write",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SecretIngressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SecretIngressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Write a provider credential",
+        "tags" : [ "Secret ingress" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "post" : {
+        "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
+        "operationId" : "bind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BindRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind an installation to a brand or location",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/activate" : {
+      "post" : {
+        "description" : "Refused until the installation has passed a connection check.",
+        "operationId" : "activateBinding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a binding",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/suspend" : {
+      "post" : {
+        "description" : "The rollback path: operations return to a manual process while mappings and evidence are retained for reconciliation.",
+        "operationId" : "suspendBinding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a binding",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation" : {
+      "post" : {
+        "description" : "Records append-only preflight evidence: the secret reference must resolve and the wired adapter must declare each capability. POS uses its specialised live discovery endpoint instead.",
+        "operationId" : "reconcileCapabilities",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Reconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reconcile an installation's declared capabilities",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
+      "post" : {
+        "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
+        "operationId" : "rotateSecret_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Point an installation's secret reference at a rotated credential",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value" : {
+      "post" : {
+        "description" : "ADR 0065: accepts the new VALUE directly, verifies it (Telegram bot installations only) before it is ever written anywhere, then writes it through the door under a freshly-minted reference and swaps the installation onto it.",
+        "operationId" : "rotateSecretByValue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotateSecretValueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateSecretResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate an installation's credential through the write-only door",
+        "tags" : [ "Provider integrations" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/marketplace/liveness" : {
@@ -15144,7 +15823,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
         "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18911,7 +19590,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20105,26 +20784,11 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Which optional messages a customer receives, per class and channel",
-    "name" : "Notification preferences"
-  }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
   }, {
-    "description" : "A brand's own accrual rate and redemption cap",
-    "name" : "Loyalty policy"
-  }, {
-    "description" : "The delivery queue, and manual assign/unassign",
-    "name" : "Dispatch board"
-  }, {
-    "description" : "Seating, rounds, the running bill, and settlement",
-    "name" : "Dine-in sessions"
-  }, {
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
-  }, {
-    "description" : "Referral codes and redemptions actually happening at a brand",
-    "name" : "Referrals"
   }, {
     "description" : "The merchant's own plan, entitlements, and usage",
     "name" : "Commercial"
@@ -20132,65 +20796,23 @@
     "description" : "Deterministic cart pricing and checkout acceptance",
     "name" : "Quotes"
   }, {
-    "description" : "Manual open/closed state, capacity, and preparation bands",
-    "name" : "Location service operations"
-  }, {
     "description" : "ADR 0060 section 3: the staff identity /link handshake",
     "name" : "Telegram staff linking"
-  }, {
-    "description" : "Balances, manual adjustments, and liability",
-    "name" : "Loyalty operations"
-  }, {
-    "description" : "Conversation list, history, and takeover/return/close actions",
-    "name" : "Operator inbox"
-  }, {
-    "description" : "Versioned metrics, day-grain reports, and their provenance",
-    "name" : "Reporting"
   }, {
     "description" : "Customer accounts, contact details, addresses, and consent",
     "name" : "Customers"
   }, {
-    "description" : "Recent call events at a branch (ADR 0064)",
-    "name" : "Voice call log"
-  }, {
-    "description" : "Refunds, delivery-fee reimbursements, and future-discount entitlements",
-    "name" : "Order remedies"
-  }, {
     "description" : "Engagements, shift approval, settlement, and delivery cost",
     "name" : "Courier operations"
-  }, {
-    "description" : "Immutable security and business evidence",
-    "name" : "Audit"
-  }, {
-    "description" : "Offered/answered/missed/transferred, per hour, per operator (ADR 0064)",
-    "name" : "Voice call stats"
-  }, {
-    "description" : "The inbound-call client card (ADR 0064)",
-    "name" : "Voice screen-pop"
   }, {
     "description" : "One order's payment intent and attempts, and re-presenting its checkout surface",
     "name" : "Order payments"
   }, {
-    "description" : "Presigned upload lifecycle for catalog and brand imagery",
-    "name" : "Media"
-  }, {
     "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
     "name" : "Staff sign-in"
   }, {
-    "description" : "The dispatcher's live map, and the audited track reveal",
-    "name" : "Courier positions"
-  }, {
     "description" : "Server-Sent Events for the live operations surfaces",
     "name" : "Operational streams"
-  }, {
-    "description" : "The maker-checker queue: actions waiting for a second signature",
-    "name" : "Approval requests"
-  }, {
-    "description" : "Reference search, handover, and liveness",
-    "name" : "Marketplace operations"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
   }, {
     "description" : "Publishing and reading a brand's own terms of service (ADR 0068)",
     "name" : "Terms of service authoring"
@@ -20201,11 +20823,8 @@
     "description" : "Opening and closing the window in which a courier's position is collected",
     "name" : "Courier duty and telemetry"
   }, {
-    "description" : "Sections, tables, QR tokens, and branch settings",
-    "name" : "Dine-in floor plan"
-  }, {
-    "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
-    "name" : "Referral program"
+    "description" : "The ADR 0065 write-only door: values enter, only references leave",
+    "name" : "Secret ingress"
   }, {
     "description" : "The branch's order queue, approvals, and timeline",
     "name" : "Operations orders"
@@ -20222,6 +20841,81 @@
     "description" : "Which legal entity settles under which provider account (ADR 0013, ADR 0026)",
     "name" : "Merchant bindings"
   }, {
+    "description" : "Production tickets, the buffer, and station advances",
+    "name" : "Kitchen board"
+  }, {
+    "description" : "Binary availability and stock listing at a location",
+    "name" : "Inventory"
+  }, {
+    "description" : "POS, payment, delivery, and notification accounts",
+    "name" : "Provider integrations"
+  }, {
+    "description" : "Table availability and the booking lifecycle",
+    "name" : "Reservations"
+  }, {
+    "description" : "Which optional messages a customer receives, per class and channel",
+    "name" : "Notification preferences"
+  }, {
+    "description" : "A brand's own accrual rate and redemption cap",
+    "name" : "Loyalty policy"
+  }, {
+    "description" : "The delivery queue, and manual assign/unassign",
+    "name" : "Dispatch board"
+  }, {
+    "description" : "Seating, rounds, the running bill, and settlement",
+    "name" : "Dine-in sessions"
+  }, {
+    "description" : "Referral codes and redemptions actually happening at a brand",
+    "name" : "Referrals"
+  }, {
+    "description" : "Manual open/closed state, capacity, and preparation bands",
+    "name" : "Location service operations"
+  }, {
+    "description" : "Balances, manual adjustments, and liability",
+    "name" : "Loyalty operations"
+  }, {
+    "description" : "Conversation list, history, and takeover/return/close actions",
+    "name" : "Operator inbox"
+  }, {
+    "description" : "Versioned metrics, day-grain reports, and their provenance",
+    "name" : "Reporting"
+  }, {
+    "description" : "Recent call events at a branch (ADR 0064)",
+    "name" : "Voice call log"
+  }, {
+    "description" : "Refunds, delivery-fee reimbursements, and future-discount entitlements",
+    "name" : "Order remedies"
+  }, {
+    "description" : "Immutable security and business evidence",
+    "name" : "Audit"
+  }, {
+    "description" : "Offered/answered/missed/transferred, per hour, per operator (ADR 0064)",
+    "name" : "Voice call stats"
+  }, {
+    "description" : "The inbound-call client card (ADR 0064)",
+    "name" : "Voice screen-pop"
+  }, {
+    "description" : "Presigned upload lifecycle for catalog and brand imagery",
+    "name" : "Media"
+  }, {
+    "description" : "The dispatcher's live map, and the audited track reveal",
+    "name" : "Courier positions"
+  }, {
+    "description" : "The maker-checker queue: actions waiting for a second signature",
+    "name" : "Approval requests"
+  }, {
+    "description" : "Reference search, handover, and liveness",
+    "name" : "Marketplace operations"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Sections, tables, QR tokens, and branch settings",
+    "name" : "Dine-in floor plan"
+  }, {
+    "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
+    "name" : "Referral program"
+  }, {
     "description" : "Delivery evidence for one message, and the manual retry",
     "name" : "Operations notifications"
   }, {
@@ -20234,16 +20928,7 @@
     "description" : "ONLINE/PAUSED/WRAP_UP/OFFLINE, channel-neutral (ADR 0064)",
     "name" : "Voice presence"
   }, {
-    "description" : "Production tickets, the buffer, and station advances",
-    "name" : "Kitchen board"
-  }, {
-    "description" : "Binary availability and stock listing at a location",
-    "name" : "Inventory"
-  }, {
     "description" : "Unreported receipts, blocked work, and receipt coverage",
     "name" : "Fiscal documents"
-  }, {
-    "description" : "Table availability and the booking lifecycle",
-    "name" : "Reservations"
   } ]
 }

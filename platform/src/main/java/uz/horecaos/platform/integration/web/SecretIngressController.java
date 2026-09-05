@@ -77,6 +77,15 @@ import uz.horecaos.platform.web.cache.RateLimiter;
  * can install a provider but not register a merchant binding can write a
  * candidate credential here and still cannot make it operative for a real
  * payment.
+ *
+ * <p><strong>This path is kept for the published contract, not for a caller.</strong>
+ * The operations app's Integrations screen (ADR 0065) is this door's real caller
+ * and reaches it through {@link OperationsSecretIngressController}, a thin
+ * forward onto {@link #write} at the operations-prefixed mirror of this path.
+ * The control-plane app never called this class. {@code OpenApiContractTests}
+ * forbids dropping a published path even with no remaining caller, so this class
+ * and its {@code /api/v1/control-plane/...} mapping stay exactly as they were —
+ * the one implementation of the write-only door, unmodified by the move.
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/integrations/secrets")

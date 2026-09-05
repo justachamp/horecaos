@@ -56,6 +56,18 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * <p>A binding is created suspended. Activation is a separate call that a
  * connection check must precede, because binding a POS to the wrong restaurant
  * is only discovered when an order exports to the wrong kitchen.
+ *
+ * <p><strong>This path is kept for the published contract, not for a caller.</strong>
+ * The operations app's own Integrations screen (ADR 0065) calls
+ * {@link OperationsProviderInstallationController} at the operations-prefixed
+ * mirror of every endpoint below; the control-plane app never called this class
+ * (its own provider reads go through the unrelated, cross-tenant
+ * {@code PlatformIntegrationAdminController}). {@code OpenApiContractTests}
+ * forbids dropping a published path even when its only caller has moved on, so
+ * this class stays exactly as it was rather than being deleted or rewritten —
+ * every method here is this codebase's one implementation of installation and
+ * secret-rotation logic, and {@link OperationsProviderInstallationController}
+ * forwards to it unchanged.
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/integrations")

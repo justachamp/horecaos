@@ -12,20 +12,22 @@ import { command } from '../../../core/api/idempotency';
  * in wave 26 — see this app's `docs/adr/partial/0065-*.md` for the placement
  * decision).
  *
- * Three server surfaces, one service, exactly as the control-plane original
- * this was ported from documented — the reason for keeping all three visible
- * here rather than behind a single facade endpoint is unchanged by the move:
+ * Three server surfaces, one service — kept visible here rather than behind a
+ * single facade endpoint, the same shape the control-plane original this was
+ * ported from used:
  *
- *   - `integration.web.SecretIngressController` — the write-only door. Still
- *     mounted at `/api/v1/control-plane/tenants/{tenantId}/integrations/secrets`
- *     — moving it would break the control-plane app's own (soon to be
- *     removed) copy of this screen, and `OpenApiContractTests` refuses a
- *     published path ever disappearing, so this wave leaves the path where it
- *     is and calls it from here instead. No method below ever reads a value
+ *   - `integration.web.OperationsSecretIngressController` — the write-only
+ *     door, at `/api/v1/operations/tenants/{tenantId}/integrations/secrets`
+ *     since wave 53. It forwards, unchanged, to
+ *     `integration.web.SecretIngressController`'s original
+ *     `/api/v1/control-plane/...` implementation, which stays published
+ *     (`OpenApiContractTests` refuses a published path ever disappearing) but
+ *     is no longer this screen's caller. No method below ever reads a value
  *     back, because the server has no endpoint that would let it.
- *   - `integration.web.ProviderInstallationController` — installations,
- *     connect-field declarations, and an installation's credential rotation.
- *     Same control-plane path, same reason.
+ *   - `integration.web.OperationsProviderInstallationController` —
+ *     installations, connect-field declarations, and an installation's
+ *     credential rotation. Same wave-53 move, same forwarding relationship to
+ *     `ProviderInstallationController`.
  *   - `payments.web.MerchantBindingController` — merchant bindings and their
  *     own rotation. Already on the operations surface
  *     (`/api/v1/operations/tenants/{tenantId}/merchant-bindings`) — this is
