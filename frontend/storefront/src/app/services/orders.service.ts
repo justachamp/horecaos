@@ -161,12 +161,17 @@ export class OrdersService {
       total_price: row.totalMinor,
       order_number: row.publicOrderNumber as unknown as number,
       number: row.publicOrderNumber as unknown as number,
-      items_count: 0,
-      delivery_distance: 0,
+      // `OrderSummaryResponse` carries no line items and no distance -- see
+      // its Javadoc ("no lines... open one order to read those"). These used
+      // to be hardcoded to 0, which rendered as the very wrong "0 ta" on
+      // every order card; left unset, the card shows nothing rather than a
+      // fabricated count.
+      items_count: undefined,
+      delivery_distance: undefined,
       image_url: null,
       created_date: row.placedAt,
       created_time: row.placedAt,
-      actions: [],
+      actions: isCancellable(row.status) ? ['cancel'] : [],
     };
   }
 
@@ -197,7 +202,7 @@ export class OrdersService {
       delivery: { price: 0, discount: 0 },
       packaging: { price: 0, discount: 0 },
       total: { price: order.totalMinor, discount: 0 },
-      actions: [],
+      actions: isCancellable(order.status) ? ['cancel'] : [],
     };
   }
 }
@@ -218,6 +223,32 @@ const PLATFORM_STATUSES: Readonly<Record<string, readonly string[]>> = {
   completed: ['COMPLETED'],
   cancelled: ['CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMENT_FAILED'],
 };
+
+/**
+ * Statuses `POST .../cancellations` would still accept with no registry
+ * reason, mirroring the server's own read model,
+ * `OrderActionsPolicy.canCancelWithoutReason` (`ordering.application`,
+ * combined there with `OrderStateMachine.permits(status, CANCELLED)` into
+ * `canCancel`): once an order is `CONFIRMED` the kitchen owns it, and every
+ * status from there on refuses a reasonless cancellation.
+ *
+ * The storefront order responses carry no server-computed `actions[]` today
+ * -- that read model is wired only into `OperationsOrderController`, the
+ * staff-facing surface -- so this is what decides whether `toApiOrder` and
+ * `toApiOrderDetail` below offer a cancel button at all. Getting it wrong in
+ * either direction is visible: too narrow, and a cancellable order shows no
+ * button; too wide, and a customer taps cancel on an order the platform then
+ * refuses with a conflict.
+ */
+const CANCELLABLE_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  'RECEIVED',
+  'PAYMENT_AUTHORIZING',
+  'AWAITING_APPROVAL',
+]);
+
+function isCancellable(status: string): boolean {
+  return CANCELLABLE_ORDER_STATUSES.has(status);
+}
 
 /** The version the server actually holds, or null when this was not a stale one. */
 function staleVersionFrom(failure: unknown): number | null {

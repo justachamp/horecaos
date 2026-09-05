@@ -49,11 +49,11 @@ function summary(orderId: string, status: string, version = 1): OrderSummaryResp
   };
 }
 
-function orderResponse(orderId: string, version: number): OrderResponse {
+function orderResponse(orderId: string, version: number, status = 'RECEIVED'): OrderResponse {
   return {
     orderId,
     publicOrderNumber: `PN-${orderId}`,
-    status: 'RECEIVED',
+    status,
     currency: 'UZS',
     subtotalMinor: 1000,
     taxMinor: 0,
@@ -128,6 +128,98 @@ describe('OrdersService.getOrders (status -> tab mapping)', () => {
     const orders = await firstValueFrom(service.getOrders(['not-a-real-tab']));
 
     expect(orders).toHaveLength(1);
+  });
+});
+
+describe('OrdersService: never fabricates an item count or distance', () => {
+  // Regression for the proven "0 ta | km" defect: OrderSummaryResponse carries
+  // no line items and no distance (see its Javadoc), so a list row must not
+  // invent either one.
+  it('leaves items_count and delivery_distance unset on every list row, whatever its status', async () => {
+    const { service, api } = setUp();
+    api.list.mockResolvedValue({ items: [summary('o1', 'CONFIRMED')], nextCursor: null });
+
+    const [order] = await firstValueFrom(service.getOrders([]));
+
+    expect(order.items_count).toBeUndefined();
+    expect(order.delivery_distance).toBeUndefined();
+  });
+
+  it('reports the real line count on an order detail read, which does carry lines', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...orderResponse('o1', 1),
+      lines: [
+        {
+          lineNumber: 1,
+          productName: 'Osh',
+          variantName: '',
+          quantity: 2,
+          unitAmountMinor: 1000,
+          finalAmountMinor: 2000,
+          modifiers: [],
+        },
+      ],
+    });
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.items_count).toBe(1);
+  });
+});
+
+describe('OrdersService: cancel action reflects the real state-machine guard', () => {
+  // Mirrors ordering.application.OrderActionsPolicy.canCancelWithoutReason on
+  // the platform: cancellable up to and including AWAITING_APPROVAL, refused
+  // from CONFIRMED on. Getting this wrong either hides a working cancel
+  // button or offers one the platform will refuse with a conflict.
+  const CANCELLABLE = ['RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'];
+  const NOT_CANCELLABLE = [
+    'CONFIRMED',
+    'PREPARING',
+    'READY',
+    'FULFILLING',
+    'COMPLETED',
+    'CANCELLED',
+    'REJECTED',
+    'EXPIRED',
+    'PAYMENT_FAILED',
+  ];
+
+  it.each(CANCELLABLE)('offers cancel on a list row at status %s', async (status) => {
+    const { service, api } = setUp();
+    api.list.mockResolvedValue({ items: [summary('o1', status)], nextCursor: null });
+
+    const [order] = await firstValueFrom(service.getOrders([]));
+
+    expect(order.actions).toContain('cancel');
+  });
+
+  it.each(NOT_CANCELLABLE)('offers no cancel on a list row at status %s', async (status) => {
+    const { service, api } = setUp();
+    api.list.mockResolvedValue({ items: [summary('o1', status)], nextCursor: null });
+
+    const [order] = await firstValueFrom(service.getOrders([]));
+
+    expect(order.actions).not.toContain('cancel');
+  });
+
+  it.each(CANCELLABLE)('offers cancel on an order detail read at status %s', async (status) => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(orderResponse('o1', 1, status));
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.actions).toContain('cancel');
+  });
+
+  it.each(NOT_CANCELLABLE)('offers no cancel on an order detail read at status %s', async (status) => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(orderResponse('o1', 1, status));
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.actions).not.toContain('cancel');
   });
 });
 

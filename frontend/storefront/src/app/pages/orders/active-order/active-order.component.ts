@@ -2,13 +2,18 @@ import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { OrderItem, API_TO_UI_STATUS, UI_TO_API_STATUS, API_STATUS_TO_I18N_KEY } from '../orders.data';
+import { OrderItem, ORDER_STATUS_I18N_KEY, formatPlacedAt } from '../orders.data';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { OrdersService, type ApiOrder } from '../../../services/orders.service';
 import { NotificationService } from '../../../services/notification.service';
 
-/** API status values for active (in-progress) orders tab */
+/**
+ * Legacy tab-identity tokens, not real order statuses. `OrdersService.getOrders`
+ * maps each one to the real platform statuses it covers (see its own
+ * `PLATFORM_STATUSES` table) -- a real order's `status` field is never one of
+ * these words.
+ */
 const ACTIVE_ORDER_STATUSES = ['new', 'accepted', 'cooking', 'ready', 'delivering'] as const;
 
 /** How often the list re-reads while this screen is open and visible. */
@@ -90,18 +95,21 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
     return apiOrders.map((o) => {
       const total = o.total ?? o.total_price ?? 0;
       const priceStr = total > 0 ? `${total.toLocaleString('uz-UZ')} ${currency}` : `0 ${currency}`;
+      // `items_count` and `delivery_distance` are only ever set when the API
+      // actually reports them -- see OrdersService.toApiOrder's comment. They
+      // do not exist on today's order-list response, so these stay empty
+      // rather than showing a fabricated "0".
       const itemCount = o.items_count != null ? `${o.items_count} ${itemsUnit}` : '';
       const distM = o.delivery_distance ?? 0;
       const distanceKm = distM > 0 ? (distM / 1000).toFixed(1) : '';
       const orderNum = o.order_number ?? o.number ?? o.id ?? 0;
       const statusId = (typeof o.status === 'object' ? o.status?.id : o.status) ?? '';
-      const uiStatus = API_TO_UI_STATUS[statusId ?? ''] ?? statusId ?? 'tasdiqlandi';
       return {
         id: String(o.id),
         title: 'Order',
         subtitle: '',
-        status: uiStatus as OrderItem['status'],
-        date: '',
+        status: statusId,
+        date: formatPlacedAt(o.created_date),
         price: priceStr,
         image: o.image_url || '/jizbiz/orders/buyurtmalar_0.png',
         orderNumber: orderNum,
@@ -112,11 +120,17 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * The platform's own status, translated -- never a guessed legacy word and
+   * never a raw i18n key left on screen. `ORDER_STATUS_I18N_KEY` names every
+   * status `ordering.domain.OrderStatus` defines; a status this build somehow
+   * does not recognise falls back to the raw value from the API rather than
+   * an untranslated key path like `orders.statusCONFIRMED`.
+   */
   getStatusLabel(status: string): string {
-    const apiStatus = UI_TO_API_STATUS[status] ?? status.toLowerCase();
-    const i18nSuffix = API_STATUS_TO_I18N_KEY[apiStatus];
-    const key = i18nSuffix ? `orders.${i18nSuffix}` : `orders.status${status.charAt(0).toUpperCase() + status.slice(1)}`;
-    return this.translate.get(key) || status;
+    if (!status) return '';
+    const key = ORDER_STATUS_I18N_KEY[status];
+    return key ? this.translate.get(key) : status;
   }
 
   cancelOrder(order: OrderItem): void {

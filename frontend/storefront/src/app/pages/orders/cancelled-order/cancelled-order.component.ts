@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { OrderItem } from '../orders.data';
+import { OrderItem, formatPlacedAt } from '../orders.data';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { OrdersService, type ApiOrder } from '../../../services/orders.service';
@@ -58,16 +58,21 @@ export class CancelledOrderComponent implements OnInit, OnDestroy {
     return apiOrders.map((o) => {
       const total = o.total ?? o.total_price ?? 0;
       const priceStr = total > 0 ? `${total.toLocaleString('uz-UZ')} ${currency}` : `0 ${currency}`;
+      // items_count/delivery_distance are only set when the API actually
+      // reports them; today's order-list response never does (see
+      // OrdersService.toApiOrder), so these stay empty rather than a
+      // fabricated "0".
       const itemCount = o.items_count != null ? `${o.items_count} ${itemsUnit}` : '';
       const distM = o.delivery_distance ?? 0;
       const distanceKm = distM > 0 ? (distM / 1000).toFixed(1) : '';
       const orderNum = o.order_number ?? o.number ?? o.id ?? 0;
+      const statusId = (typeof o.status === 'object' ? o.status?.id : o.status) ?? '';
       return {
         id: String(o.id),
         title: 'Order',
         subtitle: '',
-        status: 'bekor',
-        date: '',
+        status: statusId,
+        date: formatPlacedAt(o.created_date),
         price: priceStr,
         image: o.image_url || '/jizbiz/orders/buyurtmalar_0.png',
         orderNumber: orderNum,
