@@ -37,7 +37,7 @@ import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
- * Step 6 of {@link CheckoutService}'s order of operations: the order, and
+ * Step 7 of {@link CheckoutService}'s order of operations: the order, and
  * everything it must remember for ever. Resolves how it will be accepted,
  * allocates its human-facing number, writes the order row and its ADR 0039
  * checkout revision, copies the priced result onto immutable line and customer

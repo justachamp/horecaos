@@ -47,11 +47,13 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryF
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.pricing.application.PricingEngine;
+import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -151,12 +153,15 @@ class DeliveryFeeResolutionTests {
         tariffs = new DeliveryTariffService(tariffStore, clock);
         resolver = new DeliveryFeeResolver(
                 zoneStore, tariffStore, resolutionStore, unboundRouting(), new SimpleMeterRegistry());
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, mapper);
         quotes = new QuoteService(
                 new JdbcPricingStore(jdbc, mapper),
                 new PricingEngine(),
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 new JdbcSalesChannelStore(jdbc),
                 resolver,
+                promoCodeStore,
+                new PromoCodeEligibilityService(promoCodeStore),
                 clock);
 
         seedTenancy();

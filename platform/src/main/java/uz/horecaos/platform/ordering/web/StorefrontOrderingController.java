@@ -326,6 +326,7 @@ public class StorefrontOrderingController {
                     priced.quote().currency(),
                     priced.quote().subtotalMinor(),
                     priced.quote().taxMinor(),
+                    priced.quote().discountMinor(),
                     priced.quote().totalMinor(),
                     priced.quote().expiresAt()));
         } catch (CartService.StaleCartException stale) {
@@ -337,6 +338,58 @@ public class StorefrontOrderingController {
                     ErrorCode.VALIDATION_FAILED,
                     unpriced.getMessage(),
                     java.util.Map.of("reason", unpriced.code(), "subjectId", String.valueOf(unpriced.subjectId())));
+        }
+    }
+
+    @PostMapping("/carts/{cartId}/promo-code")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Apply a promo code to the cart",
+            description = "ADR 0072. Checked read-only against live coupon state before it is "
+                    + "stored — active, in its window, and not exhausted — and checked again, "
+                    + "independently, on every subsequent price. A cart already carrying a code "
+                    + "has it replaced rather than refused: this platform supports at most one "
+                    + "applied code per cart. Clears any attached quote, because a code changes "
+                    + "what the total will be.")
+    public ResponseEntity<CartResponse> applyPromoCode(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            @Valid @RequestBody ApplyPromoCodeRequest body,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            var view = carts.applyPromoCode(
+                    tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, body.code());
+            return ResponseEntity.ok(CartResponse.of(view));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
+        }
+    }
+
+    @DeleteMapping("/carts/{cartId}/promo-code")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Remove the cart's applied promo code",
+            description =
+                    "Does nothing when none is applied. Clears any attached quote, the same " + "as applying one does.")
+    public ResponseEntity<CartResponse> removePromoCode(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            var view = carts.removePromoCode(tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected);
+            return ResponseEntity.ok(CartResponse.of(view));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
         }
     }
 
@@ -531,7 +584,7 @@ public class StorefrontOrderingController {
                 switch (refused.code()) {
                     case "CART_NOT_FOUND", "LINE_NOT_FOUND", "TENANT_NOT_FOUND", "CHANNEL_NOT_REGISTERED" ->
                         ErrorCode.RESOURCE_NOT_FOUND;
-                    case "ADDRESS_NOT_FOUND" -> ErrorCode.RESOURCE_NOT_FOUND;
+                    case "ADDRESS_NOT_FOUND", "CODE_NOT_FOUND" -> ErrorCode.RESOURCE_NOT_FOUND;
                     case "CART_NOT_EDITABLE",
                             "CART_EXPIRED",
                             "NOT_SERVICEABLE",
@@ -539,7 +592,16 @@ public class StorefrontOrderingController {
                             "GUEST_ORDERS_NOT_ALLOWED",
                             "CUSTOMER_BLACKLISTED",
                             "DESTINATION_NOT_APPLICABLE",
-                            "DESTINATION_NOT_LOCATED" -> ErrorCode.RESOURCE_CONFLICT;
+                            "DESTINATION_NOT_LOCATED",
+                            // ADR 0072: a well-formed request against a code whose current
+                            // state refuses it — nothing in the body is wrong, the coupon is
+                            // just not usable right now, the same class of answer
+                            // CUSTOMER_BLACKLISTED and NOT_SERVICEABLE already give.
+                            "CODE_NOT_ACTIVE",
+                            "CODE_NOT_YET_ACTIVE",
+                            "CODE_EXPIRED",
+                            "REDEMPTION_LIMIT_REACHED",
+                            "PER_CUSTOMER_LIMIT_REACHED" -> ErrorCode.RESOURCE_CONFLICT;
                     default -> ErrorCode.VALIDATION_FAILED;
                 };
         return new ApiException(code, refused.getMessage(), java.util.Map.of("reason", refused.code()));
@@ -591,6 +653,10 @@ public class StorefrontOrderingController {
             @Size(max = 500) String customerNote) {}
 
     public record MoveLocationRequest(@NotNull UUID locationId) {}
+
+    /** ADR 0072. Normalized (trimmed, upper-cased) by {@code CartService} before lookup. */
+    public record ApplyPromoCodeRequest(
+            @NotBlank @Size(min = 1, max = 32) String code) {}
 
     /**
      * Where a delivery order goes.
@@ -688,7 +754,8 @@ public class StorefrontOrderingController {
             @Nullable UUID quoteId,
             @Nullable String contextHash,
             Instant expiresAt,
-            List<CartLineResponse> lines) {
+            List<CartLineResponse> lines,
+            @Nullable String appliedPromoCode) {
 
         // `currency` then `fulfillmentMode`, in that order, and it is worth
         // saying why a line this dull carries a comment. The two arguments were
@@ -716,7 +783,8 @@ public class StorefrontOrderingController {
                                     line.variantId(),
                                     line.quantity(),
                                     line.customerNoteEncrypted() != null))
-                            .toList());
+                            .toList(),
+                    view.cart().appliedCouponCode());
         }
     }
 
@@ -778,6 +846,7 @@ public class StorefrontOrderingController {
             String currency,
             long subtotalMinor,
             long taxMinor,
+            long discountMinor,
             long totalMinor,
             Instant expiresAt) {}
 

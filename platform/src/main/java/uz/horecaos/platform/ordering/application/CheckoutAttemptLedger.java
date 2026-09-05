@@ -148,7 +148,7 @@ class CheckoutAttemptLedger {
     }
 
     /**
-     * 9. Convert the cart and settle the idempotency record — the two mutations
+     * 10. Convert the cart and settle the idempotency record — the two mutations
      * that mark a checkout as finished, once nothing further can refuse it.
      */
     void completeAttempt(CheckoutCommand command, CartRow cart, UUID attemptId, UUID orderId, Instant now) {

@@ -12,6 +12,7 @@ import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -45,6 +46,7 @@ public final class CheckoutServiceTestFactory {
             LocationCapacityPort capacity,
             QuoteAcceptancePort quotes,
             InventoryReservationPort inventory,
+            PromoCodeRedemptionPort promoCodes,
             OrderCatalogSnapshot catalog,
             OrderingTenantContext tenancy,
             OrderAcceptancePolicyService acceptancePolicies,
@@ -70,7 +72,7 @@ public final class CheckoutServiceTestFactory {
                         quotes,
                         catalog,
                         blacklist),
-                new CheckoutReservationStep(inventory, capacity, quotes),
+                new CheckoutReservationStep(inventory, capacity, quotes, promoCodes),
                 new CheckoutOrderWriter(
                         orders,
                         acceptancePolicies,
