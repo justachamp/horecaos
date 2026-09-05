@@ -9,8 +9,11 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * IA §2's P-tier screens — 2.1 Kitchen queue (KDS) and 2.5 Stop list — and
  * wave 38's tier-2 additions — 2.2 Buffer, 2.3 Expo/handover, 2.4 Display
  * board (VDU) — share the same "siblings an author moves between" shape
- * `catalog-shell.ts` already established for Catalog's screens. 2.6
- * Capacity & buffer settings stays tier 3 and is not one of these tabs.
+ * `catalog-shell.ts` already established for Catalog's screens. 2.6 Capacity
+ * & buffer settings joined this wave (43): tier 3, but a real one-card build
+ * over ADR 0041's `kitchen.station_capacity` — see `CapacityPage`'s own doc
+ * for the honest split between what is built and what a cook-count output
+ * would still need.
  *
  * **On the "device shell" in IA §2's own heading.** The spec calls for a
  * third template — a fullscreen, no-sidebar, touch-first shell for the KDS —

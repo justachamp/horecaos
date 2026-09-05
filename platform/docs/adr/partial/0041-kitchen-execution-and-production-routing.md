@@ -1,8 +1,9 @@
 # ADR 0041: Kitchen execution, production routing, and kitchen release
 
 - Decision status: Accepted
-- Implementation status: Partial — rollout steps 1 to 3 less throughput ceilings,
-  with the ADR 0019 proposal now reaching ordering.
+- Implementation status: Partial — rollout steps 1 to 3, with the ADR 0019
+  proposal now reaching ordering, and throughput ceilings configurable but not
+  yet consumed by release scheduling.
   V0030 creates schema `kitchen` with `stations`, `brand_routing_rules`,
   `location_routing_rules`, `tickets`, `ticket_items` and `ticket_events`;
   `JdbcKitchenStore.resolveStation` implements all five routing levels in one
@@ -23,10 +24,19 @@
   on the ticket the branch reads rather than only in a log.
   `KitchenOrderProgressConfiguration`'s stand-in stays behind
   `@ConditionalOnMissingBean` for a context without the adapter — a slice test,
-  or the rollback this ADR describes. Not built: devices and enrolment, expo and
-  handover — so nothing yet proposes the pickup `COMPLETED` that the port and the
-  adapter both support — branch suspension, station capacity, the ADR 0017
-  modifier-option stock and expiring stops, and the external event contracts.
+  or the rollback this ADR describes. Wave 43 adds V0144's
+  `kitchen.station_capacity` and `KitchenStationController`'s
+  `GET`/`POST .../kitchen/station-capacity`, plus `apps/operations`'
+  `CapacityPage` (IA §2.6) over it — create and list only, no edit or delete,
+  the same discipline routing rules already keep. `release_at` still computes
+  with no queue offset; a ceiling is read today only by a manager comparing it
+  against the board by eye, not by the scheduler this ADR sketched. Not
+  built: devices and enrolment, expo and handover — so nothing yet proposes
+  the pickup `COMPLETED` that the port and the adapter both support — branch
+  suspension, the ADR 0017 modifier-option stock and expiring stops, the
+  external event contracts, and — a genuine product-policy gap, not a schema
+  one — "cook headcount output": it needs a demand forecast and a
+  portions-per-cook ratio, and neither exists anywhere in this platform.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), operations (station layout and role bundles), product (entitlement)
@@ -430,8 +440,10 @@ evidence for whatever went wrong.
       seeded, and the six capabilities below are granted individually until
       product answers both.
 - [x] Station, routing-rule, ticket, item, and event tables added in **V0030**,
-      creating schema `kitchen`. No handover table, as decided. **No capacity,
-      device, or suspension table** — see "What was not built" below.
+      creating schema `kitchen`. No handover table, as decided. **No device or
+      suspension table** — see "What was not built" below. `station_capacity`
+      followed in **V0144** (wave 43), once it had a real reader — see the same
+      section.
 - [x] The routing resolver, all five levels, in one statement
       (`JdbcKitchenStore.resolveStation`), with the fallback station and a
       per-line `ROUTING_UNRESOLVED` event.
@@ -546,10 +558,15 @@ ADR 0016.
   therefore **not added**: the kitchen device calls the existing serviceability
   endpoint under the capability that already exists. The table above should be
   amended.
-- **`kitchen.station_capacity` and throughput shifting.** Configuration no code
-  reads is worse than no configuration: an operator would set a ceiling that
-  silently does nothing. `release_at` is computed from the promise and the prep
-  estimate with no queue offset.
+- **Throughput shifting.** `release_at` is still computed from the promise and
+  the prep estimate with no queue offset — the scheduler this ADR sketched is
+  not built. `kitchen.station_capacity` itself no longer belongs on this list:
+  wave 43 built it, once it had a real reader that was not "configuration no
+  code reads" — a manager comparing the ceiling against the board by eye, on
+  `apps/operations`' `CapacityPage` (IA §2.6). "Cook headcount output," the
+  other half of that IA row, stays unbuilt and is named there as a product-
+  policy gap (a demand forecast and a portions-per-cook ratio), not a schema
+  one.
 - **`kitchen.devices`, the VDU projection, and station-filtered device reads.** A
   device row with no principal behind it grants nothing and revokes nothing, which
   is exactly the shared-manager-login problem the row exists to solve.

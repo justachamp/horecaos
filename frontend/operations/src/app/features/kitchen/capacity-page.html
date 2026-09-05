@@ -1,0 +1,118 @@
+<div class="capacity">
+  <h1 class="q-subhead">{{ 'kitchen.capacity.title' | t }}</h1>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm capacity__state">{{ 'kitchen.capacity.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm capacity__state" data-testid="capacity-denied">{{ 'kitchen.capacity.denied' | t }}</p>
+  } @else if (lastError()) {
+    <p class="q-body-sm capacity__state" data-testid="capacity-error">{{ 'kitchen.capacity.loadError' | t }}</p>
+  } @else {
+    <section class="card">
+      <h2 class="q-subhead">{{ 'kitchen.capacity.card1.title' | t }}</h2>
+      <p class="q-body-sm capacity__hint">{{ 'kitchen.capacity.card1.hint' | t }}</p>
+
+      @if (stations().length === 0) {
+        <p class="q-body-sm capacity__hint" data-testid="capacity-no-stations">
+          {{ 'kitchen.capacity.noStations' | t }}
+        </p>
+      } @else {
+        <table class="capacity__table" data-testid="capacity-table">
+          <thead>
+            <tr>
+              <th>{{ 'kitchen.capacity.column.station' | t }}</th>
+              <th>{{ 'kitchen.capacity.column.weekday' | t }}</th>
+              <th>{{ 'kitchen.capacity.column.window' | t }}</th>
+              <th>{{ 'kitchen.capacity.column.portionsPerHour' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (window of sortedWindows(); track window.capacityWindowId) {
+              <tr>
+                <td>{{ stationLabel(window.stationId) }}</td>
+                <td>{{ weekdayLabel(window.weekday) }}</td>
+                <td>{{ windowLabel(window) }}</td>
+                <td class="q-tnum">{{ window.portionsPerHour }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="4" class="capacity__empty">{{ 'kitchen.capacity.empty' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        <form class="capacity__form" (submit)="$event.preventDefault(); submit()">
+          <label class="capacity__field">
+            <span class="q-caption">{{ 'kitchen.capacity.form.station' | t }}</span>
+            <select
+              [value]="formStationId()"
+              (change)="formStationId.set($any($event.target).value)"
+              data-testid="capacity-form-station"
+            >
+              @for (station of stations(); track station.stationId) {
+                <option [value]="station.stationId">{{ stationLabel(station.stationId) }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="capacity__field">
+            <span class="q-caption">{{ 'kitchen.capacity.form.weekday' | t }}</span>
+            <select
+              [value]="formWeekday()"
+              (change)="formWeekday.set(+$any($event.target).value)"
+              data-testid="capacity-form-weekday"
+            >
+              @for (day of WEEKDAYS; track day) {
+                <option [value]="day">{{ weekdayLabel(day) }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="capacity__field">
+            <span class="q-caption">{{ 'kitchen.capacity.form.from' | t }}</span>
+            <input type="time" [value]="formFrom()" (input)="formFrom.set($any($event.target).value)" />
+          </label>
+
+          <label class="capacity__field">
+            <span class="q-caption">{{ 'kitchen.capacity.form.to' | t }}</span>
+            <input type="time" [value]="formTo()" (input)="formTo.set($any($event.target).value)" />
+          </label>
+
+          <label class="capacity__field">
+            <span class="q-caption">{{ 'kitchen.capacity.form.portionsPerHour' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              max="100000"
+              [value]="formPortionsPerHour()"
+              (input)="formPortionsPerHour.set(+$any($event.target).value)"
+              data-testid="capacity-form-portions"
+            />
+          </label>
+
+          @if (formTouched() && !formValid()) {
+            <p class="q-caption capacity__error">{{ 'kitchen.capacity.form.incomplete' | t }}</p>
+          }
+          @if (formError()) {
+            <p class="q-caption capacity__error" data-testid="capacity-form-error">{{ formError() }}</p>
+          }
+
+          <button
+            type="submit"
+            class="primary"
+            [disabled]="formSubmitting()"
+            data-testid="capacity-form-submit"
+          >
+            {{ formSubmitting() ? ('kitchen.capacity.form.saving' | t) : ('kitchen.capacity.form.save' | t) }}
+          </button>
+        </form>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="q-subhead">{{ 'kitchen.capacity.card2.title' | t }}</h2>
+      <p class="q-body-sm">{{ 'kitchen.capacity.card2.body' | t }}</p>
+    </section>
+  }
+</div>

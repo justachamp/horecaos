@@ -3,8 +3,12 @@ package uz.horecaos.platform.kitchen.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +22,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.kitchen.application.KitchenStationService;
 import uz.horecaos.platform.kitchen.domain.StationRole;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -113,6 +118,48 @@ public class KitchenStationController {
         return ResponseEntity.ok(new RoutingRuleResponse(id, body.stationId() == null ? "BRAND" : "LOCATION"));
     }
 
+    @GetMapping("/station-capacity")
+    @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The branch's throughput ceilings (IA §2.6)",
+            description = "Read today only by this screen — the release scheduler does not shift "
+                    + "on it yet (ADR 0041's own implementation checklist names why). A manager "
+                    + "compares this against the board by eye.")
+    public ResponseEntity<List<StationCapacityResponse>> capacity(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+
+        return ResponseEntity.ok(stations.listCapacityWindows(tenantId, locationId).stream()
+                .map(StationCapacityResponse::of)
+                .toList());
+    }
+
+    @PostMapping("/station-capacity")
+    @RequiresCapability(value = Capability.KITCHEN_STATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Add a throughput ceiling for one station, one weekday, one time window",
+            description = "Refused when it overlaps a window already stored for that station and "
+                    + "weekday. There is no edit or delete in this release — remove a mistake by "
+                    + "the same discipline `routing-rules` already applies: nothing here is ever "
+                    + "removed once created.")
+    public ResponseEntity<StationCapacityResponse> addCapacity(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody StationCapacityRequest body) {
+
+        StationCapacityRow created = stations.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                tenantId,
+                brandId,
+                locationId,
+                body.stationId(),
+                body.weekday(),
+                body.windowStart(),
+                body.windowEnd(),
+                body.portionsPerHour()));
+
+        return ResponseEntity.ok(StationCapacityResponse.of(created));
+    }
+
     record StationRequest(
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 16) String role,
@@ -157,4 +204,32 @@ public class KitchenStationController {
             UUID stationId) {}
 
     record RoutingRuleResponse(UUID ruleId, String layer) {}
+
+    record StationCapacityRequest(
+            @NotNull UUID stationId,
+            @Min(1) @Max(7) int weekday,
+            @NotNull LocalTime windowStart,
+            @NotNull LocalTime windowEnd,
+            @Min(1) @Max(100_000) int portionsPerHour) {}
+
+    record StationCapacityResponse(
+            UUID capacityWindowId,
+            UUID stationId,
+            int weekday,
+            LocalTime windowStart,
+            LocalTime windowEnd,
+            int portionsPerHour,
+            int version) {
+
+        static StationCapacityResponse of(StationCapacityRow row) {
+            return new StationCapacityResponse(
+                    row.id(),
+                    row.stationId(),
+                    row.weekday(),
+                    row.windowStart(),
+                    row.windowEnd(),
+                    row.portionsPerHour(),
+                    row.version());
+        }
+    }
 }

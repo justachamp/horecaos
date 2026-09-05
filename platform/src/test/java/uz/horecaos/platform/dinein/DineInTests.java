@@ -284,6 +284,135 @@ class DineInTests {
                         .doesNotContain("998901234567"));
     }
 
+    // ------------------------------------------------------------- day listing
+
+    @Test
+    @DisplayName("the day list carries every status in the window, not only the ones holding a " + "table")
+    void theDayListShowsEveryStatusInRange() {
+        UUID confirmed = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        confirm(confirmed);
+
+        UUID cancelled = book(tableTwo, DINNER.plus(Duration.ofMinutes(30)), DINNER.plus(Duration.ofHours(2)));
+        ReservationRow requested = store.findReservation(TENANT, cancelled).orElseThrow();
+        transactions.executeWithoutResult(status -> reservations.move(
+                TENANT, cancelled, ReservationStatus.CANCELLED, requested.version(), "host", "Guest rang back"));
+
+        List<ReservationRow> day = transactions.execute(status -> reservations.listForDay(
+                TENANT, branch, DINNER.minus(Duration.ofHours(1)), DINNER.plus(Duration.ofHours(4))));
+
+        // A day list that dropped the cancellation would be reporting on a plan
+        // that no longer reflects what a host actually told a guest an hour ago.
+        assertThat(day.stream().map(ReservationRow::id)).containsExactlyInAnyOrder(confirmed, cancelled);
+        assertThat(day.stream()
+                        .filter(row -> row.id().equals(cancelled))
+                        .findFirst()
+                        .orElseThrow()
+                        .status())
+                .isEqualTo(ReservationStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("the day list excludes bookings whose interval does not overlap the asked-for " + "window")
+    void theDayListExcludesBookingsOutsideTheWindow() {
+        UUID tonight = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        book(
+                tableTwo,
+                DINNER.plus(Duration.ofDays(1)),
+                DINNER.plus(Duration.ofDays(1)).plus(Duration.ofHours(2)));
+
+        List<ReservationRow> day = transactions.execute(status -> reservations.listForDay(
+                TENANT, branch, DINNER.minus(Duration.ofHours(2)), DINNER.plus(Duration.ofHours(6))));
+
+        assertThat(day.stream().map(ReservationRow::id)).containsExactly(tonight);
+    }
+
+    // -------------------------------------------------------------- amendments
+
+    @Test
+    @DisplayName("amending a booking moves it to a new table and a new time, freeing the one it " + "left")
+    void amendingMovesTheHold() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        ReservationRow before = store.findReservation(TENANT, booking).orElseThrow();
+
+        Instant newFrom = DINNER.plus(Duration.ofHours(1));
+        Instant newTo = DINNER.plus(Duration.ofHours(3));
+        transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT, booking, 6, newFrom, newTo, List.of(tableTwo), before.version(), "host", "Guest moved seats"));
+
+        ReservationRow after = store.findReservation(TENANT, booking).orElseThrow();
+        assertThat(after.partySize()).isEqualTo(6);
+        assertThat(after.requestedFrom()).isEqualTo(newFrom);
+        assertThat(after.requestedTo()).isEqualTo(newTo);
+        assertThat(reservations.tablesFor(TENANT, booking)).containsExactly(tableTwo);
+
+        // The table it left must be free for somebody else — an amendment that
+        // only added a row would leave tableOne permanently, silently held.
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM dinein.reservation_tables WHERE reservation_id = :id AND table_id = :t")
+                        .param("id", booking)
+                        .param("t", tableOne)
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("amending a confirmed booking into another confirmed booking's hold is refused "
+            + "with a stable conflict code, and the original hold survives")
+    void amendingIntoAnotherHoldIsRefused() {
+        UUID first = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        confirm(first);
+
+        UUID second = book(tableTwo, DINNER, DINNER.plus(Duration.ofHours(2)));
+        confirm(second);
+        ReservationRow confirmedSecond = store.findReservation(TENANT, second).orElseThrow();
+
+        Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                second,
+                4,
+                DINNER,
+                DINNER.plus(Duration.ofHours(2)),
+                List.of(tableOne),
+                confirmedSecond.version(),
+                "host",
+                "Wrong table")));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+
+        // A rolled-back amendment must not have dropped the hold it was replacing.
+        assertThat(reservations.tablesFor(TENANT, second)).containsExactly(tableTwo);
+        assertThat(heldTables()).containsExactlyInAnyOrder(tableOne, tableTwo);
+    }
+
+    @Test
+    @DisplayName("a seated booking can no longer be amended")
+    void aSeatedBookingCannotBeAmended() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        confirm(booking);
+        transactions.executeWithoutResult(status -> sessions.open(
+                new TableSessionService.OpenSession(
+                        TENANT, BRAND, branch, booking, List.of(tableOne), 4, "UZS", "host"),
+                "Party arrived"));
+        assertThat(statusOf(booking)).isEqualTo(ReservationStatus.SEATED);
+
+        ReservationRow seated = store.findReservation(TENANT, booking).orElseThrow();
+        Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                booking,
+                4,
+                DINNER,
+                DINNER.plus(Duration.ofHours(2)),
+                List.of(tableOne),
+                seated.version(),
+                "host",
+                "Too late")));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
     // ---------------------------------------------------------------- sessions
 
     @Test

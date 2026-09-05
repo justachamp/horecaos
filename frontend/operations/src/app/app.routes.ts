@@ -72,6 +72,15 @@ export const routes: Routes = [
             path: 'drafts',
             loadComponent: () => import('./features/orders/drafts-page').then((m) => m.DraftsPage),
           },
+          // IA 1.5 — Reservations (ADR 0047, wave 43): orders.md §7's own
+          // prose says no floor-plan entity exists; it was built by a
+          // previous wave and reachable by nothing until this page. Declared
+          // before `:orderId` for the same reason `new` and `drafts` are.
+          {
+            path: 'reservations',
+            loadComponent: () =>
+              import('./features/orders/reservations-page').then((m) => m.ReservationsPage),
+          },
           // The detail is a *child* of the board, not a sibling. That is what
           // makes it dock beside the queue instead of replacing it, and what
           // keeps it deep-linkable and back-button-correct at the same time.
@@ -609,6 +618,14 @@ export const routes: Routes = [
             path: 'stop-list',
             loadComponent: () =>
               import('./features/kitchen/stop-list-page').then((m) => m.StopListPage),
+          },
+          // IA 2.6 — Capacity & buffer settings (ADR 0041, wave 43):
+          // `kitchen-shell.ts`'s own doc named this tab as deliberately
+          // absent until this wave built it.
+          {
+            path: 'capacity',
+            loadComponent: () =>
+              import('./features/kitchen/capacity-page').then((m) => m.CapacityPage),
           },
         ],
       },

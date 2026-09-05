@@ -223,6 +223,41 @@ export const operationsPaths = {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/stations`;
   },
 
+  /** The branch's throughput ceilings (IA §2.6, `KitchenStationController`). Same `GET`/`POST` shape as {@link kitchenStations}. */
+  kitchenStationCapacity(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/station-capacity`;
+  },
+
+  /**
+   * Table availability for a window (ADR 0047, `ReservationController`, IA
+   * §1.5) — on {@link LEGACY_TENANT_PREFIX} directly under the location, not
+   * under `/dine-in`: the controller's own `@RequestMapping` has no such
+   * segment. Query params `from`/`to`, both instants.
+   */
+  reservationTableAvailability(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/table-availability`;
+  },
+
+  /** A branch's bookings, either `GET` (query params `from`/`to`, the day window) or `POST` (a new booking). */
+  reservations(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/reservations`;
+  },
+
+  /** One booking, without the guest's name, phone or note (never rendered here — see `ReservationController`'s own doc). */
+  reservation(scope: LocationScope, reservationId: string): string {
+    return `${this.reservations(scope)}/${encodeURIComponent(reservationId)}`;
+  },
+
+  /** Confirm, reject, cancel, or mark a no-show. Mutation: key and `If-Match`. */
+  reservationStateActions(scope: LocationScope, reservationId: string): string {
+    return `${this.reservation(scope, reservationId)}/state-actions`;
+  },
+
+  /** Change the party size, the time, or the tables of a booking not yet seated. Mutation: key and `If-Match`. */
+  reservationAmendments(scope: LocationScope, reservationId: string): string {
+    return `${this.reservation(scope, reservationId)}/amendments`;
+  },
+
   /**
    * The dispatch board (ADR 0014, `DispatchController`, wave 30) — on the ADR
    * 0031 prefix, unlike the kitchen board above: this controller is new and

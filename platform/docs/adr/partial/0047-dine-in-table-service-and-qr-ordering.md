@@ -12,7 +12,18 @@
   with its ADR 0027 record, and QR token issue, body-form exchange, rotation and
   rate limiting; `FloorPlanController`, `ReservationController`,
   `TableSessionController` and `QrEntryController` carry the seven ADR 0025
-  capabilities at `LOCATION` scope, and `DineInTests` covers them.
+  capabilities at `LOCATION` scope, and `DineInTests` covers them. Wave 43
+  adds `GET .../reservations` (a branch's day plan, every status in a window)
+  and `POST .../reservations/{id}/amendments` (party size, time and table set,
+  refused once `SEATED` or terminal, deliberately not touching the guest's
+  name, phone or note) to `ReservationController`/`ReservationService`, and
+  builds `apps/operations`' first consumer of this module —
+  `ReservationsPage` (IA 1.5) — a table × hour day grid over
+  `table-availability` and the new list endpoint, with create and the
+  `REQUESTED`/`CONFIRMED` state actions. Seating and completion stay
+  unreachable from that screen: they need `TableSessionController`'s own
+  session lifecycle (a currency, rounds, a running bill), which has no IA row
+  and no screen yet.
   `SETTLE_OPEN_TICKET` is declared and refused at both the service and
   `ck_dinein_qr_mode` until the fiscal open input closes and a POS adapter exists.
   Not built: the two ADR 0011 ports and any adapter, ADR 0013's widened payable

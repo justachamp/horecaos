@@ -9,6 +9,13 @@
         data-testid="orders-drafts-link"
         >{{ 'orders.drafts.link' | t }}</a
       >
+      <a
+        class="queue__drafts-link q-body-sm"
+        routerLink="/orders/reservations"
+        routerLinkActive="queue__drafts-link--active"
+        data-testid="orders-reservations-link"
+        >{{ 'reservations.title' | t }}</a
+      >
     </header>
 
     <!-- The queue table lives here. It scrolls its own body under this fixed
