@@ -1351,6 +1351,16 @@ export interface DeliveryTariffControllerVersionView {
   version?: number;
 }
 
+export interface DemandHistoryResponse {
+  hours?: Array<HourDemandResponse>;
+  locationId?: string;
+  minimumSampleSize?: number;
+  provenance?: ProvenanceResponse;
+  requestedSampleSize?: number;
+  sampleDates?: Array<string>;
+  weekday?: number;
+}
+
 export interface DescribeLocationRequest {
   addressLine?: string;
   city?: string;
@@ -1771,6 +1781,13 @@ export interface GuestBillResponse {
   sessionId?: string;
   status?: string;
   totalMinor?: number;
+}
+
+export interface HourDemandResponse {
+  averageOrders?: number;
+  hourOfDay?: number;
+  ordersByDate?: { [key: string]: number };
+  totalOrders?: number;
 }
 
 export interface ImportInvoiceLine {
@@ -5040,6 +5057,7 @@ export interface Operations {
   "forOrder": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/orders/{orderId}"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<NotificationSummary> } };
   "detail": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}"; request: { parameters: { path: { notificationId: string; tenantId: string } } }; responses: { "200": NotificationResponse } };
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
+  "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
   "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
   "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };

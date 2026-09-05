@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -207,6 +208,49 @@ public class ReportingController {
                 result.rows().stream().map(VariantSalesRowResponse::of).toList(),
                 result.maybeMore(),
                 ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/demand-history")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Historical average order count by hour, for one location and weekday",
+            description = "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's "
+                    + "implementation status): an average of completed orders in each hour, over "
+                    + "the location's most recent occurrences of the requested weekday. Below "
+                    + "minimumSampleSize qualifying dates, averageOrders is null on every hour and "
+                    + "ordersByDate carries the raw per-date counts instead, so a sample too thin "
+                    + "to mean anything is never shown as a confident number.")
+    public ResponseEntity<DemandHistoryResponse> demandHistory(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID locationId,
+            @RequestParam int weekday,
+            @RequestParam(required = false) Integer sampleSize) {
+
+        if (weekday < 1 || weekday > 7) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "weekday must be between 1 (Monday) and 7 (Sunday), ISO-8601",
+                    Map.of("weekday", weekday));
+        }
+
+        var result = queries.demandHistory(tenantId, locationId, weekday, clampDemandSampleSize(sampleSize));
+        return ResponseEntity.ok(DemandHistoryResponse.of(result));
+    }
+
+    /** The example this wave's own mission statement uses: "the last 4 Tuesdays". */
+    private static final int DEMAND_SAMPLE_DEFAULT = 4;
+
+    /** About three months of one weekday. Wider stops being "recent" for a staffing tool. */
+    private static final int DEMAND_SAMPLE_MAX = 12;
+
+    private static int clampDemandSampleSize(@Nullable Integer requested) {
+        if (requested == null) {
+            return DEMAND_SAMPLE_DEFAULT;
+        }
+        if (requested < 1) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "sampleSize must be at least 1", Map.of());
+        }
+        return Math.min(requested, DEMAND_SAMPLE_MAX);
     }
 
     private static final int VARIANT_SALES_DEFAULT_LIMIT = 200;
@@ -442,6 +486,55 @@ public class ReportingController {
 
     public record VariantSalesListResponse(
             List<VariantSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /**
+     * One hour-of-day's demand sample.
+     *
+     * @param ordersByDate ISO business date to that date's count in this hour,
+     *                     zero-filled — never missing a sample date, because a
+     *                     missing entry would silently drop a real zero
+     * @param averageOrders null below {@code minimumSampleSize} qualifying
+     *                      dates on the parent {@link DemandHistoryResponse} —
+     *                      never a number computed from too thin a sample
+     */
+    public record HourDemandResponse(
+            int hourOfDay,
+            Map<String, Integer> ordersByDate,
+            int totalOrders,
+            @Nullable Double averageOrders) {
+
+        static HourDemandResponse of(ReportQueryService.HourDemand hour) {
+            Map<String, Integer> byDate = new LinkedHashMap<>();
+            hour.ordersByDate().forEach((date, count) -> byDate.put(date.toString(), count));
+            return new HourDemandResponse(hour.hourOfDay(), byDate, hour.totalOrders(), hour.averageOrders());
+        }
+    }
+
+    /**
+     * Reports 7.8. Not a forecast: {@code sampleDates} names exactly which real
+     * business dates were averaged, most recent first, so the number on screen
+     * always traces back to dates a manager could look up in 7.2's order log.
+     */
+    public record DemandHistoryResponse(
+            UUID locationId,
+            int weekday,
+            int requestedSampleSize,
+            int minimumSampleSize,
+            List<LocalDate> sampleDates,
+            List<HourDemandResponse> hours,
+            ProvenanceResponse provenance) {
+
+        static DemandHistoryResponse of(ReportQueryService.DemandHistoryResult result) {
+            return new DemandHistoryResponse(
+                    result.locationId(),
+                    result.weekday(),
+                    result.requestedSampleSize(),
+                    result.minimumSampleSize(),
+                    result.sampleDates(),
+                    result.hours().stream().map(HourDemandResponse::of).toList(),
+                    ProvenanceResponse.of(result.provenance()));
+        }
+    }
 
     /** One (terminal status, cancellation reason) bucket. */
     public record OutcomeRowResponse(

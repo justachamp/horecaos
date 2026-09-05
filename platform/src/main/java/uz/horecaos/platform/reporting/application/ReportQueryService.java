@@ -197,6 +197,114 @@ public class ReportQueryService {
         return new OutcomeResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 
+    /**
+     * Reports 7.8's honest historical-average read — the owner's 2026-09-05
+     * decision recorded in ADR 0043's implementation status: build the
+     * same-weekday, same-hour average from real order history now, labelled as
+     * exactly that, rather than the ADR's own seasonal-naive forecast model.
+     *
+     * <p>The average is null whenever fewer than {@link
+     * #DEMAND_HISTORY_MINIMUM_SAMPLE} qualifying dates exist — a sample that
+     * thin does not get to look like a confident number — and {@code
+     * ordersByDate} on every {@link HourDemand} carries the raw per-date counts
+     * either way, so a manager reading a thin sample sees the real numbers
+     * instead of nothing.
+     *
+     * @param sampleSize how many of the location's most recent occurrences of
+     *                   {@code weekday} to average over; the response's own
+     *                   {@code sampleDates} says how many were actually found
+     */
+    @Transactional(readOnly = true)
+    public DemandHistoryResult demandHistory(UUID tenantId, UUID locationId, int weekday, int sampleSize) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        LocalDate to = LocalDate.now(clock.withZone(boundary.zone()));
+        LocalDate from = to.minusDays(DEMAND_HISTORY_LOOKBACK_DAYS);
+
+        JdbcReportingStore.DemandSample sample = store.readDemandHistory(
+                tenantId, locationId, weekday, from, to, boundary.zone().getId(), sampleSize);
+
+        Map<LocalDate, Map<Integer, Integer>> byDateThenHour = new LinkedHashMap<>();
+        for (LocalDate date : sample.sampleDates()) {
+            byDateThenHour.put(date, new LinkedHashMap<>());
+        }
+        for (JdbcReportingStore.HourCount count : sample.hourCounts()) {
+            byDateThenHour
+                    .computeIfAbsent(count.businessDate(), ignored -> new LinkedHashMap<>())
+                    .put(count.hourOfDay(), count.orderCount());
+        }
+
+        int actualSampleSize = sample.sampleDates().size();
+        List<HourDemand> hours = new ArrayList<>(24);
+        for (int hour = 0; hour < 24; hour++) {
+            Map<LocalDate, Integer> ordersByDate = new LinkedHashMap<>();
+            int total = 0;
+            for (LocalDate date : sample.sampleDates()) {
+                // Explicitly zero, not absent: a sample date this location
+                // traded on but that had nothing in this particular hour is a
+                // real zero data point. Skipping it instead of counting it
+                // would average only the hours that happened to have orders,
+                // which overstates every quiet hour on the chart.
+                int count = byDateThenHour.getOrDefault(date, Map.of()).getOrDefault(hour, 0);
+                ordersByDate.put(date, count);
+                total += count;
+            }
+            Double average =
+                    actualSampleSize >= DEMAND_HISTORY_MINIMUM_SAMPLE ? (double) total / actualSampleSize : null;
+            hours.add(new HourDemand(hour, ordersByDate, total, average));
+        }
+
+        return new DemandHistoryResult(
+                locationId,
+                weekday,
+                sampleSize,
+                DEMAND_HISTORY_MINIMUM_SAMPLE,
+                sample.sampleDates(),
+                hours,
+                provenance(tenantId, List.of(), boundary));
+    }
+
+    /** How far back {@link #demandHistory} looks for qualifying dates — the same span {@link ReportQuery#MAX_DAYS} bounds a typed query to. */
+    private static final int DEMAND_HISTORY_LOOKBACK_DAYS = 400;
+
+    /**
+     * Below this many qualifying dates, {@link #demandHistory} refuses to
+     * publish an average at all. Three is the smallest sample where "average"
+     * stops meaning "whatever the most recent week happened to do" — two
+     * points is a trend line looking for an excuse, and one is just that one
+     * Tuesday. Below it the caller still gets every raw count, in {@code
+     * ordersByDate}, because a manager with one real week of data is better
+     * served by that number than by nothing.
+     */
+    private static final int DEMAND_HISTORY_MINIMUM_SAMPLE = 3;
+
+    /** One hour-of-day's demand sample — see {@link #demandHistory}. */
+    public record HourDemand(
+            int hourOfDay,
+            Map<LocalDate, Integer> ordersByDate,
+            int totalOrders,
+            @Nullable Double averageOrders) {}
+
+    /**
+     * The full answer {@link #demandHistory} returns.
+     *
+     * @param requestedSampleSize what the caller asked for
+     * @param minimumSampleSize   below this many {@code sampleDates}, every
+     *                            {@code hours[].averageOrders} is null
+     * @param sampleDates         the qualifying dates actually found, most
+     *                            recent first — shorter than {@code
+     *                            requestedSampleSize} whenever history is
+     *                            thinner than asked for, empty when the
+     *                            location has no history on this weekday at all
+     */
+    public record DemandHistoryResult(
+            UUID locationId,
+            int weekday,
+            int requestedSampleSize,
+            int minimumSampleSize,
+            List<LocalDate> sampleDates,
+            List<HourDemand> hours,
+            Provenance provenance) {}
+
     /** Every definition, with whether finance has signed it. */
     @Transactional(readOnly = true)
     public List<MetricView> catalogue() {

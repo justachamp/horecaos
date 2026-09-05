@@ -2086,6 +2086,7 @@ export const messagesEn = {
   'reports.nav.staff': 'Staff',
   'reports.nav.customers': 'Customers',
   'reports.nav.marketing': 'Marketing',
+  'reports.nav.forecast': 'Demand',
 
   'reports.branches.title': 'Branch & SLA reports',
   'reports.branches.loading': 'Loading…',
@@ -2122,6 +2123,30 @@ export const messagesEn = {
     'There may be more products than shown — this is a bounded read, not a full export.',
   'reports.products.abcXyzNotBuilt':
     'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
+
+  // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
+  'reports.forecast.title': 'Demand history',
+  'reports.forecast.intro':
+    'This shows what actually happened, not what might happen: the average number of completed orders in each hour, across the most recent occurrences of the selected weekday for which this location has order history. There is no model of future demand yet (ADR 0043).',
+  'reports.forecast.loading': 'Loading…',
+  'reports.forecast.weekday.1': 'Monday',
+  'reports.forecast.weekday.2': 'Tuesday',
+  'reports.forecast.weekday.3': 'Wednesday',
+  'reports.forecast.weekday.4': 'Thursday',
+  'reports.forecast.weekday.5': 'Friday',
+  'reports.forecast.weekday.6': 'Saturday',
+  'reports.forecast.weekday.7': 'Sunday',
+  'reports.forecast.sampleSize.label': 'Weeks to average',
+  'reports.forecast.sampleSize.option': 'Last {count}',
+  'reports.forecast.column.hour': 'Hour',
+  'reports.forecast.column.average': 'Avg. orders',
+  'reports.forecast.sample.summary':
+    'Average over the {count} most recent occurrences of this weekday with order history.',
+  'reports.forecast.thin.zero': 'No order history yet for this weekday at this location.',
+  'reports.forecast.thin.one':
+    'Only 1 occurrence of this weekday has been recorded so far — not enough to average. The count below is that single week, not an average.',
+  'reports.forecast.thin.two':
+    'Only 2 occurrences of this weekday have been recorded so far — not enough to average. The counts below are those two weeks, not an average.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',

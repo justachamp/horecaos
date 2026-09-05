@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ddmm,
   ddmmyyyy,
+  formatAverage,
   formatCount,
   formatDeltaPercent,
   formatSecondsDuration,
@@ -83,6 +84,17 @@ describe('formatCount', () => {
 
   it('signs a negative count with a real minus', () => {
     expect(formatCount(-7)).toBe('−7');
+  });
+});
+
+describe('formatAverage', () => {
+  it('renders one decimal place, even for a whole number', () => {
+    expect(formatAverage(5)).toBe('5.0');
+    expect(formatAverage(2.25)).toBe('2.3');
+  });
+
+  it('renders — for null, never a bare 0.0', () => {
+    expect(formatAverage(null)).toBe('—');
   });
 });
 

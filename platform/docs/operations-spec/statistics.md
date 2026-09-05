@@ -656,6 +656,19 @@ ClickHouse and explains nothing.
 Actions: `Пересчитать` (rate-limited under ADR 0033, confirmation naming the
 window), `Праздники →` (10.10 calendar).
 
+**Actual (wave 48, 2026-09-05 owner decision) is a historical average, not
+this chart.** `План`/`Факт`, `Прогноз, шт`, `Ошибка, %`, `Модель` and
+`Праздник` all describe the seasonal-naive model above, which remains **not
+built** — no `forecast_run`, no `fact_forecast`, no holiday factor. What
+shipped instead: `GET .../reporting/demand-history` — **built**, straight off
+`fact_order` — answers "how many orders actually happened in this hour, on
+this weekday's most recent occurrences", per branch, with the sample size
+always stated and no number published below three qualifying dates. No
+per-product breakdown (`fact_order_line` has no hour to bucket by) and no
+`Пересчитать`/`Праздники` actions — there is no run to recompute and no model
+for a holiday to adjust. See ADR 0043's implementation status for the full
+accounting and `demand-forecast-page.ts` for the screen itself.
+
 ---
 
 ### 2.9 — 7.9 Marketing reports · `/reports/marketing` *(tier 2)*
