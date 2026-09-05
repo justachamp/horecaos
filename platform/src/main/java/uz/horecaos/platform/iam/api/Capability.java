@@ -147,6 +147,19 @@ public enum Capability {
     ORDER_PROVENANCE_RECORD("order.provenance.record", "order", "provenance.record"),
 
     /**
+     * ADR 0071: reading a brand's order reviews — the rating, the comment, and
+     * the order and customer each one is attached to.
+     *
+     * <p>Its own capability rather than folded into {@link #ORDER_READ} or
+     * {@link #CUSTOMER_READ}: a review's comment is free text a customer wrote
+     * about a real visit and can name a person, the same reasoning that keeps
+     * {@link #RESERVATION_READ} separate from a broader read. There is no
+     * matching write capability — nothing on the operations side ever writes a
+     * review; submission is customer-owned (ADR 0071), not staff-delegated.
+     */
+    REVIEW_READ("review.read", "review", "read"),
+
+    /**
      * ADR 0013: reading an order's payment — the intent, its attempts, and the
      * provider states recorded beside HorecaOS's own.
      *

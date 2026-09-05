@@ -2146,6 +2146,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.segments.operator.IN': 'quyidagilardan biri',
   'customers.segments.operator.NOT_IN': 'quyidagilardan biri emas',
 
+  // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
+  'customers.reviews.title': 'Sharhlar',
+  'customers.reviews.subtitle':
+    'Mijozning oʻz yakunlangan buyurtmasiga bergan bahosi, buyurtma va mijoziga bogʻlangan holda.',
+  'customers.reviews.summary.count': 'Sharhlar',
+  'customers.reviews.summary.average': 'Oʻrtacha baho',
+  'customers.reviews.filter.allLocations': 'Barcha filiallar',
+  'customers.reviews.filter.allRatings': 'Har qanday baho',
+  'customers.reviews.column.submittedAt': 'Yuborilgan',
+  'customers.reviews.column.location': 'Filial',
+  'customers.reviews.column.rating': 'Baho',
+  'customers.reviews.column.comment': 'Izoh',
+  'customers.reviews.column.order': 'Buyurtma',
+  'customers.reviews.column.customer': 'Mijoz',
+  'customers.reviews.empty': 'Hozircha sharhlar yoʻq.',
+
   // ---------------------------------------------------------------- reports 7.3/7.7 and nav (wave 39)
   'reports.nav.branches': 'Filiallar',
   'reports.nav.products': 'Mahsulotlar',

@@ -2134,6 +2134,22 @@ export const messagesRu: MessageCatalogue = {
   'customers.segments.operator.IN': 'входит в',
   'customers.segments.operator.NOT_IN': 'не входит в',
 
+  // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
+  'customers.reviews.title': 'Отзывы',
+  'customers.reviews.subtitle':
+    'Оценка клиентом своего завершённого заказа, привязанная к заказу и клиенту.',
+  'customers.reviews.summary.count': 'Отзывов',
+  'customers.reviews.summary.average': 'Средняя оценка',
+  'customers.reviews.filter.allLocations': 'Все филиалы',
+  'customers.reviews.filter.allRatings': 'Любая оценка',
+  'customers.reviews.column.submittedAt': 'Отправлен',
+  'customers.reviews.column.location': 'Филиал',
+  'customers.reviews.column.rating': 'Оценка',
+  'customers.reviews.column.comment': 'Комментарий',
+  'customers.reviews.column.order': 'Заказ',
+  'customers.reviews.column.customer': 'Клиент',
+  'customers.reviews.empty': 'Отзывов пока нет.',
+
   // ---------------------------------------------------------------- reports 7.3/7.7 and nav (wave 39)
   'reports.nav.branches': 'Филиалы',
   'reports.nav.products': 'Товары',

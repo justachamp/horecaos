@@ -140,6 +140,9 @@ public enum PlatformRole {
                     // the same holder rather than with whoever runs the campaign.
                     REFERRAL_POLICY_MANAGE,
                     REFERRAL_READ,
+                    // ADR 0071: a brand's own order reviews, the same class of read as
+                    // the referral line above it.
+                    REVIEW_READ,
                     // ADR 0042: a rate card is what a courier is paid, and authorising a
                     // payout is the second signature on money leaving. Held apart from
                     // COURIER_SETTLEMENT_CLOSE, which finance holds, so no one person
@@ -275,6 +278,8 @@ public enum PlatformRole {
                     // ADR 0067: seeing referrals happen is a marketer's read, beside
                     // audiences; only the policy that pays for them is held higher.
                     REFERRAL_READ,
+                    // ADR 0071: a brand's own order reviews, the same class of read.
+                    REVIEW_READ,
                     CAMPAIGN_AUTHOR,
                     // ADR 0046: correcting a balance by hand, which support cannot do.
                     LOYALTY_READ,
@@ -469,6 +474,9 @@ public enum PlatformRole {
                     // ADR 0067: seeing referrals happen is a marketer's read, beside
                     // audiences; only the policy that pays for them is held higher.
                     REFERRAL_READ,
+                    // ADR 0071: a brand's own order reviews — its own reputation
+                    // signal, the same class of read as the referral line above it.
+                    REVIEW_READ,
                     CAMPAIGN_AUTHOR,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
