@@ -124,6 +124,12 @@ public enum PlatformRole {
                     // ADR 0046: what a point is worth, and how long it lasts. A currency
                     // decision rather than an operational one.
                     LOYALTY_POLICY_MANAGE,
+                    // ADR 0067: what a referral pays, to whom, and up to what cap.
+                    // The same class of decision as the loyalty policy above it --
+                    // it commits the tenant to giving value away -- so it sits with
+                    // the same holder rather than with whoever runs the campaign.
+                    REFERRAL_POLICY_MANAGE,
+                    REFERRAL_READ,
                     // ADR 0042: a rate card is what a courier is paid, and authorising a
                     // payout is the second signature on money leaving. Held apart from
                     // COURIER_SETTLEMENT_CLOSE, which finance holds, so no one person
@@ -251,6 +257,9 @@ public enum PlatformRole {
                     // not here — an unrestricted download of the customer base is how a
                     // tenant's list reaches a competitor, so it sits with the owner.
                     AUDIENCE_READ,
+                    // ADR 0067: seeing referrals happen is a marketer's read, beside
+                    // audiences; only the policy that pays for them is held higher.
+                    REFERRAL_READ,
                     CAMPAIGN_AUTHOR,
                     // ADR 0046: correcting a balance by hand, which support cannot do.
                     LOYALTY_READ,
@@ -433,6 +442,9 @@ public enum PlatformRole {
                     // ADR 0044: a brand markets itself, and needs to see who it would
                     // be reaching before it does.
                     AUDIENCE_READ,
+                    // ADR 0067: seeing referrals happen is a marketer's read, beside
+                    // audiences; only the policy that pays for them is held higher.
+                    REFERRAL_READ,
                     CAMPAIGN_AUTHOR,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
