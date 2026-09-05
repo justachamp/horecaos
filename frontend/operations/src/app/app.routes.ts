@@ -425,6 +425,19 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/marketing/loyalty/loyalty-page').then((m) => m.LoyaltyPage),
           },
+          // 6.6 Referrals (a new ADR, wave 47): the reward half only.
+          // `ReferralPolicyController`'s draft/activate/retire program
+          // authoring, and `ReferralOperationsController`'s read of
+          // redemptions actually happening. Website `?ref=` links, Telegram
+          // deep links, and the Mini-App/BotFather setup flow render as an
+          // honest not-built panel inside `ReferralsPage` itself — those are
+          // ADR 0044's `marketing.attribution_links`, still on that ADR's
+          // own checklist, not a separate route here.
+          {
+            path: 'referrals',
+            loadComponent: () =>
+              import('./features/marketing/referrals/referrals-page').then((m) => m.ReferralsPage),
+          },
           {
             path: 'campaigns',
             loadComponent: () =>

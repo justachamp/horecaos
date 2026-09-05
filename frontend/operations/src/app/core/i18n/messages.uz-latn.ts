@@ -106,8 +106,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.form.reason': 'Sabab',
   'reservations.form.tables': 'Stollar',
   'reservations.form.incomplete': 'Mehmon ismi, telefon va kamida bitta stol kiritilishi kerak',
-  'reservations.form.incompleteEdit': 'Toʻgʻri vaqt oynasi, kamida bitta stol va sabab kiritilishi kerak',
-  'reservations.form.noChannel': 'Faol sotuv kanali yoʻq — bron qayerdan kelganini yozish uchun kanal kerak',
+  'reservations.form.incompleteEdit':
+    'Toʻgʻri vaqt oynasi, kamida bitta stol va sabab kiritilishi kerak',
+  'reservations.form.noChannel':
+    'Faol sotuv kanali yoʻq — bron qayerdan kelganini yozish uchun kanal kerak',
   'reservations.form.saving': 'Saqlanmoqda…',
   'reservations.form.save': 'Bronni saqlash',
   'reservations.form.saveEdit': 'Oʻzgarishlarni saqlash',
@@ -1799,6 +1801,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.nav.promotions': 'Aksiyalar',
   'marketing.nav.promoCodes': 'Promokodlar',
   'marketing.nav.loyalty': 'Sodiqlik',
+  'marketing.nav.referrals': 'Referallar',
   'marketing.nav.campaigns': 'Kampaniyalar',
   'marketing.nav.automations': 'Avtomatlashtirishlar',
   'marketing.nav.content': 'Kontent',
@@ -2019,6 +2022,77 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.loyalty.posSync.title': 'POS bilan balans sinxronizatsiyasi',
   'marketing.loyalty.posSync.body':
     'Qurilmagan. Hech qanday ADR POS terminali sodiqlik balansini o‘qishi yoki yozishini belgilamaydi, va provayder imkoniyati sifatida ham e’lon qilinmagan — qarang: frontend-information-architecture.md §6.3.',
+
+  // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
+  'marketing.referrals.title': 'Referallar',
+  'marketing.referrals.intro':
+    'Brend sozlaydigan referal mukofoti, sodiqlik balllari orqali beriladi. Ikkala tomon ham — taklif qiluvchi va yangi mijoz — mukofotlanadimi yoki faqat taklif qiluvchimi, tanlang; faol dasturi yo‘q brend hech narsa ishga tushirmaydi.',
+  'marketing.referrals.loading': 'Yuklanmoqda',
+  'marketing.referrals.denied': 'Bu brendning referal dasturiga kirish yo‘q',
+  'marketing.referrals.column.status': 'Holati',
+  'marketing.referrals.uncapped': 'Cheklovsiz',
+  'marketing.referrals.notApplicable': 'Tegishli emas',
+  'marketing.referrals.skipped': 'O‘tkazib yuborildi',
+  'marketing.referrals.days': '{count} kun',
+  'marketing.referrals.action.activate': 'Faollashtirish',
+  'marketing.referrals.action.retire': 'Bekor qilish',
+  'marketing.referrals.dialog.cancel': 'Bekor qilish',
+  'marketing.referrals.shape.BOTH_SIDES': 'Ikkala tomon ham mukofotlanadi',
+  'marketing.referrals.shape.REFERRER_ONLY': 'Faqat taklif qiluvchi',
+  'marketing.referrals.status.DRAFT': 'Qoralama',
+  'marketing.referrals.status.ACTIVE': 'Faol',
+  'marketing.referrals.status.RETIRED': 'Bekor qilingan',
+  'marketing.referrals.status.PENDING': 'Kutilmoqda',
+  'marketing.referrals.status.REWARDED': 'Mukofotlandi',
+  'marketing.referrals.status.EXPIRED': 'Muddati o‘tgan',
+  'marketing.referrals.status.VOIDED': 'Bekor qilindi',
+  'marketing.referrals.skipReason.REFERRER_CAP_REACHED':
+    'Taklif qiluvchining o‘z mukofot chegarasiga allaqachon yetilgan',
+
+  'marketing.referrals.summary.codesIssued': 'Berilgan kodlar',
+  'marketing.referrals.summary.pending': 'Birinchi buyurtmani kutmoqda',
+  'marketing.referrals.summary.rewarded': 'Mukofotlandi',
+  'marketing.referrals.summary.paidOut': 'To‘langan ballar',
+
+  'marketing.referrals.program.title': 'Mukofot dasturi',
+  'marketing.referrals.program.hint':
+    'Shakli, summalar, bitta taklif qiluvchiga chegarasi va ishlatilgan kod muddati tugashidan oldin qancha kun ochiq qolishi. Faol dasturi yo‘q brend hech narsa mukofotlamaydi.',
+  'marketing.referrals.program.create.action': 'Yangi dastur',
+  'marketing.referrals.program.create.title': 'Referal dasturi qoralamasi',
+  'marketing.referrals.program.create.submit': 'Qoralamani saqlash',
+  'marketing.referrals.program.column.shape': 'Shakli',
+  'marketing.referrals.program.column.referrerReward': 'Taklif qiluvchi mukofoti',
+  'marketing.referrals.program.column.refereeReward': 'Yangi mijoz mukofoti',
+  'marketing.referrals.program.column.cap': 'Taklif qiluvchiga chegara',
+  'marketing.referrals.program.column.window': 'Ishlatish muddati',
+  'marketing.referrals.program.empty': 'Hali referal dasturi yaratilmagan.',
+  'marketing.referrals.program.form.shape': 'Kim mukofotlanadi',
+  'marketing.referrals.program.form.shape.hint':
+    'Ikkala tomon ham: taklif qiluvchi va yangi mijoz yangi mijozning birinchi yakunlangan buyurtmasida mukofotlanadi. Faqat taklif qiluvchi: yangi mijoz qo‘shimcha hech narsa olmaydi.',
+  'marketing.referrals.program.form.referrerReward': 'Taklif qiluvchi mukofoti, ball',
+  'marketing.referrals.program.form.refereeReward': 'Yangi mijoz mukofoti, ball',
+  'marketing.referrals.program.form.hasCap':
+    'Bitta taklif qiluvchiga mukofotlanadigan referallar sonini cheklash',
+  'marketing.referrals.program.form.cap':
+    'Bitta taklif qiluvchiga maksimal mukofotlanadigan referallar',
+  'marketing.referrals.program.form.redemptionWindow':
+    'Ishlatish muddati, birinchi yakunlangan buyurtmagacha kunlar',
+  'marketing.referrals.program.form.redemptionWindow.hint':
+    'Ishlatilgan, lekin shu muddat ichida yakunlangan buyurtmaga olib kelmagan kod kuchini yo‘qotadi.',
+  'marketing.referrals.program.form.lotLifetime': 'Mukofot ballari necha kunda muddati tugaydi',
+
+  'marketing.referrals.redemptions.title': 'Haqiqatda sodir bo‘layotgan referallar',
+  'marketing.referrals.redemptions.hint':
+    'Bu brend mijozlari tomonidan ishlatilgan har bir kod: mukofot to‘langanmi va taklif qiluvchining o‘z mukofoti nima uchun o‘tkazib yuborilgani, agar chegarasiga allaqachon yetilgan bo‘lsa.',
+  'marketing.referrals.redemptions.column.referrer': 'Taklif qiluvchi',
+  'marketing.referrals.redemptions.column.referee': 'Yangi mijoz',
+  'marketing.referrals.redemptions.column.referrerReward': 'Taklif qiluvchiga to‘landi',
+  'marketing.referrals.redemptions.column.refereeReward': 'Yangi mijozga to‘landi',
+  'marketing.referrals.redemptions.empty': 'Hali birorta referal kodi ishlatilmagan.',
+
+  'marketing.referrals.links.title': 'Veb-sayt va Telegram orqali jalb qilish havolalari',
+  'marketing.referrals.links.body':
+    'Qurilmagan, va bu yashirilgan bo‘shliq emas: veb-saytdagi "?ref=" havolalari, Telegramdagi "startapp" deep-linklari va Mini-App/BotFather sozlash bosqichma-bosqich oqimi ADR 0044ning marketing.attribution_links qismiga tegishli va shu ADRning o‘z ro‘yxatida qolmoqda. Mijoz hamon kod olishi va do‘sti uni do‘kon oynasidan ishlatishi mumkin — bu yerda ulashiladigan havola ko‘rsatilmaydi, chunki hali havolalar jadvali mavjud emas.',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar bo‘limi',

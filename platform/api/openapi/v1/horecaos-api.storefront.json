@@ -727,6 +727,17 @@
         "required" : [ "locationId" ],
         "type" : "object"
       },
+      "MyReferralResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "redeemedAs" : {
+            "$ref" : "#/components/schemas/ReferralStorefrontControllerRedemptionResponse"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
           "finalAmountMinor" : {
@@ -1083,6 +1094,36 @@
           }
         },
         "required" : [ "variantId" ],
+        "type" : "object"
+      },
+      "RedeemRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
+      "ReferralStorefrontControllerRedemptionResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "redeemedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "rewardedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "RegisterRequest" : {
@@ -3240,6 +3281,90 @@
         "tags" : [ "Storefront payments" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
+      "get" : {
+        "description" : "Mints the code on first read rather than requiring a separate create call — a customer's own code is a durable identity, not a resource with a creation step worth exposing.",
+        "operationId" : "myReferral",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MyReferralResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own referral code, and their own redemption if they used one",
+        "tags" : [ "Referrals" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions" : {
+      "post" : {
+        "description" : "Refused when the code is the caller's own (self-referral), when this account has already redeemed a code (at most one, ever, per brand), or when the brand runs no referral program right now. Nothing is credited by this call itself: the reward fires later, on the caller's first order to reach COMPLETED.",
+        "operationId" : "redeem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RedeemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferralStorefrontControllerRedemptionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Redeem a friend's referral code",
+        "tags" : [ "Referrals" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq" : {
       "get" : {
         "description" : "Categories in authored order, each with its published entries. Text resolves to the requested locale and falls back to any other published translation rather than to the authoring code. A brand with no published FAQ answers an empty list, which is a screen with no questions and not a failure.",
@@ -3619,6 +3744,9 @@
   }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
   }, {
     "description" : "Pickup branches near a customer",
     "name" : "Storefront pickup locations"

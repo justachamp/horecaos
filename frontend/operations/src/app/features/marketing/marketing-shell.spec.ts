@@ -16,7 +16,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('MarketingShell', () => {
-  it('renders a sub-nav link for every tier-2 Marketing screen, plus wave 44’s Loyalty tab', async () => {
+  it('renders a sub-nav link for every tier-2 Marketing screen, plus wave 44’s Loyalty and wave 47’s Referrals tabs', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
@@ -38,13 +38,13 @@ describe('MarketingShell', () => {
     );
     // §6.3 Loyalty was tier 3 and stayed out through wave 39; wave 44 built it
     // (ADR 0046) alongside Customers §5.5, so it now has a tab like every
-    // tier-2 row. §6.6 Referrals is the one tier-3 row still out — the same
-    // "tier 3 stays out" rule Finance's own shell test proves for its own
-    // Wave-2 rows.
+    // tier-2 row. §6.6 Referrals was the other tier-3 row still out; wave 47
+    // built its reward half (a new ADR), so it now has a tab too.
     expect(labels).toEqual([
       'Промоакции',
       'Промокоды',
       'Лояльность',
+      'Рефералы',
       'Кампании',
       'Автоматизации',
       'Контент',

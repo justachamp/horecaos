@@ -35,6 +35,7 @@ class ModularArchitectureTests {
             "ordering",
             "payments",
             "pricing",
+            "referral",
             "reporting",
             "telemetry",
             "tenancy",
