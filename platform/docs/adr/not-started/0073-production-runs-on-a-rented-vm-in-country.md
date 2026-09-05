@@ -7,9 +7,14 @@
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
 - Depends on: 0001, 0010, 0023, 0028, 0029, 0033, 0056, 0057
 - Supersedes / Superseded by: Supersedes ADR 0034 and ADR 0061
-- Open inputs: whether the provider's object storage supports **S3 SigV4
-  presigned PUT and GET** — this is a hard dependency of ADR 0010's media
-  flow, not a preference (owner, with the provider); the contract, SLA and
+- Open inputs: ~~whether the provider's object storage supports S3 SigV4
+  presigned PUT and GET~~ — **closed 2026-09-05 by probe against the real
+  endpoint: presigned PUT and GET both work, bytes round-trip, HEAD reports
+  the right size and content type. One caveat, now fixed in
+  `ObjectStorageConfiguration`: the store refuses the SDK's default
+  `x-amz-checksum-*` headers with HTTP 400, so the platform would have failed
+  on every upload until `requestChecksumCalculation` was set to
+  `WHEN_REQUIRED`**; the contract, SLA and
   support-response terms (owner); where off-provider backups land, with this
   record's own proposal below (owner); whether the colocated hardware is
   retired, kept as a warm spare, or repurposed as that backup target (owner)
@@ -75,7 +80,13 @@ space carries encrypted database dumps as well as menu images and courier
 delivery evidence; 10 GB would last months and then start failing backups, which
 is the worst item on that list to run out of.
 
-**MinIO is removed if, and only if, the provider supports SigV4 presigned URLs.**
+**MinIO is removed: the provider supports SigV4 presigned URLs.** Measured, not
+asked — a probe ran the platform's own client and presigner against the real
+endpoint on 2026-09-05 and passed every step. It also found the store answers
+400 to the SDK's default flexible-checksum headers, so
+`ObjectStorageConfiguration` now sets `requestChecksumCalculation` and
+`responseChecksumValidation` to `WHEN_REQUIRED`; without that the platform
+fails on every upload, not intermittently. The original conditional read:
 ADR 0010's media flow *requires* `presignUpload` and `presignDownload` — a
 browser uploads straight to storage and reads private objects through short-lived
 signed URLs. "S3-compatible" is answered loosely in sales conversations; this

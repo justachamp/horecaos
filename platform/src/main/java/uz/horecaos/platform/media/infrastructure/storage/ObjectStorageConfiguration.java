@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -55,6 +57,19 @@ public class ObjectStorageConfiguration {
                         .apiCallTimeout(callTimeout)
                         .apiCallAttemptTimeout(attemptTimeout)
                         .build())
+                // Flexible checksums only where the operation requires them.
+                //
+                // The SDK otherwise adds x-amz-checksum-* to every PUT by
+                // default. S3 itself accepts that; other implementations of the
+                // same API do not, and answer 400 on every upload rather than
+                // degrading. A Ceph-backed store was measured refusing exactly
+                // this in September 2026, and the platform would have failed on
+                // its first menu photo after a host move -- not intermittently,
+                // every time. ADR 0057's portability argument is about staying
+                // able to move; a default that silently binds this platform to
+                // one vendor's implementation of the protocol works against it.
+                .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+                .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
                 // MinIO serves path-style addressing; virtual-host style would
                 // require per-bucket DNS that does not exist locally.
                 .serviceConfiguration(
