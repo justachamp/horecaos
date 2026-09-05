@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
 import { ApiError } from '../../../core/api/problem-details';
-import { CurrentLocation } from '../../../core/auth/current-location';
+import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -104,7 +104,7 @@ function emptyRow(): PredicateRow {
 })
 export class SegmentsPage {
   private readonly api = inject(SegmentsApi);
-  private readonly location = inject(CurrentLocation);
+  private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
 
   protected readonly state = signal<LoadState>('loading');
@@ -141,10 +141,10 @@ export class SegmentsPage {
 
   private async load(): Promise<void> {
     this.state.set('loading');
-    await this.location.ensureLoaded();
-    const scope = this.location.scope();
+    await this.brand.ensureLoaded();
+    const scope = this.brand.scope();
     if (!scope) {
-      this.state.set(this.location.denied() ? 'denied' : 'error');
+      this.state.set(this.brand.denied() ? 'denied' : 'error');
       return;
     }
     try {
@@ -172,7 +172,7 @@ export class SegmentsPage {
   }
 
   protected async openEdit(summary: AudienceSummary): Promise<void> {
-    const scope = this.location.scope();
+    const scope = this.brand.scope();
     if (!scope) {
       return;
     }
@@ -247,7 +247,7 @@ export class SegmentsPage {
   }
 
   protected async save(): Promise<void> {
-    const scope = this.location.scope();
+    const scope = this.brand.scope();
     if (!scope || !this.canSave()) {
       return;
     }
@@ -288,7 +288,7 @@ export class SegmentsPage {
   }
 
   protected async confirmSnapshot(): Promise<void> {
-    const scope = this.location.scope();
+    const scope = this.brand.scope();
     const audienceId = this.snapshottingId();
     if (!scope || !audienceId || this.snapshotBusy()) {
       return;

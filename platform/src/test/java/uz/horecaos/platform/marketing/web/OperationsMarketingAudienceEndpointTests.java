@@ -44,7 +44,10 @@ import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
  *
  * <p>Defining and redefining are gated by {@code CAMPAIGN_AUTHOR} (ADR 0044
  * declares no separate authoring capability for audiences), reading by
- * {@code AUDIENCE_READ}; an actor holding neither is refused by name.
+ * {@code AUDIENCE_READ} — and {@code tenant-owner} holds neither, on purpose:
+ * the owner approves campaigns and exports audiences ({@code AUDIENCE_EXPORT},
+ * {@code CAMPAIGN_APPROVE}), while authoring belongs to {@code tenant-admin}
+ * and {@code brand-manager}. That separation is proven here, not assumed.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,7 +60,7 @@ class OperationsMarketingAudienceEndpointTests {
     // subject to parse as one (a Keycloak subject is a UUID in this deployment),
     // and defineAudience/redefineAudience both resolve the author through it.
     private static final String ADMINISTRATOR = "018f9b20-4000-7000-8000-0000000000ea";
-    private static final String UNGRANTED = "018f9b20-4000-7000-8000-0000000000eb";
+    private static final String OWNER = "018f9b20-4000-7000-8000-0000000000eb";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -99,12 +102,13 @@ class OperationsMarketingAudienceEndpointTests {
         seedTenantAndBrand();
         roleRegistry.synchronize();
         grant(ADMINISTRATOR, PlatformRole.TENANT_ADMIN);
+        grant(OWNER, PlatformRole.TENANT_OWNER);
     }
 
     @Test
-    void anActorWithoutAMarketingGrantCannotDefineOrListAudiences() throws Exception {
+    void anOwnerCannotDefineOrListAudiences() throws Exception {
         MvcResult refusedDefine = mvc.perform(post(audiencesPath())
-                        .with(tokenFor(UNGRANTED))
+                        .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "define-refused-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(defineBody()))
@@ -115,7 +119,7 @@ class OperationsMarketingAudienceEndpointTests {
                 .contains(Capability.CAMPAIGN_AUTHOR.code());
 
         MvcResult refusedList =
-                mvc.perform(get(audiencesPath()).with(tokenFor(UNGRANTED))).andReturn();
+                mvc.perform(get(audiencesPath()).with(tokenFor(OWNER))).andReturn();
         assertThat(refusedList.getResponse().getStatus()).isEqualTo(403);
     }
 

@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
-import { LocationScope } from '../../../core/api/operations-paths';
+import { BrandScope } from '../../../core/api/catalog-paths';
 import { marketingPaths } from '../../../core/api/marketing-paths';
 
 /** The closed predicate catalogue (ADR 0044) — `PredicateType.java`. */
@@ -115,21 +115,21 @@ export interface SnapshotResult {
 export class SegmentsApi {
   private readonly api = inject(ApiClient);
 
-  async list(scope: LocationScope): Promise<readonly AudienceSummary[]> {
+  async list(scope: BrandScope): Promise<readonly AudienceSummary[]> {
     const result = await firstValueFrom(
       this.api.get<readonly AudienceSummary[]>(marketingPaths.audiences(scope)),
     );
     return result.value ?? [];
   }
 
-  async detail(scope: LocationScope, audienceId: string): Promise<AudienceDetail> {
+  async detail(scope: BrandScope, audienceId: string): Promise<AudienceDetail> {
     const result = await firstValueFrom(
       this.api.get<AudienceDetail>(marketingPaths.audience(scope, audienceId)),
     );
     return result.value;
   }
 
-  async define(scope: LocationScope, input: DefineAudienceInput): Promise<string> {
+  async define(scope: BrandScope, input: DefineAudienceInput): Promise<string> {
     const result = await firstValueFrom(
       this.api.post<DefineAudienceInput, { readonly audienceId: string }>(
         marketingPaths.audiences(scope),
@@ -140,7 +140,7 @@ export class SegmentsApi {
   }
 
   async redefine(
-    scope: LocationScope,
+    scope: BrandScope,
     audienceId: string,
     predicates: readonly AudiencePredicate[],
   ): Promise<number> {
@@ -154,7 +154,7 @@ export class SegmentsApi {
   }
 
   async buildSnapshot(
-    scope: LocationScope,
+    scope: BrandScope,
     audienceId: string,
     channel: MarketingChannel,
     consentPurpose: string,
