@@ -106,8 +106,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.form.reason': 'Sabab',
   'reservations.form.tables': 'Stollar',
   'reservations.form.incomplete': 'Mehmon ismi, telefon va kamida bitta stol kiritilishi kerak',
-  'reservations.form.incompleteEdit': 'Toʻgʻri vaqt oynasi, kamida bitta stol va sabab kiritilishi kerak',
-  'reservations.form.noChannel': 'Faol sotuv kanali yoʻq — bron qayerdan kelganini yozish uchun kanal kerak',
+  'reservations.form.incompleteEdit':
+    'Toʻgʻri vaqt oynasi, kamida bitta stol va sabab kiritilishi kerak',
+  'reservations.form.noChannel':
+    'Faol sotuv kanali yoʻq — bron qayerdan kelganini yozish uchun kanal kerak',
   'reservations.form.saving': 'Saqlanmoqda…',
   'reservations.form.save': 'Bronni saqlash',
   'reservations.form.saveEdit': 'Oʻzgarishlarni saqlash',
@@ -2346,6 +2348,36 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Mijozning buyurtmadagi izohi ko‘rsatildi',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed':
     'Buyurtmadagi mijoz telefoni ko‘rsatildi',
+  'settings.nav.terms': 'Foydalanish shartlari',
+  'settings.home.description.terms':
+    'Mijozlar rozi boʻladigan foydalanish shartlarini yozing va e’lon qiling.',
+  'settings.terms.title': 'Foydalanish shartlari',
+  'settings.terms.lead':
+    'Bu — mijozlarga buyurtma rasmiylashtirishda va vitrina footer’ida koʻrsatiladigan foydalanish shartlari matni. E’lon qilish yangi versiya yaratadi — u hech qachon amaldagi versiyani oʻzgartirmaydi.',
+  'settings.terms.loading': 'Yuklanmoqda…',
+  'settings.terms.noBrands':
+    'Bu tenantda hali brendlar yoʻq, shuning uchun shartlarni yozadigan joy yoʻq.',
+  'settings.terms.brandPicker.label': 'Brend',
+  'settings.terms.neverPublished':
+    'Hali hech narsa e’lon qilinmagan. Mijozlar hozircha platformaning oʻz standart shartlar matnini koʻrmoqda.',
+  'settings.terms.currentVersion': 'Hozir e’lon qilingan versiya: {version}.',
+  'settings.terms.editor.title': 'Tahrirlash va e’lon qilish',
+  'settings.terms.field.ru': 'Rus tili (ru)',
+  'settings.terms.field.uz': 'Oʻzbek — lotin (uz-Latn)',
+  'settings.terms.field.en': 'Ingliz tili (en)',
+  'settings.terms.field.note': 'Izoh (ixtiyoriy)',
+  'settings.terms.publish.action': 'E’lon qilish',
+  'settings.terms.publish.submitting': 'E’lon qilinmoqda…',
+  'settings.terms.publish.success': '{version}-versiya e’lon qilindi.',
+  'settings.terms.history.title': 'E’lon qilish tarixi',
+  'settings.terms.history.column.version': 'Versiya',
+  'settings.terms.history.column.locales': 'Tillar',
+  'settings.terms.history.column.publishedBy': 'Kim e’lon qilgan',
+  'settings.terms.history.column.publishedAt': 'Qachon e’lon qilingan',
+  'settings.terms.history.empty': 'Hali hech narsa e’lon qilinmagan.',
+  'settings.terms.preview.loading': 'Ushbu versiya yuklanmoqda…',
+  'settings.terms.preview.notIncluded': 'Bu versiyaga kiritilmagan.',
+
   'settings.dataPrivacy.egress.action.orderAddressRevealed':
     'Buyurtmadagi mijoz yetkazib berish manzili ko‘rsatildi',
 };

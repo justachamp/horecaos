@@ -116,8 +116,10 @@ export const messagesEn = {
   'reservations.form.reason': 'Reason',
   'reservations.form.tables': 'Tables',
   'reservations.form.incomplete': 'A guest name, a phone, and at least one table are required',
-  'reservations.form.incompleteEdit': 'A valid time window, at least one table, and a reason are required',
-  'reservations.form.noChannel': 'No active sales channel is configured — a booking needs one to record where it came from',
+  'reservations.form.incompleteEdit':
+    'A valid time window, at least one table, and a reason are required',
+  'reservations.form.noChannel':
+    'No active sales channel is configured — a booking needs one to record where it came from',
   'reservations.form.saving': 'Saving…',
   'reservations.form.save': 'Save booking',
   'reservations.form.saveEdit': 'Save changes',
@@ -1170,7 +1172,8 @@ export const messagesEn = {
   'kitchen.capacity.form.from': 'From',
   'kitchen.capacity.form.to': 'To',
   'kitchen.capacity.form.portionsPerHour': 'Portions per hour',
-  'kitchen.capacity.form.incomplete': 'A station, a valid window, and a positive ceiling are required',
+  'kitchen.capacity.form.incomplete':
+    'A station, a valid window, and a positive ceiling are required',
   'kitchen.capacity.form.saving': 'Saving…',
   'kitchen.capacity.form.save': 'Add ceiling',
   'kitchen.capacity.card2.title': 'Cook headcount output',
@@ -2354,6 +2357,35 @@ export const messagesEn = {
     'Revealed a customer’s phone on an order',
   'settings.dataPrivacy.egress.action.orderAddressRevealed':
     'Revealed a customer’s delivery address on an order',
+
+  'settings.nav.terms': 'Terms of service',
+  'settings.home.description.terms': 'Write and publish the terms of service customers agree to.',
+  'settings.terms.title': 'Terms of service',
+  'settings.terms.lead':
+    'This is the terms-of-service text shown to customers at checkout and in the storefront footer. Publishing creates a new version — it never edits one already in force.',
+  'settings.terms.loading': 'Loading…',
+  'settings.terms.noBrands':
+    'This tenant has no brands yet, so there is nothing to author terms for.',
+  'settings.terms.brandPicker.label': 'Brand',
+  'settings.terms.neverPublished':
+    'Nothing has been published yet. Customers are currently seeing the platform’s own default terms text.',
+  'settings.terms.currentVersion': 'Currently published: version {version}.',
+  'settings.terms.editor.title': 'Edit and publish',
+  'settings.terms.field.ru': 'Russian (ru)',
+  'settings.terms.field.uz': 'Uzbek — Latin (uz-Latn)',
+  'settings.terms.field.en': 'English (en)',
+  'settings.terms.field.note': 'Note (optional)',
+  'settings.terms.publish.action': 'Publish',
+  'settings.terms.publish.submitting': 'Publishing…',
+  'settings.terms.publish.success': 'Published as version {version}.',
+  'settings.terms.history.title': 'Publish history',
+  'settings.terms.history.column.version': 'Version',
+  'settings.terms.history.column.locales': 'Languages',
+  'settings.terms.history.column.publishedBy': 'Published by',
+  'settings.terms.history.column.publishedAt': 'Published at',
+  'settings.terms.history.empty': 'Nothing has been published yet.',
+  'settings.terms.preview.loading': 'Loading this version…',
+  'settings.terms.preview.notIncluded': 'Not included in this version.',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

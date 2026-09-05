@@ -978,7 +978,7 @@ public class JdbcCustomerStore {
      * consent" column would destroy exactly that.
      */
     public Optional<ConsentRow> currentConsent(
-            UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
+            UUID tenantId, UUID accountId, @Nullable UUID brandId, String purpose, @Nullable String channel) {
         return jdbc.sql("""
                 SELECT decision, policy_version, decided_at, source
                 FROM customer.consent_decisions

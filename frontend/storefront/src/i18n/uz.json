@@ -261,13 +261,11 @@
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
-    "title": "Xizmat shartlari",
-    "section1Title": "1. Umumiy qoidalar",
-    "section1Content": "JizBiz ilovasidan foydalanib, siz ushbu shartlarga rozilik bildirasiz. Xizmat taom buyurtma qilish va yetkazib berish uchun mo'ljallangan. Biz shartlarni o'zgartirish huquqini saqlab qolamiz. O'zgarishlardan keyin davom etish sizning roziligingizni bildiradi.",
-    "section2Title": "2. Buyurtmalar va to'lov",
-    "section2Content": "Buyurtma ilova orqali rasmiylashtiriladi. To'lov yetkazib berish paytida naqd pul yoki elektron tizimlar orqali amalga oshirilishi mumkin. Narxlar so'mda ko'rsatilgan. Yetkazib berish vaqti taxminiy.",
-    "section3Title": "3. Aloqa va qo'llab-quvvatlash",
-    "section3Content": "Savollar uchun qo'llab-quvvatlash xizmatiga murojaat qiling. Biz buyurtmalar va xizmat sifati bilan bog'liq barcha savollarni tez hal qilishga intilamiz."
+    "loadError": "Foydalanish shartlarini yuklab bo'lmadi. Qayta urinib ko'ring.",
+    "platformDefaultNotice": "Ushbu restoran hali o'z foydalanish shartlarini e'lon qilmagan, shuning uchun quyida umumiy standart matn ko'rsatilgan.",
+    "mustAcceptNotice": "Bizning foydalanish shartlarimiz yangilandi. Davom etish uchun ular bilan tanishib, qabul qiling.",
+    "iAgree": "Roziman",
+    "acceptError": "Xatolik yuz berdi. Qayta urinib ko'ring."
   },
   "action": {
     "yourAddress": "Sizning manzil",

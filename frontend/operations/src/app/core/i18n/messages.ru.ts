@@ -91,7 +91,8 @@ export const messagesRu: MessageCatalogue = {
   'reservations.action.noShow': 'Неявка',
   'reservations.form.title': 'Новое бронирование',
   'reservations.form.editTitle': 'Изменить бронирование',
-  'reservations.form.editHint': 'Имя гостя, телефон и комментарий здесь изменить нельзя — чтобы их поменять, отмените бронь и создайте новую.',
+  'reservations.form.editHint':
+    'Имя гостя, телефон и комментарий здесь изменить нельзя — чтобы их поменять, отмените бронь и создайте новую.',
   'reservations.form.guestName': 'Имя гостя',
   'reservations.form.guestPhone': 'Телефон',
   'reservations.form.secondaryPhone': 'Доп. телефон',
@@ -102,8 +103,10 @@ export const messagesRu: MessageCatalogue = {
   'reservations.form.reason': 'Причина',
   'reservations.form.tables': 'Столы',
   'reservations.form.incomplete': 'Укажите имя гостя, телефон и хотя бы один стол',
-  'reservations.form.incompleteEdit': 'Укажите корректное время, хотя бы один стол и причину изменения',
-  'reservations.form.noChannel': 'Нет активного канала продаж — для бронирования нужно указать, откуда оно поступило',
+  'reservations.form.incompleteEdit':
+    'Укажите корректное время, хотя бы один стол и причину изменения',
+  'reservations.form.noChannel':
+    'Нет активного канала продаж — для бронирования нужно указать, откуда оно поступило',
   'reservations.form.saving': 'Сохранение…',
   'reservations.form.save': 'Сохранить бронирование',
   'reservations.form.saveEdit': 'Сохранить изменения',
@@ -2330,6 +2333,36 @@ export const messagesRu: MessageCatalogue = {
   'settings.dataPrivacy.egress.action.audienceExported': 'Выгружена маркетинговая аудитория',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Открыт комментарий клиента к заказу',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed': 'Открыт телефон клиента в заказе',
+  'settings.nav.terms': 'Условия использования',
+  'settings.home.description.terms':
+    'Напишите и опубликуйте условия использования, с которыми соглашаются клиенты.',
+  'settings.terms.title': 'Условия использования',
+  'settings.terms.lead':
+    'Это текст условий использования, который клиенты видят при оформлении заказа и в подвале витрины. Публикация создаёт новую версию — она никогда не изменяет уже действующую.',
+  'settings.terms.loading': 'Загрузка…',
+  'settings.terms.noBrands':
+    'У этого тенанта пока нет брендов, поэтому условия писать не для чего.',
+  'settings.terms.brandPicker.label': 'Бренд',
+  'settings.terms.neverPublished':
+    'Пока ничего не опубликовано. Клиенты сейчас видят собственный стандартный текст условий платформы.',
+  'settings.terms.currentVersion': 'Сейчас опубликована версия {version}.',
+  'settings.terms.editor.title': 'Редактирование и публикация',
+  'settings.terms.field.ru': 'Русский (ru)',
+  'settings.terms.field.uz': 'Узбекский — латиница (uz-Latn)',
+  'settings.terms.field.en': 'Английский (en)',
+  'settings.terms.field.note': 'Примечание (необязательно)',
+  'settings.terms.publish.action': 'Опубликовать',
+  'settings.terms.publish.submitting': 'Публикация…',
+  'settings.terms.publish.success': 'Опубликована версия {version}.',
+  'settings.terms.history.title': 'История публикаций',
+  'settings.terms.history.column.version': 'Версия',
+  'settings.terms.history.column.locales': 'Языки',
+  'settings.terms.history.column.publishedBy': 'Кем опубликовано',
+  'settings.terms.history.column.publishedAt': 'Когда опубликовано',
+  'settings.terms.history.empty': 'Пока ничего не опубликовано.',
+  'settings.terms.preview.loading': 'Загрузка этой версии…',
+  'settings.terms.preview.notIncluded': 'Не включено в эту версию.',
+
   'settings.dataPrivacy.egress.action.orderAddressRevealed':
     'Открыт адрес доставки клиента в заказе',
 };

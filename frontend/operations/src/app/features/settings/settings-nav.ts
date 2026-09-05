@@ -121,6 +121,12 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         description: 'settings.home.description.dataPrivacy',
         builtRoute: true,
       },
+      {
+        path: 'terms',
+        label: 'settings.nav.terms',
+        description: 'settings.home.description.terms',
+        builtRoute: true,
+      },
     ],
   },
 ];

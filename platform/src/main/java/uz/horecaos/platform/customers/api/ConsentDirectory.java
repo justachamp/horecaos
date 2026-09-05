@@ -3,6 +3,7 @@ package uz.horecaos.platform.customers.api;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reading what a customer has agreed to (ADR 0015, consumed by ADR 0020).
@@ -28,7 +29,8 @@ public interface ConsentDirectory {
      * @return empty when nobody ever asked. Absence is not consent, and the caller
      *         must treat it as withheld rather than as permission
      */
-    Optional<ConsentState> consentFor(UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel);
+    Optional<ConsentState> consentFor(
+            UUID tenantId, UUID accountId, @Nullable UUID brandId, String purpose, @Nullable String channel);
 
     /**
      * What a caller may hold about a decision.

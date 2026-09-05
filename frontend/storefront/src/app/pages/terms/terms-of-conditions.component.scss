@@ -2,8 +2,8 @@
   display: block;
 }
 
-/* Uzbek terms content - formatted legal document */
-.terms-uz-content {
+/* The fetched terms document, in whichever language is currently selected. */
+.terms-content {
   a {
     color: var(--brand-accent);
     text-decoration: underline;

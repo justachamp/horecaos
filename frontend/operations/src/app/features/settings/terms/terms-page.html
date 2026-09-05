@@ -1,0 +1,178 @@
+<h1 class="q-title">{{ 'settings.terms.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.terms.lead' | t }}</p>
+
+@switch (state()) {
+  @case ('loading') {
+    <p class="q-body-sm">{{ 'settings.terms.loading' | t }}</p>
+  }
+  @case ('denied') {
+    <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  }
+  @case ('error') {
+    <div class="error-band" role="alert">
+      <span class="q-body-sm">{{ loadErrorText() }}</span>
+      <button type="button" class="secondary" (click)="retry()">
+        {{ 'reports.error.retry' | t }}
+      </button>
+    </div>
+  }
+  @case ('ready') {
+    @if (brands().length > 1) {
+      <label class="q-caption" for="terms-brand">{{
+        'settings.terms.brandPicker.label' | t
+      }}</label>
+      <select
+        id="terms-brand"
+        class="q-body field brand-select"
+        [value]="selectedBrandId()"
+        (change)="selectBrand($any($event.target).value)"
+      >
+        @for (brand of brands(); track brand.id) {
+          <option [value]="brand.id">{{ brand.displayName }}</option>
+        }
+      </select>
+    }
+
+    @if (current(); as value) {
+      @if (!value.published) {
+        <p class="q-body-sm banner banner--info">{{ 'settings.terms.neverPublished' | t }}</p>
+      } @else {
+        <p class="q-body-sm banner">
+          {{ 'settings.terms.currentVersion' | t: { version: value.version ?? 0 } }}
+        </p>
+      }
+
+      <section class="card">
+        <h2 class="q-subhead">{{ 'settings.terms.editor.title' | t }}</h2>
+
+        <label class="q-caption" for="terms-ru">{{ 'settings.terms.field.ru' | t }}</label>
+        <textarea
+          id="terms-ru"
+          class="q-body field textarea"
+          [value]="editRu()"
+          (input)="editRu.set($any($event.target).value)"
+          [disabled]="publishSubmitting()"
+        ></textarea>
+
+        <label class="q-caption" for="terms-uz">{{ 'settings.terms.field.uz' | t }}</label>
+        <textarea
+          id="terms-uz"
+          class="q-body field textarea"
+          [value]="editUz()"
+          (input)="editUz.set($any($event.target).value)"
+          [disabled]="publishSubmitting()"
+        ></textarea>
+
+        <label class="q-caption" for="terms-en">{{ 'settings.terms.field.en' | t }}</label>
+        <textarea
+          id="terms-en"
+          class="q-body field textarea"
+          [value]="editEn()"
+          (input)="editEn.set($any($event.target).value)"
+          [disabled]="publishSubmitting()"
+        ></textarea>
+
+        <label class="q-caption" for="terms-note">{{ 'settings.terms.field.note' | t }}</label>
+        <input
+          id="terms-note"
+          class="q-body field"
+          type="text"
+          [value]="note()"
+          (input)="note.set($any($event.target).value)"
+          [disabled]="publishSubmitting()"
+        />
+
+        @if (publishError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        @if (publishedNotice(); as message) {
+          <p class="q-body-sm success">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="primary"
+            (click)="submitPublish()"
+            [disabled]="!canPublish()"
+          >
+            {{
+              publishSubmitting()
+                ? ('settings.terms.publish.submitting' | t)
+                : ('settings.terms.publish.action' | t)
+            }}
+          </button>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <h2 class="q-subhead">{{ 'settings.terms.history.title' | t }}</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.terms.history.column.version' | t }}</th>
+            <th class="q-caption">{{ 'settings.terms.history.column.locales' | t }}</th>
+            <th class="q-caption">{{ 'settings.terms.history.column.publishedBy' | t }}</th>
+            <th class="q-caption">{{ 'settings.terms.history.column.publishedAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of history(); track entry.id) {
+            <tr class="row row--clickable" (click)="togglePreview(entry)">
+              <td class="q-body-sm q-tnum">{{ entry.version }}</td>
+              <td class="q-body-sm">{{ entry.locales.join(', ') }}</td>
+              <td class="q-body-sm">{{ entry.publishedBy }}</td>
+              <td class="q-body-sm q-mono">{{ entry.publishedAt }}</td>
+            </tr>
+            @if (expandedVersion() === entry.version) {
+              <tr class="preview-row">
+                <td colspan="4">
+                  @if (previewLoading()) {
+                    <p class="q-body-sm">{{ 'settings.terms.preview.loading' | t }}</p>
+                  } @else if (previewError(); as message) {
+                    <p class="q-body-sm error" role="alert">{{ message }}</p>
+                  } @else if (previewContent(); as preview) {
+                    <div class="preview">
+                      <div class="preview__locale">
+                        <h3 class="q-caption">{{ 'settings.terms.field.ru' | t }}</h3>
+                        <p class="q-body-sm preview__text">
+                          {{
+                            preview.contentsByLocale['ru'] ??
+                              ('settings.terms.preview.notIncluded' | t)
+                          }}
+                        </p>
+                      </div>
+                      <div class="preview__locale">
+                        <h3 class="q-caption">{{ 'settings.terms.field.uz' | t }}</h3>
+                        <p class="q-body-sm preview__text">
+                          {{
+                            preview.contentsByLocale['uz-Latn'] ??
+                              ('settings.terms.preview.notIncluded' | t)
+                          }}
+                        </p>
+                      </div>
+                      <div class="preview__locale">
+                        <h3 class="q-caption">{{ 'settings.terms.field.en' | t }}</h3>
+                        <p class="q-body-sm preview__text">
+                          {{
+                            preview.contentsByLocale['en'] ??
+                              ('settings.terms.preview.notIncluded' | t)
+                          }}
+                        </p>
+                      </div>
+                    </div>
+                  }
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">{{ 'settings.terms.history.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+}

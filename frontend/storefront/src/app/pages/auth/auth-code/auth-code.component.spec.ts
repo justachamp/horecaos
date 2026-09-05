@@ -12,11 +12,22 @@ import {
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { TelegramWebappService } from '../../../services/telegram-webapp.service';
+import { TermsService } from '../../../services/terms.service';
 
 class FakeCustomerOtp {
   requestCode = vi.fn();
   submitCode = vi.fn();
   signIn = vi.fn();
+}
+
+/** Defaults to "already accepted", so most tests exercise the ordinary path straight to /locations. */
+class FakeTermsService {
+  status = vi.fn().mockResolvedValue({
+    accepted: true,
+    currentVersion: 'v1:en',
+    lastAcceptedVersion: 'v1:en',
+    lastAcceptedAt: '2026-01-01T00:00:00Z',
+  });
 }
 
 class FakeTranslateService {
@@ -53,6 +64,7 @@ function setUp(state: HistoryState | null) {
 
   const otp = new FakeCustomerOtp();
   const delivery = new FakeDeliverySelectionService();
+  const terms = new FakeTermsService();
   TestBed.configureTestingModule({
     imports: [AuthCodeComponent],
     providers: [
@@ -61,12 +73,13 @@ function setUp(state: HistoryState | null) {
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: DeliverySelectionService, useValue: delivery },
       { provide: TelegramWebappService, useClass: FakeTelegramWebappService },
+      { provide: TermsService, useValue: terms },
     ],
   });
   const router = TestBed.inject(Router);
   const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
   const fixture = TestBed.createComponent(AuthCodeComponent);
-  return { fixture, comp: fixture.componentInstance, otp, delivery, navigateSpy };
+  return { fixture, comp: fixture.componentInstance, otp, delivery, terms, navigateSpy };
 }
 
 /**
@@ -294,6 +307,39 @@ describe('AuthCodeComponent.submit', () => {
     const signInOrder = otp.signIn.mock.invocationCallOrder[0];
     const navigateOrder = navigateSpy.mock.invocationCallOrder[0];
     expect(signInOrder).toBeLessThan(navigateOrder);
+  });
+
+  it('routes through /terms with mustAccept when the customer has not accepted the version in force', async () => {
+    const { fixture, comp, otp, terms, navigateSpy } = setUp(validState());
+    fixture.detectChanges();
+    comp.code.set('123456');
+    otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+    otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+    terms.status.mockResolvedValue({
+      accepted: false,
+      currentVersion: 'v2:en',
+      lastAcceptedVersion: 'v1:en',
+      lastAcceptedAt: '2026-01-01T00:00:00Z',
+    });
+
+    await comp.submit();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/terms'], {
+      state: { mustAccept: true, returnTo: '/locations' },
+    });
+  });
+
+  it('fails open to /locations when the acceptance-status check itself errors', async () => {
+    const { fixture, comp, otp, terms, navigateSpy } = setUp(validState());
+    fixture.detectChanges();
+    comp.code.set('123456');
+    otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+    otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+    terms.status.mockRejectedValue(new Error('network'));
+
+    await comp.submit();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/locations']);
   });
 
   it.each([

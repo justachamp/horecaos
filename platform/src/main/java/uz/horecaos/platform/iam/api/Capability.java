@@ -1154,6 +1154,26 @@ public enum Capability {
     CONVERSATION_INBOX_MANAGE("conversation.inbox.manage", "conversation-inbox", "manage"),
 
     /**
+     * ADR 0067: reading a brand's authored terms-of-service versions, their
+     * history, and which one is currently in force.
+     */
+    TERMS_READ("terms.read", "terms", "read"),
+
+    /**
+     * ADR 0067: publishing a new version of a brand's terms of service.
+     *
+     * <p>Held by {@link PlatformRole#TENANT_OWNER} alone among the tenant
+     * bundles, the same argument {@link #LEGAL_ENTITY_MANAGE} makes: the words
+     * a customer is asked to accept before ordering are a legal decision for
+     * the tenant's principal, not an operational one an administrator or a
+     * branch manager makes on their behalf. Publishing never edits a prior
+     * version — it creates the next one — because a customer accepted
+     * specific words at a specific time, and rewriting history under them
+     * destroys the only thing that acceptance record is for.
+     */
+    TERMS_MANAGE("terms.manage", "terms", "manage"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */
