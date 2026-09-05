@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.BlacklistEntryRow;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -30,17 +31,20 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
  * a later insert bury them would make the history lie about what was ever true
  * at once.
  *
- * <p>The enforcement point is {@link CustomerIdentityService#resolve}, the one
- * place in this codebase where a returning customer's principal becomes a
- * durable account (see that method's own doc). Ordering's own checkout has no
- * live consumer of {@link uz.horecaos.platform.customers.api.CustomerDirectory}
- * yet to enforce against — its javadoc says "consumed by ADR 0019" but nothing
- * in the ordering module calls it today — so refusing sign-in resolution is the
- * one place this can actually stop a blacklisted person's next order rather
- * than merely recording an opinion nothing reads.
+ * <p>Two enforcement points read this. {@link CustomerIdentityService#resolve}
+ * refuses a blacklisted principal a session at sign-in — the one place in this
+ * codebase where a returning customer's principal becomes a durable account
+ * (see that method's own doc). That does not cover a principal already holding
+ * a session minted before the entry was added, so {@link
+ * uz.horecaos.platform.customers.api.CustomerBlacklistPort} exposes the same
+ * read to ordering's cart-creation and checkout paths — the actual moments an
+ * order is filled and taken. Neither caller sees a reason or an actor: both
+ * are checking a gate, not looking at a customer's record, and {@link
+ * #isCurrentlyBlacklisted} is deliberately audit-free for the same reason its
+ * own doc gives.
  */
 @Service
-public class CustomerBlacklistService {
+public class CustomerBlacklistService implements CustomerBlacklistPort {
 
     private static final String TABLE = "customer.blacklist_entries";
 
@@ -154,6 +158,7 @@ public class CustomerBlacklistService {
      * stated purpose would misrepresent what the caller is doing — the caller is
      * not choosing to look at a customer's record, it is checking a gate.
      */
+    @Override
     @Transactional(readOnly = true)
     public boolean isCurrentlyBlacklisted(UUID tenantId, UUID accountId) {
         return store.isCurrentlyBlacklisted(tenantId, accountId, clock.instant());

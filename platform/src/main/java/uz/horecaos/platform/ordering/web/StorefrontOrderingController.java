@@ -537,6 +537,7 @@ public class StorefrontOrderingController {
                             "NOT_SERVICEABLE",
                             "CHANNEL_NOT_SELLABLE",
                             "GUEST_ORDERS_NOT_ALLOWED",
+                            "CUSTOMER_BLACKLISTED",
                             "DESTINATION_NOT_APPLICABLE",
                             "DESTINATION_NOT_LOCATED" -> ErrorCode.RESOURCE_CONFLICT;
                     default -> ErrorCode.VALIDATION_FAILED;
@@ -554,6 +555,13 @@ public class StorefrontOrderingController {
             // is going. A conflict rather than a validation failure: nothing in the
             // body is wrong, a step is missing.
             case "DELIVERY_DESTINATION_REQUIRED" -> ErrorCode.RESOURCE_CONFLICT;
+            // A well-formed request against an account this checkout will never
+            // accept. A conflict for the same reason GUEST_ORDERS_NOT_ALLOWED and
+            // NOT_SERVICEABLE are (below, by way of the default): nothing in the
+            // request is wrong, the account's own standing is what refuses it, and
+            // that standing can change (a lift, an expiry) without the caller
+            // changing anything.
+            case "CUSTOMER_BLACKLISTED" -> ErrorCode.RESOURCE_CONFLICT;
             // The body asked for something the request itself forbids — a
             // redemption on a checkout with no account behind it, or one that would
             // leave the order with no money tender. Nothing moved underneath the

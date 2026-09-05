@@ -30,6 +30,8 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.customers.application.CustomerBlacklistService;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
@@ -227,6 +229,12 @@ class OrderAmendmentAndOutcomeTests {
                         Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get, clock),
                 "local"));
 
+        // The real gate, over the real table, for the same reason every other
+        // collaborator here is real rather than a stub: this suite must meet
+        // production behaviour, not a stand-in's opinion of it.
+        var customerBlacklist = new CustomerBlacklistService(
+                new JdbcCustomerStore(jdbc), protection, clock, new JdbcAuditRecorder(jdbc, objectMapper));
+
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
         var policies = new OrderAcceptancePolicyService(
@@ -259,7 +267,8 @@ class OrderAmendmentAndOutcomeTests {
                         jdbc, protection, objectMapper),
                 protection,
                 objectMapper,
-                clock);
+                clock,
+                customerBlacklist);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         orderStateWith = store -> new OrderStateService(
                 store, serviceability, inventoryProcess, policies, settlementPlanner, auditRecorder, published, clock);
@@ -303,7 +312,8 @@ class OrderAmendmentAndOutcomeTests {
                 protection,
                 objectMapper,
                 published,
-                clock);
+                clock,
+                customerBlacklist);
 
         seedTenancyAndCatalog();
         seedPricingAndStock();

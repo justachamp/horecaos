@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -88,6 +89,7 @@ public class CartService {
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final CustomerBlacklistPort blacklist;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -100,7 +102,8 @@ public class CartService {
             CustomerAddressBook addresses,
             FieldProtection protection,
             ObjectMapper objectMapper,
-            Clock clock) {
+            Clock clock,
+            CustomerBlacklistPort blacklist) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -111,6 +114,7 @@ public class CartService {
         this.protection = protection;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.blacklist = blacklist;
     }
 
     /**
@@ -120,6 +124,11 @@ public class CartService {
      * checking only here would let a branch that shut while the customer was
      * choosing still take the order, and checking only at checkout would let them
      * fill a basket they were never going to be allowed to place.
+     *
+     * <p>A blacklisted account's standing is checked for the identical reason and
+     * at the identical two points: refusing only here would let an entry added
+     * mid-basket still be checked out on, and refusing only at checkout would let
+     * an account that can never place this order spend the time filling one.
      */
     @Transactional
     public CartRow create(
@@ -145,6 +154,9 @@ public class CartService {
             // last step, which is the worst possible moment to learn it.
             throw new CartRefusedException(
                     "GUEST_ORDERS_NOT_ALLOWED", "Channel " + channelCode + " requires an account");
+        }
+        if (customerAccountId != null && blacklist.isCurrentlyBlacklisted(tenantId, customerAccountId)) {
+            throw new CartRefusedException("CUSTOMER_BLACKLISTED", "This account cannot place orders");
         }
 
         Instant now = clock.instant();

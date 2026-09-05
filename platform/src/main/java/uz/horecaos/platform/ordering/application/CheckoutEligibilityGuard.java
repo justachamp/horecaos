@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.MigrationOwnershipPort;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
@@ -26,9 +27,10 @@ import uz.horecaos.platform.tenancy.api.ServiceabilityResolver;
 
 /**
  * Step 2 of {@link CheckoutService}'s order of operations: locks and validates
- * the cart, the channel, serviceability, the publication and the quote — all
- * reads. Nothing here mutates, which is what lets {@link CheckoutService} run
- * every one of these checks before anything can be refused only by compensation.
+ * the cart, the channel, serviceability, the customer's standing, the
+ * publication and the quote — all reads. Nothing here mutates, which is what
+ * lets {@link CheckoutService} run every one of these checks before anything
+ * can be refused only by compensation.
  */
 @Component
 class CheckoutEligibilityGuard {
@@ -45,7 +47,9 @@ class CheckoutEligibilityGuard {
     private final OrderSettlementPort settlements;
     private final QuoteAcceptancePort quotes;
     private final OrderCatalogSnapshot catalog;
+    private final CustomerBlacklistPort blacklist;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
             JdbcCartStore carts,
             CartService cartService,
@@ -55,7 +59,8 @@ class CheckoutEligibilityGuard {
             PaymentIntentPort payments,
             OrderSettlementPort settlements,
             QuoteAcceptancePort quotes,
-            OrderCatalogSnapshot catalog) {
+            OrderCatalogSnapshot catalog,
+            CustomerBlacklistPort blacklist) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -65,6 +70,7 @@ class CheckoutEligibilityGuard {
         this.settlements = settlements;
         this.quotes = quotes;
         this.catalog = catalog;
+        this.blacklist = blacklist;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -140,6 +146,17 @@ class CheckoutEligibilityGuard {
         }
         if (!cart.expiresAt().isAfter(now)) {
             return Result.rejected("CART_EXPIRED", "This cart has expired");
+        }
+
+        // A guest cart has no account to check. An account cart is re-checked here
+        // against the clock rather than trusted from whatever CartService.create
+        // found true when the cart was opened, for the same reason serviceability
+        // is: an entry added while the basket was being filled must refuse the
+        // order it was added to stop, not merely the next one.
+        UUID cartCustomerAccountId = cart.customerAccountId();
+        if (cartCustomerAccountId != null
+                && blacklist.isCurrentlyBlacklisted(command.tenantId(), cartCustomerAccountId)) {
+            return Result.rejected("CUSTOMER_BLACKLISTED", "This account cannot place orders");
         }
 
         List<CartLineRow> cartLines = cartService.lines(command.tenantId(), command.cartId());
