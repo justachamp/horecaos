@@ -1707,6 +1707,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.nav.label': 'Marketing boʻlimlari',
   'marketing.nav.promotions': 'Aksiyalar',
   'marketing.nav.promoCodes': 'Promokodlar',
+  'marketing.nav.loyalty': 'Sodiqlik',
   'marketing.nav.campaigns': 'Kampaniyalar',
   'marketing.nav.automations': 'Avtomatlashtirishlar',
   'marketing.nav.content': 'Kontent',
@@ -1857,14 +1858,87 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.suppressions.lift.title': 'Toʻxtatishni olib tashlash',
   'marketing.suppressions.lift.reason': 'Sabab',
   'marketing.suppressions.lift.submit': 'Olib tashlash',
+
+  // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
+  'marketing.loyalty.title': 'Sodiqlik',
+  'marketing.loyalty.intro':
+    'Keshbek ballari, saqlanadigan qiymat emas. Mijoz quyidagi qoidalar bo‘yicha ball to‘playdi va sarflaydi — oldindan to‘langan balans yo‘q, chunki HorecaOS mijozlarning pulini saqlamaydi (ADR 0046).',
+  'marketing.loyalty.loading': 'Yuklanmoqda',
+  'marketing.loyalty.denied': 'Ushbu brendning sodiqlik siyosatiga kirish yo‘q',
+  'marketing.loyalty.liability.label': 'Brend to‘lashi kerak bo‘lgan ballar',
+  'marketing.loyalty.liability.held': '{amount} tugallanmagan buyurtma tomonidan ushlab turilgan',
+  'marketing.loyalty.column.scope': 'Qo‘llaniladi',
+  'marketing.loyalty.column.status': 'Holati',
+  'marketing.loyalty.uncapped': 'Cheklanmagan',
+  'marketing.loyalty.hours': '{count} soat',
+  'marketing.loyalty.days': '{count} kun',
+  'marketing.loyalty.yes': 'Ha',
+  'marketing.loyalty.no': 'Yo‘q',
+  'marketing.loyalty.status.DRAFT': 'Qoralama',
+  'marketing.loyalty.status.ACTIVE': 'Faol',
+  'marketing.loyalty.status.RETIRED': 'Bekor qilingan',
+  'marketing.loyalty.action.activate': 'Faollashtirish',
+  'marketing.loyalty.action.retire': 'Bekor qilish',
+  'marketing.loyalty.dialog.cancel': 'Bekor qilish',
+  'marketing.loyalty.scope.brand': 'Butun brend',
+  'marketing.loyalty.scope.location': 'Bitta filial',
+  'marketing.loyalty.scope.channel': 'Bitta kanal',
+
+  'marketing.loyalty.accrual.title': 'Ball to‘plash',
+  'marketing.loyalty.accrual.hint':
+    'To‘langan buyurtmadan mijoz nima to‘playdi. Faol qoidasi yo‘q brend hech narsa to‘plamaydi — standart stavka koddan berilmaydi.',
+  'marketing.loyalty.accrual.create.action': 'Yangi to‘plash qoidasi',
+  'marketing.loyalty.accrual.create.title': 'To‘plash qoidasi qoralamasi',
+  'marketing.loyalty.accrual.create.submit': 'Qoralamani saqlash',
+  'marketing.loyalty.accrual.column.rate': 'Stavka',
+  'marketing.loyalty.accrual.column.cap': 'Buyurtma uchun chegara',
+  'marketing.loyalty.accrual.column.earnDelay': 'Kechikish',
+  'marketing.loyalty.accrual.column.lotLifetime': 'Muddati',
+  'marketing.loyalty.accrual.empty': 'Hali to‘plash qoidasi yaratilmagan.',
+  'marketing.loyalty.accrual.form.rate': 'Stavka, buyurtmaning pulda to‘langan qiymatidan %',
+  'marketing.loyalty.accrual.form.hasCap': 'Bitta buyurtma uchun ballarni cheklash',
+  'marketing.loyalty.accrual.form.cap': 'Buyurtma uchun maksimal ball',
+  'marketing.loyalty.accrual.form.earnDelay':
+    'To‘plash kechikishi, buyurtma tugagandan keyingi soat',
+  'marketing.loyalty.accrual.form.lotLifetime': 'Ballar necha kunda kuchini yo‘qotadi',
+  'marketing.loyalty.accrual.form.expiryWarning': 'Muddatidan necha kun oldin ogohlantirish',
+  'marketing.loyalty.accrual.form.expiryWarning.hint':
+    'Ball partiyasi necha kun qolganda "tez orada tugaydi" deb hisoblanadi — bu haqidagi xabarnoma hali qurilmagan (ADR 0046).',
+
+  'marketing.loyalty.redemption.title': 'Sarflash',
+  'marketing.loyalty.redemption.hint':
+    'Ballar buyurtmaning qanday ulushini qoplashi mumkin. Faol siyosati yo‘q brend ballarni to‘lov sifatida qabul qilmaydi.',
+  'marketing.loyalty.redemption.create.action': 'Yangi sarflash siyosati',
+  'marketing.loyalty.redemption.create.title': 'Sarflash siyosati qoralamasi',
+  'marketing.loyalty.redemption.create.submit': 'Qoralamani saqlash',
+  'marketing.loyalty.redemption.column.share': 'Buyurtma qiymatidan ulush',
+  'marketing.loyalty.redemption.column.minOrder': 'Minimal buyurtma',
+  'marketing.loyalty.redemption.column.excludesFee': 'Yetkazib berishga hisoblanmaydi',
+  'marketing.loyalty.redemption.empty': 'Hali sarflash siyosati yaratilmagan.',
+  'marketing.loyalty.redemption.form.share': 'Buyurtmaning maksimal ulushi, %',
+  'marketing.loyalty.redemption.form.share.hint':
+    '90% bilan cheklangan — ballar hech qachon butun buyurtmani qoplay olmaydi, shunda fiskal chek va kuryer naqd puliga tayanadigan narsa qoladi.',
+  'marketing.loyalty.redemption.form.minOrder': 'Sarflash uchun minimal buyurtma summasi',
+  'marketing.loyalty.redemption.form.excludesFee':
+    'Yetkazib berish narxini sarflash bazasidan chiqarib tashlash',
+
+  'marketing.loyalty.deposit.title': 'Depozit hisoblar',
+  'marketing.loyalty.deposit.body':
+    'Qurilmagan, va bu bo‘shliq emas: ADR 0046 mijoz mablag‘i bilan to‘ldiriladigan hisobni butunlay doiradan chiqarib tashladi. HorecaOS mijozlarning pulini saqlamaydi, shuning uchun depozit hisob litsenziyasiz to‘lov xizmati bilan bir xil savolni tug‘diradi — qaror faqat ballarni taklif qilishdir.',
+  'marketing.loyalty.posSync.title': 'POS bilan balans sinxronizatsiyasi',
+  'marketing.loyalty.posSync.body':
+    'Qurilmagan. Hech qanday ADR POS terminali sodiqlik balansini o‘qishi yoki yozishini belgilamaydi, va provayder imkoniyati sifatida ham e’lon qilinmagan — qarang: frontend-information-architecture.md §6.3.',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar bo‘limi',
   'customers.nav.list': 'Mijozlar',
   'customers.nav.segments': 'Segmentlar',
   'customers.nav.reviews': 'Sharhlar',
+  'customers.nav.feedbackSettings': 'Sharh sozlamalari',
 
   'customers.segments.title': 'Segmentlar',
-  'customers.segments.subtitle': 'Mijozlar bazasi bo‘yicha auditoriyalarni yarating, saqlang va qayta ishlating.',
+  'customers.segments.subtitle':
+    'Mijozlar bazasi bo‘yicha auditoriyalarni yarating, saqlang va qayta ishlating.',
   'customers.segments.create.action': 'Yangi segment',
   'customers.segments.column.name': 'Nomi',
   'customers.segments.column.description': 'Tavsif',
@@ -1913,7 +1987,8 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'reports.branches.title': 'Filiallar va SLA hisobotlari',
   'reports.branches.loading': 'Yuklanmoqda…',
-  'reports.branches.singleLocation': 'Bu hisobot filiallarni solishtiradi va bitta filial uchun ma’noga ega emas.',
+  'reports.branches.singleLocation':
+    'Bu hisobot filiallarni solishtiradi va bitta filial uchun ma’noga ega emas.',
   'reports.branches.leaderboard.title': 'Filiallar reytingi',
   'reports.branches.column.name': 'Filial',
   'reports.branches.column.orders': 'Buyurtmalar',
@@ -1941,7 +2016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.totalQty': 'Soni (jami)',
   'reports.products.column.totalSum': 'Summa (jami)',
   'reports.products.column.share': 'Tushumdagi ulush',
-  'reports.products.maybeMore': 'Mahsulotlar ko‘proq bo‘lishi mumkin — bu chegaralangan o‘qish, to‘liq eksport emas.',
+  'reports.products.maybeMore':
+    'Mahsulotlar ko‘proq bo‘lishi mumkin — bu chegaralangan o‘qish, to‘liq eksport emas.',
   'reports.products.abcXyzNotBuilt':
     'ABC va XYZ tasnifi hali yaratilmagan: reporting’da classification_run jadvali va ro‘yxatga olingan metrika yo‘q (ADR 0043).',
 
@@ -1972,7 +2048,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.cash.confirm.defaultReason': 'Inkassatsiyada tasdiqlandi',
 
   'finance.deliveryCost.title': 'Yetkazib berish tannarxini solishtirish',
-  'finance.deliveryCost.subtitle': 'Provayder hisob-fakturalari va qayd etilgan yetkazib berish tannarxi.',
+  'finance.deliveryCost.subtitle':
+    'Provayder hisob-fakturalari va qayd etilgan yetkazib berish tannarxi.',
   'finance.deliveryCost.basisLabel': 'Asos',
   'finance.deliveryCost.from': 'Dan',
   'finance.deliveryCost.to': 'Gacha',
@@ -1982,7 +2059,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.deliveryCost.internal': 'O‘z kuryerlari',
   'finance.deliveryCost.partner': 'Yetkazib berish xizmati',
   'finance.deliveryCost.total': 'Jami',
-  'finance.deliveryCost.missingBasis': 'Boshqa asosda hisoblangan yetkazib berishlar: {count} — ular jamiga kirmaydi.',
+  'finance.deliveryCost.missingBasis':
+    'Boshqa asosda hisoblangan yetkazib berishlar: {count} — ular jamiga kirmaydi.',
   'finance.deliveryCost.invoices.title': 'Yetkazib berish xizmatlari hisob-fakturalari',
   'finance.deliveryCost.invoices.provider': 'Xizmat',
   'finance.deliveryCost.invoices.reference': 'Hisob-faktura raqami',
@@ -1999,7 +2077,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.deliveryCost.lines.variance': 'Farq',
 
   'finance.payouts.title': 'Kuryer to‘lovlari',
-  'finance.payouts.subtitle': 'Butun park bo‘yicha hisob-kitob davrlari va bitta kuryerning balansi.',
+  'finance.payouts.subtitle':
+    'Butun park bo‘yicha hisob-kitob davrlari va bitta kuryerning balansi.',
   'finance.payouts.column.period': 'Davr',
   'finance.payouts.column.status': 'Holat',
   'finance.payouts.column.delivered': 'Yetkazildi',

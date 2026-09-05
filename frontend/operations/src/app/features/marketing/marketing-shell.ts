@@ -10,20 +10,29 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * `frontend-information-architecture.md` §6 lists eight Marketing screens; its
  * own tier legend puts every one of 6.1, 6.2, 6.4, 6.5, 6.7, 6.8 at tier 2 —
  * the owner directed the tier-2 build, unlike Finance's §8.3-8.6, which are
- * explicitly "Wave 2" and carry no tab here at all. 6.3 Loyalty and 6.6
- * Referrals are tier 3 and, per the same legend, stay out entirely: no tab, no
- * route, the same "tier 3 stays out" this build was scoped against.
+ * explicitly "Wave 2" and carry no tab here at all. 6.3 Loyalty was tier 3 and
+ * stayed out through wave 39; wave 44 built it (`LoyaltyPage`, ADR 0046) as
+ * one of the last two unbuilt tier-3 rows, alongside Customers §5.5. 6.6
+ * Referrals is the one tier-3 row still out, per the same "tier 3 stays out"
+ * rule.
  *
- * Only 6.4 Campaigns has a real backend to render honestly: ADR 0044's
- * audiences, campaign lifecycle, and suppression machinery, with `RFM
- * targeting` folded in as this row's own audience-definition step rather than
- * a separate IA row. The other five tabs route to the shared `NotBuiltPage`,
+ * Two tabs now have a real backend to render honestly. 6.4 Campaigns:
+ * ADR 0044's audiences, campaign lifecycle, and suppression machinery, with
+ * `RFM targeting` folded in as this row's own audience-definition step rather
+ * than a separate IA row. 6.3 Loyalty: `LoyaltyOperationsController`'s
+ * balance/liability reads already served Customer detail (wave 39); this wave
+ * adds `LoyaltyPolicyController`'s accrual-rule and redemption-policy
+ * authoring, the `LOYALTY_POLICY_MANAGE` capability's first caller. Deposit
+ * accounts and POS balance sync render as honest not-built panels inside that
+ * same screen rather than a separate route, because they are sub-bullets of
+ * one IA row, not rows of their own — see `LoyaltyPage`'s own doc for why
+ * each is not built. The other four tabs route to the shared `NotBuiltPage`,
  * each naming its own IA subsection — 6.1 Promotions and 6.2 Promo codes have
  * a schema (`V0093`) and nothing above it (no authoring service, no
  * controller); 6.5 Automations' trigger engine, and 6.7/6.8's merchandising
  * slots, have neither schema nor service. Each is a subsystem in its own
- * right, not a small gap this wave's two reserved migrations could close
- * honestly — see the wave's final report.
+ * right, not a small gap a couple of reserved migrations could close
+ * honestly — see wave 44's final report.
  */
 @Component({
   selector: 'q-marketing-shell',

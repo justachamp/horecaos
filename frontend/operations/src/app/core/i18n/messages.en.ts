@@ -1721,6 +1721,7 @@ export const messagesEn = {
   'marketing.nav.label': 'Marketing sections',
   'marketing.nav.promotions': 'Promotions',
   'marketing.nav.promoCodes': 'Promo codes',
+  'marketing.nav.loyalty': 'Loyalty',
   'marketing.nav.campaigns': 'Campaigns',
   'marketing.nav.automations': 'Automations',
   'marketing.nav.content': 'Content',
@@ -1870,11 +1871,82 @@ export const messagesEn = {
   'marketing.suppressions.lift.title': 'Lift this suppression',
   'marketing.suppressions.lift.reason': 'Reason',
   'marketing.suppressions.lift.submit': 'Lift',
+
+  // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
+  'marketing.loyalty.title': 'Loyalty',
+  'marketing.loyalty.intro':
+    'Cashback points, not stored value. A customer earns and spends points against the numbers below — there is no prepaid balance, because HorecaOS holds no customer funds (ADR 0046).',
+  'marketing.loyalty.loading': 'Loading',
+  'marketing.loyalty.denied': 'No access to this brand’s loyalty policy',
+  'marketing.loyalty.liability.label': 'Outstanding points owed by this brand',
+  'marketing.loyalty.liability.held': '{amount} held by an unfinished checkout',
+  'marketing.loyalty.column.scope': 'Applies to',
+  'marketing.loyalty.column.status': 'Status',
+  'marketing.loyalty.uncapped': 'Uncapped',
+  'marketing.loyalty.hours': '{count} h',
+  'marketing.loyalty.days': '{count} d',
+  'marketing.loyalty.yes': 'Yes',
+  'marketing.loyalty.no': 'No',
+  'marketing.loyalty.status.DRAFT': 'Draft',
+  'marketing.loyalty.status.ACTIVE': 'Active',
+  'marketing.loyalty.status.RETIRED': 'Retired',
+  'marketing.loyalty.action.activate': 'Activate',
+  'marketing.loyalty.action.retire': 'Retire',
+  'marketing.loyalty.dialog.cancel': 'Cancel',
+  'marketing.loyalty.scope.brand': 'Whole brand',
+  'marketing.loyalty.scope.location': 'One branch',
+  'marketing.loyalty.scope.channel': 'One channel',
+
+  'marketing.loyalty.accrual.title': 'Accrual',
+  'marketing.loyalty.accrual.hint':
+    'What a customer earns on a paid order. A brand with no active rule accrues nothing — there is no built-in default rate.',
+  'marketing.loyalty.accrual.create.action': 'New accrual rule',
+  'marketing.loyalty.accrual.create.title': 'Draft an accrual rule',
+  'marketing.loyalty.accrual.create.submit': 'Save draft',
+  'marketing.loyalty.accrual.column.rate': 'Rate',
+  'marketing.loyalty.accrual.column.cap': 'Cap per order',
+  'marketing.loyalty.accrual.column.earnDelay': 'Earn delay',
+  'marketing.loyalty.accrual.column.lotLifetime': 'Expires after',
+  'marketing.loyalty.accrual.empty': 'No accrual rule authored yet.',
+  'marketing.loyalty.accrual.form.rate': 'Rate, % of the money-settled order value',
+  'marketing.loyalty.accrual.form.hasCap': 'Cap the points one order can earn',
+  'marketing.loyalty.accrual.form.cap': 'Maximum points per order',
+  'marketing.loyalty.accrual.form.earnDelay': 'Earn delay, hours after the order completes',
+  'marketing.loyalty.accrual.form.lotLifetime': 'Points expire after, days',
+  'marketing.loyalty.accrual.form.expiryWarning': 'Warn before expiry, days',
+  'marketing.loyalty.accrual.form.expiryWarning.hint':
+    'How many days ahead a lot counts as "about to expire" — the message that would use this is not built yet (ADR 0046).',
+
+  'marketing.loyalty.redemption.title': 'Redemption',
+  'marketing.loyalty.redemption.hint':
+    'How much of an order points may cover. A brand with no active policy accepts no points as payment.',
+  'marketing.loyalty.redemption.create.action': 'New redemption policy',
+  'marketing.loyalty.redemption.create.title': 'Draft a redemption policy',
+  'marketing.loyalty.redemption.create.submit': 'Save draft',
+  'marketing.loyalty.redemption.column.share': 'Share of order value',
+  'marketing.loyalty.redemption.column.minOrder': 'Minimum order',
+  'marketing.loyalty.redemption.column.excludesFee': 'Excludes delivery fee',
+  'marketing.loyalty.redemption.empty': 'No redemption policy authored yet.',
+  'marketing.loyalty.redemption.form.share': 'Maximum share of the order, %',
+  'marketing.loyalty.redemption.form.share.hint':
+    'Capped at 90% — points may never cover a whole order, so a fiscal receipt and a courier’s cash always have something to point at.',
+  'marketing.loyalty.redemption.form.minOrder': 'Minimum order to redeem against',
+  'marketing.loyalty.redemption.form.excludesFee':
+    'Exclude the delivery fee from the eligible value',
+
+  'marketing.loyalty.deposit.title': 'Deposit accounts',
+  'marketing.loyalty.deposit.body':
+    'Not built, and not a gap: ADR 0046 withdrew customer-funded stored value from scope outright. HorecaOS holds no customer funds, so a prepaid deposit account raises the same question as an unlicensed payment service, and the decision is to offer points only.',
+  'marketing.loyalty.posSync.title': 'POS balance sync',
+  'marketing.loyalty.posSync.body':
+    'Not built. No ADR owns a point-of-sale terminal reading or writing a loyalty balance, and no provider capability declares it — see frontend-information-architecture.md §6.3.',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',
   'customers.nav.list': 'Customers',
   'customers.nav.segments': 'Segments',
   'customers.nav.reviews': 'Reviews',
+  'customers.nav.feedbackSettings': 'Feedback settings',
 
   'customers.segments.title': 'Segments',
   'customers.segments.subtitle': 'Build, save and reuse audiences over the customer base.',
@@ -1926,7 +1998,8 @@ export const messagesEn = {
 
   'reports.branches.title': 'Branch & SLA reports',
   'reports.branches.loading': 'Loading…',
-  'reports.branches.singleLocation': 'This report compares branches and has nothing to show for a single-location tenant.',
+  'reports.branches.singleLocation':
+    'This report compares branches and has nothing to show for a single-location tenant.',
   'reports.branches.leaderboard.title': 'Branch leaderboard',
   'reports.branches.column.name': 'Branch',
   'reports.branches.column.orders': 'Orders',
@@ -1954,7 +2027,8 @@ export const messagesEn = {
   'reports.products.column.totalQty': 'Qty (total)',
   'reports.products.column.totalSum': 'Sum (total)',
   'reports.products.column.share': 'Revenue share',
-  'reports.products.maybeMore': 'There may be more products than shown — this is a bounded read, not a full export.',
+  'reports.products.maybeMore':
+    'There may be more products than shown — this is a bounded read, not a full export.',
   'reports.products.abcXyzNotBuilt':
     'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
 
@@ -1995,7 +2069,8 @@ export const messagesEn = {
   'finance.deliveryCost.internal': 'In-house',
   'finance.deliveryCost.partner': 'Partner',
   'finance.deliveryCost.total': 'Total',
-  'finance.deliveryCost.missingBasis': '{count} shipments carry cost at a different basis and are not in this total.',
+  'finance.deliveryCost.missingBasis':
+    '{count} shipments carry cost at a different basis and are not in this total.',
   'finance.deliveryCost.invoices.title': 'Partner invoices',
   'finance.deliveryCost.invoices.provider': 'Provider',
   'finance.deliveryCost.invoices.reference': 'Reference',

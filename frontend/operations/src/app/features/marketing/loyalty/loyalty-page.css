@@ -1,0 +1,232 @@
+.loyalty {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow: auto;
+}
+
+.loyalty__toolbar {
+  margin-bottom: 12px;
+}
+
+.loyalty__intro {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+  max-width: 70ch;
+}
+
+.loyalty__liability {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+}
+
+.loyalty__liability-value {
+  font-weight: 600;
+}
+
+.loyalty__liability-held {
+  color: var(--q-ink-muted);
+}
+
+.loyalty__section {
+  margin-bottom: 28px;
+}
+
+.loyalty__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.loyalty__section-title {
+  margin: 0;
+}
+
+.loyalty__section-hint {
+  margin: 4px 0 12px;
+  color: var(--q-ink-muted);
+  max-width: 70ch;
+}
+
+.loyalty__create {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.loyalty__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.loyalty__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.loyalty-row td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.loyalty__action-col {
+  text-align: right;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.loyalty__action-col button {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.status-badge--live {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.loyalty__not-built {
+  padding: 12px 14px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  max-width: 70ch;
+}
+
+.loyalty__not-built .q-body-sm {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.loyalty__denied,
+.loyalty__skeleton {
+  padding: 16px;
+}
+
+.loyalty__denied {
+  text-align: center;
+  padding: 32px;
+}
+
+.loyalty__skeleton-row {
+  height: 32px;
+  margin-bottom: 8px;
+  background: var(--q-surface-1);
+}
+
+.loyalty__error-band {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 40%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.dialog {
+  background: var(--q-canvas);
+  padding: 20px;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: var(--q-radius);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field input,
+.field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 14px;
+}
+
+.field--checkbox input {
+  padding: 0;
+  width: auto;
+}
+
+.loyalty__field-hint {
+  color: var(--q-ink-muted);
+}
+
+.dialog__error {
+  color: var(--q-error-text);
+  margin: 0 0 8px;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog__actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dialog__actions button:last-child {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.dialog__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}

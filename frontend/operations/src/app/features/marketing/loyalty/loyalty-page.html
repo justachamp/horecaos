@@ -1,0 +1,410 @@
+<div class="loyalty">
+  <div class="loyalty__toolbar">
+    <div>
+      <h1 class="q-subhead">{{ 'marketing.loyalty.title' | t }}</h1>
+      <p class="q-body-sm loyalty__intro">{{ 'marketing.loyalty.intro' | t }}</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loyalty__skeleton" [attr.aria-label]="'marketing.loyalty.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="loyalty__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="loyalty__denied" data-testid="loyalty-denied">
+      <p class="q-body-sm">{{ 'marketing.loyalty.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="loyalty__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="loyalty__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (ownLiability(); as liability) {
+      <div class="loyalty__liability" data-testid="loyalty-liability">
+        <span class="q-caption">{{ 'marketing.loyalty.liability.label' | t }}</span>
+        <span class="q-body loyalty__liability-value">{{
+          formatLiabilityMoney(liability.outstanding)
+        }}</span>
+        @if (liability.held.amountMinor > 0) {
+          <span class="q-caption loyalty__liability-held">
+            {{
+              'marketing.loyalty.liability.held'
+                | t: { amount: formatLiabilityMoney(liability.held) }
+            }}
+          </span>
+        }
+      </div>
+    }
+
+    <section class="loyalty__section">
+      <div class="loyalty__section-head">
+        <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.accrual.title' | t }}</h2>
+        <button type="button" class="loyalty__create" (click)="openAccrualForm()">
+          {{ 'marketing.loyalty.accrual.create.action' | t }}
+        </button>
+      </div>
+      <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.accrual.hint' | t }}</p>
+
+      <table class="loyalty__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.loyalty.column.scope' | t }}</th>
+            <th>{{ 'marketing.loyalty.accrual.column.rate' | t }}</th>
+            <th>{{ 'marketing.loyalty.accrual.column.cap' | t }}</th>
+            <th>{{ 'marketing.loyalty.accrual.column.earnDelay' | t }}</th>
+            <th>{{ 'marketing.loyalty.accrual.column.lotLifetime' | t }}</th>
+            <th>{{ 'marketing.loyalty.column.status' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rule of accrualRules(); track rule.id) {
+            <tr class="loyalty-row" data-testid="accrual-rule-row">
+              <td>{{ scopeLabel(rule) }}</td>
+              <td class="q-tnum">{{ ratePercentLabel(rule) }}</td>
+              <td class="q-tnum">
+                {{
+                  rule.maxAccrualMinor === null
+                    ? ('marketing.loyalty.uncapped' | t)
+                    : formatWhole(rule.maxAccrualMinor)
+                }}
+              </td>
+              <td class="q-tnum">
+                {{ 'marketing.loyalty.hours' | t: { count: rule.earnDelayHours } }}
+              </td>
+              <td class="q-tnum">
+                {{ 'marketing.loyalty.days' | t: { count: rule.lotLifetimeDays } }}
+              </td>
+              <td>
+                <span class="status-badge" [class.status-badge--live]="rule.status === 'ACTIVE'">
+                  {{ statusLabelKey(rule.status) | t }}
+                </span>
+              </td>
+              <td class="loyalty__action-col">
+                @if (rule.status === 'DRAFT') {
+                  <button
+                    type="button"
+                    [disabled]="actingRuleId() === rule.id"
+                    (click)="activateAccrualRule(rule)"
+                  >
+                    {{ 'marketing.loyalty.action.activate' | t }}
+                  </button>
+                }
+                @if (rule.status !== 'RETIRED') {
+                  <button
+                    type="button"
+                    [disabled]="actingRuleId() === rule.id"
+                    (click)="retireAccrualRule(rule)"
+                  >
+                    {{ 'marketing.loyalty.action.retire' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7">
+                <p class="q-body-sm" data-testid="accrual-rules-empty">
+                  {{ 'marketing.loyalty.accrual.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="loyalty__section">
+      <div class="loyalty__section-head">
+        <h2 class="q-body loyalty__section-title">
+          {{ 'marketing.loyalty.redemption.title' | t }}
+        </h2>
+        <button type="button" class="loyalty__create" (click)="openRedemptionForm()">
+          {{ 'marketing.loyalty.redemption.create.action' | t }}
+        </button>
+      </div>
+      <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.redemption.hint' | t }}</p>
+
+      <table class="loyalty__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.loyalty.redemption.column.share' | t }}</th>
+            <th>{{ 'marketing.loyalty.redemption.column.minOrder' | t }}</th>
+            <th>{{ 'marketing.loyalty.redemption.column.excludesFee' | t }}</th>
+            <th>{{ 'marketing.loyalty.column.status' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (policy of redemptionPolicies(); track policy.id) {
+            <tr class="loyalty-row" data-testid="redemption-policy-row">
+              <td class="q-tnum">{{ sharePercentLabel(policy) }}</td>
+              <td class="q-tnum">{{ formatWhole(policy.minOrderMinor) }}</td>
+              <td>
+                {{
+                  policy.excludesDeliveryFee
+                    ? ('marketing.loyalty.yes' | t)
+                    : ('marketing.loyalty.no' | t)
+                }}
+              </td>
+              <td>
+                <span class="status-badge" [class.status-badge--live]="policy.status === 'ACTIVE'">
+                  {{ statusLabelKey(policy.status) | t }}
+                </span>
+              </td>
+              <td class="loyalty__action-col">
+                @if (policy.status === 'DRAFT') {
+                  <button
+                    type="button"
+                    [disabled]="actingPolicyId() === policy.id"
+                    (click)="activateRedemptionPolicy(policy)"
+                  >
+                    {{ 'marketing.loyalty.action.activate' | t }}
+                  </button>
+                }
+                @if (policy.status !== 'RETIRED') {
+                  <button
+                    type="button"
+                    [disabled]="actingPolicyId() === policy.id"
+                    (click)="retireRedemptionPolicy(policy)"
+                  >
+                    {{ 'marketing.loyalty.action.retire' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">
+                <p class="q-body-sm" data-testid="redemption-policies-empty">
+                  {{ 'marketing.loyalty.redemption.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-deposit-not-built">
+      <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.deposit.title' | t }}</h2>
+      <p class="q-body-sm">{{ 'marketing.loyalty.deposit.body' | t }}</p>
+    </section>
+
+    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-pos-sync-not-built">
+      <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.posSync.title' | t }}</h2>
+      <p class="q-body-sm">{{ 'marketing.loyalty.posSync.body' | t }}</p>
+    </section>
+  }
+
+  @if (showAccrualForm()) {
+    <div class="dialog-backdrop" (click)="closeAccrualForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'marketing.loyalty.accrual.create.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.column.scope' | t }}</span>
+          <select
+            [value]="accrualScopeType()"
+            (change)="accrualScopeType.set($any($event.target).value); accrualScopeId.set('')"
+          >
+            @for (choice of scopeChoices; track choice) {
+              <option [value]="choice">{{ scopeChoiceLabelKey(choice) | t }}</option>
+            }
+          </select>
+        </label>
+
+        @if (accrualScopeType() === 'LOCATION') {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.loyalty.scope.location' | t }}</span>
+            @if (locations().length > 0) {
+              <select
+                [value]="accrualScopeId()"
+                (change)="accrualScopeId.set($any($event.target).value)"
+              >
+                <option value="">—</option>
+                @for (location of locations(); track location.id) {
+                  <option [value]="location.id">{{ location.displayName }}</option>
+                }
+              </select>
+            } @else {
+              <input
+                type="text"
+                [value]="accrualScopeId()"
+                (input)="accrualScopeId.set($any($event.target).value)"
+                placeholder="UUID"
+              />
+            }
+          </label>
+        }
+        @if (accrualScopeType() === 'CHANNEL') {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.loyalty.scope.channel' | t }}</span>
+            @if (channels().length > 0) {
+              <select
+                [value]="accrualScopeId()"
+                (change)="accrualScopeId.set($any($event.target).value)"
+              >
+                <option value="">—</option>
+                @for (channel of channels(); track channel.id) {
+                  <option [value]="channel.id">{{ channel.displayName }}</option>
+                }
+              </select>
+            } @else {
+              <input
+                type="text"
+                [value]="accrualScopeId()"
+                (input)="accrualScopeId.set($any($event.target).value)"
+                placeholder="UUID"
+              />
+            }
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.accrual.form.rate' | t }}</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            [value]="accrualRatePercent()"
+            (input)="accrualRatePercent.set(+$any($event.target).value)"
+          />
+        </label>
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="accrualHasCap()"
+            (change)="accrualHasCap.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.loyalty.accrual.form.hasCap' | t }}</span>
+        </label>
+        @if (accrualHasCap()) {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.loyalty.accrual.form.cap' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="accrualMaxAccrualMinor()"
+              (input)="accrualMaxAccrualMinor.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.accrual.form.earnDelay' | t }}</span>
+          <input
+            type="number"
+            min="0"
+            [value]="accrualEarnDelayHours()"
+            (input)="accrualEarnDelayHours.set(+$any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.accrual.form.lotLifetime' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            [value]="accrualLotLifetimeDays()"
+            (input)="accrualLotLifetimeDays.set(+$any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.accrual.form.expiryWarning' | t }}</span>
+          <input
+            type="number"
+            min="0"
+            [value]="accrualExpiryWarningDays()"
+            (input)="accrualExpiryWarningDays.set(+$any($event.target).value)"
+          />
+          <span class="q-caption loyalty__field-hint">{{
+            'marketing.loyalty.accrual.form.expiryWarning.hint' | t
+          }}</span>
+        </label>
+
+        @if (accrualError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeAccrualForm()">
+            {{ 'marketing.loyalty.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canSubmitAccrual()" (click)="submitAccrualForm()">
+            {{ 'marketing.loyalty.accrual.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showRedemptionForm()) {
+    <div class="dialog-backdrop" (click)="closeRedemptionForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'marketing.loyalty.redemption.create.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.redemption.form.share' | t }}</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            max="90"
+            [value]="redemptionSharePercent()"
+            (input)="redemptionSharePercent.set(+$any($event.target).value)"
+          />
+          <span class="q-caption loyalty__field-hint">{{
+            'marketing.loyalty.redemption.form.share.hint' | t
+          }}</span>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.loyalty.redemption.form.minOrder' | t }}</span>
+          <input
+            type="number"
+            min="0"
+            [value]="redemptionMinOrderMinor()"
+            (input)="redemptionMinOrderMinor.set(+$any($event.target).value)"
+          />
+        </label>
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="redemptionExcludesDeliveryFee()"
+            (change)="redemptionExcludesDeliveryFee.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.loyalty.redemption.form.excludesFee' | t }}</span>
+        </label>
+
+        @if (redemptionError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeRedemptionForm()">
+            {{ 'marketing.loyalty.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            [disabled]="!canSubmitRedemption()"
+            (click)="submitRedemptionForm()"
+          >
+            {{ 'marketing.loyalty.redemption.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

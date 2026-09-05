@@ -1250,6 +1250,305 @@ public class JdbcLoyaltyStore {
                 .optional();
     }
 
+    // ------------------------------------------------------ policy authoring
+
+    /**
+     * One accrual rule as the authoring screen needs it — every lifecycle field,
+     * unlike {@link AccrualRuleRow} which is shaped for the resolver and carries
+     * only what an entry snapshots.
+     */
+    public record AccrualRuleAuthoringRow(
+            UUID id,
+            String scopeType,
+            @Nullable UUID scopeId,
+            int rateBasisPoints,
+            @Nullable Long maxAccrualMinor,
+            int earnDelayHours,
+            int lotLifetimeDays,
+            int expiryWarningDays,
+            String status,
+            int version,
+            Instant validFrom,
+            @Nullable Instant validUntil) {}
+
+    /** Every accrual rule this brand has authored, newest first within each status. */
+    public List<AccrualRuleAuthoringRow> listAccrualRules(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, scope_type, scope_id, rate_basis_points, max_accrual_minor,
+                       earn_delay_hours, lot_lifetime_days, expiry_warning_days,
+                       status, version, valid_from, valid_until
+                  FROM loyalty.accrual_rules
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                 ORDER BY CASE status WHEN 'ACTIVE' THEN 0 WHEN 'DRAFT' THEN 1 ELSE 2 END,
+                          valid_from DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcLoyaltyStore::toAccrualRuleAuthoringRow)
+                .list();
+    }
+
+    public Optional<AccrualRuleAuthoringRow> findAccrualRuleById(UUID tenantId, UUID brandId, UUID ruleId) {
+        return jdbc.sql("""
+                SELECT id, scope_type, scope_id, rate_basis_points, max_accrual_minor,
+                       earn_delay_hours, lot_lifetime_days, expiry_warning_days,
+                       status, version, valid_from, valid_until
+                  FROM loyalty.accrual_rules
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :ruleId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ruleId", ruleId)
+                .query(JdbcLoyaltyStore::toAccrualRuleAuthoringRow)
+                .optional();
+    }
+
+    /** Drafts a rule. Never DEFAULT ACTIVE — an operator's own {@link #activateAccrualRule} says so. */
+    public void insertAccrualRuleDraft(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String scopeType,
+            @Nullable UUID scopeId,
+            int rateBasisPoints,
+            @Nullable Long maxAccrualMinor,
+            int earnDelayHours,
+            int lotLifetimeDays,
+            int expiryWarningDays,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            Instant now) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", id);
+        params.put("tenantId", tenantId);
+        params.put("brandId", brandId);
+        params.put("scopeType", scopeType);
+        params.put("scopeId", scopeId);
+        params.put("rate", rateBasisPoints);
+        params.put("maxAccrual", maxAccrualMinor);
+        params.put("earnDelay", earnDelayHours);
+        params.put("lotLifetime", lotLifetimeDays);
+        params.put("expiryWarning", expiryWarningDays);
+        params.put("validFrom", utc(validFrom));
+        params.put("validUntil", utc(validUntil));
+        params.put("now", utc(now));
+
+        jdbc.sql("""
+                INSERT INTO loyalty.accrual_rules (
+                    id, tenant_id, brand_id, scope_type, scope_id,
+                    rate_basis_points, max_accrual_minor, earn_delay_hours,
+                    lot_lifetime_days, expiry_warning_days, status, version,
+                    valid_from, valid_until, created_at, updated_at)
+                VALUES (:id, :tenantId, :brandId, :scopeType, :scopeId,
+                    :rate, :maxAccrual, :earnDelay, :lotLifetime, :expiryWarning,
+                    'DRAFT', 1, :validFrom, :validUntil, :now, :now)
+                """).params(params).update();
+    }
+
+    /**
+     * Retires whichever rule currently holds this exact scope, then promotes the
+     * draft, in that order and one transaction — the same shape
+     * {@code JdbcDeliveryTariffStore.activateVersion} uses for a rate table.
+     *
+     * <p>{@code scope_id IS NOT DISTINCT FROM} rather than {@code =}: a BRAND rule
+     * carries a null {@code scope_id}, and {@code NULL = NULL} is never true in
+     * SQL, so a plain equality would never find the sibling it is meant to retire.
+     *
+     * @return 1 if this call promoted the draft, 0 if it was raced or was not a DRAFT
+     */
+    public int activateAccrualRule(
+            UUID tenantId, UUID brandId, UUID ruleId, String scopeType, @Nullable UUID scopeId, Instant now) {
+
+        Map<String, Object> retireParams = new HashMap<>();
+        retireParams.put("tenantId", tenantId);
+        retireParams.put("brandId", brandId);
+        retireParams.put("scopeType", scopeType);
+        retireParams.put("scopeId", scopeId);
+        retireParams.put("ruleId", ruleId);
+        retireParams.put("now", utc(now));
+        jdbc.sql("""
+                UPDATE loyalty.accrual_rules
+                   SET status = 'RETIRED', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND scope_type = :scopeType AND scope_id IS NOT DISTINCT FROM :scopeId
+                   AND status = 'ACTIVE' AND id <> :ruleId
+                """).params(retireParams).update();
+
+        return jdbc.sql("""
+                UPDATE loyalty.accrual_rules
+                   SET status = 'ACTIVE', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :ruleId
+                   AND status = 'DRAFT'
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ruleId", ruleId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** Withdraws a rule — a live one or an abandoned draft — without touching any other row. */
+    public int retireAccrualRule(UUID tenantId, UUID brandId, UUID ruleId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.accrual_rules
+                   SET status = 'RETIRED', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :ruleId
+                   AND status IN ('DRAFT', 'ACTIVE')
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ruleId", ruleId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** One redemption policy as the authoring screen needs it. */
+    public record RedemptionPolicyAuthoringRow(
+            UUID id,
+            int maxShareBasisPoints,
+            long minOrderMinor,
+            boolean excludesDeliveryFee,
+            List<String> allowedChannels,
+            String status,
+            int version,
+            Instant validFrom,
+            @Nullable Instant validUntil) {}
+
+    public List<RedemptionPolicyAuthoringRow> listRedemptionPolicies(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, max_share_basis_points, min_order_minor, excludes_delivery_fee,
+                       allowed_channels, status, version, valid_from, valid_until
+                  FROM loyalty.redemption_policies
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                 ORDER BY CASE status WHEN 'ACTIVE' THEN 0 WHEN 'DRAFT' THEN 1 ELSE 2 END,
+                          valid_from DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcLoyaltyStore::toRedemptionPolicyAuthoringRow)
+                .list();
+    }
+
+    public Optional<RedemptionPolicyAuthoringRow> findRedemptionPolicyById(UUID tenantId, UUID brandId, UUID policyId) {
+        return jdbc.sql("""
+                SELECT id, max_share_basis_points, min_order_minor, excludes_delivery_fee,
+                       allowed_channels, status, version, valid_from, valid_until
+                  FROM loyalty.redemption_policies
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :policyId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("policyId", policyId)
+                .query(JdbcLoyaltyStore::toRedemptionPolicyAuthoringRow)
+                .optional();
+    }
+
+    public void insertRedemptionPolicyDraft(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            int maxShareBasisPoints,
+            long minOrderMinor,
+            boolean excludesDeliveryFee,
+            List<String> allowedChannels,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            Instant now) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", id);
+        params.put("tenantId", tenantId);
+        params.put("brandId", brandId);
+        params.put("maxShare", maxShareBasisPoints);
+        params.put("minOrder", minOrderMinor);
+        params.put("excludesFee", excludesDeliveryFee);
+        params.put("channels", allowedChannels.toArray(new String[0]));
+        params.put("validFrom", utc(validFrom));
+        params.put("validUntil", utc(validUntil));
+        params.put("now", utc(now));
+
+        jdbc.sql("""
+                INSERT INTO loyalty.redemption_policies (
+                    id, tenant_id, brand_id, max_share_basis_points, min_order_minor,
+                    excludes_delivery_fee, allowed_channels, status, version,
+                    valid_from, valid_until, created_at, updated_at)
+                VALUES (:id, :tenantId, :brandId, :maxShare, :minOrder,
+                    :excludesFee, :channels, 'DRAFT', 1, :validFrom, :validUntil, :now, :now)
+                """).params(params).update();
+    }
+
+    /** Same retire-then-promote shape as {@link #activateAccrualRule}, minus the scope key — a brand has one live policy. */
+    public int activateRedemptionPolicy(UUID tenantId, UUID brandId, UUID policyId, Instant now) {
+        jdbc.sql("""
+                UPDATE loyalty.redemption_policies
+                   SET status = 'RETIRED', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND status = 'ACTIVE' AND id <> :policyId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("policyId", policyId)
+                .param("now", utc(now))
+                .update();
+
+        return jdbc.sql("""
+                UPDATE loyalty.redemption_policies
+                   SET status = 'ACTIVE', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :policyId
+                   AND status = 'DRAFT'
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("policyId", policyId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    public int retireRedemptionPolicy(UUID tenantId, UUID brandId, UUID policyId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.redemption_policies
+                   SET status = 'RETIRED', updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :policyId
+                   AND status IN ('DRAFT', 'ACTIVE')
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("policyId", policyId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    private static AccrualRuleAuthoringRow toAccrualRuleAuthoringRow(ResultSet row, int number) throws SQLException {
+        return new AccrualRuleAuthoringRow(
+                row.getObject("id", UUID.class),
+                row.getString("scope_type"),
+                row.getObject("scope_id", UUID.class),
+                row.getInt("rate_basis_points"),
+                row.getObject("max_accrual_minor", Long.class),
+                row.getInt("earn_delay_hours"),
+                row.getInt("lot_lifetime_days"),
+                row.getInt("expiry_warning_days"),
+                row.getString("status"),
+                row.getInt("version"),
+                requiredInstant(row, "valid_from"),
+                instant(row, "valid_until"));
+    }
+
+    private static RedemptionPolicyAuthoringRow toRedemptionPolicyAuthoringRow(ResultSet row, int number)
+            throws SQLException {
+        return new RedemptionPolicyAuthoringRow(
+                row.getObject("id", UUID.class),
+                row.getInt("max_share_basis_points"),
+                row.getLong("min_order_minor"),
+                row.getBoolean("excludes_delivery_fee"),
+                channels(row),
+                row.getString("status"),
+                row.getInt("version"),
+                requiredInstant(row, "valid_from"),
+                instant(row, "valid_until"));
+    }
+
     // ----------------------------------------------------------- order facts
 
     /**
@@ -1388,7 +1687,7 @@ public class JdbcLoyaltyStore {
         return Objects.requireNonNull(instant(row, column), () -> column + " was unexpectedly null");
     }
 
-    private static @Nullable OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 }
