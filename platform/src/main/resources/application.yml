@@ -88,6 +88,23 @@ springdoc:
     tags-sorter: alpha
 
 horecaos:
+  runtime:
+    # ADR 0023's app/worker split. One of "app", "worker", "both"; unset (the
+    # default everywhere today — this laptop, every test, and the single
+    # production container) behaves exactly as "both": every @Scheduled job and
+    # the ADR 0006 inbox Kafka listener run, same as before this key existed.
+    #
+    # "app" turns off every @Scheduled method on every module (via
+    # SchedulingConfiguration's own @ConditionalOnWorkerRole) and the inbox
+    # listener, but changes nothing about HTTP, Camel provider routes, or the
+    # two payment callback roots — those are not gated by role. "worker" turns
+    # scheduling and the inbox listener on and expects the reverse proxy, not
+    # this property, to keep customer traffic off the container.
+    #
+    # A container actually split this way still needs PosOrderExportTrigger's
+    # dispatch and RealtimeStreamMaintenance's tick running wherever HTTP/SSE
+    # traffic lands — see SchedulingConfiguration's own Javadoc.
+    role: ${HORECAOS_RUNTIME_ROLE:}
   authorization:
     # ADR 0025. On means a @RequiresCapability declaration actually refuses:
     # a principal without the grant gets INSUFFICIENT_CAPABILITY, and

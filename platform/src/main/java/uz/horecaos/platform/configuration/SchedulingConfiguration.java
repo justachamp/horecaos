@@ -16,9 +16,34 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * work — the outbox relay, the idempotency purge, approval expiry — and having
  * one module's configuration silently decide whether another module's job ever
  * runs is the kind of coupling that is only discovered when the job stops.
+ *
+ * <p><b>ADR 0023's {@code app}/{@code worker} split gates the whole class.</b> This is
+ * the one place {@code @EnableScheduling} is declared, so a role of {@code app} skips
+ * this configuration entirely — no {@code ScheduledAnnotationBeanPostProcessor}, no
+ * {@link ThreadPoolTaskScheduler} bean, and therefore no {@code @Scheduled} method on
+ * any module runs, regardless of that method's own {@code @ConditionalOnProperty}. A
+ * per-job switch answers "should this job run at all"; this answers "does this process
+ * run scheduled jobs", and the second question has to be answered in exactly one place
+ * or a job added after this record could reintroduce the coupling ADR 0023 named. Role
+ * {@code worker} or {@code both}, or the property left unset, changes nothing here —
+ * every job's own switch still decides its own fate exactly as before this class was
+ * touched.
+ *
+ * <p><b>Not every {@code @Scheduled} method is worker-shaped.</b> {@code
+ * PosOrderExportTrigger.dispatchPending} drains an in-process queue that only the
+ * {@code app} process that handled the confirming HTTP request ever populates, and
+ * {@code RealtimeStreamMaintenance.tick}/{@code onGrantChanged} drive SSE connections
+ * that only exist on whichever process is holding them open. A deployment that actually
+ * splits {@code app} and {@code worker} into separate containers per ADR 0023's runtime
+ * shape must keep one of these two running where the coupled HTTP traffic lands — role
+ * {@code both} on that container, not {@code worker} — until either is redesigned onto
+ * a durable, cross-process handoff. This class cannot express that distinction on its
+ * own; it is documented here because this is where the blanket switch lives that would
+ * otherwise silently turn both jobs off.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
+@ConditionalOnWorkerRole
 public class SchedulingConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(SchedulingConfiguration.class);
