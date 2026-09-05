@@ -116,7 +116,11 @@
     "noPaymentMethods": "Hozircha bu buyurtma uchun to'lov usuli mavjud emas.",
     "paymentSessionError": "Buyurtma qabul qilindi, lekin to'lov sahifasi ochilmadi. \"Buyurtmalar\" bo'limini tekshiring.",
     "paymentReturnChecking": "To'lov tekshirilmoqda...",
-    "deliveryNotServiceable": "Bu manzilga yetkazib berish mavjud emas."
+    "deliveryNotServiceable": "Bu manzilga yetkazib berish mavjud emas.",
+    "recipient": "Qabul qiluvchi",
+    "recipientName": "Qabul qiluvchi ismi",
+    "recipientPhone": "Qabul qiluvchi telefoni",
+    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting."
   },
   "orders": {
     "title": "Buyurtmalar",

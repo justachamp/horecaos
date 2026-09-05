@@ -20,6 +20,7 @@ import { CartHintBadgeComponent } from '../../shared/cart-hint-badge/cart-hint-b
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { MenuService } from '../../services/menu.service';
+import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
@@ -43,6 +44,7 @@ export class HomeComponent implements OnInit {
   private readonly favourites = inject(FavouritesService);
   private readonly langService = inject(LangService);
   private readonly cartService = inject(UiCartService);
+  private readonly delivery = inject(DeliverySelectionService);
   private readonly router = inject(Router);
   protected readonly telegramWebapp = inject(TelegramWebappService);
   private readonly translate = inject(TranslateService);
@@ -125,6 +127,11 @@ export class HomeComponent implements OnInit {
     }
 
     void this.cartService.load();
+    // Only the address id survives a reload, so the top bar would report "no
+    // address" over a choice the customer already made until the row is read
+    // back. Authenticated-only for the same reason as the reads around it: the
+    // address book is the customer's own and an anonymous visitor has none.
+    void this.delivery.ensureAddressResolved();
     // The hearts on the food cards read this, so it has to be loaded before
     // they are drawn or every card starts unmarked and flickers. Skipped
     // entirely while FEATURES.favourites is off: there is no backend for it

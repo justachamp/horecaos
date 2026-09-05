@@ -1,6 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
+import { AddressBookService, addressLine } from './address-book.service';
 import { CustomerProfileService } from './customer-profile.service';
+import type { CustomerAddress } from '../core/api/customer-api';
 
 const ADDRESS_KEY = 'horecaos_delivery_address';
 
@@ -33,9 +35,29 @@ const ADDRESS_KEY = 'horecaos_delivery_address';
 @Injectable({ providedIn: 'root' })
 export class DeliverySelectionService {
   private readonly profile = inject(CustomerProfileService);
+  private readonly addressBook = inject(AddressBookService);
 
   /** The saved address the customer chose. Survives a reload; an id is not PII. */
   readonly addressId = signal<string | null>(readAddressId());
+
+  /**
+   * The chosen address itself, once it has been read back.
+   *
+   * Only the *id* survives a reload (see above), so on a fresh page the
+   * confirmation screen knows an address was chosen but not what it says. This
+   * holds the resolved row so the screen can name the destination instead of
+   * reporting "not selected" over a choice the customer already made.
+   */
+  private readonly chosen = signal<CustomerAddress | null>(null);
+
+  /** The chosen address as one line, or '' when none is chosen or resolved. */
+  readonly addressLabel = computed(() => {
+    const address = this.chosen();
+    if (!address || address.addressId !== this.addressId()) {
+      return '';
+    }
+    return address.label?.trim() || addressLine(address);
+  });
 
   /** Session-scoped, never persisted. See the class comment. */
   private readonly signedInPhone = signal<string | null>(null);
@@ -55,8 +77,40 @@ export class DeliverySelectionService {
     () => !!this.addressId() && !!this.recipientName().trim() && !!this.recipientPhone().trim(),
   );
 
-  choose(addressId: string): void {
+  /**
+   * Reads the chosen address back when only its id survived a reload.
+   *
+   * Cheap to call repeatedly: it returns as soon as the resolved row already
+   * matches the chosen id, so a screen may await it on every entry.
+   */
+  async ensureAddressResolved(): Promise<void> {
+    const addressId = this.addressId();
+    if (!addressId) {
+      this.chosen.set(null);
+      return;
+    }
+    if (this.chosen()?.addressId === addressId) {
+      return;
+    }
+    try {
+      const addresses = await this.addressBook.list();
+      const match = addresses.find((address) => address.addressId === addressId) ?? null;
+      // An address removed since it was chosen leaves the choice dangling, and
+      // a dangling id would be sent to a destination endpoint that refuses it.
+      // Forgetting it here sends the customer back to pick again instead.
+      if (!match) {
+        this.clear();
+        return;
+      }
+      this.chosen.set(match);
+    } catch {
+      // Offline or refused: the id still stands, the label simply stays empty.
+    }
+  }
+
+  choose(addressId: string, address?: CustomerAddress): void {
     this.addressId.set(addressId);
+    this.chosen.set(address ?? null);
     try {
       localStorage.setItem(ADDRESS_KEY, addressId);
     } catch {
@@ -76,6 +130,7 @@ export class DeliverySelectionService {
 
   clear(): void {
     this.addressId.set(null);
+    this.chosen.set(null);
     this.overriddenName.set(null);
     this.overriddenPhone.set(null);
     try {

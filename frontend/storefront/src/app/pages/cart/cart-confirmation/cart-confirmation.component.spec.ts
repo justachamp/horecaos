@@ -7,10 +7,12 @@ import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
+import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 
 class FakeUiCartService {
+  fulfillmentMode = vi.fn(() => 'DELIVERY' as const);
   cartData = vi.fn<() => CartResponse | null>(() => cartDataFixture());
   load = vi.fn();
   paymentMethods = vi.fn();
@@ -22,6 +24,14 @@ class FakeUiCartService {
   subtotalFormatted = vi.fn(() => '10 000 so\'m');
   deliveryFee = vi.fn(() => '5 000 so\'m');
   totalWithDelivery = vi.fn(() => '15 000 so\'m');
+}
+
+class FakeDeliverySelectionService {
+  addressId = vi.fn<() => string | null>(() => 'address-1');
+  recipientName = vi.fn(() => '');
+  recipientPhone = vi.fn(() => '');
+  setRecipient = vi.fn();
+  ensureAddressResolved = vi.fn().mockResolvedValue(undefined);
 }
 
 class FakePaymentSessionService {
@@ -91,6 +101,7 @@ function checkoutResult(overrides: Partial<CheckoutResult> = {}): CheckoutResult
 
 async function setUp(paymentCodes: readonly string[] = ['CASH']) {
   const cart = new FakeUiCartService();
+  const delivery = new FakeDeliverySelectionService();
   cart.paymentMethods.mockResolvedValue(paymentCodes);
   const paymentSessions = new FakePaymentSessionService();
   const notification = new FakeNotificationService();
@@ -104,6 +115,7 @@ async function setUp(paymentCodes: readonly string[] = ['CASH']) {
       { provide: PaymentSessionService, useValue: paymentSessions },
       { provide: NotificationService, useValue: notification },
       { provide: TranslateService, useClass: FakeTranslateService },
+      { provide: DeliverySelectionService, useValue: delivery },
     ],
   });
   const router = TestBed.inject(Router);
@@ -119,7 +131,15 @@ async function setUp(paymentCodes: readonly string[] = ['CASH']) {
   // has been set before a test reads it.
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  return { fixture, comp: fixture.componentInstance, cart, paymentSessions, notification, navigateSpy };
+  return {
+    fixture,
+    comp: fixture.componentInstance,
+    cart,
+    delivery,
+    paymentSessions,
+    notification,
+    navigateSpy,
+  };
 }
 
 describe('CartConfirmationComponent: no payment methods blocks submit', () => {
@@ -172,14 +192,46 @@ describe('CartConfirmationComponent.submitOrder sequencing (destination -> price
   });
 
   it('stops before pricing when the destination could not be applied (a delivery cart with no address yet)', async () => {
-    const { comp, cart } = await setUp(['CASH']);
+    const { comp, cart, delivery } = await setUp(['CASH']);
     cart.applyDestination.mockResolvedValue(false);
+    delivery.addressId.mockReturnValue(null);
 
     await comp.submitOrder();
 
     expect(comp.orderError()).toBe('cart.addressRequired');
     expect(cart.priceCart).not.toHaveBeenCalled();
     expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
+  it('blames the recipient, not the address, when an address is chosen but nobody is named', async () => {
+    // The destination endpoint needs an address *and* a recipient, and the
+    // phone never survives a reload. Reporting "address required" over an
+    // address the customer already chose sent them back to re-pick something
+    // that was never missing -- and there was no field to fix what was.
+    const { comp, cart, delivery } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(false);
+    delivery.addressId.mockReturnValue('address-1');
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('cart.recipientRequired');
+    expect(cart.priceCart).not.toHaveBeenCalled();
+  });
+
+  it('hands the typed recipient to the delivery selection before applying the destination', async () => {
+    const { comp, cart, delivery } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValue(checkoutResult());
+    comp.recipientName = 'Dilnoza';
+    comp.recipientPhone = '+998901234567';
+
+    await comp.submitOrder();
+
+    expect(delivery.setRecipient).toHaveBeenCalledWith('Dilnoza', '+998901234567');
+    const recipientOrder = delivery.setRecipient.mock.invocationCallOrder[0];
+    const destinationOrder = cart.applyDestination.mock.invocationCallOrder[0];
+    expect(recipientOrder).toBeLessThan(destinationOrder);
   });
 
   it('stops before checkout when pricing fails', async () => {

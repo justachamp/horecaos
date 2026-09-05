@@ -146,8 +146,17 @@ export class UiCartService {
     return UNRESOLVED;
   });
 
-  readonly deliveryAddress = computed(() => '');
-  readonly deliveryAddressName = computed(() => '');
+  /**
+   * Where this delivery is going, as the customer would recognise it.
+   *
+   * Reads the chosen address through {@link DeliverySelectionService}, which
+   * resolves the id that survived the reload back into a row. It reported '' up
+   * to this wave, so the confirmation screen said "no address selected" over a
+   * choice that had in fact been made and stored -- and the customer had no way
+   * to tell that from a choice that had not registered.
+   */
+  readonly deliveryAddress = computed(() => this.delivery.addressLabel());
+  readonly deliveryAddressName = computed(() => this.delivery.addressLabel());
   readonly deliveryTimeDisplay = computed(() => null);
   readonly deliveryTime = computed(() => {
     this.translate.current();

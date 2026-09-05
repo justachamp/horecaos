@@ -32,6 +32,34 @@
       </svg> -->
     </a>
 
+    <!-- Kimga yetkaziladi -->
+    <div *ngIf="delivering" class="border-b border-zinc-700/80 pb-4">
+      <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.recipient' | t }}</p>
+      <div class="flex flex-col gap-2">
+        <input
+          type="text"
+          name="recipientName"
+          autocomplete="name"
+          class="w-full rounded-lg bg-jizbiz-surface-2 px-3 py-2 text-sm text-jizbiz-text placeholder:text-zinc-500"
+          [attr.aria-label]="'cart.recipientName' | t"
+          [placeholder]="'cart.recipientName' | t"
+          [(ngModel)]="recipientName"
+          (ngModelChange)="onRecipientChange()"
+        />
+        <input
+          type="tel"
+          name="recipientPhone"
+          autocomplete="tel"
+          inputmode="tel"
+          class="w-full rounded-lg bg-jizbiz-surface-2 px-3 py-2 text-sm text-jizbiz-text placeholder:text-zinc-500"
+          [attr.aria-label]="'cart.recipientPhone' | t"
+          [placeholder]="'cart.recipientPhone' | t"
+          [(ngModel)]="recipientPhone"
+          (ngModelChange)="onRecipientChange()"
+        />
+      </div>
+    </div>
+
     <!-- To'lov usuli -->
     <div class="border-b border-zinc-700/80">
       <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.pay' | t }}</p>

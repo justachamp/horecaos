@@ -116,7 +116,11 @@
     "noPaymentMethods": "No payment method is available for this order right now.",
     "paymentSessionError": "The order was placed, but the payment page could not be opened. Check your orders.",
     "paymentReturnChecking": "Checking your payment...",
-    "deliveryNotServiceable": "Delivery is not available to this address."
+    "deliveryNotServiceable": "Delivery is not available to this address.",
+    "recipient": "Recipient",
+    "recipientName": "Recipient name",
+    "recipientPhone": "Recipient phone",
+    "recipientRequired": "Add a recipient name and phone for this delivery."
   },
   "orders": {
     "title": "Orders",

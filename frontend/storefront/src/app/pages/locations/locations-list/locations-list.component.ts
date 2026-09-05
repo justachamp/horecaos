@@ -80,7 +80,16 @@ export class LocationsListComponent implements OnInit {
     this.selectedId = loc.id;
     // Recorded here rather than written to the server: the platform has no
     // default address, and where an order goes is set on the cart at checkout.
-    this.delivery.choose(loc.id);
+    // The row travels with the id so every screen can *name* the destination
+    // without reading the book again.
+    this.delivery.choose(loc.id, this.addressById(loc.id));
+  }
+
+  /** The last-read rows, so a choice can carry its own address with it. */
+  private known: readonly CustomerAddress[] = [];
+
+  private addressById(addressId: string): CustomerAddress | undefined {
+    return this.known.find((address) => address.addressId === addressId);
   }
 
   private loadAddresses(showLoading = false): void {
@@ -89,6 +98,7 @@ export class LocationsListComponent implements OnInit {
     this.addressBook.list().then(
       (data) => {
         if (showLoading) this.loading.set(false);
+        this.known = data;
         const items = data.map(addressToDeliveryLocation);
         this.locations.set(items);
         // No stored default to restore, so the first is preselected and the
@@ -96,7 +106,7 @@ export class LocationsListComponent implements OnInit {
         this.selectedId =
           items.find((l) => l.id === this.delivery.addressId())?.id ?? items[0]?.id ?? null;
         if (this.selectedId) {
-          this.delivery.choose(this.selectedId);
+          this.delivery.choose(this.selectedId, this.addressById(this.selectedId));
         }
         if (items.length === 0) {
           this.editMode.set(false);

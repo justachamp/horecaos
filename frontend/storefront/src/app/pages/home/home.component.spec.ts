@@ -8,9 +8,17 @@ import { FavouritesService } from '../../services/favourites.service';
 import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { CustomerProfileService } from '../../services/customer-profile.service';
+import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { TranslateService } from '../../services/translate.service';
 import { Session } from '../../core/auth/session';
 import type { CustomerUiResponse } from '../../types/home.types';
+
+/** The address book is the customer's own; an anonymous visitor has none. */
+class FakeDeliverySelectionService {
+  addressId = vi.fn<() => string | null>(() => null);
+  addressLabel = vi.fn(() => '');
+  ensureAddressResolved = vi.fn().mockResolvedValue(undefined);
+}
 
 function emptyMenu(): CustomerUiResponse {
   return {
@@ -63,6 +71,7 @@ function setUp() {
   const cart = new FakeUiCartService();
   const profile = new FakeCustomerProfileService();
 
+  const delivery = new FakeDeliverySelectionService();
   TestBed.configureTestingModule({
     imports: [HomeComponent],
     providers: [
@@ -73,13 +82,23 @@ function setUp() {
       { provide: UiCartService, useValue: cart },
       { provide: CustomerProfileService, useValue: profile },
       { provide: TranslateService, useClass: FakeTranslateService },
+      { provide: DeliverySelectionService, useValue: delivery },
     ],
   });
 
   const session = TestBed.inject(Session);
   const fixture = TestBed.createComponent(HomeComponent);
 
-  return { fixture, comp: fixture.componentInstance, menu, favourites, cart, profile, session };
+  return {
+    fixture,
+    comp: fixture.componentInstance,
+    menu,
+    favourites,
+    cart,
+    profile,
+    delivery,
+    session,
+  };
 }
 
 function signIn(session: Session): void {
@@ -105,14 +124,15 @@ describe('HomeComponent: anonymous visitor', () => {
     expect(comp.loading()).toBe(false);
   });
 
-  it('never reads the cart, favourites or profile for an anonymous visitor -- the platform has no anonymous form of any of them', async () => {
-    const { fixture, cart, favourites, profile } = setUp();
+  it('never reads the cart, favourites, profile or address book for an anonymous visitor -- the platform has no anonymous form of any of them', async () => {
+    const { fixture, cart, favourites, profile, delivery } = setUp();
 
     await mount(fixture);
 
     expect(cart.load).not.toHaveBeenCalled();
     expect(favourites.load).not.toHaveBeenCalled();
     expect(profile.load).not.toHaveBeenCalled();
+    expect(delivery.ensureAddressResolved).not.toHaveBeenCalled();
   });
 
   it('renders without crashing and without a router redirect away from /home', async () => {
@@ -126,7 +146,7 @@ describe('HomeComponent: signed in', () => {
   beforeEach(() => localStorage.clear());
 
   it('still warms the cart, favourites and profile for a signed-in customer, unchanged from before', async () => {
-    const { fixture, cart, favourites, profile, session } = setUp();
+    const { fixture, cart, favourites, profile, delivery, session } = setUp();
     signIn(session);
 
     await mount(fixture);
@@ -134,5 +154,8 @@ describe('HomeComponent: signed in', () => {
     expect(cart.load).toHaveBeenCalledTimes(1);
     expect(favourites.load).toHaveBeenCalledTimes(1);
     expect(profile.load).toHaveBeenCalledTimes(1);
+    // The top bar names the chosen address, so the row behind the stored id is
+    // read back for a signed-in customer and only for them.
+    expect(delivery.ensureAddressResolved).toHaveBeenCalledTimes(1);
   });
 });

@@ -116,7 +116,11 @@
     "noPaymentMethods": "Сейчас для этого заказа нет доступного способа оплаты.",
     "paymentSessionError": "Заказ оформлен, но страницу оплаты не удалось открыть. Проверьте раздел «Заказы».",
     "paymentReturnChecking": "Проверяем оплату...",
-    "deliveryNotServiceable": "Доставка по этому адресу недоступна."
+    "deliveryNotServiceable": "Доставка по этому адресу недоступна.",
+    "recipient": "Получатель",
+    "recipientName": "Имя получателя",
+    "recipientPhone": "Телефон получателя",
+    "recipientRequired": "Укажите имя и телефон получателя для доставки."
   },
   "orders": {
     "title": "Заказы",

@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UiCartService } from '../../../services/ui-cart.service';
+import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { NotificationService } from '../../../services/notification.service';
@@ -115,6 +116,8 @@ export class CartConfirmationComponent implements OnInit {
       .finally(() => this.paymentMethodsLoaded.set(true));
   }
 
+  private readonly delivery = inject(DeliverySelectionService);
+
   constructor(
     public cart: UiCartService,
     private ordersService: OrdersService,
@@ -127,10 +130,38 @@ export class CartConfirmationComponent implements OnInit {
     } else {
       this.loadPaymentMethods();
     }
+    // Only the address *id* survives a reload, so a fresh page has a choice it
+    // cannot yet name; this reads it back before the screen renders it.
+    void this.delivery.ensureAddressResolved();
+    this.recipientName = this.delivery.recipientName();
+    this.recipientPhone = this.delivery.recipientPhone();
   }
 
   get deliveryAddress(): string {
     return this.cart.deliveryAddress() || this.translate.get('cart.addressNotSelected');
+  }
+
+  /** Delivery is the only mode with a recipient to ask about. */
+  get delivering(): boolean {
+    return this.cart.fulfillmentMode() === 'DELIVERY';
+  }
+
+  /**
+   * Who receives this delivery.
+   *
+   * Bound to plain fields rather than read straight from
+   * {@link DeliverySelectionService} because the phone is deliberately never
+   * persisted (it is ADR 0029 personal data and `GET /me` will not return it),
+   * so on any page that was reloaded there is nothing to prefill from and the
+   * customer types it once. Before this wave the screen offered nowhere to type
+   * it, and `PUT /carts/{id}/destination` requires it -- which is how a chosen
+   * address still ended in "address required" at checkout.
+   */
+  recipientName = '';
+  recipientPhone = '';
+
+  onRecipientChange(): void {
+    this.delivery.setRecipient(this.recipientName, this.recipientPhone);
   }
 
   togglePaymentOptions(): void {
@@ -197,8 +228,15 @@ export class CartConfirmationComponent implements OnInit {
       // quote checkout is about to spend. ADR 0037 prices delivery from the
       // destination, which is why the two are ordered this way and not the
       // other.
+      this.delivery.setRecipient(this.recipientName, this.recipientPhone);
       if (!(await this.cart.applyDestination())) {
-        this.orderError.set(this.translate.get('cart.addressRequired'));
+        // Name the missing half. "Address required" over a chosen address sends
+        // the customer back to re-pick something that was never the problem.
+        this.orderError.set(
+          this.translate.get(
+            this.delivery.addressId() ? 'cart.recipientRequired' : 'cart.addressRequired',
+          ),
+        );
         return;
       }
       const priced = await this.cart.priceCart();
