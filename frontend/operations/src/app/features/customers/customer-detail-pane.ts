@@ -116,8 +116,10 @@ function toAddressFields(form: AddressFormState): CustomerAddressFields {
  * deposit balance (`loyalty`'s own package doc: "no deposit account… and
  * none is deferred" — an architectural exclusion, not a gap), promo code
  * redemptions (the pricing module has no redemption ledger at all), and
- * reviews left (no review/feedback entity exists in this codebase yet — 5.4
- * and 5.5 are tier 2/3 and out of scope for this wave regardless).
+ * reviews left — the review entity now exists (ADR 0071, wave 59) and answers
+ * this exact question filtered by customer (`reviews.order_reviews
+ * .customer_account_id`), but wiring a tab here is out of this pane's own
+ * scope; the operator reads the same rows today from the §5.4 Reviews screen.
  */
 @Component({
   selector: 'q-customer-detail-pane',

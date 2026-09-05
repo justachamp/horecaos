@@ -2156,6 +2156,22 @@ export const messagesEn = {
   'customers.segments.operator.IN': 'is one of',
   'customers.segments.operator.NOT_IN': 'is not one of',
 
+  // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
+  'customers.reviews.title': 'Reviews',
+  'customers.reviews.subtitle':
+    'A customer rating of their own completed order, read against its order and customer.',
+  'customers.reviews.summary.count': 'Reviews',
+  'customers.reviews.summary.average': 'Average rating',
+  'customers.reviews.filter.allLocations': 'All locations',
+  'customers.reviews.filter.allRatings': 'All ratings',
+  'customers.reviews.column.submittedAt': 'Submitted',
+  'customers.reviews.column.location': 'Location',
+  'customers.reviews.column.rating': 'Rating',
+  'customers.reviews.column.comment': 'Comment',
+  'customers.reviews.column.order': 'Order',
+  'customers.reviews.column.customer': 'Customer',
+  'customers.reviews.empty': 'No reviews yet.',
+
   // ---------------------------------------------------------------- reports 7.3/7.7 and nav (wave 39)
   'reports.nav.branches': 'Branches',
   'reports.nav.products': 'Products',

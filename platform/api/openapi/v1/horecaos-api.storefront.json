@@ -902,6 +902,20 @@
         },
         "type" : "object"
       },
+      "PageStorefrontReviewControllerReviewResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StorefrontReviewControllerReviewResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentMethodsResponse" : {
         "properties" : {
           "cartId" : {
@@ -1510,6 +1524,30 @@
         },
         "type" : "object"
       },
+      "StorefrontReviewControllerReviewResponse" : {
+        "properties" : {
+          "comment" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "submittedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "SubmitCodeRequest" : {
         "properties" : {
           "code" : {
@@ -1519,6 +1557,22 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "SubmitReviewRequest" : {
+        "properties" : {
+          "comment" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "rating" : {
+            "format" : "int32",
+            "maximum" : 5,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "TermsView" : {
@@ -3343,6 +3397,61 @@
         "tags" : [ "Storefront payments" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review" : {
+      "post" : {
+        "description" : "Refused with RESOURCE_NOT_FOUND when the order is not the caller's own, UNPROCESSABLE_STATE when it has not reached COMPLETED yet, and RESOURCE_CONFLICT when it already has a review. There is no endpoint to edit or withdraw a review once submitted (ADR 0071's own open input).",
+        "operationId" : "submit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubmitReviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontReviewControllerReviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rate a completed order, once",
+        "tags" : [ "Reviews" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
       "get" : {
         "description" : "Mints the code on first read rather than requiring a separate create call — a customer's own code is a durable identity, not a resource with a creation step worth exposing.",
@@ -3425,6 +3534,59 @@
         },
         "summary" : "Redeem a friend's referral code",
         "tags" : [ "Referrals" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews" : {
+      "get" : {
+        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
+        "operationId" : "myReviews",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageStorefrontReviewControllerReviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own reviews at this brand, newest first",
+        "tags" : [ "Reviews" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq" : {
@@ -3964,6 +4126,9 @@
   }, {
     "description" : "Pickup branches near a customer",
     "name" : "Storefront pickup locations"
+  }, {
+    "description" : "A customer's own rating of their own completed order",
+    "name" : "Reviews"
   }, {
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"

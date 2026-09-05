@@ -305,6 +305,11 @@ export interface PageStorefrontOrderingControllerOrderSummaryResponse {
   nextCursor?: string;
 }
 
+export interface PageStorefrontReviewControllerReviewResponse {
+  items?: Array<StorefrontReviewControllerReviewResponse>;
+  nextCursor?: string;
+}
+
 export interface PaymentMethodsResponse {
   cartId?: string;
   channelId?: string;
@@ -500,8 +505,21 @@ export interface StorefrontPaymentControllerPaymentSessionResponse {
   rePresented?: boolean;
 }
 
+export interface StorefrontReviewControllerReviewResponse {
+  comment?: string;
+  id?: string;
+  orderId?: string;
+  rating?: number;
+  submittedAt?: string;
+}
+
 export interface SubmitCodeRequest {
   code: string;
+}
+
+export interface SubmitReviewRequest {
+  comment?: string;
+  rating?: number;
 }
 
 export interface TermsView {
@@ -550,8 +568,10 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
+  "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };

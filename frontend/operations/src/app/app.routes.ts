@@ -122,34 +122,36 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/customers/segments/segments-page').then((m) => m.SegmentsPage),
           },
-          // 5.4 Reviews: statistics.md's own skip table and the IA's §5.4 row
-          // both point at the same gap — no review/feedback entity, no
-          // owning ADR (marketing.md's Отзывы analytics is a chart over data
-          // that does not exist either). Honest not-built rather than a
-          // service-recovery kanban with nothing behind it.
+          // 5.4 Reviews (ADR 0071, wave 59): a customer's own rating of their
+          // own completed order, read against its order and customer.
+          // Deliberately not the four-dimension service-recovery kanban
+          // statistics.md's own skip table and the IA's original §5.4 row
+          // described — see the ADR's own Alternatives table for why: it
+          // would duplicate the order-remedy console (ADR 0048) that already
+          // exists for acting on a bad review, and invent case-management
+          // state nobody asked to operate. §5.5 Feedback settings stays the
+          // honest not-built stub below — there is no tag library or prompt
+          // timing to author when this screen has neither.
           {
             path: 'reviews',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §5.4 (Reviews) — no review/feedback entity, ' +
-                'no owning ADR',
-            },
+              import('./features/customers/reviews/reviews-page').then((m) => m.ReviewsPage),
           },
-          // 5.5 Feedback settings (wave 44): the same gap as 5.4 above, one
-          // level up. Prompt timing and the review tag library both configure
-          // a review/feedback entity that does not exist yet, so there is
-          // nothing for a settings screen to author against — honest
-          // not-built rather than a tag editor with no review flow behind it.
+          // 5.5 Feedback settings: the review entity 5.4 reads now exists
+          // (ADR 0071, wave 59), but the ADR's own "no moderation, no kanban"
+          // decision means there is still nothing here for a settings screen
+          // to author. Prompt timing and a review tag library both configure
+          // a moderation/tagging pipeline that ADR 0071 deliberately did not
+          // build — see its Alternatives table. Honest not-built rather than
+          // a settings editor with no feature behind it.
           {
             path: 'feedback-settings',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
             data: {
               spec:
-                'frontend-information-architecture.md §5.5 (Feedback settings) — no review/' +
-                'feedback entity, no owning ADR',
+                'frontend-information-architecture.md §5.5 (Feedback settings) — ADR 0071 ' +
+                'deliberately ships no moderation, tag library, or prompt-timing config',
             },
           },
           {

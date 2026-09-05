@@ -1,0 +1,124 @@
+<div class="reviews">
+  <div class="header">
+    <h1 class="q-title">{{ 'customers.reviews.title' | t }}</h1>
+  </div>
+  <p class="q-body-sm subtitle">{{ 'customers.reviews.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (summary(); as s) {
+        <div class="counters">
+          <div class="counter">
+            <span class="q-caption">{{ 'customers.reviews.summary.count' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ s.reviewCount }}</span>
+          </div>
+          <div class="counter">
+            <span class="q-caption">{{ 'customers.reviews.summary.average' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ formattedAverage() }}</span>
+          </div>
+        </div>
+      }
+
+      <div class="filters">
+        <select
+          class="location-select"
+          [value]="locationFilter()"
+          (change)="onLocationFilterChange($any($event.target).value)"
+          data-testid="reviews-location-filter"
+        >
+          <option value="">{{ 'customers.reviews.filter.allLocations' | t }}</option>
+          @for (location of locations(); track location.id) {
+            <option [value]="location.id">{{ location.displayName }}</option>
+          }
+        </select>
+        <select
+          class="rating-select"
+          [value]="minRatingFilter() ?? ''"
+          (change)="onMinRatingFilterChange($any($event.target).value)"
+          data-testid="reviews-rating-filter"
+        >
+          <option value="">{{ 'customers.reviews.filter.allRatings' | t }}</option>
+          @for (option of minRatingOptions; track option) {
+            <option [value]="option">{{ stars(option) }}+</option>
+          }
+        </select>
+        <input
+          type="date"
+          class="date-input"
+          [value]="fromFilter()"
+          (change)="onFromFilterChange($any($event.target).value)"
+          data-testid="reviews-from-filter"
+        />
+        <input
+          type="date"
+          class="date-input"
+          [value]="toFilter()"
+          (change)="onToFilterChange($any($event.target).value)"
+          data-testid="reviews-to-filter"
+        />
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.reviews.column.submittedAt' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.location' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.rating' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.comment' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.order' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.customer' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (review of reviews(); track review.id) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ formatSubmittedAt(review.submittedAt) }}</td>
+              <td class="q-body-sm">{{ locationName(review.locationId) }}</td>
+              <td class="q-body-sm rating" [attr.aria-label]="review.rating + ' / 5'">
+                {{ stars(review.rating) }}
+              </td>
+              <td class="q-body-sm comment">{{ review.comment ?? '—' }}</td>
+              <td class="q-body-sm">
+                <a class="link" [routerLink]="['/orders', review.orderId]">{{ review.orderId }}</a>
+              </td>
+              <td class="q-body-sm">
+                <a class="link" [routerLink]="['/customers', review.customerAccountId]">{{
+                  review.customerAccountId
+                }}</a>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">{{ 'customers.reviews.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hasMore()) {
+        <button
+          type="button"
+          class="secondary load-more"
+          (click)="loadMore()"
+          [disabled]="loadingMore()"
+        >
+          {{ loadingMore() ? ('customers.loading' | t) : ('customers.loadMore' | t) }}
+        </button>
+      }
+    }
+  }
+</div>

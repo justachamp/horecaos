@@ -37,6 +37,7 @@ class ModularArchitectureTests {
             "pricing",
             "referral",
             "reporting",
+            "reviews",
             "telemetry",
             "tenancy",
             "voice",
