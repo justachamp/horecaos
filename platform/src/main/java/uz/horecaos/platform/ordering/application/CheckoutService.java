@@ -42,6 +42,8 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
  *   <li>claim the idempotency record, or return the settled result;</li>
  *   <li>lock and validate the cart, the channel, serviceability, the publication
  *       and the quote — all reads;</li>
+ *   <li>consume a promo-code redemption if the quote carries one (ADR 0072),
+ *       compensated on refusal;</li>
  *   <li>hold inventory (idempotent per quote, compensated on refusal);</li>
  *   <li>claim a kitchen slot under the order id that is about to exist;</li>
  *   <li>accept the quote by context hash — the point of no return;</li>
@@ -54,9 +56,9 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
  *
  * <p>This method is the one place that reads as that sequence; each step's own
  * "why" now lives with the package-private collaborator that carries it out:
- * {@link CheckoutAttemptLedger} (1, 9), {@link CheckoutEligibilityGuard} (2),
- * {@link CheckoutReservationStep} (3-5), {@link CheckoutOrderWriter} (6),
- * {@link CheckoutSettlementStep} (7) and {@link CheckoutProgressionStep} (8). No
+ * {@link CheckoutAttemptLedger} (1, 10), {@link CheckoutEligibilityGuard} (2),
+ * {@link CheckoutReservationStep} (3-6), {@link CheckoutOrderWriter} (7),
+ * {@link CheckoutSettlementStep} (8) and {@link CheckoutProgressionStep} (9). No
  * collaborator opens a transaction of its own — every one of them runs as a plain
  * method call inside the transaction this method starts, so the boundary is
  * exactly what it was before the split.
@@ -121,9 +123,10 @@ public class CheckoutService {
             return ledger.settle(attemptId, null, rejectionCode, check.rejectionDetail(), now);
         }
 
-        // 3-5. Hold the stock, claim a kitchen slot, and accept the quote — the
-        // point of no return. Every refusal from here has already compensated
-        // whatever this step committed before it.
+        // 3-6. Consume a promo-code redemption if any, hold the stock, claim a
+        // kitchen slot, and accept the quote — the point of no return. Every
+        // refusal from here has already compensated whatever this step
+        // committed before it.
         var reserved = reservation.reserve(command, eligible, now);
         if (reserved instanceof CheckoutReservationStep.ItemsUnavailable unavailable) {
             return ledger.settleUnavailable(attemptId, unavailable.decision(), now);
@@ -134,15 +137,15 @@ public class CheckoutService {
         var reservedOrder = (CheckoutReservationStep.Reserved) reserved;
         UUID orderId = reservedOrder.orderId();
 
-        // 6. The order, and everything it must remember for ever.
+        // 7. The order, and everything it must remember for ever.
         var written = orderWriter.create(
                 command, eligible, orderId, reservedOrder.quantities().keySet(), now);
 
-        // 7. The settlement (ADR 0046) and the provider-neutral payment intent
+        // 8. The settlement (ADR 0046) and the provider-neutral payment intent
         // (ADR 0013), both local rows only.
         settlementStep.planAndCreateIntent(command, eligible, orderId, written.paymentFirst());
 
-        // 8. Advance. Payment intervenes first when ADR 0013's capture timing says
+        // 9. Advance. Payment intervenes first when ADR 0013's capture timing says
         // the money must arrive before the restaurant is asked: the order waits in
         // PAYMENT_AUTHORIZING rather than reaching a kitchen unpaid. Cash and every
         // method with no online payment take the acceptance-policy path unchanged.
@@ -172,7 +175,7 @@ public class CheckoutService {
                     command, eligible.cart(), orderId, written.policy().policy(), eligible.quote(), now);
         }
 
-        // 9. Convert the cart and settle the idempotency record.
+        // 10. Convert the cart and settle the idempotency record.
         ledger.completeAttempt(command, eligible.cart(), attemptId, orderId, now);
 
         log.info(

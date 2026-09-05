@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +25,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -90,6 +92,7 @@ public class CartService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final CustomerBlacklistPort blacklist;
+    private final PromoCodeQueryPort promoCodes;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -103,7 +106,8 @@ public class CartService {
             FieldProtection protection,
             ObjectMapper objectMapper,
             Clock clock,
-            CustomerBlacklistPort blacklist) {
+            CustomerBlacklistPort blacklist,
+            PromoCodeQueryPort promoCodes) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -115,6 +119,7 @@ public class CartService {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.blacklist = blacklist;
+        this.promoCodes = promoCodes;
     }
 
     /**
@@ -190,6 +195,7 @@ public class CartService {
                 null,
                 1,
                 now.plus(CART_TTL),
+                null,
                 null);
 
         carts.insertCart(cart, now);
@@ -509,7 +515,12 @@ public class CartService {
                 // cart returns the same quote rather than a second one holding a
                 // second reservation — and any edit, which bumps the version,
                 // produces a genuinely new quote.
-                "cart:%s:v%d".formatted(cartId, cart.version())));
+                "cart:%s:v%d".formatted(cartId, cart.version()),
+                // ADR 0072: whatever code is currently applied, re-resolved by
+                // pricing itself against live coupon state — this method never
+                // learns whether it is eligible, only what the resulting quote
+                // says.
+                cart.appliedCouponCode()));
 
         if (!carts.attachQuote(
                 tenantId,
@@ -522,6 +533,57 @@ public class CartService {
             throw new StaleCartException(cart.version(), cart.version());
         }
         return new PricedCart(cart.cartId(), cart.version(), quote);
+    }
+
+    /**
+     * Applies (or replaces) the cart's promo code (ADR 0072).
+     *
+     * <p>Checked read-only against live coupon state before it is stored — the
+     * first of the two independent checks ADR 0072 requires; the second runs
+     * again inside {@code QuoteService.quote()} at every subsequent price,
+     * trusting nothing this method decided. A cart already carrying a code
+     * simply has it replaced: this platform supports at most one applied code
+     * per cart, so typing a new one is the customer's own decision to swap it,
+     * not an error.
+     *
+     * <p>Invalidates the attached quote exactly as a line edit does — a
+     * promo code changes what the total will be.
+     */
+    @Transactional
+    public CartView applyPromoCode(
+            UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId, int expectedVersion, String rawCode) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        if (cart.version() != expectedVersion) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+
+        String normalized = rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
+        PromoCodeQueryPort.Eligibility eligibility =
+                promoCodes.check(tenantId, brandId, normalized, cart.customerAccountId(), clock.instant());
+        if (!eligibility.isEligible()) {
+            throw new CartRefusedException(
+                    eligibility.reason().name(), "This promo code cannot be applied: " + eligibility.reason());
+        }
+
+        if (!carts.setCouponCodeAndInvalidatePricing(tenantId, cartId, expectedVersion, normalized, clock.instant())) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        log.debug("Cart {} applied promo code", cartId);
+        return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
+    }
+
+    /** Removes whatever promo code is applied, or does nothing when none is. Invalidates the attached quote. */
+    @Transactional
+    public CartView removePromoCode(
+            UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId, int expectedVersion) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        if (cart.version() != expectedVersion) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        if (!carts.setCouponCodeAndInvalidatePricing(tenantId, cartId, expectedVersion, null, clock.instant())) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
     }
 
     /**

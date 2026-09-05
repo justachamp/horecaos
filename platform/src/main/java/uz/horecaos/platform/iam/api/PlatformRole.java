@@ -143,6 +143,10 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews, the same class of read as
                     // the referral line above it.
                     REVIEW_READ,
+                    // ADR 0072: a promo code's shape, value and limits -- the same
+                    // class of decision as the two above it, held here alone for the
+                    // same reason.
+                    PRICING_PROMOTION_MANAGE,
                     // ADR 0042: a rate card is what a courier is paid, and authorising a
                     // payout is the second signature on money leaving. Held apart from
                     // COURIER_SETTLEMENT_CLOSE, which finance holds, so no one person

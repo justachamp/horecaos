@@ -17,7 +17,7 @@ import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
- * Step 8 of {@link CheckoutService}'s order of operations: advance the new
+ * Step 9 of {@link CheckoutService}'s order of operations: advance the new
  * order past {@code RECEIVED} — into {@code PAYMENT_AUTHORIZING} when ADR
  * 0013's capture timing says the money must arrive first, into {@code
  * AWAITING_APPROVAL} with a durable timer armed when the location requires

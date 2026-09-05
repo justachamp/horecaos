@@ -78,6 +78,22 @@ public enum Capability {
     PRICING_AUTHOR("pricing.author", "pricing", "author"),
     PRICING_ACTIVATE("pricing.activate", "pricing", "activate"),
 
+    /**
+     * ADR 0072: authoring a brand's promo codes — the discount shape, value,
+     * limits, and validity window, and the draft/activate/retire lifecycle
+     * that promotes or withdraws one.
+     *
+     * <p>Separate from {@link #PRICING_AUTHOR} and {@link #PRICING_ACTIVATE}
+     * for the same reason {@link #LOYALTY_POLICY_MANAGE} is separate from
+     * {@code LOYALTY_ADJUST}: those two author what a tenant <em>charges</em>
+     * — a price book, a VAT profile — held broadly because pricing a menu is
+     * routine operational work. This authors what a tenant <em>gives away</em>,
+     * a currency decision rather than an operational one, so it is held only
+     * where {@code LOYALTY_POLICY_MANAGE} and {@code REFERRAL_POLICY_MANAGE}
+     * already are.
+     */
+    PRICING_PROMOTION_MANAGE("pricing.promotion.manage", "pricing", "promotion.manage"),
+
     ORDER_READ("order.read", "order", "read"),
 
     ORDER_APPROVE("order.approve", "order", "approve"),

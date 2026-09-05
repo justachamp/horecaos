@@ -11,7 +11,7 @@ import uz.horecaos.platform.ordering.application.CheckoutService.CheckoutCommand
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 
 /**
- * Step 7 of {@link CheckoutService}'s order of operations: the settlement that
+ * Step 8 of {@link CheckoutService}'s order of operations: the settlement that
  * will discharge this order (ADR 0046), and the provider-neutral payment
  * intent (ADR 0013, ADR 0019) it is planned for. Both write local rows only —
  * no provider, and no other module's write, ever happens from inside this

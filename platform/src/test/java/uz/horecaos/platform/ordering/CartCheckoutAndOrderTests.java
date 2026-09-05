@@ -107,9 +107,12 @@ import uz.horecaos.platform.payments.settlement.OrderSettlementService;
 import uz.horecaos.platform.payments.settlement.SettlementStatus;
 import uz.horecaos.platform.payments.settlement.TenderStatus;
 import uz.horecaos.platform.pricing.application.PricingEngine;
+import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
+import uz.horecaos.platform.pricing.application.PromoCodeRedemptionService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -323,12 +326,15 @@ class CartCheckoutAndOrderTests {
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, objectMapper);
         quotes = new QuoteService(
                 pricingStore,
                 new PricingEngine(),
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
+                promoCodeStore,
+                new PromoCodeEligibilityService(promoCodeStore),
                 clock);
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
 
@@ -374,7 +380,8 @@ class CartCheckoutAndOrderTests {
                 protection,
                 objectMapper,
                 clock,
-                customerBlacklist);
+                customerBlacklist,
+                new PromoCodeEligibilityService(promoCodeStore));
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         orderState = new OrderStateService(
                 orderStore,
@@ -444,6 +451,7 @@ class CartCheckoutAndOrderTests {
                 serviceability,
                 quotes,
                 inventory,
+                new PromoCodeRedemptionService(new JdbcPromoCodeStore(jdbc, objectMapper), clock),
                 catalogSnapshot,
                 tenantContext,
                 policies,

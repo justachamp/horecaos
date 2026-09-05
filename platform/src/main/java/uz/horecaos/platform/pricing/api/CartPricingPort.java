@@ -35,6 +35,11 @@ public interface CartPricingPort {
      *                          price loyalty or account-scoped terms against
      * @param channelCode the ADR 0036 channel, which decides both the menu that is
      *                    priced and the price plane that prices it
+     * @param presentedCouponCode ADR 0072: the cart's own applied promo code
+     *                    ({@code ordering.carts.applied_coupon_code}), or null.
+     *                    Re-resolved by pricing on every call — ordering never
+     *                    learns whether it is eligible, only what the resulting
+     *                    quote's total and adjustments say
      */
     record PricingCommand(
             UUID tenantId,
@@ -43,7 +48,8 @@ public interface CartPricingPort {
             @Nullable UUID customerAccountId,
             String channelCode,
             List<Item> items,
-            String idempotencyKey) {
+            String idempotencyKey,
+            @Nullable String presentedCouponCode) {
 
         public PricingCommand {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -53,6 +59,18 @@ public interface CartPricingPort {
             if (items.isEmpty()) {
                 throw new IllegalArgumentException("A cart with no items has nothing to price");
             }
+        }
+
+        /** Every call site that predates ADR 0072's promo code. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey) {
+            this(tenantId, brandId, locationId, customerAccountId, channelCode, items, idempotencyKey, null);
         }
 
         /**

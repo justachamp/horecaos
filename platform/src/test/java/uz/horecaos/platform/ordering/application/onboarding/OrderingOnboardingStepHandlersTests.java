@@ -25,9 +25,11 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.pricing.application.PricingEngine;
+import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler.StepResult;
@@ -222,12 +224,15 @@ class OrderingOnboardingStepHandlersTests {
                 new JdbcDeliveryFeeResolutionStore(jdbc, JsonMapper.builder().build()),
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
         var pricing = new QuoteService(
                 new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
                 new PricingEngine(),
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channels,
                 deliveryFees,
+                promoCodeStore,
+                new PromoCodeEligibilityService(promoCodeStore),
                 CLOCK);
         return new OrderingOnboardingStepHandlers.ActivationSmokeTest(
                 jdbc, channels, serviceability, pricing, inventory(), CLOCK);

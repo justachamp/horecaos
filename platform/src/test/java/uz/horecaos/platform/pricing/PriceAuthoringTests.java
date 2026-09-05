@@ -30,11 +30,13 @@ import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.TaxMode;
+import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
@@ -121,7 +123,16 @@ class PriceAuthoringTests {
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
-        quotes = new QuoteService(pricingStore, new PricingEngine(), catalog, channelStore, deliveryFees, clock);
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
+        quotes = new QuoteService(
+                pricingStore,
+                new PricingEngine(),
+                catalog,
+                channelStore,
+                deliveryFees,
+                promoCodeStore,
+                new PromoCodeEligibilityService(promoCodeStore),
+                clock);
 
         seedTenancyAndCatalog();
     }

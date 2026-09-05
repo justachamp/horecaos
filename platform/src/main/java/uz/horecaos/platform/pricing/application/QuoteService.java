@@ -3,7 +3,10 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoField;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -20,13 +23,16 @@ import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.Money;
+import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -59,20 +65,27 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final CatalogPricingContext catalog;
     private final SalesChannelLookup channels;
     private final DeliveryFeePort deliveryFees;
+    private final JdbcPromoCodeStore promoCodes;
+    private final PromoCodeEligibilityService promoCodeEligibility;
     private final Clock clock;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public QuoteService(
             JdbcPricingStore store,
             PricingEngine engine,
             CatalogPricingContext catalog,
             SalesChannelLookup channels,
             DeliveryFeePort deliveryFees,
+            JdbcPromoCodeStore promoCodes,
+            PromoCodeEligibilityService promoCodeEligibility,
             Clock clock) {
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
         this.channels = channels;
         this.deliveryFees = deliveryFees;
+        this.promoCodes = promoCodes;
+        this.promoCodeEligibility = promoCodeEligibility;
         this.clock = clock;
     }
 
@@ -148,7 +161,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 variantPrices,
                 modifierPrices,
                 catalog.descriptions(request.tenantId(), request.brandId(), variantIds),
-                charge);
+                charge,
+                resolvePromotionInputs(request, now));
 
         var result = engine.price(request, inputs, now);
 
@@ -215,6 +229,63 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             log.info("Delivery fee not resolved for location {}: {}", request.locationId(), charge.outcome());
         }
         return charge;
+    }
+
+    /**
+     * ADR 0072 stages 3 and 4's input: every promotion this brand could apply,
+     * and whether a presented promo code is eligible right now.
+     *
+     * <p>Both reads are fresh — the brand's {@code ACTIVE} promotion list and
+     * the coupon's own limits and window — never cached across calls, per ADR
+     * 0072's "neither check trusts the other's earlier answer". A code that
+     * was eligible when the customer applied it and has since been exhausted
+     * by another checkout simply produces no
+     * {@code presentedCouponPromotionIds} entry: {@code PromotionEvaluator}
+     * then skips its promotion (which {@code requiresCoupon}) and this price
+     * carries no discount for it, changing the context hash exactly as a
+     * changed price book would.
+     */
+    private PricingEngine.PromotionInputs resolvePromotionInputs(QuoteRequest request, Instant now) {
+        List<Promotion> promotions =
+                promoCodes.listActivePromotionsForPricing(request.tenantId(), request.brandId(), now);
+
+        Set<UUID> presentedCouponPromotionIds = Set.of();
+        if (request.presentedCouponCode() != null
+                && !request.presentedCouponCode().isBlank()) {
+            PromoCodeQueryPort.Eligibility eligibility = promoCodeEligibility.check(
+                    request.tenantId(),
+                    request.brandId(),
+                    request.presentedCouponCode(),
+                    request.customerAccountId(),
+                    now);
+            if (eligibility.isEligible()) {
+                presentedCouponPromotionIds = Set.of(Objects.requireNonNull(
+                        eligibility.promotionId(), "an OK eligibility always names a promotion"));
+            }
+        }
+
+        // firstOrder and customerSegments are always the same neutral value:
+        // no condition this ADR's authoring surface writes ever reads either
+        // (FIRST_ORDER and CUSTOMER_SEGMENT are outside the closed condition
+        // set — see ADR 0072), so there is nothing here to resolve correctly
+        // yet. localDayOfWeek/localMinuteOfDay are UTC-derived rather than
+        // resolved from the location's own IANA timezone for the identical
+        // reason (DAY_OF_WEEK/TIME_OF_DAY are likewise outside the closed
+        // set) — ADR 0072 records this explicitly as a negative consequence,
+        // not a silent gap: the day either of those conditions is authored
+        // through any surface, this becomes a real defect.
+        var utcNow = now.atZone(ZoneOffset.UTC);
+        var context = new PromotionEvaluator.PromotionContext(
+                request.channel(),
+                request.locationId(),
+                request.delivery() != null ? "DELIVERY" : "PICKUP",
+                false,
+                Set.of(),
+                presentedCouponPromotionIds,
+                utcNow.getDayOfWeek().getValue(),
+                utcNow.get(ChronoField.MINUTE_OF_DAY));
+
+        return new PricingEngine.PromotionInputs(promotions, context, Map.of());
     }
 
     /**
@@ -302,7 +373,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 // Null until ordering supplies a destination on the command. Until
                 // then a cart priced through this port is priced as a collection,
                 // which is the honest reading of a command that names no address.
-                null);
+                null,
+                command.presentedCouponCode());
 
         try {
             Quote quote = quote(request);

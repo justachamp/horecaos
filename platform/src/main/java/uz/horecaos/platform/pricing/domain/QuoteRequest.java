@@ -16,6 +16,13 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  * @param customerAccountId null for a guest cart, which has no account to price
  *                          loyalty or account-scoped terms against
  * @param delivery null for a cart being collected rather than delivered
+ * @param presentedCouponCode ADR 0072: the raw, customer-typed promo code
+ *                          applied to the cart, or null when none is. Resolved
+ *                          fresh against {@code pricing.coupon_codes} by
+ *                          {@code QuoteService} on every call — never trusted
+ *                          from an earlier answer — and, when still eligible,
+ *                          folded into {@code presentedCouponPromotionIds},
+ *                          which is already part of the context hash
  */
 public record QuoteRequest(
         UUID tenantId,
@@ -25,7 +32,8 @@ public record QuoteRequest(
         String channel,
         List<Line> lines,
         @Nullable String idempotencyKey,
-        @Nullable Delivery delivery) {
+        @Nullable Delivery delivery,
+        @Nullable String presentedCouponCode) {
 
     public QuoteRequest {
         Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -39,7 +47,7 @@ public record QuoteRequest(
         lines = List.copyOf(lines);
     }
 
-    /** A cart being collected, and every call site that predates ADR 0037. */
+    /** A cart being collected, with no promo code, and every call site that predates ADR 0037/0072. */
     public QuoteRequest(
             UUID tenantId,
             UUID brandId,
@@ -48,7 +56,20 @@ public record QuoteRequest(
             String channel,
             List<Line> lines,
             @Nullable String idempotencyKey) {
-        this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, null);
+        this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, null, null);
+    }
+
+    /** Every call site that predates ADR 0072's promo code. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery) {
+        this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, delivery, null);
     }
 
     /**

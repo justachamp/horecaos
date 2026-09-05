@@ -69,7 +69,7 @@ public class JdbcCartStore {
                 SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
                        guest_reference_hash, fulfillment_mode, currency, status,
                        pricing_quote_id, pricing_context_hash, catalog_publication_id,
-                       version, expires_at, converted_order_id
+                       version, expires_at, converted_order_id, applied_coupon_code
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
@@ -93,7 +93,7 @@ public class JdbcCartStore {
                 SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
                        guest_reference_hash, fulfillment_mode, currency, status,
                        pricing_quote_id, pricing_context_hash, catalog_publication_id,
-                       version, expires_at, converted_order_id
+                       version, expires_at, converted_order_id, applied_coupon_code
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 FOR UPDATE
@@ -204,6 +204,37 @@ public class JdbcCartStore {
                 """)
                         .param("tenantId", tenantId)
                         .param("id", cartId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * ADR 0072: applies, replaces, or removes the cart's promo code, and
+     * invalidates the attached price exactly as {@link #touchAndInvalidatePricing}
+     * does — applying a code changes what the total will be exactly as a line
+     * edit does.
+     *
+     * @param normalizedCode null to remove whatever code is applied
+     * @return false when the expected version has moved on
+     */
+    public boolean setCouponCodeAndInvalidatePricing(
+            UUID tenantId, UUID cartId, int expectedVersion, @Nullable String normalizedCode, Instant now) {
+        return jdbc.sql("""
+                UPDATE ordering.carts
+                SET applied_coupon_code = :code,
+                    version = version + 1,
+                    pricing_quote_id = NULL,
+                    pricing_context_hash = NULL,
+                    catalog_publication_id = NULL,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND version = :expectedVersion AND status = 'ACTIVE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", cartId)
+                        .param("code", normalizedCode)
                         .param("expectedVersion", expectedVersion)
                         .param("now", utc(now))
                         .update()
@@ -463,7 +494,8 @@ public class JdbcCartStore {
                 row.getObject("catalog_publication_id", UUID.class),
                 row.getInt("version"),
                 row.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                row.getObject("converted_order_id", UUID.class));
+                row.getObject("converted_order_id", UUID.class),
+                row.getString("applied_coupon_code"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -484,6 +516,10 @@ public class JdbcCartStore {
      * @param catalogPublicationId null exactly when {@code pricingQuoteId} is
      * @param convertedOrderId     null until checkout converts this cart into an
      *                             order
+     * @param appliedCouponCode    ADR 0072: the customer-typed promo code, normalized,
+     *                             or null when none is applied. Never trusted as an
+     *                             eligibility verdict — every consumer re-resolves it
+     *                             against {@code pricing.coupon_codes} itself
      */
     public record CartRow(
             UUID cartId,
@@ -501,7 +537,8 @@ public class JdbcCartStore {
             @Nullable UUID catalogPublicationId,
             int version,
             Instant expiresAt,
-            @Nullable UUID convertedOrderId) {}
+            @Nullable UUID convertedOrderId,
+            @Nullable String appliedCouponCode) {}
 
     /**
      * One line of a cart.
