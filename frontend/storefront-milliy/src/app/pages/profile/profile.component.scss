@@ -1,0 +1,156 @@
+.head { padding: 14px 24px 0; }
+.head__title { margin: 0; font: 800 30px/1.1 var(--font-display); letter-spacing: -0.02em; }
+
+.state { padding: 32px 24px; color: var(--text-muted); font: 400 14px/1.5 var(--font-ui); }
+
+.btn {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 12px 22px;
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 14px/1 var(--font-display);
+  cursor: pointer;
+
+  &--block { width: calc(100% - 48px); margin: 16px 24px 0; height: 54px; }
+  &:disabled { background: var(--line-default); color: var(--text-muted); cursor: not-allowed; }
+}
+
+.identity {
+  margin: 20px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-accent-wash);
+  color: var(--brand-accent-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 800 22px/1 var(--font-display);
+}
+
+.identity__body { flex: 1; min-width: 0; }
+.identity__name { font: 800 21px/1.2 var(--font-display); color: var(--text-primary); }
+
+.pill-btn {
+  height: 44px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-accent-wash);
+  padding: 0 14px;
+  font: 600 13px/1 var(--font-display);
+  color: var(--brand-accent-deep);
+  cursor: pointer;
+
+  &--accent { background: var(--brand-accent); color: var(--text-on-accent); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.edit-form { display: flex; flex-direction: column; gap: 8px; }
+.edit-form__actions { display: flex; gap: 8px; }
+
+.field {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line-subtle);
+  background: var(--surface-raised);
+  padding: 0 14px;
+  font: 600 14px/1 var(--font-ui);
+  color: var(--text-primary);
+  box-sizing: border-box;
+
+  &--area { height: 76px; padding: 14px; font: 400 13px/1.6 var(--font-ui); resize: vertical; }
+}
+
+.lang-row {
+  margin: 22px 24px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-subtle);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lang-row__label { flex: 1; font: 600 14px/1.3 var(--font-ui); color: var(--text-primary); }
+
+.lang-chips {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+}
+
+.lang-chip {
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 13px;
+  background: transparent;
+  font: 700 13px/1 var(--font-display);
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  &.is-active { background: var(--brand-accent-deep); color: var(--text-on-dark); }
+}
+
+.rate-card {
+  margin: 24px 24px 0;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rate-card__title { margin: 0; font: 800 22px/1.1 var(--font-display); letter-spacing: -0.02em; color: var(--text-primary); }
+.rate-card__sub { margin: 0; color: var(--text-secondary); font: 400 12px/1.45 var(--font-ui); }
+.rate-card__field-label { margin-top: 6px; font: 700 13px/1 var(--font-ui); color: var(--text-secondary); }
+
+.stars { display: flex; gap: 2px; }
+
+.star-btn {
+  border: 0;
+  background: none;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--line-default);
+
+  &.is-filled { color: var(--status-warning); }
+}
+
+.hint { margin: 0; color: var(--text-muted); font: 400 13px/1.5 var(--font-ui); }
+.hint--error { color: var(--status-error); }
+
+.thanks {
+  margin: 24px 24px 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-accent-wash);
+  color: var(--brand-accent-deep);
+  font: 700 14px/1.4 var(--font-ui);
+  text-align: center;
+}
+
+.signout {
+  margin: 24px 24px 40px;
+  width: calc(100% - 48px);
+  height: 50px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid #ffe2e2;
+  background: transparent;
+  color: var(--status-error);
+  font: 700 14px/1 var(--font-display);
+  cursor: pointer;
+}

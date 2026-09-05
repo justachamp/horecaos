@@ -1,0 +1,82 @@
+<header class="head">
+  <h1 class="head__title">{{ 'orders.title' | t }}</h1>
+</header>
+
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'orders.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="refresh()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (orders().length === 0) {
+      <div class="empty">
+        <app-icon name="clock" [size]="46" />
+        <h2 class="empty__title">{{ 'orders.noOrdersTitle' | t }}</h2>
+        <p class="empty__sub">{{ 'orders.noOrdersSubtitle' | t }}</p>
+        <button type="button" class="btn" (click)="goHome()">{{ 'orders.placeOrder' | t }}</button>
+      </div>
+    } @else {
+      @if (active(); as activeOrder) {
+        <section class="active-card">
+          <div class="active-card__top">
+            <div>
+              <span class="eyebrow">{{ 'orders.activeSectionTitle' | t }}</span>
+              <h2 class="active-card__status">{{ statusKey(activeOrder) | t }}</h2>
+            </div>
+            <app-icon name="clock" [size]="26" />
+          </div>
+          <div class="rail">
+            @for (step of [0, 1, 2]; track step) {
+              <div class="rail__step" [class.is-done]="stage(activeOrder) >= step">
+                <span class="rail__dot">✓</span>
+                @if (step < 2) {
+                  <span class="rail__line" [class.is-done]="stage(activeOrder) > step"></span>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <section class="history">
+        <h2 class="history__title">{{ 'orders.historyTitle' | t }}</h2>
+        @if (repeatMessage(); as message) {
+          <p class="hint" role="status">{{ message.key | t: message.params }}</p>
+        }
+        <div class="history-list">
+          @for (order of history(); track order.id) {
+            <article class="order-card">
+              <div class="order-card__top">
+                <div>
+                  <div class="order-card__id-row">
+                    <span class="order-card__id">{{ order.order_number ?? order.id }}</span>
+                    <span
+                      class="badge"
+                      [class.badge--success]="order.status?.id === 'COMPLETED'"
+                      [class.badge--error]="isEndedBadly(order)"
+                    >
+                      {{ statusKey(order) | t }}
+                    </span>
+                  </div>
+                  <p class="order-card__date">{{ dateLabel(order) }}</p>
+                </div>
+                <span class="order-card__total">{{ totalLabel(order) }}</span>
+              </div>
+              <button
+                type="button"
+                class="repeat-btn"
+                [disabled]="repeatingId() === order.id"
+                (click)="repeat(order)"
+              >
+                {{ (repeatingId() === order.id ? 'common.loading' : 'orders.repeat') | t }}
+              </button>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  }
+}

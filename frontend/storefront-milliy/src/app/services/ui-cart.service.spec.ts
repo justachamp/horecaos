@@ -10,6 +10,7 @@ import { LangService } from './lang.service';
 import { ApiClient } from '../core/api/api-client';
 import { CustomerApi, type CustomerAddress } from '../core/api/customer-api';
 import { APP_CONFIG, type AppConfig } from '../core/config/app-config';
+import { HorecaOSApiError } from '../core/api/problem-details';
 import type { CartResponseItem } from '../types/cart.types';
 
 const CONFIG: AppConfig = {
@@ -34,6 +35,8 @@ class FakeCartService {
   paymentMethods = vi.fn();
   checkout = vi.fn();
   discard = vi.fn();
+  applyPromoCode = vi.fn();
+  removePromoCode = vi.fn();
 }
 
 class FakeMenuService {
@@ -107,6 +110,7 @@ function pricedFor(cart: PlatformCart): PricedCart {
     subtotalMinor: 1000,
     taxMinor: 0,
     totalMinor: 1000,
+    discountMinor: 0,
     expiresAt: new Date().toISOString(),
   };
 }
@@ -395,5 +399,81 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     expect(api.get).not.toHaveBeenCalled();
     expect(service.deliveryFeeQuote()).toBeNull();
     expect(service.deliveryFee()).toBe('—');
+  });
+});
+
+describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
+  function cartWith(promoCode: string | null): PlatformCart {
+    return baseCart({
+      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+      appliedPromoCode: promoCode,
+    });
+  }
+
+  it('trims the code, applies it, and re-prices so the discount is the platform\'s own answer', async () => {
+    const { service, carts } = setUp();
+    const applied = cartWith('OSH2026');
+    carts.applyPromoCode.mockResolvedValue(applied);
+    carts.price.mockResolvedValue({ ...pricedFor(applied), discountMinor: 4_800 });
+
+    const ok = await service.applyPromoCode('  OSH2026  ');
+
+    expect(ok).toBe(true);
+    expect(carts.applyPromoCode).toHaveBeenCalledWith('OSH2026');
+    expect(service.appliedPromoCode()).toBe('OSH2026');
+    expect(service.hasDiscount()).toBe(true);
+    expect(service.promoError()).toBeNull();
+  });
+
+  it('never calls the platform for a blank code', async () => {
+    const { service, carts } = setUp();
+
+    const ok = await service.applyPromoCode('   ');
+
+    expect(ok).toBe(false);
+    expect(carts.applyPromoCode).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a refusal reason as a translated message, never the raw ADR 0031 code', async () => {
+    const { service, carts } = setUp();
+    carts.applyPromoCode.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'expired',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'CODE_EXPIRED' },
+      }),
+    );
+
+    const ok = await service.applyPromoCode('OLDCODE');
+
+    expect(ok).toBe(false);
+    // The fake TranslateService echoes the key, so this is the *key* the
+    // message resolves to -- never 'RESOURCE_CONFLICT' or 'CODE_EXPIRED'.
+    expect(service.promoError()).toBe('checkout.promoExpired');
+  });
+
+  it('falls back to the generic message for a reason it does not specifically know', async () => {
+    const { service, carts } = setUp();
+    carts.applyPromoCode.mockRejectedValue(
+      new HorecaOSApiError({ status: 500, code: 'INTERNAL_ERROR', detail: 'boom' }),
+    );
+
+    await service.applyPromoCode('X');
+
+    expect(service.promoError()).toBe('errors.generic');
+  });
+
+  it('removePromoCode re-prices without the code', async () => {
+    const { service, carts } = setUp();
+    const cleared = cartWith(null);
+    carts.removePromoCode.mockResolvedValue(cleared);
+    carts.price.mockResolvedValue({ ...pricedFor(cleared), discountMinor: 0 });
+
+    await service.removePromoCode();
+
+    expect(carts.removePromoCode).toHaveBeenCalled();
+    expect(service.appliedPromoCode()).toBeNull();
+    expect(service.hasDiscount()).toBe(false);
   });
 });

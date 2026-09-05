@@ -231,6 +231,48 @@ export class CartService {
     );
   }
 
+  /**
+   * Applies a promo code to the cart, replacing whatever was applied before.
+   *
+   * ADR 0072: this platform supports at most one applied code per cart, so a
+   * second code simply replaces the first rather than being refused. This call
+   * only records the code and clears the attached quote -- it does **not**
+   * compute or return a discount. The total moves only because {@link price} is
+   * asked again afterward, through the platform's own pricing pipeline; nothing
+   * here may be read as "the code was worth X" until that repricing happens.
+   *
+   * A refusal names why in `problem.reason` (`HorecaOSApiError`): `CODE_NOT_FOUND`
+   * (unknown code, `RESOURCE_NOT_FOUND`), or `CODE_NOT_ACTIVE`,
+   * `CODE_NOT_YET_ACTIVE`, `CODE_EXPIRED`, `REDEMPTION_LIMIT_REACHED`,
+   * `PER_CUSTOMER_LIMIT_REACHED` (a code that exists but is not usable right
+   * now, `RESOURCE_CONFLICT`). The minimum-basket, channel and location
+   * conditions are deliberately not checked here -- only at every price -- so
+   * this call accepting a code is not a promise it will discount anything.
+   */
+  async applyPromoCode(code: string): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>(
+        'POST',
+        `${this.brandPath}/carts/${cart.cartId}/promo-code`,
+        { body: { code }, expectedVersion: version, idempotencyKey: newIdempotencyKey() },
+      ),
+    );
+  }
+
+  /**
+   * Removes the cart's applied promo code. Does nothing when none is applied.
+   * Clears any attached quote, the same as applying one does.
+   */
+  async removePromoCode(): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>(
+        'DELETE',
+        `${this.brandPath}/carts/${cart.cartId}/promo-code`,
+        { expectedVersion: version, idempotencyKey: newIdempotencyKey() },
+      ),
+    );
+  }
+
   /** What this cart may be paid with, as the platform resolves it today. */
   async paymentMethods(): Promise<PaymentMethods | null> {
     const cart = this.cart();
@@ -415,6 +457,8 @@ export interface PlatformCart {
   readonly contextHash: string | null;
   readonly expiresAt: string | null;
   readonly lines: readonly PlatformCartLine[];
+  /** ADR 0072. Null (or absent) when no code is applied to this cart. */
+  readonly appliedPromoCode?: string | null;
 }
 
 export interface PricedCart {
@@ -427,6 +471,13 @@ export interface PricedCart {
   readonly taxMinor: number;
   readonly totalMinor: number;
   readonly expiresAt: string;
+  /**
+   * ADR 0072. What the applied promo code discounted, already folded into
+   * `totalMinor` -- this is shown beside the total, never subtracted from it
+   * again. Zero when no code is applied or the applied one is not eligible
+   * right now.
+   */
+  readonly discountMinor: number;
 }
 
 export interface PaymentMethods {

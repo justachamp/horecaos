@@ -1,0 +1,100 @@
+<header class="head">
+  <button type="button" class="head__back" (click)="goHome()" [attr.aria-label]="'common.back' | t">
+    <span class="head__chevron">‹</span>
+  </button>
+  <div class="head__titles">
+    <h1 class="head__title">{{ 'cart.title' | t }}</h1>
+    @if (cart.items().length > 0) {
+      <p class="head__sub">
+        {{ cart.totalItemsCount() }} {{ 'common.itemsUnit' | t }}
+      </p>
+    }
+  </div>
+</header>
+
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'cart.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="refresh()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (cart.items().length === 0) {
+      <div class="empty">
+        <app-icon name="bag" [size]="46" />
+        <h2 class="empty__title">{{ 'cart.emptyTitle' | t }}</h2>
+        <p class="empty__sub">{{ 'cart.emptySubtitle' | t }}</p>
+        <button type="button" class="btn" (click)="goHome()">{{ 'cart.goToMenu' | t }}</button>
+      </div>
+    } @else {
+      <div class="lines">
+        @for (item of cart.items(); track item.item_id) {
+          <div class="line">
+            <div
+              class="line__img"
+              role="img"
+              [attr.aria-label]="item.name"
+              [style.backgroundImage]="'url(' + item.image + ')'"
+            ></div>
+            <div class="line__body">
+              <span class="line__name">{{ item.name }}</span>
+              @if (addonLabel(item); as addons) {
+                @if (addons) {
+                  <span class="line__addons">{{ addons }}</span>
+                }
+              }
+              <span class="line__price">{{ cart.formatPrice(item.price * item.quantity) }}</span>
+            </div>
+            <div class="qty">
+              <button
+                type="button"
+                class="qty__btn"
+                (click)="decrease(item)"
+                [attr.aria-label]="'common.decrease' | t"
+              >−</button>
+              <span class="qty__value">{{ item.quantity }}</span>
+              <button
+                type="button"
+                class="qty__btn qty__btn--add"
+                (click)="increase(item)"
+                [attr.aria-label]="'common.increase' | t"
+              >+</button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="summary">
+        <div class="summary__row">
+          <span>{{ 'cart.subtotalLabel' | t }}</span>
+          <span class="summary__value">{{ cart.subtotalFormatted() }}</span>
+        </div>
+        <div class="summary__row">
+          <span>{{ 'cart.delivery' | t }}</span>
+          <span class="summary__value">{{ cart.deliveryFee() }}</span>
+        </div>
+        @if (cart.hasDiscount()) {
+          <div class="summary__row summary__row--discount">
+            <span>{{ 'cart.promoCode' | t }} {{ cart.appliedPromoCode() }}</span>
+            <span>−{{ cart.discountFormatted() }}</span>
+          </div>
+        }
+        <div class="summary__divider"></div>
+        <div class="summary__row summary__row--total">
+          <span>{{ 'cart.total' | t }}</span>
+          <span>{{ cart.totalAmount() }}</span>
+        </div>
+      </div>
+    }
+  }
+}
+
+@if (state() === 'ready' && cart.items().length > 0) {
+  <footer class="foot">
+    <button type="button" class="cta" (click)="goCheckout()">
+      {{ 'cart.checkoutCta' | t }} · {{ cart.totalAmount() }}
+    </button>
+  </footer>
+}

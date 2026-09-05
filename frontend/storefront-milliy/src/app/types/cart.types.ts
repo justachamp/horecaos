@@ -9,11 +9,14 @@
  * every service.
  *
  * Several members below are therefore filled with zero or empty rather than a
- * number the platform computed: `packaging` and `promo_code` have no platform
- * equivalent at all, `delivery` is priced by its own endpoint against a
- * destination (ADR 0037), and `vendor` is a legacy block with nothing behind it.
- * They are kept so the templates compile and are documented here so nobody
- * reads a zero as a fact.
+ * number the platform computed: `packaging` has no platform equivalent at all,
+ * `delivery` is priced by its own endpoint against a destination (ADR 0037),
+ * and `vendor` is a legacy block with nothing behind it. They are kept so the
+ * templates compile and are documented here so nobody reads a zero as a fact.
+ *
+ * `promo_code` is the exception: ADR 0072 gave it a real platform source
+ * (`PlatformCart.appliedPromoCode`), and `UiCartService.project` now fills it
+ * from there instead of leaving it null.
  */
 
 /** Price + discount pair from cart response */

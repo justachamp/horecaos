@@ -1,0 +1,110 @@
+<header class="head">
+  <h1 class="head__title">{{ 'profile.title' | t }}</h1>
+</header>
+
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'profile.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="ngOnInit()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    <section class="identity">
+      <div class="avatar">{{ initial() }}</div>
+      <div class="identity__body">
+        @if (!editing()) {
+          <span class="identity__name">{{ displayName() ?? ('profile.guestName' | t) }}</span>
+        } @else {
+          <div class="edit-form">
+            <input
+              class="field"
+              [value]="draftFirstName()"
+              (input)="draftFirstName.set($any($event.target).value)"
+              [placeholder]="'profile.firstNamePlaceholder' | t"
+            />
+            <input
+              class="field"
+              [value]="draftLastName()"
+              (input)="draftLastName.set($any($event.target).value)"
+              [placeholder]="'profile.lastNamePlaceholder' | t"
+            />
+            <div class="edit-form__actions">
+              <button type="button" class="pill-btn" (click)="cancelEdit()">{{ 'common.close' | t }}</button>
+              <button type="button" class="pill-btn pill-btn--accent" [disabled]="savingName()" (click)="saveName()">
+                {{ (savingName() ? 'common.saving' : 'common.save') | t }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+      @if (!editing()) {
+        <button type="button" class="pill-btn" (click)="startEdit()">{{ 'profile.editAction' | t }}</button>
+      }
+    </section>
+
+    <section class="lang-row">
+      <app-icon name="flagUz" [size]="24" />
+      <span class="lang-row__label">{{ 'profile.languageSwitchLabel' | t }}</span>
+      <div class="lang-chips">
+        @for (code of languages; track code) {
+          <button
+            type="button"
+            class="lang-chip"
+            [class.is-active]="lang.langId() === code"
+            (click)="setLang(code)"
+          >
+            {{ code.toUpperCase() }}
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (ratableOrder(); as order) {
+      @if (!ratingSubmitted()) {
+        <section class="rate-card">
+          <h2 class="rate-card__title">{{ 'profile.rateTitle' | t }}</h2>
+          <p class="rate-card__sub">
+            {{ 'profile.rateSubtitleForOrder' | t: { order: order.order_number ?? order.id } }}
+          </p>
+          <span class="rate-card__field-label">{{ 'profile.rateFieldLabel' | t }}</span>
+          <div class="stars">
+            @for (value of [1, 2, 3, 4, 5]; track value) {
+              <button
+                type="button"
+                class="star-btn"
+                [class.is-filled]="rating() >= value"
+                (click)="setRating(value)"
+                [attr.aria-label]="value"
+              >
+                <app-icon name="star" [size]="26" />
+              </button>
+            }
+          </div>
+          <textarea
+            class="field field--area"
+            [value]="ratingComment()"
+            (input)="ratingComment.set($any($event.target).value)"
+            [placeholder]="'profile.commentPlaceholder' | t"
+          ></textarea>
+          @if (ratingErrorKey(); as errorKey) {
+            <p class="hint hint--error" role="alert">{{ errorKey | t }}</p>
+          }
+          <button
+            type="button"
+            class="btn btn--block"
+            [disabled]="rating() < 1 || submittingRating()"
+            (click)="submitRating()"
+          >
+            {{ (submittingRating() ? 'profile.submittingRating' : 'profile.submitRating') | t }}
+          </button>
+        </section>
+      } @else {
+        <p class="thanks">{{ 'profile.rateThanks' | t }}</p>
+      }
+    }
+
+    <button type="button" class="signout" (click)="signOut()">{{ 'profile.logout' | t }}</button>
+  }
+}

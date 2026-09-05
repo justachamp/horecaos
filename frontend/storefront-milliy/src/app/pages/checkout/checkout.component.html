@@ -1,0 +1,178 @@
+<header class="head">
+  <button type="button" class="head__back" (click)="back()" [attr.aria-label]="'common.back' | t">
+    <span class="head__chevron">‹</span>
+  </button>
+  <div class="head__titles">
+    <h1 class="head__title">{{ 'checkout.title' | t }}</h1>
+    <p class="head__sub">
+      {{ (isDelivery() ? 'home.delivery' : 'home.pickup') | t }}
+      @if (cart.deliveryTimeDisplay(); as eta) {
+        · {{ 'checkout.estimatedDeliveryTime' | t }}: {{ eta }}
+      }
+    </p>
+  </div>
+</header>
+
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'checkout.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="back()">{{ 'common.back' | t }}</button>
+    </div>
+  }
+  @case ('empty') {
+    <div class="state">
+      <p class="state__title">{{ 'checkout.emptyCartTitle' | t }}</p>
+      <p>{{ 'checkout.emptyCartSubtitle' | t }}</p>
+      <button type="button" class="btn" (click)="back()">{{ 'cart.title' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (isDelivery()) {
+      <section class="block">
+        <h2 class="block__title">{{ 'checkout.addressTitle' | t }}</h2>
+        @if (delivery.addressLabel(); as label) {
+          <p class="address-current">{{ label }}</p>
+        }
+        @if (addresses().length === 0) {
+          <p class="hint">{{ 'checkout.noSavedAddresses' | t }}</p>
+        } @else {
+          <div class="address-list">
+            @for (address of addresses(); track address.addressId) {
+              <button
+                type="button"
+                class="address-row"
+                [class.is-active]="delivery.addressId() === address.addressId"
+                (click)="chooseAddress(address)"
+              >
+                <app-icon name="pin" [size]="18" />
+                <span>{{ addressLine(address) }}</span>
+              </button>
+            }
+          </div>
+        }
+
+        <h3 class="block__subtitle">{{ 'checkout.recipientTitle' | t }}</h3>
+        <input
+          class="field"
+          [value]="recipientName()"
+          (input)="onNameInput($any($event.target).value)"
+          [placeholder]="'cart.recipientName' | t"
+        />
+        <input
+          class="field"
+          [value]="recipientPhone()"
+          (input)="onPhoneInput($any($event.target).value)"
+          [placeholder]="'cart.recipientPhone' | t"
+        />
+      </section>
+    }
+
+    <section class="block">
+      <h2 class="block__title">{{ 'checkout.paymentTitle' | t }}</h2>
+      @if (paymentMethods().length === 0) {
+        <p class="hint">{{ 'cart.noPaymentMethods' | t }}</p>
+      } @else {
+        <div class="pay-list">
+          @for (code of paymentMethods(); track code) {
+            <button
+              type="button"
+              class="pay-row"
+              [class.is-active]="selectedPayment() === code"
+              (click)="selectPayment(code)"
+            >
+              <span class="pay-row__dot"></span>
+              <span class="pay-row__badge">{{ code.charAt(0) }}</span>
+              <span class="pay-row__label">
+                {{ paymentOption(code).labelKey ? (paymentOption(code).labelKey | t) : code }}
+              </span>
+            </button>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="block">
+      <h2 class="block__title">{{ 'checkout.promoTitle' | t }}</h2>
+      @if (cart.appliedPromoCode(); as applied) {
+        <div class="promo-applied">
+          <span class="promo-applied__check">✓</span>
+          <div class="promo-applied__body">
+            <span class="promo-applied__code">{{ 'checkout.promoApplied' | t: { code: applied } }}</span>
+            @if (cart.hasDiscount()) {
+              <span class="promo-applied__sub">−{{ cart.discountFormatted() }}</span>
+            }
+          </div>
+          <button type="button" class="pill-btn" (click)="removePromo()" [disabled]="cart.promoBusy()">
+            {{ 'common.delete' | t }}
+          </button>
+        </div>
+      } @else {
+        <div class="promo-form">
+          <input
+            class="field field--grow"
+            [value]="promoInput()"
+            (input)="promoInput.set($any($event.target).value)"
+            [placeholder]="'checkout.promoPlaceholder' | t"
+          />
+          <button
+            type="button"
+            class="btn btn--compact"
+            [disabled]="!promoInput().trim() || cart.promoBusy()"
+            (click)="applyPromo()"
+          >
+            {{ 'checkout.promoApply' | t }}
+          </button>
+        </div>
+        @if (cart.promoError(); as promoError) {
+          <p class="hint hint--error" role="alert">{{ promoError }}</p>
+        }
+      }
+    </section>
+
+    <section class="block">
+      <h2 class="block__title">{{ 'checkout.courierNoteTitle' | t }}</h2>
+      <textarea
+        class="field field--area"
+        [value]="cart.orderComment"
+        (input)="onCommentInput($any($event.target).value)"
+        [placeholder]="'cart.commentPlaceholder' | t"
+      ></textarea>
+    </section>
+
+    <div class="summary">
+      <div class="summary__row">
+        <span>{{ 'cart.subtotalLabel' | t }}</span>
+        <span class="summary__value">{{ cart.subtotalFormatted() }}</span>
+      </div>
+      <div class="summary__row">
+        <span>{{ 'cart.delivery' | t }}</span>
+        <span class="summary__value">{{ cart.deliveryFee() }}</span>
+      </div>
+      @if (cart.hasDiscount()) {
+        <div class="summary__row summary__row--discount">
+          <span>{{ 'cart.promoCode' | t }}</span>
+          <span>−{{ cart.discountFormatted() }}</span>
+        </div>
+      }
+      <div class="summary__divider"></div>
+      <div class="summary__row summary__row--total">
+        <span>{{ 'cart.total' | t }}</span>
+        <span>{{ cart.totalAmount() }}</span>
+      </div>
+    </div>
+
+    @if (submitErrorKey(); as errorKey) {
+      <p class="hint hint--error hint--footer" role="alert">{{ errorKey | t }}</p>
+    }
+  }
+}
+
+@if (state() === 'ready') {
+  <footer class="foot">
+    <button type="button" class="cta" [disabled]="!canConfirm()" (click)="confirm()">
+      {{ (submitting() ? 'checkout.placingOrder' : 'checkout.confirmOrder') | t }} · {{ cart.totalAmount() }}
+    </button>
+  </footer>
+}

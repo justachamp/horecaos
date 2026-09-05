@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { CustomerApi } from '../core/api/customer-api';
+import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
 import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
 import {
   CartService,
@@ -109,6 +110,37 @@ export class UiCartService {
   });
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
+
+  /**
+   * The code applied to the cart right now, ADR 0072, or null.
+   *
+   * Read from the last {@link project}ed cart rather than from what {@link
+   * applyPromoCode} was last called with: the server is the only party that
+   * knows whether a code actually stuck, and a cart rebuilt for a mode switch
+   * (see {@link switchFulfillmentMode}) carries no code forward at all.
+   */
+  readonly appliedPromoCode = computed(() => this.cartData()?.promo_code ?? null);
+
+  /** Busy flag for the promo field alone, so applying a code does not grey out the whole basket. */
+  readonly promoBusy = signal(false);
+
+  /** The last promo refusal, as a customer-facing message -- never a raw code. */
+  readonly promoError = signal<string | null>(null);
+
+  /**
+   * What the applied code discounted, straight from the last price
+   * (`PricedCart.discountMinor`) and never computed here. Zero -- shown as no
+   * discount at all -- when the cart has not been priced yet, or the applied
+   * code is not eligible right now (ADR 0072: a code can be presented and
+   * still discount nothing, e.g. once its capacity runs out between apply and
+   * price).
+   */
+  readonly discountMinor = computed(() => this.priced()?.discountMinor ?? 0);
+  readonly hasDiscount = computed(() => this.discountMinor() > 0);
+  readonly discountFormatted = computed(() => {
+    this.translate.current();
+    return this.formatPrice(this.discountMinor());
+  });
 
   /**
    * A preview of what delivery will cost, from `GET .../delivery-fee`
@@ -344,6 +376,64 @@ export class UiCartService {
   }
 
   /**
+   * Applies a promo code, ADR 0072.
+   *
+   * Never subtracts anything itself: it writes the code to the cart, then
+   * re-prices through {@link project} so `discountMinor`/`totalAmount` are the
+   * platform's own answer. A refusal is translated to a customer-facing
+   * message keyed off `problem.reason` (an unknown or currently-unusable
+   * code), never shown as the raw ADR 0031 code.
+   *
+   * @returns false on refusal, without touching the cart's existing state --
+   *          a customer who typed a bad code keeps whatever was priced before.
+   */
+  async applyPromoCode(code: string): Promise<boolean> {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      return false;
+    }
+    this.promoBusy.set(true);
+    this.promoError.set(null);
+    try {
+      const cart = await this.carts.applyPromoCode(trimmed);
+      await this.project(cart);
+      return true;
+    } catch (failure) {
+      this.promoError.set(this.promoErrorMessage(failure));
+      return false;
+    } finally {
+      this.promoBusy.set(false);
+    }
+  }
+
+  /** Removes the applied promo code, then re-prices without it. */
+  async removePromoCode(): Promise<void> {
+    this.promoBusy.set(true);
+    this.promoError.set(null);
+    try {
+      const cart = await this.carts.removePromoCode();
+      await this.project(cart);
+    } catch {
+      this.promoError.set(this.translate.get('errors.generic'));
+    } finally {
+      this.promoBusy.set(false);
+    }
+  }
+
+  /** ADR 0072's refusal reasons, each named as `problem.reason` by the platform. */
+  private promoErrorMessage(failure: unknown): string {
+    if (failure instanceof HorecaOSApiError) {
+      const reason = failure.problem?.reason;
+      const key = reason ? PROMO_REASON_KEYS[reason] : undefined;
+      if (key) {
+        return this.translate.get(key);
+      }
+      return this.translate.get(messageKeyFor(failure));
+    }
+    return this.translate.get('errors.generic');
+  }
+
+  /**
    * Says where a delivery cart is going, if it is one and a choice has been made.
    *
    * Called before pricing rather than after, because setting a destination
@@ -515,7 +605,7 @@ export class UiCartService {
       delivery_distance: 0,
       delivery_date_display: null,
       delivery_time_display: null,
-      promo_code: null,
+      promo_code: cart.appliedPromoCode ?? null,
       delivery_duration: 0,
     });
 
@@ -571,7 +661,8 @@ export class UiCartService {
     return this.formatPrice(0);
   }
 
-  private formatPrice(value: number): string {
+  /** Public: also used by screens that render a line total or a discount amount. */
+  formatPrice(value: number): string {
     const currency = this.translate.get('common.currency') || "so'm";
     // Minor units, and for UZS that is whole som -- nothing divides by a hundred.
     return `${value.toLocaleString('uz-UZ')} ${currency}`;
@@ -596,3 +687,18 @@ interface DeliveryFeeView {
   readonly distanceMeters: number | null;
   readonly distanceSource: string | null;
 }
+
+/**
+ * ADR 0072's `PromoCodeEligibilityService.Eligibility.Reason` names, exactly as
+ * `StorefrontOrderingController.refusal` puts them on `problem.reason`, mapped
+ * to a customer-facing key. An unlisted reason (there should not be one) falls
+ * back to {@link messageKeyFor}'s generic reading of the ADR 0031 code.
+ */
+const PROMO_REASON_KEYS: Readonly<Record<string, string>> = {
+  CODE_NOT_FOUND: 'checkout.promoNotFound',
+  CODE_NOT_ACTIVE: 'checkout.promoNotActive',
+  CODE_NOT_YET_ACTIVE: 'checkout.promoNotYetActive',
+  CODE_EXPIRED: 'checkout.promoExpired',
+  REDEMPTION_LIMIT_REACHED: 'checkout.promoLimitReached',
+  PER_CUSTOMER_LIMIT_REACHED: 'checkout.promoAlreadyUsed',
+};
