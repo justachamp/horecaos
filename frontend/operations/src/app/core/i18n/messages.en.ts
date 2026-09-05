@@ -2129,6 +2129,7 @@ export const messagesEn = {
   'customers.segments.snapshot.result': 'Reached {count} customers.',
   'customers.segments.snapshot.building': 'Building…',
   'customers.segments.snapshot.confirm': 'Build',
+  'customers.segments.snapshot.done': 'Done',
   'customers.segments.cancel': 'Cancel',
   'customers.segments.builder.editTitle': 'Edit segment',
   'customers.segments.builder.createTitle': 'New segment',

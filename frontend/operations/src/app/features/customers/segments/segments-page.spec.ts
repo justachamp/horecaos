@@ -288,7 +288,7 @@ describe('SegmentsPage', () => {
   });
 
   describe('snapshot', () => {
-    it('builds a snapshot with the fixed, machine-facing purpose and closes the panel on success', async () => {
+    it('builds a snapshot with the fixed, machine-facing purpose and shows the reach it computed', async () => {
       await render([summary()]);
       (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -305,17 +305,36 @@ describe('SegmentsPage', () => {
         'SMS',
         'Operations console: segment snapshot from Customers 5.3',
       );
-      // NOTE (found while writing this test, reported rather than fixed —
-      // out of this wave's scope): `confirmSnapshot()` sets `snapshotResult`
-      // and then `snapshottingId.set(null)` in the same synchronous
-      // continuation, and the template's "Reached N customers" result line
-      // lives *inside* the `@if (snapshottingId(); as audienceId)` block.
-      // The panel that would show the result closes in the same tick the
-      // result becomes available, so an operator never actually sees the
-      // reach figure this action just computed — it renders successfully in
-      // no build ever observed. This assertion documents the real, current
-      // (buggy) behaviour rather than the intended one.
+      // The panel stays open carrying the answer. It used to close in the same
+      // tick the result arrived, which made the reach unreachable: computed,
+      // stored, and never rendered in any build.
+      const panel = host().querySelector('.snapshot-panel');
+      expect(panel).not.toBeNull();
+      expect(panel?.querySelector('.result-text')?.textContent ?? '').toContain('150');
+    });
+
+    it('dismisses the result panel, and a later snapshot never opens showing the old reach', async () => {
+      await render([summary()]);
+      (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (
+        host().querySelector('.snapshot-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      // Done closes it.
+      (
+        host().querySelector('.snapshot-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
       expect(host().querySelector('.snapshot-panel')).toBeNull();
+
+      // Reopening must not show the previous run's figure as if it were this one's.
+      (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(host().querySelector('.snapshot-panel')).not.toBeNull();
+      expect(host().querySelector('.snapshot-panel .result-text')).toBeNull();
     });
 
     it('surfaces a snapshot failure honestly and leaves the panel open to retry', async () => {

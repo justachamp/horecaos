@@ -84,16 +84,22 @@
         </p>
       }
       <div class="panel__actions">
-        <button type="button" class="secondary" (click)="cancelSnapshot()">
-          {{ 'customers.segments.cancel' | t }}
-        </button>
-        <button type="button" class="primary" [disabled]="snapshotBusy()" (click)="confirmSnapshot()">
-          {{
-            snapshotBusy()
-              ? ('customers.segments.snapshot.building' | t)
-              : ('customers.segments.snapshot.confirm' | t)
-          }}
-        </button>
+        @if (snapshotResult()) {
+          <button type="button" class="primary" (click)="cancelSnapshot()">
+            {{ 'customers.segments.snapshot.done' | t }}
+          </button>
+        } @else {
+          <button type="button" class="secondary" (click)="cancelSnapshot()">
+            {{ 'customers.segments.cancel' | t }}
+          </button>
+          <button type="button" class="primary" [disabled]="snapshotBusy()" (click)="confirmSnapshot()">
+            {{
+              snapshotBusy()
+                ? ('customers.segments.snapshot.building' | t)
+                : ('customers.segments.snapshot.confirm' | t)
+            }}
+          </button>
+        }
       </div>
     </div>
   }

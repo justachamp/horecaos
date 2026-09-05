@@ -2119,6 +2119,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.segments.snapshot.result': 'Qamrab olindi: {count} mijoz.',
   'customers.segments.snapshot.building': 'Yaratilmoqda…',
   'customers.segments.snapshot.confirm': 'Yaratish',
+  'customers.segments.snapshot.done': 'Tayyor',
   'customers.segments.cancel': 'Bekor qilish',
   'customers.segments.builder.editTitle': 'Segmentni tahrirlash',
   'customers.segments.builder.createTitle': 'Yangi segment',

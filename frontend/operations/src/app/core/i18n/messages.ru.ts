@@ -2107,6 +2107,7 @@ export const messagesRu: MessageCatalogue = {
   'customers.segments.snapshot.result': 'Охвачено клиентов: {count}.',
   'customers.segments.snapshot.building': 'Строится…',
   'customers.segments.snapshot.confirm': 'Построить',
+  'customers.segments.snapshot.done': 'Готово',
   'customers.segments.cancel': 'Отмена',
   'customers.segments.builder.editTitle': 'Изменить сегмент',
   'customers.segments.builder.createTitle': 'Новый сегмент',

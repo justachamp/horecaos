@@ -285,6 +285,7 @@ export class SegmentsPage {
 
   protected cancelSnapshot(): void {
     this.snapshottingId.set(null);
+    this.snapshotResult.set(null);
   }
 
   protected async confirmSnapshot(): Promise<void> {
@@ -302,8 +303,13 @@ export class SegmentsPage {
         this.snapshotChannel(),
         SegmentsPage.SNAPSHOT_PURPOSE,
       );
+      // The panel stays open. Closing it here set `snapshotResult` and then
+      // immediately removed the only place the template renders it, so the
+      // reach an operator had just asked for was computed, stored and thrown
+      // away in the same tick. The refreshed row's last-reach column does
+      // carry the same figure, but a cell that changes quietly in a table of
+      // segments is not an answer to the question the operator just asked.
       this.snapshotResult.set({ audienceId, members: result.members });
-      this.snapshottingId.set(null);
       await this.load();
     } catch (error) {
       this.snapshotError.set(this.describe(error));
