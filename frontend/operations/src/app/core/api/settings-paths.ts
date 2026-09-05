@@ -244,6 +244,30 @@ export const settingsPaths = {
   orderOutcomeReason(scope: LocationScope, reasonId: string): string {
     return `${this.orderOutcomeReasons(scope)}/${enc(reasonId)}`;
   },
+
+  // ---------------------------------------------------------- 10.12 Terms of service
+
+  /**
+   * `OperationsTermsController` (ADR 0067) — a bare `tenantId`/`brandId` pair,
+   * not a `LocationScope`: `TERMS_READ`/`TERMS_MANAGE` are granted only to
+   * `tenant-owner`, a `TENANT`-scoped bundle with no `BRAND`- or
+   * `LOCATION`-scoped grant row, so this screen resolves its tenant from
+   * `CurrentTenant` and its brand from its own picker rather than
+   * `CurrentLocation` — see `terms-page.ts`'s own doc for why.
+   */
+  termsDocuments(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/brands/${enc(brandId)}/terms-documents`;
+  },
+
+  /** The version in force right now, or `published: false` if the brand has never published. */
+  termsDocumentCurrent(tenantId: string, brandId: string): string {
+    return `${this.termsDocuments(tenantId, brandId)}/current`;
+  },
+
+  /** One historical version, read-only, for the publish history's preview. */
+  termsDocumentVersion(tenantId: string, brandId: string, version: number): string {
+    return `${this.termsDocuments(tenantId, brandId)}/${version}`;
+  },
 } as const;
 
 function enc(value: string): string {

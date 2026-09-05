@@ -261,13 +261,11 @@
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
-    "title": "Terms of Service",
-    "section1Title": "1. General provisions",
-    "section1Content": "By using the JizBiz app, you agree to these terms. The service is intended for ordering food with delivery. We reserve the right to change the terms. Continued use after changes means your consent.",
-    "section2Title": "2. Orders and payment",
-    "section2Content": "Orders are placed through the app. Payment can be made in cash on delivery or via electronic systems. Prices are shown in soums. Delivery time is approximate.",
-    "section3Title": "3. Contact and support",
-    "section3Content": "For questions, please contact our support service. We strive to promptly resolve any issues related to orders and service quality."
+    "loadError": "The terms of service could not be loaded. Please try again.",
+    "platformDefaultNotice": "This restaurant has not published its own terms of service yet, so a general default is shown below.",
+    "mustAcceptNotice": "Our terms of service have been updated. Please review and accept them to continue.",
+    "iAgree": "I agree",
+    "acceptError": "Something went wrong. Please try again."
   },
   "action": {
     "yourAddress": "Your address",

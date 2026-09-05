@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
+import uz.horecaos.platform.customers.api.ConsentRecorder;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ConsentHistoryRow;
 
@@ -25,7 +26,7 @@ import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerSto
  * which is why {@link #hasConsent} returns false rather than defaulting to true.
  */
 @Service
-public class ConsentService implements ConsentDirectory {
+public class ConsentService implements ConsentDirectory, ConsentRecorder {
 
     private final JdbcCustomerStore store;
     private final Clock clock;
@@ -112,9 +113,44 @@ public class ConsentService implements ConsentDirectory {
     @Override
     @Transactional(readOnly = true)
     public Optional<ConsentState> consentFor(
-            UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
+            UUID tenantId, UUID accountId, @Nullable UUID brandId, String purpose, @Nullable String channel) {
         return store.currentConsent(tenantId, accountId, brandId, purpose, channel)
                 .map(row -> new ConsentState("GRANTED".equals(row.decision()), row.policyVersion(), row.decidedAt()));
+    }
+
+    /**
+     * {@link ConsentRecorder}'s narrower write, for a caller outside this
+     * module that already knows exactly what the customer agreed to.
+     *
+     * <p>Always {@link Decision#GRANTED} through this port — a module reaching
+     * across a boundary to record a customer's own affirmative action has no
+     * business withdrawing one, importing one, or backdating one; those stay
+     * {@link #record} calls made from inside {@code customers} itself.
+     * {@code decidedAt} is always now, for the same reason: this is the
+     * customer acting in this request, not an import replaying history.
+     */
+    @Override
+    @Transactional
+    public UUID recordGrant(
+            UUID tenantId,
+            UUID accountId,
+            @Nullable UUID brandId,
+            String purpose,
+            @Nullable String channel,
+            String policyVersion,
+            String source,
+            @Nullable String evidenceReference) {
+        return record(
+                tenantId,
+                accountId,
+                brandId,
+                purpose,
+                channel,
+                Decision.GRANTED,
+                policyVersion,
+                Source.valueOf(source),
+                evidenceReference,
+                null);
     }
 
     /** The full decision history. This is what a subject-access request produces. */

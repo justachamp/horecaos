@@ -48,7 +48,7 @@
   The Telegram surface question that held this record at `Proposed` was answered by
   ADR 0035 on 2026-08-22 and is withdrawn rather than deferred. Referral reward
   mechanics — who is rewarded, on which qualifying event, amount, cap, expiry — was
-  an open input here and is resolved by [ADR 0067](0067-referral-program-rewards-through-the-loyalty-ledger.md)
+  an open input here and is resolved by [ADR 0067](../partial/0067-referral-program-rewards-through-the-loyalty-ledger.md)
   on 2026-09-05: a tenant-configured shape (both sides, or the referrer only),
   riding on ADR 0046's loyalty ledger. The referral edge and attribution links
   this record still owns (below) are unaffected and remain unbuilt.
@@ -618,7 +618,7 @@ payments, for the same reason.
 | Input | Owner | Why it does not change the structure |
 |---|---|---|
 | Marketing frequency cap and quiet-hours values | product, legal | Values resolved through ADR 0030 against ADR 0020's `quiet_hours` preference column. Provisional defaults are set above and enforced from day one, so the mechanism ships complete; counsel changes numbers, not tables |
-| Referral reward mechanics — who is rewarded, on which qualifying event, amount, cap, expiry | product, finance | **Resolved 2026-09-05 by [ADR 0067](0067-referral-program-rewards-through-the-loyalty-ledger.md)**, which took the accrual shape this row names: a tenant-authored program (both sides rewarded, or the referrer only) paying through ADR 0046's loyalty ledger. The referral edge itself — recorded regardless of a reward, per this ADR's own decision above — and attribution links remain this ADR's own unbuilt work; ADR 0067 owns only the reward |
+| Referral reward mechanics — who is rewarded, on which qualifying event, amount, cap, expiry | product, finance | **Resolved 2026-09-05 by [ADR 0067](../partial/0067-referral-program-rewards-through-the-loyalty-ledger.md)**, which took the accrual shape this row names: a tenant-authored program (both sides rewarded, or the referrer only) paying through ADR 0046's loyalty ledger. The referral edge itself — recorded regardless of a reward, per this ADR's own decision above — and attribution links remain this ADR's own unbuilt work; ADR 0067 owns only the reward |
 | Marketing SMS sender of record and price per segment | finance, legal | The campaign already carries `estimated_cost_minor`, `cost_ceiling_minor`, `reserved_cost_minor`, and `spent_cost_minor` against a tenant-configured price per segment. If campaign spend later becomes an ADR 0021 billable unit, ADR 0021 meters `spent_cost_minor`; that is a meter definition against an existing column |
 | Signed treatment of cancelled and refunded orders in RFM, and the business-day boundary | finance, through ADR 0043 | Not this ADR's to answer. ADR 0043 is Accepted, its business-day boundary is implemented, and its registry ships version 1 as provisional. The projection carries `order_count` beside `completed_order_count` and `gross_spend_minor` beside `net_spend_minor`, and stamps `metric_definition_version`; a registry revision restates the projection rather than reshaping it |
 

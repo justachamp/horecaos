@@ -120,6 +120,15 @@ public class SecurityConfiguration {
                                 // personal data or per-customer.
                                 "/api/v1/storefront/tenants/*/brands/*/support/faq",
                                 "/api/v1/storefront/tenants/*/brands/*/support/social-links",
+                                // ADR 0068: the tenant's own terms of service, or
+                                // the platform's brand-neutral default. Read
+                                // before an account exists for the same reason
+                                // the FAQ is -- the storefront's own sign-in
+                                // screen links here -- and never the accept or
+                                // acceptance-status endpoints beside it, which
+                                // stay behind a customer session because there is
+                                // nobody to accept on behalf of otherwise.
+                                "/api/v1/storefront/tenants/*/brands/*/terms",
                                 // ADR 0036 and its delivery-fee companion: the same
                                 // customer, the same moment, before an account
                                 // exists. "Can I order from here" and "what does

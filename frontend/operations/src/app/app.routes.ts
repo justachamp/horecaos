@@ -288,6 +288,14 @@ export const routes: Routes = [
                 (m) => m.DataPrivacyPage,
               ),
           },
+          {
+            // 10.12 Terms of service (ADR 0067): also tenant-scoped, with its
+            // own brand picker rather than `CurrentLocation` — see
+            // `terms-page.ts`'s own doc for why.
+            path: 'terms',
+            loadComponent: () =>
+              import('./features/settings/terms/terms-page').then((m) => m.TermsPage),
+          },
         ],
       },
       {

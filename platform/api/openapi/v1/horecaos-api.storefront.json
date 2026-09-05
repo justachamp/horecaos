@@ -1,6 +1,50 @@
 {
   "components" : {
     "schemas" : {
+      "AcceptRequest" : {
+        "properties" : {
+          "brandName" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "locale" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandName", "locale" ],
+        "type" : "object"
+      },
+      "AcceptResponse" : {
+        "properties" : {
+          "acceptedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AcceptanceStatusView" : {
+        "properties" : {
+          "accepted" : {
+            "type" : "boolean"
+          },
+          "currentVersion" : {
+            "type" : "string"
+          },
+          "lastAcceptedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastAcceptedVersion" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AddressFields" : {
         "properties" : {
           "apartment" : {
@@ -1475,6 +1519,24 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "TermsView" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       }
     },
@@ -3682,6 +3744,155 @@
         "tags" : [ "Telegram sign-in" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms" : {
+      "get" : {
+        "description" : "The tenant's own published text when it has one for this language; otherwise the platform's brand-neutral default with brandName interpolated in. Cached briefly like the FAQ, because this changes on the order of weeks.",
+        "operationId" : "current",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TermsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The document in force right now, in the requested language",
+        "tags" : [ "Storefront terms of service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/accept" : {
+      "post" : {
+        "description" : "Always accepts whatever GET would answer right now for this locale — a client cannot name an older or newer version. Recorded through the same ADR 0015 consent store every other acceptance in the platform uses, so publishing a later version never rewrites what this call recorded.",
+        "operationId" : "accept",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that the signed-in customer accepts the document currently in force",
+        "tags" : [ "Storefront terms of service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status" : {
+      "get" : {
+        "description" : "False for a customer who never accepted anything, and false again the day after a new version publishes for a customer who only ever accepted the one before it — the storefront reads this after sign-in to decide whether to ask.",
+        "operationId" : "acceptanceStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptanceStatusView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the signed-in customer has accepted the version currently in force",
+        "tags" : [ "Storefront terms of service" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
         "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
@@ -3747,6 +3958,9 @@
   }, {
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
   }, {
     "description" : "Pickup branches near a customer",
     "name" : "Storefront pickup locations"

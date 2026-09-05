@@ -13,6 +13,7 @@ import { formatUzPhone } from '../../../core/session/phone';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { TelegramWebappService } from '../../../services/telegram-webapp.service';
+import { TermsService } from '../../../services/terms.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { BackDirective } from '../../../shared/back/back.directive';
 
@@ -59,6 +60,7 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
   private readonly otp = inject(CustomerOtp);
   private readonly translate = inject(TranslateService);
   private readonly delivery = inject(DeliverySelectionService);
+  private readonly terms = inject(TermsService);
 
   constructor(private router: Router) {}
 
@@ -262,13 +264,36 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
       // this session so the delivery form can offer it. Never persisted: see
       // DeliverySelectionService.
       this.delivery.rememberSignInPhone(this.phone);
-      this.router.navigate(['/locations']).catch(() => {});
+      await this.continuePastTerms();
     } catch (failure) {
       this.code.set('');
       this.error.set(this.messageFor(failure));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * ADR 0067: a first-time customer, or one whose accepted terms are no
+   * longer the version in force, is routed through `/terms` to accept
+   * before landing on `/locations`; everybody else goes straight there.
+   *
+   * This check is not a security gate -- nothing on the platform refuses an
+   * order for a stale acceptance -- so a failure here (the network, a slow
+   * backend) fails open to `/locations` rather than trap a customer who just
+   * successfully signed in behind a screen that cannot load.
+   */
+  private async continuePastTerms(): Promise<void> {
+    try {
+      const status = await this.terms.status();
+      if (!status.accepted) {
+        await this.router.navigate(['/terms'], { state: { mustAccept: true, returnTo: '/locations' } });
+        return;
+      }
+    } catch {
+      // Fall through to /locations -- see this method's own doc comment.
+    }
+    await this.router.navigate(['/locations']);
   }
 
   /**

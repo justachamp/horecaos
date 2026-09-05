@@ -1,55 +1,74 @@
 <div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto max-w-[420px] px-4 py-6">
     <header class="flex shrink-0 flex-col gap-2 pb-6">
-      <button
-        type="button"
-        appBack="/auth/login"
-        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
-      >
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-        {{ 'common.back' | t }}
-      </button>
+      @if (!mustAccept) {
+        <button
+          type="button"
+          appBack="/auth/login"
+          class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          {{ 'common.back' | t }}
+        </button>
+      }
       <p class="text-center text-base font-semibold text-text-primary">{{ 'terms.agreementTitle' | t }}</p>
+      @if (mustAccept) {
+        <p class="text-center text-sm text-zinc-400">{{ 'terms.mustAcceptNotice' | t }}</p>
+      }
     </header>
 
-    @if (selectedLangId() === 'uz') {
-      <div
-        class="terms-uz-content text-sm leading-relaxed text-zinc-300"
-        lang="uz"
-      >
-        <p class="mb-4 text-center font-medium text-zinc-200">Sotuv Ommaviy oferta bo'yicha shartnoma</p>
-        @for (section of termsUzContent | termsSections; track $index) {
-          <section class="mt-4 block first:mt-0">{{ section }}</section>
+    @switch (state()) {
+      @case ('loading') {
+        <div class="flex justify-center py-10">
+          <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+        </div>
+      }
+      @case ('error') {
+        <p class="text-center text-sm text-red-400">{{ 'terms.loadError' | t }}</p>
+      }
+      @case ('ready') {
+        @if (isPlatformDefault()) {
+          <p class="mb-4 rounded-lg border border-zinc-700 bg-surface-raised px-3 py-2 text-xs text-zinc-400">
+            {{ 'terms.platformDefaultNotice' | t }}
+          </p>
         }
-      </div>
+        <div class="terms-content text-sm leading-relaxed text-zinc-300" [attr.lang]="selectedLangId()">
+          @for (section of body() | termsSections; track $index) {
+            <section class="mt-4 block first:mt-0">{{ section }}</section>
+          }
+        </div>
+      }
     }
-    @if (selectedLangId() === 'en') {
-      <div
-        class="terms-en-content text-sm leading-relaxed text-zinc-300"
-        lang="en"
-      >
-        <p class="mb-4 text-center font-medium text-zinc-200">Public offer agreement</p>
-        @for (section of termsEnContent | termsSections; track $index) {
-          <section class="mt-4 block first:mt-0">{{ section }}</section>
-        }
-      </div>
-    }
-    @if (selectedLangId() === 'ru') {
-      <div
-        class="terms-ru-content text-sm leading-relaxed text-zinc-300"
-        lang="ru"
-      >
-        <p class="mb-4 text-center font-medium text-zinc-200">Договор публичной оферты</p>
-        @for (section of termsRuContent | termsSections; track $index) {
-          <section class="mt-4 block first:mt-0">{{ section }}</section>
-        }
+
+    @if (mustAccept && state() === 'ready') {
+      <div class="fixed inset-x-0 bottom-0 border-t border-zinc-700 bg-surface-base px-4 py-4">
+        <div class="mx-auto max-w-[420px]">
+          @if (acceptError()) {
+            <p class="mb-2 text-center text-sm text-red-400">{{ acceptError()! | t }}</p>
+          }
+          <button
+            type="button"
+            (click)="agree()"
+            [disabled]="accepting()"
+            class="w-full rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity disabled:opacity-50"
+          >
+            @if (accepting()) {
+              <span class="inline-flex items-center gap-2 justify-center w-full">
+                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                {{ 'common.loading' | t }}
+              </span>
+            } @else {
+              {{ 'terms.iAgree' | t }}
+            }
+          </button>
+        </div>
       </div>
     }
   </div>

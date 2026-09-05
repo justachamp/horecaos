@@ -153,6 +153,11 @@ public enum PlatformRole {
                     // administrator nor finance may move that on their own.
                     LEGAL_ENTITY_READ,
                     LEGAL_ENTITY_MANAGE,
+                    // ADR 0068: the words a customer accepts before ordering, held here
+                    // alone among the tenant bundles for the same reason as the legal
+                    // entity pair above — a legal decision for the tenant's principal.
+                    TERMS_READ,
+                    TERMS_MANAGE,
                     BRAND_READ,
                     BRAND_WRITE,
                     LOCATION_READ,

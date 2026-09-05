@@ -9,6 +9,23 @@ export type ApiProblem = {
   code?: string; correlationId?: string; errors?: Array<{ field?: string; code?: string }>;
 };
 
+export interface AcceptRequest {
+  brandName: string;
+  locale: string;
+}
+
+export interface AcceptResponse {
+  acceptedAt?: string;
+  version?: string;
+}
+
+export interface AcceptanceStatusView {
+  accepted?: boolean;
+  currentVersion?: string;
+  lastAcceptedAt?: string;
+  lastAcceptedVersion?: string;
+}
+
 export interface AddressFields {
   apartment?: string;
   city?: string;
@@ -487,6 +504,13 @@ export interface SubmitCodeRequest {
   code: string;
 }
 
+export interface TermsView {
+  body?: string;
+  isPlatformDefault?: boolean;
+  locale?: string;
+  version?: number;
+}
+
 export interface Operations {
   "exchange": { method: "POST"; path: "/api/v1/storefront/dine-in/qr/token-exchanges"; request: { parameters: Record<string, never>; body: ExchangeRequest }; responses: { "200": AdmissionResponse } };
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
@@ -536,6 +560,9 @@ export interface Operations {
   "linkViaMiniApp": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-link"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MiniAppLinkRequest }; responses: { "200": CustomerTelegramLinkStatusResponse } };
   "issueCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": SignInCodeResponse } };
   "poll": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes/{code}"; request: { parameters: { path: { brandId: string; code: string; tenantId: string } } }; responses: { "200": SignInPollResponse } };
+  "current": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": TermsView } };
+  "accept": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/accept"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: AcceptRequest }; responses: { "200": AcceptResponse } };
+  "acceptanceStatus": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": AcceptanceStatusView } };
   "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": unknown } };
 }
 
