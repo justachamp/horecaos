@@ -1,4 +1,4 @@
-<div class="flex min-h-screen flex-col bg-jizbiz-bg pb-32 text-jizbiz-text">
+<div class="flex min-h-screen flex-col bg-surface-base pb-32 text-text-primary">
   <div class="mx-auto w-full max-w-[420px] flex-1 px-4 py-4">
     <!-- Back -->
     <button
@@ -12,12 +12,12 @@
       {{ 'common.back' | t }}
     </button>
 
-    <h1 class="mt-4 text-xl font-bold text-jizbiz-text">{{ 'locations.enterAddress' | t }}</h1>
+    <h1 class="mt-4 text-xl font-bold text-text-primary">{{ 'locations.enterAddress' | t }}</h1>
 
     <!-- Address line (clickable to edit / go back to map) -->
     <a
       routerLink="/locations/add"
-      class="mt-2 flex items-center justify-between gap-2 text-jizbiz-text"
+      class="mt-2 flex items-center justify-between gap-2 text-text-primary"
     >
       <span class="text-sm">{{ addressLine }}</span>
       <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,12 +31,12 @@
         type="button"
         (click)="selectedType = 'home'"
         class="rounded-full px-4 py-2.5 text-sm font-medium transition-colors"
-        [class.bg-jizbiz-accent]="selectedType === 'home'"
+        [class.bg-brand-accent]="selectedType === 'home'"
         [class.text-white]="selectedType === 'home'"
         [class.border]="selectedType !== 'home'"
         [class.border-zinc-500]="selectedType !== 'home'"
         [class.bg-transparent]="selectedType !== 'home'"
-        [class.text-jizbiz-text]="selectedType !== 'home'"
+        [class.text-text-primary]="selectedType !== 'home'"
       >
         Uy
       </button>
@@ -44,12 +44,12 @@
         type="button"
         (click)="selectedType = 'work'"
         class="rounded-full px-4 py-2.5 text-sm font-medium transition-colors"
-        [class.bg-jizbiz-accent]="selectedType === 'work'"
+        [class.bg-brand-accent]="selectedType === 'work'"
         [class.text-white]="selectedType === 'work'"
         [class.border]="selectedType !== 'work'"
         [class.border-zinc-500]="selectedType !== 'work'"
         [class.bg-transparent]="selectedType !== 'work'"
-        [class.text-jizbiz-text]="selectedType !== 'work'"
+        [class.text-text-primary]="selectedType !== 'work'"
       >
         Ishxona
       </button>
@@ -57,12 +57,12 @@
         type="button"
         (click)="selectedType = 'other'"
         class="rounded-full px-4 py-2.5 text-sm font-medium transition-colors"
-        [class.bg-jizbiz-accent]="selectedType === 'other'"
+        [class.bg-brand-accent]="selectedType === 'other'"
         [class.text-white]="selectedType === 'other'"
         [class.border]="selectedType !== 'other'"
         [class.border-zinc-500]="selectedType !== 'other'"
         [class.bg-transparent]="selectedType !== 'other'"
-        [class.text-jizbiz-text]="selectedType !== 'other'"
+        [class.text-text-primary]="selectedType !== 'other'"
       >
         Boshqa
       </button>
@@ -73,7 +73,7 @@
       type="text"
       [(ngModel)]="locationName"
       [placeholder]="'locations.locationNamePlaceholder' | t"
-      class="mt-6 w-full rounded-xl border border-zinc-500 bg-jizbiz-surface px-4 py-3 text-sm text-jizbiz-text placeholder-zinc-500 focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+      class="mt-6 w-full rounded-xl border border-zinc-500 bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder-zinc-500 focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
     />
 
     <!-- Comment -->
@@ -81,7 +81,7 @@
       [(ngModel)]="comment"
       placeholder="Kommentariy manzilga"
       rows="3"
-      class="mt-4 w-full resize-none rounded-xl border border-zinc-600 bg-jizbiz-surface px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-jizbiz-accent focus:outline-none"
+      class="mt-4 w-full resize-none rounded-xl border border-zinc-600 bg-surface-raised px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-brand-accent focus:outline-none"
     ></textarea> -->
 
     @if (error()) {
@@ -89,7 +89,7 @@
     }
 
     <!-- Instructional text -->
-    <p class="mt-6 text-center text-sm text-jizbiz-text">
+    <p class="mt-6 text-center text-sm text-text-primary">
       {{ 'locations.instruction' | t }}
     </p>
   </div>
@@ -103,7 +103,7 @@
       type="button"
       (click)="save()"
       [disabled]="loading()"
-      class="w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-bold text-white transition-opacity disabled:opacity-50 hover:opacity-95"
+      class="w-full rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity disabled:opacity-50 hover:opacity-95"
     >
       @if (loading()) {
         {{ 'common.loading' | t }}

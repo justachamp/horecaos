@@ -3,7 +3,7 @@
     <li>
       @if (item.isTheme) {
         <div class="flex w-full items-center gap-4 py-4">
-          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent" aria-hidden="true">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-brand-accent" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="4"/>
               <path d="M12 2v2"/>
@@ -16,16 +16,16 @@
               <path d="m19.07 4.93-1.41 1.41"/>
             </svg>
           </span>
-          <span class="min-w-0 flex-1 font-medium text-jizbiz-text">{{ item.labelKey | t }}</span>
+          <span class="min-w-0 flex-1 font-medium text-text-primary">{{ item.labelKey | t }}</span>
           <div
-            class="inline-flex shrink-0 rounded-full bg-jizbiz-surface-2 p-0.5 ring-1 ring-jizbiz-border"
+            class="inline-flex shrink-0 rounded-full bg-surface-raised-2 p-0.5 ring-1 ring-border-default"
             role="group"
             [attr.aria-label]="'profile.theme' | t"
           >
             <button
               type="button"
-              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-jizbiz-muted transition-colors"
-              [class.bg-jizbiz-accent]="theme.mode() === 'light'"
+              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted transition-colors"
+              [class.bg-brand-accent]="theme.mode() === 'light'"
               [class.text-white]="theme.mode() === 'light'"
               [attr.aria-pressed]="theme.mode() === 'light'"
               (click)="setTheme('light')"
@@ -45,8 +45,8 @@
             </button>
             <button
               type="button"
-              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-jizbiz-muted transition-colors"
-              [class.bg-jizbiz-accent]="theme.mode() === 'dark'"
+              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted transition-colors"
+              [class.bg-brand-accent]="theme.mode() === 'dark'"
               [class.text-white]="theme.mode() === 'dark'"
               [attr.aria-pressed]="theme.mode() === 'dark'"
               (click)="setTheme('dark')"
@@ -61,10 +61,10 @@
       } @else if (item.isLogout) {
         <button
           type="button"
-          class="flex w-full items-center gap-4 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+          class="flex w-full items-center gap-4 py-4 text-left text-text-primary transition-opacity hover:opacity-90"
           (click)="onLogout()"
         >
-          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-brand-accent">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </span>
           <span class="flex-1 font-medium">{{ item.labelKey | t }}</span>
@@ -72,9 +72,9 @@
       } @else {
         <a
           [routerLink]="item.route"
-          class="flex w-full items-center gap-4 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+          class="flex w-full items-center gap-4 py-4 text-left text-text-primary transition-opacity hover:opacity-90"
         >
-          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-brand-accent">
             @switch (item.id) {
               @case ('details') {
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -107,7 +107,7 @@
           </span>
           <span class="flex-1 font-medium">{{ item.labelKey | t }}</span>
           @if (item.value) {
-            <span class="text-sm text-jizbiz-text">{{ item.value }}</span>
+            <span class="text-sm text-text-primary">{{ item.value }}</span>
           }
           <span class="text-zinc-400">›</span>
         </a>

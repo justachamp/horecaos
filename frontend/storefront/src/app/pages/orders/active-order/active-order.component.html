@@ -1,6 +1,6 @@
 @if (loading()) {
   <div class="mt-6 flex flex-col items-center gap-4 py-8">
-    <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+    <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
     <p class="text-sm text-zinc-400">{{ 'common.loading' | t }}</p>
   </div>
 } @else if (error()) {
@@ -9,19 +9,19 @@
     <button
       type="button"
       (click)="loadOrders()"
-      class="rounded-md bg-jizbiz-surface px-4 py-2 text-sm text-jizbiz-text"
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-text-primary"
     >
       {{ 'common.retry' | t }}
     </button>
   </div>
 } @else if (orders().length === 0) {
   <div class="mt-6 flex flex-col items-center gap-4 text-center">
-    <img src="/jizbiz/empty-list.svg" alt="Empty" class="h-16 w-16" />
+    <img src="/assets/empty-list.svg" alt="Empty" class="h-16 w-16" />
     <h2 class="text-base font-semibold">{{ 'orders.activeEmptyTitle' | t }}</h2>
     <p class="max-w-[260px] text-sm text-zinc-400">
       {{ 'orders.activeEmptySubtitle' | t }}
     </p>
-    <a routerLink="/home" class="mt-4 block w-full rounded-md bg-jizbiz-surface py-4 text-center text-sm text-jizbiz-text">
+    <a routerLink="/home" class="mt-4 block w-full rounded-md bg-surface-raised py-4 text-center text-sm text-text-primary">
       {{ 'orders.placeOrder' | t }}
     </a>
   </div>
@@ -42,12 +42,12 @@
         class="flex items-start justify-between gap-2"
       >
         <div class="flex flex-col gap-0.5">
-          <span class="text-base font-bold text-jizbiz-text">Order N: {{ order.orderNumber }}</span>
+          <span class="text-base font-bold text-text-primary">Order N: {{ order.orderNumber }}</span>
           <span class="text-sm text-zinc-400">{{ order.itemCount }} | {{ order.distanceKm }} {{ 'common.distanceUnit' | t }}</span>
         </div>
         <div class="flex flex-col items-end gap-0.5">
-          <span class="text-sm font-medium text-jizbiz-accent">{{ getStatusLabel(order.status) }}</span>
-          <span class="text-base font-bold text-jizbiz-text">{{ order.price }}</span>
+          <span class="text-sm font-medium text-brand-accent">{{ getStatusLabel(order.status) }}</span>
+          <span class="text-base font-bold text-text-primary">{{ order.price }}</span>
         </div>
       </a>
       @if (order.actions?.includes('cancel')) {
@@ -56,7 +56,7 @@
             type="button"
             (click)="cancelOrder(order)"
             [disabled]="cancellingId() === order.id"
-            class="rounded-lg bg-jizbiz-surface-2 px-6 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-jizbiz-hover hover:text-zinc-300 disabled:opacity-50"
+            class="rounded-lg bg-surface-raised-2 px-6 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-surface-hover hover:text-zinc-300 disabled:opacity-50"
           >
             @if (cancellingId() === order.id) {
               {{ 'common.loading' | t }}

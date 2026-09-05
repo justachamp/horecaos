@@ -1,4 +1,13 @@
-import { ConfigUnavailableError, loadAppConfig } from './load-config';
+import { ConfigUnavailableError, loadAppConfig, NEUTRAL_BRAND } from './load-config';
+
+const VALID_BRAND = {
+  displayName: "Tandir House",
+  logoUrl: 'https://cdn.example.com/tandir-house/logo.svg',
+  theme: {
+    accent: '#c0392b',
+    accentDeep: '#7b241c',
+  },
+};
 
 const VALID_BODY = {
   apiBaseUrl: '/api/v1',
@@ -7,6 +16,7 @@ const VALID_BODY = {
   defaultLocationId: '10000000-0000-0000-0000-000000000003',
   channel: 'STOREFRONT',
   yandexMapsApiKey: 'a-key',
+  brand: VALID_BRAND,
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -26,6 +36,7 @@ describe('loadAppConfig', () => {
       defaultLocationId: '10000000-0000-0000-0000-000000000003',
       channel: 'STOREFRONT',
       yandexMapsApiKey: 'a-key',
+      brand: VALID_BRAND,
     });
   });
 
@@ -146,5 +157,93 @@ describe('loadAppConfig', () => {
 
     expect(failure).toBeInstanceOf(ConfigUnavailableError);
     expect((failure as ConfigUnavailableError).cause).toBeInstanceOf(TypeError);
+  });
+
+  describe('brand', () => {
+    it('degrades to the neutral brand when "brand" is entirely absent', async () => {
+      const { brand: _drop, ...rest } = VALID_BODY;
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(rest));
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand).toEqual(NEUTRAL_BRAND);
+    });
+
+    it('degrades to the neutral brand when "brand" is not an object', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ...VALID_BODY, brand: 'JizBiz' }));
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand).toEqual(NEUTRAL_BRAND);
+    });
+
+    it('never resolves the neutral default to the legacy brand this app was cloned from', () => {
+      const serialized = JSON.stringify(NEUTRAL_BRAND).toLowerCase();
+
+      expect(serialized).not.toContain('jizbiz');
+    });
+
+    it('fills a missing displayName with the neutral name, independent of the rest of the brand', async () => {
+      const { displayName: _drop, ...restBrand } = VALID_BRAND;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ ...VALID_BODY, brand: restBrand }));
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand.displayName).toBe(NEUTRAL_BRAND.displayName);
+      expect(config.brand.theme).toEqual(VALID_BRAND.theme);
+    });
+
+    it('leaves logoUrl undefined when absent, rather than defaulting it to an asset', async () => {
+      const { logoUrl: _drop, ...restBrand } = VALID_BRAND;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ ...VALID_BODY, brand: restBrand }));
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand.logoUrl).toBeUndefined();
+    });
+
+    it('fills a missing theme with the neutral, brand-less colours', async () => {
+      const { theme: _drop, ...restBrand } = VALID_BRAND;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ ...VALID_BODY, brand: restBrand }));
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand.theme).toEqual(NEUTRAL_BRAND.theme);
+    });
+
+    it('fills a partial theme field-by-field rather than discarding the whole theme', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...VALID_BODY,
+          brand: { ...VALID_BRAND, theme: { accent: '#123456' } },
+        }),
+      );
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand.theme).toEqual({
+        accent: '#123456',
+        accentDeep: NEUTRAL_BRAND.theme.accentDeep,
+      });
+    });
+
+    it('does not reject the whole config when brand fields are the wrong type', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...VALID_BODY,
+          brand: { displayName: 42, logoUrl: null, theme: { accent: 7, accentDeep: [] } },
+        }),
+      );
+
+      const config = await loadAppConfig(fetchImpl);
+
+      expect(config.brand).toEqual(NEUTRAL_BRAND);
+    });
   });
 });

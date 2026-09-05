@@ -2,17 +2,17 @@
   class="relative z-50 shrink-0"
   style="padding: 0.75rem 0.75rem calc(0.75rem + var(--safe-bottom, 0px));"
 >
-  <div class="mx-auto max-w-[420px] rounded-[22px] bg-jizbiz-surface px-6 py-3 shadow-jizbiz-nav">
+  <div class="mx-auto max-w-[420px] rounded-[22px] bg-surface-raised px-6 py-3 shadow-nav">
     <ul class="grid grid-cols-4 items-center text-center">
       <li>
         <a
           routerLink="/home"
-          [class.text-jizbiz-accent]="isTabActive('home')"
+          [class.text-brand-accent]="isTabActive('home')"
           [class.text-zinc-400]="!isTabActive('home')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
           <img
-            [src]="isTabActive('home') ? '/jizbiz/nav-icons/home-active.svg' : '/jizbiz/nav-icons/home.svg'"
+            [src]="isTabActive('home') ? '/assets/nav-icons/home-active.svg' : '/assets/nav-icons/home.svg'"
             [attr.alt]="'nav.home' | t"
             class="h-6 w-6"
           />
@@ -22,13 +22,13 @@
       <li>
         <a
           routerLink="/cart"
-          [class.text-jizbiz-accent]="isTabActive('cart')"
+          [class.text-brand-accent]="isTabActive('cart')"
           [class.text-zinc-400]="!isTabActive('cart')"
           class="relative flex flex-col items-center gap-1 text-[11px]"
         >
           <span class="relative inline-block">
             <img
-              [src]="isTabActive('cart') ? '/jizbiz/nav-icons/cart-active.svg' : '/jizbiz/nav-icons/cart.svg'"
+              [src]="isTabActive('cart') ? '/assets/nav-icons/cart-active.svg' : '/assets/nav-icons/cart.svg'"
               [attr.alt]="'nav.cart' | t"
               class="h-6 w-6"
             />
@@ -46,12 +46,12 @@
       <li>
         <a
           routerLink="/orders"
-          [class.text-jizbiz-accent]="isTabActive('orders')"
+          [class.text-brand-accent]="isTabActive('orders')"
           [class.text-zinc-400]="!isTabActive('orders')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
           <img
-            [src]="isTabActive('orders') ? '/jizbiz/nav-icons/list-active.svg' : '/jizbiz/nav-icons/list.svg'"
+            [src]="isTabActive('orders') ? '/assets/nav-icons/list-active.svg' : '/assets/nav-icons/list.svg'"
             [attr.alt]="'nav.orders' | t"
             class="h-6 w-6"
           />
@@ -61,12 +61,12 @@
       <li>
         <a
           routerLink="/profile"
-          [class.text-jizbiz-accent]="isTabActive('profile')"
+          [class.text-brand-accent]="isTabActive('profile')"
           [class.text-zinc-400]="!isTabActive('profile')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
           <img
-            [src]="isTabActive('profile') ? '/jizbiz/nav-icons/profile-active.svg' : '/jizbiz/nav-icons/profile.svg'"
+            [src]="isTabActive('profile') ? '/assets/nav-icons/profile-active.svg' : '/assets/nav-icons/profile.svg'"
             [attr.alt]="'nav.profile' | t"
             class="h-6 w-6"
           />

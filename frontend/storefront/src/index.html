@@ -2,7 +2,7 @@
 <html lang="uz" data-theme="dark" class="dark">
 <head>
   <meta charset="utf-8">
-  <title>JizbizFrontend</title>
+  <title>Storefront</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#111111">
@@ -40,7 +40,7 @@
       var isTg = !!(win.TelegramWebviewProxy && win.TelegramWebviewProxy.postEvent) ||
         !!(win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.initData);
       if (!isTg) return;
-      var key = 'jizbiz_tg_entry_reload';
+      var key = 'app_tg_entry_reload';
       var q = '_r';
       var url = new URL(location.href);
       if (url.searchParams.has(q)) {

@@ -1,11 +1,11 @@
 <div
-  class="relative flex h-full min-h-0 max-h-full flex-col overflow-hidden bg-jizbiz-bg px-4 pt-4 text-jizbiz-text"
+  class="relative flex h-full min-h-0 max-h-full flex-col overflow-hidden bg-surface-base px-4 pt-4 text-text-primary"
 >
   <div class="absolute right-4 top-4 flex justify-end">
     <select
       [value]="selectedLangId()"
       (change)="selectLanguage($any($event.target).value)"
-      class="cursor-pointer rounded-lg border border-zinc-500 bg-jizbiz-surface p-1.5 text-xl text-jizbiz-text focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+      class="cursor-pointer rounded-lg border border-zinc-500 bg-surface-raised p-1.5 text-xl text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
       [attr.aria-label]="'Language'"
     >
       @for (lang of languages; track lang.id) {
@@ -15,24 +15,24 @@
   </div>
 
   <div class="mx-auto flex w-full max-w-[420px] min-h-0 flex-1 flex-col items-center">
-    <!-- Logo: large gold M, centered -->
+    <!-- Brand mark: the tenant's own logo, or its name as text when none is configured. -->
     <div class="mb-2 mt-22 flex w-full shrink justify-center px-2">
-      <img
-        src="/jizbiz/logo/Logo-jizbiz.png"
-        alt="Jizbiz"
-        class="h-auto w-full max-w-full object-contain"
-      />
+      @if (brand.logoUrl; as logoUrl) {
+        <img [src]="logoUrl" [alt]="brand.displayName" class="h-auto w-full max-w-full object-contain" />
+      } @else {
+        <span class="text-3xl font-bold text-text-primary">{{ brand.displayName }}</span>
+      }
     </div>
 
     <!-- Slogan: two lines, bold white -->
-    <p class="mt-6 max-w-[280px] text-center text-lg font-bold leading-snug text-jizbiz-text sm:text-xl">
+    <p class="mt-6 max-w-[280px] text-center text-lg font-bold leading-snug text-text-primary sm:text-xl">
       {{ 'auth.slogan' | t }}
     </p>
-    <div class="mt-6 w-full bg-jizbiz-bg px-4 pb-2 pt-1">
+    <div class="mt-6 w-full bg-surface-base px-4 pb-2 pt-1">
       <div
-        class="flex items-center gap-2 rounded-xl border border-zinc-500 bg-jizbiz-surface px-4 py-4 focus-within:border-jizbiz-accent focus-within:ring-2 focus-within:ring-jizbiz-accent"
+        class="flex items-center gap-2 rounded-xl border border-zinc-500 bg-surface-raised px-4 py-4 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
       >
-        <span class="shrink-0 text-base text-jizbiz-text">+998</span>
+        <span class="shrink-0 text-base text-text-primary">+998</span>
         <input
           type="tel"
           inputmode="numeric"
@@ -41,7 +41,7 @@
           (focus)="onPhoneFocus()"
           (blur)="onPhoneBlur()"
           [placeholder]="'auth.phonePlaceholder' | t"
-          class="min-w-0 flex-1 bg-transparent text-base text-jizbiz-text placeholder-zinc-500 focus:outline-none"
+          class="min-w-0 flex-1 bg-transparent text-base text-text-primary placeholder-zinc-500 focus:outline-none"
           maxlength="12"
         />
       </div>
@@ -53,10 +53,10 @@
         (click)="continue()"
         [disabled]="!phoneValid || loading()"
         class="mt-4 w-full rounded-xl py-3.5 text-base font-bold transition-opacity disabled:opacity-50"
-        [class.bg-jizbiz-accent]="phoneValid && !loading()"
+        [class.bg-brand-accent]="phoneValid && !loading()"
         [class.text-white]="phoneValid && !loading()"
-        [class.bg-jizbiz-surface-2]="!phoneValid || loading()"
-        [class.text-jizbiz-muted]="!phoneValid || loading()"
+        [class.bg-surface-raised-2]="!phoneValid || loading()"
+        [class.text-text-muted]="!phoneValid || loading()"
       >
         @if (loading()) {
           <span class="inline-flex items-center gap-2">
@@ -71,7 +71,7 @@
       </button>
       <p class="mt-3 text-center text-xs text-zinc-500">
         {{ 'common.agreeLegal' | t }}<br />
-        <a routerLink="/terms" class="text-jizbiz-accent underline">{{
+        <a routerLink="/terms" class="text-brand-accent underline">{{
           'common.termsOfService' | t
         }}</a>
       </p>
@@ -82,13 +82,13 @@
             [href]="code.deepLink"
             target="_blank"
             rel="noopener noreferrer"
-            class="flex items-center justify-center gap-2 rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+            class="flex items-center justify-center gap-2 rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
           >
             {{ 'auth.telegramOpenInTelegram' | t }}
           </a>
           <p class="mt-3 text-center text-xs text-zinc-400">{{ 'auth.telegramExpiryNotice' | t }}</p>
           <div class="flex items-center justify-center gap-2 py-2">
-            <span class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+            <span class="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
             <span class="text-xs text-zinc-400">{{ 'auth.telegramWaiting' | t }}</span>
           </div>
           @if (telegramError()) {
@@ -97,7 +97,7 @@
           <button
             type="button"
             (click)="cancelTelegramSignIn()"
-            class="w-full text-center text-xs font-medium text-jizbiz-accent transition-opacity hover:opacity-90"
+            class="w-full text-center text-xs font-medium text-brand-accent transition-opacity hover:opacity-90"
           >
             {{ 'auth.telegramCancel' | t }}
           </button>
@@ -115,11 +115,11 @@
           type="button"
           (click)="continueWithTelegram()"
           [disabled]="telegramMinting()"
-          class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 py-3.5 text-base font-semibold text-jizbiz-text transition-opacity hover:opacity-90 disabled:opacity-50"
+          class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 py-3.5 text-base font-semibold text-text-primary transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           @if (telegramMinting()) {
             <span
-              class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-text border-t-transparent"
+              class="h-4 w-4 animate-spin rounded-full border-2 border-text-primary border-t-transparent"
             ></span>
           }
           {{ 'auth.continueWithTelegram' | t }}

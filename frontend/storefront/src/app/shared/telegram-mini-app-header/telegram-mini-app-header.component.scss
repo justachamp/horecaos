@@ -2,5 +2,5 @@
   /* Extends from top-0, covering Dynamic Island + Telegram header (Close, menu) */
   padding-top: max(44px, var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px)));
   min-height: var(--tg-header-min-height, 60px);
-  background: linear-gradient(180deg, var(--jizbiz-accent-deep) 0%, var(--jizbiz-accent) 100%);
+  background: linear-gradient(180deg, var(--brand-accent-deep) 0%, var(--brand-accent) 100%);
 }

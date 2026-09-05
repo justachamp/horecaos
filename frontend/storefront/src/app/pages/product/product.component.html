@@ -1,20 +1,20 @@
-<div class="min-h-screen bg-jizbiz-surface pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-raised pb-24 text-text-primary">
   @if (hasCartItems()) {
     <app-cart-hint-badge></app-cart-hint-badge>
   }
   @if (loading()) {
     <div class="flex items-center justify-center gap-2 py-24">
       <span
-        class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
       ></span>
       <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
     </div>
   } @else if (error()) {
-    <div class="mx-auto flex max-w-[375px] flex-col gap-4 px-4 py-6 text-jizbiz-text">
+    <div class="mx-auto flex max-w-[375px] flex-col gap-4 px-4 py-6 text-text-primary">
       <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
         {{ error() }}
       </p>
-      <a routerLink="/home" class="text-jizbiz-accent">Bosh sahifaga qaytish</a>
+      <a routerLink="/home" class="text-brand-accent">Bosh sahifaga qaytish</a>
     </div>
   } @else if (product(); as item) {
     <div class="mx-auto w-full max-w-[420px] px-[6.5%] py-4 pb-6">
@@ -22,7 +22,7 @@
         <button
           type="button"
           (click)="back()"
-          class="pointer-events-auto ml-3 inline-flex items-center gap-2 rounded-full border border-zinc-500 bg-jizbiz-surface px-3 py-2 text-sm text-jizbiz-text transition-opacity hover:opacity-90"
+          class="pointer-events-auto ml-3 inline-flex items-center gap-2 rounded-full border border-zinc-500 bg-surface-raised px-3 py-2 text-sm text-text-primary transition-opacity hover:opacity-90"
           [attr.aria-label]="'common.back' | t"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +44,7 @@
 
           <!-- <button
             type="button"
-            class="absolute right-[60px] top-3 flex h-9 w-9 items-center justify-center rounded-full bg-jizbiz-surface"
+            class="absolute right-[60px] top-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface-raised"
             aria-label="Ulashish"
           >
             <svg width="20" height="20" viewBox="282 44 20 20" fill="none" aria-hidden="true">
@@ -58,7 +58,7 @@
           @if (favouritesEnabled) {
             <button
               type="button"
-              class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-jizbiz-surface text-jizbiz-text"
+              class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface-raised text-text-primary"
               [attr.aria-label]="'product.favorites' | t"
               (click)="toggleFavourite($event)"
               [disabled]="favouriting()"
@@ -85,7 +85,7 @@
 
           @if (item.badge) {
             <span
-              class="absolute bottom-3 left-3 rounded-full bg-gradient-to-r from-jizbiz-accent-deep to-jizbiz-accent px-3 py-1 text-[12px] font-semibold text-white"
+              class="absolute bottom-3 left-3 rounded-full bg-gradient-to-r from-brand-accent-deep to-brand-accent px-3 py-1 text-[12px] font-semibold text-white"
             >
               {{ item.badge }}
             </span>
@@ -94,7 +94,7 @@
 
         <!-- Product name and description -->
         <div class="space-y-2 border-b border-zinc-700 pb-4">
-          <h1 class="text-xl font-bold text-jizbiz-text">{{ item.title }}</h1>
+          <h1 class="text-xl font-bold text-text-primary">{{ item.title }}</h1>
           @if (item.description) {
             <p class="line-clamp-3 text-[13px] leading-5 text-zinc-300">{{ item.description }}</p>
           }
@@ -102,14 +102,14 @@
 
         @if (modifierGroups().length > 0) {
           <div class="border-b border-zinc-700 pb-4">
-            <h2 class="mb-3 text-sm font-bold text-jizbiz-text">{{ 'product.modifiersTitle' | t }}</h2>
+            <h2 class="mb-3 text-sm font-bold text-text-primary">{{ 'product.modifiersTitle' | t }}</h2>
             <div class="flex flex-col gap-4">
               @for (group of modifierGroups(); track group.id) {
                 <div>
                   <div class="mb-2 flex items-center justify-between gap-2">
-                    <span class="text-[13px] font-medium text-jizbiz-text">{{ group.name }}</span>
+                    <span class="text-[13px] font-medium text-text-primary">{{ group.name }}</span>
                     @if (group.required) {
-                      <span class="shrink-0 rounded-full bg-jizbiz-accent/15 px-2 py-0.5 text-[11px] font-semibold text-jizbiz-accent">
+                      <span class="shrink-0 rounded-full bg-brand-accent/15 px-2 py-0.5 text-[11px] font-semibold text-brand-accent">
                         {{ 'product.modifierRequired' | t }}
                       </span>
                     }
@@ -117,14 +117,14 @@
                   <div class="flex flex-col gap-2">
                     @for (option of group.options; track option.id) {
                       <label
-                        class="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-jizbiz-bg px-3 py-2.5 text-jizbiz-text"
+                        class="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2.5 text-text-primary"
                       >
                         <span class="flex min-w-0 items-center gap-2 text-[13px]">
                           <input
                             type="checkbox"
                             [checked]="isOptionSelected(group.id, option.id)"
                             (change)="toggleOption(group, option.id)"
-                            class="h-4 w-4 shrink-0 accent-jizbiz-accent"
+                            class="h-4 w-4 shrink-0 accent-brand-accent"
                           />
                           <span class="truncate">{{ option.label || ('product.modifierOption' | t) }}</span>
                         </span>
@@ -145,16 +145,16 @@
 
         @if (hasActiveVariants()) {
           <div class="border-b border-zinc-700 pb-4">
-            <h2 class="mb-3 text-sm font-bold text-jizbiz-text">{{ 'product.variants' | t }}</h2>
+            <h2 class="mb-3 text-sm font-bold text-text-primary">{{ 'product.variants' | t }}</h2>
             <div class="flex flex-col gap-3">
               @for (variant of variants(); track variant.id) {
-                <div class="flex flex-col gap-2 rounded-2xl bg-jizbiz-bg p-3">
-                  <span class="text-[13px] font-medium leading-snug text-jizbiz-text">{{ variant.label }}</span>
+                <div class="flex flex-col gap-2 rounded-2xl bg-surface-base p-3">
+                  <span class="text-[13px] font-medium leading-snug text-text-primary">{{ variant.label }}</span>
                   @if (qtyForVariant(variant.id); as qty) {
                     <div class="flex items-center gap-1.5">
                       <button
                         type="button"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:cursor-not-allowed disabled:opacity-40"
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                         [disabled]="cartService.updating() || qty <= 0"
                         [attr.aria-label]="'common.decrease' | t"
                         (click)="decreaseVariant(variant.id)"
@@ -162,9 +162,9 @@
                         −
                       </button>
                       <div
-                        class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-jizbiz-surface-2 px-3 py-2 text-center"
+                        class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
                       >
-                        <span class="text-xs font-bold leading-tight text-jizbiz-text">
+                        <span class="text-xs font-bold leading-tight text-text-primary">
                           {{ qty }} {{ 'common.itemsUnit' | t }}
                         </span>
                         <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
@@ -173,7 +173,7 @@
                       </div>
                       <button
                         type="button"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                         [disabled]="cartService.updating() || !modifiersValid()"
                         [attr.aria-label]="'common.increase' | t"
                         (click)="increaseVariant(variant.id)"
@@ -184,7 +184,7 @@
                   } @else {
                     <button
                       type="button"
-                      class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-jizbiz-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
+                      class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-brand-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
                       [disabled]="cartService.updating() || !modifiersValid()"
                       [attr.aria-label]="'cart.addToCart' | t"
                       (click)="increaseVariant(variant.id)"
@@ -202,7 +202,7 @@
         <!-- Takliflar (Recommendations) -->
         @if (recommendationItems().length > 0) {
           <section class="space-y-3" [class.pb-24]="!hasActiveVariants() || hasCartItems()">
-            <h2 class="text-sm font-bold text-jizbiz-text">{{ 'product.recommendations' | t }}</h2>
+            <h2 class="text-sm font-bold text-text-primary">{{ 'product.recommendations' | t }}</h2>
             <app-food-carousel [items]="recommendationItems()"></app-food-carousel>
           </section>
         }
@@ -218,27 +218,27 @@
           type="button"
           (click)="add()"
           [disabled]="cartService.updating() || !modifiersValid()"
-          class="w-full rounded-t-2xl bg-jizbiz-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          class="w-full rounded-t-2xl bg-brand-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {{ 'cart.addToCart' | t }}
         </button>
       } @else {
         <div class="flex flex-col gap-2">
-          <div class="flex items-stretch gap-2 rounded-2xl bg-jizbiz-bg p-2 ring-1 ring-zinc-800/80">
+          <div class="flex items-stretch gap-2 rounded-2xl bg-surface-base p-2 ring-1 ring-zinc-800/80">
             <div class="flex min-w-0 flex-1 items-center gap-1.5">
               <button
                 type="button"
                 (click)="remove()"
                 [disabled]="cartService.updating() || qty() <= 0"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-jizbiz-surface-2 text-xl font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:cursor-not-allowed disabled:opacity-40"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                 [attr.aria-label]="'common.decrease' | t"
               >
                 −
               </button>
               <div
-                class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-jizbiz-surface-2 px-2 py-2 text-center"
+                class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-2 py-2 text-center"
               >
-                <span class="text-xs font-bold leading-tight text-jizbiz-text">
+                <span class="text-xs font-bold leading-tight text-text-primary">
                   {{ qty() }} {{ 'common.itemsUnit' | t }}
                 </span>
                 <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
@@ -249,7 +249,7 @@
                 type="button"
                 (click)="add()"
                 [disabled]="cartService.updating() || !modifiersValid()"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-jizbiz-surface-2 text-xl font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                 [attr.aria-label]="'common.increase' | t"
               >
                 +
@@ -258,7 +258,7 @@
           </div>
           <a
             routerLink="/cart"
-            class="block w-full rounded-t-2xl bg-jizbiz-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
+            class="block w-full rounded-t-2xl bg-brand-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
           >
             {{ 'product.goToPayment' | t }}
           </a>
@@ -271,16 +271,16 @@
       >
         <a
           routerLink="/cart"
-          class="block w-full rounded-t-2xl bg-jizbiz-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
+          class="block w-full rounded-t-2xl bg-brand-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
         >
           {{ 'product.goToPayment' | t }}
         </a>
       </div>
     }
   } @else {
-    <div class="mx-auto flex max-w-[375px] flex-col gap-4 px-4 py-6 text-jizbiz-text">
+    <div class="mx-auto flex max-w-[375px] flex-col gap-4 px-4 py-6 text-text-primary">
       <p>{{ 'product.productNotFound' | t }}</p>
-      <a routerLink="/home" class="text-jizbiz-accent">{{ 'home.goHome' | t }}</a>
+      <a routerLink="/home" class="text-brand-accent">{{ 'home.goHome' | t }}</a>
     </div>
   }
 </div>

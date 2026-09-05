@@ -69,7 +69,7 @@ export class FinishedOrderComponent implements OnInit, OnDestroy {
         status: 'yetkazildi',
         date: '',
         price: priceStr,
-        image: o.image_url || '/jizbiz/orders/buyurtmalar_0.png',
+        image: o.image_url || '/assets/orders/placeholder-order.png',
         orderNumber: orderNum,
         itemCount,
         distanceKm,

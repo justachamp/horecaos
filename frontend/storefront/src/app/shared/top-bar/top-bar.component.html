@@ -4,14 +4,14 @@
       <span class="text-xs text-zinc-400">{{ addressLabel() || ('cart.deliveryAddress' | t) }}</span>
       <span
         [title]="addressValue() || ('cart.addressNotSelected' | t)"
-        class="line-clamp-2 min-w-0 text-base font-semibold text-jizbiz-text"
+        class="line-clamp-2 min-w-0 text-base font-semibold text-text-primary"
       >{{ addressValue() || ('cart.addressNotSelected' | t) }}</span>
     </div>
     <span class="text-zinc-400">›</span>
   </a>
   <button
     type="button"
-    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jizbiz-surface text-jizbiz-text"
+    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-text-primary"
     aria-label="Notification"
   >
     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

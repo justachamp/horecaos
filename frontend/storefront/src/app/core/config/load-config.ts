@@ -1,4 +1,4 @@
-import type { AppConfig } from './app-config';
+import type { AppConfig, BrandConfig, BrandTheme } from './app-config';
 
 /**
  * Where the runtime configuration is served from.
@@ -44,6 +44,25 @@ export async function loadAppConfig(fetchImpl: typeof fetch = fetch): Promise<Ap
   return validate(body);
 }
 
+/**
+ * The identity a deployment gets when `/config.json` names no brand at all,
+ * or names one only partly.
+ *
+ * Deliberately anonymous rather than a second hardcoded product: the whole
+ * point of this file is that a missing value never resolves to whatever
+ * brand this application last shipped as. `accent`/`accentDeep` are a plain
+ * neutral grey -- recognisably "no brand configured" rather than a second
+ * opinion about what a brand should look like.
+ */
+export const NEUTRAL_BRAND: BrandConfig = {
+  displayName: 'Storefront',
+  logoUrl: undefined,
+  theme: {
+    accent: '#52525b',
+    accentDeep: '#3f3f46',
+  },
+};
+
 /** The start failed before the application existed. Nothing here is retryable. */
 export class ConfigUnavailableError extends Error {
   constructor(
@@ -75,7 +94,41 @@ function validate(body: unknown): AppConfig {
     defaultLocationId: optionalUuid(raw, 'defaultLocationId'),
     channel: requireText(raw, 'channel'),
     yandexMapsApiKey: typeof raw['yandexMapsApiKey'] === 'string' ? raw['yandexMapsApiKey'] : '',
+    brand: brandFrom(raw),
   };
+}
+
+/**
+ * Reads the optional `"brand"` object, soft-defaulting missing or malformed
+ * fields to {@link NEUTRAL_BRAND} one at a time -- a brand present but
+ * missing a logo still gets its own name and colours, rather than the
+ * whole object being discarded for one absent field.
+ */
+function brandFrom(raw: Record<string, unknown>): BrandConfig {
+  const value = raw['brand'];
+  const rawBrand = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+  return {
+    displayName: optionalText(rawBrand, 'displayName') ?? NEUTRAL_BRAND.displayName,
+    logoUrl: optionalText(rawBrand, 'logoUrl'),
+    theme: themeFrom(rawBrand),
+  };
+}
+
+function themeFrom(rawBrand: Record<string, unknown>): BrandTheme {
+  const value = rawBrand['theme'];
+  const rawTheme = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+  return {
+    accent: optionalText(rawTheme, 'accent') ?? NEUTRAL_BRAND.theme.accent,
+    accentDeep: optionalText(rawTheme, 'accentDeep') ?? NEUTRAL_BRAND.theme.accentDeep,
+  };
+}
+
+/** Unlike {@link requireText}, a present-but-wrong-shaped value is treated as absent rather than rejected -- brand fields never fail a deployment's start. */
+function optionalText(raw: Record<string, unknown>, key: string): string | undefined {
+  const value = raw[key];
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

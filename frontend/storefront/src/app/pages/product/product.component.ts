@@ -50,7 +50,7 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
     id: item.id,
     title: item.name,
     description: item.description ?? '',
-    image: item.image ?? '/jizbiz/logo/Logo-sq.png',
+    image: item.image ?? '/assets/logo/placeholder-item.png',
     price: formatPriceFn(item.price),
     badge,
     variants,

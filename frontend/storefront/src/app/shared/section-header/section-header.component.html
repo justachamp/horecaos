@@ -1,16 +1,16 @@
 <div class="flex items-center justify-between">
-  <h2 class="text-lg font-semibold text-jizbiz-text">{{ title() }}</h2>
+  <h2 class="text-lg font-semibold text-text-primary">{{ title() }}</h2>
   @if (actionRouterLink()) {
     <a
       [routerLink]="actionRouterLink()!"
       (click)="onActionClick()"
-      class="text-sm text-zinc-400 transition hover:text-jizbiz-accent"
+      class="text-sm text-zinc-400 transition hover:text-brand-accent"
     >
       {{ actionLabel() }}
     </a>
   } @else if (actionHref()) {
     <a
-      class="text-sm text-zinc-400 transition hover:text-jizbiz-accent"
+      class="text-sm text-zinc-400 transition hover:text-brand-accent"
       [href]="actionHref()!"
     >
       {{ actionLabel() }}

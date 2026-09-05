@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto max-w-[420px] px-4 py-6">
     <header class="flex shrink-0 flex-col gap-2 pb-3">
       <button
@@ -11,13 +11,13 @@
         </svg>
         {{ 'common.back' | t }}
       </button>
-      <h1 class="text-center text-xl font-bold text-jizbiz-text">{{ 'profile.supportTitle' | t }}</h1>
+      <h1 class="text-center text-xl font-bold text-text-primary">{{ 'profile.supportTitle' | t }}</h1>
     </header>
     <p class="mb-6 text-center text-sm text-zinc-400">{{ 'profile.supportSubtitle' | t }}</p>
 
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-12">
-        <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>
     } @else if (error()) {
@@ -30,18 +30,18 @@
               [href]="item.url"
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center gap-4 rounded-xl border border-zinc-700/80 px-4 py-4 text-jizbiz-text transition-opacity hover:opacity-90"
+              class="flex items-center gap-4 rounded-xl border border-zinc-700/80 px-4 py-4 text-text-primary transition-opacity hover:opacity-90"
             >
               @if (item.image) {
                 <div class="relative flex h-10 w-10 shrink-0 items-center justify-center">
                   <img
                     [src]="getImageUrl(item.image)"
                     [alt]="item.name"
-                    class="h-10 w-10 rounded-full object-cover bg-jizbiz-surface-2"
+                    class="h-10 w-10 rounded-full object-cover bg-surface-raised-2"
                     (error)="onImageError($event)"
                   />
                   <span
-                    class="absolute inset-0 hidden items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-medium text-jizbiz-accent"
+                    class="absolute inset-0 hidden items-center justify-center rounded-full bg-surface-raised-2 text-lg font-medium text-brand-accent"
                   >
                     {{ item.name.charAt(0) }}
                   </span>

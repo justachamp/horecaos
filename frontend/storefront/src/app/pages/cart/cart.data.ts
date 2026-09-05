@@ -15,7 +15,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '1',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "32 000 so'm",
     originalPrice: "44 000 so'm",
@@ -24,7 +24,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '2',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "32 000 so'm",
     originalPrice: "44 000 so'm",
@@ -33,7 +33,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '3',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -42,7 +42,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '4',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -51,7 +51,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '5',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -60,7 +60,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '6',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -69,7 +69,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '7',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -78,7 +78,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '8',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -87,7 +87,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '9',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -96,7 +96,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '10',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -105,7 +105,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '11',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
@@ -114,7 +114,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
   {
     id: '12',
     name: "Qovurilgan lag'mon",
-    image: '/jizbiz/orders/buyurtmalar_0.png',
+    image: '/assets/orders/placeholder-order.png',
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",

@@ -19,6 +19,13 @@ import {
 import { OrdersService } from '../../../services/orders.service';
 import { TranslateService } from '../../../services/translate.service';
 import { LangService } from '../../../services/lang.service';
+import { APP_CONFIG, type BrandConfig } from '../../../core/config/app-config';
+import { NEUTRAL_BRAND } from '../../../core/config/load-config';
+
+const TEST_BRAND: BrandConfig = {
+  displayName: 'Test Brand',
+  theme: { accent: '#000000', accentDeep: '#000000' },
+};
 
 class FakeCustomerOtp {
   requestCode = vi.fn();
@@ -63,7 +70,7 @@ class FakeLangService {
   setLang(): void {}
 }
 
-function setUp() {
+function setUp(brand: BrandConfig = TEST_BRAND) {
   const otp = new FakeCustomerOtp();
   const telegram = new FakeTelegramSignIn();
   TestBed.configureTestingModule({
@@ -75,6 +82,17 @@ function setUp() {
       { provide: OrdersService, useClass: FakeOrdersService },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: LangService, useClass: FakeLangService },
+      {
+        provide: APP_CONFIG,
+        useValue: {
+          apiBaseUrl: '/api/v1',
+          tenantId: '10000000-0000-0000-0000-000000000001',
+          brandId: '10000000-0000-0000-0000-000000000002',
+          channel: 'STOREFRONT',
+          yandexMapsApiKey: '',
+          brand,
+        },
+      },
     ],
   });
   const router = TestBed.inject(Router);
@@ -285,5 +303,50 @@ describe('AuthLoginComponent Continue with Telegram', () => {
 
     expect(comp.telegramCode()).toBeNull();
     expect(comp.telegramError()).toBeNull();
+  });
+});
+
+/**
+ * This screen is the first thing a customer sees, before they have ever
+ * signed in, and it used to hardcode the legacy product's own logo and name
+ * (`src="/jizbiz/logo/Logo-jizbiz.png"`, `alt="Jizbiz"`). Asserting only on
+ * `comp.brand` would still pass if the template regressed back to a literal
+ * `src`/text, which is why these read the rendered DOM instead.
+ */
+describe('AuthLoginComponent brand rendering', () => {
+  it("renders the configured brand's own logo and alt text when one is configured", () => {
+    const { fixture } = setUp({
+      displayName: 'Tandir House',
+      logoUrl: 'https://cdn.example.com/tandir-house/logo.svg',
+      theme: { accent: '#c0392b', accentDeep: '#7b241c' },
+    });
+
+    fixture.detectChanges();
+
+    const img: HTMLImageElement | null = fixture.nativeElement.querySelector('img');
+    expect(img?.src).toBe('https://cdn.example.com/tandir-house/logo.svg');
+    expect(img?.alt).toBe('Tandir House');
+  });
+
+  it('falls back to the brand name as text -- not any image -- when no logo is configured', () => {
+    const { fixture } = setUp({
+      displayName: 'Tandir House',
+      theme: { accent: '#c0392b', accentDeep: '#7b241c' },
+    });
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('img')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Tandir House');
+  });
+
+  it('shows the neutral name, never the legacy brand, when the deployment configured none', () => {
+    const { fixture } = setUp(NEUTRAL_BRAND);
+
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text.toLowerCase()).not.toContain('jizbiz');
+    expect(text).toContain(NEUTRAL_BRAND.displayName);
   });
 });

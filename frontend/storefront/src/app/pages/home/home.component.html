@@ -1,5 +1,5 @@
-<div class="relative min-h-screen min-w-0 bg-jizbiz-bg pb-24 text-jizbiz-text">
-  <div class="z-10 bg-jizbiz-bg px-4 pb-2 pt-4">
+<div class="relative min-h-screen min-w-0 bg-surface-base pb-24 text-text-primary">
+  <div class="z-10 bg-surface-base px-4 pb-2 pt-4">
     <div class="mx-auto max-w-[420px]">
       <app-top-bar [addressValue]="topBarAddressValue()"></app-top-bar>
     </div>
@@ -8,7 +8,7 @@
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-8">
         <span
-          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+          class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
         ></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>
@@ -19,33 +19,33 @@
       </p>
     }
 
-    <div class="flex rounded-2xl bg-jizbiz-surface p-1">
+    <div class="flex rounded-2xl bg-surface-raised p-1">
       <button
         type="button"
         (click)="setDeliveryMode('delivery')"
         class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
-        [class.bg-jizbiz-surface-2]="deliveryMode() === 'delivery'"
-        [class.text-jizbiz-text]="deliveryMode() === 'delivery'"
+        [class.bg-surface-raised-2]="deliveryMode() === 'delivery'"
+        [class.text-text-primary]="deliveryMode() === 'delivery'"
         [class.text-zinc-400]="deliveryMode() !== 'delivery'"
       >
-        <span class="text-jizbiz-accent">⚡</span>
+        <span class="text-brand-accent">⚡</span>
         {{ 'home.delivery' | t }}
       </button>
       <button
         type="button"
         (click)="setDeliveryMode('pickup')"
         class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
-        [class.bg-jizbiz-surface-2]="deliveryMode() === 'pickup'"
-        [class.text-jizbiz-text]="deliveryMode() === 'pickup'"
+        [class.bg-surface-raised-2]="deliveryMode() === 'pickup'"
+        [class.text-text-primary]="deliveryMode() === 'pickup'"
         [class.text-zinc-400]="deliveryMode() !== 'pickup'"
       >
-        <span class="text-jizbiz-accent">🏪</span>
+        <span class="text-brand-accent">🏪</span>
         {{ 'home.pickup' | t }}
       </button> 
     </div>
 
     @if (deliveryMode() === 'pickup') {
-      <p class="rounded-2xl bg-jizbiz-surface px-4 py-3 text-center text-sm text-zinc-400">
+      <p class="rounded-2xl bg-surface-raised px-4 py-3 text-center text-sm text-zinc-400">
         {{ 'home.pickupComingSoon' | t }}
       </p>
     }
@@ -54,7 +54,7 @@
         <section class="grid grid-cols-[3fr_2fr] gap-3">
           @if (offer.items.length > 0) {
             <a
-              class="relative block w-full min-w-0 aspect-video overflow-hidden rounded-2xl bg-jizbiz-surface bg-cover bg-center bg-no-repeat"
+              class="relative block w-full min-w-0 aspect-video overflow-hidden rounded-2xl bg-surface-raised bg-cover bg-center bg-no-repeat"
               [style.background-image]="
                 'url(' + (offer.items[0].image) + ')'
               "
@@ -63,7 +63,7 @@
           }
           <div
             class="min-w-0 h-full min-h-0 overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat"
-            style="background-image: url('/jizbiz/logo/jizbiz-new-logo.jpg')"
+            style="background-image: url('/assets/home-promo.jpg')"
           ></div>
         </section>
       }
@@ -71,15 +71,15 @@
       <section class="space-y-3">
         <h2 class="text-lg font-semibold">{{ 'home.welcome' | t }}</h2>
         <div
-          class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-jizbiz-accent-deep to-jizbiz-accent p-4 text-white"
+          class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white"
         >
           <p class="text-sm font-semibold">{{ 'home.welcomeSubtitle' | t }}</p>
           <div class="absolute right-4 top-2 h-16 w-16 rounded-full bg-white/40"></div>
         </div>
       </section>
 
-      <div class="flex items-center gap-3 rounded-2xl border border-zinc-500 bg-jizbiz-surface px-4 py-3 focus-within:border-jizbiz-accent focus-within:ring-2 focus-within:ring-jizbiz-accent">
-        <span class="shrink-0 text-jizbiz-text" aria-hidden="true">
+      <div class="flex items-center gap-3 rounded-2xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent">
+        <span class="shrink-0 text-text-primary" aria-hidden="true">
           <svg
             class="h-5 w-5"
             fill="none"
@@ -99,12 +99,12 @@
           type="search"
           [placeholder]="'home.search' | t"
           (focus)="goToSearch()"
-          class="min-w-0 flex-1 bg-transparent text-sm text-jizbiz-text placeholder:text-zinc-500 focus:outline-none"
+          class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
         />
         <span class="h-5 w-px shrink-0 bg-zinc-600" aria-hidden="true"></span>
         <button
           type="button"
-          class="flex shrink-0 items-center justify-center text-jizbiz-text transition-opacity hover:opacity-80"
+          class="flex shrink-0 items-center justify-center text-text-primary transition-opacity hover:opacity-80"
           [attr.aria-label]="'common.filter' | t"
         >
           <svg
@@ -127,7 +127,7 @@
       <nav class="space-y-4">
         @for (popular of populars; track popular.id) {
           <section>
-            <a class="mb-2 block text-lg font-semibold text-jizbiz-text">
+            <a class="mb-2 block text-lg font-semibold text-text-primary">
               {{ popular.name }}
             </a>
             <app-food-carousel [items]="popular.items"></app-food-carousel>
@@ -136,7 +136,7 @@
       </nav>
 
       <!-- <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-jizbiz-text">Ommabop! 👌</h2>
+        <h2 class="text-lg font-semibold text-text-primary">Ommabop! 👌</h2>
       </div>
       <div class="grid grid-cols-2 gap-4 justify-items-center">
         @for (item of popularItems; track item.id) {
@@ -148,7 +148,7 @@
 
   @if (deliveryMode() === 'delivery') {
     <div class="mt-6">
-      <div #menuSection class="sticky top-0 z-20 bg-jizbiz-bg shadow-[0_12px_16px_var(--jizbiz-bg)]">
+      <div #menuSection class="sticky top-0 z-20 bg-surface-base shadow-[0_12px_16px_var(--surface-base)]">
         <div class="mx-auto max-w-[420px] space-y-3 px-4 pb-3 pt-2">
           <app-section-header [title]="'home.menu' | t" actionLabel=""></app-section-header>
           <div class="flex gap-2 overflow-x-auto no-scrollbar">
@@ -156,7 +156,7 @@
               type="button"
               (click)="selectCategory(null)"
               class="whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-colors"
-              [class.bg-jizbiz-accent]="selectedCategoryId() === null"
+              [class.bg-brand-accent]="selectedCategoryId() === null"
               [class.text-white]="selectedCategoryId() === null"
               [class.border]="selectedCategoryId() !== null"
               [class.border-zinc-700]="selectedCategoryId() !== null"
@@ -169,7 +169,7 @@
                 type="button"
                 (click)="selectCategory(cat.id)"
                 class="whitespace-nowrap rounded-full px-4 py-2 text-xs transition-colors"
-                [class.bg-jizbiz-accent]="selectedCategoryId() === cat.id"
+                [class.bg-brand-accent]="selectedCategoryId() === cat.id"
                 [class.font-semibold]="selectedCategoryId() === cat.id"
                 [class.text-white]="selectedCategoryId() === cat.id"
                 [class.border]="selectedCategoryId() !== cat.id"

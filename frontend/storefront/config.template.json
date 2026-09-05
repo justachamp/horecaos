@@ -4,5 +4,13 @@
   "brandId": "${APP_BRAND_ID}",
   "defaultLocationId": "${APP_DEFAULT_LOCATION_ID}",
   "channel": "${APP_CHANNEL}",
-  "yandexMapsApiKey": "${APP_YANDEX_MAPS_API_KEY}"
+  "yandexMapsApiKey": "${APP_YANDEX_MAPS_API_KEY}",
+  "brand": {
+    "displayName": "${APP_BRAND_DISPLAY_NAME}",
+    "logoUrl": "${APP_BRAND_LOGO_URL}",
+    "theme": {
+      "accent": "${APP_BRAND_ACCENT}",
+      "accentDeep": "${APP_BRAND_ACCENT_DEEP}"
+    }
+  }
 }

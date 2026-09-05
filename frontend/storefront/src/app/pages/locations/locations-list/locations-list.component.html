@@ -1,5 +1,5 @@
 <div
-  class="flex min-h-0 flex-1 flex-col bg-jizbiz-bg pt-2 text-jizbiz-text"
+  class="flex min-h-0 flex-1 flex-col bg-surface-base pt-2 text-text-primary"
   style="padding-left: max(1rem, var(--safe-left, 0px)); padding-right: max(1rem, var(--safe-right, 0px));"
 >
   <div class="mx-auto w-full max-w-[420px] min-h-0 flex-1 overflow-auto scrollbar-stable pb-28">
@@ -8,7 +8,7 @@
       <button
         type="button"
         (click)="close()"
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-jizbiz-text transition-colors hover:bg-white/10"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-white/10"
         [attr.aria-label]="'common.back' | t"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,13 +16,13 @@
         </svg>
       </button>
       <div class="flex flex-1 flex-col items-center gap-0.5 text-center">
-        <h1 class="text-lg font-bold text-jizbiz-text">{{ 'locations.title' | t }}</h1>
+        <h1 class="text-lg font-bold text-text-primary">{{ 'locations.title' | t }}</h1>
         <p class="text-sm text-zinc-400">{{ 'locations.yourAddresses' | t }}</p>
       </div>
       <button
         type="button"
         (click)="addLocation()"
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-jizbiz-text transition-colors hover:bg-white/10"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-white/10"
         [attr.aria-label]="'locations.addAddress' | t"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,7 +34,7 @@
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-12">
         <span
-          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+          class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
         ></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>
@@ -64,7 +64,7 @@
               [class.active:bg-white/5]="!editMode()"
               (click)="!editMode() && onSelectLocation(loc)"
             >
-              <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     stroke-linecap="round"
@@ -88,14 +88,14 @@
                       [ngModel]="editingName()"
                       (ngModelChange)="editingName.set($event)"
                       (keydown.enter)="saveLocationEdit(loc); $event.preventDefault()"
-                      class="min-w-0 flex-1 rounded border border-zinc-500 bg-jizbiz-surface-2 px-2 py-1 text-sm font-semibold text-jizbiz-text focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+                      class="min-w-0 flex-1 rounded border border-zinc-500 bg-surface-raised-2 px-2 py-1 text-sm font-semibold text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
                       [placeholder]="'profile.locationName' | t"
                     />
                   } @else {
-                    <span class="font-semibold text-jizbiz-text">{{ loc.name }}</span>
+                    <span class="font-semibold text-text-primary">{{ loc.name }}</span>
                   }
                   @if (loc.isDefault) {
-                    <span class="rounded bg-jizbiz-surface-2 px-2 py-0.5 text-xs font-medium text-jizbiz-text">
+                    <span class="rounded bg-surface-raised-2 px-2 py-0.5 text-xs font-medium text-text-primary">
                       {{ 'common.default' | t }}
                     </span>
                   }
@@ -129,7 +129,7 @@
                     <button
                       type="button"
                       (click)="editLocation(loc); $event.stopPropagation()"
-                      class="flex h-9 w-9 items-center justify-center rounded-full text-jizbiz-text transition-colors hover:bg-white/10"
+                      class="flex h-9 w-9 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-white/10"
                       [attr.aria-label]="'common.edit' | t"
                     >
                       <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,8 +162,8 @@
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center">
                   <span
                     class="inline-block h-5 w-5 rounded-full border-2 transition-colors"
-                    [class.border-jizbiz-accent]="selectedId === loc.id"
-                    [class.bg-jizbiz-accent]="selectedId === loc.id"
+                    [class.border-brand-accent]="selectedId === loc.id"
+                    [class.bg-brand-accent]="selectedId === loc.id"
                     [class.border-zinc-400]="selectedId !== loc.id"
                     [class.bg-transparent]="selectedId !== loc.id"
                   ></span>
@@ -209,7 +209,7 @@
       <button
         type="button"
         (click)="toggleEditMode()"
-        class="mt-6 w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+        class="mt-6 w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90"
       >
         {{ (editMode() ? 'common.done' : 'locations.edit') | t }}
       </button>
@@ -225,7 +225,7 @@
       <button
         type="button"
         (click)="selectLocation()"
-        class="w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+        class="w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
       >
         {{ 'common.continue' | t }}
       </button>

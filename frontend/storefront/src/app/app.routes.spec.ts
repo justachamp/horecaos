@@ -12,6 +12,7 @@ const TEST_APP_CONFIG: AppConfig = {
   defaultLocationId: '10000000-0000-0000-0000-000000000003',
   channel: 'STOREFRONT',
   yandexMapsApiKey: '',
+  brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
 };
 
 function setUp() {

@@ -1,12 +1,12 @@
 @if (loading()) {
   <div class="flex flex-1 items-center justify-center gap-2 py-12">
-    <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+    <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
     <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
   </div>
 } @else if (error()) {
   <div class="px-4 py-8 text-center">
     <p class="text-sm text-red-400">{{ error() }}</p>
-    <a routerLink="/orders" class="mt-4 inline-block text-jizbiz-accent underline">{{ 'orders.backToList' | t }}</a>
+    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{ 'orders.backToList' | t }}</a>
   </div>
 } @else if (order()) {
   <!-- Top handle (e.g. for bottom sheet) -->
@@ -17,13 +17,13 @@
   <!-- Header -->
   <header class="flex items-start justify-between gap-4 px-4 py-4">
     <div class="space-y-0.5">
-      <h1 class="text-lg font-bold text-jizbiz-text">{{ 'orders.order' | t }}</h1>
+      <h1 class="text-lg font-bold text-text-primary">{{ 'orders.order' | t }}</h1>
       <p class="text-sm text-zinc-400">Order N: {{ order()!.orderNumber }}</p>
     </div>
     <button
       type="button"
       (click)="close()"
-      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-jizbiz-text transition-colors hover:bg-jizbiz-hover"
+      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-text-primary transition-colors hover:bg-surface-hover"
       [attr.aria-label]="'common.close' | t"
     >
       <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -42,10 +42,10 @@
         class="h-14 w-14 shrink-0 rounded-lg object-cover"
       />
       <div class="min-w-0 flex-1">
-        <h2 class="text-sm font-semibold text-jizbiz-text">{{ item.name }}</h2>
-        <p class="mt-0.5 text-sm text-jizbiz-text">
+        <h2 class="text-sm font-semibold text-text-primary">{{ item.name }}</h2>
+        <p class="mt-0.5 text-sm text-text-primary">
           {{ item.quantity }} {{ 'common.itemsUnit' | t }} {{ 'common.times' | t }}
-          <span class="font-semibold text-jizbiz-accent">{{ item.unitPrice }}</span>
+          <span class="font-semibold text-brand-accent">{{ item.unitPrice }}</span>
         </p>
       </div>
       </article>
@@ -53,7 +53,7 @@
   </div>
 
   <!-- Payment summary (golden box) -->
-  <div class="mx-4 mt-4 rounded-xl bg-gradient-to-r from-jizbiz-accent-deep to-jizbiz-accent p-4 text-white">
+  <div class="mx-4 mt-4 rounded-xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white">
     <div class="flex items-center justify-between font-bold text-white">
       <span>{{ 'cart.paymentAmount' | t }}</span>
       <span>{{ order()!.total }}</span>
@@ -80,7 +80,7 @@
         type="button"
         (click)="cancelOrder()"
         [disabled]="cancelling()"
-        class="w-full rounded-lg border border-zinc-600 bg-jizbiz-surface py-3 text-sm font-medium text-jizbiz-text transition-colors hover:bg-jizbiz-surface-2 disabled:opacity-50"
+        class="w-full rounded-lg border border-zinc-600 bg-surface-raised py-3 text-sm font-medium text-text-primary transition-colors hover:bg-surface-raised-2 disabled:opacity-50"
       >
         @if (cancelling()) {
           {{ 'common.loading' | t }}
@@ -96,6 +96,6 @@
 } @else {
   <div class="px-4 py-8 text-center text-zinc-400">
     <p>{{ 'orders.orderNotFound' | t }}</p>
-    <a routerLink="/orders" class="mt-4 inline-block text-jizbiz-accent underline">{{ 'orders.backToList' | t }}</a>
+    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{ 'orders.backToList' | t }}</a>
   </div>
 }

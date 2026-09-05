@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
   <div class="mx-auto max-w-[420px] px-4 py-6">
     <header class="flex shrink-0 flex-col gap-2 pb-3">
       <button
@@ -11,12 +11,12 @@
         </svg>
         {{ 'common.back' | t }}
       </button>
-      <h1 class="text-center text-xl font-bold text-jizbiz-text">{{ 'profile.telegramTitle' | t }}</h1>
+      <h1 class="text-center text-xl font-bold text-text-primary">{{ 'profile.telegramTitle' | t }}</h1>
     </header>
 
     @if (loading()) {
       <div class="flex items-center justify-center gap-2 py-12">
-        <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
         <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
       </div>
     } @else if (needsSignIn()) {
@@ -24,7 +24,7 @@
         <p class="mb-4 text-sm text-zinc-400">{{ 'profile.telegramSignInRequired' | t }}</p>
         <a
           routerLink="/auth/login"
-          class="inline-block rounded-xl bg-jizbiz-accent px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          class="inline-block rounded-xl bg-brand-accent px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
         >
           {{ 'auth.login' | t }}
         </a>
@@ -39,7 +39,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
           </span>
-          <p class="flex-1 text-sm font-medium text-jizbiz-text">{{ 'profile.telegramLinked' | t }}</p>
+          <p class="flex-1 text-sm font-medium text-text-primary">{{ 'profile.telegramLinked' | t }}</p>
         </div>
 
         @if (!confirmingUnlink()) {
@@ -87,20 +87,20 @@
               [href]="code.deepLink"
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center justify-center gap-2 rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+              class="flex items-center justify-center gap-2 rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
             >
               {{ 'profile.telegramOpenInTelegram' | t }}
             </a>
             <p class="text-center text-xs text-zinc-400">{{ 'profile.telegramExpiryNotice' | t }}</p>
             <div class="flex items-center justify-center gap-2 py-1">
-              <span class="h-4 w-4 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+              <span class="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
               <span class="text-xs text-zinc-400">{{ 'profile.telegramWaiting' | t }}</span>
             </div>
             <button
               type="button"
               (click)="connect()"
               [disabled]="minting()"
-              class="text-center text-xs font-medium text-jizbiz-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+              class="text-center text-xs font-medium text-brand-accent transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {{ 'profile.telegramNoConfirmation' | t }} {{ 'profile.telegramGetNewLink' | t }}
             </button>
@@ -110,7 +110,7 @@
             type="button"
             (click)="connect()"
             [disabled]="minting()"
-            class="mt-4 w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+            class="mt-4 w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
           >
             {{ minting() ? ('profile.telegramConnecting' | t) : ('profile.telegramConnect' | t) }}
           </button>

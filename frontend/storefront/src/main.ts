@@ -3,6 +3,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { App } from './app/app';
 import { appConfig } from './app/app.config';
 import { APP_CONFIG } from './app/core/config/app-config';
+import { applyBrand } from './app/core/config/apply-brand';
 import { loadAppConfig } from './app/core/config/load-config';
 import { showStartFailure } from './start-failure';
 
@@ -19,10 +20,13 @@ import { showStartFailure } from './start-failure';
  * tenant would produce an application that renders and then answers 404 to
  * every call — which is precisely the failure this replaces.
  */
+const config = await loadAppConfig();
+applyBrand(config.brand);
+
 bootstrapApplication(App, {
   ...appConfig,
   providers: [
     ...appConfig.providers,
-    { provide: APP_CONFIG, useValue: await loadAppConfig() },
+    { provide: APP_CONFIG, useValue: config },
   ],
 }).catch((failure) => showStartFailure(failure));
