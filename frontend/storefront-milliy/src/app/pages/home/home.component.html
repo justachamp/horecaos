@@ -1,0 +1,49 @@
+<header class="head">
+  <span class="head__brand">{{ brandName }}</span>
+  <button type="button" class="head__bell" [attr.aria-label]="'home.notifications' | t">
+    <app-icon name="bell" [size]="21" />
+  </button>
+</header>
+
+<div class="search">
+  <app-icon name="search" [size]="18" />
+  <span class="search__hint">{{ 'home.searchHint' | t }}</span>
+</div>
+
+@switch (state()) {
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'home.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="load()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    <nav class="rail chips" [attr.aria-label]="'home.categories' | t">
+      <button
+        type="button"
+        class="chip"
+        [class.is-active]="activeCategoryId() === null"
+        (click)="selectCategory(null)"
+      >
+        {{ 'home.allCategories' | t }}
+      </button>
+      @for (category of categories(); track category.id) {
+        <button
+          type="button"
+          class="chip"
+          [class.is-active]="activeCategoryId() === category.id"
+          (click)="selectCategory(category.id)"
+        >
+          {{ category.name }}
+        </button>
+      }
+    </nav>
+
+    @if (items().length === 0) {
+      <p class="state">{{ 'home.emptyMenu' | t }}</p>
+    }
+  }
+}

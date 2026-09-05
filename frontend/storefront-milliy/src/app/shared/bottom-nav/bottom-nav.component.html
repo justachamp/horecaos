@@ -1,0 +1,18 @@
+<nav class="nav">
+  @for (tab of tabs; track tab.path) {
+    <a
+      [routerLink]="tab.path"
+      routerLinkActive="is-active"
+      class="tab"
+      [attr.aria-label]="tab.label | t"
+    >
+      <span class="tab__icon">
+        <app-icon [name]="tab.icon" [size]="24" />
+        @if (tab.path === '/cart' && cart.totalItemsCount() > 0) {
+          <span class="tab__badge">{{ cart.totalItemsCount() > 99 ? '99+' : cart.totalItemsCount() }}</span>
+        }
+      </span>
+      <span class="tab__label">{{ tab.label | t }}</span>
+    </a>
+  }
+</nav>

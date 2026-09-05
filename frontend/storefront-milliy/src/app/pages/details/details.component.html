@@ -1,0 +1,85 @@
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('missing') { <p class="state">{{ 'details.notFound' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'details.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="load()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (item(); as product) {
+      <header class="hero">
+        <button type="button" class="hero__back" (click)="back()" [attr.aria-label]="'common.back' | t">
+          <app-icon name="close" [size]="18" />
+        </button>
+        @if (product.image) {
+          <img class="hero__img" [src]="product.image" [alt]="product.name" />
+        }
+      </header>
+
+      <section class="body">
+        <h1 class="title">{{ product.name }}</h1>
+        @if (product.description) {
+          <p class="desc">{{ product.description }}</p>
+        }
+
+        @if (product.variants.length > 1) {
+          <h2 class="section">{{ 'details.portion' | t }}</h2>
+          <div class="options">
+            @for (variant of product.variants; track variant.id) {
+              <button
+                type="button"
+                class="option"
+                [class.is-active]="variantId() === variant.id"
+                [disabled]="!variant.active"
+                (click)="variantId.set(variant.id)"
+              >
+                <span class="option__name">{{ variant.name }}</span>
+              </button>
+            }
+          </div>
+        }
+
+        @for (group of product.modifierGroups; track group.id) {
+          <h2 class="section">
+            {{ group.name }}
+            @if (group.required) { <span class="req">{{ 'details.required' | t }}</span> }
+          </h2>
+          <div class="options">
+            @for (option of group.options; track option.id) {
+              <button
+                type="button"
+                class="option"
+                [class.is-active]="chosenIn(group.id).includes(option.id)"
+                (click)="toggleOption(group, option.id)"
+              >
+                <span class="option__name">{{ option.label }}</span>
+              </button>
+            }
+          </div>
+        }
+
+        <h2 class="section">{{ 'details.quantity' | t }}</h2>
+        <div class="qty">
+          <button type="button" (click)="step(-1)" [attr.aria-label]="'details.decrease' | t">−</button>
+          <span class="qty__value">{{ quantity() }}</span>
+          <button type="button" (click)="step(1)" [attr.aria-label]="'details.increase' | t">+</button>
+        </div>
+
+        @if (unsatisfied().length > 0) {
+          <p class="hint">{{ 'details.chooseRequired' | t }}</p>
+        }
+        @if (addError(); as message) {
+          <p class="hint hint--error" role="alert">{{ message | t }}</p>
+        }
+      </section>
+
+      <footer class="foot">
+        <button type="button" class="cta" [disabled]="!canAdd()" (click)="addToCart()">
+          {{ (adding() ? 'details.adding' : 'details.addToCart') | t }}
+        </button>
+      </footer>
+    }
+  }
+}
