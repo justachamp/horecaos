@@ -16,7 +16,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('MarketingShell', () => {
-  it('renders a sub-nav link for every tier-2 Marketing screen, tier-3 excluded', async () => {
+  it('renders a sub-nav link for every tier-2 Marketing screen, plus wave 44’s Loyalty tab', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
@@ -36,12 +36,15 @@ describe('MarketingShell', () => {
     const labels = [...harness.routeNativeElement!.querySelectorAll('.marketing-shell__tab')].map(
       (el) => el.textContent?.trim(),
     );
-    // §6.3 Loyalty and §6.6 Referrals are tier 3 and carry no tab at all — the
-    // same "tier 3 stays out" rule Finance's own shell test proves for its
+    // §6.3 Loyalty was tier 3 and stayed out through wave 39; wave 44 built it
+    // (ADR 0046) alongside Customers §5.5, so it now has a tab like every
+    // tier-2 row. §6.6 Referrals is the one tier-3 row still out — the same
+    // "tier 3 stays out" rule Finance's own shell test proves for its own
     // Wave-2 rows.
     expect(labels).toEqual([
       'Промоакции',
       'Промокоды',
+      'Лояльность',
       'Кампании',
       'Автоматизации',
       'Контент',

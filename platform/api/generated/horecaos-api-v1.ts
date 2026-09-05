@@ -37,6 +37,21 @@ export interface AccessDebugResponse {
   view?: CapabilityView;
 }
 
+export interface AccrualRuleResponse {
+  earnDelayHours?: number;
+  expiryWarningDays?: number;
+  id?: string;
+  lotLifetimeDays?: number;
+  maxAccrualMinor?: number;
+  rateBasisPoints?: number;
+  scopeId?: string;
+  scopeType?: string;
+  status?: string;
+  validFrom?: string;
+  validUntil?: string;
+  version?: number;
+}
+
 export interface ActivateRateCardRequest {
   reason: string;
 }
@@ -1411,6 +1426,18 @@ export interface DownloadResponse {
   url?: string;
 }
 
+export interface DraftAccrualRuleRequest {
+  earnDelayHours?: number;
+  expiryWarningDays?: number;
+  lotLifetimeDays?: number;
+  maxAccrualMinor?: number;
+  rateBasisPoints?: number;
+  scopeId?: string;
+  scopeType: string;
+  validFrom?: string;
+  validUntil?: string;
+}
+
 export interface DraftCartResponse {
   cartId?: string;
   channelId?: string;
@@ -1421,6 +1448,15 @@ export interface DraftCartResponse {
   lineCount?: number;
   locationId?: string;
   status?: string;
+}
+
+export interface DraftRedemptionPolicyRequest {
+  allowedChannels?: Array<string>;
+  excludesDeliveryFee?: boolean;
+  maxShareBasisPoints?: number;
+  minOrderMinor?: number;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export interface DraftTariffVersionRequest {
@@ -3322,6 +3358,18 @@ export interface RedefineAudienceRequest {
   predicates: Array<AudiencePredicateRequest>;
 }
 
+export interface RedemptionPolicyResponse {
+  allowedChannels?: Array<string>;
+  excludesDeliveryFee?: boolean;
+  id?: string;
+  maxShareBasisPoints?: number;
+  minOrderMinor?: number;
+  status?: string;
+  validFrom?: string;
+  validUntil?: string;
+  version?: number;
+}
+
 export interface ReferenceData {
   countries?: Array<Country>;
   locales?: Array<Locale>;
@@ -4724,6 +4772,14 @@ export interface Operations {
   "bindSchedule": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindingRequest }; responses: { "200": unknown } };
   "changeServiceState": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-state"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ServiceStateRequest }; responses: { "200": unknown } };
   "serviceSummary": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-summary"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": ServiceSummaryResponse } };
+  "accrualRules": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AccrualRuleResponse> } };
+  "draftAccrualRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftAccrualRuleRequest }; responses: { "200": AccrualRuleResponse } };
+  "activateAccrualRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/activate"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "retireAccrualRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/retire"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "redemptionPolicies": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<RedemptionPolicyResponse> } };
+  "draftRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftRedemptionPolicyRequest }; responses: { "200": RedemptionPolicyResponse } };
+  "activateRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "retireRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/retire"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "cashHandovers": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; locationId?: string; status?: string } } }; responses: { "200": Array<CashHandoverResponse> } };
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
   "suspend_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };

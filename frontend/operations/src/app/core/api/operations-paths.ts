@@ -391,6 +391,18 @@ export const operationsPaths = {
   ): string {
     return `${this.customerLoyaltyBalances(scope, accountId)}/${encodeURIComponent(loyaltyAccountId)}/entries`;
   },
+
+  /**
+   * Outstanding points per brand, never pooled into one tenant figure
+   * (`LoyaltyOperationsController.liability`). Tenant-scoped like
+   * {@link customers} — `LocationScope.brandId`/`locationId` are unused here —
+   * because the liability belongs to each brand's own legal entity and the
+   * report reads every brand at once so operations §6.3 Loyalty can show a
+   * brand its own row without a second controller.
+   */
+  loyaltyLiability(scope: LocationScope): string {
+    return `${OPERATIONS}${tenant(scope)}/reports/loyalty-liability`;
+  },
 } as const;
 
 /**

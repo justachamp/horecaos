@@ -1788,6 +1788,7 @@ export const messagesRu: MessageCatalogue = {
   'marketing.nav.label': 'Разделы маркетинга',
   'marketing.nav.promotions': 'Промоакции',
   'marketing.nav.promoCodes': 'Промокоды',
+  'marketing.nav.loyalty': 'Лояльность',
   'marketing.nav.campaigns': 'Кампании',
   'marketing.nav.automations': 'Автоматизации',
   'marketing.nav.content': 'Контент',
@@ -1937,11 +1938,82 @@ export const messagesRu: MessageCatalogue = {
   'marketing.suppressions.lift.title': 'Снять подавление',
   'marketing.suppressions.lift.reason': 'Причина',
   'marketing.suppressions.lift.submit': 'Снять',
+
+  // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
+  'marketing.loyalty.title': 'Лояльность',
+  'marketing.loyalty.intro':
+    'Кешбэк-баллы, а не хранимая стоимость. Клиент начисляет и списывает баллы по правилам ниже — предоплаченного баланса нет, потому что HorecaOS не хранит денежные средства клиентов (ADR 0046).',
+  'marketing.loyalty.loading': 'Загрузка',
+  'marketing.loyalty.denied': 'Нет доступа к программе лояльности этого бренда',
+  'marketing.loyalty.liability.label': 'Баллы, которые бренд обязан покрыть',
+  'marketing.loyalty.liability.held': '{amount} удержано незавершённым оформлением заказа',
+  'marketing.loyalty.column.scope': 'Применяется к',
+  'marketing.loyalty.column.status': 'Статус',
+  'marketing.loyalty.uncapped': 'Без ограничения',
+  'marketing.loyalty.hours': '{count} ч',
+  'marketing.loyalty.days': '{count} дн.',
+  'marketing.loyalty.yes': 'Да',
+  'marketing.loyalty.no': 'Нет',
+  'marketing.loyalty.status.DRAFT': 'Черновик',
+  'marketing.loyalty.status.ACTIVE': 'Действует',
+  'marketing.loyalty.status.RETIRED': 'Отозвано',
+  'marketing.loyalty.action.activate': 'Активировать',
+  'marketing.loyalty.action.retire': 'Отозвать',
+  'marketing.loyalty.dialog.cancel': 'Отмена',
+  'marketing.loyalty.scope.brand': 'Весь бренд',
+  'marketing.loyalty.scope.location': 'Один филиал',
+  'marketing.loyalty.scope.channel': 'Один канал',
+
+  'marketing.loyalty.accrual.title': 'Начисление',
+  'marketing.loyalty.accrual.hint':
+    'Сколько клиент зарабатывает с оплаченного заказа. Пока у бренда нет действующего правила, начисление не идёт — ставки по умолчанию не предусмотрено.',
+  'marketing.loyalty.accrual.create.action': 'Новое правило начисления',
+  'marketing.loyalty.accrual.create.title': 'Черновик правила начисления',
+  'marketing.loyalty.accrual.create.submit': 'Сохранить черновик',
+  'marketing.loyalty.accrual.column.rate': 'Ставка',
+  'marketing.loyalty.accrual.column.cap': 'Лимит на заказ',
+  'marketing.loyalty.accrual.column.earnDelay': 'Задержка начисления',
+  'marketing.loyalty.accrual.column.lotLifetime': 'Сгорает через',
+  'marketing.loyalty.accrual.empty': 'Правило начисления ещё не создано.',
+  'marketing.loyalty.accrual.form.rate': 'Ставка, % от оплаченной деньгами суммы заказа',
+  'marketing.loyalty.accrual.form.hasCap': 'Ограничить баллы, начисляемые за один заказ',
+  'marketing.loyalty.accrual.form.cap': 'Максимум баллов за заказ',
+  'marketing.loyalty.accrual.form.earnDelay': 'Задержка начисления, часов после завершения заказа',
+  'marketing.loyalty.accrual.form.lotLifetime': 'Баллы сгорают через, дней',
+  'marketing.loyalty.accrual.form.expiryWarning': 'Предупреждать за, дней до сгорания',
+  'marketing.loyalty.accrual.form.expiryWarning.hint':
+    'За сколько дней партия баллов считается «скоро сгорит» — само уведомление об этом ещё не реализовано (ADR 0046).',
+
+  'marketing.loyalty.redemption.title': 'Списание',
+  'marketing.loyalty.redemption.hint':
+    'Какую долю заказа можно покрыть баллами. Пока у бренда нет действующей политики, баллы к оплате не принимаются.',
+  'marketing.loyalty.redemption.create.action': 'Новая политика списания',
+  'marketing.loyalty.redemption.create.title': 'Черновик политики списания',
+  'marketing.loyalty.redemption.create.submit': 'Сохранить черновик',
+  'marketing.loyalty.redemption.column.share': 'Доля от суммы заказа',
+  'marketing.loyalty.redemption.column.minOrder': 'Минимальная сумма заказа',
+  'marketing.loyalty.redemption.column.excludesFee': 'Без учёта доставки',
+  'marketing.loyalty.redemption.empty': 'Политика списания ещё не создана.',
+  'marketing.loyalty.redemption.form.share': 'Максимальная доля заказа, %',
+  'marketing.loyalty.redemption.form.share.hint':
+    'Ограничено 90% — баллы никогда не могут покрыть весь заказ, чтобы у фискального чека и суммы курьера всегда было к чему привязаться.',
+  'marketing.loyalty.redemption.form.minOrder': 'Минимальная сумма заказа для списания',
+  'marketing.loyalty.redemption.form.excludesFee':
+    'Не учитывать стоимость доставки в базе списания',
+
+  'marketing.loyalty.deposit.title': 'Депозитные счета',
+  'marketing.loyalty.deposit.body':
+    'Не реализовано, и это не пробел: ADR 0046 полностью исключил хранимую клиентскую стоимость из объёма работ. HorecaOS не держит деньги клиентов, поэтому депозитный счёт поднимает тот же вопрос, что и нелицензированная платёжная услуга — решение оставить только баллы.',
+  'marketing.loyalty.posSync.title': 'Синхронизация баланса с POS',
+  'marketing.loyalty.posSync.body':
+    'Не реализовано. Ни один ADR не описывает чтение или запись баланса лояльности POS-терминалом, и такая возможность провайдера нигде не заявлена — см. frontend-information-architecture.md §6.3.',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',
   'customers.nav.list': 'Клиенты',
   'customers.nav.segments': 'Сегменты',
   'customers.nav.reviews': 'Отзывы',
+  'customers.nav.feedbackSettings': 'Настройки отзывов',
 
   'customers.segments.title': 'Сегменты',
   'customers.segments.subtitle':

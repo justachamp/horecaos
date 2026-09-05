@@ -26,6 +26,57 @@
         },
         "type" : "object"
       },
+      "AccrualRuleResponse" : {
+        "properties" : {
+          "earnDelayHours" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiryWarningDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lotLifetimeDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxAccrualMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rateBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ActivateRateCardRequest" : {
         "properties" : {
           "reason" : {
@@ -2387,6 +2438,51 @@
         },
         "type" : "object"
       },
+      "DraftAccrualRuleRequest" : {
+        "properties" : {
+          "earnDelayHours" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiryWarningDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lotLifetimeDays" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "maxAccrualMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rateBasisPoints" : {
+            "format" : "int32",
+            "maximum" : 10000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "pattern" : "BRAND|LOCATION|CHANNEL",
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "scopeType" ],
+        "type" : "object"
+      },
       "DraftCartResponse" : {
         "properties" : {
           "cartId" : {
@@ -2421,6 +2517,38 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DraftRedemptionPolicyRequest" : {
+        "properties" : {
+          "allowedChannels" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "excludesDeliveryFee" : {
+            "type" : "boolean"
+          },
+          "maxShareBasisPoints" : {
+            "format" : "int32",
+            "maximum" : 9000,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "minOrderMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
             "type" : "string"
           }
         },
@@ -5244,6 +5372,47 @@
           }
         },
         "required" : [ "predicates" ],
+        "type" : "object"
+      },
+      "RedemptionPolicyResponse" : {
+        "properties" : {
+          "allowedChannels" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "excludesDeliveryFee" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maxShareBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minOrderMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "ReferenceMatchResponse" : {
@@ -8921,6 +9090,327 @@
         },
         "summary" : "Manual override, bound schedules with their grids, preparation bands, and live capacity",
         "tags" : [ "Location service operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules" : {
+      "get" : {
+        "description" : "DRAFT, ACTIVE and RETIRED rows together, newest first within each status — an authoring screen needs the lineage, not only what is live.",
+        "operationId" : "accrualRules",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AccrualRuleResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every accrual rule this brand has authored",
+        "tags" : [ "Loyalty policy" ]
+      },
+      "post" : {
+        "description" : "Always DRAFT. Nothing here accrues until a separate activation call promotes it, so a mistyped rate is caught before it touches a customer's order.",
+        "operationId" : "draftAccrualRule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DraftAccrualRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccrualRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft an accrual rule",
+        "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/activate" : {
+      "post" : {
+        "description" : "Retires whichever rule currently holds this exact scope (BRAND, or the same LOCATION/CHANNEL), then promotes the draft, in one transaction — a brand's live set never holds two rules resolving the same scope at once.",
+        "operationId" : "activateAccrualRule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a drafted accrual rule live",
+        "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/retire" : {
+      "post" : {
+        "description" : "A retired rule stops resolving from this instant. It is not deleted: every entry an active rule already produced keeps the rule it was earned under (ADR 0046 rule snapshotting).",
+        "operationId" : "retireAccrualRule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw a live rule, or discard a draft nobody activated",
+        "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies" : {
+      "get" : {
+        "operationId" : "redemptionPolicies",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RedemptionPolicyResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every redemption policy this brand has authored",
+        "tags" : [ "Loyalty policy" ]
+      },
+      "post" : {
+        "description" : "The share is capped at 9000 basis points by validation as well as by the database: points may never cover a whole order, because a zero-consideration sale has no fiscal path and no cash for a courier to collect.",
+        "operationId" : "draftRedemptionPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DraftRedemptionPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RedemptionPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a redemption policy",
+        "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate" : {
+      "post" : {
+        "description" : "Retires the brand's current policy, if any, then promotes the draft, in one transaction — a brand redeems against exactly one live cap.",
+        "operationId" : "activateRedemptionPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "policyId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a drafted redemption policy live",
+        "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/retire" : {
+      "post" : {
+        "description" : "Once retired the brand redeems nothing until a new policy is activated — the same silence a brand that never authored one sees.",
+        "operationId" : "retireRedemptionPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "policyId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw the live policy, or discard a draft nobody activated",
+        "tags" : [ "Loyalty policy" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/cash-handovers" : {
@@ -18220,6 +18710,9 @@
   }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
+  }, {
+    "description" : "A brand's own accrual rate and redemption cap",
+    "name" : "Loyalty policy"
   }, {
     "description" : "The delivery queue, and manual assign/unassign",
     "name" : "Dispatch board"

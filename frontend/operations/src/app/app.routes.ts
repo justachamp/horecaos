@@ -95,13 +95,14 @@ export const routes: Routes = [
         // The Customers section (frontend-information-architecture.md §5):
         // `CustomersShell` (wave 39) is a small tab strip — the same shape
         // `staff-shell.ts` uses — over 5.1/5.2 (unchanged below, still
-        // docking `:accountId` the same way `orders`/`locations` do) plus
-        // this wave's two tier-2 additions, 5.3 Segments and 5.4 Reviews.
-        // `segments` and `reviews` are declared *before* the empty-path
+        // docking `:accountId` the same way `orders`/`locations` do), wave
+        // 39's two tier-2 additions 5.3 Segments and 5.4 Reviews, and wave
+        // 44's tier-3 addition 5.5 Feedback settings. `segments`, `reviews`
+        // and `feedback-settings` are declared *before* the empty-path
         // `CustomersPage` child for the same reason `staff-shell`'s `roles`
         // is declared before its own empty-path child: Angular tries this
         // array in order, and `CustomersPage`'s own `:accountId` child would
-        // otherwise swallow either literal segment as an account id.
+        // otherwise swallow any of the three literal segments as an account id.
         path: 'customers',
         loadComponent: () =>
           import('./features/customers/customers-shell').then((m) => m.CustomersShell),
@@ -124,6 +125,21 @@ export const routes: Routes = [
               spec:
                 'frontend-information-architecture.md §5.4 (Reviews) — no review/feedback entity, ' +
                 'no owning ADR',
+            },
+          },
+          // 5.5 Feedback settings (wave 44): the same gap as 5.4 above, one
+          // level up. Prompt timing and the review tag library both configure
+          // a review/feedback entity that does not exist yet, so there is
+          // nothing for a settings screen to author against — honest
+          // not-built rather than a tag editor with no review flow behind it.
+          {
+            path: 'feedback-settings',
+            loadComponent: () =>
+              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+            data: {
+              spec:
+                'frontend-information-architecture.md §5.5 (Feedback settings) — no review/' +
+                'feedback entity, no owning ADR',
             },
           },
           {
@@ -397,6 +413,17 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
             data: { spec: 'frontend-information-architecture.md §6.2 (Promo codes)' },
+          },
+          // 6.3 Loyalty (ADR 0046, wave 44): the last tier-3 Marketing row
+          // this wave built, alongside 6.4 Campaigns' own real backend.
+          // Accrual-rule and redemption-policy authoring through the new
+          // `LoyaltyPolicyController`; deposit accounts and POS balance sync
+          // render as honest not-built panels inside `LoyaltyPage` itself,
+          // not a separate route — see that component's own doc.
+          {
+            path: 'loyalty',
+            loadComponent: () =>
+              import('./features/marketing/loyalty/loyalty-page').then((m) => m.LoyaltyPage),
           },
           {
             path: 'campaigns',
