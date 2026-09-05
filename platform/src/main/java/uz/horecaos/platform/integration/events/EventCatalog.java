@@ -77,6 +77,9 @@ public final class EventCatalog {
     /** ADR 0014 fulfilment facts, including the settled result of a route command. */
     public static final String FULFILLMENT_EVENTS_TOPIC = KafkaTopicCatalog.FULFILLMENT_EVENTS;
 
+    /** ADR 0064 call-event facts, from either the hosted-PBX or the Asterisk-class adapter. */
+    public static final String VOICE_EVENTS_TOPIC = KafkaTopicCatalog.VOICE_EVENTS;
+
     private static final Map<String, EventContract> CONTRACTS = index(List.of(
             new EventContract(
                     "TenantCreated",
@@ -270,7 +273,19 @@ public final class EventCatalog {
                     Retention.SIGNAL,
                     Classification.INTERNAL,
                     "Something in a scope changed; the reader re-reads it through the authorized "
-                            + "API. Identifiers only, never state.")));
+                            + "API. Identifiers only, never state."),
+            new EventContract(
+                    "VoiceCallEventRecorded",
+                    1,
+                    "voice",
+                    VOICE_EVENTS_TOPIC,
+                    "callCorrelationId",
+                    "events/voice.events/VoiceCallEventRecorded.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "One normalized call event (offered/answered/ended/missed/transferred). "
+                            + "Never a caller number, encrypted or not — only a resolved customer "
+                            + "account id, when resolution succeeded.")));
 
     private EventCatalog() {}
 

@@ -191,4 +191,45 @@ public final class ReportingFacts {
             String bucketCode,
             int orderCount,
             int shareBasisPoints) {}
+
+    /**
+     * ADR 0064: one hour's call activity for one operator at one location, on
+     * one business date. The one new grain ADR 0043's day-only physical model
+     * did not have — see {@code fact_call_hour}'s own migration comment for
+     * why calls get an hour bucket instead of widening every existing fact.
+     *
+     * @param operatorPrincipalId {@code "(unassigned)"} rather than null: a
+     *                            call this build could not attribute to a
+     *                            specific operator (most missed calls, and
+     *                            any answered call neither the provider nor
+     *                            our own screen-pop acknowledgment could
+     *                            name) is still a real call for the location,
+     *                            and a primary key cannot hold a null column
+     */
+    public record CallHourFact(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            LocalDate businessDate,
+            int hourOfDay,
+            String operatorPrincipalId,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            int offeredCount,
+            int answeredCount,
+            int missedCount,
+            int transferredCount,
+            long talkDurationSeconds) {
+
+        public CallHourFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(businessDate, "A fact is dated");
+            if (hourOfDay < 0 || hourOfDay > 23) {
+                throw new IllegalArgumentException("hourOfDay must be 0-23, not " + hourOfDay);
+            }
+            // No answered-vs-offered check here: those two counts share a
+            // location-hour, not a row — see fact_call_hour's own migration
+            // comment for why that invariant is a rollup, not a per-row one.
+        }
+    }
 }

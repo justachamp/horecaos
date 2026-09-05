@@ -1,0 +1,162 @@
+<div class="call-centre">
+  <header class="call-centre__toolbar">
+    <h1 class="q-subhead">{{ 'orders.callCentre.title' | t }}</h1>
+  </header>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm call-centre__state">{{ 'reservations.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm call-centre__state" data-testid="call-centre-denied">
+      {{ 'orders.callCentre.denied' | t }}
+    </p>
+  } @else {
+    <p class="q-caption call-centre__not-built-note">{{ 'orders.callCentre.notBuilt' | t }}</p>
+
+    <section class="call-centre__panel" [attr.aria-label]="'orders.callCentre.presence.title' | t">
+      <h2 class="q-body call-centre__panel-title">{{ 'orders.callCentre.presence.title' | t }}</h2>
+      <div class="call-centre__presence-buttons">
+        @for (state of presenceStates; track state) {
+          <button
+            type="button"
+            class="q-body-sm call-centre__presence-button"
+            [class.call-centre__presence-button--active]="presence()?.state === state"
+            [disabled]="presenceSaving()"
+            [attr.data-testid]="'call-centre-presence-' + state"
+            (click)="setPresence(state)"
+          >
+            {{ presenceStateLabel(state) }}
+          </button>
+        }
+      </div>
+      <label class="call-centre__reason-field">
+        <span class="q-caption">{{ 'orders.callCentre.presence.reasonLabel' | t }}</span>
+        <input
+          type="text"
+          [value]="presenceReason()"
+          (input)="presenceReason.set($any($event.target).value)"
+          [placeholder]="'orders.callCentre.presence.reasonPlaceholder' | t"
+          data-testid="call-centre-presence-reason"
+        />
+      </label>
+      @if (presenceError()) {
+        <p class="q-caption call-centre__error" data-testid="call-centre-presence-error">
+          {{ presenceError() }}
+        </p>
+      }
+      @if (presence(); as current) {
+        <p class="q-caption call-centre__presence-current" data-testid="call-centre-presence-current">
+          {{ presenceStateLabel(current.state) }}
+          @if (current.reason) {
+            — {{ current.reason }}
+          }
+        </p>
+      }
+    </section>
+
+    <section class="call-centre__panel" [attr.aria-label]="'orders.callCentre.screenPop.title' | t">
+      <h2 class="q-body call-centre__panel-title">{{ 'orders.callCentre.screenPop.title' | t }}</h2>
+      @if (screenPopError()) {
+        <p class="q-caption call-centre__error" data-testid="call-centre-screen-pop-error">
+          {{ screenPopError() }}
+        </p>
+      }
+      @if (currentCall(); as call) {
+        <div class="call-centre__card" data-testid="call-centre-screen-pop-card">
+          @if (call.unknownCaller) {
+            <p class="q-body call-centre__card-title">{{ 'orders.callCentre.screenPop.unknownCaller' | t }}</p>
+          } @else {
+            <p class="q-body call-centre__card-title">{{ call.customerDisplayName }}</p>
+          }
+          <p class="q-caption">{{ call.maskedCallerNumber }}</p>
+          @if (call.lineDid) {
+            <p class="q-caption">{{ call.lineDid }}</p>
+          }
+
+          @if (call.unknownCaller) {
+            <button
+              type="button"
+              class="q-body-sm primary"
+              data-testid="call-centre-create-customer"
+              (click)="openCreateCustomer()"
+            >
+              {{ 'orders.callCentre.screenPop.createCustomer' | t }}
+            </button>
+          } @else {
+            <div class="call-centre__recent-orders">
+              <p class="q-caption">{{ 'orders.callCentre.screenPop.recentOrders' | t }}</p>
+              @if (call.recentOrders.length === 0) {
+                <p class="q-caption">{{ 'orders.callCentre.screenPop.noRecentOrders' | t }}</p>
+              } @else {
+                <ul>
+                  @for (order of call.recentOrders; track order.orderId) {
+                    <li class="q-caption">{{ order.publicOrderNumber }} — {{ order.status }}</li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+
+          @if (call.acknowledgedBy) {
+            <p class="q-caption" data-testid="call-centre-claimed-by">
+              {{ 'orders.callCentre.screenPop.claimedBy' | t: { operator: call.acknowledgedBy } }}
+            </p>
+          } @else {
+            <button
+              type="button"
+              class="q-body-sm primary"
+              [disabled]="acknowledging()"
+              data-testid="call-centre-claim"
+              (click)="claimCurrentCall()"
+            >
+              {{ 'orders.callCentre.screenPop.claim' | t }}
+            </button>
+          }
+        </div>
+      } @else {
+        <p class="q-body-sm call-centre__state" data-testid="call-centre-screen-pop-empty">
+          {{ 'orders.callCentre.screenPop.empty' | t }}
+        </p>
+      }
+    </section>
+
+    <section class="call-centre__panel" [attr.aria-label]="'orders.callCentre.callLog.title' | t">
+      <h2 class="q-body call-centre__panel-title">{{ 'orders.callCentre.callLog.title' | t }}</h2>
+      @if (callLog().length === 0) {
+        <p class="q-body-sm call-centre__state">{{ 'orders.callCentre.callLog.empty' | t }}</p>
+      } @else {
+        <table class="call-centre__log" data-testid="call-centre-log">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'orders.callCentre.callLog.column.time' | t }}</th>
+              <th class="q-caption">{{ 'orders.callCentre.callLog.column.type' | t }}</th>
+              <th class="q-caption">{{ 'orders.callCentre.callLog.column.line' | t }}</th>
+              <th class="q-caption">{{ 'orders.callCentre.callLog.column.operator' | t }}</th>
+              <th class="q-caption">{{ 'orders.callCentre.callLog.column.duration' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of callLog(); track entry.callEventId) {
+              <tr>
+                <td class="q-caption">{{ formatTime(entry.occurredAt) }}</td>
+                <td class="q-caption">{{ callTypeLabel(entry.eventType) }}</td>
+                <td class="q-caption">{{ entry.lineDid ?? '—' }}</td>
+                <td class="q-caption">{{ entry.operatorPrincipalId ?? '—' }}</td>
+                <td class="q-caption">{{ formatDuration(entry.durationSeconds) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+
+  @if (createCustomerOpen()) {
+    <q-create-customer-dialog
+      [initialPhone]="createCustomerPhone()"
+      [busy]="createCustomerBusy()"
+      [errorMessage]="createCustomerError()"
+      (confirm)="onCreateCustomerConfirm($event)"
+      (dismiss)="onCreateCustomerDismiss()"
+    />
+  }
+</div>

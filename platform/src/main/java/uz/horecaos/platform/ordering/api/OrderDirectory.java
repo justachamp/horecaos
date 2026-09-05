@@ -67,6 +67,34 @@ public interface OrderDirectory {
             Instant approvalDeadlineAt) {}
 
     /**
+     * A customer's most recent orders at one brand, newest first — the ADR
+     * 0064 screen-pop card's "recent orders, active order state" read.
+     *
+     * <p>The identical query {@code CustomerOrderHistoryController} already
+     * exposes to staff by capability; this is the same read exposed as a port
+     * so the voice module can assemble a card without importing {@code
+     * ordering.web} or {@code ordering.application}, which {@code
+     * ordering.api}'s own package doc forbids.
+     *
+     * <p>Defaulted to empty for the same reason {@link #ordersNearingApprovalDeadline}
+     * is: the several hand-written {@code OrderDirectory} test doubles that
+     * predate ADR 0064 need no mechanical implementation of a read they never
+     * exercise.
+     */
+    default List<RecentOrder> recentForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId, int limit) {
+        return List.of();
+    }
+
+    record RecentOrder(
+            UUID orderId,
+            String publicOrderNumber,
+            UUID locationId,
+            String status,
+            String currency,
+            long totalMinor,
+            Instant placedAt) {}
+
+    /**
      * The board's own order counts for one location (ADR 0060 §3's bot
      * {@code /stats} command: "reading the counts read model"). Mirrors
      * {@code JdbcOrderStore.OrderCountsRow} field for field — an internal

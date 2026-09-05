@@ -22,12 +22,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
@@ -69,6 +71,7 @@ public class OperationsOrderController {
     private final RejectReasonQueryService rejectReasons;
     private final JdbcCartStore carts;
     private final CurrentActor currentActor;
+    private final OrderCallProvenanceService callProvenance;
 
     public OperationsOrderController(
             OrderQueryService orderQuery,
@@ -77,7 +80,8 @@ public class OperationsOrderController {
             OrderAmendmentService amendments,
             RejectReasonQueryService rejectReasons,
             JdbcCartStore carts,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            OrderCallProvenanceService callProvenance) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -85,6 +89,7 @@ public class OperationsOrderController {
         this.rejectReasons = rejectReasons;
         this.carts = carts;
         this.currentActor = currentActor;
+        this.callProvenance = callProvenance;
     }
 
     @GetMapping
@@ -383,6 +388,32 @@ public class OperationsOrderController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
     }
+
+    @PostMapping("/{orderId}/call-provenance")
+    @RequiresCapability(value = Capability.ORDER_PROVENANCE_RECORD, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Record the call this order originated from",
+            description = "ADR 0064: a phone order is an ordinary operations order, and the only "
+                    + "channel-specific fact about it is the call id its screen-pop card carried. "
+                    + "Write-once — a second call with the same id is a harmless retry, and a "
+                    + "second call with a different id is refused rather than silently "
+                    + "overwriting where the order came from.")
+    public ResponseEntity<Void> recordCallProvenance(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId,
+            @Valid @RequestBody CallProvenanceRequest body) {
+        callProvenance.record(
+                tenantId,
+                orderId,
+                body.callId(),
+                ActorRef.user(currentActor.get().subject(), null),
+                Capability.ORDER_PROVENANCE_RECORD.code());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record CallProvenanceRequest(@NotNull UUID callId) {}
 
     @PostMapping("/{orderId}/completion")
     @RequiresCapability(value = Capability.ORDER_ADVANCE, scope = ScopeType.LOCATION, mutating = true)

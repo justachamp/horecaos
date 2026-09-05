@@ -38,6 +38,7 @@ class ModularArchitectureTests {
             "reporting",
             "telemetry",
             "tenancy",
+            "voice",
             "web");
 
     @Test

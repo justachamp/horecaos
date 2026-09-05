@@ -45,6 +45,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `fulfillment.commands` | 3 | 1 | `PT24H` | `delete` |
 | `fulfillment.events` | 6 | 1 | `PT168H` | `delete` |
 | `realtime.signals` | 3 | 1 | `PT1M` | `delete` |
+| `voice.events` | 3 | 1 | `PT168H` | `delete` |
 
 Business-fact retention is the seven-day operational replay window. Commands
 are durable in PostgreSQL and need only outlive a consumer restart. Realtime
@@ -245,6 +246,27 @@ re-issuing the original command is safe. `UNRESOLVED` means the reconciliation
 budget is spent and nobody established which — it is emitted so that an
 unanswerable case is a fact somebody can act on rather than a log line, and it
 must never be read as `ABSENT`.
+
+## `voice.events`
+
+- Producing module: `voice`
+- Retention class: **business fact** — retained for replay and reconciliation
+- Classification: `INTERNAL` — no caller number, encrypted or not, ever appears here
+- Key: `callCorrelationId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `VoiceCallEventRecorded` | 1 | `callCorrelationId` | [`VoiceCallEventRecorded.v1`](../../src/main/resources/events/voice.events/VoiceCallEventRecorded.v1.schema.json) | `callEventId`, `installationId`, `providerCallId`, `brandId`, `locationId`, `callEventType` (OFFERED/ANSWERED/ENDED/MISSED/TRANSFERRED), `direction`, `lineDid`, `resolvedCustomerAccountId`, `operatorPrincipalId`, `durationSeconds` |
+
+One event type covers all five ADR 0064 vocabulary words, discriminated by
+`callEventType`, rather than five near-identical schemas ahead of any consumer
+needing the difference — see the schema's own description and `VoiceEvent`'s
+Javadoc for the reasoning; splitting them out remains additive. `callCorrelationId`
+(the topic's partition key, computed deterministically from `tenantId`,
+`installationId`, and `providerCallId` — see `VoiceEvent.callCorrelationId()`)
+is not itself a payload field: every event in one call's lifecycle keys the
+same way so a call's own events cannot overtake each other, even though each
+is a distinct `callEventId` row in `voice.call_events`.
 
 ## Delivery and ordering guarantees
 

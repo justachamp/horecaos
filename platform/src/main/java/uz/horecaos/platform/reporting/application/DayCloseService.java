@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
+import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
@@ -97,22 +98,25 @@ public class DayCloseService {
         derived.refunds().forEach(store::insertRefundFact);
         derived.aggregates().forEach(store::insertAggregate);
         DayAggregator.slaBuckets(tenantId, businessDate, derived.orders()).forEach(store::insertSlaBucket);
+        derived.callHours().forEach(store::insertCallHourFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
-                "Closed business day {} for tenant {}: {} orders, {} lines, {} refunds",
+                "Closed business day {} for tenant {}: {} orders, {} lines, {} refunds, {} call-hours",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
                 derived.lines().size(),
-                derived.refunds().size());
+                derived.refunds().size(),
+                derived.callHours().size());
 
         return new CloseResult(
                 runId,
                 derived.orders().size(),
                 derived.lines().size(),
                 derived.refunds().size(),
+                derived.callHours().size(),
                 List.of());
     }
 
@@ -203,6 +207,7 @@ public class DayCloseService {
                 derived.orders().size(),
                 derived.lines().size(),
                 derived.refunds().size(),
+                derived.callHours().size(),
                 divergences);
     }
 
@@ -216,6 +221,7 @@ public class DayCloseService {
         List<SourceOrder> sourceOrders = store.readSourceOrders(tenantId, from, to);
         List<SourceLine> sourceLines = store.readSourceLines(tenantId, from, to);
         List<SourceRefund> sourceRefunds = store.readSourceRefunds(tenantId, from, to);
+        var sourceCallEvents = store.readSourceCallEvents(tenantId, from, to);
 
         Map<UUID, List<SourceLine>> linesByOrder = new HashMap<>();
         sourceLines.forEach(line -> linesByOrder
@@ -258,12 +264,21 @@ public class DayCloseService {
                     MetricRegistry.CALCULATION_VERSION));
         }
 
+        List<CallHourFact> callHours = DayAggregator.callHourFacts(
+                tenantId,
+                businessDate,
+                boundary.zone(),
+                sourceCallEvents,
+                boundary.version(),
+                MetricRegistry.CALCULATION_VERSION);
+
         return new DerivedDay(
                 orders,
                 lines,
                 refunds,
                 DayAggregator.branchDay(
-                        businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION));
+                        businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION),
+                callHours);
     }
 
     private OrderFact toFact(
@@ -376,7 +391,8 @@ public class DayCloseService {
             List<OrderFact> orders,
             List<OrderLineFact> lines,
             List<RefundFact> refunds,
-            List<BranchDayAggregate> aggregates) {}
+            List<BranchDayAggregate> aggregates,
+            List<CallHourFact> callHours) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.
@@ -392,7 +408,19 @@ public class DayCloseService {
         }
     }
 
-    /** What a close or a recut did. */
+    /**
+     * What a close or a recut did.
+     *
+     * @param callsWritten the ADR 0064 call-hour facts a close derived; always
+     *                     the count re-derived on a recut too, even though
+     *                     recut does not yet compare it against what is
+     *                     stored (see {@link #recut}'s own limits)
+     */
     public record CloseResult(
-            UUID runId, int ordersWritten, int linesWritten, int refundsWritten, List<Divergence> divergences) {}
+            UUID runId,
+            int ordersWritten,
+            int linesWritten,
+            int refundsWritten,
+            int callsWritten,
+            List<Divergence> divergences) {}
 }

@@ -484,6 +484,7 @@ public class ProviderInstallationController {
             case PAYMENT -> SecretCategory.PROVIDER_PAYMENT;
             case DELIVERY -> SecretCategory.PROVIDER_DELIVERY;
             case NOTIFICATION -> SecretCategory.PROVIDER_NOTIFICATION;
+            case VOICE -> SecretCategory.PROVIDER_VOICE;
             case MARKETPLACE, GEOCODING, OTHER ->
                 throw new ApiException(
                         ErrorCode.UNPROCESSABLE_STATE,

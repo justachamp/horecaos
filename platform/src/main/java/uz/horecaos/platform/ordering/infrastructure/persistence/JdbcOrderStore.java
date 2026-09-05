@@ -275,6 +275,43 @@ public class JdbcOrderStore {
                 """).params(params).query(Integer.class).optional();
     }
 
+    /**
+     * ADR 0064: attaching the voice call this order originated from.
+     *
+     * <p>Write-once by the {@code source_call_id IS NULL} predicate — a call id
+     * is a fact about how the order began, not a field an order can be
+     * reassigned to later. The caller (see {@code OrderCallProvenanceService})
+     * treats zero rows updated as either "already this value" (a harmless
+     * retry) or "already a different value" (a conflict), by reading {@link
+     * #find} again rather than this method guessing which.
+     */
+    public boolean recordCallProvenance(UUID tenantId, UUID orderId, UUID callId) {
+        return jdbc.sql("""
+                UPDATE ordering.orders
+                SET source_call_id = :callId, version = version + 1
+                WHERE tenant_id = :tenantId AND id = :orderId AND source_call_id IS NULL
+                """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .param("callId", callId)
+                        .update()
+                == 1;
+    }
+
+    /** Whether this order's call provenance is already exactly this value — the "harmless retry" case. */
+    public boolean hasCallProvenance(UUID tenantId, UUID orderId, UUID callId) {
+        Integer count = jdbc.sql("""
+                SELECT count(*) FROM ordering.orders
+                WHERE tenant_id = :tenantId AND id = :orderId AND source_call_id = :callId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("callId", callId)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
     // ---------------------------------------------------------- terminal outcome
 
     /**

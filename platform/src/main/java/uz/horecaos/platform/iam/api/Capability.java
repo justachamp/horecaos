@@ -137,6 +137,16 @@ public enum Capability {
     ORDER_ACCEPTANCE_POLICY_MANAGE("order.acceptance-policy.manage", "order", "acceptance-policy.manage"),
 
     /**
+     * ADR 0064: attaching the voice call id an order originated from. A narrow
+     * capability of its own rather than folded into {@link #ORDER_ADVANCE} or
+     * {@link #ORDER_AMEND} — recording where an order came from changes
+     * nothing about its state or its agreed contents, so an operator who may
+     * take a phone order needs this without needing either of those broader
+     * powers.
+     */
+    ORDER_PROVENANCE_RECORD("order.provenance.record", "order", "provenance.record"),
+
+    /**
      * ADR 0013: reading an order's payment — the intent, its attempts, and the
      * provider states recorded beside HorecaOS's own.
      *
@@ -1152,6 +1162,28 @@ public enum Capability {
      * documents as the normal case, not the only permitted one.
      */
     CONVERSATION_INBOX_MANAGE("conversation.inbox.manage", "conversation-inbox", "manage"),
+
+    /**
+     * ADR 0064: marking yourself ONLINE/PAUSED/WRAP_UP/OFFLINE at a branch.
+     * Self-service by construction — the write path takes the operator's
+     * identity from the authenticated token, never from the request body — so
+     * this capability answers only "may this principal touch presence at
+     * all", the same way {@link #CUSTOMER_MANAGE} does not distinguish whose
+     * customer record is being edited.
+     */
+    VOICE_PRESENCE_MANAGE("voice.presence.manage", "voice-presence", "manage"),
+
+    /** ADR 0064: a supervisor's or a routing adapter's read of who is online at a branch. */
+    VOICE_PRESENCE_READ("voice.presence.read", "voice-presence", "read"),
+
+    /** ADR 0064: polling for the current inbound call's client card. */
+    VOICE_SCREEN_POP_READ("voice.screen-pop.read", "voice-screen-pop", "read"),
+
+    /** ADR 0064: claiming a ringing call's card so it stops showing for every other operator polling the same branch. */
+    VOICE_SCREEN_POP_ACKNOWLEDGE("voice.screen-pop.acknowledge", "voice-screen-pop", "acknowledge"),
+
+    /** ADR 0064: the branch's recent call list (frontend information architecture Sec 1.6). */
+    VOICE_CALL_LOG_READ("voice.call-log.read", "voice-call-log", "read"),
 
     /**
      * Global control-plane administration. Issued by Keycloak as described in
