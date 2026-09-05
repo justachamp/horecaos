@@ -17,7 +17,7 @@ Read that to actually deploy something. This file is the map.
 
 | Path | What it is |
 |---|---|
-| `compose.production.yml` | The stack: edge, three frontend bundles, the platform JVM, PostgreSQL, Kafka, Keycloak, OpenBao, backup tooling. Pulls pinned images; contains no `build:` block. |
+| `compose.production.yml` | The stack: edge, three frontend bundles, the platform JVM, PostgreSQL, Kafka, Keycloak, OpenBao, backup tooling. Pulls pinned images; contains no `build:` block. The edge image is `horecaos-edge`, CI's eighth published image — stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit` (ADR 0023), since the stock image cannot run this file's `rate_limit` directives. |
 | `compose.local-test.override.yml` | Port remapping ONLY, applied by `local-smoke.sh`. Never used on a real host. |
 | `env.template` | The per-environment file, exhaustively documented inline. Copy it, fill it, keep the result outside this repository. |
 | `env.staging.example` | A filled example for a hypothetical aHOST staging VM — a different provider than production, which ADR 0061 requires. |
@@ -62,22 +62,58 @@ it honest: it runs the unmodified `compose.production.yml` against a fresh
 volume on a machine that is neither Sarkor nor aHOST, and a green run is
 evidence the file itself has not quietly grown a provider dependency.
 
-## Relationship to `platform/compose.production.yaml`
+## Relationship to `platform/compose.production.yaml` (read this before deploying)
 
-An earlier, still-valid production stack exists at
+**Deploy from THIS directory.** This is ADR 0061's registry-pull model —
+CI builds and pushes pinned images, a devops engineer pulls them by tag,
+following `production-setup.md` — and it is the model the owner actually
+decided on 2026-09-01: no repository checkout on the server, no Maven
+toolchain there, no SSH access for CI. It is also the only compose file that
+serves the current three-frontend architecture (storefront, control-plane,
+operations); `platform/compose.production.yaml` predates the second and
+third frontends and has no containers for them at all.
+
+An older stack still lives at
 [`platform/compose.production.yaml`](../platform/compose.production.yaml),
-built for ADR 0023/0028/0034, which clones this repository onto the server
-and builds every image there over SSH — see
+built for ADR 0023 before this directory existed, which clones the
+repository onto the server and builds every image there over SSH — see
 [`platform/docs/runbooks/deploy.md`](../platform/docs/runbooks/deploy.md).
-It is not superseded or deleted by this directory. ADR 0061 chooses the
-registry-pull model here as the one the production-setup runbook walks a
-devops engineer through, specifically because it needs no repository
-checkout on the server, no Maven toolchain there, and no SSH access for CI
-— see that ADR's "Open inputs" for why that changed on 2026-09-01. Both
-files share the same hardening posture and the same ADR 0028 secret-delivery
-design; they differ only in who builds the image and how it reaches the
-host. An operator who prefers to build from source on the box still can,
-using the other file and its own runbook.
+Wave 16 documented it as "not superseded, still valid" on the reasoning that
+the two files differ only in who builds the image. That reasoning undersold
+two things this record now states plainly, because a devops engineer
+choosing between the two needs both:
+
+- **The old file cannot deploy today's frontends.** It has no
+  `control-plane-web` or `operations-web` service, and its Caddyfile has no
+  site block for either origin. Deploying from it means those two
+  consoles are simply not served.
+- **The old file's model is the one the owner's 2026-09-01 decision moved
+  away from.** ADR 0061's "Open inputs" section states the reason in the
+  owner's own words: there is no server access for CI or an assistant, so a
+  deploy that needs `git pull` and a Maven build to run ON THE HOST is not
+  the one that gets used.
+
+It is kept rather than deleted for a real, load-bearing reason this
+directory does NOT yet cover: ADR 0023's built alerting, backup, and restore
+apparatus — `infra/observability/horecaos-probe.sh`'s default
+`COMPOSE_FILE`, `infra/backup/README.md`, and six of the incident runbooks
+(`restore.md`, `postgresql-down.md`, `outbox-not-draining.md`,
+`container-crash-loop.md`, `onboarding-run-stalled.md`,
+`payment-callback-failing.md`) — was built against and verified against the
+old file's paths (`/opt/horecaos/horecaos-platform`,
+`infra/production/*.sh`) and has NOT been ported to this directory's layout.
+Deleting the old tree today would orphan the only operating model this
+platform has actually rehearsed a restore against. Porting that apparatus
+onto this directory (or formally retiring the old tree once it is ported) is
+open, unscheduled work — flagged as a follow-up task in wave 55, not solved
+by it.
+
+Until that porting happens, both Caddyfiles carry the SAME ADR 0023 edge
+hardening (Payme allowlist, body caps, per-binding/per-IP rate limits),
+kept in parity on purpose: either file could plausibly front real traffic
+depending on which runbook path an operator is following, and a hardened
+edge next to an unhardened one is exactly the latent incident this
+consolidation pass exists to close.
 
 ## Local smoke test
 
@@ -85,7 +121,7 @@ using the other file and its own runbook.
 deploy/local-smoke.sh
 ```
 
-Builds all seven images from this checkout, stands the entire production
+Builds all eight images from this checkout, stands the entire production
 stack up under compose project `horecaos-prod-smoke` (never the dev stack's
 `horecaos-platform` project — see the script's own header), runs a smoke
 checklist against it over real TLS (Caddy's internal CA, verified rather

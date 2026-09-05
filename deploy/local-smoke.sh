@@ -133,11 +133,14 @@ build horecaos-platform          "${PLATFORM_DIR}"                 "${PLATFORM_D
 build horecaos-platform-migrate  "${PLATFORM_DIR}"                 "${PLATFORM_DIR}/infra/production/migrate/Dockerfile"
 build horecaos-platform-ops      "${PLATFORM_DIR}"                 "${PLATFORM_DIR}/infra/production/ops/Dockerfile"
 build horecaos-postgres-postgis  "${PLATFORM_DIR}/infra/postgres"  "${PLATFORM_DIR}/infra/postgres/Dockerfile"
+# Stock caddy:2.10-alpine plus caddy-ratelimit (ADR 0023) — see the
+# Dockerfile's own header for why the stock image cannot run this Caddyfile.
+build horecaos-edge               "${PLATFORM_DIR}"                 "${PLATFORM_DIR}/infra/production/caddy/Dockerfile"
 build horecaos-storefront        "${REPO_ROOT}/frontend/storefront"    "${REPO_ROOT}/frontend/storefront/Dockerfile"
 build horecaos-control-plane     "${REPO_ROOT}/frontend/control-plane" "${REPO_ROOT}/frontend/control-plane/Dockerfile"
 build horecaos-operations        "${REPO_ROOT}/frontend/operations"    "${REPO_ROOT}/frontend/operations/Dockerfile"
 
-say "All 7 images built"
+say "All 8 images built"
 
 # -----------------------------------------------------------------------------
 # 2. OpenBao: up, initialised, unsealed, non-interactively

@@ -5,21 +5,36 @@
   proven (wave 16): `deploy/compose.production.yml` (pinned images, Caddy edge with
   automatic TLS, three frontend containers, resource limits, hardening),
   `deploy/env.template` as the one per-environment artifact with a filled
-  different-provider staging example, CI's `publish-images` job (seven images,
-  git-SHA + rolling tags to ghcr, registry overridable by one variable — no deploy
-  step by design), and `docs/runbooks/production-setup.md`, the bare-OS-to-running
-  procedure the owner's devops executes without assistant or CI access. All of it
-  verified end to end by `deploy/local-smoke.sh`: the real production compose on a
-  fresh volume under an isolated project boots, migrates, imports the realm, serves
-  all three frontends, and keeps docs/metrics unexposed — a run that caught and
-  fixed a genuine boot-blocker (`OpenApiConfiguration` under disabled api-docs) and
-  an issuer mismatch in the operations app. Realm hardening steps (localhost
-  redirect URIs, shipped fallback secrets) are found and written into the runbook.
+  different-provider staging example, CI's `publish-images` job (eight images as
+  of wave 55 — see below — git-SHA + rolling tags to ghcr, registry overridable by
+  one variable — no deploy step by design), and `docs/runbooks/production-setup.md`,
+  the bare-OS-to-running procedure the owner's devops executes without assistant or
+  CI access. All of it verified end to end by `deploy/local-smoke.sh`: the real
+  production compose on a fresh volume under an isolated project boots, migrates,
+  imports the realm, serves all three frontends, and keeps docs/metrics unexposed —
+  a run that caught and fixed a genuine boot-blocker (`OpenApiConfiguration` under
+  disabled api-docs) and an issuer mismatch in the operations app. Realm hardening
+  steps (localhost redirect URIs, shipped fallback secrets) are found and written
+  into the runbook. **Wave 55 closed most of ADR 0023's reverse-proxy checklist
+  item in `deploy/infra/caddy/Caddyfile`**: body caps throughout, and per-binding/
+  per-IP rate limits via a new eighth image (`horecaos-edge`, stock Caddy
+  recompiled with `caddy-ratelimit`, since the stock image this compose file
+  pulled before wave 55 has no `rate_limit` directive at all) — built and
+  `caddy validate`-clean locally, not yet proven through a real CI publish or
+  deploy. The Payme allowlist piece is wired but not yet functional: it fails
+  closed (rejects every caller, Payme included) until the owner supplies Payme's
+  real published addresses — see ADR 0023's own checklist line for the full
+  account. Wave 55 also found and documented, but did not resolve, the gap this
+  line already flagged below (ADR 0023's observability items): the alerting,
+  backup, and restore apparatus that record built is wired to
+  `platform/compose.production.yaml`'s paths, not this directory's, and porting it
+  is unscheduled follow-up work — `deploy/README.md`'s "Relationship" section has
+  the detail.
   Not built: the Sarkor box itself, a real registry push, staging on a second
-  provider, WAL archiving (only nightly logical dumps are scripted), ADR 0023's
-  observability items, ADR 0056's RLS backstop, the pilot tenant, and the SendPulse
-  cutover; `deploy/README.md` carries the explicit cannot-verify-without-the-server
-  risk register for devops's first run.
+  provider, WAL archiving (only nightly logical dumps are scripted), the rest of
+  ADR 0023's observability items, ADR 0056's RLS backstop, the pilot tenant, and
+  the SendPulse cutover; `deploy/README.md` carries the explicit
+  cannot-verify-without-the-server risk register for devops's first run.
 - Date proposed: 2026-09-01
 - Date decided: 2026-09-01
 - Deciders: platform owner (hosting, budget, and SLO decisions — see Decision),
