@@ -4236,6 +4236,43 @@
         },
         "type" : "object"
       },
+      "DemandHistoryResponse" : {
+        "properties" : {
+          "hours" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HourDemandResponse"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "minimumSampleSize" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "requestedSampleSize" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sampleDates" : {
+            "items" : {
+              "format" : "date",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "weekday" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "DescribeLocationRequest" : {
         "properties" : {
           "addressLine" : {
@@ -5585,6 +5622,30 @@
           },
           "totalMinor" : {
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "HourDemandResponse" : {
+        "properties" : {
+          "averageOrders" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "hourOfDay" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "ordersByDate" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "totalOrders" : {
+            "format" : "int32",
             "type" : "integer"
           }
         },
@@ -35120,6 +35181,59 @@
         },
         "summary" : "Put a settled message back in the queue",
         "tags" : [ "Operations notifications" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
+      "get" : {
+        "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number.",
+        "operationId" : "demandHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "weekday",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sampleSize",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DemandHistoryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Historical average order count by hour, for one location and weekday",
+        "tags" : [ "Reporting" ]
       }
     },
     "/api/v1/tenants/{tenantId}/reporting/metrics" : {

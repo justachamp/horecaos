@@ -2066,6 +2066,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.nav.staff': 'Персонал',
   'reports.nav.customers': 'Клиенты',
   'reports.nav.marketing': 'Маркетинг',
+  'reports.nav.forecast': 'Спрос',
 
   'reports.branches.title': 'Отчёты по филиалам и SLA',
   'reports.branches.loading': 'Загрузка…',
@@ -2102,6 +2103,30 @@ export const messagesRu: MessageCatalogue = {
     'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
   'reports.products.abcXyzNotBuilt':
     'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
+
+  // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
+  'reports.forecast.title': 'История спроса',
+  'reports.forecast.intro':
+    'Здесь показано то, что произошло на самом деле, а не то, что может произойти: среднее количество завершённых заказов в каждый час за последние по времени случаи выбранного дня недели, по которым в этой точке есть история заказов. Модели будущего спроса пока не существует (ADR 0043).',
+  'reports.forecast.loading': 'Загрузка…',
+  'reports.forecast.weekday.1': 'Понедельник',
+  'reports.forecast.weekday.2': 'Вторник',
+  'reports.forecast.weekday.3': 'Среда',
+  'reports.forecast.weekday.4': 'Четверг',
+  'reports.forecast.weekday.5': 'Пятница',
+  'reports.forecast.weekday.6': 'Суббота',
+  'reports.forecast.weekday.7': 'Воскресенье',
+  'reports.forecast.sampleSize.label': 'Недель для усреднения',
+  'reports.forecast.sampleSize.option': 'Последние {count}',
+  'reports.forecast.column.hour': 'Час',
+  'reports.forecast.column.average': 'Средн. заказов',
+  'reports.forecast.sample.summary':
+    'Среднее по {count} последним случаям этого дня недели, за которые есть история заказов.',
+  'reports.forecast.thin.zero': 'По этому дню недели в этой точке пока нет истории заказов.',
+  'reports.forecast.thin.one':
+    'Пока зафиксирован только 1 случай этого дня недели — недостаточно для среднего. Ниже — значение за эту единственную неделю, а не среднее.',
+  'reports.forecast.thin.two':
+    'Пока зафиксировано только 2 случая этого дня недели — недостаточно для среднего. Ниже — значения за эти две недели, а не среднее.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',

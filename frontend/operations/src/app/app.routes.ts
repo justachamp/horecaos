@@ -527,7 +527,9 @@ export const routes: Routes = [
         // Reports (IA PART 2 §7): 7.1 Business overview and 7.2 Order
         // reports (tier P, wave 33) plus every tier-2 row (wave 39) —
         // `ReportsShell` owns the shared filter bar and the tab strip across
-        // all of them. 7.8/7.10 are tier 3 and carry no tab at all.
+        // all of them. 7.8 joins them this wave (48), honestly scoped down
+        // from its own tier-3 spec — see `demand-forecast-page.ts`. 7.10
+        // stays off this rail entirely.
         path: 'statistics',
         loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
         children: [
@@ -622,6 +624,17 @@ export const routes: Routes = [
                 'frontend-information-architecture.md §7.9 (Marketing reports) — no promotions ADR, ' +
                 'no fact_promotion_redemption',
             },
+          },
+          // 7.8 Demand history (wave 48): the owner's 2026-09-05 decision,
+          // recorded in ADR 0043's implementation status, was to ship the
+          // honest same-weekday historical average from `fact_order` now
+          // rather than the ADR's own seasonal-naive forecast model — see
+          // `demand-forecast-page.ts`'s own doc for exactly what that means
+          // and does not mean.
+          {
+            path: 'forecast',
+            loadComponent: () =>
+              import('./features/reports/demand-forecast-page').then((m) => m.DemandForecastPage),
           },
         ],
       },

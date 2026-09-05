@@ -151,6 +151,43 @@ export interface VariantSalesListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * One hour-of-day's demand sample behind 7.8 (wave 48). Mirrors
+ * {@code ReportingController.HourDemandResponse}.
+ *
+ * @property ordersByDate ISO business date to that date's order count in this
+ *   hour, zero-filled for every date in the parent's `sampleDates` — a date
+ *   this location traded on but that had nothing in this hour is a real zero,
+ *   never a missing entry.
+ * @property averageOrders null whenever the parent's `sampleDates` is shorter
+ *   than `minimumSampleSize` — never a number computed from too thin a sample
+ *   to mean anything.
+ */
+export interface HourDemandResponse {
+  readonly hourOfDay: number;
+  readonly ordersByDate: Readonly<Record<string, number>>;
+  readonly totalOrders: number;
+  readonly averageOrders: number | null;
+}
+
+/**
+ * Reports 7.8's honest historical average (ADR 0043's implementation status,
+ * owner decision 2026-09-05) — mirrors
+ * {@code ReportingController.DemandHistoryResponse}. Not a forecast: every
+ * number traces back to `sampleDates`, real business dates a manager could
+ * look up in 7.2's order log.
+ */
+export interface DemandHistoryResponse {
+  readonly locationId: string;
+  /** ISO-8601: 1 = Monday .. 7 = Sunday. */
+  readonly weekday: number;
+  readonly requestedSampleSize: number;
+  readonly minimumSampleSize: number;
+  readonly sampleDates: readonly string[];
+  readonly hours: readonly HourDemandResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -246,6 +283,23 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           channelCode: params.channelCode,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** 7.8's historical average — see {@link DemandHistoryResponse}'s own doc. */
+  async demandHistory(
+    tenantId: string,
+    params: { readonly locationId: string; readonly weekday: number; readonly sampleSize?: number },
+  ): Promise<DemandHistoryResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DemandHistoryResponse>(reportsPaths.demandHistory(tenantId), {
+        params: {
+          locationId: params.locationId,
+          weekday: params.weekday,
+          sampleSize: params.sampleSize,
         },
       }),
     );

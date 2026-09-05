@@ -1,0 +1,109 @@
+<div class="forecast">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.forecast.title' | t }}</h1>
+    <p class="q-body-sm forecast__intro">{{ 'reports.forecast.intro' | t }}</p>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.forecast.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied" data-testid="forecast-denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()" data-testid="forecast-retry">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (response(); as r) {
+        <div class="forecast__controls">
+          <div class="forecast__weekdays" role="tablist">
+            @for (day of WEEKDAYS; track day) {
+              <button
+                type="button"
+                class="forecast__weekday-button"
+                [class.forecast__weekday-button--active]="day === weekday()"
+                (click)="selectWeekday(day)"
+                [attr.data-testid]="'forecast-weekday-' + day"
+              >
+                {{ weekdayLabel(day) }}
+              </button>
+            }
+          </div>
+
+          <label class="forecast__sample-size">
+            <span class="q-caption">{{ 'reports.forecast.sampleSize.label' | t }}</span>
+            <select
+              [value]="sampleSize()"
+              (change)="selectSampleSize(+$any($event.target).value)"
+              data-testid="forecast-sample-size"
+            >
+              @for (option of SAMPLE_SIZE_OPTIONS; track option) {
+                <option [value]="option">
+                  {{ 'reports.forecast.sampleSize.option' | t: { count: option } }}
+                </option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <q-provenance-banner [provenance]="r.provenance" />
+
+        @if (r.sampleDates.length === 0) {
+          <p class="q-body-sm forecast__state" data-testid="forecast-no-history">
+            {{ 'reports.forecast.thin.zero' | t }}
+          </p>
+        } @else if (belowMinimum(r)) {
+          <p class="q-body-sm forecast__state" data-testid="forecast-thin-sample">
+            {{ r.sampleDates.length === 1 ? ('reports.forecast.thin.one' | t) : ('reports.forecast.thin.two' | t) }}
+          </p>
+          <table class="forecast__table" data-testid="forecast-raw-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                @for (date of r.sampleDates; track date) {
+                  <th class="q-caption q-tnum">{{ ddmmyyyy(date) }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (hour of r.hours; track hour.hourOfDay) {
+                <tr>
+                  <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
+                  @for (date of r.sampleDates; track date) {
+                    <td class="q-tnum">{{ hour.ordersByDate[date] ?? 0 }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="q-body-sm forecast__state" data-testid="forecast-sample-summary">
+            {{ 'reports.forecast.sample.summary' | t: { count: r.sampleDates.length } }}
+          </p>
+          <table class="forecast__table" data-testid="forecast-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                <th class="q-caption q-tnum">{{ 'reports.forecast.column.average' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (hour of r.hours; track hour.hourOfDay) {
+                <tr>
+                  <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
+                  <td class="q-tnum">{{ formatAverage(hour.averageOrders) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    }
+  }
+</div>

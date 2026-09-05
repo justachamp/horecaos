@@ -2078,6 +2078,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.nav.staff': 'Xodimlar',
   'reports.nav.customers': 'Mijozlar',
   'reports.nav.marketing': 'Marketing',
+  'reports.nav.forecast': 'Talab',
 
   'reports.branches.title': 'Filiallar va SLA hisobotlari',
   'reports.branches.loading': 'Yuklanmoqda…',
@@ -2114,6 +2115,30 @@ export const messagesUzLatn: MessageCatalogue = {
     'Mahsulotlar ko‘proq bo‘lishi mumkin — bu chegaralangan o‘qish, to‘liq eksport emas.',
   'reports.products.abcXyzNotBuilt':
     'ABC va XYZ tasnifi hali yaratilmagan: reporting’da classification_run jadvali va ro‘yxatga olingan metrika yo‘q (ADR 0043).',
+
+  // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
+  'reports.forecast.title': 'Talab tarixi',
+  'reports.forecast.intro':
+    'Bu yerda nima sodir bo‘lgani ko‘rsatiladi, kelajakda nima bo‘lishi mumkinligi emas: tanlangan hafta kunining ushbu joyda buyurtmalar tarixi mavjud bo‘lgan so‘nggi holatlari bo‘yicha har bir soatda bajarilgan buyurtmalarning o‘rtacha soni. Kelajakdagi talab modeli hozircha mavjud emas (ADR 0043).',
+  'reports.forecast.loading': 'Yuklanmoqda…',
+  'reports.forecast.weekday.1': 'Dushanba',
+  'reports.forecast.weekday.2': 'Seshanba',
+  'reports.forecast.weekday.3': 'Chorshanba',
+  'reports.forecast.weekday.4': 'Payshanba',
+  'reports.forecast.weekday.5': 'Juma',
+  'reports.forecast.weekday.6': 'Shanba',
+  'reports.forecast.weekday.7': 'Yakshanba',
+  'reports.forecast.sampleSize.label': 'O‘rtacha uchun haftalar',
+  'reports.forecast.sampleSize.option': 'So‘nggi {count}',
+  'reports.forecast.column.hour': 'Soat',
+  'reports.forecast.column.average': 'O‘rtacha buyurtma',
+  'reports.forecast.sample.summary':
+    'Buyurtmalar tarixi mavjud bo‘lgan shu hafta kunining so‘nggi {count} holati bo‘yicha o‘rtacha.',
+  'reports.forecast.thin.zero': 'Bu joyda shu hafta kuni bo‘yicha hali buyurtmalar tarixi yo‘q.',
+  'reports.forecast.thin.one':
+    'Shu hafta kunining hozircha faqat 1 holati qayd etilgan — o‘rtacha chiqarish uchun yetarli emas. Quyidagi son o‘sha bitta hafta uchun, o‘rtacha emas.',
+  'reports.forecast.thin.two':
+    'Shu hafta kunining hozircha faqat 2 holati qayd etilgan — o‘rtacha chiqarish uchun yetarli emas. Quyidagi sonlar o‘sha ikki hafta uchun, o‘rtacha emas.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',

@@ -1,7 +1,7 @@
 # ADR 0043: Reporting, analytics, and the metric layer
 
 - Decision status: Accepted
-- Implementation status: Partial — V0031 creates `reporting.metric_definitions`, `fact_order`, `fact_order_line`, `fact_refund`, `agg_branch_day`, `agg_sla_bucket_day`, `close_runs`, `aggregate_divergences` and `business_day_policies` with monthly partitions, and grants the read-only `horecaos_reporting_read` role; `MetricRegistry` with `MetricDefinitionSynchronizer`'s startup refusal, `BusinessDayService`, `DayCloseService` with the settle recut and divergence alert, `DayAggregator`, `ReportQueryService`/`ReportingController` (the typed `GET .../reporting/queries` with provenance and the ADR 0038 and boundary-regime refusals) and `MetricSigningService`/`MetricSignatureController` are built and tested. `DayCloseScheduler` (wave 6) is now `DayCloseService`'s production caller: a five-minute heartbeat closes each active tenant's business day once it is over plus the close delay, and a fifteen-minute one recuts settled days, both behind a durable cross-replica claim (`reporting.day_close_claims`, V0102) — so fact rows are written and the count queries answer in a deployed system, proven by `DayCloseSchedulerTests`. No metric signature has been recorded, so every metric would report provisional. Also not built: the `analytics.events` topic and any behavioural emission, type-2 dimensions, inbox projections for near-real-time counters, the `report.export`/`customer.pii.export`/`forecast.manage` capabilities and their surfaces, asynchronous export, ABC/XYZ/RFM and forecasting, and tender and delivery facts. `fact_refund`'s source is `payments.payment_transactions` refund rows, which no code writes.
+- Implementation status: Partial — V0031 creates `reporting.metric_definitions`, `fact_order`, `fact_order_line`, `fact_refund`, `agg_branch_day`, `agg_sla_bucket_day`, `close_runs`, `aggregate_divergences` and `business_day_policies` with monthly partitions, and grants the read-only `horecaos_reporting_read` role; `MetricRegistry` with `MetricDefinitionSynchronizer`'s startup refusal, `BusinessDayService`, `DayCloseService` with the settle recut and divergence alert, `DayAggregator`, `ReportQueryService`/`ReportingController` (the typed `GET .../reporting/queries` with provenance and the ADR 0038 and boundary-regime refusals) and `MetricSigningService`/`MetricSignatureController` are built and tested. `DayCloseScheduler` (wave 6) is now `DayCloseService`'s production caller: a five-minute heartbeat closes each active tenant's business day once it is over plus the close delay, and a fifteen-minute one recuts settled days, both behind a durable cross-replica claim (`reporting.day_close_claims`, V0102) — so fact rows are written and the count queries answer in a deployed system, proven by `DayCloseSchedulerTests`. No metric signature has been recorded, so every metric would report provisional. Also not built: the `analytics.events` topic and any behavioural emission, type-2 dimensions, inbox projections for near-real-time counters, the `report.export`/`customer.pii.export`/`forecast.manage` capabilities and their surfaces, asynchronous export, ABC/XYZ/RFM, and tender and delivery facts. `fact_refund`'s source is `payments.payment_transactions` refund rows, which no code writes. **The seasonal-naive forecast model this ADR's own "Forecasting" section describes is still not built** — `forecast_run` and `fact_forecast` do not exist, and neither does a holiday calendar. What wave 48 built instead, deliberately, is `GET .../reporting/demand-history`: a same-weekday, same-hour average of `fact_order` (`ReportQueryService.demandHistory`, `JdbcReportingStore.readDemandHistory`), labelled on every surface as a historical average and never as a forecast — the owner's 2026-09-05 decision, recorded in full under "What was built" below, was to ship that now rather than wait for the model this ADR sketches.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (metric semantics), product (dashboard scope)
@@ -389,7 +389,7 @@ makes rollback cheap and it is worth protecting.
 - [ ] Implement projections on the ADR 0005 inbox path for near-real-time counters.
 - [ ] Add `report.export`, `customer.pii.export`, and `forecast.manage` to the ADR 0025 registry, with the surfaces they gate.
 - [ ] Implement asynchronous export with quotas, audit, and presigned delivery.
-- [ ] Implement ABC, XYZ, and RFM runs, the forecast model, the holiday calendar, and error write-back.
+- [ ] Implement ABC, XYZ, and RFM runs, the forecast model, the holiday calendar, and error write-back. (7.8's `demand-history` historical average, wave 48, is a deliberate substitute for the model, not a step toward it — see "What was built".)
 - [ ] Confirm behavioural retention with legal before production.
 - [ ] Schedule the close and the recut. `DayCloseService` is invoked by its caller today; nothing runs it on a timer, so no facts exist in an unattended deployment.
 
@@ -436,6 +436,26 @@ makes rollback cheap and it is worth protecting.
   slice, so neither fits the query's one-value-per-cell shape. `prep_time.median.v1`
   and `sla_bucket_set.v1` are refused by the typed query, by name, pointing at the
   endpoint that answers them.
+- **7.8 Demand ships a historical average, not this ADR's forecast, by a
+  2026-09-05 owner decision.** The "Forecasting" section above stays the
+  target — seasonal-naive, day-of-week/hour profile, holiday factor, a stored
+  error rate — and is unbuilt: no `forecast_run`, no `fact_forecast`, no
+  holiday calendar, no model of any kind. What ships instead is `GET
+  .../reporting/demand-history`: for one location and one weekday, the
+  average count of `COMPLETED` orders in each hour of the day, over that
+  weekday's most recent occurrences with order history, straight off
+  `fact_order` (`occurred_at`, converted to the tenant's own timezone —
+  wall-clock hour, not the operating-day-relative hour the sketch above
+  charts). Below three qualifying dates the average is refused — the
+  response carries the raw per-date counts instead of a number computed from
+  a sample too thin to mean anything — and a location with no history on
+  that weekday says so rather than rendering a table of zeros. **This is a
+  deliberate, recorded choice, not a partial implementation of the
+  forecast**: the word "forecast" does not appear in the response, the UI
+  copy, or any of the three locale catalogues. The next person to touch this
+  screen should build the seasonal-naive model as a new capability alongside
+  `demand-history`, not fold a smoothing step into it and call the result the
+  same thing.
 - **The recut does not write.** It re-derives the day from `ordering` and
   `payments`, compares against the stored aggregate on gross revenue, net revenue,
   and completed order count, and records a divergence row. The stored figure stays
@@ -460,7 +480,10 @@ author as a broken projection.
   message naming the ADR, rather than answered with a zero that reads as a
   perfectly reconciled month.
 - **`fact_promotion_redemption`**, which has no owning ADR at all.
-- **Classifications (ABC, XYZ, RFM), forecasting, and the holiday calendar.**
+- **Classifications (ABC, XYZ, RFM), the forecast model, and the holiday
+  calendar.** 7.8 Demand itself is built, honestly scoped down to a
+  historical average — see "What was built" above for exactly what that
+  means and does not mean.
 - **Exports**, and with them `report.export` and `customer.pii.export`. Exports
   are the last item in this ADR's own rollout and the capabilities are not added
   ahead of them: a capability that gates nothing reads as a control that exists.

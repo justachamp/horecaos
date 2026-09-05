@@ -73,6 +73,21 @@ export function formatDeltaPercent(current: number, comparison: number): string 
   return `${sign}${Math.abs(percent)}%`;
 }
 
+/**
+ * An hourly average to one decimal place — `5.3`, never rounded to a whole
+ * count. The decimal is deliberate: it is the one visual cue on 7.8's demand
+ * table that a cell is an average of several real days, not a count from one
+ * of them, without adding a word to every row. `—`, never `0.0`-shaped
+ * confidence, when there is no average to show (an empty or too-thin sample —
+ * see `demand-forecast-page.ts`).
+ */
+export function formatAverage(value: number | null): string {
+  if (value === null) {
+    return '—';
+  }
+  return value.toFixed(1);
+}
+
 /** The median of a list of numbers, or null for an empty list — never zero. */
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) {

@@ -47,4 +47,14 @@ export const reportsPaths = {
   variantSales(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
   },
+
+  /**
+   * 7.8's historical average order count by hour, for one location and
+   * weekday — wave 48. Not a forecast id despite the section's own name: see
+   * `demand-forecast-page.ts`'s doc for the owner's 2026-09-05 decision to
+   * ship the honest average now rather than ADR 0043's seasonal-naive model.
+   */
+  demandHistory(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/demand-history`;
+  },
 } as const;

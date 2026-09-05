@@ -16,8 +16,20 @@ import { ReportsFilterState } from './reports-filter-state';
  * Product analytics are real reads (see those pages' own docs for exactly
  * what "real" covers); 7.4 Courier, 7.5 Staff, 7.6 Customer analytics and 7.9
  * Marketing reports route to the shared `NotBuiltPage`, each naming the fact
- * family it is missing rather than shipping a chart over nothing. 7.8 Demand
- * forecast and 7.10 Geography are tier 3 and stay off this rail entirely.
+ * family it is missing rather than shipping a chart over nothing.
+ *
+ * **7.8 Demand joins the rail in wave 48**, deliberately short of its own
+ * tier-3 spec (forecast vs. actual, holiday-aware, per product) — it is a
+ * historical average, not a forecast, and its tab reads "Demand" rather than
+ * a word implying prediction; see `demand-forecast-page.ts` for the full
+ * accounting. 7.10 Geography stays off this rail entirely.
+ *
+ * The shared period/fulfilment filter bar above the outlet does not reach
+ * the Demand tab: its unit is not a date span but "the most recent
+ * occurrences of one weekday", an axis the bar has no control for. This is
+ * the same selective applicability the bar already has everywhere else — 7.3
+ * and 7.7 already ignore its fulfilment-type toggle — carried one step
+ * further rather than a new mechanism.
  */
 @Component({
   selector: 'q-reports-shell',

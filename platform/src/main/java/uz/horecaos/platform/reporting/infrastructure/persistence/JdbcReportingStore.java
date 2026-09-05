@@ -970,6 +970,111 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    /**
+     * The historical demand sample behind Reports 7.8 — the owner's honest
+     * alternative to ADR 0043's own seasonal-naive forecast (2026-09-05, see
+     * that ADR's implementation status): "how many orders actually happened,
+     * hour by hour, on the location's most recent occurrences of this
+     * weekday", never a prediction.
+     *
+     * <p>Two queries rather than one join, deliberately. The first picks
+     * {@code sampleSize} business dates — the location's most recent trading
+     * days on this weekday, "trading" meaning it has at least one {@code
+     * COMPLETED} order somewhere that day, which is the only signal this
+     * schema carries for "the location was open" (ADR 0043 writes a fact row
+     * only for an order that happened; a quiet Tuesday leaves no row at all,
+     * and this module never reads {@code tenancy} to ask when a location was
+     * provisioned). The second reads every hour's count for exactly those
+     * dates. Folding both into one query would need an outer join against a
+     * generated hour series to keep a silent hour from disappearing instead of
+     * counting as zero — the exact bug {@code AGENTS.md} warns about under "a
+     * green test is evidence about the test" — and the two-step read is
+     * simpler to get right and to test than that join.
+     *
+     * <p>{@code terminal_status = 'COMPLETED'} matches {@code orders.count.v1}
+     * exactly, on purpose: a second, slightly different definition of "an
+     * order" here is the disagreement ADR 0043 exists to prevent, even though
+     * this read is not itself a registered metric (the shape — one row per
+     * hour with a per-date breakdown — is not a slice the registry's
+     * one-value-per-cell contract can express, the same reason {@link
+     * #readVariantSales} and {@link #readOrderOutcomes} are not metrics
+     * either).
+     *
+     * @return the {@code sampleSize} most recent qualifying business dates,
+     *         most recent first, with an hour-of-day count for each — empty
+     *         when the location has never recorded a completed order on this
+     *         weekday
+     */
+    public DemandSample readDemandHistory(
+            UUID tenantId,
+            UUID locationId,
+            int weekday,
+            LocalDate from,
+            LocalDate to,
+            String timezone,
+            int sampleSize) {
+
+        List<LocalDate> sampleDates = jdbc.sql("""
+                SELECT business_date
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND terminal_status = 'COMPLETED'
+                   AND business_date BETWEEN :from AND :to
+                   AND extract(isodow FROM business_date)::int = :weekday
+                 GROUP BY business_date
+                 ORDER BY business_date DESC
+                 LIMIT :sampleSize
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", from)
+                .param("to", to)
+                .param("weekday", weekday)
+                .param("sampleSize", sampleSize)
+                .query(LocalDate.class)
+                .list();
+
+        if (sampleDates.isEmpty()) {
+            return new DemandSample(List.of(), List.of());
+        }
+
+        List<HourCount> hourCounts = jdbc.sql("""
+                SELECT business_date,
+                       extract(hour FROM (occurred_at AT TIME ZONE :timezone))::int AS hour_of_day,
+                       count(*) AS order_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND terminal_status = 'COMPLETED'
+                   AND business_date IN (:sampleDates)
+                 GROUP BY business_date, hour_of_day
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("timezone", timezone)
+                .param("sampleDates", sampleDates)
+                .query((ResultSet row, int number) -> new HourCount(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getInt("order_count")))
+                .list();
+
+        return new DemandSample(sampleDates, hourCounts);
+    }
+
+    /**
+     * The result of {@link #readDemandHistory}: which dates qualified, and
+     * their hourly order counts.
+     *
+     * @param sampleDates the qualifying business dates found, most recent
+     *                    first — never more than the caller's {@code
+     *                    sampleSize}, and shorter than it whenever the
+     *                    location's history is thinner than asked for
+     */
+    public record DemandSample(List<LocalDate> sampleDates, List<HourCount> hourCounts) {}
+
+    /** One business date's order count for one local hour-of-day (0-23) — see {@link #readDemandHistory}. */
+    public record HourCount(LocalDate businessDate, int hourOfDay, int orderCount) {}
+
     // ------------------------------------------------ runs and divergence
 
     public void insertRun(
