@@ -35,7 +35,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.customers.application.CustomerBlacklistService;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
@@ -159,6 +162,7 @@ class CartCheckoutAndOrderTests {
     private JdbcOrderStore orderStore;
     private JdbcCartStore cartStore;
     private FieldProtection protection;
+    private CustomerBlacklistService customerBlacklist;
     private ObjectMapper objectMapper;
     private uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort deliveryOrders;
     private java.util.function.Function<PaymentIntentPort, CheckoutService> checkoutWith;
@@ -342,6 +346,12 @@ class CartCheckoutAndOrderTests {
                         Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get, clock),
                 "local"));
 
+        // The real gate, over the real table, for the same reason serviceability
+        // above is real rather than a stub that agrees with itself: whether an
+        // account may check out is exactly the property this suite exists to test.
+        customerBlacklist = new CustomerBlacklistService(
+                new JdbcCustomerStore(jdbc), protection, clock, new JdbcAuditRecorder(jdbc, objectMapper));
+
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
         var policies = new OrderAcceptancePolicyService(
@@ -363,7 +373,8 @@ class CartCheckoutAndOrderTests {
                         jdbc, protection, objectMapper),
                 protection,
                 objectMapper,
-                clock);
+                clock,
+                customerBlacklist);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         orderState = new OrderStateService(
                 orderStore,
@@ -443,7 +454,8 @@ class CartCheckoutAndOrderTests {
                 protection,
                 objectMapper,
                 published,
-                clock);
+                clock,
+                customerBlacklist);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         deliveryOrders =
@@ -876,6 +888,112 @@ class CartCheckoutAndOrderTests {
         assertThat(orderStore.find(TENANT, orderIdOf(result)).orElseThrow().paymentStatusProjection())
                 .as("no order waits on a provider that does not exist")
                 .isEqualTo("NOT_REQUIRED");
+    }
+
+    // ------------------------------------------------------ customer blacklist
+
+    @Test
+    @DisplayName("a blacklisted customer cannot even open a cart")
+    void aBlacklistedCustomerCannotOpenACart() {
+        tx(() -> customerBlacklist.add(TENANT, CUSTOMER, "chargebacks", null, ActorRef.user("operator", "Operator")));
+
+        var refused = catchThrowable(this::openCart);
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("CUSTOMER_BLACKLISTED");
+        assertThat(countOrders()).isZero();
+    }
+
+    @Test
+    @DisplayName("an entry added after the basket was filled still refuses the checkout it was meant to stop")
+    void aBlacklistEntryAddedAfterTheCartRefusesCheckout() {
+        // The realistic sequence: nothing stopped the cart from being built,
+        // because nothing had happened yet. The entry landing before checkout is
+        // exactly what CheckoutEligibilityGuard's own read-against-the-clock is
+        // for — a cached "this account was fine" from cart creation would let the
+        // entry it was added to stop sail straight through.
+        var cart = readyCart();
+        tx(() -> customerBlacklist.add(TENANT, CUSTOMER, "chargebacks", null, ActorRef.user("operator", "Operator")));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-blacklist-checkout")));
+
+        assertThat(result.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(result.rejectionCode()).isEqualTo("CUSTOMER_BLACKLISTED");
+        assertThat(countOrders()).isZero();
+        // A refused checkout leaves no trace on the cart it refused, the same
+        // property ADR 0019 states for every other business rejection.
+        assertThat(readCart(cart).status()).isEqualTo(CartStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("lifting a blacklist entry restores the account's ability to check out")
+    void aLiftedBlacklistRestoresCheckout() {
+        tx(() -> customerBlacklist.add(TENANT, CUSTOMER, "chargebacks", null, ActorRef.user("operator", "Operator")));
+        tx(() -> customerBlacklist.lift(
+                TENANT, CUSTOMER, "resolved with the customer", ActorRef.user("operator", "Operator")));
+
+        var result = placeOrder("idem-lifted");
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("blacklisting one account does not refuse a different account's checkout")
+    void blacklistingOneAccountDoesNotRefuseAnothersCheckout() {
+        // The model carries no brand or location scope at all (V0125): an entry
+        // names a tenant and one customer_account_id, nothing narrower and
+        // nothing wider. The only "scope" this platform's blacklist has is the
+        // account itself, so the isolation this platform promises is exactly
+        // this: refusing CUSTOMER must never refuse OTHER_CUSTOMER.
+        tx(() -> customerBlacklist.add(TENANT, CUSTOMER, "chargebacks", null, ActorRef.user("operator", "Operator")));
+
+        UUID otherCart = tx(() -> carts.create(
+                        TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.PICKUP, OTHER_CUSTOMER, null))
+                .cartId();
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                OTHER_CUSTOMER,
+                otherCart,
+                cartVersion(otherCart),
+                "a",
+                burgerVariant,
+                2,
+                List.of(),
+                null));
+        tx(() -> carts.price(TENANT, BRAND, OTHER_CUSTOMER, otherCart, cartVersion(otherCart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(otherCart, "idem-other-customer")));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("an expired blacklist entry stops refusing the moment the clock passes it")
+    void anExpiredBlacklistEntryStopsRefusingOnceTheClockPassesIt() {
+        var cart = readyCart();
+        // Five minutes: comfortably inside the fifteen-minute quote TTL, so the
+        // quote this cart was priced at is still the one bound to it on the
+        // second attempt below — the test's own clock advance must not
+        // accidentally prove QUOTE_EXPIRED instead of the property it is for.
+        tx(() -> customerBlacklist.add(
+                TENANT,
+                CUSTOMER,
+                "temporary",
+                clock.instant().plus(Duration.ofMinutes(5)),
+                ActorRef.user("operator", "Operator")));
+
+        var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-expiry-refused")));
+        assertThat(refused.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(refused.rejectionCode()).isEqualTo("CUSTOMER_BLACKLISTED");
+
+        clock.advance(Duration.ofMinutes(6));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-expiry-succeeds")));
+        assertThat(result.created()).isTrue();
+        assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
     }
 
     // ------------------------------------------------- checkout, payments wired

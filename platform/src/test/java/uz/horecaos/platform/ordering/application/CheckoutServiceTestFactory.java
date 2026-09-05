@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.time.Clock;
 import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.migration.api.MigrationOwnershipPort;
@@ -54,7 +55,8 @@ public final class CheckoutServiceTestFactory {
             FieldProtection protection,
             ObjectMapper objectMapper,
             ApplicationEventPublisher events,
-            Clock clock) {
+            Clock clock,
+            CustomerBlacklistPort blacklist) {
         return new CheckoutService(
                 new CheckoutAttemptLedger(attempts, orders, carts, payments, settlements),
                 new CheckoutEligibilityGuard(
@@ -66,7 +68,8 @@ public final class CheckoutServiceTestFactory {
                         payments,
                         settlements,
                         quotes,
-                        catalog),
+                        catalog,
+                        blacklist),
                 new CheckoutReservationStep(inventory, capacity, quotes),
                 new CheckoutOrderWriter(
                         orders,
