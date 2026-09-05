@@ -246,6 +246,11 @@ export interface MoveLocationRequest {
   locationId: string;
 }
 
+export interface MyReferralResponse {
+  code?: string;
+  redeemedAs?: ReferralStorefrontControllerRedemptionResponse;
+}
+
 export interface OrderLineResponse {
   finalAmountMinor?: number;
   lineNumber?: number;
@@ -352,6 +357,17 @@ export interface PutLineRequest {
   modifierOptionIds?: Array<string>;
   quantity?: number;
   variantId: string;
+}
+
+export interface RedeemRequest {
+  code: string;
+}
+
+export interface ReferralStorefrontControllerRedemptionResponse {
+  expiresAt?: string;
+  redeemedAt?: string;
+  rewardedAt?: string;
+  status?: string;
 }
 
 export interface RegisterRequest {
@@ -510,6 +526,8 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
+  "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };

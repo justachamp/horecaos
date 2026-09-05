@@ -834,6 +834,33 @@ public enum Capability {
      */
     LOYALTY_POLICY_MANAGE("loyalty.policy.manage", "loyalty", "policy.manage"),
 
+    /**
+     * A new ADR (referral program): reading a brand's referral program, its
+     * customer codes, and its redemptions — "referrals actually happening" for
+     * a marketer, and a support agent answering "why did my friend's code not
+     * pay out".
+     *
+     * <p>No contact value travels with a redemption row — referrer and referee
+     * are opaque account references, per ADR 0029 — so this read is safe at
+     * {@code BRAND} scope without a second, narrower capability the way
+     * {@code customer.pii.reveal} gates a contact value elsewhere.
+     */
+    REFERRAL_READ("referral.read", "referral", "read"),
+
+    /**
+     * A new ADR (referral program): authoring which reward shape a brand runs —
+     * both sides rewarded, or the referrer only — the reward amounts, the
+     * per-referrer cap, and the redemption window.
+     *
+     * <p>Separate from {@link #LOYALTY_POLICY_MANAGE} for the same reason that
+     * capability is separate from {@code LOYALTY_ADJUST}: this authors the
+     * numbers a whole brand runs under, not one customer's balance, and every
+     * number here is a policy value ADR 0046's own accrual and redemption
+     * policies already are — granted at {@code BRAND} scope, since a brand's
+     * referral liability is paid from its own points ledger.
+     */
+    REFERRAL_POLICY_MANAGE("referral.policy.manage", "referral", "policy.manage"),
+
     /** Granting and revoking roles within a scope the granter already covers. */
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
 

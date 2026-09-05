@@ -41,13 +41,17 @@
 - Supersedes / Superseded by: —
 - Open inputs: Marketing frequency cap and quiet-hours values (product, legal),
   carried from ADR 0020 — provisional defaults are set below and enforced from day
-  one; referral reward mechanics (product, finance); marketing SMS sender of record
-  and price per segment (finance, legal); the signed treatment of cancelled and
-  refunded orders in RFM (finance), inherited from ADR 0043's provisional registry
-  version 1. **None is structural** — see
+  one; marketing SMS sender of record and price per segment (finance, legal); the
+  signed treatment of cancelled and refunded orders in RFM (finance), inherited
+  from ADR 0043's provisional registry version 1. **None is structural** — see
   [Open inputs and why none is structural](#open-inputs-and-why-none-is-structural).
   The Telegram surface question that held this record at `Proposed` was answered by
-  ADR 0035 on 2026-08-22 and is withdrawn rather than deferred.
+  ADR 0035 on 2026-08-22 and is withdrawn rather than deferred. Referral reward
+  mechanics — who is rewarded, on which qualifying event, amount, cap, expiry — was
+  an open input here and is resolved by [ADR 0067](0067-referral-program-rewards-through-the-loyalty-ledger.md)
+  on 2026-09-05: a tenant-configured shape (both sides, or the referrer only),
+  riding on ADR 0046's loyalty ledger. The referral edge and attribution links
+  this record still owns (below) are unaffected and remain unbuilt.
 
 ## Context
 
@@ -422,9 +426,10 @@ creation, and never again: last-touch attribution over a delivery base makes
 every re-engagement SMS look like it acquired a customer who has ordered for two
 years. Each order separately records the link active in its session, which is
 what a campaign report actually needs. A referral is an edge — referrer, referee,
-link, qualifying event — recorded whether or not a reward exists. Reward
-mechanics are an open input; if the reward is cashback it belongs to ADR 0046,
-and if it is a promo code the coded grant above already carries it.
+link, qualifying event — recorded whether or not a reward exists, and this
+attribution mechanism itself is not built. Reward mechanics were an open
+input and are resolved by ADR 0067: a tenant-authored program, paid through
+ADR 0046's loyalty ledger, on the referee's first completed order.
 
 ## Reviews
 
@@ -613,7 +618,7 @@ payments, for the same reason.
 | Input | Owner | Why it does not change the structure |
 |---|---|---|
 | Marketing frequency cap and quiet-hours values | product, legal | Values resolved through ADR 0030 against ADR 0020's `quiet_hours` preference column. Provisional defaults are set above and enforced from day one, so the mechanism ships complete; counsel changes numbers, not tables |
-| Referral reward mechanics — who is rewarded, on which qualifying event, amount, cap, expiry | product, finance | The referral edge is recorded regardless. Both surviving reward shapes already exist in the model: a coded benefit grant here, or an ADR 0046 points accrual. The third shape, a cash credit to a customer-funded balance, was withdrawn from ADR 0046's scope on 2026-08-23 and is no longer a candidate |
+| Referral reward mechanics — who is rewarded, on which qualifying event, amount, cap, expiry | product, finance | **Resolved 2026-09-05 by [ADR 0067](0067-referral-program-rewards-through-the-loyalty-ledger.md)**, which took the accrual shape this row names: a tenant-authored program (both sides rewarded, or the referrer only) paying through ADR 0046's loyalty ledger. The referral edge itself — recorded regardless of a reward, per this ADR's own decision above — and attribution links remain this ADR's own unbuilt work; ADR 0067 owns only the reward |
 | Marketing SMS sender of record and price per segment | finance, legal | The campaign already carries `estimated_cost_minor`, `cost_ceiling_minor`, `reserved_cost_minor`, and `spent_cost_minor` against a tenant-configured price per segment. If campaign spend later becomes an ADR 0021 billable unit, ADR 0021 meters `spent_cost_minor`; that is a meter definition against an existing column |
 | Signed treatment of cancelled and refunded orders in RFM, and the business-day boundary | finance, through ADR 0043 | Not this ADR's to answer. ADR 0043 is Accepted, its business-day boundary is implemented, and its registry ships version 1 as provisional. The projection carries `order_count` beside `completed_order_count` and `gross_spend_minor` beside `net_spend_minor`, and stamps `metric_definition_version`; a registry revision restates the projection rather than reshaping it |
 

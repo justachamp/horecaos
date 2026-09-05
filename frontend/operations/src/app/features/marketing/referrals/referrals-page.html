@@ -1,0 +1,316 @@
+<div class="referrals">
+  <div class="referrals__toolbar">
+    <div>
+      <h1 class="q-subhead">{{ 'marketing.referrals.title' | t }}</h1>
+      <p class="q-body-sm referrals__intro">{{ 'marketing.referrals.intro' | t }}</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="referrals__skeleton" [attr.aria-label]="'marketing.referrals.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="referrals__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="referrals__denied" data-testid="referrals-denied">
+      <p class="q-body-sm">{{ 'marketing.referrals.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="referrals__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="referrals__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (summary(); as totals) {
+      <div class="referrals__summary" data-testid="referrals-summary">
+        <div class="referrals__summary-tile">
+          <span class="q-caption">{{ 'marketing.referrals.summary.codesIssued' | t }}</span>
+          <span class="q-body referrals__summary-value">{{ totals.codesIssued }}</span>
+        </div>
+        <div class="referrals__summary-tile">
+          <span class="q-caption">{{ 'marketing.referrals.summary.pending' | t }}</span>
+          <span class="q-body referrals__summary-value">{{ totals.pendingRedemptions }}</span>
+        </div>
+        <div class="referrals__summary-tile">
+          <span class="q-caption">{{ 'marketing.referrals.summary.rewarded' | t }}</span>
+          <span class="q-body referrals__summary-value">{{ totals.rewardedRedemptions }}</span>
+        </div>
+        <div class="referrals__summary-tile">
+          <span class="q-caption">{{ 'marketing.referrals.summary.paidOut' | t }}</span>
+          <span class="q-body referrals__summary-value">{{
+            formatWhole(totals.pointsPaidOutMinor)
+          }}</span>
+        </div>
+      </div>
+    }
+
+    <section class="referrals__section">
+      <div class="referrals__section-head">
+        <h2 class="q-body referrals__section-title">
+          {{ 'marketing.referrals.program.title' | t }}
+        </h2>
+        <button type="button" class="referrals__create" (click)="openForm()">
+          {{ 'marketing.referrals.program.create.action' | t }}
+        </button>
+      </div>
+      <p class="q-caption referrals__section-hint">{{ 'marketing.referrals.program.hint' | t }}</p>
+
+      <table class="referrals__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.referrals.program.column.shape' | t }}</th>
+            <th>{{ 'marketing.referrals.program.column.referrerReward' | t }}</th>
+            <th>{{ 'marketing.referrals.program.column.refereeReward' | t }}</th>
+            <th>{{ 'marketing.referrals.program.column.cap' | t }}</th>
+            <th>{{ 'marketing.referrals.program.column.window' | t }}</th>
+            <th>{{ 'marketing.referrals.column.status' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (program of programs(); track program.id) {
+            <tr class="referrals-row" data-testid="program-row">
+              <td>{{ shapeLabelKey(program.rewardShape) | t }}</td>
+              <td class="q-tnum">{{ formatWhole(program.referrerRewardMinor) }}</td>
+              <td class="q-tnum">
+                {{
+                  program.rewardShape === 'REFERRER_ONLY'
+                    ? ('marketing.referrals.notApplicable' | t)
+                    : formatWhole(program.refereeRewardMinor)
+                }}
+              </td>
+              <td class="q-tnum">
+                {{
+                  program.maxRewardedReferralsPerReferrer === null
+                    ? ('marketing.referrals.uncapped' | t)
+                    : program.maxRewardedReferralsPerReferrer
+                }}
+              </td>
+              <td class="q-tnum">
+                {{ 'marketing.referrals.days' | t: { count: program.redemptionWindowDays } }}
+              </td>
+              <td>
+                <span class="status-badge" [class.status-badge--live]="program.status === 'ACTIVE'">
+                  {{ statusLabelKey(program.status) | t }}
+                </span>
+              </td>
+              <td class="referrals__action-col">
+                @if (program.status === 'DRAFT') {
+                  <button
+                    type="button"
+                    [disabled]="actingProgramId() === program.id"
+                    (click)="activateProgram(program)"
+                  >
+                    {{ 'marketing.referrals.action.activate' | t }}
+                  </button>
+                }
+                @if (program.status !== 'RETIRED') {
+                  <button
+                    type="button"
+                    [disabled]="actingProgramId() === program.id"
+                    (click)="retireProgram(program)"
+                  >
+                    {{ 'marketing.referrals.action.retire' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7">
+                <p class="q-body-sm" data-testid="programs-empty">
+                  {{ 'marketing.referrals.program.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="referrals__section">
+      <div class="referrals__section-head">
+        <h2 class="q-body referrals__section-title">
+          {{ 'marketing.referrals.redemptions.title' | t }}
+        </h2>
+      </div>
+      <p class="q-caption referrals__section-hint">
+        {{ 'marketing.referrals.redemptions.hint' | t }}
+      </p>
+
+      <table class="referrals__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.referrals.redemptions.column.referrer' | t }}</th>
+            <th>{{ 'marketing.referrals.redemptions.column.referee' | t }}</th>
+            <th>{{ 'marketing.referrals.column.status' | t }}</th>
+            <th>{{ 'marketing.referrals.redemptions.column.referrerReward' | t }}</th>
+            <th>{{ 'marketing.referrals.redemptions.column.refereeReward' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (redemption of redemptions(); track redemption.id) {
+            <tr class="referrals-row" data-testid="redemption-row">
+              <td class="q-tnum">{{ shortId(redemption.referrerCustomerAccountId) }}</td>
+              <td class="q-tnum">{{ shortId(redemption.refereeCustomerAccountId) }}</td>
+              <td>
+                <span
+                  class="status-badge"
+                  [class.status-badge--live]="redemption.status === 'REWARDED'"
+                >
+                  {{ statusLabelKey(redemption.status) | t }}
+                </span>
+              </td>
+              <td class="q-tnum">
+                @if (redemption.referrerPaid) {
+                  {{ formatWhole(redemption.referrerRewardMinor) }}
+                } @else if (redemption.referrerSkipReason) {
+                  <span
+                    class="referrals__skip-reason"
+                    [title]="skipReasonLabelKey(redemption.referrerSkipReason) | t"
+                    >{{ 'marketing.referrals.skipped' | t }}</span
+                  >
+                } @else {
+                  —
+                }
+              </td>
+              <td class="q-tnum">
+                {{
+                  redemption.refereePaid
+                    ? formatWhole(redemption.refereeRewardMinor)
+                    : redemption.refereeRewardMinor === 0
+                      ? ('marketing.referrals.notApplicable' | t)
+                      : '—'
+                }}
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">
+                <p class="q-body-sm" data-testid="redemptions-empty">
+                  {{ 'marketing.referrals.redemptions.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section
+      class="referrals__section referrals__not-built"
+      data-testid="referrals-links-not-built"
+    >
+      <h2 class="q-body referrals__section-title">{{ 'marketing.referrals.links.title' | t }}</h2>
+      <p class="q-body-sm">{{ 'marketing.referrals.links.body' | t }}</p>
+    </section>
+  }
+
+  @if (showForm()) {
+    <div class="dialog-backdrop" (click)="closeForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'marketing.referrals.program.create.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.referrals.program.form.shape' | t }}</span>
+          <select [value]="formShape()" (change)="formShape.set($any($event.target).value)">
+            @for (choice of shapeChoices; track choice) {
+              <option [value]="choice">{{ shapeLabelKey(choice) | t }}</option>
+            }
+          </select>
+          <span class="q-caption referrals__field-hint">{{
+            'marketing.referrals.program.form.shape.hint' | t
+          }}</span>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.referrals.program.form.referrerReward' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            [value]="formReferrerRewardMinor()"
+            (input)="formReferrerRewardMinor.set(+$any($event.target).value)"
+          />
+        </label>
+
+        @if (formShape() === 'BOTH_SIDES') {
+          <label class="field">
+            <span class="q-caption">{{
+              'marketing.referrals.program.form.refereeReward' | t
+            }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="formRefereeRewardMinor()"
+              (input)="formRefereeRewardMinor.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="formHasCap()"
+            (change)="formHasCap.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.referrals.program.form.hasCap' | t }}</span>
+        </label>
+        @if (formHasCap()) {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.referrals.program.form.cap' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              [value]="formCap()"
+              (input)="formCap.set(+$any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{
+            'marketing.referrals.program.form.redemptionWindow' | t
+          }}</span>
+          <input
+            type="number"
+            min="1"
+            [value]="formRedemptionWindowDays()"
+            (input)="formRedemptionWindowDays.set(+$any($event.target).value)"
+          />
+          <span class="q-caption referrals__field-hint">{{
+            'marketing.referrals.program.form.redemptionWindow.hint' | t
+          }}</span>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.referrals.program.form.lotLifetime' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            [value]="formRewardLotLifetimeDays()"
+            (input)="formRewardLotLifetimeDays.set(+$any($event.target).value)"
+          />
+        </label>
+
+        @if (formError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeForm()">
+            {{ 'marketing.referrals.dialog.cancel' | t }}
+          </button>
+          <button type="button" [disabled]="!canSubmit()" (click)="submitForm()">
+            {{ 'marketing.referrals.program.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

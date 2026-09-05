@@ -1236,7 +1236,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -2557,6 +2557,50 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "DraftProgramRequest" : {
+        "properties" : {
+          "maxRewardedReferralsPerReferrer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "redemptionWindowDays" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "refereeRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referrerRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rewardCurrency" : {
+            "pattern" : "[A-Z]{3}",
+            "type" : "string"
+          },
+          "rewardLotLifetimeDays" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "rewardShape" : {
+            "pattern" : "BOTH_SIDES|REFERRER_ONLY",
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "rewardCurrency", "rewardShape" ],
         "type" : "object"
       },
       "DraftRedemptionPolicyRequest" : {
@@ -5059,6 +5103,56 @@
         },
         "type" : "object"
       },
+      "ProgramResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maxRewardedReferralsPerReferrer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "redemptionWindowDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "refereeRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referrerRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rewardCurrency" : {
+            "type" : "string"
+          },
+          "rewardLotLifetimeDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rewardShape" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ProvenanceResponse" : {
         "properties" : {
           "asOf" : {
@@ -5500,6 +5594,59 @@
             "type" : "string"
           },
           "referenceValue" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReferralOperationsControllerRedemptionResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qualifyingOrderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redeemedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "refereeCustomerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "refereePaid" : {
+            "type" : "boolean"
+          },
+          "refereeRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referrerCustomerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "referrerPaid" : {
+            "type" : "boolean"
+          },
+          "referrerRewardMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referrerSkipReason" : {
+            "type" : "string"
+          },
+          "rewardedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           }
         },
@@ -6425,7 +6572,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -7114,6 +7261,31 @@
           },
           "trackingMode" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SummaryResponse" : {
+        "properties" : {
+          "closedRedemptions" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "codesIssued" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pendingRedemptions" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pointsPaidOutMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rewardedRedemptions" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -9472,6 +9644,244 @@
         },
         "summary" : "Withdraw the live policy, or discard a draft nobody activated",
         "tags" : [ "Loyalty policy" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs" : {
+      "get" : {
+        "description" : "DRAFT, ACTIVE and RETIRED rows together, newest first within each status — an authoring screen needs the lineage, not only what is live.",
+        "operationId" : "programs",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProgramResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every referral program this brand has authored",
+        "tags" : [ "Referral program" ]
+      },
+      "post" : {
+        "description" : "Always DRAFT. Nothing here rewards anyone until a separate activation call promotes it, so a mistyped amount is caught before a customer redeems against it.",
+        "operationId" : "draftProgram",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DraftProgramRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProgramResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a referral program",
+        "tags" : [ "Referral program" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs/{programId}/activate" : {
+      "post" : {
+        "description" : "Retires whichever program currently holds this brand, then promotes the draft, in one transaction — a brand runs exactly one referral program at a time.",
+        "operationId" : "activateProgram",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "programId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a drafted referral program live",
+        "tags" : [ "Referral program" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs/{programId}/retire" : {
+      "post" : {
+        "description" : "A retired program stops resolving from this instant. Redemptions already snapshotted under it keep paying out on their own terms until their window closes; only new redemptions are refused once nothing is ACTIVE.",
+        "operationId" : "retireProgram",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "programId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw a live program, or discard a draft nobody activated",
+        "tags" : [ "Referral program" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/redemptions" : {
+      "get" : {
+        "description" : "PENDING, REWARDED, EXPIRED, and VOIDED together — the lineage a marketer or a support agent needs to answer \"why did my friend's code not pay out\".",
+        "operationId" : "redemptions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReferralOperationsControllerRedemptionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every redemption at this brand, newest first",
+        "tags" : [ "Referrals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/summary" : {
+      "get" : {
+        "description" : "The marketer's headline numbers, computed from the same rows the redemption list below shows — never a separately maintained count that can drift from it.",
+        "operationId" : "summary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Codes issued, redemptions by status, and points paid out",
+        "tags" : [ "Referrals" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/cash-handovers" : {
@@ -18837,6 +19247,9 @@
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
   }, {
+    "description" : "Referral codes and redemptions actually happening at a brand",
+    "name" : "Referrals"
+  }, {
     "description" : "The merchant's own plan, entitlements, and usage",
     "name" : "Commercial"
   }, {
@@ -18902,6 +19315,9 @@
   }, {
     "description" : "Sections, tables, QR tokens, and branch settings",
     "name" : "Dine-in floor plan"
+  }, {
+    "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
+    "name" : "Referral program"
   }, {
     "description" : "The branch's order queue, approvals, and timeline",
     "name" : "Operations orders"

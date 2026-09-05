@@ -94,7 +94,8 @@ export const messagesRu: MessageCatalogue = {
   'reservations.action.noShow': 'Неявка',
   'reservations.form.title': 'Новое бронирование',
   'reservations.form.editTitle': 'Изменить бронирование',
-  'reservations.form.editHint': 'Имя гостя, телефон и комментарий здесь изменить нельзя — чтобы их поменять, отмените бронь и создайте новую.',
+  'reservations.form.editHint':
+    'Имя гостя, телефон и комментарий здесь изменить нельзя — чтобы их поменять, отмените бронь и создайте новую.',
   'reservations.form.guestName': 'Имя гостя',
   'reservations.form.guestPhone': 'Телефон',
   'reservations.form.secondaryPhone': 'Доп. телефон',
@@ -105,8 +106,10 @@ export const messagesRu: MessageCatalogue = {
   'reservations.form.reason': 'Причина',
   'reservations.form.tables': 'Столы',
   'reservations.form.incomplete': 'Укажите имя гостя, телефон и хотя бы один стол',
-  'reservations.form.incompleteEdit': 'Укажите корректное время, хотя бы один стол и причину изменения',
-  'reservations.form.noChannel': 'Нет активного канала продаж — для бронирования нужно указать, откуда оно поступило',
+  'reservations.form.incompleteEdit':
+    'Укажите корректное время, хотя бы один стол и причину изменения',
+  'reservations.form.noChannel':
+    'Нет активного канала продаж — для бронирования нужно указать, откуда оно поступило',
   'reservations.form.saving': 'Сохранение…',
   'reservations.form.save': 'Сохранить бронирование',
   'reservations.form.saveEdit': 'Сохранить изменения',
@@ -1792,6 +1795,7 @@ export const messagesRu: MessageCatalogue = {
   'marketing.nav.promotions': 'Промоакции',
   'marketing.nav.promoCodes': 'Промокоды',
   'marketing.nav.loyalty': 'Лояльность',
+  'marketing.nav.referrals': 'Рефералы',
   'marketing.nav.campaigns': 'Кампании',
   'marketing.nav.automations': 'Автоматизации',
   'marketing.nav.content': 'Контент',
@@ -2010,6 +2014,76 @@ export const messagesRu: MessageCatalogue = {
   'marketing.loyalty.posSync.title': 'Синхронизация баланса с POS',
   'marketing.loyalty.posSync.body':
     'Не реализовано. Ни один ADR не описывает чтение или запись баланса лояльности POS-терминалом, и такая возможность провайдера нигде не заявлена — см. frontend-information-architecture.md §6.3.',
+
+  // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
+  'marketing.referrals.title': 'Рефералы',
+  'marketing.referrals.intro':
+    'Реферальное вознаграждение, настраиваемое брендом и начисляемое через баллы лояльности. Выберите, вознаграждаются ли обе стороны — и приглашающий, и новый клиент — или только приглашающий; бренд без активной программы не запускает ни одной.',
+  'marketing.referrals.loading': 'Загрузка',
+  'marketing.referrals.denied': 'Нет доступа к реферальной программе этого бренда',
+  'marketing.referrals.column.status': 'Статус',
+  'marketing.referrals.uncapped': 'Без ограничения',
+  'marketing.referrals.notApplicable': 'Н/Д',
+  'marketing.referrals.skipped': 'Пропущено',
+  'marketing.referrals.days': '{count} дн.',
+  'marketing.referrals.action.activate': 'Активировать',
+  'marketing.referrals.action.retire': 'Отозвать',
+  'marketing.referrals.dialog.cancel': 'Отмена',
+  'marketing.referrals.shape.BOTH_SIDES': 'Обе стороны',
+  'marketing.referrals.shape.REFERRER_ONLY': 'Только приглашающий',
+  'marketing.referrals.status.DRAFT': 'Черновик',
+  'marketing.referrals.status.ACTIVE': 'Активна',
+  'marketing.referrals.status.RETIRED': 'Отозвана',
+  'marketing.referrals.status.PENDING': 'Ожидает',
+  'marketing.referrals.status.REWARDED': 'Начислено',
+  'marketing.referrals.status.EXPIRED': 'Истекло',
+  'marketing.referrals.status.VOIDED': 'Аннулировано',
+  'marketing.referrals.skipReason.REFERRER_CAP_REACHED':
+    'Собственный лимит вознаграждений приглашающего уже достигнут',
+
+  'marketing.referrals.summary.codesIssued': 'Выдано кодов',
+  'marketing.referrals.summary.pending': 'Ждут первого заказа',
+  'marketing.referrals.summary.rewarded': 'Вознаграждено',
+  'marketing.referrals.summary.paidOut': 'Начислено баллов',
+
+  'marketing.referrals.program.title': 'Программа вознаграждения',
+  'marketing.referrals.program.hint':
+    'Форма, суммы, лимит на одного приглашающего и срок, в течение которого использованный код должен привести к заказу. Бренд без активной программы ничего не начисляет.',
+  'marketing.referrals.program.create.action': 'Новая программа',
+  'marketing.referrals.program.create.title': 'Черновик реферальной программы',
+  'marketing.referrals.program.create.submit': 'Сохранить черновик',
+  'marketing.referrals.program.column.shape': 'Форма',
+  'marketing.referrals.program.column.referrerReward': 'Награда приглашающему',
+  'marketing.referrals.program.column.refereeReward': 'Награда новому клиенту',
+  'marketing.referrals.program.column.cap': 'Лимит на приглашающего',
+  'marketing.referrals.program.column.window': 'Окно на заказ',
+  'marketing.referrals.program.empty': 'Реферальная программа ещё не создана.',
+  'marketing.referrals.program.form.shape': 'Кто получает награду',
+  'marketing.referrals.program.form.shape.hint':
+    'Обе стороны: приглашающий и новый клиент получают баллы при первом завершённом заказе нового клиента. Только приглашающий: новый клиент не получает ничего дополнительно.',
+  'marketing.referrals.program.form.referrerReward': 'Награда приглашающему, баллы',
+  'marketing.referrals.program.form.refereeReward': 'Награда новому клиенту, баллы',
+  'marketing.referrals.program.form.hasCap':
+    'Ограничить число оплачиваемых рефералов на одного приглашающего',
+  'marketing.referrals.program.form.cap': 'Максимум оплачиваемых рефералов на приглашающего',
+  'marketing.referrals.program.form.redemptionWindow':
+    'Окно на использование кода, дней до первого завершённого заказа',
+  'marketing.referrals.program.form.redemptionWindow.hint':
+    'Код, использованный, но не приведший к завершённому заказу за этот срок, теряет силу.',
+  'marketing.referrals.program.form.lotLifetime': 'Награда сгорает через, дней',
+
+  'marketing.referrals.redemptions.title': 'Рефералы в действии',
+  'marketing.referrals.redemptions.hint':
+    'Каждое использование кода клиентами этого бренда: начислено ли вознаграждение и почему собственная награда приглашающего была пропущена, если его лимит уже достигнут.',
+  'marketing.referrals.redemptions.column.referrer': 'Приглашающий',
+  'marketing.referrals.redemptions.column.referee': 'Новый клиент',
+  'marketing.referrals.redemptions.column.referrerReward': 'Начислено приглашающему',
+  'marketing.referrals.redemptions.column.refereeReward': 'Начислено новому клиенту',
+  'marketing.referrals.redemptions.empty': 'Ни один реферальный код ещё не использован.',
+
+  'marketing.referrals.links.title': 'Ссылки для привлечения на сайте и в Telegram',
+  'marketing.referrals.links.body':
+    'Не реализовано, и это не скрытый пробел: ссылки "?ref=" на сайте, deep-link "startapp" в Telegram и пошаговая настройка Mini-App/BotFather относятся к marketing.attribution_links из ADR 0044 и остаются пунктом чек-листа этого ADR. Клиент всё ещё может получить код, а друг — использовать его в витрине; здесь не отображается ссылка для отправки, потому что таблицы ссылок пока не существует.',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',

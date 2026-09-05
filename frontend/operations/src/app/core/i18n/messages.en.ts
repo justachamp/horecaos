@@ -119,8 +119,10 @@ export const messagesEn = {
   'reservations.form.reason': 'Reason',
   'reservations.form.tables': 'Tables',
   'reservations.form.incomplete': 'A guest name, a phone, and at least one table are required',
-  'reservations.form.incompleteEdit': 'A valid time window, at least one table, and a reason are required',
-  'reservations.form.noChannel': 'No active sales channel is configured — a booking needs one to record where it came from',
+  'reservations.form.incompleteEdit':
+    'A valid time window, at least one table, and a reason are required',
+  'reservations.form.noChannel':
+    'No active sales channel is configured — a booking needs one to record where it came from',
   'reservations.form.saving': 'Saving…',
   'reservations.form.save': 'Save booking',
   'reservations.form.saveEdit': 'Save changes',
@@ -1173,7 +1175,8 @@ export const messagesEn = {
   'kitchen.capacity.form.from': 'From',
   'kitchen.capacity.form.to': 'To',
   'kitchen.capacity.form.portionsPerHour': 'Portions per hour',
-  'kitchen.capacity.form.incomplete': 'A station, a valid window, and a positive ceiling are required',
+  'kitchen.capacity.form.incomplete':
+    'A station, a valid window, and a positive ceiling are required',
   'kitchen.capacity.form.saving': 'Saving…',
   'kitchen.capacity.form.save': 'Add ceiling',
   'kitchen.capacity.card2.title': 'Cook headcount output',
@@ -1816,6 +1819,7 @@ export const messagesEn = {
   'marketing.nav.promotions': 'Promotions',
   'marketing.nav.promoCodes': 'Promo codes',
   'marketing.nav.loyalty': 'Loyalty',
+  'marketing.nav.referrals': 'Referrals',
   'marketing.nav.campaigns': 'Campaigns',
   'marketing.nav.automations': 'Automations',
   'marketing.nav.content': 'Content',
@@ -2034,6 +2038,75 @@ export const messagesEn = {
   'marketing.loyalty.posSync.title': 'POS balance sync',
   'marketing.loyalty.posSync.body':
     'Not built. No ADR owns a point-of-sale terminal reading or writing a loyalty balance, and no provider capability declares it — see frontend-information-architecture.md §6.3.',
+
+  // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
+  'marketing.referrals.title': 'Referrals',
+  'marketing.referrals.intro':
+    'A brand-configured referral reward, paid through the loyalty ledger. Choose whether both the referrer and the new customer are rewarded, or the referrer only — a brand with no active program runs none.',
+  'marketing.referrals.loading': 'Loading',
+  'marketing.referrals.denied': 'No access to this brand’s referral program',
+  'marketing.referrals.column.status': 'Status',
+  'marketing.referrals.uncapped': 'Uncapped',
+  'marketing.referrals.notApplicable': 'N/A',
+  'marketing.referrals.skipped': 'Skipped',
+  'marketing.referrals.days': '{count} d',
+  'marketing.referrals.action.activate': 'Activate',
+  'marketing.referrals.action.retire': 'Retire',
+  'marketing.referrals.dialog.cancel': 'Cancel',
+  'marketing.referrals.shape.BOTH_SIDES': 'Both sides rewarded',
+  'marketing.referrals.shape.REFERRER_ONLY': 'Referrer only',
+  'marketing.referrals.status.DRAFT': 'Draft',
+  'marketing.referrals.status.ACTIVE': 'Active',
+  'marketing.referrals.status.RETIRED': 'Retired',
+  'marketing.referrals.status.PENDING': 'Pending',
+  'marketing.referrals.status.REWARDED': 'Rewarded',
+  'marketing.referrals.status.EXPIRED': 'Expired',
+  'marketing.referrals.status.VOIDED': 'Voided',
+  'marketing.referrals.skipReason.REFERRER_CAP_REACHED':
+    'The referrer’s own reward cap was already reached',
+
+  'marketing.referrals.summary.codesIssued': 'Codes issued',
+  'marketing.referrals.summary.pending': 'Awaiting a first order',
+  'marketing.referrals.summary.rewarded': 'Rewarded',
+  'marketing.referrals.summary.paidOut': 'Points paid out',
+
+  'marketing.referrals.program.title': 'Reward program',
+  'marketing.referrals.program.hint':
+    'The shape, the amounts, the per-referrer cap, and how long a redeemed code stays open before it lapses unqualified. A brand with no active program rewards nothing.',
+  'marketing.referrals.program.create.action': 'New program',
+  'marketing.referrals.program.create.title': 'Draft a referral program',
+  'marketing.referrals.program.create.submit': 'Save draft',
+  'marketing.referrals.program.column.shape': 'Shape',
+  'marketing.referrals.program.column.referrerReward': 'Referrer reward',
+  'marketing.referrals.program.column.refereeReward': 'New-customer reward',
+  'marketing.referrals.program.column.cap': 'Cap per referrer',
+  'marketing.referrals.program.column.window': 'Redemption window',
+  'marketing.referrals.program.empty': 'No referral program authored yet.',
+  'marketing.referrals.program.form.shape': 'Who is rewarded',
+  'marketing.referrals.program.form.shape.hint':
+    'Both sides: the referrer and the new customer are each credited on the new customer’s first completed order. Referrer only: the new customer receives nothing extra.',
+  'marketing.referrals.program.form.referrerReward': 'Referrer reward, points',
+  'marketing.referrals.program.form.refereeReward': 'New-customer reward, points',
+  'marketing.referrals.program.form.hasCap': 'Cap how many referrals one referrer can be paid for',
+  'marketing.referrals.program.form.cap': 'Maximum rewarded referrals per referrer',
+  'marketing.referrals.program.form.redemptionWindow':
+    'Redemption window, days to place a first completed order',
+  'marketing.referrals.program.form.redemptionWindow.hint':
+    'A code redeemed but not followed by a completed order within this many days lapses unqualified.',
+  'marketing.referrals.program.form.lotLifetime': 'Reward points expire after, days',
+
+  'marketing.referrals.redemptions.title': 'Referrals actually happening',
+  'marketing.referrals.redemptions.hint':
+    'Every code redemption this brand’s customers have made, whether it already paid out, and why a referrer’s own reward was skipped when their cap was already reached.',
+  'marketing.referrals.redemptions.column.referrer': 'Referrer',
+  'marketing.referrals.redemptions.column.referee': 'New customer',
+  'marketing.referrals.redemptions.column.referrerReward': 'Referrer paid',
+  'marketing.referrals.redemptions.column.refereeReward': 'New customer paid',
+  'marketing.referrals.redemptions.empty': 'No referral has been redeemed yet.',
+
+  'marketing.referrals.links.title': 'Website and Telegram acquisition links',
+  'marketing.referrals.links.body':
+    'Not built, and not a gap this screen hides: website "?ref=" links, Telegram "startapp" deep links, and a guided Mini-App/BotFather setup flow belong to ADR 0044’s marketing.attribution_links, which remains on that ADR’s own checklist. A customer can still get a code and a friend can still redeem it from the storefront — nothing here renders a shareable link, because no link table exists yet to render one from.',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',
