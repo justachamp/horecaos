@@ -6,10 +6,10 @@
   "channel": "STOREFRONT",
   "yandexMapsApiKey": "99847472-f185-464c-b2cb-7b28dd285a8c",
   "brand": {
-    "displayName": "Storefront",
+    "displayName": "HorecaOS",
     "theme": {
-      "accent": "#52525b",
-      "accentDeep": "#3f3f46"
+      "accent": "#0E7C6B",
+      "accentDeep": "#0B5F52"
     }
   }
 }

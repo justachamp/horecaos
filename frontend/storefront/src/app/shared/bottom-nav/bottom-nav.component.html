@@ -11,11 +11,12 @@
           [class.text-zinc-400]="!isTabActive('home')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
-          <img
-            [src]="isTabActive('home') ? '/assets/nav-icons/home-active.svg' : '/assets/nav-icons/home.svg'"
-            [attr.alt]="'nav.home' | t"
-            class="h-6 w-6"
-          />
+          <span
+            class="nav-icon h-6 w-6"
+            role="img"
+            [attr.aria-label]="'nav.home' | t"
+            [style.--nav-icon]="'url(/assets/nav-icons/home.svg)'"
+          ></span>
           {{ 'nav.home' | t }}
         </a>
       </li>
@@ -27,11 +28,12 @@
           class="relative flex flex-col items-center gap-1 text-[11px]"
         >
           <span class="relative inline-block">
-            <img
-              [src]="isTabActive('cart') ? '/assets/nav-icons/cart-active.svg' : '/assets/nav-icons/cart.svg'"
-              [attr.alt]="'nav.cart' | t"
-              class="h-6 w-6"
-            />
+            <span
+            class="nav-icon h-6 w-6"
+            role="img"
+            [attr.aria-label]="'nav.cart' | t"
+            [style.--nav-icon]="'url(/assets/nav-icons/cart.svg)'"
+          ></span>
             @if (cart.totalItemsCount() > 0) {
               <span
                 class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
@@ -50,11 +52,12 @@
           [class.text-zinc-400]="!isTabActive('orders')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
-          <img
-            [src]="isTabActive('orders') ? '/assets/nav-icons/list-active.svg' : '/assets/nav-icons/list.svg'"
-            [attr.alt]="'nav.orders' | t"
-            class="h-6 w-6"
-          />
+          <span
+            class="nav-icon h-6 w-6"
+            role="img"
+            [attr.aria-label]="'nav.orders' | t"
+            [style.--nav-icon]="'url(/assets/nav-icons/list.svg)'"
+          ></span>
           {{ 'nav.orders' | t }}
         </a>
       </li>
@@ -65,11 +68,12 @@
           [class.text-zinc-400]="!isTabActive('profile')"
           class="flex flex-col items-center gap-1 text-[11px]"
         >
-          <img
-            [src]="isTabActive('profile') ? '/assets/nav-icons/profile-active.svg' : '/assets/nav-icons/profile.svg'"
-            [attr.alt]="'nav.profile' | t"
-            class="h-6 w-6"
-          />
+          <span
+            class="nav-icon h-6 w-6"
+            role="img"
+            [attr.aria-label]="'nav.profile' | t"
+            [style.--nav-icon]="'url(/assets/nav-icons/profile.svg)'"
+          ></span>
           {{ 'nav.profile' | t }}
         </a>
       </li>

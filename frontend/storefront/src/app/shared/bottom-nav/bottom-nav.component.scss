@@ -1,3 +1,27 @@
 :host {
   display: block;
 }
+
+/**
+ * The tab icons take their colour from the link, which is already brand-aware
+ * (`text-brand-accent` when active, muted otherwise).
+ *
+ * They used to be two `<img>` files per tab -- one grey, one with the launch
+ * brand's purple baked into an SVG gradient. That made the icon the single
+ * place a tenant's accent could not reach: configure a teal brand and the
+ * label turned teal beside a purple icon. Masking one shape with
+ * `currentColor` means a tenant's colour reaches the icon for free, and the
+ * `-active` asset variants are no longer needed.
+ */
+.nav-icon {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-image: var(--nav-icon);
+  mask-image: var(--nav-icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
