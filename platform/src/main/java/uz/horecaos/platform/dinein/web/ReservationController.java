@@ -79,6 +79,26 @@ public class ReservationController {
                 .toList());
     }
 
+    @GetMapping("/reservations")
+    @RequiresCapability(value = Capability.RESERVATION_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "A branch's bookings for a window — the day plan",
+            description = "Every status in range, not only the ones holding a table: a host "
+                    + "reading tonight's plan needs the cancellation next to the confirmed "
+                    + "booking it replaced. No guest name, phone or note, the same restraint "
+                    + "the single-booking read below keeps.")
+    public ResponseEntity<List<ReservationResponse>> list(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam Instant from,
+            @RequestParam Instant to) {
+
+        return ResponseEntity.ok(reservations.listForDay(tenantId, locationId, from, to).stream()
+                .map(row -> ReservationResponse.of(row, reservations.tablesFor(tenantId, row.id())))
+                .toList());
+    }
+
     @PostMapping("/reservations")
     @RequiresCapability(value = Capability.RESERVATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -165,6 +185,37 @@ public class ReservationController {
         return ResponseEntity.ok(ReservationResponse.of(moved, reservations.tablesFor(tenantId, reservationId)));
     }
 
+    @PostMapping("/reservations/{reservationId}/amendments")
+    @RequiresCapability(value = Capability.RESERVATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Change the party size, the time, or the tables of a booking not yet seated",
+            description = "The guest's name, phone and note are not writable here — a host "
+                    + "correcting a table or a time has no need to re-type a number, and a wrong "
+                    + "one is a cancel-and-rebook. Refused once the booking is SEATED or terminal.")
+    public ResponseEntity<ReservationResponse> amend(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID reservationId,
+            @Valid @RequestBody AmendmentRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+
+        ReservationRow amended = reservations.amend(
+                tenantId,
+                reservationId,
+                body.partySize(),
+                body.requestedFrom(),
+                body.requestedTo(),
+                body.tableIds(),
+                (int) expected,
+                currentActor.get().subject(),
+                body.reason());
+
+        return ResponseEntity.ok(ReservationResponse.of(amended, reservations.tablesFor(tenantId, reservationId)));
+    }
+
     private static ReservationStatus parse(String value) {
         try {
             return ReservationStatus.valueOf(value);
@@ -226,5 +277,12 @@ public class ReservationController {
 
     record StateActionRequest(
             @NotBlank @Size(max = 16) String targetStatus,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    record AmendmentRequest(
+            @Min(1) @Max(200) int partySize,
+            @NotNull Instant requestedFrom,
+            @NotNull Instant requestedTo,
+            @NotEmpty List<UUID> tableIds,
             @NotBlank @Size(max = 500) String reason) {}
 }

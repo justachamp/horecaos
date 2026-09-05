@@ -1,0 +1,92 @@
+.capacity {
+  padding: 16px 20px;
+  max-width: 720px;
+}
+
+.capacity__state {
+  padding: 32px;
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.card {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.capacity__hint {
+  color: var(--q-ink-subtle);
+  margin: 0 0 12px;
+}
+
+.capacity__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.capacity__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.capacity__table td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.capacity__empty {
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.capacity__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.capacity__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.capacity__field select,
+.capacity__field input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.capacity__error {
+  color: var(--q-error-text);
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

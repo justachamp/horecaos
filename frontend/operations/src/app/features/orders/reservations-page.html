@@ -1,0 +1,273 @@
+<div class="reservations">
+  <header class="reservations__toolbar">
+    <h1 class="q-subhead">{{ 'reservations.title' | t }}</h1>
+    <label class="reservations__date-field">
+      <span class="q-body-sm">{{ 'reservations.date' | t }}</span>
+      <input
+        type="date"
+        [value]="selectedDate()"
+        (change)="changeDate($any($event.target).value)"
+        data-testid="reservations-date"
+      />
+    </label>
+    <button
+      type="button"
+      class="q-body primary"
+      (click)="openCreateForm()"
+      data-testid="reservations-new"
+    >
+      {{ 'reservations.newBooking' | t }}
+    </button>
+  </header>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm reservations__state">{{ 'reservations.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm reservations__state" data-testid="reservations-denied">
+      {{ 'reservations.denied' | t }}
+    </p>
+  } @else if (lastError()) {
+    <p class="q-body-sm reservations__state" data-testid="reservations-error">
+      {{ 'reservations.loadError' | t }}
+    </p>
+  } @else {
+    <div class="reservations__body">
+      <div class="reservations__grid-wrap">
+        @if (tables().length === 0) {
+          <p class="q-body-sm reservations__state">{{ 'reservations.noTables' | t }}</p>
+        } @else {
+          <table class="reservations__grid" data-testid="reservations-grid">
+            <thead>
+              <tr>
+                <th class="reservations__hour-header">{{ 'reservations.grid.time' | t }}</th>
+                @for (table of tables(); track table.tableId) {
+                  <th>
+                    <div class="reservations__table-header">
+                      <span class="q-body-sm">{{ table.code }}</span>
+                      <span class="q-caption reservations__seats">{{ table.seats }}</span>
+                      <span class="q-caption reservations__occupancy">{{ occupancyFor(table.tableId) }}</span>
+                    </div>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (hour of HOURS; track hour) {
+                <tr>
+                  <th class="reservations__hour-header q-caption">{{ hour }}:00</th>
+                  @for (table of tables(); track table.tableId) {
+                    @let cell = cellReservation(table.tableId, hour);
+                    <td
+                      [class.reservations__cell--free]="!cell"
+                      [class.reservations__cell--booked]="!!cell"
+                      (click)="cell && openDetail(cell)"
+                      [attr.data-testid]="cell ? 'reservations-cell-booked' : null"
+                    >
+                      @if (cell && isCellStart(cell, hour)) {
+                        <span class="q-caption reservations__cell-label">{{ cell.partySize }}·{{ statusLabel(cell.status) }}</span>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+
+      @if (selectedReservation(); as reservation) {
+        <aside class="reservations__panel" data-testid="reservations-detail">
+          <div class="reservations__panel-header">
+            <h2 class="q-emphasis">{{ 'reservations.detail.title' | t }}</h2>
+            <button type="button" class="reservations__close" (click)="closeDetail()">×</button>
+          </div>
+          <dl class="reservations__facts">
+            <dt class="q-caption">{{ 'reservations.detail.time' | t }}</dt>
+            <dd class="q-body-sm">{{ timeRange(reservation) }}</dd>
+            <dt class="q-caption">{{ 'reservations.detail.party' | t }}</dt>
+            <dd class="q-body-sm">{{ reservation.partySize }}</dd>
+            <dt class="q-caption">{{ 'reservations.detail.tables' | t }}</dt>
+            <dd class="q-body-sm">{{ reservation.tableIds.join(', ') }}</dd>
+            <dt class="q-caption">{{ 'reservations.detail.status' | t }}</dt>
+            <dd class="q-body-sm">{{ statusLabel(reservation.status) }}</dd>
+            <dt class="q-caption">{{ 'reservations.detail.id' | t }}</dt>
+            <dd class="q-body-sm reservations__id">{{ reservation.reservationId }}</dd>
+          </dl>
+
+          @if (availableActions(reservation).length > 0) {
+            <div class="reservations__actions">
+              @for (target of availableActions(reservation); track target) {
+                <button
+                  type="button"
+                  class="q-body-sm"
+                  (click)="requestAction(reservation, target)"
+                  [attr.data-testid]="'reservations-action-' + target"
+                >
+                  {{ actionLabel(target) | t }}
+                </button>
+              }
+            </div>
+          }
+          @if (canEdit(reservation)) {
+            <button
+              type="button"
+              class="q-body-sm"
+              (click)="openEditForm(reservation)"
+              data-testid="reservations-edit"
+            >
+              {{ 'reservations.detail.edit' | t }}
+            </button>
+          }
+          @if (reservation.status === 'CONFIRMED' || reservation.status === 'SEATED') {
+            <p class="q-caption reservations__hint" data-testid="reservations-seat-note">
+              {{ 'reservations.detail.seatNotBuilt' | t }}
+            </p>
+          }
+        </aside>
+      }
+
+      @if (showCreateForm()) {
+        <aside class="reservations__panel" data-testid="reservations-form">
+          <div class="reservations__panel-header">
+            <h2 class="q-emphasis">
+              {{ editTarget() ? ('reservations.form.editTitle' | t) : ('reservations.form.title' | t) }}
+            </h2>
+            <button type="button" class="reservations__close" (click)="closeCreateForm()">×</button>
+          </div>
+
+          @if (editTarget()) {
+            <p class="q-caption reservations__hint">{{ 'reservations.form.editHint' | t }}</p>
+          } @else {
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.guestName' | t }}</span>
+              <input
+                type="text"
+                [value]="formGuestName()"
+                (input)="formGuestName.set($any($event.target).value)"
+                data-testid="reservations-form-name"
+              />
+            </label>
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.guestPhone' | t }}</span>
+              <input
+                type="text"
+                [value]="formGuestPhone()"
+                (input)="formGuestPhone.set($any($event.target).value)"
+                data-testid="reservations-form-phone"
+              />
+            </label>
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.secondaryPhone' | t }}</span>
+              <input
+                type="text"
+                [value]="formSecondaryPhone()"
+                (input)="formSecondaryPhone.set($any($event.target).value)"
+              />
+            </label>
+          }
+          <label class="reservations__field">
+            <span class="q-caption">{{ 'reservations.form.partySize' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              max="200"
+              [value]="formPartySize()"
+              (input)="formPartySize.set(+$any($event.target).value)"
+              data-testid="reservations-form-party"
+            />
+          </label>
+          <div class="reservations__field-row">
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.from' | t }}</span>
+              <input
+                type="time"
+                [value]="formFrom()"
+                (input)="formFrom.set($any($event.target).value)"
+              />
+            </label>
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.to' | t }}</span>
+              <input type="time" [value]="formTo()" (input)="formTo.set($any($event.target).value)" />
+            </label>
+          </div>
+          @if (editTarget()) {
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.reason' | t }}</span>
+              <input
+                type="text"
+                [value]="formReason()"
+                (input)="formReason.set($any($event.target).value)"
+                data-testid="reservations-form-reason"
+              />
+            </label>
+          } @else {
+            <label class="reservations__field">
+              <span class="q-caption">{{ 'reservations.form.note' | t }}</span>
+              <textarea
+                rows="2"
+                [value]="formNote()"
+                (input)="formNote.set($any($event.target).value)"
+              ></textarea>
+            </label>
+          }
+
+          <fieldset class="reservations__field">
+            <legend class="q-caption">{{ 'reservations.form.tables' | t }}</legend>
+            <div class="reservations__table-picker">
+              @for (table of tables(); track table.tableId) {
+                <label class="reservations__table-option">
+                  <input
+                    type="checkbox"
+                    [checked]="formTableIds().has(table.tableId)"
+                    (change)="toggleTable(table.tableId)"
+                  />
+                  <span class="q-caption">{{ table.code }} ({{ table.seats }})</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+
+          @if (formTouched() && !formValid()) {
+            <p class="q-caption reservations__error">{{ formIncompleteKey() | t }}</p>
+          }
+          @if (formError()) {
+            <p class="q-caption reservations__error" data-testid="reservations-form-error">{{ formError() }}</p>
+          }
+
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="submitForm()"
+            [disabled]="formSubmitting()"
+            data-testid="reservations-form-submit"
+          >
+            {{
+              formSubmitting()
+                ? ('reservations.form.saving' | t)
+                : editTarget()
+                  ? ('reservations.form.saveEdit' | t)
+                  : ('reservations.form.save' | t)
+            }}
+          </button>
+        </aside>
+      }
+    </div>
+  }
+
+  @if (actionNotice(); as notice) {
+    <div class="reservations__notice" data-testid="reservations-notice">
+      <span class="q-body-sm">{{ notice }}</span>
+      <button type="button" (click)="dismissNotice()">×</button>
+    </div>
+  }
+
+  @if (pendingAction(); as pending) {
+    <q-order-reason-dialog
+      [titleKey]="actionLabel(pending.target)"
+      [confirmLabelKey]="actionLabel(pending.target)"
+      [busy]="actionBusy()"
+      (confirm)="submitAction($event)"
+      (dismiss)="dismissAction()"
+    />
+  }
+</div>

@@ -3,6 +3,7 @@ package uz.horecaos.platform.kitchen.infrastructure.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -93,6 +94,70 @@ public class JdbcKitchenStore {
                 .param("id", stationId)
                 .query(JdbcKitchenStore::mapStation)
                 .optional();
+    }
+
+    // ---------------------------------------------------------- station capacity
+
+    public void insertStationCapacity(StationCapacityRow row) {
+        jdbc.sql("""
+                INSERT INTO kitchen.station_capacity (
+                    id, tenant_id, brand_id, location_id, station_id,
+                    weekday, window_start, window_end, portions_per_hour,
+                    version, created_at, updated_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :stationId,
+                    :weekday, :windowStart, :windowEnd, :portionsPerHour,
+                    1, :now, :now)
+                """)
+                .param("id", row.id())
+                .param("tenantId", row.tenantId())
+                .param("brandId", row.brandId())
+                .param("locationId", row.locationId())
+                .param("stationId", row.stationId())
+                .param("weekday", row.weekday())
+                .param("windowStart", row.windowStart())
+                .param("windowEnd", row.windowEnd())
+                .param("portionsPerHour", row.portionsPerHour())
+                .param("now", utc(row.createdAt()))
+                .update();
+    }
+
+    public List<StationCapacityRow> listStationCapacity(UUID tenantId, UUID locationId) {
+        return jdbc.sql(SELECT_STATION_CAPACITY + """
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                 ORDER BY station_id, weekday, window_start
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query(JdbcKitchenStore::mapStationCapacity)
+                .list();
+    }
+
+    /**
+     * Whether a proposed window would overlap one already stored for this station
+     * and weekday.
+     *
+     * <p>Checked by the service before every insert rather than by a database
+     * exclusion constraint — see V0144's own comment for why a `time`-typed window
+     * does not get one in this release. A concurrent double-submit can still race
+     * past this check; {@code uq_station_capacity_window} at the database is the
+     * backstop for the one shape of that race an exact retry produces.
+     */
+    public boolean overlapsExisting(UUID tenantId, UUID stationId, int weekday, LocalTime start, LocalTime end) {
+        Boolean exists = jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM kitchen.station_capacity
+                     WHERE tenant_id = :tenantId AND station_id = :stationId AND weekday = :weekday
+                       AND window_start < :end AND window_end > :start
+                )
+                """)
+                .param("tenantId", tenantId)
+                .param("stationId", stationId)
+                .param("weekday", weekday)
+                .param("start", start)
+                .param("end", end)
+                .query(Boolean.class)
+                .single();
+        return Boolean.TRUE.equals(exists);
     }
 
     // ------------------------------------------------------------ routing rules
@@ -583,6 +648,13 @@ public class JdbcKitchenStore {
             FROM kitchen.stations
             """;
 
+    private static final String SELECT_STATION_CAPACITY = """
+            SELECT id, tenant_id, brand_id, location_id, station_id,
+                   weekday, window_start, window_end, portions_per_hour,
+                   version, created_at
+            FROM kitchen.station_capacity
+            """;
+
     private static final String SELECT_TICKET = """
             SELECT id, tenant_id, brand_id, location_id, order_id, sequence_label,
                    fulfilment_mode, channel_code, status, release_mode, release_at,
@@ -660,6 +732,21 @@ public class JdbcKitchenStore {
                 row.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
+    private static StationCapacityRow mapStationCapacity(ResultSet row, int number) throws SQLException {
+        return new StationCapacityRow(
+                row.getObject("id", UUID.class),
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("station_id", UUID.class),
+                row.getInt("weekday"),
+                row.getObject("window_start", LocalTime.class),
+                row.getObject("window_end", LocalTime.class),
+                row.getInt("portions_per_hour"),
+                row.getInt("version"),
+                row.getObject("created_at", OffsetDateTime.class).toInstant());
+    }
+
     private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
@@ -688,6 +775,20 @@ public class JdbcKitchenStore {
             int sortOrder,
             boolean fallback,
             String status,
+            int version,
+            Instant createdAt) {}
+
+    /** One station's throughput ceiling for one weekday and one local time window (ADR 0041, IA §2.6). */
+    public record StationCapacityRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID stationId,
+            int weekday,
+            LocalTime windowStart,
+            LocalTime windowEnd,
+            int portionsPerHour,
             int version,
             Instant createdAt) {}
 

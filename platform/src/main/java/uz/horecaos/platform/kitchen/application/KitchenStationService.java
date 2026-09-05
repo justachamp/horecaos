@@ -1,6 +1,7 @@
 package uz.horecaos.platform.kitchen.application;
 
 import java.time.Clock;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -75,6 +77,63 @@ public class KitchenStationService {
 
     public List<StationRow> list(UUID tenantId, UUID locationId) {
         return stations.listStations(tenantId, locationId);
+    }
+
+    /**
+     * Sets one station's throughput ceiling for one weekday and one local time
+     * window (frontend-information-architecture.md §2.6).
+     *
+     * <p>Not consumed by the release scheduler — see V0144's own comment. This is
+     * the ceiling a manager sets and compares by eye against the board, which is
+     * a real reader even though {@code KitchenTicketService.decideRelease} is not
+     * one yet.
+     */
+    @Transactional
+    public StationCapacityRow createCapacityWindow(NewCapacityWindow command) {
+        if (!command.windowEnd().isAfter(command.windowStart())) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A capacity window's end is after its start");
+        }
+        // The station must exist at this branch before its throughput is bounded —
+        // the foreign key would refuse it anyway, but naming the mistake here
+        // gives a manager a sentence instead of a constraint-violation code.
+        StationRow station = stations.findStation(command.tenantId(), command.stationId())
+                .filter(candidate -> candidate.locationId().equals(command.locationId()))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such station at this branch"));
+
+        if (stations.overlapsExisting(
+                command.tenantId(),
+                command.stationId(),
+                command.weekday(),
+                command.windowStart(),
+                command.windowEnd())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This station already has a throughput ceiling covering part of that window on that day");
+        }
+
+        StationCapacityRow row = new StationCapacityRow(
+                UUID.randomUUID(),
+                command.tenantId(),
+                command.brandId(),
+                command.locationId(),
+                command.stationId(),
+                command.weekday(),
+                command.windowStart(),
+                command.windowEnd(),
+                command.portionsPerHour(),
+                1,
+                clock.instant());
+        try {
+            stations.insertStationCapacity(row);
+        } catch (DuplicateKeyException clash) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This station already has exactly this window on that day");
+        }
+        return row;
+    }
+
+    public List<StationCapacityRow> listCapacityWindows(UUID tenantId, UUID locationId) {
+        return stations.listStationCapacity(tenantId, locationId);
     }
 
     /**
@@ -158,6 +217,17 @@ public class KitchenStationService {
      * @param stationRole set for a brand rule, null for a location rule
      * @param stationId   set for a location rule, null for a brand rule
      */
+    /** One throughput ceiling to add for one station (frontend-information-architecture.md §2.6). */
+    public record NewCapacityWindow(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID stationId,
+            int weekday,
+            LocalTime windowStart,
+            LocalTime windowEnd,
+            int portionsPerHour) {}
+
     public record NewRoutingRule(
             UUID tenantId,
             UUID brandId,

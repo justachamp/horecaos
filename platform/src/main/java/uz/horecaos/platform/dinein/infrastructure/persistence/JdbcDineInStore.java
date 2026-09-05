@@ -484,6 +484,84 @@ public class JdbcDineInStore {
     }
 
     /**
+     * A branch's bookings overlapping a window, oldest first.
+     *
+     * <p>Unlike {@link #tableAvailability}, this carries every status — a host
+     * reading tonight's plan needs to see a cancellation sitting beside a
+     * confirmed booking, not just what still holds a table. No guest name, phone
+     * or note is selected: the day view this backs is the same list surface
+     * {@link ReservationRow} already renders through {@code ReservationResponse},
+     * which carries none of it either.
+     */
+    public List<ReservationRow> listReservations(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        return jdbc.sql(SELECT_RESERVATION + """
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND requested_from < :to AND requested_to > :from
+                 ORDER BY requested_from
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(JdbcDineInStore::mapReservation)
+                .list();
+    }
+
+    /**
+     * Rewrites a booking's own fields — party size and the requested interval —
+     * conditionally on the version the caller read.
+     *
+     * <p>Status is untouched here; {@link #moveReservation} owns that column
+     * exclusively so the exclusion constraint's trigger always sees a status
+     * change come through one statement shape.
+     *
+     * @return whether the row moved
+     */
+    public boolean updateReservationCore(
+            UUID tenantId,
+            UUID reservationId,
+            int partySize,
+            Instant requestedFrom,
+            Instant requestedTo,
+            int turnaroundMinutesSnapshot,
+            int expectedVersion,
+            Instant now) {
+
+        return jdbc.sql("""
+                UPDATE dinein.reservations
+                   SET party_size = :partySize,
+                       requested_from = :from,
+                       requested_to = :to,
+                       turnaround_minutes_snapshot = :turnaround,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("partySize", partySize)
+                        .param("from", utc(requestedFrom))
+                        .param("to", utc(requestedTo))
+                        .param("turnaround", turnaroundMinutesSnapshot)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", reservationId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Detaches every table a booking currently holds, so an amendment can
+     * reattach the (possibly different) set it was submitted with in the same
+     * transaction.
+     */
+    public void deleteReservationTables(UUID tenantId, UUID reservationId) {
+        jdbc.sql("DELETE FROM dinein.reservation_tables WHERE tenant_id = :tenantId AND reservation_id = :id")
+                .param("tenantId", tenantId)
+                .param("id", reservationId)
+                .update();
+    }
+
+    /**
      * Which of a branch's tables are free for an interval, and which are not.
      *
      * <p>Answers over the same predicate the exclusion constraint enforces, so the

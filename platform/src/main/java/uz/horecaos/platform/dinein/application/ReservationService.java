@@ -272,6 +272,134 @@ public class ReservationService {
     }
 
     /**
+     * A branch's day plan: every booking whose requested interval overlaps the
+     * asked-for window, regardless of status.
+     *
+     * <p>The host stand needs the cancellations and no-shows in view beside the
+     * confirmed bookings — that is what makes a lattice a plan rather than a
+     * queue — so this does not filter to the statuses that hold a table the way
+     * {@link #availability} implicitly does.
+     */
+    public List<ReservationRow> listForDay(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        if (!to.isAfter(from)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A day window's end is after its start");
+        }
+        return store.listReservations(tenantId, locationId, from, to);
+    }
+
+    /**
+     * Changes the party size, the requested interval, or the table set of a
+     * booking that has not yet been seated.
+     *
+     * <p>Deliberately narrower than {@link #request}: the guest's name, phone and
+     * note are not touched here, because that is a corridor from a plaintext
+     * request body to a PII column this method's caller would need to justify
+     * with the same purpose {@link #request} already states, and a host
+     * correcting a table or a time has no such need. Re-typing the guest's
+     * number is what a cancel-and-rebook is for.
+     *
+     * <p>The table set is replaced wholesale — every existing hold is dropped
+     * and the submitted set is re-attached — rather than diffed, so an amendment
+     * and a fresh request run the same per-table validation and hit the same
+     * exclusion constraint on conflict.
+     */
+    @Transactional
+    public ReservationRow amend(
+            UUID tenantId,
+            UUID reservationId,
+            int partySize,
+            Instant requestedFrom,
+            Instant requestedTo,
+            List<UUID> tableIds,
+            int expectedVersion,
+            String actorSubject,
+            String reason) {
+
+        if (tableIds == null || tableIds.isEmpty()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking names at least one table");
+        }
+        if (!requestedTo.isAfter(requestedFrom)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking's end is after its start");
+        }
+
+        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
+
+        if (reservation.status() != ReservationStatus.REQUESTED
+                && reservation.status() != ReservationStatus.CONFIRMED) {
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A %s booking can no longer be edited".formatted(reservation.status()),
+                    Map.of("currentStatus", reservation.status().name()));
+        }
+
+        Instant now = clock.instant();
+        SettingsRow settings = floorPlan.settings(tenantId, reservation.brandId(), reservation.locationId());
+        int turnaround = settings.turnaroundMinutes();
+
+        try {
+            boolean moved = store.updateReservationCore(
+                    tenantId, reservationId, partySize, requestedFrom, requestedTo, turnaround, expectedVersion, now);
+            if (!moved) {
+                throw ApiException.staleVersion(expectedVersion, reservation.version());
+            }
+
+            store.deleteReservationTables(tenantId, reservationId);
+
+            // The hold widens by the turnaround only while the booking is one the
+            // exclusion constraint actually checks (CONFIRMED); a REQUESTED
+            // booking holds nothing yet and gets the plain requested interval, the
+            // same asymmetry `request()` and `move()` already keep.
+            boolean holds = reservation.status() == ReservationStatus.CONFIRMED;
+            Instant heldFrom = holds ? requestedFrom.minus(Duration.ofMinutes(turnaround)) : requestedFrom;
+            Instant heldTo = holds ? requestedTo.plus(Duration.ofMinutes(turnaround)) : requestedTo;
+
+            for (UUID tableId : tableIds) {
+                TableRow table = store.findTable(tenantId, tableId)
+                        .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+                if (!table.locationId().equals(reservation.locationId())) {
+                    throw new ApiException(
+                            ErrorCode.INVALID_REQUEST, "Table %s is at another branch".formatted(table.code()));
+                }
+                if (!"ACTIVE".equals(table.status())) {
+                    throw new ApiException(
+                            ErrorCode.INVALID_REQUEST,
+                            "Table %s is %s and cannot be booked".formatted(table.code(), table.status()));
+                }
+                store.insertReservationTable(
+                        reservationId, tableId, tenantId, reservation.locationId(), heldFrom, heldTo);
+            }
+        } catch (DataIntegrityViolationException conflict) {
+            if (isDoubleBooking(conflict)) {
+                throw new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT,
+                        "One of these tables is already booked for an overlapping time. "
+                                + "Re-read availability and choose another table or another time.",
+                        Map.of("conflict", "TABLE_ALREADY_BOOKED"));
+            }
+            throw conflict;
+        }
+
+        audit.record(AuditFact.of("dinein.reservation.amended", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, reservation.brandId(), reservation.locationId()))
+                .target("dinein.reservation", reservationId)
+                .targetVersion((long) expectedVersion + 1)
+                .because(reason)
+                .changed(Map.of(
+                        "partySize", partySize,
+                        "tables", tableIds.size(),
+                        "requestedFrom", requestedFrom.toString(),
+                        "requestedTo", requestedTo.toString()))
+                .usingCapability("reservation.manage")
+                .correlatedBy(reservationId.toString())
+                .occurredAt(now)
+                .build());
+
+        return store.findReservation(tenantId, reservationId).orElseThrow();
+    }
+
+    /**
      * Which tables are free, and which are merely occupied.
      *
      * <p>Advisory, and honestly so. Two hosts reading this in the same second both

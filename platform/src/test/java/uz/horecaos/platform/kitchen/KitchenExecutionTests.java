@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
 import uz.horecaos.platform.kitchen.infrastructure.ordering.JdbcKitchenOrderSource;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
@@ -56,6 +58,7 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Kitchen execution, production routing, and kitchen release (ADR 0041).
@@ -272,6 +275,66 @@ class KitchenExecutionTests {
                 .as("a brand rule resolves a role to \"the location's station carrying it\", "
                         + "and with two that question has no answer")
                 .isInstanceOf(ApiException.class);
+    }
+
+    // --------------------------------------------------------- throughput ceilings
+
+    @Test
+    @DisplayName("a throughput ceiling is listable once created")
+    void aCapacityWindowIsListable() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+
+        assertThat(created.portionsPerHour()).isEqualTo(40);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .as("the settings screen has nothing else to read this back from")
+                .extracting(StationCapacityRow::id)
+                .containsExactly(created.id());
+    }
+
+    @Test
+    @DisplayName("a window overlapping one already stored for the same station and weekday is " + "refused")
+    void anOverlappingCapacityWindowIsRefused() {
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        Throwable failure =
+                catchThrowable(() -> stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                        TENANT, BRAND, branch, grillStation, 5, LocalTime.of(11, 0), LocalTime.of(13, 0), 30)));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        // The rejected window must not have landed — a silent partial write would
+        // let the settings screen show two ceilings and the database hold one.
+        assertThat(stationService.listCapacityWindows(TENANT, branch)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("the same time window on a different station, or a different weekday on the "
+            + "same station, is not an overlap")
+    void nonOverlappingWindowsAreBothAccepted() {
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        // A different station, same clock.
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, coldStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 20));
+        // The same station, a different weekday.
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 6, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        assertThat(stationService.listCapacityWindows(TENANT, branch)).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("a ceiling cannot be set on a station that does not exist at this branch")
+    void aCapacityWindowNeedsARealStation() {
+        Throwable failure =
+                catchThrowable(() -> stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                        TENANT, BRAND, branch, UUID.randomUUID(), 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30)));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     // --------------------------------------------------------- tickets and roll-up
