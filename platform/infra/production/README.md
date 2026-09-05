@@ -1,4 +1,31 @@
-# Production deployment
+# Production deployment (superseded for NEW deploys — read this before using it)
+
+**For a new production deploy, use `deploy/` at the repository root instead**,
+following `docs/runbooks/production-setup.md`. That is ADR 0061's
+registry-pull model — the one the owner actually decided on 2026-09-01 — and
+it is the only one of the two that serves the current three-frontend
+architecture; this tree's compose file has no `control-plane-web` or
+`operations-web` service at all, because it predates both.
+
+This tree is not deleted, and is still genuinely load-bearing: ADR 0023's
+built alerting, backup, and restore apparatus —
+`platform/infra/observability/horecaos-probe.sh`'s default `COMPOSE_FILE`,
+`platform/infra/backup/README.md`, and six incident runbooks (`restore.md`,
+`postgresql-down.md`, `outbox-not-draining.md`, `container-crash-loop.md`,
+`onboarding-run-stalled.md`, `payment-callback-failing.md`) — was built and
+verified against exactly this tree's paths
+(`/opt/horecaos/horecaos-platform`, `infra/production/*.sh`) and has not
+been ported to `deploy/`'s layout. Porting it (or formally retiring this
+tree once that porting is done) is open, unscheduled work, not something
+wave 55's edge-hardening pass resolves.
+
+Two of this Dockerfiles below are shared, not duplicated: `deploy/`'s CI
+publish job builds `horecaos-platform-migrate` and `horecaos-platform-ops`
+from `migrate/Dockerfile` and `ops/Dockerfile` in this directory, because
+those images have nothing tree-specific in them. `compose.production.yaml`,
+`caddy/Caddyfile`, `deploy.sh`, `bootstrap.sh`, `run-backup.sh`, and
+`heartbeat.sh` are this tree's own orchestration and are what a new deploy
+should not use.
 
 Everything needed to run HorecaOS on the colocated server in Uzbekistan, and
 nothing that runs anywhere else.
@@ -6,16 +33,17 @@ nothing that runs anywhere else.
 | Path | What it is |
 |---|---|
 | `../../Dockerfile` | The application image |
-| `../../compose.production.yaml` | The stack |
+| `../../compose.production.yaml` | The stack (superseded for new deploys — see above) |
 | `../app/entrypoint.sh` | How the application receives its secrets |
 | `../openbao/` | OpenBao server config, agent config, and the two policies |
 | `bootstrap.sh` | Once per host. Initialises OpenBao and generates the credentials |
-| `deploy.sh` | Every release |
+| `deploy.sh` | Every release (superseded for new deploys — see above) |
 | `run-backup.sh` | The nightly backup, as cron runs it |
 | `heartbeat.sh` | The whole of the alerting |
-| `caddy/Caddyfile` | TLS, routing, and what is not exposed |
-| `migrate/Dockerfile` | The one-shot Flyway job |
-| `ops/` | The operator's shell: pg_dump, psql, mc, openssl |
+| `caddy/Caddyfile` | TLS, routing, rate limits, body caps, and the Payme allowlist (ADR 0023) — kept in parity with `deploy/infra/caddy/Caddyfile`, see that file's own note |
+| `caddy/Dockerfile` | Stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit`, since the stock image cannot run this Caddyfile's `rate_limit` directives. Shared: `deploy/`'s CI job publishes this as `horecaos-edge` too |
+| `migrate/Dockerfile` | The one-shot Flyway job. Shared with `deploy/`'s CI publish job |
+| `ops/` | The operator's shell: pg_dump, psql, mc, openssl. `ops/Dockerfile` is shared with `deploy/`'s CI publish job |
 | `postgres-init/` | Creates the least-privilege application login |
 | `audit-grants.sql` | Fails the deploy if a table exists the application cannot read |
 

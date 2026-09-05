@@ -178,6 +178,12 @@ jobs:
           - { name: horecaos-platform-migrate, context: platform, dockerfile: platform/infra/production/migrate/Dockerfile }
           - { name: horecaos-platform-ops, context: platform, dockerfile: platform/infra/production/ops/Dockerfile }
           - { name: horecaos-postgres-postgis, context: platform/infra/postgres, dockerfile: platform/infra/postgres/Dockerfile }
+          # Stock caddy:2.10-alpine with caddy-ratelimit added (ADR 0023 —
+          # deploy/infra/caddy/Caddyfile and platform/infra/production/caddy/
+          # Caddyfile both use `rate_limit`, which the stock image cannot
+          # run). Same Dockerfile the build-on-server deploy path compiles
+          # locally; here it is an eighth published tag like the rest.
+          - { name: horecaos-edge, context: platform, dockerfile: platform/infra/production/caddy/Dockerfile }
           # Frontends — one image per app, per deploy/compose.production.yml's
           # own note on why they are not baked into the edge image.
           - { name: horecaos-storefront, context: frontend/storefront, dockerfile: frontend/storefront/Dockerfile }

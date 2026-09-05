@@ -381,7 +381,7 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
 ```
 
 **Check:** no error. `docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env images`
-lists all seven pinned images with the tag you set.
+lists all eight pinned images with the tag you set.
 
 ### Issue the AppRole credential and start dependencies
 

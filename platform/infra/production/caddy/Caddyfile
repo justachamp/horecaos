@@ -5,7 +5,6 @@
 # and without a renewal that silently stops working eight weeks before anyone
 # notices. An expired certificate is a full outage, and it is the single most
 # common self-inflicted one on deployments like this.
-
 {
 	email {$HORECAOS_ACME_EMAIL}
 
@@ -13,6 +12,15 @@
 	# health check probes, and it must never be reachable from the network: it
 	# can reconfigure the reverse proxy without authentication.
 	admin 127.0.0.1:2019
+
+	# caddy-ratelimit (this directory's own Dockerfile — stock caddy:2.10-alpine
+	# has no rate_limit directive at all, and this image replaces the stock
+	# binary specifically to carry it) registers no default position in
+	# Caddy's directive order, so every Caddyfile that uses it has to give it
+	# one. The anchor directive doesn't matter — this Caddyfile never uses
+	# basic_auth — only that rate_limit runs early enough to reject a request
+	# before request_body or reverse_proxy spend any work on it.
+	order rate_limit before basic_auth
 
 	servers {
 		# The application reads X-Forwarded-For to attribute requests. Trusting
@@ -36,6 +44,19 @@
 				request>uri regexp "\?.*$" "?redacted"
 			}
 		}
+	}
+}
+
+# Reusable upstream block for every handler below that ends up forwarding to
+# the platform JVM. Kept in one place so the retry-across-a-deploy and
+# health-check settings can't drift between the callback-specific handlers
+# added below and the general one they sit in front of.
+(platform_app_upstream) {
+	reverse_proxy platform-app:8080 {
+		lb_try_duration 10s
+		health_uri /actuator/health/readiness
+		health_interval 10s
+		health_timeout 3s
 	}
 }
 
@@ -73,17 +94,296 @@
 		respond 404
 	}
 
-	handle {
-		reverse_proxy platform-app:8080 {
-			# A request that is still in flight when the application is being
-			# replaced should be retried against the new container rather than
-			# returned as a 502. With one replica this only covers the restart
-			# window, which is exactly the window a deploy creates.
-			lb_try_duration 10s
-			health_uri /actuator/health/readiness
-			health_interval 10s
-			health_timeout 3s
+	# -------------------------------------------------------------------
+	# ADR 0023's open reverse-proxy checklist item: the Payme allowlist,
+	# body caps, and per-binding/per-IP rate limits. `handle` blocks are
+	# mutually exclusive and tried in the order written (Caddy's own
+	# semantics), so the most specific paths have to come before the
+	# catch-all at the bottom.
+	# -------------------------------------------------------------------
+
+	# Payme's fifteen published source addresses, defence in depth and never
+	# the only check (ADR 0013, ADR 0023) — PaymeEndpointSecurity's own
+	# comment names the same addresses and the same caveat. This is
+	# CONFIGURATION, not a hard-coded list: HORECAOS_PAYME_ALLOWED_IPS must
+	# be set to Payme's real, currently-published addresses by whoever
+	# operates this file. It is deliberately NOT defaulted to those
+	# addresses here, because a value invented by this change and never
+	# checked against Payme's own current publication is worse than no
+	# allowlist at all — it would look configured while quietly being wrong.
+	#
+	# compose.production.yaml defaults this variable to 0.0.0.0/32 — a
+	# reserved, non-routable address nothing ever calls from — specifically
+	# so that an unset allowlist FAILS CLOSED: every Payme callback is
+	# rejected 403 until the real list is supplied, rather than the
+	# allowlist silently matching everything (open) or the edge refusing to
+	# start at all (which would take down the storefront, auth, and every
+	# other origin over one payment provider's address list). A 403 on every
+	# Payme call is loud — Payme's own dashboard shows it immediately — and
+	# is the correct failure direction for a check that exists to keep this
+	# endpoint from being the whole of its own authentication.
+	@payme_not_allowed not remote_ip {$HORECAOS_PAYME_ALLOWED_IPS}
+
+	handle /providers/payme/* {
+		# 64 KiB, matching PaymeMerchantApiController.MAX_REQUEST_BYTES
+		# exactly. The controller already refuses a body past this size; the
+		# proxy enforcing the same ceiling means an oversized body is
+		# dropped before it is streamed to the JVM at all.
+		request_body {
+			max_size 65536
 		}
+
+		# Keyed by the exact path, which already contains the {binding}
+		# segment — ADR 0023 asks for per-binding limits so one
+		# misconfigured or looping cashbox cannot exhaust the endpoint's
+		# capacity for every other tenant sharing it. 60/minute is generous
+		# headroom over one restaurant's real transaction volume at its
+		# busiest and still bounds a retry storm.
+		rate_limit {
+			zone payme_by_binding {
+				key {http.request.uri.path}
+				events 60
+				window 1m
+			}
+		}
+
+		respond @payme_not_allowed 403
+
+		import platform_app_upstream
+	}
+
+	# Click publishes no source-address list (ADR 0023), so it gets no
+	# allowlist and its MD5 signature, verified before any database access,
+	# is the whole of its authentication — unchanged by this file.
+	@click_callbacks path /providers/click/*/prepare /providers/click/*/complete
+
+	handle @click_callbacks {
+		# Same ceiling and the same reasoning as Payme's: both are small
+		# fixed-shape provider callbacks with no legitimate reason to be
+		# large, and ClickShopApiController never reads past what an
+		# ordinary prepare/complete call needs.
+		request_body {
+			max_size 65536
+		}
+
+		# Per-binding, same reasoning as Payme's zone above — the path
+		# carries {bindingRef}, so keying on it isolates one cashbox's retry
+		# storm from every other tenant's.
+		rate_limit {
+			zone click_by_binding {
+				key {http.request.uri.path}
+				events 60
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# The storefront's pre-account browse surface (ADR 0016): the published
+	# menu, its pictures, pickup locations, FAQ, social links, terms, and
+	# serviceability/delivery-fee lookups — every anonymous GET
+	# SecurityConfiguration.apiSecurity permits, listed the same way that
+	# file lists them: one path at a time, so a new anonymous GET added
+	# there does not silently inherit a wildcard's rate budget here either.
+	# This is the surface a scraper hammers (ADR 0023). 120/minute per IP is
+	# roughly 2 requests/second sustained — generous for a customer loading
+	# a menu with several images, or several customers behind one venue's
+	# NAT, while bounding a bot harvesting the whole catalogue at speed.
+	@storefront_browse {
+		method GET
+		path /api/v1/storefront/pickup-locations
+		path /api/v1/storefront/tenants/*/brands/*/locations/*/menu
+		path /api/v1/storefront/tenants/*/media/*
+		path /api/v1/storefront/tenants/*/brands/*/support/faq
+		path /api/v1/storefront/tenants/*/brands/*/support/social-links
+		path /api/v1/storefront/tenants/*/brands/*/terms
+		path /api/v1/storefront/tenants/*/brands/*/locations/*/serviceability
+		path /api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee
+	}
+
+	handle @storefront_browse {
+		rate_limit {
+			zone storefront_browse_by_ip {
+				key {client_ip}
+				events 120
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# ADR 0047's guest dine-in flows: the QR table-token exchange, the
+	# running-bill request, and the running-bill read. Grouped separately
+	# from the plain browse surface above because these are authorised by
+	# possession of a token rather than being open reads, and because a
+	# whole table of guests legitimately shares one venue Wi-Fi address —
+	# 30/minute per IP is more generous than the identity endpoints below
+	# for exactly that reason, while still bounding token-guessing against
+	# X-Dine-In-Token.
+	@dine_in_guest {
+		method GET POST
+		path /api/v1/storefront/dine-in/qr/token-exchanges
+		path /api/v1/storefront/dine-in/sessions/*/bill-requests
+		path /api/v1/storefront/dine-in/sessions/*
+	}
+
+	handle @dine_in_guest {
+		rate_limit {
+			zone dine_in_guest_by_ip {
+				key {client_ip}
+				events 30
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# ADR 0015/0051's account-creation identity endpoints — "the identity and
+	# verification endpoints... are the ones an attacker hammers" (ADR 0023).
+	# Three separate zones because a genuine caller passes through each step
+	# a different number of times, and one shared budget would either let an
+	# attacker exhaust the SMS gateway on the request step or throttle a
+	# legitimate typo-and-retry on the attempt step:
+	#
+	#   request an OTP    rare for a genuine caller (once every 30-60s even
+	#                     retrying) and the expensive step — every accepted
+	#                     call sends an SMS. 5/minute/IP.
+	#   attempt a code     a caller may mistype a six-digit code a couple of
+	#                     times. 20/minute/IP still bounds a brute force
+	#                     meaningfully alongside the per-challenge attempt
+	#                     ceiling PostgreSQL enforces (CustomerVerificationService).
+	#   exchange a session the final step after a correct attempt; a couple
+	#                     of retries on a transient error are plausible.
+	#                     10/minute/IP.
+	@otp_request {
+		method POST
+		path /api/v1/storefront/tenants/*/brands/*/identity/verification-challenges
+	}
+
+	handle @otp_request {
+		rate_limit {
+			zone otp_request_by_ip {
+				key {client_ip}
+				events 5
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	@otp_attempt {
+		method POST
+		path /api/v1/storefront/tenants/*/brands/*/identity/verification-challenges/*/attempts
+	}
+
+	handle @otp_attempt {
+		rate_limit {
+			zone otp_attempt_by_ip {
+				key {client_ip}
+				events 20
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	@otp_session {
+		method POST
+		path /api/v1/storefront/tenants/*/brands/*/identity/sessions
+	}
+
+	handle @otp_session {
+		rate_limit {
+			zone otp_session_by_ip {
+				key {client_ip}
+				events 10
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# ADR 0063's "Continue with Telegram": starting a sign-in is the same
+	# shape and the same budget as requesting an OTP above. Polling for its
+	# redemption is not — a genuine client polls every second or two while
+	# the customer taps the bot, so it needs a much larger ceiling than a
+	# one-shot request.
+	@telegram_start {
+		method POST
+		path /api/v1/storefront/tenants/*/brands/*/telegram/sign-in-codes
+	}
+
+	handle @telegram_start {
+		rate_limit {
+			zone telegram_start_by_ip {
+				key {client_ip}
+				events 5
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	@telegram_poll {
+		method GET
+		path /api/v1/storefront/tenants/*/brands/*/telegram/sign-in-codes/*
+	}
+
+	handle @telegram_poll {
+		rate_limit {
+			zone telegram_poll_by_ip {
+				key {client_ip}
+				events 60
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# ADR 0062's staff sign-in: a credential-guessing target the same way
+	# the customer identity endpoints are, gated here as a coarse backstop
+	# in front of Keycloak's own credential check. 10/minute/IP is comfortable
+	# for a shift change at one venue and bounds a stuffing attempt.
+	@staff_signin {
+		method POST
+		path /api/v1/control-plane/auth/sessions
+		path /api/v1/operations/auth/sessions
+	}
+
+	handle @staff_signin {
+		rate_limit {
+			zone staff_signin_by_ip {
+				key {client_ip}
+				events 10
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# Everything else — the authenticated API surface. No edge rate limit
+	# here: it cannot see tenant, principal, capability or plan, which is
+	# exactly why RateLimiter/InProcessRateLimiter (ADR 0033) exists at the
+	# application layer for this traffic instead of being duplicated,
+	# coarsely and tenant-blind, here. What the edge still owns is a body
+	# ceiling: 2 MiB is generous for any JSON mutation this API accepts
+	# (there is no multipart endpoint anywhere in this codebase) while
+	# bounding how much any single request can make the JVM allocate.
+	handle {
+		request_body {
+			max_size 2097152
+		}
+
+		import platform_app_upstream
 	}
 
 	header {
@@ -178,6 +478,16 @@
 	}
 
 	handle {
+		# The higher ceiling ADR 0023 asks for, sized to where an upload
+		# genuinely needs it: MediaAssetService.MAX_IMAGE_BYTES is 10 MiB,
+		# and a presigned PUT is signed for the exact size the client
+		# declared, so MinIO itself refuses anything the signature didn't
+		# cover. 11 MiB leaves headroom for request framing and headers
+		# without opening the door to an arbitrarily large upload.
+		request_body {
+			max_size 11534336
+		}
+
 		reverse_proxy minio:9000
 	}
 

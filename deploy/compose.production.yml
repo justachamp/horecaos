@@ -96,7 +96,17 @@ services:
     # only because it is more moving parts for the same outcome on a box with
     # one operator; revisit if this deployment ever needs an nginx-specific
     # module Caddy has no equivalent for.
-    image: caddy:2.10-alpine
+    # Built rather than pulled as stock `caddy:2.10-alpine`, because stock
+    # Caddy carries no `rate_limit` directive at all (verified:
+    # `caddy list-modules --packages` on the stock image has no
+    # `http.handlers.rate_limit` entry) and this Caddyfile now uses one for
+    # ADR 0023's per-binding/per-IP rate limits. `platform/infra/production/
+    # caddy/Dockerfile` recompiles the same Caddy core with caddy-ratelimit
+    # added and nothing else — published as an eighth CI image alongside the
+    # other seven so this file's "pulls pinned images, no build: block" claim
+    # stays true; `deploy/local-smoke.sh` builds it locally the same way it
+    # builds the other seven.
+    image: ${HORECAOS_REGISTRY}/horecaos-edge:${HORECAOS_IMAGE_TAG:-latest}
     <<: *hardening
     restart: unless-stopped
     cap_add:
@@ -112,6 +122,14 @@ services:
       HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN:?set the public operations console origin, for example https://operations.horecaos.uz}
       HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN:?set the public control-plane origin, for example https://admin.horecaos.uz}
       HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
+      # ADR 0023: Payme's published source addresses, defence in depth for
+      # /providers/payme/*. Deliberately defaulted to a non-routable address
+      # rather than to Payme's real list (which this change does not have
+      # and must not invent) or to an open allowlist — see the Caddyfile's
+      # own comment on @payme_not_allowed for why 0.0.0.0/32 is the correct
+      # fail-closed value: every Payme callback is rejected until the owner
+      # sets this to Payme's real, currently-published addresses.
+      HORECAOS_PAYME_ALLOWED_IPS: ${HORECAOS_PAYME_ALLOWED_IPS:-0.0.0.0/32}
       # Empty in production. `deploy/local-smoke.sh` sets this to `internal`
       # so Caddy issues from its own internal CA instead of asking Let's
       # Encrypt for a certificate for a hostname the public internet cannot

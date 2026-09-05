@@ -78,7 +78,17 @@ services:
     # The only service with a published port. Everything else is reachable only
     # from inside the compose networks, which is what makes it defensible to run
     # PostgreSQL, Kafka, MinIO and OpenBao without TLS between them.
-    image: caddy:2.10-alpine
+    #
+    # Built rather than pulled as stock `caddy:2.10-alpine`, because stock Caddy
+    # carries no `rate_limit` directive at all (verified: `caddy list-modules
+    # --packages` on the stock image has no `http.handlers.rate_limit` entry) and
+    # this Caddyfile now uses one for ADR 0023's per-binding/per-IP rate limits.
+    # infra/production/caddy/Dockerfile recompiles the same Caddy core with
+    # caddy-ratelimit added; nothing else about the image changes.
+    build:
+      context: .
+      dockerfile: infra/production/caddy/Dockerfile
+    image: horecaos/edge:${HORECAOS_IMAGE_TAG:-latest}
     <<: *hardening
     restart: unless-stopped
     cap_add:
@@ -91,7 +101,22 @@ services:
     environment:
       HORECAOS_API_ORIGIN: ${HORECAOS_API_ORIGIN:?set the public API origin, for example https://api.horecaos.uz}
       HORECAOS_AUTH_ORIGIN: ${HORECAOS_AUTH_ORIGIN:?set the public auth origin, for example https://auth.horecaos.uz}
+      # Was missing from this container's own environment even though the
+      # Caddyfile's media site block has always been keyed on it — found
+      # while adding that block's ADR 0023 body cap. Without it, `caddy`
+      # inside THIS container (not platform-app's, which does have it) sees
+      # an empty placeholder and the media origin site block never matches
+      # the hostname it is supposed to serve.
+      HORECAOS_MEDIA_ORIGIN: ${HORECAOS_MEDIA_ORIGIN:?set the public media origin, for example https://media.horecaos.uz}
       HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
+      # ADR 0023: Payme's published source addresses, defence in depth for
+      # /providers/payme/*. Deliberately defaulted to a non-routable address
+      # rather than to Payme's real list (which this change does not have
+      # and must not invent) or to an open allowlist — see the Caddyfile's
+      # own comment on @payme_not_allowed for why 0.0.0.0/32 is the correct
+      # fail-closed value: every Payme callback is rejected until the owner
+      # sets this to Payme's real, currently-published addresses.
+      HORECAOS_PAYME_ALLOWED_IPS: ${HORECAOS_PAYME_ALLOWED_IPS:-0.0.0.0/32}
     volumes:
       - ./infra/production/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - edge-data:/data
