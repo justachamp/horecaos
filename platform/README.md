@@ -186,7 +186,7 @@ Rather than restate ADR content here (the predecessor's drift started exactly th
 | Camel route foundation, provider contracts | [0007](docs/adr/partial/0007-camel-route-foundation-and-provider-contract-testing.md) |
 | Provider installations, bindings, secrets | [0026](docs/adr/built/0026-provider-installations-bindings-and-secret-references.md), [0028](docs/adr/partial/0028-secrets-management-and-credential-lifecycle.md) |
 | S3 media lifecycle | [0010](docs/adr/partial/0010-s3-media-lifecycle-and-filesystem-migration.md), [0029](docs/adr/partial/0029-pii-protection-envelope-encryption-and-key-rotation.md) |
-| Tenant isolation enforcement, RLS backstop | [0056](docs/adr/not-started/0056-tenant-isolation-enforcement-and-rls.md) |
+| Tenant isolation enforcement, RLS backstop | [0056](docs/adr/partial/0056-tenant-isolation-enforcement-and-rls.md) |
 | Build-time quality gates | [0054](docs/adr/built/0054-build-time-quality-gates.md) |
 
 ## The legacy migration program

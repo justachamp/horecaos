@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
@@ -58,31 +59,60 @@ public class InventoryService implements InventoryReservationPort {
      * Every existing caller that builds this service by hand (test fixtures
      * that predate ADR 0060, none of which cares whether a sold-out toggle is
      * audited) gets this rather than a constructor signature change that
-     * would touch all of them. Production wiring uses the three-argument,
+     * would touch all of them. Production wiring uses the five-argument,
      * {@code @Autowired} constructor below and gets the real recorder.
      */
     private static final AuditRecorder NO_OP_AUDIT = fact -> {};
+
+    /**
+     * The same story as {@link #NO_OP_AUDIT}, for the ADR 0056 backstop:
+     * every fixture built by hand here runs against {@code TestDatabase}'s
+     * migrator connection, which owns every table row-level security could
+     * ever apply to and so is exempt from it regardless of what this binds.
+     * Production wiring uses the five-argument, {@code @Autowired}
+     * constructor below and gets {@link uz.horecaos.platform.configuration.rls.JdbcTenantRlsSession},
+     * the one that actually talks to PostgreSQL.
+     */
+    private static final TenantRlsSession NO_OP_RLS = new TenantRlsSession() {
+        @Override
+        public void bindTenant(UUID tenantId) {}
+
+        @Override
+        public void bindPlatform() {}
+    };
 
     private final JdbcInventoryStore store;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final AuditRecorder audit;
+    private final TenantRlsSession rls;
 
     public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
         this(store, events, clock, NO_OP_AUDIT);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public InventoryService(
             JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock, AuditRecorder audit) {
+        this(store, events, clock, audit, NO_OP_RLS);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(
+            JdbcInventoryStore store,
+            ApplicationEventPublisher events,
+            Clock clock,
+            AuditRecorder audit,
+            TenantRlsSession rls) {
         this.store = store;
         this.events = events;
         this.clock = clock;
         this.audit = audit;
+        this.rls = rls;
     }
 
     @Transactional
     public UUID listVariantAtLocation(UUID tenantId, UUID brandId, UUID locationId, UUID variantId, TrackingMode mode) {
+        rls.bindTenant(tenantId);
         if (mode == TrackingMode.QUANTITY) {
             throw new UnsupportedTrackingModeException(mode);
         }
@@ -100,6 +130,7 @@ public class InventoryService implements InventoryReservationPort {
     @Override
     @Transactional(readOnly = true)
     public AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
+        rls.bindTenant(tenantId);
 
         Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, variantIds);
         List<Unavailable> blocked = new ArrayList<>();
@@ -136,6 +167,7 @@ public class InventoryService implements InventoryReservationPort {
             boolean available,
             String reasonCode,
             @Nullable UUID actorId) {
+        rls.bindTenant(tenantId);
 
         StockItemRow item = store.findStockItem(tenantId, locationId, variantId)
                 .orElseThrow(() ->
@@ -212,6 +244,7 @@ public class InventoryService implements InventoryReservationPort {
     @Transactional
     public boolean setAvailabilityAudited(
             UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, String actorSubject) {
+        rls.bindTenant(tenantId);
         StockItemRow before = store.findStockItem(tenantId, locationId, variantId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("Variant " + variantId + " is not stocked at this location"));
@@ -271,6 +304,7 @@ public class InventoryService implements InventoryReservationPort {
     @Transactional
     public ReservationResult reserveForQuote(
             UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
+        rls.bindTenant(tenantId);
 
         // ADR 0024 forbids a historical import from changing inventory, and this
         // is the movement it means: an order from 2021 holding stock a branch is
@@ -343,6 +377,7 @@ public class InventoryService implements InventoryReservationPort {
     @Override
     @Transactional
     public boolean commit(UUID tenantId, UUID quoteId) {
+        rls.bindTenant(tenantId);
         // Unreachable while reserveForQuote refuses, and guarded anyway: false
         // here means "there was no hold to commit", which an import would read as
         // an ordinary lapsed reservation rather than as a suppression.
@@ -357,6 +392,7 @@ public class InventoryService implements InventoryReservationPort {
     @Override
     @Transactional
     public boolean release(UUID tenantId, UUID quoteId) {
+        rls.bindTenant(tenantId);
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "release a stock reservation");
 
         var reservation = store.findReservation(tenantId, OWNER_QUOTE, quoteId);
@@ -364,9 +400,20 @@ public class InventoryService implements InventoryReservationPort {
                 && store.transitionReservation(tenantId, reservation.get().id(), "RELEASED", clock.instant());
     }
 
-    /** Sweeps abandoned holds so they stop reserving stock. */
+    /**
+     * Sweeps abandoned holds so they stop reserving stock.
+     *
+     * <p>Genuinely cross-tenant by design, not by omission: one UPDATE reaches
+     * every tenant's expired holds in a single round trip. ADR 0056 makes that
+     * an explicit choice rather than a forgotten predicate — {@link
+     * TenantRlsSession#bindPlatform()} assumes {@code horecaos_platform_bypass}
+     * for the rest of this transaction so the sweep keeps seeing every tenant
+     * once {@code inventory.reservations} enforces row-level security (V0162),
+     * exactly as it did before that migration.
+     */
     @Transactional
     public int expireStaleReservations() {
+        rls.bindPlatform();
         List<UUID> expired = store.expireReservations(clock.instant());
         if (!expired.isEmpty()) {
             log.debug("Expired {} stale reservations", expired.size());
