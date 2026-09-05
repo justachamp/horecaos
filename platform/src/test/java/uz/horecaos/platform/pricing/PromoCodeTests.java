@@ -182,7 +182,7 @@ class PromoCodeTests {
     @Test
     @DisplayName("more than one promo code may be live for a brand at once")
     void multipleCodesCanBeLiveTogether() {
-        var first = activate(percentageDraft("A10", 1_000, null));
+        var first = activate(percentageDraft("A100", 1_000, null));
         var second = activate(fixedDraft("B5000", 5_000L, null));
 
         assertThat(couponStatus(first.couponId())).isEqualTo("ACTIVE");

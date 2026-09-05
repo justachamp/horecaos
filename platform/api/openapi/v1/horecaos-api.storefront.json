@@ -141,6 +141,17 @@
         },
         "type" : "object"
       },
+      "ApplyPromoCodeRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
       "BalanceResponse" : {
         "properties" : {
           "accountId" : {
@@ -191,6 +202,9 @@
       },
       "CartResponse" : {
         "properties" : {
+          "appliedPromoCode" : {
+            "type" : "string"
+          },
           "cartId" : {
             "format" : "uuid",
             "type" : "string"
@@ -1052,6 +1066,10 @@
           },
           "currency" : {
             "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "expiresAt" : {
             "format" : "date-time",
@@ -2278,6 +2296,104 @@
           }
         },
         "summary" : "Price the cart and bind the quote to it",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code" : {
+      "delete" : {
+        "description" : "Does nothing when none is applied. Clears any attached quote, the same as applying one does.",
+        "operationId" : "removePromoCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove the cart's applied promo code",
+        "tags" : [ "Storefront ordering" ]
+      },
+      "post" : {
+        "description" : "ADR 0072. Checked read-only against live coupon state before it is stored — active, in its window, and not exhausted — and checked again, independently, on every subsequent price. A cart already carrying a code has it replaced rather than refused: this platform supports at most one applied code per cart. Clears any attached quote, because a code changes what the total will be.",
+        "operationId" : "applyPromoCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplyPromoCodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Apply a promo code to the cart",
         "tags" : [ "Storefront ordering" ]
       }
     },
