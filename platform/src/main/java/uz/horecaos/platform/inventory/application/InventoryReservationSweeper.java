@@ -43,10 +43,7 @@ import org.springframework.stereotype.Component;
  * copy — must not expire a real tenant's holds as a side effect of starting up.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.inventory.sweeper.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.inventory.sweeper.enabled", havingValue = "true", matchIfMissing = true)
 public class InventoryReservationSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryReservationSweeper.class);

@@ -9,9 +9,9 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import uz.horecaos.platform.inventory.api.InventoryEvent;
 import uz.horecaos.platform.integration.events.EventCatalog;
 import uz.horecaos.platform.integration.events.EventContract;
+import uz.horecaos.platform.inventory.api.InventoryEvent;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 

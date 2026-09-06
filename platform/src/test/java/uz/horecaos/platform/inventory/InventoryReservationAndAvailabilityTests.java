@@ -84,6 +84,19 @@ class InventoryReservationAndAvailabilityTests {
     void wireService() {
         dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
+        // The database is shared across every test method in this class (one
+        // TestDatabase.Handle per class, not per test), and expireReservations
+        // is a deliberately cross-tenant sweep with no tenant predicate of its
+        // own -- so a HELD row a previous test left behind, however unrelated
+        // its tenant, is visible to this test's own sweep call. The tenant
+        // isolation test below leaves exactly such a row on purpose (a still-
+        // live hold, to prove a sweep does not touch it); truncating first is
+        // what keeps that intentional leftover from being counted by whichever
+        // test happens to run next.
+        jdbc.sql("""
+                        TRUNCATE TABLE inventory.reservation_lines, inventory.reservations,
+                            inventory.movements, inventory.positions, inventory.stock_items CASCADE
+                        """).update();
         store = new JdbcInventoryStore(jdbc);
         clock = new MutableClock(Instant.parse("2026-09-05T09:00:00Z"));
         inventory = new InventoryService(store, event -> {}, clock);
@@ -111,7 +124,9 @@ class InventoryReservationAndAvailabilityTests {
         // The store's WHERE status = 'HELD' predicate is what a retried
         // confirmation relies on: a second commit call must change nothing.
         boolean committedAgain = tx(() -> inventory.commit(fixture.tenantId(), quoteId));
-        assertThat(committedAgain).as("a terminal reservation cannot be committed a second time").isFalse();
+        assertThat(committedAgain)
+                .as("a terminal reservation cannot be committed a second time")
+                .isFalse();
         assertThat(reservationStatus(reservationId)).isEqualTo("COMMITTED");
     }
 
@@ -130,7 +145,9 @@ class InventoryReservationAndAvailabilityTests {
         assertThat(reservationStatus(reservationId)).isEqualTo("RELEASED");
 
         boolean releasedAgain = tx(() -> inventory.release(fixture.tenantId(), quoteId));
-        assertThat(releasedAgain).as("a terminal reservation cannot be released a second time").isFalse();
+        assertThat(releasedAgain)
+                .as("a terminal reservation cannot be released a second time")
+                .isFalse();
     }
 
     // -----------------------------------------------------------------------
@@ -190,8 +207,8 @@ class InventoryReservationAndAvailabilityTests {
         // Deliberately no listVariantAtLocation call: this variant has no stock
         // item at this location at all.
 
-        AvailabilityDecision decision = tx(() -> inventory.checkAvailability(
-                fixture.tenantId(), fixture.locationId(), Set.of(fixture.variantId())));
+        AvailabilityDecision decision = tx(() ->
+                inventory.checkAvailability(fixture.tenantId(), fixture.locationId(), Set.of(fixture.variantId())));
 
         assertThat(decision.available())
                 .as("an unlisted variant is unavailable, not available by default")
@@ -209,13 +226,15 @@ class InventoryReservationAndAvailabilityTests {
         boolean availableAtStart = tx(() -> inventory
                 .checkAvailability(fixture.tenantId(), fixture.locationId(), Set.of(fixture.variantId()))
                 .available());
-        assertThat(availableAtStart).as("a freshly listed binary item starts available").isTrue();
+        assertThat(availableAtStart)
+                .as("a freshly listed binary item starts available")
+                .isTrue();
 
         tx(() -> inventory.setAvailability(
                 fixture.tenantId(), fixture.locationId(), fixture.variantId(), false, "SOLD_OUT", null));
 
-        AvailabilityDecision decision = tx(() -> inventory.checkAvailability(
-                fixture.tenantId(), fixture.locationId(), Set.of(fixture.variantId())));
+        AvailabilityDecision decision = tx(() ->
+                inventory.checkAvailability(fixture.tenantId(), fixture.locationId(), Set.of(fixture.variantId())));
 
         assertThat(decision.available()).as("the 86 toggle takes effect").isFalse();
         assertThat(decision.unavailableItems())
@@ -318,7 +337,9 @@ class InventoryReservationAndAvailabilityTests {
         Fixture fixture = seedTenantBrandLocationVariant();
         UUID stockItemId = tx(() -> inventory.listVariantAtLocation(
                 fixture.tenantId(), fixture.brandId(), fixture.locationId(), fixture.variantId(), TrackingMode.BINARY));
-        assertThat(stockItemId).as("listing a variant returns the new stock item's id").isNotNull();
+        assertThat(stockItemId)
+                .as("listing a variant returns the new stock item's id")
+                .isNotNull();
         return fixture;
     }
 
@@ -331,27 +352,18 @@ class InventoryReservationAndAvailabilityTests {
         UUID variantId = UUID.randomUUID();
         String suffix = tenantId.toString().substring(0, 8);
 
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                         INSERT INTO tenant.tenants (
                             id, slug, legal_name, display_name, default_currency, default_timezone, status)
                         VALUES (:id, :slug, 'Inventory test', 'Inventory test', 'UZS', 'Asia/Tashkent', 'ACTIVE')
-                        """)
-                .param("id", tenantId)
-                .param("slug", "inv-" + suffix)
-                .update();
+                        """).param("id", tenantId).param("slug", "inv-" + suffix).update();
 
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                         INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                         VALUES (:id, :tenantId, 'BRAND', 'brand', 'Brand', 'ACTIVE')
-                        """)
-                .param("id", brandId)
-                .param("tenantId", tenantId)
-                .update();
+                        """).param("id", brandId).param("tenantId", tenantId).update();
 
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                         INSERT INTO tenant.locations (
                             id, tenant_id, brand_id, code, slug, display_name, timezone, status)
                         VALUES (:id, :tenantId, :brandId, 'LOC', 'loc', 'Location', 'Asia/Tashkent', 'ACTIVE')
@@ -361,8 +373,7 @@ class InventoryReservationAndAvailabilityTests {
                 .param("brandId", brandId)
                 .update();
 
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                         INSERT INTO catalog.products (id, tenant_id, brand_id, code)
                         VALUES (:id, :tenantId, :brandId, 'SKU')
                         """)
@@ -371,8 +382,7 @@ class InventoryReservationAndAvailabilityTests {
                 .param("brandId", brandId)
                 .update();
 
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                         INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id)
                         VALUES (:id, :tenantId, :brandId, :productId)
                         """)
@@ -408,7 +418,9 @@ class InventoryReservationAndAvailabilityTests {
      * "this hold succeeded" before it needs the id for a follow-up call.
      */
     private static UUID requireHeldId(ReservationResult result) {
-        assertThat(result.isHeld()).as("stock is listed and available, so the hold succeeds").isTrue();
+        assertThat(result.isHeld())
+                .as("stock is listed and available, so the hold succeeds")
+                .isTrue();
         return java.util.Objects.requireNonNull(result.reservationId());
     }
 
@@ -424,7 +436,8 @@ class InventoryReservationAndAvailabilityTests {
     }
 
     private void tx(Runnable work) {
-        new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(status -> work.run());
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource))
+                .executeWithoutResult(status -> work.run());
     }
 
     /** A clock the test advances, so TTL and sweep behaviour is asserted against a duration, not an instant. */
