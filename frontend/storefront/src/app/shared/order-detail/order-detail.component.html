@@ -76,6 +76,26 @@
     }
   </div>
 
+  @if (canRepeat()) {
+    <div class="mt-6 px-4 pb-6">
+      <button
+        type="button"
+        (click)="repeat()"
+        [disabled]="repeating()"
+        class="repeat-btn w-full rounded-lg bg-gradient-to-r from-brand-accent-deep to-brand-accent py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+      >
+        @if (repeating()) {
+          {{ 'common.loading' | t }}
+        } @else {
+          {{ 'orders.repeat' | t }}
+        }
+      </button>
+      @if (repeatError()) {
+        <p class="mt-2 text-center text-sm text-red-400">{{ repeatError() }}</p>
+      }
+    </div>
+  }
+
   @if (order()!.actions?.includes('cancel')) {
     <div class="mt-6 px-4 pb-6">
       <button

@@ -1,13 +1,51 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { OrderDetail, OrderLineItem } from '../../pages/orders/orders.data';
-import { OrdersService, type ApiOrderDetail, type ApiOrderLineItem } from '../../services/orders.service';
+import {
+  OrdersService,
+  type ApiOrderDetail,
+  type ApiOrderLineItem,
+  type ReorderPlanResponse,
+} from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
 import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
+import { UiCartService } from '../../services/ui-cart.service';
 
+/**
+ * A single order's detail, plus (ADR 0074) whether it can be ordered again.
+ *
+ * <h2>Repeat, resolved rather than guessed</h2>
+ *
+ * There used to be no repeat here at all. Building one by matching this
+ * order's line names against the current menu would have been the same
+ * mistake `frontend/storefront-milliy` made and then had to undo: a renamed
+ * dish silently fails to match, a two-variant dish gets whichever one is
+ * listed first, and the modifiers never travel. `GET .../orders/{id}/reorder`
+ * exists precisely so no client does that -- it resolves the order's own
+ * stored variant and modifier ids against the menu as it stands now,
+ * including this location's offerings and the kitchen's 86 list, neither of
+ * which a storefront can see, and answers one verdict for the whole order.
+ *
+ * <h2>Why this screen, and one plan per view</h2>
+ *
+ * This is already a single-order screen: `ngOnInit` reads one order by id,
+ * once. Asking for its reorder plan alongside it costs one more request for
+ * the same one order, not one per row the way a repeat button on a list
+ * screen would (see the design note on `frontend/storefront-milliy`'s
+ * `OrdersComponent`, which restricts itself to the newest history row for
+ * exactly that reason). There is no list here to economise across.
+ *
+ * <h2>Hidden, not greyed</h2>
+ *
+ * The button appears only when the plan's `verdict` is `READY`. `PARTIAL` --
+ * some lines available, some not -- renders no button, by the platform
+ * owner's own rule: a repeat that quietly drops a dish is not a repeat. A
+ * plan request that fails renders no button either, for the same reason a
+ * `PARTIAL` one does -- see {@link loadReorderPlan}.
+ */
 @Component({
   selector: 'app-order-detail',
   standalone: true,
@@ -22,7 +60,27 @@ export class OrderDetailComponent implements OnInit {
   cancelling = signal(false);
   cancelError = signal<string | null>(null);
 
+  /**
+   * The reorder plan for this one order, or null while it is in flight, has
+   * failed, or the order cannot be repeated.
+   *
+   * Null and "not READY" render identically -- no button -- deliberately: a
+   * plan request that failed must not leave behind a button that would fail
+   * too.
+   */
+  reorderPlan = signal<ReorderPlanResponse | null>(null);
+  repeating = signal(false);
+  repeatError = signal<string | null>(null);
+
+  /** True once the plan says this exact order is READY to repeat. */
+  readonly canRepeat = computed(() => {
+    const plan = this.reorderPlan();
+    const current = this.order();
+    return plan !== null && current !== null && plan.verdict === 'READY' && plan.orderId === current.id;
+  });
+
   private readonly translate = inject(TranslateService);
+  private readonly cart = inject(UiCartService);
 
   constructor(
     private route: ActivatedRoute,
@@ -48,6 +106,24 @@ export class OrderDetailComponent implements OnInit {
         this.loading.set(false);
         this.error.set(err?.error?.message ?? err?.message ?? "Buyurtma yuklanmadi.");
       },
+    });
+    this.loadReorderPlan(id);
+  }
+
+  /**
+   * Asks whether this order can be repeated.
+   *
+   * Independent of {@link ngOnInit}'s own load: the order detail renders as
+   * soon as it arrives, and the repeat button appears a moment later once the
+   * platform has answered. A failure leaves the plan null, which {@link
+   * canRepeat} reads as "no button" -- the safe direction, and the reason
+   * this swallows rather than surfaces the failure.
+   */
+  private loadReorderPlan(id: string): void {
+    this.reorderPlan.set(null);
+    this.ordersService.getReorderPlan(id).subscribe({
+      next: (plan) => this.reorderPlan.set(plan),
+      error: () => this.reorderPlan.set(null),
     });
   }
 
@@ -127,5 +203,40 @@ export class OrderDetailComponent implements OnInit {
         this.cancelError.set(err?.error?.message ?? err?.message ?? "Buyurtma bekor qilinmadi.");
       },
     });
+  }
+
+  /**
+   * Rebuilds the cart from the plan's own lines -- variant, quantity, *and*
+   * every modifier option -- never by matching this order's product names
+   * against today's menu. Runs only once {@link canRepeat} is true, which
+   * means the plan already said READY -- every line available -- so there is
+   * no partial basket to build and nothing to ask the customer to confirm.
+   *
+   * The plan is still a snapshot: a dish can be 86'd between reading it and
+   * this call. `UiCartService.add` refuses on its own if that happens, and
+   * pricing stays the authority that would refuse regardless -- narrowing
+   * that window is what the plan is for; closing it is not something a
+   * client can do.
+   */
+  async repeat(): Promise<void> {
+    const plan = this.reorderPlan();
+    if (!this.canRepeat() || !plan || this.repeating()) {
+      return;
+    }
+    this.repeating.set(true);
+    this.repeatError.set(null);
+    try {
+      for (const line of plan.lines) {
+        await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
+      }
+      this.notification.show(
+        this.translate.getWithParams('orders.repeatAddedAll', { count: plan.lines.length }),
+      );
+      this.router.navigate(['/cart']).catch(() => {});
+    } catch {
+      this.repeatError.set(this.translate.get('errors.generic'));
+    } finally {
+      this.repeating.set(false);
+    }
   }
 }

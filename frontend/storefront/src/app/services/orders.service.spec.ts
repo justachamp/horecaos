@@ -169,6 +169,43 @@ describe('OrdersService: never fabricates an item count or distance', () => {
   });
 });
 
+describe('OrdersService.getReorderPlan (ADR 0074)', () => {
+  it('reads the per-order reorder plan endpoint and returns it untouched', async () => {
+    const { service, api } = setUp();
+    const plan = {
+      orderId: 'o1',
+      publicOrderNumber: 'PN-o1',
+      locationId: 'loc-1',
+      channelCode: 'STOREFRONT',
+      verdict: 'READY' as const,
+      currency: 'UZS',
+      lines: [
+        {
+          lineNumber: 1,
+          productName: 'Osh',
+          variantName: null,
+          productId: 'p1',
+          variantId: 'v1',
+          quantity: 2,
+          modifierOptionIds: ['o1', 'o2'],
+          status: 'AVAILABLE' as const,
+          unitAmountMinor: 25_000,
+          originalUnitAmountMinor: 25_000,
+        },
+      ],
+    };
+    api.get.mockResolvedValue(plan);
+
+    const result = await firstValueFrom(service.getReorderPlan('o1'));
+
+    expect(api.get).toHaveBeenCalledWith(
+      `/storefront/tenants/${CONFIG.tenantId}/brands/${CONFIG.brandId}/orders/o1/reorder`,
+    );
+    // Passed straight through -- there is nothing here for a client to resolve.
+    expect(result).toEqual(plan);
+  });
+});
+
 describe('OrdersService: cancel action reflects the real state-machine guard', () => {
   // Mirrors ordering.application.OrderActionsPolicy.canCancelWithoutReason on
   // the platform: cancellable up to and including AWAITING_APPROVAL, refused
