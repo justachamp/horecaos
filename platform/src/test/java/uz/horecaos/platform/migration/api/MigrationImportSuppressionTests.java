@@ -53,6 +53,13 @@ class MigrationImportSuppressionTests {
             // derivative job is still written, because the renditions genuinely
             // are owed.
             Map.entry("integration/outbox/MediaOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
+            // ADR 0017's availability fact, same footing again: the legacy stock
+            // baseline import sets availability as its own opening movement, so
+            // suppressing it here (not at InventoryService.setAvailability, which
+            // ADR 0024 deliberately leaves unsuppressed — see that method's own
+            // comment) is what stops thousands of baseline toggles from each
+            // announcing a stock-out for years-old history.
+            Map.entry("integration/outbox/InventoryOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
             Map.entry("notifications/application/OrderNotificationTrigger.java", ExternalEffect.CUSTOMER_NOTIFICATION),
             // The outbound half, and a different effect from the trigger above for
             // the same reason POS splits its two: not writing an intent is a

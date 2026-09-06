@@ -34,6 +34,7 @@ public final class KafkaTopicCatalog {
     public static final String FULFILLMENT_EVENTS = "fulfillment.events";
     public static final String REALTIME_SIGNALS = "realtime.signals";
     public static final String VOICE_EVENTS = "voice.events";
+    public static final String INVENTORY_EVENTS = "inventory.events";
 
     private static final Map<String, TopicSpecification> TOPICS = index(List.of(
             // The production topology has one broker (ADR 0034), so replication
@@ -47,7 +48,12 @@ public final class KafkaTopicCatalog {
             // ADR 0064. A pilot tenant's call volume is nowhere near ordering's,
             // so this shares ordering's partition-count reasoning at a smaller
             // scale rather than fulfillment's.
-            new TopicSpecification(VOICE_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION)));
+            new TopicSpecification(VOICE_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0017. One event type published so far (an 86 toggle), so this
+            // shares media's partition count rather than ordering's — a stock-out
+            // is rare next to an order, and over-partitioning a light topic buys
+            // nothing but idle broker bookkeeping.
+            new TopicSpecification(INVENTORY_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION)));
 
     private KafkaTopicCatalog() {}
 
