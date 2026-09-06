@@ -135,6 +135,8 @@
     "cancelledEmptyTitle": "No cancelled orders",
     "cancelledEmptySubtitle": "No cancelled orders yet.",
     "placeOrder": "Place order",
+    "repeat": "Repeat order",
+    "repeatAddedAll": "{{count}} dishes added to your cart",
     "cancel": "Cancel",
     "cancelConfirm": "Are you sure you want to cancel this order?",
     "order": "Order",

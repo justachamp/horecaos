@@ -106,6 +106,18 @@ export class OrdersService {
   }
 
   /**
+   * Whether one order can be ordered again, and with what (ADR 0074).
+   *
+   * The verdict is the server's; the policy of what to do with it is this
+   * application's, and lives in `OrderDetailComponent`. Nothing here inspects
+   * the menu: the platform already did, against the location and channel this
+   * order was placed on, including the 86 list a storefront cannot see.
+   */
+  getReorderPlan(id: string | number): Observable<ReorderPlanResponse> {
+    return from(this.api.get<ReorderPlanResponse>(`${this.brandPath}/orders/${id}/reorder`));
+  }
+
+  /**
    * Cancels an order that has not been confirmed.
    *
    * The idempotency key is formed once, outside the retry, and reused: the whole
@@ -280,10 +292,53 @@ export interface OrderLineResponse {
   readonly lineNumber: number;
   readonly productName: string;
   readonly variantName: string;
+  /** ADR 0074. What the line pointed at, which may no longer be on the menu. */
+  readonly productId: string;
+  readonly variantId: string;
   readonly quantity: number;
   readonly unitAmountMinor: number;
   readonly finalAmountMinor: number;
   readonly modifiers: readonly string[];
+  readonly modifierOptionIds: readonly string[];
+}
+
+/**
+ * ADR 0074's answer to "can this be ordered again".
+ *
+ * The server resolves every line's stored ids against the menu as it stands now
+ * -- the published menu, this location's offerings, and the kitchen's 86 list --
+ * so a client never matches names and never decides what "available" means.
+ */
+export interface ReorderPlanResponse {
+  readonly orderId: string;
+  readonly publicOrderNumber: string;
+  readonly locationId: string;
+  readonly channelCode: string;
+  readonly verdict: ReorderVerdict;
+  readonly currency: string;
+  readonly lines: readonly ReorderLineResponse[];
+}
+
+export type ReorderVerdict = 'READY' | 'PARTIAL' | 'UNAVAILABLE';
+
+export type ReorderLineStatus =
+  | 'AVAILABLE'
+  | 'SOLD_OUT'
+  | 'WITHDRAWN'
+  | 'UNPRICED'
+  | 'MODIFIERS_WITHDRAWN';
+
+export interface ReorderLineResponse {
+  readonly lineNumber: number;
+  readonly productName: string;
+  readonly variantName: string | null;
+  readonly productId: string | null;
+  readonly variantId: string;
+  readonly quantity: number;
+  readonly modifierOptionIds: readonly string[];
+  readonly status: ReorderLineStatus;
+  readonly unitAmountMinor: number | null;
+  readonly originalUnitAmountMinor: number;
 }
 
 export interface OrderResponse {

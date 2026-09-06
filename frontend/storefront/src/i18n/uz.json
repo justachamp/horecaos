@@ -135,6 +135,8 @@
     "cancelledEmptyTitle": "Bekor qilingan buyurtmalar yo'q",
     "cancelledEmptySubtitle": "Hozircha bekor qilingan buyurtmalar mavjud emas.",
     "placeOrder": "Buyurtma berish",
+    "repeat": "Buyurtmani takrorlash",
+    "repeatAddedAll": "{{count}} ta taom savatga qo'shildi",
     "cancel": "Bekor qilish",
     "cancelConfirm": "Ushbu buyurtmani bekor qilishga ishonchingiz komilmi?",
     "order": "Buyurtma",

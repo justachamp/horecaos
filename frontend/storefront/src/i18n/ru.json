@@ -135,6 +135,8 @@
     "cancelledEmptyTitle": "Нет отменённых заказов",
     "cancelledEmptySubtitle": "Пока нет отменённых заказов.",
     "placeOrder": "Оформить заказ",
+    "repeat": "Повторить заказ",
+    "repeatAddedAll": "{{count}} блюд добавлено в корзину",
     "cancel": "Отменить",
     "cancelConfirm": "Вы уверены, что хотите отменить этот заказ?",
     "order": "Заказ",
