@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json",
+  "title": "InventoryAvailabilityChanged v1 payload",
+  "description": "A binary-tracked item was marked available or unavailable at one location (ADR 0017). Symmetric by construction: available carries the direction, so a dish going off and a dish coming back are the same event type. reasonCode is a stable code and never free text: a typed reason would be personal data on a topic and untranslatable in a consumer's own UI. Never a product or variant name — a consumer resolves that through the authorized catalog API with variantId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["variantId", "locationId", "available"],
+  "properties": {
+    "variantId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": "string", "format": "uuid" },
+    "available": { "type": "boolean" },
+    "reasonCode": { "type": ["string", "null"], "maxLength": 64 }
+  }
+}

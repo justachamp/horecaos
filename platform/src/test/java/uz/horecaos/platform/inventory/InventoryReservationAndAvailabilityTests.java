@@ -84,6 +84,14 @@ class InventoryReservationAndAvailabilityTests {
     void wireService() {
         dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
+        // expireStaleReservations sweeps every tenant, by design — it is the one
+        // genuinely cross-tenant statement V0162's own header calls out. So a
+        // reservation left behind by an earlier test in this class is inside the
+        // next test's sweep count, and the count assertions below are only about
+        // this test's own holds if the ledger starts empty.
+        jdbc.sql("TRUNCATE TABLE inventory.reservation_lines, inventory.reservations, "
+                        + "inventory.movements, inventory.positions, inventory.stock_items CASCADE")
+                .update();
         store = new JdbcInventoryStore(jdbc);
         clock = new MutableClock(Instant.parse("2026-09-05T09:00:00Z"));
         inventory = new InventoryService(store, event -> {}, clock);
