@@ -110,12 +110,18 @@ public class SchedulingConfiguration {
      * one more: {@code AsteriskAmiConnectionSupervisor.ensureConnections},
      * which only decides whether a connection thread needs (re)starting —
      * the AMI session itself runs on its own dedicated thread, not this pool,
-     * for the reason that class's own doc gives. Wave 61 added the last one so
-     * far: {@code PosOrderExportTrigger.sweepStale}, the durable backstop that
+     * for the reason that class's own doc gives. Wave 61 added one more:
+     * {@code PosOrderExportTrigger.sweepStale}, the durable backstop that
      * makes the in-process dispatch queue beside it safe on more than one
-     * replica — see that class's doc and ADR 0023's Runtime shape.
+     * replica — see that class's doc and ADR 0023's Runtime shape. Wave 64
+     * added the last one so far: {@code InventoryReservationSweeper
+     * .expireStaleReservations}, the durable sweep ADR 0017 named and
+     * {@code InventoryService.expireStaleReservations} implemented but that
+     * nothing had ever called — a hold on abandoned stock used to outlive its
+     * own TTL until an unrelated request happened to re-reserve the same
+     * quote, which for an abandoned cart is never.
      */
-    static final int DEFAULT_POOL_SIZE = 42;
+    static final int DEFAULT_POOL_SIZE = 43;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

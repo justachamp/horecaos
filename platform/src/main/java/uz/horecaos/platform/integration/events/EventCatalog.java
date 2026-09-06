@@ -80,6 +80,15 @@ public final class EventCatalog {
     /** ADR 0064 call-event facts, from either the hosted-PBX or the Asterisk-class adapter. */
     public static final String VOICE_EVENTS_TOPIC = KafkaTopicCatalog.VOICE_EVENTS;
 
+    /**
+     * ADR 0017 inventory facts. Its own topic rather than a share of {@code
+     * tenancy.events}, matching the reason every other domain topic here has
+     * one: a consumer of stock-out alerts should not have to filter out
+     * onboarding creations to get them, and the two have nothing in common to
+     * retain or partition alike.
+     */
+    public static final String INVENTORY_EVENTS_TOPIC = KafkaTopicCatalog.INVENTORY_EVENTS;
+
     private static final Map<String, EventContract> CONTRACTS = index(List.of(
             new EventContract(
                     "TenantCreated",
@@ -285,7 +294,20 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "One normalized call event (offered/answered/ended/missed/transferred). "
                             + "Never a caller number, encrypted or not — only a resolved customer "
-                            + "account id, when resolution succeeded.")));
+                            + "account id, when resolution succeeded."),
+            new EventContract(
+                    "InventoryAvailabilityChanged",
+                    1,
+                    "inventory",
+                    INVENTORY_EVENTS_TOPIC,
+                    "variantId",
+                    "events/inventory.events/InventoryAvailabilityChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A binary-tracked item was marked available or unavailable at one location. "
+                            + "Symmetric — the direction is a field, not two event types — and never "
+                            + "a product name, only the identifiers a consumer already needs to look "
+                            + "one up.")));
 
     private EventCatalog() {}
 

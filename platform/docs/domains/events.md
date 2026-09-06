@@ -46,6 +46,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `fulfillment.events` | 6 | 1 | `PT168H` | `delete` |
 | `realtime.signals` | 3 | 1 | `PT1M` | `delete` |
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
+| `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 
 Business-fact retention is the seven-day operational replay window. Commands
 are durable in PostgreSQL and need only outlive a consumer restart. Realtime
@@ -267,6 +268,32 @@ Javadoc for the reasoning; splitting them out remains additive. `callCorrelation
 is not itself a payload field: every event in one call's lifecycle keys the
 same way so a call's own events cannot overtake each other, even though each
 is a distinct `callEventId` row in `voice.call_events`.
+
+## `inventory.events`
+
+- Producing module: `inventory`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `variantId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `InventoryAvailabilityChanged` | 1 | `variantId` | [`InventoryAvailabilityChanged.v1`](../../src/main/resources/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json) | `variantId`, `locationId`, `available`, `reasonCode` |
+
+Symmetric by construction: `available` carries the direction, so a dish going
+off and a dish coming back are the same event type rather than two. Never a
+product or variant name — a consumer resolves that through the authorized
+catalog API with `variantId` — and never `brandId`, which a consumer holding
+`locationId` can already resolve.
+
+ADR 0017 names six further inventory facts — `InventoryPositionChanged`,
+`InventoryReserved`, `InventoryReservationCommitted`,
+`InventoryReservationReleased`, `InventoryReservationExpired`, and
+`InventoryReconciliationRequired`. None is published yet, and none is
+catalogued here: their payload shape (a reservation's lines? a quantity delta?)
+is not yet decided, and a contract with no producer is a promise this
+repository has not made — the same restraint `media.events` states for its own
+five unpublished siblings.
 
 ## Delivery and ordering guarantees
 
