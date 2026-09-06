@@ -411,6 +411,17 @@ export const messagesEn = {
     'Provider connected. Bind it to a brand or location to start using it.',
   'settings.integrations.connect.cancel': 'Cancel',
 
+  'settings.integrations.connect.bind.title': 'Bind the connected provider',
+  'settings.integrations.connect.bind.brand': 'Brand',
+  'settings.integrations.connect.bind.location': 'Location',
+  'settings.integrations.connect.bind.location.hint':
+    'Leave unset to bind every location under this brand.',
+  'settings.integrations.connect.bind.locationAny': '— Entire brand —',
+  'settings.integrations.connect.bind.noBrands': 'No brands available to bind to.',
+  'settings.integrations.connect.bind.submit': 'Bind',
+  'settings.integrations.connect.bind.submitting': 'Binding…',
+  'settings.integrations.connect.bind.skip': 'Skip for now',
+
   'settings.integrations.rotate.installationAction': 'Rotate credential',
   'settings.integrations.rotate.bindingAction': 'Rotate credential',
   'settings.integrations.rotate.title': 'Rotate this credential',
@@ -434,9 +445,18 @@ export const messagesEn = {
   'settings.integrations.registerBinding.lead':
     'Links a legal entity to a Click or Payme account through an installation you already connected above.',
   'settings.integrations.registerBinding.provider': 'Provider',
-  'settings.integrations.registerBinding.legalEntityId': 'Legal entity id',
-  'settings.integrations.registerBinding.installationId': 'Installation id',
-  'settings.integrations.registerBinding.integrationBindingId': 'Integration binding id',
+  'settings.integrations.registerBinding.legalEntityId': 'Legal entity',
+  'settings.integrations.registerBinding.legalEntity.placeholder': 'Select a legal entity',
+  'settings.integrations.registerBinding.legalEntity.empty':
+    'No active legal entities yet. Register one in Fiscalization first.',
+  'settings.integrations.registerBinding.installationId': 'Installation',
+  'settings.integrations.registerBinding.installation.placeholder': 'Select an installation',
+  'settings.integrations.registerBinding.installation.empty':
+    'No installations for this provider yet. Connect one above first.',
+  'settings.integrations.registerBinding.integrationBindingId': 'Integration binding',
+  'settings.integrations.registerBinding.binding.placeholder': 'Select a binding',
+  'settings.integrations.registerBinding.binding.empty':
+    'No known bindings for this installation yet. Bind it to a brand or location from the connect flow, then come back here.',
   'settings.integrations.registerBinding.merchantAccountReference': 'Merchant account reference',
   'settings.integrations.registerBinding.callbackPathSegment': 'Callback path segment',
   'settings.integrations.registerBinding.value': 'Merchant secret key',

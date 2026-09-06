@@ -1,11 +1,15 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
+import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { describeApiError } from '../../orders/order-errors';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
-import { ConnectProviderPanel, ConnectSubmission } from './connect-provider-panel';
+import { BrandProfileApi, BrandView } from '../brand-profile/brand-profile-api';
+import { FiscalizationApi, LegalEntityView } from '../fiscalization/fiscalization-api';
+import { LocationsApi, LocationView } from '../locations/locations-api';
+import { BindSubmission, ConnectProviderPanel, ConnectSubmission } from './connect-provider-panel';
 import {
   InstallationView,
   IntegrationsApi,
@@ -13,6 +17,7 @@ import {
   ProviderConnectDeclaration,
 } from './integrations-api';
 import {
+  IntegrationBindingOption,
   RegisterBindingSubmission,
   RegisterMerchantBindingPanel,
 } from './register-merchant-binding-panel';
@@ -47,6 +52,27 @@ type RotationTarget =
  * Two lists (installations, merchant bindings) assembled from three server
  * surfaces -- see {@link IntegrationsApi}'s own doc comment for why, and for
  * which of the three surface-crossings this move actually resolves.
+ *
+ * <p><strong>Wave 66's own addition: pickers, and a connect flow that
+ * finishes what it starts.</strong> Before this wave, the legal-entity,
+ * installation and integration-binding fields on the merchant-binding form
+ * were plain id inputs — see `register-merchant-binding-panel.ts`'s own doc
+ * comment for the full story — and connecting a provider never continued
+ * into binding it to a brand or location, so the only way a tenant admin
+ * could register a merchant binding at all was to already know three raw
+ * UUIDs from somewhere else in the console. {@link legalEntities} and
+ * {@link brands}/{@link locations} back real dropdowns now
+ * ({@link FiscalizationApi.listLegalEntities}, `BrandProfileApi.list`,
+ * `LocationsApi.list` — endpoints this app already called elsewhere, per
+ * wave 66's own brief), and {@link onConnect} continues straight into
+ * {@link onBind} instead of closing the drawer. {@link createdBindings}
+ * exists because that closes the loop only halfway: the platform has no
+ * endpoint that lists a tenant's existing `integration.bindings` rows (only
+ * `POST .../bindings` to create one — nothing reads them back), so the
+ * integration-binding picker can only offer bindings *this page* has itself
+ * created since it loaded, not ones from an earlier session. That is a real
+ * backend gap, not a shortcut this wave papered over; it belongs next to the
+ * missing RETIRED transition this same wave's report also names.
  */
 @Component({
   selector: 'q-integrations-page',
@@ -57,6 +83,9 @@ type RotationTarget =
 })
 export class IntegrationsPage {
   private readonly api = inject(IntegrationsApi);
+  private readonly fiscalization = inject(FiscalizationApi);
+  private readonly brandsApi = inject(BrandProfileApi);
+  private readonly locationsApi = inject(LocationsApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
@@ -67,9 +96,29 @@ export class IntegrationsPage {
   protected readonly merchantBindings = signal<readonly MerchantBindingView[]>([]);
   protected readonly connectFields = signal<readonly ProviderConnectDeclaration[]>([]);
 
+  /** For the merchant-binding form's own legal-entity picker. */
+  protected readonly legalEntities = signal<readonly LegalEntityView[]>([]);
+  /** For the connect drawer's bind step. */
+  protected readonly brands = signal<readonly BrandView[]>([]);
+  /** Every location across every brand, flat — see {@link loadPickerData}. */
+  protected readonly locations = signal<readonly LocationView[]>([]);
+  /**
+   * Bindings created via {@link onBind} since this page loaded — the
+   * integration-binding picker's only source, for the reason this class's
+   * own doc comment explains.
+   */
+  protected readonly createdBindings = signal<readonly IntegrationBindingOption[]>([]);
+
   protected readonly showConnectPanel = signal(false);
   protected readonly connectSubmitting = signal(false);
   protected readonly connectError = signal<string | null>(null);
+  protected readonly connectPhase = signal<'connect' | 'bind'>('connect');
+  protected readonly pendingInstallation = signal<{
+    readonly id: string;
+    readonly providerType: string;
+  } | null>(null);
+  protected readonly bindSubmitting = signal(false);
+  protected readonly bindError = signal<string | null>(null);
 
   protected readonly showRegisterBindingPanel = signal(false);
   protected readonly registerSubmitting = signal(false);
@@ -102,7 +151,18 @@ export class IntegrationsPage {
 
   protected openConnect(): void {
     this.connectError.set(null);
+    this.connectPhase.set('connect');
+    this.pendingInstallation.set(null);
+    this.bindError.set(null);
     this.showConnectPanel.set(true);
+  }
+
+  /** The drawer's own cancel/close, from either step — see this class's own doc comment. */
+  protected closeConnectPanel(): void {
+    this.showConnectPanel.set(false);
+    this.connectPhase.set('connect');
+    this.pendingInstallation.set(null);
+    this.bindError.set(null);
   }
 
   protected async onConnect(submission: ConnectSubmission): Promise<void> {
@@ -118,7 +178,7 @@ export class IntegrationsPage {
         providerType: submission.providerType,
         value: submission.secretValue,
       });
-      await this.api.install(scope, {
+      const installed = await this.api.install(scope, {
         category: submission.category,
         providerType: submission.providerType,
         environmentCode: submission.environmentCode,
@@ -126,13 +186,62 @@ export class IntegrationsPage {
         secretReference: reference,
         externalAccountReference: submission.reference === '' ? undefined : submission.reference,
       });
-      this.showConnectPanel.set(false);
       await this.reloadInstallations(scope);
+      // Continue straight into binding it rather than dropping the operator
+      // back at the table — the two-journeys defect this wave closes.
+      this.pendingInstallation.set({
+        id: installed.installationId,
+        providerType: submission.providerType,
+      });
+      this.connectPhase.set('bind');
     } catch (failure) {
       this.connectError.set(this.describeError(failure));
     } finally {
       this.connectSubmitting.set(false);
     }
+  }
+
+  protected async onBind(submission: BindSubmission): Promise<void> {
+    const scope = this.location.scope();
+    const pending = this.pendingInstallation();
+    if (!scope || pending === null) {
+      return;
+    }
+    this.bindSubmitting.set(true);
+    this.bindError.set(null);
+    try {
+      const result = await this.api.bindInstallation(scope, pending.id, {
+        brandId: submission.brandId,
+        locationId: submission.locationId,
+        capabilities: [],
+        primaryCapabilities: [],
+      });
+      this.createdBindings.update((current) => [
+        ...current,
+        {
+          id: result.bindingId,
+          installationId: pending.id,
+          label: this.describeBinding(pending.providerType, submission),
+        },
+      ]);
+      this.closeConnectPanel();
+    } catch (failure) {
+      this.bindError.set(this.describeError(failure));
+    } finally {
+      this.bindSubmitting.set(false);
+    }
+  }
+
+  private describeBinding(providerType: string, submission: BindSubmission): string {
+    const brand = this.brands().find((candidate) => candidate.id === submission.brandId);
+    const location =
+      submission.locationId === null
+        ? null
+        : this.locations().find((candidate) => candidate.id === submission.locationId);
+    const parts = [providerType, brand?.displayName, location?.displayName].filter(
+      (part): part is string => part !== undefined,
+    );
+    return parts.join(' · ');
   }
 
   protected openRegisterBinding(): void {
@@ -257,6 +366,7 @@ export class IntegrationsPage {
       this.installations.set(installations);
       this.merchantBindings.set(merchantBindings);
       this.connectFields.set(connectFields);
+      await this.loadPickerData(scope);
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 403) {
         this.denied.set(true);
@@ -265,6 +375,42 @@ export class IntegrationsPage {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * Legal entities, brands and every location — the connect drawer's bind
+   * step and the merchant-binding form's own pickers. Best-effort and never
+   * blocking the two tables above on it: a scope that cannot also read one
+   * of these (an unusual capability split, but not this screen's business to
+   * assume against) should still see its installations and merchant
+   * bindings, just with an emptier picker.
+   *
+   * <p>The brand/location fan-out mirrors `StaffApi.scopeDirectory`'s own
+   * doc comment: no single endpoint returns every location in a tenant, so
+   * this is one call per brand — the tenant's own brand count, single digits
+   * for the pilot.
+   */
+  private async loadPickerData(scope: LocationScope): Promise<void> {
+    try {
+      this.legalEntities.set(await this.fiscalization.listLegalEntities(scope));
+    } catch {
+      this.legalEntities.set([]);
+    }
+    try {
+      const brands = await this.brandsApi.list(scope.tenantId);
+      this.brands.set(brands);
+      const perBrand = await Promise.all(
+        brands.map((brand) =>
+          this.locationsApi
+            .list({ tenantId: scope.tenantId, brandId: brand.id, locationId: '' })
+            .catch(() => []),
+        ),
+      );
+      this.locations.set(perBrand.flat());
+    } catch {
+      this.brands.set([]);
+      this.locations.set([]);
     }
   }
 

@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { BrandProfileApi, BrandView } from '../brand-profile/brand-profile-api';
+import { FiscalizationApi, LegalEntityView } from '../fiscalization/fiscalization-api';
+import { LocationsApi, LocationView } from '../locations/locations-api';
 import { ConnectProviderPanel } from './connect-provider-panel';
 import { IntegrationsPage } from './integrations-page';
 import { InstallationView, IntegrationsApi, MerchantBindingView } from './integrations-api';
@@ -13,6 +16,49 @@ import { RegisterMerchantBindingPanel } from './register-merchant-binding-panel'
 import { RotateSecretDialog } from './rotate-secret-dialog';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
+
+const BRAND: BrandView = {
+  id: 'brand-1',
+  tenantId: 'tenant-1',
+  code: 'MAIN',
+  slug: 'main',
+  displayName: 'Rayhon Chilonzor',
+  status: 'ACTIVE',
+};
+
+const LOCATION: LocationView = {
+  id: 'location-1',
+  tenantId: 'tenant-1',
+  brandId: 'brand-1',
+  code: 'L1',
+  slug: 'l1',
+  displayName: 'Chilonzor branch',
+  timezone: 'Asia/Tashkent',
+  status: 'ACTIVE',
+  addressLine: null,
+  district: null,
+  city: null,
+  landmark: null,
+  contactPhone: null,
+  latitude: null,
+  longitude: null,
+  coordinateSource: 'NOT_GEOCODED',
+};
+
+const LEGAL_ENTITY: LegalEntityView = {
+  id: 'legal-1',
+  code: 'MAIN',
+  legalName: 'Rayhon LLC',
+  shortName: null,
+  tin: '123456789',
+  vatRegistered: true,
+  vatCertificateReference: null,
+  taxProfileId: null,
+  registeredAddress: null,
+  contactPhone: null,
+  status: 'ACTIVE',
+  version: 1,
+};
 
 /**
  * Settles the constructor's start -> load -> Promise.all -> render chain
@@ -96,19 +142,41 @@ class FakeIntegrationsApi {
   });
   readonly rotateMerchantBindingSecret = vi.fn().mockResolvedValue({ ...BINDING, version: 2 });
   readonly archiveMerchantBinding = vi.fn().mockResolvedValue({ ...BINDING, status: 'RETIRED' });
+  readonly bindInstallation = vi.fn().mockResolvedValue({ bindingId: 'binding-new', status: 'SUSPENDED' });
+}
+
+class FakeFiscalizationApi {
+  readonly listLegalEntities = vi.fn().mockResolvedValue([LEGAL_ENTITY]);
+}
+
+class FakeBrandProfileApi {
+  readonly list = vi.fn().mockResolvedValue([BRAND]);
+}
+
+class FakeLocationsApi {
+  readonly list = vi.fn().mockResolvedValue([LOCATION]);
 }
 
 describe('IntegrationsPage', () => {
   let fixture: ComponentFixture<IntegrationsPage>;
   let api: FakeIntegrationsApi;
+  let fiscalizationApi: FakeFiscalizationApi;
+  let brandsApi: FakeBrandProfileApi;
+  let locationsApi: FakeLocationsApi;
 
   beforeEach(async () => {
     api = new FakeIntegrationsApi();
+    fiscalizationApi = new FakeFiscalizationApi();
+    brandsApi = new FakeBrandProfileApi();
+    locationsApi = new FakeLocationsApi();
 
     await TestBed.configureTestingModule({
       imports: [IntegrationsPage],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -156,6 +224,9 @@ describe('IntegrationsPage', () => {
       imports: [IntegrationsPage],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentLocation, useValue: denied },
       ],
     }).compileComponents();
@@ -169,6 +240,16 @@ describe('IntegrationsPage', () => {
       'No location in scope',
     );
     expect(api.listInstallations).not.toHaveBeenCalled();
+  });
+
+  it('loads legal entities, brands and locations for the drawer and merchant-binding pickers', () => {
+    expect(fiscalizationApi.listLegalEntities).toHaveBeenCalledWith(SCOPE);
+    expect(brandsApi.list).toHaveBeenCalledWith('tenant-1');
+    expect(locationsApi.list).toHaveBeenCalledWith({
+      tenantId: 'tenant-1',
+      brandId: 'brand-1',
+      locationId: '',
+    });
   });
 
   it('writes the secret through the door, then installs, then reloads, when the connect panel emits', async () => {
@@ -210,7 +291,94 @@ describe('IntegrationsPage', () => {
     expect(api.writeSecret.mock.invocationCallOrder[0]).toBeLessThan(
       api.install.mock.invocationCallOrder[0],
     );
+    // Wave 66's own fix: the drawer must NOT close here — it continues
+    // straight into the binding step instead of dropping the operator back
+    // at the table to start a second, disconnected journey.
+    const stillOpen = fixture.debugElement.query(By.directive(ConnectProviderPanel));
+    expect(stillOpen).toBeTruthy();
+    expect((stillOpen.componentInstance as ConnectProviderPanel).phase()).toBe('bind');
+  });
+
+  it('continues the connect drawer into binding, then closes only once the bind step submits', async () => {
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Connect')) as HTMLButtonElement;
+    button.click();
+    fixture.detectChanges();
+
+    let panel = fixture.debugElement.query(By.directive(ConnectProviderPanel));
+    (panel.componentInstance as ConnectProviderPanel).connect.emit({
+      providerType: 'TELEGRAM_BOT_API',
+      category: 'NOTIFICATION',
+      displayName: 'Pilot bot',
+      environmentCode: 'telegram-prod',
+      reference: '',
+      secretValue: 'a-real-bot-token',
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    panel = fixture.debugElement.query(By.directive(ConnectProviderPanel));
+    (panel.componentInstance as ConnectProviderPanel).bind.emit({
+      brandId: 'brand-1',
+      locationId: null,
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.bindInstallation).toHaveBeenCalledWith(SCOPE, 'inst-new', {
+      brandId: 'brand-1',
+      locationId: null,
+      capabilities: [],
+      primaryCapabilities: [],
+    });
+    // Now, and only now, the drawer is done.
     expect(fixture.debugElement.query(By.directive(ConnectProviderPanel))).toBeFalsy();
+  });
+
+  it('offers the freshly created binding to the merchant-binding form afterward', async () => {
+    const connectButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Connect')) as HTMLButtonElement;
+    connectButton.click();
+    fixture.detectChanges();
+
+    let panel = fixture.debugElement.query(By.directive(ConnectProviderPanel));
+    (panel.componentInstance as ConnectProviderPanel).connect.emit({
+      providerType: 'TELEGRAM_BOT_API',
+      category: 'NOTIFICATION',
+      displayName: 'Pilot bot',
+      environmentCode: 'telegram-prod',
+      reference: '',
+      secretValue: 'a-real-bot-token',
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    panel = fixture.debugElement.query(By.directive(ConnectProviderPanel));
+    (panel.componentInstance as ConnectProviderPanel).bind.emit({
+      brandId: 'brand-1',
+      locationId: null,
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const registerButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) =>
+      candidate.textContent?.includes('Register a merchant binding'),
+    ) as HTMLButtonElement;
+    registerButton.click();
+    fixture.detectChanges();
+
+    const registerPanel = fixture.debugElement.query(By.directive(RegisterMerchantBindingPanel));
+    expect(
+      (registerPanel.componentInstance as RegisterMerchantBindingPanel).bindings(),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'binding-new', installationId: 'inst-new' }),
+      ]),
+    );
   });
 
   it('registers a merchant binding through the door when the register panel emits', async () => {
