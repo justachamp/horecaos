@@ -19,7 +19,7 @@ dev/test before the next". `tools/proving-run` is that proof: one script, run
 against a fresh local stack, that creates a **brand-new** tenant through the
 control-plane API — never the [local-fixtures](../local-fixtures.md) demo
 tenant, which exists only for contrast and manual debugging — carries it
-through [ADR 0008](../adr/partial/0008-resumable-tenant-onboarding-workflow.md)'s
+through [ADR 0008](../adr/built/0008-resumable-tenant-onboarding-workflow.md)'s
 resumable onboarding workflow with real validator failures and real resumes,
 activates it, and takes a real phone+OTP customer order through payment,
 operations approval, fulfilment, and fiscal issuance.

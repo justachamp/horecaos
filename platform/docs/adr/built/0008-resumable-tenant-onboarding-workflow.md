@@ -1,7 +1,7 @@
 # ADR 0008: Resumable tenant onboarding workflow
 
 - Decision status: Accepted
-- Implementation status: Partial — eleven of the twelve catalogued steps have
+- Implementation status: Built — eleven of the twelve catalogued steps have
   handlers as of 2026-08-30; only `TENANT_ACTIVATE` has none, by design (it
   parks awaiting a platform-admin's approval). The seven formerly-BLOCKED
   validators are real and `requiredInV1`: six live in `tenancy`
@@ -95,6 +95,41 @@
   the default itself, and `DEFAULT_CONFIGURATION_APPLY` actually writes the
   template's acceptance-policy default (RESTAURANT_APPROVAL) instead of applying
   nothing — proven live by the proving run through pure HTTP.
+  As of 2026-09-06 (wave 65), the two gaps this line used to name as
+  outstanding are closed. `cancel` and `validate` are real endpoints on
+  `OnboardingController`, backed by `OnboardingService.cancel` and
+  `.validate`. `cancel` requires `TENANT_ONBOARDING_MANAGE` — the same
+  capability `start` and `resume` already require, because cancelling a run
+  is one more run-lifecycle decision, not a new kind of authority — and is
+  refused with the identical `RESOURCE_CONFLICT` message whether the run
+  already reached `ACTIVE` or `FAILED`: cancel is neither how a failed run is
+  repaired (that is `resume`, or now a fresh `startRun`) nor how an activated
+  tenant is undone, and which kind of finished a run is is not this
+  endpoint's business to reveal through a different error — `GET
+  .../onboarding-runs/{runId}` already answers that for a caller who wants to
+  know. `validate` requires only `TENANT_READ`: it dry-runs every
+  `VALIDATING`-phase handler against the tenant's current configuration
+  synchronously and persists nothing, so a tenant can see what activation
+  would find before committing to a `resume` or an `activate` call rather
+  than waiting for the scheduler's next pass. It deliberately excludes
+  `ACTIVATION_SMOKE_TEST` — the one `VALIDATING`-phase handler that is not a
+  pure read, since its own javadoc records that it writes an idempotent
+  `pricing.quotes` row — because a dry run a tenant can call at will must
+  never write anything. Separately, `V0174` fixes `uq_onboarding_run_active`
+  (`V0014`): that partial index excluded only `ACTIVE` and `CANCELLED` from
+  "one active run per tenant", so a `FAILED` run held the index entry forever
+  and a tenant stuck behind an unfixable step could neither resume (which
+  only ever reopens `FAILED` steps on the same run) nor start over — the
+  index, not `OnboardingService.startRun`, has always been the only thing
+  enforcing this invariant, since `startRun` itself is a plain `INSERT` with
+  no guard of its own. `FAILED` now joins `ACTIVE` and `CANCELLED` as "not
+  active"; a genuinely in-flight run is unaffected and still blocks a second.
+  `OnboardingServiceTests` proves both: a `FAILED` run is replaced by a fresh
+  `startRun` (asserted against `tenant.onboarding_runs` directly, not only
+  through the service call succeeding), a run that has not finished still
+  collides with a second `startRun` with `DataIntegrityViolationException`,
+  and cancelling an already-`ACTIVE` or already-`FAILED` run throws the
+  identical `CancellationNotPermittedException` message either way.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
