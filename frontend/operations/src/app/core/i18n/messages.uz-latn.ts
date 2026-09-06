@@ -395,6 +395,17 @@ export const messagesUzLatn: MessageCatalogue = {
     'Provayder ulandi. Undan foydalanish uchun brend yoki filialga bogʻlang.',
   'settings.integrations.connect.cancel': 'Bekor qilish',
 
+  'settings.integrations.connect.bind.title': 'Ulangan provayderni bogʻlash',
+  'settings.integrations.connect.bind.brand': 'Brend',
+  'settings.integrations.connect.bind.location': 'Filial',
+  'settings.integrations.connect.bind.location.hint':
+    'Ushbu brendning barcha filiallariga bogʻlash uchun boʻsh qoldiring.',
+  'settings.integrations.connect.bind.locationAny': '— Butun brend —',
+  'settings.integrations.connect.bind.noBrands': 'Bogʻlash uchun brend topilmadi.',
+  'settings.integrations.connect.bind.submit': 'Bogʻlash',
+  'settings.integrations.connect.bind.submitting': 'Bogʻlanmoqda…',
+  'settings.integrations.connect.bind.skip': 'Hozircha oʻtkazib yuborish',
+
   'settings.integrations.rotate.installationAction': 'Maxfiy maʼlumotni yangilash',
   'settings.integrations.rotate.bindingAction': 'Maxfiy maʼlumotni yangilash',
   'settings.integrations.rotate.title': 'Maxfiy maʼlumotni yangilash',
@@ -418,9 +429,18 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.registerBinding.lead':
     'Yuqorida ulangan integratsiya orqali yuridik shaxsni Click yoki Payme hisobiga bogʻlaydi.',
   'settings.integrations.registerBinding.provider': 'Provayder',
-  'settings.integrations.registerBinding.legalEntityId': 'Yuridik shaxs id',
-  'settings.integrations.registerBinding.installationId': 'Integratsiya id',
-  'settings.integrations.registerBinding.integrationBindingId': 'Integratsiya bogʻlanish id',
+  'settings.integrations.registerBinding.legalEntityId': 'Yuridik shaxs',
+  'settings.integrations.registerBinding.legalEntity.placeholder': 'Yuridik shaxsni tanlang',
+  'settings.integrations.registerBinding.legalEntity.empty':
+    'Faol yuridik shaxs yoʻq. Avval «Fiskalizatsiya» boʻlimida birini roʻyxatdan oʻtkazing.',
+  'settings.integrations.registerBinding.installationId': 'Integratsiya',
+  'settings.integrations.registerBinding.installation.placeholder': 'Integratsiyani tanlang',
+  'settings.integrations.registerBinding.installation.empty':
+    'Bu provayder uchun integratsiya yoʻq. Avval yuqorida birini ulang.',
+  'settings.integrations.registerBinding.integrationBindingId': 'Integratsiya bogʻlanishi',
+  'settings.integrations.registerBinding.binding.placeholder': 'Bogʻlanishni tanlang',
+  'settings.integrations.registerBinding.binding.empty':
+    'Bu integratsiya uchun hali maʼlum bogʻlanish yoʻq. Uni ulash oynasida brend yoki filialga bogʻlab, keyin qaytib keling.',
   'settings.integrations.registerBinding.merchantAccountReference': 'Merchant hisob havolasi',
   'settings.integrations.registerBinding.callbackPathSegment': 'Callback yoʻl segmenti',
   'settings.integrations.registerBinding.value': 'Merchant maxfiy kaliti',

@@ -108,6 +108,32 @@ export class IntegrationsApi {
     );
   }
 
+  /**
+   * Binds a just-connected installation to a brand or, narrower, one of its
+   * locations (ADR 0026). Wired into the connect drawer's own second step in
+   * wave 66 — the only caller of this endpoint anywhere in this app, because
+   * before this wave the connect flow ended at {@link install} and nothing
+   * ever bound the result to anything. `capabilities`/`primaryCapabilities`
+   * travel empty: unlike POS (`PosCapability`) and delivery
+   * (`DeliveryCapability`), the platform declares no capability catalogue for
+   * a PAYMENT or NOTIFICATION installation, so there is nothing a picker could
+   * render here yet — the same class of gap this wave's own report calls out
+   * for the missing RETIRED transition, not something this wave invents a
+   * backend catalogue to paper over.
+   */
+  async bindInstallation(
+    scope: LocationScope,
+    installationId: string,
+    request: BindInstallationRequest,
+  ): Promise<BindInstallationResponse> {
+    return firstValueFrom(
+      this.api.post<BindInstallationRequest, BindInstallationResponse>(
+        settingsPaths.integrationInstallationBindings(scope, installationId),
+        command(request),
+      ),
+    );
+  }
+
   // -------------------------------------------------------------- merchant bindings
 
   async registerMerchantBinding(
@@ -239,6 +265,21 @@ export interface RotateSecretResponse {
   readonly oldSecretReference: string;
   readonly newSecretReference: string;
   readonly botUsername: string | null;
+}
+
+/** Mirrors uz.horecaos.platform.integration.web.ProviderInstallationController.BindRequest. */
+export interface BindInstallationRequest {
+  readonly brandId: string;
+  readonly locationId?: string | null;
+  readonly priority?: number;
+  readonly capabilities: readonly string[];
+  readonly primaryCapabilities: readonly string[];
+}
+
+/** The `bind` endpoint's response: a fresh SUSPENDED binding, awaiting activation. */
+export interface BindInstallationResponse {
+  readonly bindingId: string;
+  readonly status: string;
 }
 
 /** Mirrors uz.horecaos.platform.payments.web.MerchantBindingController.RegisterMerchantBindingRequest. */

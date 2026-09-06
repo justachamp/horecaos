@@ -139,13 +139,22 @@
     [providers]="connectFields()"
     [submitting]="connectSubmitting()"
     [errorMessage]="connectError()"
+    [phase]="connectPhase()"
+    [brands]="brands()"
+    [locations]="locations()"
+    [bindSubmitting]="bindSubmitting()"
+    [bindErrorMessage]="bindError()"
     (connect)="onConnect($event)"
-    (cancel)="showConnectPanel.set(false)"
+    (bind)="onBind($event)"
+    (cancel)="closeConnectPanel()"
   />
 }
 
 @if (showRegisterBindingPanel()) {
   <app-register-merchant-binding-panel
+    [legalEntities]="legalEntities()"
+    [installations]="installations()"
+    [bindings]="createdBindings()"
     [submitting]="registerSubmitting()"
     [errorMessage]="registerError()"
     (register)="onRegisterBinding($event)"

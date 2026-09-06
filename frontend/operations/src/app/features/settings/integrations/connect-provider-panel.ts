@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -9,6 +10,8 @@ import {
 } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { BrandView } from '../brand-profile/brand-profile-api';
+import { LocationView } from '../locations/locations-api';
 import { ProviderConnectDeclaration } from './integrations-api';
 
 /**
@@ -28,15 +31,37 @@ export interface ConnectSubmission {
 }
 
 /**
- * "Connect a provider" (ADR 0065): renders entirely from the server's
- * per-adapter field declarations ({@link ProviderConnectDeclaration}), so a
- * new provider adapter costs a catalogue entry on the server, never a change
- * here — the same neutrality discipline the connect-fields endpoint's own
- * doc comment names.
+ * What the parent needs to bind the just-connected installation to a brand
+ * or, narrower, one of its locations. `locationId` null means "the whole
+ * brand" — `BindingRef`'s own nullable-location scoping (ADR 0026), not an
+ * unset field.
+ */
+export interface BindSubmission {
+  readonly brandId: string;
+  readonly locationId: string | null;
+}
+
+/**
+ * "Connect a provider" (ADR 0065), now two steps in one drawer instead of
+ * one: renders the connect form entirely from the server's per-adapter field
+ * declarations ({@link ProviderConnectDeclaration}), so a new provider
+ * adapter costs a catalogue entry on the server, never a change here — the
+ * same neutrality discipline the connect-fields endpoint's own doc comment
+ * names — then, on a successful connect, continues straight into binding the
+ * new installation to a brand or location rather than dropping the operator
+ * back at the installations table to start a second, disconnected journey.
  *
- * Ported from `frontend/control-plane/src/app/features/integrations/` in
- * wave 26 (ADR 0065's placement move); behaviour unchanged, only the i18n
- * service and import depth differ.
+ * <p>{@link phase} is parent-controlled, matching every other panel in this
+ * feature (`RegisterMerchantBindingPanel`, `RotateSecretDialog`): this
+ * component owns no async call of its own, so `IntegrationsPage` decides when
+ * `connect` succeeded and flips {@link phase} to `'bind'` rather than this
+ * component guessing at it. `brands`/`locations` are the same flat,
+ * fan-out-fetched lists `StaffApi.scopeDirectory`'s own doc comment
+ * describes: no single endpoint returns every location in the tenant.
+ *
+ * <p>Ported from `frontend/control-plane/src/app/features/integrations/` in
+ * wave 26 (ADR 0065's placement move); the connect step's own behaviour is
+ * unchanged from that port. The bind step is new in wave 66.
  */
 @Component({
   selector: 'app-connect-provider-panel',
@@ -47,96 +72,181 @@ export interface ConnectSubmission {
         class="drawer"
         role="dialog"
         aria-modal="true"
-        [attr.aria-label]="i18n.t('settings.integrations.connect.title')"
+        [attr.aria-label]="
+          phase() === 'connect'
+            ? i18n.t('settings.integrations.connect.title')
+            : i18n.t('settings.integrations.connect.bind.title')
+        "
         (click)="$event.stopPropagation()"
       >
         <div class="header">
-          <h2 class="q-subhead">{{ i18n.t('settings.integrations.connect.title') }}</h2>
+          <h2 class="q-subhead">
+            {{
+              phase() === 'connect'
+                ? i18n.t('settings.integrations.connect.title')
+                : i18n.t('settings.integrations.connect.bind.title')
+            }}
+          </h2>
           <button type="button" class="q-body close" (click)="cancel.emit()" aria-label="Close">
             ✕
           </button>
         </div>
 
-        <div class="body">
-          <label class="q-caption field-label" for="connect-provider">{{
-            i18n.t('settings.integrations.connect.provider')
-          }}</label>
-          <select
-            id="connect-provider"
-            class="q-body field"
-            [value]="providerType()"
-            (change)="onProviderChange($event)"
-            [disabled]="submitting()"
-          >
-            @for (declaration of providers(); track declaration.providerType) {
-              <option [value]="declaration.providerType">{{ declaration.providerType }}</option>
-            }
-          </select>
+        @if (phase() === 'connect') {
+          <div class="body">
+            <label class="q-caption field-label" for="connect-provider">{{
+              i18n.t('settings.integrations.connect.provider')
+            }}</label>
+            <select
+              id="connect-provider"
+              class="q-body field"
+              [value]="providerType()"
+              (change)="onProviderChange($event)"
+              [disabled]="submitting()"
+            >
+              @for (declaration of providers(); track declaration.providerType) {
+                <option [value]="declaration.providerType">{{ declaration.providerType }}</option>
+              }
+            </select>
 
-          <label class="q-caption field-label" for="connect-display-name">{{
-            i18n.t('settings.integrations.connect.displayName')
-          }}</label>
-          <input
-            id="connect-display-name"
-            class="q-body field"
-            type="text"
-            [value]="displayName()"
-            (input)="displayName.set(inputValue($event))"
-            [disabled]="submitting()"
-          />
-
-          <label class="q-caption field-label" for="connect-environment">{{
-            i18n.t('settings.integrations.connect.environmentCode')
-          }}</label>
-          <input
-            id="connect-environment"
-            class="q-body field"
-            type="text"
-            [value]="environmentCode()"
-            (input)="environmentCode.set(inputValue($event))"
-            [disabled]="submitting()"
-          />
-          <p class="q-caption hint">
-            {{ i18n.t('settings.integrations.connect.environmentCode.hint') }}
-          </p>
-
-          @for (field of selectedDeclaration()?.fields ?? []; track field.key) {
-            <label class="q-caption field-label" [for]="'connect-field-' + field.key">{{
-              label(field.key)
+            <label class="q-caption field-label" for="connect-display-name">{{
+              i18n.t('settings.integrations.connect.displayName')
             }}</label>
             <input
-              [id]="'connect-field-' + field.key"
+              id="connect-display-name"
               class="q-body field"
-              [type]="field.secret ? 'password' : 'text'"
-              [autocomplete]="field.secret ? 'off' : 'on'"
-              [value]="fieldValue(field.key)"
-              (input)="onFieldInput(field.key, $event)"
+              type="text"
+              [value]="displayName()"
+              (input)="displayName.set(inputValue($event))"
               [disabled]="submitting()"
             />
-          }
 
-          @if (errorMessage(); as message) {
-            <p class="q-body-sm error" role="alert">{{ message }}</p>
-          }
-        </div>
+            <label class="q-caption field-label" for="connect-environment">{{
+              i18n.t('settings.integrations.connect.environmentCode')
+            }}</label>
+            <input
+              id="connect-environment"
+              class="q-body field"
+              type="text"
+              [value]="environmentCode()"
+              (input)="environmentCode.set(inputValue($event))"
+              [disabled]="submitting()"
+            />
+            <p class="q-caption hint">
+              {{ i18n.t('settings.integrations.connect.environmentCode.hint') }}
+            </p>
 
-        <div class="actions">
-          <button
-            type="button"
-            class="q-body secondary"
-            (click)="cancel.emit()"
-            [disabled]="submitting()"
-          >
-            {{ i18n.t('settings.integrations.connect.cancel') }}
-          </button>
-          <button type="button" class="q-body primary" (click)="submit()" [disabled]="!canSubmit()">
-            {{
-              submitting()
-                ? i18n.t('settings.integrations.connect.submitting')
-                : i18n.t('settings.integrations.connect.submit')
-            }}
-          </button>
-        </div>
+            @for (field of selectedDeclaration()?.fields ?? []; track field.key) {
+              <label class="q-caption field-label" [for]="'connect-field-' + field.key">{{
+                label(field.key)
+              }}</label>
+              <input
+                [id]="'connect-field-' + field.key"
+                class="q-body field"
+                [type]="field.secret ? 'password' : 'text'"
+                [autocomplete]="field.secret ? 'off' : 'on'"
+                [value]="fieldValue(field.key)"
+                (input)="onFieldInput(field.key, $event)"
+                [disabled]="submitting()"
+              />
+            }
+
+            @if (errorMessage(); as message) {
+              <p class="q-body-sm error" role="alert">{{ message }}</p>
+            }
+          </div>
+
+          <div class="actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancel.emit()"
+              [disabled]="submitting()"
+            >
+              {{ i18n.t('settings.integrations.connect.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="submit()"
+              [disabled]="!canSubmit()"
+            >
+              {{
+                submitting()
+                  ? i18n.t('settings.integrations.connect.submitting')
+                  : i18n.t('settings.integrations.connect.submit')
+              }}
+            </button>
+          </div>
+        } @else {
+          <div class="body">
+            <p class="q-body-sm lead">{{ i18n.t('settings.integrations.connect.success') }}</p>
+
+            <label class="q-caption field-label" for="connect-bind-brand">{{
+              i18n.t('settings.integrations.connect.bind.brand')
+            }}</label>
+            <select
+              id="connect-bind-brand"
+              class="q-body field"
+              [value]="bindBrandId() ?? ''"
+              (change)="onBindBrandChange($event)"
+              [disabled]="bindSubmitting()"
+            >
+              @for (brand of brands(); track brand.id) {
+                <option [value]="brand.id">{{ brand.displayName }}</option>
+              }
+            </select>
+            @if (brands().length === 0) {
+              <p class="q-caption hint">{{ i18n.t('settings.integrations.connect.bind.noBrands') }}</p>
+            }
+
+            <label class="q-caption field-label" for="connect-bind-location">{{
+              i18n.t('settings.integrations.connect.bind.location')
+            }}</label>
+            <select
+              id="connect-bind-location"
+              class="q-body field"
+              [value]="bindLocationId() ?? ''"
+              (change)="onBindLocationChange($event)"
+              [disabled]="bindSubmitting()"
+            >
+              <option value="">{{ i18n.t('settings.integrations.connect.bind.locationAny') }}</option>
+              @for (location of bindLocationsForBrand(); track location.id) {
+                <option [value]="location.id">{{ location.displayName }}</option>
+              }
+            </select>
+            <p class="q-caption hint">
+              {{ i18n.t('settings.integrations.connect.bind.location.hint') }}
+            </p>
+
+            @if (bindErrorMessage(); as message) {
+              <p class="q-body-sm error" role="alert">{{ message }}</p>
+            }
+          </div>
+
+          <div class="actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancel.emit()"
+              [disabled]="bindSubmitting()"
+            >
+              {{ i18n.t('settings.integrations.connect.bind.skip') }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="submitBind()"
+              [disabled]="!canSubmitBind()"
+            >
+              {{
+                bindSubmitting()
+                  ? i18n.t('settings.integrations.connect.bind.submitting')
+                  : i18n.t('settings.integrations.connect.bind.submit')
+              }}
+            </button>
+          </div>
+        }
       </div>
     </div>
   `,
@@ -218,6 +328,11 @@ export interface ConnectSubmission {
       margin: 4px 0 0;
     }
 
+    .lead {
+      color: var(--q-ink-muted);
+      margin: 0 0 8px;
+    }
+
     .error {
       margin: 16px 0 0;
       color: var(--q-error-text);
@@ -268,7 +383,16 @@ export class ConnectProviderPanel {
   readonly submitting = input(false);
   readonly errorMessage = input<string | null>(null);
 
+  /** Parent-controlled — see this file's own doc comment for why. */
+  readonly phase = input<'connect' | 'bind'>('connect');
+  readonly brands = input<readonly BrandView[]>([]);
+  /** Every location across every brand, flat — filtered per-brand by {@link bindLocationsForBrand}. */
+  readonly locations = input<readonly LocationView[]>([]);
+  readonly bindSubmitting = input(false);
+  readonly bindErrorMessage = input<string | null>(null);
+
   readonly connect = output<ConnectSubmission>();
+  readonly bind = output<BindSubmission>();
   readonly cancel = output<void>();
 
   protected readonly providerType = signal('');
@@ -276,8 +400,15 @@ export class ConnectProviderPanel {
   protected readonly environmentCode = signal('');
   protected readonly fieldValues = signal<Record<string, string>>({});
 
+  protected readonly bindBrandId = signal<string | null>(null);
+  protected readonly bindLocationId = signal<string | null>(null);
+
   protected readonly selectedDeclaration = computed(() =>
     this.providers().find((declaration) => declaration.providerType === this.providerType()),
+  );
+
+  protected readonly bindLocationsForBrand = computed(() =>
+    this.locations().filter((location) => location.brandId === this.bindBrandId()),
   );
 
   constructor() {
@@ -290,6 +421,21 @@ export class ConnectProviderPanel {
         this.providerType.set(first.providerType);
       }
     });
+
+    // Same reasoning as the provider default above, for the bind step's own
+    // brand select: `brands` typically arrives already populated (fetched at
+    // page load, before this drawer ever opens), but an `effect` — rather
+    // than another `queueMicrotask` — also covers the drawer opening before
+    // that fetch settles.
+    effect(
+      () => {
+        const list = this.brands();
+        if (list.length > 0 && this.bindBrandId() === null) {
+          this.bindBrandId.set(list[0].id);
+        }
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   protected readonly canSubmit = () => {
@@ -353,5 +499,25 @@ export class ConnectProviderPanel {
       reference: nonSecretValues.join('/'),
       secretValue: secretField === undefined ? '' : (values[secretField.key] ?? ''),
     });
+  }
+
+  protected readonly canSubmitBind = () => !this.bindSubmitting() && this.bindBrandId() !== null;
+
+  protected onBindBrandChange(event: Event): void {
+    this.bindBrandId.set(this.inputValue(event) || null);
+    this.bindLocationId.set(null);
+  }
+
+  protected onBindLocationChange(event: Event): void {
+    const value = this.inputValue(event);
+    this.bindLocationId.set(value === '' ? null : value);
+  }
+
+  protected submitBind(): void {
+    const brandId = this.bindBrandId();
+    if (!this.canSubmitBind() || brandId === null) {
+      return;
+    }
+    this.bind.emit({ brandId, locationId: this.bindLocationId() });
   }
 }

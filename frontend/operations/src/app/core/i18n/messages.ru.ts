@@ -389,6 +389,17 @@ export const messagesRu: MessageCatalogue = {
     'Провайдер подключён. Привяжите его к бренду или точке, чтобы начать использовать.',
   'settings.integrations.connect.cancel': 'Отмена',
 
+  'settings.integrations.connect.bind.title': 'Привязка подключённого провайдера',
+  'settings.integrations.connect.bind.brand': 'Бренд',
+  'settings.integrations.connect.bind.location': 'Точка',
+  'settings.integrations.connect.bind.location.hint':
+    'Оставьте не выбранным, чтобы привязать ко всем точкам этого бренда.',
+  'settings.integrations.connect.bind.locationAny': '— Весь бренд —',
+  'settings.integrations.connect.bind.noBrands': 'Нет доступных брендов для привязки.',
+  'settings.integrations.connect.bind.submit': 'Привязать',
+  'settings.integrations.connect.bind.submitting': 'Привязка…',
+  'settings.integrations.connect.bind.skip': 'Пропустить пока',
+
   'settings.integrations.rotate.installationAction': 'Обновить учётные данные',
   'settings.integrations.rotate.bindingAction': 'Обновить учётные данные',
   'settings.integrations.rotate.title': 'Обновление учётных данных',
@@ -412,9 +423,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.registerBinding.lead':
     'Связывает юридическое лицо с аккаунтом Click или Payme через уже подключённую выше интеграцию.',
   'settings.integrations.registerBinding.provider': 'Провайдер',
-  'settings.integrations.registerBinding.legalEntityId': 'Id юридического лица',
-  'settings.integrations.registerBinding.installationId': 'Id интеграции',
-  'settings.integrations.registerBinding.integrationBindingId': 'Id привязки интеграции',
+  'settings.integrations.registerBinding.legalEntityId': 'Юридическое лицо',
+  'settings.integrations.registerBinding.legalEntity.placeholder': 'Выберите юридическое лицо',
+  'settings.integrations.registerBinding.legalEntity.empty':
+    'Нет активных юридических лиц. Сначала зарегистрируйте одно в разделе «Фискализация».',
+  'settings.integrations.registerBinding.installationId': 'Интеграция',
+  'settings.integrations.registerBinding.installation.placeholder': 'Выберите интеграцию',
+  'settings.integrations.registerBinding.installation.empty':
+    'Нет интеграций этого провайдера. Сначала подключите одну выше.',
+  'settings.integrations.registerBinding.integrationBindingId': 'Привязка интеграции',
+  'settings.integrations.registerBinding.binding.placeholder': 'Выберите привязку',
+  'settings.integrations.registerBinding.binding.empty':
+    'Пока нет известных привязок для этой интеграции. Привяжите её к бренду или точке в мастере подключения и вернитесь сюда.',
   'settings.integrations.registerBinding.merchantAccountReference': 'Ссылка мерчант-аккаунта',
   'settings.integrations.registerBinding.callbackPathSegment': 'Сегмент callback-пути',
   'settings.integrations.registerBinding.value': 'Секретный ключ мерчанта',

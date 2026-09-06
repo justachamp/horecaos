@@ -205,6 +205,17 @@ export const settingsPaths = {
     return `${this.integrationInstallations(scope)}/${enc(installationId)}/secret-rotations/value`;
   },
 
+  /**
+   * `OperationsProviderInstallationController.bind` (delegate:
+   * `ProviderInstallationController.bind`) — ADR 0026's binding step, wired
+   * into the connect drawer for the first time in wave 66. Before this wave
+   * nothing in this app ever called it: a tenant could connect a provider and
+   * had no screen at all that would bind it to a brand or location afterward.
+   */
+  integrationInstallationBindings(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/bindings`;
+  },
+
   /** `MerchantBindingController` — already operations surface (ADR 0065's one resolved tension). */
   merchantBindings(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/merchant-bindings`;

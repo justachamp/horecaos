@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { LegalEntityView } from '../fiscalization/fiscalization-api';
+import { InstallationView } from './integrations-api';
 
 /**
  * What the parent screen needs to write the merchant secret through the door
@@ -18,15 +28,46 @@ export interface RegisterBindingSubmission {
 }
 
 /**
+ * One `integration.bindings` row (ADR 0026) the connect drawer's own bind
+ * step created, for this panel's integration-binding picker. `label` is a
+ * display string (`IntegrationsPage.describeBinding`) — provider, brand, and
+ * location — never the raw id, which only ever appears as {@link id}'s value.
+ */
+export interface IntegrationBindingOption {
+  readonly id: string;
+  readonly installationId: string;
+  readonly label: string;
+}
+
+/**
  * "Register a merchant binding" (ADR 0013, ADR 0026, ADR 0065): links a legal
  * entity to a Click or Payme account, through an installation the connect
  * panel already created above.
  *
- * <strong>A known, deliberate limitation of this iteration:</strong> the
- * legal entity, installation and integration-binding pickers are plain id
- * fields rather than searchable selects, unchanged from the control-plane
- * original this was ported from — an operator copies the three ids from
- * elsewhere in the console for now.
+ * <p><strong>Three real pickers, cascading.</strong> Wave 66 replaced the
+ * three plain id fields this panel used to render (an operator copying UUIDs
+ * from elsewhere in the console, unchanged from the control-plane original
+ * this was ported from) with selects backed by data the parent already
+ * fetched: {@link legalEntities} ({@link FiscalizationApi.listLegalEntities}),
+ * {@link installations} (`IntegrationsApi.listInstallations`, already on this
+ * page for the table above), and {@link bindings}. Choosing an installation
+ * narrows the binding picker to bindings that installation actually has —
+ * cheap enough here, but the point that matters: it makes it structurally
+ * impossible to submit a binding that belongs to a different installation
+ * than the one shown next to it, the exact "silently targets another record"
+ * failure a free-typed id invites.
+ *
+ * <p><strong>The one field with no server list to draw from.</strong> The
+ * platform has no endpoint that lists a tenant's existing
+ * `integration.bindings` rows — only `POST .../bindings` to create one, never
+ * a `GET` to read them back (`IntegrationsPage`'s own doc comment names this
+ * as a backend gap, not a shortcut this wave took). So {@link bindings} only
+ * ever holds what the connect drawer's bind step created since this page
+ * loaded: an installation bound in an earlier session has no entry here yet,
+ * and this form has nothing to fall back to for it beyond bind it again from
+ * the connect flow. A free-text escape hatch was deliberately not added back
+ * in for that case — it would reopen exactly the "type a UUID, silently hit
+ * the wrong row" failure this wave exists to close.
  */
 @Component({
   selector: 'app-register-merchant-binding-panel',
@@ -57,7 +98,7 @@ export interface RegisterBindingSubmission {
             id="rmb-provider"
             class="q-body field"
             [value]="providerType()"
-            (change)="providerType.set(inputValue($event) === 'PAYME' ? 'PAYME' : 'CLICK')"
+            (change)="onProviderTypeChange($event)"
             [disabled]="submitting()"
           >
             <option value="CLICK">CLICK</option>
@@ -67,38 +108,71 @@ export interface RegisterBindingSubmission {
           <label class="q-caption field-label" for="rmb-legal-entity">{{
             i18n.t('settings.integrations.registerBinding.legalEntityId')
           }}</label>
-          <input
+          <select
             id="rmb-legal-entity"
             class="q-body field"
-            type="text"
             [value]="legalEntityId()"
-            (input)="legalEntityId.set(inputValue($event))"
+            (change)="legalEntityId.set(inputValue($event))"
             [disabled]="submitting()"
-          />
+          >
+            <option value="" disabled>
+              {{ i18n.t('settings.integrations.registerBinding.legalEntity.placeholder') }}
+            </option>
+            @for (entity of activeLegalEntities(); track entity.id) {
+              <option [value]="entity.id">{{ entity.legalName }}</option>
+            }
+          </select>
+          @if (activeLegalEntities().length === 0) {
+            <p class="q-caption hint">
+              {{ i18n.t('settings.integrations.registerBinding.legalEntity.empty') }}
+            </p>
+          }
 
           <label class="q-caption field-label" for="rmb-installation">{{
             i18n.t('settings.integrations.registerBinding.installationId')
           }}</label>
-          <input
+          <select
             id="rmb-installation"
             class="q-body field"
-            type="text"
             [value]="installationId()"
-            (input)="installationId.set(inputValue($event))"
+            (change)="onInstallationChange($event)"
             [disabled]="submitting()"
-          />
+          >
+            <option value="" disabled>
+              {{ i18n.t('settings.integrations.registerBinding.installation.placeholder') }}
+            </option>
+            @for (installation of matchingInstallations(); track installation.id) {
+              <option [value]="installation.id">{{ installation.displayName }}</option>
+            }
+          </select>
+          @if (matchingInstallations().length === 0) {
+            <p class="q-caption hint">
+              {{ i18n.t('settings.integrations.registerBinding.installation.empty') }}
+            </p>
+          }
 
           <label class="q-caption field-label" for="rmb-binding">{{
             i18n.t('settings.integrations.registerBinding.integrationBindingId')
           }}</label>
-          <input
+          <select
             id="rmb-binding"
             class="q-body field"
-            type="text"
             [value]="integrationBindingId()"
-            (input)="integrationBindingId.set(inputValue($event))"
-            [disabled]="submitting()"
-          />
+            (change)="integrationBindingId.set(inputValue($event))"
+            [disabled]="submitting() || installationId() === ''"
+          >
+            <option value="" disabled>
+              {{ i18n.t('settings.integrations.registerBinding.binding.placeholder') }}
+            </option>
+            @for (binding of availableBindings(); track binding.id) {
+              <option [value]="binding.id">{{ binding.label }}</option>
+            }
+          </select>
+          @if (installationId() !== '' && availableBindings().length === 0) {
+            <p class="q-caption hint">
+              {{ i18n.t('settings.integrations.registerBinding.binding.empty') }}
+            </p>
+          }
 
           <label class="q-caption field-label" for="rmb-account">{{
             i18n.t('settings.integrations.registerBinding.merchantAccountReference')
@@ -213,6 +287,11 @@ export interface RegisterBindingSubmission {
       margin: 0 0 8px;
     }
 
+    .hint {
+      color: var(--q-ink-subtle);
+      margin: 4px 0 0;
+    }
+
     .field-label {
       display: block;
       color: var(--q-ink-muted);
@@ -282,6 +361,9 @@ export interface RegisterBindingSubmission {
 export class RegisterMerchantBindingPanel {
   protected readonly i18n = inject(I18n);
 
+  readonly legalEntities = input<readonly LegalEntityView[]>([]);
+  readonly installations = input<readonly InstallationView[]>([]);
+  readonly bindings = input<readonly IntegrationBindingOption[]>([]);
   readonly submitting = input(false);
   readonly errorMessage = input<string | null>(null);
 
@@ -296,11 +378,31 @@ export class RegisterMerchantBindingPanel {
   protected readonly callbackPathSegment = signal('');
   protected readonly secretValue = signal('');
 
+  /** A merchant binding must reference an active legal entity — `MerchantBindingService` enforces it. */
+  protected readonly activeLegalEntities = computed(() =>
+    this.legalEntities().filter((entity) => entity.status === 'ACTIVE'),
+  );
+
+  protected readonly matchingInstallations = computed(() =>
+    this.installations().filter(
+      (installation) => installation.providerType === this.providerType(),
+    ),
+  );
+
+  /** Narrowed to the chosen installation, so a binding for a different one is never selectable. */
+  protected readonly availableBindings = computed(() => {
+    const installationId = this.installationId();
+    if (installationId === '') {
+      return [];
+    }
+    return this.bindings().filter((binding) => binding.installationId === installationId);
+  });
+
   protected readonly canSubmit = () =>
     !this.submitting() &&
-    this.legalEntityId().trim().length > 0 &&
-    this.installationId().trim().length > 0 &&
-    this.integrationBindingId().trim().length > 0 &&
+    this.legalEntityId() !== '' &&
+    this.installationId() !== '' &&
+    this.integrationBindingId() !== '' &&
     this.merchantAccountReference().trim().length > 0 &&
     this.callbackPathSegment().trim().length >= 8 &&
     this.secretValue().length > 0;
@@ -309,15 +411,30 @@ export class RegisterMerchantBindingPanel {
     return (event.target as HTMLInputElement).value;
   }
 
+  protected onProviderTypeChange(event: Event): void {
+    this.providerType.set(this.inputValue(event) === 'PAYME' ? 'PAYME' : 'CLICK');
+    // A CLICK installation is never a valid choice once PAYME is picked (and
+    // vice versa), so any installation — and, downstream, any binding —
+    // already chosen under the old provider must not silently ride along.
+    this.installationId.set('');
+    this.integrationBindingId.set('');
+  }
+
+  protected onInstallationChange(event: Event): void {
+    this.installationId.set(this.inputValue(event));
+    // Same reasoning: a binding belongs to exactly one installation.
+    this.integrationBindingId.set('');
+  }
+
   protected submit(): void {
     if (!this.canSubmit()) {
       return;
     }
     this.register.emit({
       providerType: this.providerType(),
-      legalEntityId: this.legalEntityId().trim(),
-      installationId: this.installationId().trim(),
-      integrationBindingId: this.integrationBindingId().trim(),
+      legalEntityId: this.legalEntityId(),
+      installationId: this.installationId(),
+      integrationBindingId: this.integrationBindingId(),
       merchantAccountReference: this.merchantAccountReference().trim(),
       callbackPathSegment: this.callbackPathSegment().trim(),
       secretValue: this.secretValue(),
