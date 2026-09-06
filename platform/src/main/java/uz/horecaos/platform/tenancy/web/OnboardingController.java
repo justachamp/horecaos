@@ -114,6 +114,47 @@ public class OnboardingController {
         return ResponseEntity.ok(Map.of("reopenedSteps", reopened));
     }
 
+    @PostMapping("/{runId}/cancel")
+    @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
+    @Operation(
+            summary = "Abandon a run that has not finished",
+            description = "The only way to stop a run: nothing else lets a tenant that started "
+                    + "onboarding by mistake, or that will never fix a step, get free of it. Refused "
+                    + "once the run has already reached ACTIVE or FAILED, and refused the same way "
+                    + "for both — a failed run is repaired by resume (or superseded by a fresh run "
+                    + "entirely), never abandoned by cancel, and an activated tenant is not "
+                    + "un-activated by cancelling the run that activated it.")
+    ResponseEntity<Map<String, Object>> cancel(
+            @PathVariable UUID tenantId, @PathVariable UUID runId, @Valid @RequestBody ReasonRequest request) {
+        try {
+            onboarding.cancel(tenantId, runId, actor(), request.reason());
+        } catch (OnboardingService.OnboardingRunNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        } catch (OnboardingService.CancellationNotPermittedException refused) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage());
+        }
+        return ResponseEntity.ok(Map.of("status", "CANCELLED"));
+    }
+
+    @PostMapping("/{runId}/validate")
+    @RequiresCapability(Capability.TENANT_READ)
+    @Operation(
+            summary = "Dry-run the tenant's current configuration",
+            description = "Runs every read-only readiness check now, synchronously, against the "
+                    + "tenant's current configuration rather than the run's persisted step status — "
+                    + "so a tenant can see what activation would find before committing to a resume "
+                    + "or an activate call. Nothing is written: a step's stored status only changes "
+                    + "when the scheduler actually executes it. The activation smoke test is not "
+                    + "included, because unlike every other check it is not a pure read.")
+    ResponseEntity<OnboardingService.ValidationOutcome> validate(
+            @PathVariable UUID tenantId, @PathVariable UUID runId) {
+        try {
+            return ResponseEntity.ok(onboarding.validate(tenantId, runId));
+        } catch (OnboardingService.OnboardingRunNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
     @PostMapping("/{runId}/activate")
     @RequiresCapability(value = Capability.TENANT_WRITE, mutating = true)
     @Operation(

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.application.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -365,6 +367,165 @@ class OnboardingServiceTests {
         service.resume(runId, ADMIN, "unnecessary resume");
 
         assertThat(stepCompletedAt(runId, "KEYCLOAK_ORGANIZATION_RECONCILE")).isEqualTo(completedAt);
+    }
+
+    @Test
+    void cancellingAGenuinelyInFlightRunStopsIt() {
+        UUID runId = startRun();
+
+        service.cancel(TENANT, runId, ADMIN, "started onboarding by mistake");
+
+        assertThat(runStatus(runId)).isEqualTo("CANCELLED");
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                 WHERE action_code = 'tenant.onboarding_cancelled' AND target_id = :runId
+                """).param("runId", runId).query(Long.class).single())
+                .as("cancellation is audited with actor and reason, like every other override (ADR 0008)")
+                .isEqualTo(1L);
+    }
+
+    /**
+     * Cancel is refused once a run has already finished, and — the point of
+     * this pair of tests — refused <em>the same way</em> whether it finished by
+     * succeeding or by failing. Which kind of finished is not this endpoint's
+     * business to reveal through a different error; {@code GET
+     * .../onboarding-runs/{runId}} already answers that for a caller who wants
+     * to know. Resume exists to repair a failed run and activate to reach an
+     * active one; cancel is neither, so it treats them identically.
+     */
+    @Test
+    void cancellingAnAlreadyActivatedRunIsRefused() {
+        UUID runId = startRun();
+        drain(runId);
+        assertThat(service.activate(runId, ADMIN, "go live").activated()).isTrue();
+
+        assertThatThrownBy(() -> service.cancel(TENANT, runId, ADMIN, "changed my mind"))
+                .isInstanceOf(OnboardingService.CancellationNotPermittedException.class)
+                .hasMessage("This onboarding run has already finished and cannot be cancelled");
+    }
+
+    @Test
+    void cancellingAnAlreadyFailedRunIsRefusedTheSameWay() {
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
+        UUID runId = startRun();
+        drain(runId);
+        assertThat(runStatus(runId)).isEqualTo("FAILED");
+
+        assertThatThrownBy(() -> service.cancel(TENANT, runId, ADMIN, "changed my mind"))
+                .isInstanceOf(OnboardingService.CancellationNotPermittedException.class)
+                .as("succeeding and failing are both finished, and cancel refuses both identically")
+                .hasMessage("This onboarding run has already finished and cannot be cancelled");
+    }
+
+    @Test
+    void cancellingAnUnknownRunIsNotFound() {
+        assertThatThrownBy(() -> service.cancel(TENANT, UUID.randomUUID(), ADMIN, "does not exist"))
+                .isInstanceOf(OnboardingService.OnboardingRunNotFoundException.class);
+    }
+
+    @Test
+    void validatingAFineConfigurationPassesEveryCheck() {
+        UUID runId = startRun();
+
+        var outcome = service.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed()).isTrue();
+        assertThat(outcome.checks()).isNotEmpty().allMatch(OnboardingService.ValidationResult::passed);
+    }
+
+    @Test
+    void validatingABadConfigurationNamesTheFailingCheck() {
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
+        UUID runId = startRun();
+
+        var outcome = service.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed()).isFalse();
+        assertThat(outcome.checks())
+                .filteredOn(check -> "BRANDS_AND_LOCATIONS_VALIDATE".equals(check.stepKey()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.errorCode())
+                            .as("a dry run must name the finding, not just say no")
+                            .isEqualTo("NO_LOCATION");
+                });
+    }
+
+    @Test
+    void validatingDoesNotPersistAnything() {
+        UUID runId = startRun();
+        var before = jdbc.sql("""
+                SELECT step_key, status, attempt_count FROM tenant.onboarding_steps
+                 WHERE run_id = :runId ORDER BY sequence_number
+                """)
+                .param("runId", runId)
+                .query((rs, n) ->
+                        rs.getString("step_key") + "=" + rs.getString("status") + "@" + rs.getInt("attempt_count"))
+                .list();
+
+        service.validate(TENANT, runId);
+
+        var after = jdbc.sql("""
+                SELECT step_key, status, attempt_count FROM tenant.onboarding_steps
+                 WHERE run_id = :runId ORDER BY sequence_number
+                """)
+                .param("runId", runId)
+                .query((rs, n) ->
+                        rs.getString("step_key") + "=" + rs.getString("status") + "@" + rs.getInt("attempt_count"))
+                .list();
+
+        assertThat(after).as("a dry run must never write a step transition").isEqualTo(before);
+    }
+
+    /**
+     * ADR 0008's second gap: {@code uq_onboarding_run_active} (V0014) excluded
+     * only ACTIVE and CANCELLED from "one active run per tenant", so a FAILED
+     * run held the index entry forever and a tenant behind it could neither
+     * resume past an unfixable step nor start over. V0174 adds FAILED to the
+     * exclusion. Asserted against the database directly — two distinct rows
+     * for one tenant, one of them still FAILED — because a passing API call
+     * alone would not distinguish "the index let this through" from "there was
+     * only ever one row all along".
+     */
+    @Test
+    void aFailedRunCanBeReplacedByANewOne() {
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
+        UUID failedRunId = startRun();
+        drain(failedRunId);
+        assertThat(runStatus(failedRunId)).isEqualTo("FAILED");
+
+        UUID newRunId = service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+
+        assertThat(newRunId).isNotEqualTo(failedRunId);
+        assertThat(jdbc.sql(
+                                "SELECT id, status FROM tenant.onboarding_runs WHERE tenant_id = :tenantId ORDER BY started_at")
+                        .param("tenantId", TENANT)
+                        .query((rs, n) -> rs.getObject("id", UUID.class) + "=" + rs.getString("status"))
+                        .list())
+                .containsExactlyInAnyOrder(failedRunId + "=FAILED", newRunId + "=PROVISIONING");
+    }
+
+    /**
+     * The other half of the same index: a run that has not finished still
+     * blocks a second one. {@code OnboardingService.startRun} has no
+     * application-level guard of its own — {@code uq_onboarding_run_active} is
+     * the only thing enforcing this invariant — so this has to hit the real
+     * database rather than a fake to mean anything.
+     */
+    @Test
+    void aGenuinelyInFlightRunStillBlocksASecond() {
+        startRun();
+
+        assertThatThrownBy(
+                        () -> service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

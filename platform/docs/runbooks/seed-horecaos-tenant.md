@@ -21,7 +21,7 @@ tenant, dogfooding the platform it built, in production. A Flyway migration
 seeding that data would land it in **every** database this platform ever
 runs — every Testcontainers instance, staging, all of them — and would
 bypass the maker-checker/audit onboarding path ([ADR
-0008](../adr/partial/0008-resumable-tenant-onboarding-workflow.md), [ADR
+0008](../adr/built/0008-resumable-tenant-onboarding-workflow.md), [ADR
 0027](../adr/partial/0027-audit-evidence-and-approval-model.md)) the platform
 deliberately made SQL-free. `tools/seed-horecaos-tenant` instead drives the
 same real HTTP APIs a human operator would, in the same style as

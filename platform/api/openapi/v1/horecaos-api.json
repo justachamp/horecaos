@@ -15056,6 +15056,20 @@
         },
         "type" : "object"
       },
+      "ValidationOutcome" : {
+        "properties" : {
+          "allPassed" : {
+            "type" : "boolean"
+          },
+          "checks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ValidationResult"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ValidationResponse" : {
         "properties" : {
           "findings" : {
@@ -15066,6 +15080,23 @@
           },
           "publishable" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "ValidationResult" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "passed" : {
+            "type" : "boolean"
+          },
+          "stepKey" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -17329,7 +17360,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation" : {
       "get" : {
         "description" : "Returns stable codes and the entity each one is about, because \"a product has no variant\" is unactionable without knowing which product.",
-        "operationId" : "validate",
+        "operationId" : "validate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20957,6 +20988,54 @@
         "tags" : [ "Tenant onboarding" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/cancel" : {
+      "post" : {
+        "description" : "The only way to stop a run: nothing else lets a tenant that started onboarding by mistake, or that will never fix a step, get free of it. Refused once the run has already reached ACTIVE or FAILED, and refused the same way for both — a failed run is repaired by resume (or superseded by a fresh run entirely), never abandoned by cancel, and an activated tenant is not un-activated by cancelling the run that activated it.",
+        "operationId" : "cancel_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OnboardingControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Abandon a run that has not finished",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/resume" : {
       "post" : {
         "description" : "Completed steps are never reset; a retry reconciles external work.",
@@ -21002,6 +21081,43 @@
           }
         },
         "summary" : "Reopen failed steps",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate" : {
+      "post" : {
+        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read.",
+        "operationId" : "validate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ValidationOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Dry-run the tenant's current configuration",
         "tags" : [ "Tenant onboarding" ]
       }
     },

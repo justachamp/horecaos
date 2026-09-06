@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -427,6 +428,137 @@ public class OnboardingService implements OnboardingHealthQuery {
     }
 
     /**
+     * Abandons a run that has not finished.
+     *
+     * <p>Refused once the run has already reached {@code ACTIVE} or {@code
+     * FAILED}, and refused the same way for both: succeeding and failing are
+     * equally finished, and neither is what cancel is for. A failed run is
+     * repaired by {@link #resume} (or, since a {@code FAILED} run no longer
+     * holds the partial unique index in {@code uq_onboarding_run_active},
+     * replaced outright by a fresh {@link #startRun}); an activated tenant is
+     * not un-activated by cancelling the run that activated it. Which kind of
+     * finished a run is is not this endpoint's business to reveal through a
+     * different error — {@code GET .../onboarding-runs/{runId}} already
+     * answers that for a caller who wants to know.
+     *
+     * <p>No {@code claim_token} needs releasing here: a step actively
+     * {@code RUNNING} under a live claim keeps running to completion (its
+     * result is simply written to a run nothing claims again, since {@link
+     * #dueRuns} already excludes {@code CANCELLED}), and a step waiting
+     * {@code PENDING}/{@code FAILED} is never claimed in the first place once
+     * the run itself is gone from that query.
+     */
+    @Transactional
+    public void cancel(UUID tenantId, UUID runId, ActorRef actor, String reason) {
+        Instant now = clock.instant();
+        int cancelled = jdbc.sql("""
+                UPDATE tenant.onboarding_runs
+                   SET status = 'CANCELLED', version = version + 1, updated_at = :now
+                 WHERE id = :runId AND tenant_id = :tenantId
+                   AND status NOT IN ('ACTIVE', 'CANCELLED', 'FAILED')
+                """)
+                .param("runId", runId)
+                .param("tenantId", tenantId)
+                .param("now", at(now))
+                .update();
+
+        if (cancelled != 1) {
+            boolean exists = Boolean.TRUE.equals(jdbc.sql("""
+                            SELECT EXISTS (SELECT 1 FROM tenant.onboarding_runs
+                                            WHERE id = :runId AND tenant_id = :tenantId)
+                            """)
+                    .param("runId", runId)
+                    .param("tenantId", tenantId)
+                    .query(Boolean.class)
+                    .single());
+            if (!exists) {
+                throw new OnboardingRunNotFoundException(runId);
+            }
+            throw new CancellationNotPermittedException(
+                    "This onboarding run has already finished and cannot be cancelled");
+        }
+
+        audit.record(AuditFact.of("tenant.onboarding_cancelled", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("OnboardingRun", runId)
+                .because(reason)
+                .correlatedBy(runId.toString())
+                .occurredAt(now)
+                .build());
+    }
+
+    /**
+     * Dry-runs every read-only {@code VALIDATING}-phase check against the
+     * tenant's current configuration, without persisting a step transition —
+     * so a tenant can see what activation would find before committing to a
+     * {@link #resume} or {@link #activate} call, rather than waiting for the
+     * scheduler's next pass.
+     *
+     * <p>{@code ACTIVATION_SMOKE_TEST} shares the {@code VALIDATING} phase but
+     * is deliberately excluded: unlike every check invoked here, its handler
+     * is not a pure read — its own javadoc records that it writes an
+     * idempotent {@code pricing.quotes} row — and a dry run a tenant can call
+     * at will must never write anything. Every handler this method does call
+     * only ever issues {@code SELECT}s (or, for {@code MEDIA_READINESS_VALIDATE},
+     * a read-only port lookup), which is exactly what makes calling them
+     * outside the scheduler's own claim-and-persist cycle safe.
+     */
+    public ValidationOutcome validate(UUID tenantId, UUID runId) {
+        boolean exists = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM tenant.onboarding_runs
+                                        WHERE id = :runId AND tenant_id = :tenantId)
+                        """)
+                .param("runId", runId)
+                .param("tenantId", tenantId)
+                .query(Boolean.class)
+                .single());
+        if (!exists) {
+            throw new OnboardingRunNotFoundException(runId);
+        }
+
+        List<StepRow> rows = jdbc.sql("""
+                SELECT step_key, input_snapshot::text AS input, external_reference, attempt_count
+                  FROM tenant.onboarding_steps
+                 WHERE run_id = :runId AND tenant_id = :tenantId AND phase = 'VALIDATING'
+                   AND step_key <> 'ACTIVATION_SMOKE_TEST'
+                 ORDER BY sequence_number
+                """)
+                .param("runId", runId)
+                .param("tenantId", tenantId)
+                .query((rs, n) -> new StepRow(
+                        rs.getString("step_key"),
+                        rs.getString("input"),
+                        rs.getString("external_reference"),
+                        rs.getInt("attempt_count")))
+                .list();
+
+        List<ValidationResult> results = new ArrayList<>();
+        for (StepRow row : rows) {
+            OnboardingStep step = OnboardingStep.valueOf(row.stepKey());
+            OnboardingStepHandler handler = handlers.get(step);
+            OnboardingStepHandler.StepResult outcome;
+            if (handler == null) {
+                outcome = OnboardingStepHandler.StepResult.blocked("No handler is registered for this step");
+            } else {
+                try {
+                    outcome = handler.execute(new OnboardingStepHandler.StepContext(
+                            runId, tenantId, inputFrom(row.input()), row.externalReference(), row.attemptCount()));
+                } catch (RuntimeException failure) {
+                    outcome = OnboardingStepHandler.StepResult.retry(
+                            "TRANSIENT_INFRASTRUCTURE", failure.getClass().getSimpleName());
+                }
+            }
+            results.add(new ValidationResult(
+                    step.name(),
+                    outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED,
+                    outcome.errorCode(),
+                    outcome.detail()));
+        }
+        return new ValidationOutcome(results.stream().allMatch(ValidationResult::passed), results);
+    }
+
+    /**
      * Activates a tenant, once a platform administrator approves.
      *
      * <p>Compare-and-set on the run version, so two simultaneous activations
@@ -781,9 +913,14 @@ public class OnboardingService implements OnboardingHealthQuery {
     }
 
     private Map<String, Object> inputFor(DueStep step) {
+        return inputFrom(step.input());
+    }
+
+    /** Shared by {@link #inputFor} and {@link #validate}: a step's stored snapshot, parsed back to a map. */
+    private Map<String, Object> inputFrom(@Nullable String snapshot) {
         Map<String, Object> input = new HashMap<>();
-        if (step.input() != null && !step.input().isBlank()) {
-            input.putAll(objectMapper.readValue(step.input(), Map.class));
+        if (snapshot != null && !snapshot.isBlank()) {
+            input.putAll(objectMapper.readValue(snapshot, Map.class));
         }
         return input;
     }
@@ -831,10 +968,41 @@ public class OnboardingService implements OnboardingHealthQuery {
             List<String> outstandingRequired,
             @Nullable UUID approvalRequestId) {}
 
+    /** One {@link #validate} finding, named rather than only pass/fail. */
+    public record ValidationResult(
+            String stepKey,
+            boolean passed,
+            @Nullable String errorCode,
+            @Nullable String detail) {}
+
+    /** What {@link #validate} found. Nothing here was written to any table. */
+    public record ValidationOutcome(boolean allPassed, List<ValidationResult> checks) {}
+
+    /** No run with this id exists for this tenant. */
+    public static final class OnboardingRunNotFoundException extends RuntimeException {
+        public OnboardingRunNotFoundException(UUID runId) {
+            super("No onboarding run %s for this tenant".formatted(runId));
+        }
+    }
+
+    /** {@link #cancel} refused: the run has already reached {@code ACTIVE}, {@code FAILED} or {@code CANCELLED}. */
+    public static final class CancellationNotPermittedException extends RuntimeException {
+        public CancellationNotPermittedException(String message) {
+            super(message);
+        }
+    }
+
     private record FailedStep(String stepKey, String errorCode) {}
 
     private record DueStep(
             UUID id, UUID tenantId, OnboardingStep step, int attemptCount, String externalReference, String input) {}
+
+    /** One row of {@code tenant.onboarding_steps}, read for {@link #validate} without claiming anything. */
+    private record StepRow(
+            String stepKey,
+            @Nullable String input,
+            @Nullable String externalReference,
+            int attemptCount) {}
 
     /**
      * What the claim transaction decided.
