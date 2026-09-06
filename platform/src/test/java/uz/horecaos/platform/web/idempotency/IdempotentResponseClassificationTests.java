@@ -60,9 +60,11 @@ class IdempotentResponseClassificationTests {
      * later puts a phone number into.
      */
     private static final Set<String> REVIEWED_UNSCANNABLE = Set.of(
-            // Onboarding: a run id, and a count of reopened steps.
+            // Onboarding: a run id, a count of reopened steps, and cancel's own
+            // fixed status literal -- none of the three is a fact about a person.
             "OnboardingController#start",
             "OnboardingController#resume",
+            "OnboardingController#cancel",
             // Integration failure operations: whether a dead letter changed state.
             "FailureOperationsController#retryOutbox",
             "FailureOperationsController#retryInbox",

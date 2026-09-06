@@ -25,6 +25,7 @@ import uz.horecaos.platform.tenancy.application.onboarding.OnboardingTemplateSer
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.idempotency.Idempotent;
 
 /**
  * Tenant onboarding (ADR 0008).
@@ -138,6 +139,7 @@ public class OnboardingController {
 
     @PostMapping("/{runId}/validate")
     @RequiresCapability(Capability.TENANT_READ)
+    @Idempotent
     @Operation(
             summary = "Dry-run the tenant's current configuration",
             description = "Runs every read-only readiness check now, synchronously, against the "
@@ -145,7 +147,10 @@ public class OnboardingController {
                     + "so a tenant can see what activation would find before committing to a resume "
                     + "or an activate call. Nothing is written: a step's stored status only changes "
                     + "when the scheduler actually executes it. The activation smoke test is not "
-                    + "included, because unlike every other check it is not a pure read.")
+                    + "included, because unlike every other check it is not a pure read. Use a fresh "
+                    + "Idempotency-Key to see a fresh answer — replaying one returns the same "
+                    + "recorded outcome, as ADR 0031 requires for every effectful request, even one "
+                    + "with no state of its own to replay.")
     ResponseEntity<OnboardingService.ValidationOutcome> validate(
             @PathVariable UUID tenantId, @PathVariable UUID runId) {
         try {
