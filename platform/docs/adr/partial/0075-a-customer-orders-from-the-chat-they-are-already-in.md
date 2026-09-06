@@ -1,9 +1,29 @@
 # ADR 0075: A customer orders from the chat they are already in
 
-- Decision status: Proposed
-- Implementation status: Not started
+- Decision status: Accepted
+- Implementation status: Partial — the tap boundary and the ordering port are
+  built and tested. V0172 adds the `CUSTOMER_ACTION` token kind, restating both
+  of V0106/V0119's CHECK constraints in full and adding a closed command set and
+  an order-id shape rule of its own. `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED`
+  ships `safeDefault(FALSE)`. `ordering.api.CustomerBotOrderingPort` and its
+  adapter (latest order, repeat, cart, cash checkout) run over the same
+  `CartService`, `CheckoutService` and `ReorderPlanService` the storefront calls;
+  `reviews.api.CustomerReviewPort` does the same for ADR 0071's rating.
+  `CustomerBotActionAuthorizer` resolves the token, refuses a non-private chat,
+  checks the entitlement, resolves the chat to a customer account through the
+  ADR 0026 binding, rate-limits per chat, and records an ADR 0027 fact on the two
+  actions that change something. `TelegramUpdateHandler` dispatches customer taps
+  ahead of the staff decision path and renders every outcome in three languages.
+  `TelegramChannelAdapter` attaches a status button to `ORDER_CONFIRMED`.
+  Nine PostgreSQL-backed authorizer tests and three ordering-port tests, all
+  proven to bite.
+  **Not built**: a delivery repeat whose source cart's address has since been
+  archived still hands off (by design, below); there is no `ORDER_COMPLETED`
+  notification for a rating prompt to ride on, so `RATE` is reachable only from a
+  status card; and no Mini App URL is configured anywhere on the installation, so
+  every "finish in the app" answer is a sentence rather than a button.
 - Date proposed: 2026-09-06
-- Date decided: —
+- Date decided: 2026-09-06
 - Deciders: Ayubkhon Abbosov (platform owner, directed the feature);
   Claude (architecture)
 - Depends on: ADR 0018 (deterministic pricing), ADR 0019 (cart and checkout),
@@ -15,16 +35,17 @@
   reviews), ADR 0074 (the reorder plan)
 - Supersedes / Superseded by: —
 - Open inputs:
-  - Whether a tenant may turn the customer inline surface off independently of
-    the staff one — owner (Ayubkhon Abbosov). Proposed as **yes**, a second
-    entitlement key, because the two audiences are different products sharing
-    one bot.
-  - Whether cash-on-delivery may be confirmed from the chat at all, or whether
-    every checkout hands off to the Mini App — owner. Proposed as **cash
-    confirms in chat**, since it is the market's majority tender and the
-    handoff is the whole friction this record removes.
-  - The Uzbek and Russian button labels and message copy — owner. English is
-    written here as the working text and is not what ships.
+  - **Closed** by the owner's instruction of 2026-09-06 to implement this
+    record: the surface has its own entitlement key
+    (`telegram.customer_inline_actions.enabled`, distinct from the staff bot's),
+    and cash confirms in the chat. Both are one flag and one branch to reverse.
+  - The Uzbek and Russian button labels and message copy — owner (Ayubkhon
+    Abbosov) to review. Real copy is written in `TelegramBotMessages`, in the
+    three-language `pick` shape every other bot message uses; what is open is
+    the wording, not its absence.
+  - Where the tenant's Mini App lives — owner. Nothing on the Telegram
+    installation carries a URL today, so the handoffs are text. The natural home
+    is the installation's own `non_sensitive_config`, beside `botUsername`.
 
 ## Context
 
@@ -162,17 +183,19 @@ confirmation code, nothing of the sort is ever typed into or read from Telegram.
 
 ### Accepted trade-offs
 
-- **Recipient details are inferred for a bot checkout, and asked for
-  everywhere else.** `DestinationRequest`'s own javadoc says the recipient is
-  asked for rather than inferred, because an order is often for somebody else.
-  A bot repeat has no good way to ask, so it uses the account's own name and
-  phone. That is right for the overwhelmingly common case and wrong for the
-  gift; the Mini App handoff is where a customer changes it, and the confirm
-  step names who the order is for before it is placed.
-- **Delivery works only when the address is unambiguous.** One active address
-  is used; several offer a picker of their labels; none hands off. A bot that
-  tried to collect a new address would be collecting ADR 0015's concept in a
-  second place.
+- **Nothing about the recipient is inferred, and this record originally said it
+  would be.** The first draft accepted resolving the recipient's name and phone
+  from the account, against `DestinationCommand`'s own javadoc, on the grounds
+  that a bot cannot ask. Implementation found a better answer and this trade-off
+  is withdrawn: carts are expired rather than deleted, so the order being
+  repeated still has its own `ordering.cart_fulfillment` row, holding the exact
+  `customer_address_id` and the recipient the customer themselves confirmed.
+  A repeat carries that forward. Nothing is guessed, no address picker is
+  needed, and ADR 0015 keeps sole ownership of what an address is.
+- **A delivery repeat whose old address is gone hands off.** Archived, or its
+  pin removed: `setDestination` refuses, the cart is built without a
+  destination, and the customer finishes in the app. Worse than a tap, far
+  better than a delivery to an address they did not choose.
 - **Buttons expire and taps after that say so.** A token has a TTL, and a
   customer returning to an old message is told the button is stale rather than
   silently acting on week-old state.
@@ -296,14 +319,20 @@ buttons harmlessly.
 
 ## Implementation checklist
 
-- [ ] Migration: `CUSTOMER_ACTION` kind, both CHECK constraints restated in full
-- [ ] `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED` entitlement key
-- [ ] `ordering.api.CustomerBotOrderingPort` and its application adapter
-- [ ] `CustomerBotActionAuthorizer`
-- [ ] `TelegramUpdateHandler` dispatch for customer callbacks
-- [ ] Buttons attached to the confirmed, completed and re-engagement messages
-- [ ] Uzbek, Russian and English copy for every action and every refusal
-- [ ] Mini App deep links for menu, address entry and provider payment
+- [x] Migration: `CUSTOMER_ACTION` kind, both CHECK constraints restated in full
+- [x] `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED` entitlement key
+- [x] `ordering.api.CustomerBotOrderingPort` and its application adapter
+- [x] `reviews.api.CustomerReviewPort` for the rating
+- [x] `CustomerBotActionAuthorizer`
+- [x] `TelegramUpdateHandler` dispatch and rendering for customer callbacks
+- [x] Uzbek, Russian and English copy for every action and every refusal
+- [x] A status button on the `ORDER_CONFIRMED` message
+- [ ] An `ORDER_COMPLETED` customer notification, so a rating prompt has a
+      message to ride on. Does not exist today — `OrderNotificationTrigger`
+      declares `ORDER_CONFIRMED`, `ORDER_REJECTED` and the operations-only
+      `ORDER_AWAITING_APPROVAL`, and nothing else
+- [ ] A re-engagement message carrying Repeat
+- [ ] A Mini App URL on the installation, and the deep links that need one
 
 ## Exit criteria
 

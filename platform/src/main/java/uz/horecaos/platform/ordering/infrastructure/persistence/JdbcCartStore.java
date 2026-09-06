@@ -81,6 +81,42 @@ public class JdbcCartStore {
     }
 
     /**
+     * This customer's live cart at this brand, newest first (ADR 0075).
+     *
+     * <p>A storefront never needs this: it holds the cart id it created and
+     * carries it from screen to screen. A chat has no such memory — a customer
+     * who taps "my cart" three days later has told the bot nothing but who they
+     * are — so the cart is found rather than remembered.
+     *
+     * <p>{@code ACTIVE} and unexpired, both. A cart is expired by a status
+     * change rather than a delete, so the sweep may not have run yet and a row
+     * still marked ACTIVE can be past its own {@code expires_at}; checking out
+     * against one would price a basket the platform has already promised to
+     * forget. {@code LIMIT 1} on the newest because nothing forbids a customer
+     * from having opened two, and the one they last touched is the one they mean.
+     */
+    public Optional<CartRow> findOpenForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
+                       guest_reference_hash, fulfillment_mode, currency, status,
+                       pricing_quote_id, pricing_context_hash, catalog_publication_id,
+                       version, expires_at, converted_order_id, applied_coupon_code
+                FROM ordering.carts
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND customer_account_id = :customerAccountId
+                  AND status = 'ACTIVE' AND expires_at > :now
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", utc(now))
+                .query(JdbcCartStore::mapCart)
+                .optional();
+    }
+
+    /**
      * Reads and locks a cart for the checkout transaction.
      *
      * <p>{@code FOR UPDATE} rather than an optimistic read: checkout goes on to

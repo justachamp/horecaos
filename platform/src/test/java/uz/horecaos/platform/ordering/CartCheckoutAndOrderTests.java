@@ -59,8 +59,10 @@ import uz.horecaos.platform.ordering.api.PaymentFailed;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.api.PaymentRefunded;
 import uz.horecaos.platform.ordering.api.PaymentVoided;
+import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.CustomerBotOrderingAdapter;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderActionCode;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
@@ -162,6 +164,7 @@ class CartCheckoutAndOrderTests {
     private OrderStateService orderState;
     private OrderQueryService orderQuery;
     private ReorderPlanService reorderPlans;
+    private uz.horecaos.platform.ordering.api.CustomerBotOrderingPort botOrdering;
     private OrderInventoryProcess inventoryProcess;
     private InventoryService inventory;
     private QuoteService quotes;
@@ -481,6 +484,21 @@ class CartCheckoutAndOrderTests {
                 customerBlacklist);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
+        // ADR 0075's port over the same services, so a bot repeat and a
+        // storefront repeat travel one code path and not two.
+        botOrdering = new CustomerBotOrderingAdapter(
+                orderQuery,
+                orderStore,
+                cartStore,
+                reorderPlans,
+                carts,
+                new CartPaymentOptions(carts, channelStore, UNWIRED_PAYMENTS),
+                checkout,
+                new uz.horecaos.platform.catalog.application.CatalogItemDisplayLookup(
+                        new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(
+                                jdbc, objectMapper)),
+                clock);
+
         deliveryOrders =
                 new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(jdbc, protection, objectMapper);
 
@@ -3778,6 +3796,104 @@ class CartCheckoutAndOrderTests {
         // that somebody else's order exists.
         assertThat(reorderPlans.planFor(TENANT, order, OTHER_CUSTOMER)).isEmpty();
         assertThat(reorderPlans.planFor(TENANT, UUID.randomUUID(), CUSTOMER)).isEmpty();
+    }
+
+    // ------------------------------------- the bot orders for a customer (ADR 0075)
+
+    @Test
+    @DisplayName("a bot repeat builds the same basket the order held, through the same CartService")
+    void theBotRepeatsIntoTheSameBasket() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-bot-repeat"));
+
+        var repeat = botOrdering.repeat(TENANT, BRAND, CUSTOMER, order);
+
+        assertThat(repeat.result())
+                .isEqualTo(uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.Repeat.Result.BUILT);
+        assertThat(repeat.lineCount()).isEqualTo(1);
+
+        UUID cart = Objects.requireNonNull(repeat.cartId());
+        assertThat(carts.view(TENANT, BRAND, CUSTOMER, cart).orElseThrow().lines())
+                .extracting(JdbcCartStore.CartLineRow::variantId, JdbcCartStore.CartLineRow::quantity)
+                .as("the ids the order stored, not a name match")
+                .containsExactly(tuple(burgerVariant, 2));
+    }
+
+    @Test
+    @DisplayName("a bot repeat refuses a sold-out dish by name, and builds no cart at all")
+    void theBotRefusesToRepeatWhatIsSoldOut() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-bot-refuse"));
+
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+        long cartsBefore = cartCount();
+
+        var repeat = botOrdering.repeat(TENANT, BRAND, CUSTOMER, order);
+
+        assertThat(repeat.result())
+                .isEqualTo(uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.Repeat.Result.NOT_READY);
+        // Named, because a chat has no control to grey out.
+        assertThat(repeat.blockedDishes()).containsExactly("Qo'y burger");
+        assertThat(cartCount())
+                .as("a refused repeat leaves nothing behind for the customer to find later")
+                .isEqualTo(cartsBefore);
+    }
+
+    @Test
+    @DisplayName("a bot cash checkout places a real order through the ordinary checkout path")
+    void theBotChecksOutForCash() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        enableCashOnTheStorefrontChannel();
+        UUID first = orderIdOf(placeOrder("idem-bot-first"));
+
+        var repeat = botOrdering.repeat(TENANT, BRAND, CUSTOMER, first);
+        UUID cart = Objects.requireNonNull(repeat.cartId());
+
+        var placed = botOrdering.checkoutForCash(TENANT, BRAND, CUSTOMER, cart, "idem-bot-checkout");
+
+        assertThat(placed.result())
+                .isEqualTo(uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.Checkout.Result.PLACED);
+        assertThat(placed.publicOrderNumber()).isNotNull();
+        // The same aggregate every other checkout produces, priced the same way.
+        var order = orderStore
+                .find(
+                        TENANT,
+                        orderStore.listForLocation(TENANT, BRAND, LOCATION, List.of(), 10).stream()
+                                .filter(row -> !row.orderId().equals(first))
+                                .findFirst()
+                                .orElseThrow()
+                                .orderId())
+                .orElseThrow();
+        assertThat(order.totalMinor()).isEqualTo(100_000L);
+    }
+
+    /**
+     * The channel's payment matrix, which this suite never seeded.
+     *
+     * <p>V0020 makes an absent row a "we do not take that here", so
+     * {@code CartPaymentOptions} correctly offers nothing for a channel with no
+     * matrix — and a bot checkout, which asks that question before it spends
+     * anybody's money, is refused. {@code CheckoutService} itself does not
+     * consult the matrix, which is why every other checkout in this class
+     * succeeds on CASH without one; that difference is real and is the reason
+     * this row has to exist for the bot path and not for theirs.
+     */
+    private void enableCashOnTheStorefrontChannel() {
+        jdbc.sql("""
+                INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+                VALUES (:tenantId, :channelId, 'CASH', true)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("tenantId", TENANT)
+                .param("channelId", storefrontChannel)
+                .update();
+    }
+
+    private long cartCount() {
+        return jdbc.sql("SELECT count(*) FROM ordering.carts").query(Long.class).single();
     }
 
     // ----------------------------------------------------------- fixtures

@@ -185,6 +185,33 @@ public final class EntitlementKeys {
             .build();
 
     /**
+     * ADR 0075: whether a customer's own linked chat carries action buttons —
+     * status, repeat, cart, checkout and rate — rather than only one-way
+     * messages.
+     *
+     * <p>Separate from {@link #TELEGRAM_BOT_INTERACTIVE_ENABLED} on purpose,
+     * and the owner's own resolution of ADR 0075's first open input. A tenant
+     * runs one Telegram bot and two audiences sit behind it: staff taps decide
+     * somebody else's order, customer taps spend the tapper's own money. A
+     * tenant that wants the staff Approve/Reject keyboard and does not want a
+     * customer checking out from a chat must be able to say so, and one flag
+     * covering both would make that impossible.
+     *
+     * <p>{@code safeDefault(FALSE)}, matching {@link
+     * #TELEGRAM_CONVERSATIONS_ENABLED} rather than {@link
+     * #TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED}: a notification a customer's
+     * own order caused is a floor every tenant gets, and a button that places
+     * an order is a product decision a tenant makes deliberately. ADR 0075's
+     * own rollout section says the surface ships dark.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED = EntitlementKey.feature(
+                    "telegram.customer_inline_actions.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("integration")
+            .describedAs("Whether a customer's linked Telegram chat carries order action buttons (ADR 0075).")
+            .build();
+
+    /**
      * ADR 0059: whether the conversations engine may run flows for this
      * tenant's brand bots at all — the resellable SendPulse-replacement
      * product itself, not a channel add-on to it. {@code safeDefault(FALSE)},

@@ -214,9 +214,11 @@ class CampaignBroadcastIntegrationTest {
                 new TelegramCircuitBreakers(new SimpleMeterRegistry(), clock),
                 actionTokens,
                 bindingSync,
+                uz.horecaos.platform.support.InertCustomerBotActions.customerActionsOff(),
                 clock,
                 Duration.ofSeconds(20),
                 Duration.ofHours(6),
+                Duration.ofHours(24),
                 "ru");
         NotificationGateway gateway =
                 new NotificationGateway(List.of(adapter), new JdbcProviderInstallationLookup(jdbc, clock), secrets);

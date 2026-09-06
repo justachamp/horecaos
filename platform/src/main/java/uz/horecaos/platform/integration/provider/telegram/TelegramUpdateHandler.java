@@ -3,9 +3,11 @@ package uz.horecaos.platform.integration.provider.telegram;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -115,6 +117,7 @@ public class TelegramUpdateHandler {
     private final TelegramBindingStore bindings;
     private final BotActionTokenStore actionTokens;
     private final BotCallbackAuthorizer callbackAuthorizer;
+    private final CustomerBotActionAuthorizer customerActions;
     private final AuthorizationService authorization;
     private final EntitlementService entitlements;
     private final OrderDirectory orderDirectory;
@@ -144,6 +147,7 @@ public class TelegramUpdateHandler {
             TelegramBindingStore bindings,
             BotActionTokenStore actionTokens,
             BotCallbackAuthorizer callbackAuthorizer,
+            CustomerBotActionAuthorizer customerActions,
             AuthorizationService authorization,
             EntitlementService entitlements,
             OrderDirectory orderDirectory,
@@ -177,6 +181,7 @@ public class TelegramUpdateHandler {
         this.bindings = bindings;
         this.actionTokens = actionTokens;
         this.callbackAuthorizer = callbackAuthorizer;
+        this.customerActions = customerActions;
         this.authorization = authorization;
         this.entitlements = entitlements;
         this.orderDirectory = orderDirectory;
@@ -370,10 +375,246 @@ public class TelegramUpdateHandler {
             return;
         }
 
+        // ADR 0075's customer half, tried before the staff decision path and
+        // answering empty when the token is not a customer action for this
+        // tapper — the same fall-through shape the tenant picker above uses. An
+        // expired or forged customer token therefore reaches BotCallbackAuthorizer
+        // and is answered exactly as an expired staff one is, which is what keeps
+        // a stranger's tap from learning which kind of button it hit.
+        boolean privateChat = "private".equals(chat.get("type"));
+        Optional<CustomerBotActionAuthorizer.Outcome> customer =
+                customerActions.perform(token, fromUserId, chatId, privateChat);
+        if (customer.isPresent()) {
+            renderCustomerOutcome(call, chatId, fromUserId, customer.get());
+            return;
+        }
+
         if (messageId == null) {
             return;
         }
         handleOrderDecisionCallback(call, chatId, topicId, messageId, fromUserId, token);
+    }
+
+    /**
+     * Turns one customer outcome into what the customer reads (ADR 0075).
+     *
+     * <p>Every branch answers with a sentence. A storefront can grey a control
+     * out and say nothing; a bot that stays silent after a tap has simply
+     * broken, so there is no path below that returns without sending something.
+     *
+     * <p>Follow-up buttons are minted here rather than by the authorizer,
+     * because what to offer next is a rendering decision — a placed order offers
+     * its status, a built cart offers itself, a completed order offers stars —
+     * and none of it changes what the tap did.
+     */
+    private void renderCustomerOutcome(
+            ProviderCall call, long chatId, long fromUserId, CustomerBotActionAuthorizer.Outcome outcome) {
+
+        String locale = defaultLocale;
+        switch (outcome.result()) {
+            case NOT_PRIVATE -> bots.sendMessage(call, chatId, null, TelegramBotMessages.notAPrivateChat(locale));
+            case NOT_ENTITLED ->
+                bots.sendMessage(call, chatId, null, TelegramBotMessages.customerActionsNotAvailable(locale));
+            case NOT_LINKED -> bots.sendMessage(call, chatId, null, TelegramBotMessages.customerNotLinked(locale));
+            case RATE_LIMITED -> bots.sendMessage(call, chatId, null, TelegramBotMessages.customerTooFast(locale));
+            case TOKEN_EXPIRED ->
+                bots.sendMessage(call, chatId, null, TelegramBotMessages.customerButtonExpired(locale));
+            case NOTHING_TO_SHOW ->
+                bots.sendMessage(
+                        call,
+                        chatId,
+                        null,
+                        outcome.cart() == null && outcome.order() == null
+                                ? TelegramBotMessages.customerNoOrders(locale)
+                                : TelegramBotMessages.customerCartEmpty(locale));
+            case DONE -> renderCustomerAction(call, chatId, fromUserId, outcome, locale);
+        }
+    }
+
+    private void renderCustomerAction(
+            ProviderCall call,
+            long chatId,
+            long fromUserId,
+            CustomerBotActionAuthorizer.Outcome outcome,
+            String locale) {
+
+        UUID tenantId = Objects.requireNonNull(outcome.tenantId(), "a DONE outcome names its tenant");
+        UUID brandId = Objects.requireNonNull(outcome.brandId(), "a DONE outcome names its brand");
+
+        if (outcome.order() != null) {
+            var order = outcome.order();
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    TelegramBotMessages.customerOrderStatus(
+                            locale,
+                            order.publicOrderNumber(),
+                            order.status(),
+                            TelegramBotMessages.money(order.totalMinor(), order.currency())),
+                    statusKeyboard(tenantId, brandId, fromUserId, outcome, locale));
+            return;
+        }
+        if (outcome.repeat() != null) {
+            renderRepeat(call, chatId, fromUserId, tenantId, brandId, outcome.repeat(), locale);
+            return;
+        }
+        if (outcome.cart() != null) {
+            renderCart(call, chatId, fromUserId, tenantId, brandId, outcome.cart(), locale);
+            return;
+        }
+        if (outcome.checkout() != null) {
+            renderCheckout(call, chatId, fromUserId, tenantId, brandId, outcome.checkout(), locale);
+            return;
+        }
+        if (outcome.rating() != null) {
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    switch (outcome.rating()) {
+                        case RECORDED -> TelegramBotMessages.customerRatingRecorded(locale);
+                        case ALREADY_RATED -> TelegramBotMessages.customerAlreadyRated(locale);
+                        case NOT_ELIGIBLE -> TelegramBotMessages.customerRatingNotEligible(locale);
+                    });
+        }
+    }
+
+    /**
+     * The buttons a status card carries: a live order offers the cart, a
+     * completed and unrated one offers stars.
+     */
+    private @Nullable TelegramInlineKeyboard statusKeyboard(
+            UUID tenantId, UUID brandId, long fromUserId, CustomerBotActionAuthorizer.Outcome outcome, String locale) {
+
+        var order = Objects.requireNonNull(outcome.order());
+        if (outcome.rateable()) {
+            List<TelegramInlineKeyboard.Button> stars = new ArrayList<>(5);
+            for (int value = 1; value <= 5; value++) {
+                stars.add(new TelegramInlineKeyboard.Button(
+                        TelegramBotMessages.customerRateButtonLabel(value),
+                        customerToken(tenantId, brandId, fromUserId, "RATE", order.orderId(), String.valueOf(value))));
+            }
+            return new TelegramInlineKeyboard(List.of(stars));
+        }
+        if (order.repeatable()) {
+            return TelegramInlineKeyboard.singleRow(new TelegramInlineKeyboard.Button(
+                    TelegramBotMessages.customerRepeatButtonLabel(locale),
+                    customerToken(tenantId, brandId, fromUserId, "REPEAT", order.orderId(), null)));
+        }
+        return null;
+    }
+
+    private void renderRepeat(
+            ProviderCall call,
+            long chatId,
+            long fromUserId,
+            UUID tenantId,
+            UUID brandId,
+            uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.Repeat repeat,
+            String locale) {
+
+        switch (repeat.result()) {
+            case BUILT ->
+                bots.sendMessage(
+                        call,
+                        chatId,
+                        null,
+                        TelegramBotMessages.customerRepeatBuilt(locale, repeat.lineCount(), null),
+                        TelegramInlineKeyboard.singleRow(new TelegramInlineKeyboard.Button(
+                                TelegramBotMessages.customerCartButtonLabel(locale),
+                                customerToken(tenantId, brandId, fromUserId, "CART", null, null))));
+            case NOT_READY ->
+                bots.sendMessage(
+                        call,
+                        chatId,
+                        null,
+                        // Named, not counted. Without the dish a customer cannot tell
+                        // whether to wait an hour or order something else.
+                        TelegramBotMessages.customerRepeatNotReady(locale, String.join(", ", repeat.blockedDishes())));
+            case NO_SUCH_ORDER ->
+                bots.sendMessage(call, chatId, null, TelegramBotMessages.customerButtonExpired(locale));
+            case REFUSED -> bots.sendMessage(call, chatId, null, TelegramBotMessages.customerRepeatRefused(locale));
+        }
+    }
+
+    private void renderCart(
+            ProviderCall call,
+            long chatId,
+            long fromUserId,
+            UUID tenantId,
+            UUID brandId,
+            uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.CartCard cart,
+            String locale) {
+
+        if (cart.items().isEmpty()) {
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.customerCartEmpty(locale));
+            return;
+        }
+        String lines = cart.items().stream()
+                .map(item -> "• " + item.name() + " × " + item.quantity())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        String total = cart.totalMinor() == null ? null : TelegramBotMessages.money(cart.totalMinor(), cart.currency());
+
+        TelegramInlineKeyboard keyboard = cart.checkoutable()
+                ? TelegramInlineKeyboard.singleRow(new TelegramInlineKeyboard.Button(
+                        TelegramBotMessages.customerCheckoutButtonLabel(locale),
+                        customerToken(tenantId, brandId, fromUserId, "CHECKOUT", null, null)))
+                : null;
+        bots.sendMessage(call, chatId, null, TelegramBotMessages.customerCart(locale, lines, total), keyboard);
+    }
+
+    private void renderCheckout(
+            ProviderCall call,
+            long chatId,
+            long fromUserId,
+            UUID tenantId,
+            UUID brandId,
+            uz.horecaos.platform.ordering.api.CustomerBotOrderingPort.Checkout checkout,
+            String locale) {
+
+        switch (checkout.result()) {
+            case PLACED ->
+                bots.sendMessage(
+                        call,
+                        chatId,
+                        null,
+                        TelegramBotMessages.customerOrderPlaced(locale, String.valueOf(checkout.publicOrderNumber())));
+            case NEEDS_DESTINATION ->
+                bots.sendMessage(call, chatId, null, TelegramBotMessages.customerNeedsDestination(locale));
+            case NO_CASH_METHOD ->
+                bots.sendMessage(call, chatId, null, TelegramBotMessages.customerNoCashMethod(locale));
+            case EMPTY -> bots.sendMessage(call, chatId, null, TelegramBotMessages.customerCartEmpty(locale));
+            case REFUSED -> bots.sendMessage(call, chatId, null, TelegramBotMessages.customerCheckoutRefused(locale));
+        }
+    }
+
+    private String customerToken(
+            UUID tenantId,
+            UUID brandId,
+            long fromUserId,
+            String action,
+            @Nullable UUID orderId,
+            @Nullable String argument) {
+        return actionTokens.mintCustomerActionToken(
+                tenantId,
+                brandId,
+                fromUserId,
+                action,
+                orderId,
+                argument,
+                clock.instant().plus(customerActionTokenTtl(action)));
+    }
+
+    /**
+     * A read may be tapped tomorrow; anything that moves a cart or spends money
+     * may not (ADR 0075).
+     */
+    private static Duration customerActionTokenTtl(String action) {
+        return switch (action) {
+            case "STATUS", "RATE" -> Duration.ofHours(24);
+            default -> Duration.ofMinutes(15);
+        };
     }
 
     private void handleOrderDecisionCallback(

@@ -13,6 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.notification.NotificationChannelAdapter;
@@ -67,6 +69,17 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
      */
     static final String ORDER_AWAITING_APPROVAL_TEMPLATE_KEY = "ORDER_AWAITING_APPROVAL";
 
+    /**
+     * ADR 0075: the one customer-facing templateKey whose Telegram rendering
+     * carries an action button today. Confirmation is the moment a customer is
+     * most likely to want the order's status a few minutes later, and it is the
+     * only customer order notification this platform currently sends besides
+     * rejection — there is no {@code ORDER_COMPLETED} template, which is why the
+     * rating prompt has no message to ride on yet and is reachable only from a
+     * status card.
+     */
+    static final String ORDER_CONFIRMED_TEMPLATE_KEY = "ORDER_CONFIRMED";
+
     private static final String ORDER_SUBJECT_TYPE = "Order";
 
     private final TelegramBotApiClient bots;
@@ -76,9 +89,11 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
     private final TelegramCircuitBreakers breakers;
     private final BotActionTokenStore actionTokens;
     private final CustomerProviderBindingSync endpointSync;
+    private final EntitlementService entitlements;
     private final Clock clock;
     private final Duration chatLeaseDuration;
     private final Duration decisionTokenTtl;
+    private final Duration customerActionTokenTtl;
     private final String buttonLocale;
 
     public TelegramChannelAdapter(
@@ -89,9 +104,12 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             TelegramCircuitBreakers breakers,
             BotActionTokenStore actionTokens,
             CustomerProviderBindingSync endpointSync,
+            EntitlementService entitlements,
             Clock clock,
             @Value("${horecaos.notifications.telegram.chat-lease:PT20S}") Duration chatLeaseDuration,
             @Value("${horecaos.notifications.telegram.decision-token-ttl:PT6H}") Duration decisionTokenTtl,
+            @Value("${horecaos.notifications.telegram.customer-action-token-ttl:PT24H}")
+                    Duration customerActionTokenTtl,
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String buttonLocale) {
         this.bots = bots;
         this.bindings = bindings;
@@ -100,9 +118,11 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
         this.breakers = breakers;
         this.actionTokens = actionTokens;
         this.endpointSync = endpointSync;
+        this.entitlements = entitlements;
         this.clock = clock;
         this.chatLeaseDuration = chatLeaseDuration;
         this.decisionTokenTtl = decisionTokenTtl;
+        this.customerActionTokenTtl = customerActionTokenTtl;
         this.buttonLocale = buttonLocale;
     }
 
@@ -153,6 +173,50 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
         return new TelegramInlineKeyboard(List.of(List.of(
                 new Button(TelegramBotMessages.approveButtonLabel(buttonLocale), approveToken),
                 new Button(TelegramBotMessages.rejectButtonLabel(buttonLocale), rejectToken))));
+    }
+
+    /**
+     * The status button on a customer's own order-confirmed message (ADR 0075),
+     * or null for every other templateKey and every chat that is not a linked
+     * customer's.
+     *
+     * <p>The audience test is the ADR 0026 binding itself rather than the
+     * template key: {@code customerAccountFor} answers only for a
+     * {@code CUSTOMER}-audience binding, so an operations group that somehow
+     * received this notification gets no customer button on it. Belt and braces,
+     * and cheap.
+     *
+     * <p>{@code chatId} doubles as the Telegram user id, which is exact for a
+     * private chat — Telegram gives a 1:1 chat the id of the user on the other
+     * side of it — and the binding lookup above is what proves this is one.
+     *
+     * <p>Entitlement-checked here as well as at the tap. A button rendered for a
+     * tenant that has not bought this surface would be a button whose only
+     * possible answer is a refusal.
+     */
+    private @Nullable TelegramInlineKeyboard customerActionKeyboard(NotificationDispatch dispatch, ChatRef chat) {
+        if (!ORDER_CONFIRMED_TEMPLATE_KEY.equals(dispatch.templateKey())
+                || !ORDER_SUBJECT_TYPE.equals(dispatch.subjectType())) {
+            return null;
+        }
+        if (!entitlements.featureEnabled(
+                dispatch.tenantId(), EntitlementKeys.TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED)) {
+            return null;
+        }
+        if (bindings.customerAccountFor(dispatch.tenantId(), chat.chatId()).isEmpty()) {
+            return null;
+        }
+
+        String token = actionTokens.mintCustomerActionToken(
+                dispatch.tenantId(),
+                dispatch.brandId(),
+                chat.chatId(),
+                "STATUS",
+                dispatch.subjectId(),
+                null,
+                clock.instant().plus(customerActionTokenTtl));
+        return TelegramInlineKeyboard.singleRow(
+                new Button(TelegramBotMessages.customerStatusButtonLabel(buttonLocale), token));
     }
 
     @Override
@@ -315,6 +379,9 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat, String contentHash) {
 
         TelegramInlineKeyboard keyboard = orderDecisionKeyboard(dispatch);
+        if (keyboard == null) {
+            keyboard = customerActionKeyboard(dispatch, chat);
+        }
         TelegramCallResult result = bots.sendMessage(call, chat.chatId(), chat.topicId(), dispatch.body(), keyboard);
 
         if (result instanceof TelegramCallResult.ChatMigrated migrated) {

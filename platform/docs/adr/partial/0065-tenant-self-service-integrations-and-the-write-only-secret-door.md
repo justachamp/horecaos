@@ -11,7 +11,7 @@
   never touches the store) and merchant bindings (always unverified: neither
   Click nor Payme offers a harmless call, verified against the adapters);
   `ConnectFieldCatalog` declares per-provider fields so screens render from
-  the adapter's declaration; the control-plane Integrations section lists,
+  the adapter's declaration; the **operations** app's Settings > Integrations section (wave 26 moved these screens out of control-plane, as this record's own Decision section directs; the control-plane copy is gone) lists,
   connects, and rotates with masked display and last-rotated (V0120);
   `docs/runbooks/connect-click-payme-sandbox.md` walks the screens
   end to end. Not built: brand/legal-entity/installation picker UI (manual id
@@ -32,6 +32,12 @@
   value "never passes through this API" was written for an operator who can
   reach the secret store directly; a tenant cannot, so this record opens
   exactly one ingress — everything else 0028 mandates stands untouched)
+  - An installation has no path to `RETIRED`. `integration.installations.status`
+    accepts the value (V0013) and **nothing anywhere writes it** — every write to
+    that table was checked. So the archive action this record names as missing
+    needs a backend transition before it can have a button, and adding one is a
+    decision about what retiring an installation does to its bindings and its
+    secret. Owner and platform, not a frontend task.
 - Open inputs: none for the decision; per-provider form fields beyond
   Click/Payme/Telegram arrive with their adapters.
 

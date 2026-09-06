@@ -194,6 +194,13 @@ class TelegramAuthSignInIntegrationTest {
                         new AlwaysEntitledService(),
                         throwingOrderDecisionPort(),
                         clock),
+                uz.horecaos.platform.support.InertCustomerBotActions.forTests(
+                        new BotActionTokenStore(jdbc, clock),
+                        bindings,
+                        new AlwaysEntitledService(),
+                        new InProcessRateLimiter(clock),
+                        audit,
+                        clock),
                 new ThrowingAuthorizationService(),
                 new AlwaysEntitledService(),
                 new NoSummaryOrderDirectory(),

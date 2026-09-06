@@ -165,6 +165,13 @@ class WelcomeFlowIntegrationTest {
                 bindings,
                 actionTokens,
                 callbackAuthorizer,
+                uz.horecaos.platform.support.InertCustomerBotActions.forTests(
+                        actionTokens,
+                        bindings,
+                        entitlements,
+                        new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
+                        audit,
+                        clock),
                 new ThrowingAuthorizationService(),
                 entitlements,
                 new NoSummaryOrderDirectory(),

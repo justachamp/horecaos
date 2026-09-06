@@ -230,6 +230,13 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramBindingStore(jdbc, clock, audit),
                 actionTokens,
                 callbackAuthorizer,
+                uz.horecaos.platform.support.InertCustomerBotActions.forTests(
+                        actionTokens,
+                        new TelegramBindingStore(jdbc, clock, audit),
+                        new AlwaysEntitledService(),
+                        new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
+                        audit,
+                        clock),
                 authorization,
                 new AlwaysEntitledService(),
                 new NoSummaryOrderDirectory(),
@@ -1018,9 +1025,11 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramCircuitBreakers(new SimpleMeterRegistry(), clock),
                 actionTokens,
                 bindingSync,
+                new AlwaysEntitledService(),
                 clock,
                 Duration.ofSeconds(20),
                 Duration.ofHours(6),
+                Duration.ofHours(24),
                 "en");
         return new NotificationGateway(
                 List.of(adapter), new JdbcProviderInstallationLookup(jdbc, clock), secretResolver());

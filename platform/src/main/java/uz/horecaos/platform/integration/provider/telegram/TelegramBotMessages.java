@@ -345,6 +345,209 @@ public final class TelegramBotMessages {
         return "• " + statsLabel(locale, key) + ": " + count;
     }
 
+    // ------------------------------------------------ ADR 0075 customer actions
+
+    /**
+     * Whole som for UZS (ADR 0018), grouped with a narrow space.
+     *
+     * <p>Never divided by anything. A formatter that asks ISO 4217 how many
+     * decimal places UZS has shows a price a hundred times too small, which is
+     * the mistake {@code OrderSummaryResponse} documents on its own totalMinor.
+     */
+    static String money(long amountMinor, String currency) {
+        StringBuilder digits = new StringBuilder(Long.toString(Math.abs(amountMinor)));
+        for (int at = digits.length() - 3; at > 0; at -= 3) {
+            digits.insert(at, '\u00a0');
+        }
+        return (amountMinor < 0 ? "-" : "") + digits + " " + currency;
+    }
+
+    static String notAPrivateChat(String locale) {
+        return pick(
+                locale,
+                "Bu amal faqat shaxsiy chatda ishlaydi.",
+                "Это действие работает только в личном чате.",
+                "This action only works in a private chat.");
+    }
+
+    public static String customerStatusButtonLabel(String locale) {
+        return pick(locale, "\uD83D\uDCE6 Buyurtmam", "\uD83D\uDCE6 Мой заказ", "\uD83D\uDCE6 My order");
+    }
+
+    public static String customerCartButtonLabel(String locale) {
+        return pick(locale, "\uD83D\uDED2 Savatim", "\uD83D\uDED2 Моя корзина", "\uD83D\uDED2 My cart");
+    }
+
+    public static String customerRepeatButtonLabel(String locale) {
+        return pick(locale, "\uD83D\uDD01 Yana buyurtma", "\uD83D\uDD01 Повторить заказ", "\uD83D\uDD01 Order again");
+    }
+
+    public static String customerCheckoutButtonLabel(String locale) {
+        return pick(
+                locale,
+                "\u2705 Naqd pulga rasmiylashtirish",
+                "\u2705 Оформить за наличные",
+                "\u2705 Place order, cash");
+    }
+
+    /** One star button of the five ADR 0071 accepts. */
+    public static String customerRateButtonLabel(int stars) {
+        return "\u2b50".repeat(Math.max(1, Math.min(5, stars)));
+    }
+
+    static String customerRatePrompt(String locale, String publicOrderNumber) {
+        return pick(
+                locale,
+                "№" + publicOrderNumber + " buyurtmasi qanday bo'ldi?",
+                "Как вам заказ №" + publicOrderNumber + "?",
+                "How was order #" + publicOrderNumber + "?");
+    }
+
+    static String customerOrderStatus(String locale, String publicOrderNumber, String status, String total) {
+        return pick(
+                locale,
+                "Buyurtma №" + publicOrderNumber + "\nHolati: " + status + "\nSumma: " + total,
+                "Заказ №" + publicOrderNumber + "\nСтатус: " + status + "\nСумма: " + total,
+                "Order #" + publicOrderNumber + "\nStatus: " + status + "\nTotal: " + total);
+    }
+
+    static String customerNoOrders(String locale) {
+        return pick(locale, "Sizda hali buyurtma yo'q.", "У вас пока нет заказов.", "You have no orders yet.");
+    }
+
+    static String customerCart(String locale, String lines, @org.jspecify.annotations.Nullable String total) {
+        String body = pick(locale, "Savatingiz:\n", "Ваша корзина:\n", "Your cart:\n") + lines;
+        if (total == null) {
+            // Shown without a number rather than with a wrong one: ADR 0018's
+            // whole point is that the price shown is the price charged.
+            return body
+                    + pick(
+                            locale,
+                            "\n\nHozircha jamini hisoblab bo'lmadi.",
+                            "\n\nСумму сейчас посчитать не удалось.",
+                            "\n\nWe could not total this right now.");
+        }
+        return body + pick(locale, "\n\nJami: ", "\n\nИтого: ", "\n\nTotal: ") + total;
+    }
+
+    static String customerCartEmpty(String locale) {
+        return pick(locale, "Savatingiz bo'sh.", "Ваша корзина пуста.", "Your cart is empty.");
+    }
+
+    static String customerRepeatBuilt(String locale, int lineCount, @org.jspecify.annotations.Nullable String total) {
+        String head = pick(
+                locale,
+                lineCount + " ta taom savatga qo'shildi.",
+                "В корзину добавлено блюд: " + lineCount + ".",
+                lineCount + " items added to your cart.");
+        return total == null ? head : head + pick(locale, "\nJami: ", "\nИтого: ", "\nTotal: ") + total;
+    }
+
+    /** Names the dishes, because a bot has no control to grey out. */
+    static String customerRepeatNotReady(String locale, String dishes) {
+        return pick(
+                locale,
+                "Hozir takrorlab bo'lmaydi — mavjud emas: " + dishes,
+                "Сейчас повторить нельзя — недоступно: " + dishes,
+                "This cannot be repeated right now — unavailable: " + dishes);
+    }
+
+    static String customerRepeatRefused(String locale) {
+        return pick(
+                locale,
+                "Buyurtmani takrorlab bo'lmadi. Ilovada urinib ko'ring.",
+                "Не удалось повторить заказ. Попробуйте в приложении.",
+                "We could not repeat that order. Please try in the app.");
+    }
+
+    static String customerOrderPlaced(String locale, String publicOrderNumber) {
+        return pick(
+                locale,
+                "Buyurtma qabul qilindi. Raqami: №" + publicOrderNumber,
+                "Заказ принят. Номер: №" + publicOrderNumber,
+                "Order placed. Number: #" + publicOrderNumber);
+    }
+
+    static String customerNeedsDestination(String locale) {
+        return pick(
+                locale,
+                "Yetkazish manzilini ilovada tanlang — shundan keyin rasmiylashtirish mumkin.",
+                "Выберите адрес доставки в приложении — после этого заказ можно оформить.",
+                "Choose a delivery address in the app, then this can be placed.");
+    }
+
+    static String customerNoCashMethod(String locale) {
+        return pick(
+                locale,
+                "Bu yerda naqd pul qabul qilinmaydi. To'lovni ilovada bajaring.",
+                "Здесь оплата наличными недоступна. Оплатите в приложении.",
+                "Cash is not available here. Please pay in the app.");
+    }
+
+    static String customerCheckoutRefused(String locale) {
+        return pick(
+                locale,
+                "Buyurtmani rasmiylashtirib bo'lmadi. Ilovada urinib ko'ring.",
+                "Не удалось оформить заказ. Попробуйте в приложении.",
+                "We could not place this order. Please try in the app.");
+    }
+
+    static String customerRatingRecorded(String locale) {
+        return pick(
+                locale,
+                "Rahmat, bahoyingiz qabul qilindi.",
+                "Спасибо, оценка сохранена.",
+                "Thank you, your rating is saved.");
+    }
+
+    static String customerAlreadyRated(String locale) {
+        return pick(
+                locale,
+                "Bu buyurtma allaqachon baholangan.",
+                "Этот заказ уже оценён.",
+                "This order has already been rated.");
+    }
+
+    static String customerRatingNotEligible(String locale) {
+        return pick(
+                locale,
+                "Bu buyurtmani hozir baholab bo'lmaydi.",
+                "Этот заказ сейчас оценить нельзя.",
+                "This order cannot be rated right now.");
+    }
+
+    static String customerButtonExpired(String locale) {
+        return pick(
+                locale,
+                "Bu tugma eskirgan. Yangi xabardagi tugmadan foydalaning.",
+                "Эта кнопка устарела. Воспользуйтесь кнопкой в новом сообщении.",
+                "This button has expired. Use the one on a newer message.");
+    }
+
+    static String customerActionsNotAvailable(String locale) {
+        return pick(
+                locale,
+                "Bu yerda tez amallar hozircha ishlamaydi. Ilovadan foydalaning.",
+                "Быстрые действия здесь пока недоступны. Воспользуйтесь приложением.",
+                "Quick actions are not available here yet. Please use the app.");
+    }
+
+    static String customerNotLinked(String locale) {
+        return pick(
+                locale,
+                "Bu chat hisobingizga ulanmagan. Ilovadan qayta ulang.",
+                "Этот чат не привязан к вашему аккаунту. Привяжите его снова в приложении.",
+                "This chat is not linked to your account. Link it again from the app.");
+    }
+
+    static String customerTooFast(String locale) {
+        return pick(
+                locale,
+                "Biroz sekinroq — bir daqiqadan keyin urinib ko'ring.",
+                "Слишком часто — попробуйте через минуту.",
+                "Too many taps — please try again in a minute.");
+    }
+
     private static String pick(String locale, String uz, String ru, String en) {
         return switch (locale == null ? "" : locale.toLowerCase(Locale.ROOT)) {
             case "uz-latn", "uz" -> uz;

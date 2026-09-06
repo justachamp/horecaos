@@ -176,6 +176,78 @@ public class BotActionTokenStore {
                 .optional();
     }
 
+    /**
+     * A button on a customer's own message (ADR 0075, V0172).
+     *
+     * <p>Minted fresh every render rather than reused the way an order-decision
+     * token is. That reuse exists so a physical Approve button keeps one stable
+     * {@code decisionId} across a harmless resend; a customer button has no such
+     * contract, and reuse would instead mean a Repeat button rendered last week
+     * and one rendered today were the same token — so tapping the old one would
+     * silently act on the newer render's intent.
+     *
+     * <p>Scoped to the Telegram account it was rendered for, exactly as {@link
+     * #mintTenantSelectToken} is: the message may be forwarded, and a stranger's
+     * tap must not spend this customer's money.
+     */
+    @Transactional
+    public String mintCustomerActionToken(
+            UUID tenantId,
+            UUID brandId,
+            long telegramUserId,
+            String action,
+            @Nullable UUID orderId,
+            @Nullable String argument,
+            Instant expiresAt) {
+        String token = TelegramLinkCode.generate();
+        jdbc.sql("""
+                INSERT INTO integration.bot_action_tokens (
+                    token, tenant_id, kind, brand_id, order_id, pending_command, pending_argument,
+                    telegram_user_id, expires_at, created_at)
+                VALUES (:token, :tenantId, 'CUSTOMER_ACTION', :brandId, :orderId, :action, :argument,
+                    :userId, :expiresAt, :now)
+                """)
+                .param("token", token)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("orderId", orderId)
+                .param("action", action)
+                .param("argument", argument)
+                .param("userId", telegramUserId)
+                .param("expiresAt", utc(expiresAt))
+                .param("now", utc(clock.instant()))
+                .update();
+        return token;
+    }
+
+    /**
+     * Redeems a customer action token, scoped to the account it was rendered
+     * for and to the chat's own tenant.
+     *
+     * <p>The {@code telegram_user_id} predicate is inside the query rather than
+     * a check on the result: a forwarded message's button tapped by somebody
+     * else must resolve to nothing at all, so the tapper cannot learn that the
+     * token was real.
+     */
+    public Optional<CustomerActionToken> resolveCustomerAction(String token, long telegramUserId) {
+        return jdbc.sql("""
+                SELECT tenant_id, brand_id, order_id, pending_command, pending_argument
+                FROM integration.bot_action_tokens
+                WHERE token = :token AND kind = 'CUSTOMER_ACTION'
+                  AND telegram_user_id = :userId AND expires_at > :now
+                """)
+                .param("token", token)
+                .param("userId", telegramUserId)
+                .param("now", utc(clock.instant()))
+                .query((row, number) -> new CustomerActionToken(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        row.getString("pending_command"),
+                        row.getString("pending_argument")))
+                .optional();
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
@@ -188,6 +260,19 @@ public class BotActionTokenStore {
             UUID locationId,
             OrderDecisionPort.Action action,
             @Nullable String rejectReasonCode) {}
+
+    /**
+     * @param orderId set for STATUS, REPEAT and RATE; null for CART and CHECKOUT,
+     *     which are about a basket and name no order (V0172's own shape CHECK)
+     * @param argument the action's one parameter — a rating value, a payment
+     *     method code — or null where it takes none
+     */
+    public record CustomerActionToken(
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID orderId,
+            String action,
+            @Nullable String argument) {}
 
     public record TenantSelectToken(
             UUID tenantId,
