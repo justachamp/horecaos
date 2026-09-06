@@ -806,11 +806,22 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "modifierOptionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "modifiers" : {
             "items" : {
               "type" : "string"
             },
             "type" : "array"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "productName" : {
             "type" : "string"
@@ -822,6 +833,10 @@
           "unitAmountMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "variantName" : {
             "type" : "string"
@@ -1221,6 +1236,82 @@
           },
           "created" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "ReorderLineResponse" : {
+        "properties" : {
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierOptionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "originalUnitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "unitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReorderPlanResponse" : {
+        "properties" : {
+          "channelCode" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReorderLineResponse"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "verdict" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -3511,6 +3602,51 @@
         },
         "summary" : "Open a payment attempt and get its checkout surface",
         "tags" : [ "Storefront payments" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder" : {
+      "get" : {
+        "description" : "ADR 0074. Resolves each line's stored variant and modifier ids against the menu as it stands now for this order's own location and channel, and answers READY, PARTIAL or UNAVAILABLE. A client shows its repeat button on the verdict rather than matching names against a menu it loaded separately. This is a read: apply it through the ordinary cart path, POST /carts then PUT /carts/{cartId}/lines/{lineKey} with the ids returned here, so a repeated basket is priced and checked out by the same code every other basket travels. The plan is a snapshot — a dish can be 86'd between reading it and rebuilding the cart, and pricing stays the authority that refuses.",
+        "operationId" : "reorderPlan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReorderPlanResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this order can be ordered again, and with what",
+        "tags" : [ "Storefront ordering" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review" : {

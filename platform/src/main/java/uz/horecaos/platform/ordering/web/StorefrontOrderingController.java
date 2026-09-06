@@ -35,6 +35,7 @@ import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
+import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -88,6 +89,7 @@ public class StorefrontOrderingController {
     private final CartPaymentOptions paymentOptions;
     private final OrderQueryService orderQuery;
     private final OrderStateService orderState;
+    private final ReorderPlanService reorderPlans;
     private final CurrentCustomer currentCustomer;
     private final CurrentActor currentActor;
 
@@ -98,6 +100,7 @@ public class StorefrontOrderingController {
             CartPaymentOptions paymentOptions,
             OrderQueryService orderQuery,
             OrderStateService orderState,
+            ReorderPlanService reorderPlans,
             CurrentCustomer currentCustomer,
             CurrentActor currentActor) {
         this.carts = carts;
@@ -105,6 +108,7 @@ public class StorefrontOrderingController {
         this.paymentOptions = paymentOptions;
         this.orderQuery = orderQuery;
         this.orderState = orderState;
+        this.reorderPlans = reorderPlans;
         this.currentCustomer = currentCustomer;
         this.currentActor = currentActor;
     }
@@ -518,6 +522,27 @@ public class StorefrontOrderingController {
         return new Page<>(rows.stream().map(OrderSummaryResponse::of).toList(), nextCursor);
     }
 
+    @GetMapping("/orders/{orderId}/reorder")
+    @CustomerOwned
+    @Operation(
+            summary = "Whether this order can be ordered again, and with what",
+            description = "ADR 0074. Resolves each line's stored variant and modifier ids "
+                    + "against the menu as it stands now for this order's own location and "
+                    + "channel, and answers READY, PARTIAL or UNAVAILABLE. A client shows its "
+                    + "repeat button on the verdict rather than matching names against a menu "
+                    + "it loaded separately. This is a read: apply it through the ordinary cart "
+                    + "path, POST /carts then PUT /carts/{cartId}/lines/{lineKey} with the ids "
+                    + "returned here, so a repeated basket is priced and checked out by the same "
+                    + "code every other basket travels. The plan is a snapshot — a dish can be "
+                    + "86'd between reading it and rebuilding the cart, and pricing stays the "
+                    + "authority that refuses.")
+    public ReorderPlanResponse reorderPlan(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID orderId) {
+        return ReorderPlanResponse.of(reorderPlans
+                .planFor(tenantId, orderId, accountId(tenantId, brandId))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order")));
+    }
+
     @PostMapping("/orders/{orderId}/cancellations")
     @CustomerOwned
     @Idempotent
@@ -895,25 +920,113 @@ public class StorefrontOrderingController {
                                     line.line().lineNumber(),
                                     line.line().productName(),
                                     line.line().variantName(),
+                                    line.line().sourceProductId(),
+                                    line.line().sourceVariantId(),
                                     line.line().quantity(),
                                     line.line().unitAmountMinor(),
                                     line.line().finalAmountMinor(),
                                     line.modifiers().stream()
                                             .map(m -> m.optionName())
+                                            .toList(),
+                                    line.modifiers().stream()
+                                            .map(m -> m.sourceOptionId())
                                             .toList()))
                             .toList(),
                     detail.warnings());
         }
     }
 
+    /**
+     * One line of an order as it was bought.
+     *
+     * <p>The names are snapshots and outrank whatever the menu says today; the
+     * ids are what the line pointed at. Both are carried because they answer
+     * different questions: the names are what to show a customer who is reading
+     * their history, and the ids are what to put back in a cart (ADR 0074). The
+     * ids resolve to nothing if the dish has since been withdrawn — ask
+     * {@code GET /orders/{orderId}/reorder} rather than assuming they still do.
+     *
+     * @param modifiers the option names as bought, in publication order
+     * @param modifierOptionIds the same options by id, in the same order
+     */
     public record OrderLineResponse(
             int lineNumber,
             String productName,
             String variantName,
+            UUID productId,
+            UUID variantId,
             int quantity,
             long unitAmountMinor,
             long finalAmountMinor,
-            List<String> modifiers) {}
+            List<String> modifiers,
+            List<UUID> modifierOptionIds) {}
+
+    /**
+     * ADR 0074's answer to "can this be ordered again".
+     *
+     * @param verdict READY when every line is AVAILABLE, UNAVAILABLE when none
+     *     is, PARTIAL otherwise. Whether PARTIAL offers the button is the
+     *     client's policy and deliberately not decided here
+     * @param currency the price book's, or the order's own where none resolved.
+     *     Whole som for UZS (ADR 0018)
+     */
+    public record ReorderPlanResponse(
+            UUID orderId,
+            String publicOrderNumber,
+            UUID locationId,
+            String channelCode,
+            String verdict,
+            String currency,
+            List<ReorderLineResponse> lines) {
+
+        static ReorderPlanResponse of(ReorderPlanService.ReorderPlan plan) {
+            return new ReorderPlanResponse(
+                    plan.orderId(),
+                    plan.publicOrderNumber(),
+                    plan.locationId(),
+                    plan.channelCode(),
+                    plan.verdict().name(),
+                    plan.currency(),
+                    plan.lines().stream().map(ReorderLineResponse::of).toList());
+        }
+    }
+
+    /**
+     * One historical line, resolved against today's menu.
+     *
+     * @param status AVAILABLE, SOLD_OUT, WITHDRAWN, UNPRICED or
+     *     MODIFIERS_WITHDRAWN — five answers rather than a boolean, because a
+     *     client that cannot say why cannot tell a customer whether to come back
+     *     later
+     * @param unitAmountMinor the price today, null when none resolves
+     * @param originalUnitAmountMinor what was paid for it
+     */
+    public record ReorderLineResponse(
+            int lineNumber,
+            String productName,
+            @Nullable String variantName,
+            @Nullable UUID productId,
+            UUID variantId,
+            int quantity,
+            List<UUID> modifierOptionIds,
+            String status,
+            @Nullable Long unitAmountMinor,
+            long originalUnitAmountMinor) {
+
+        static ReorderLineResponse of(ReorderPlanService.PlannedLine line) {
+            return new ReorderLineResponse(
+                    line.lineNumber(),
+                    line.productName(),
+                    line.variantName(),
+                    line.productId(),
+                    line.variantId(),
+                    line.quantity(),
+                    line.modifierOptionIds(),
+                    line.status().name(),
+                    line.unitAmountMinor(),
+                    line.originalUnitAmountMinor());
+        }
+    }
 
     /**
      * One row of the caller's own order history.

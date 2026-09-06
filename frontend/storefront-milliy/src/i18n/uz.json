@@ -174,8 +174,6 @@
     "historyTitle": "Tarix",
     "repeat": "Takrorlash",
     "repeatAddedAll": "{{count}} ta taom savatga qo'shildi",
-    "repeatAddedPartial": "{{added}} ta taom qo'shildi, {{skipped}} tasi endi mavjud emas",
-    "repeatFailed": "Hech qanday taom qo'shilmadi — ular endi menyuda yo'q",
     "noOrdersTitle": "Buyurtmalar yo'q",
     "noOrdersSubtitle": "Birinchi buyurtmangizni bering.",
     "placeOrder": "Buyurtma berish",

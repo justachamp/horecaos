@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -68,6 +69,7 @@ import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
 import uz.horecaos.platform.ordering.application.PaymentProjectionTrigger;
+import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
@@ -159,6 +161,7 @@ class CartCheckoutAndOrderTests {
     private CheckoutService checkout;
     private OrderStateService orderState;
     private OrderQueryService orderQuery;
+    private ReorderPlanService reorderPlans;
     private OrderInventoryProcess inventoryProcess;
     private InventoryService inventory;
     private QuoteService quotes;
@@ -202,6 +205,7 @@ class CartCheckoutAndOrderTests {
     private UUID sizeSmall;
     private UUID sizeMedium;
     private UUID sizeLarge;
+    private UUID extrasGroup;
     private UUID extrasBacon;
     private final Map<String, UUID> productIdByCode = new java.util.HashMap<>();
 
@@ -427,6 +431,17 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock);
+        // ADR 0074, production classes end to end: the real publication reader,
+        // the real price lookup pricing implements, and the real InventoryService
+        // behind InventoryReservationPort. A stub for any of the three would let
+        // the plan agree with itself about what "available" means, which is the
+        // one thing this endpoint exists to be right about.
+        reorderPlans = new ReorderPlanService(
+                orderQuery,
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcReorderMenu(jdbc, objectMapper),
+                new uz.horecaos.platform.pricing.infrastructure.catalog.PricingMenuPriceLookup(
+                        pricingStore, channelStore, clock),
+                inventory);
         // The real ADR 0024 gate over the real scope table, not a stub that agrees
         // with itself. No scope row is seeded, so every checkout below runs through
         // the "no scope registered" branch — which is the branch that decides
@@ -3526,6 +3541,245 @@ class CartCheckoutAndOrderTests {
         assertThat(refundedMinor(orderIdOf(placed))).isZero();
     }
 
+    // ------------------------------------------ repeating an order (ADR 0074)
+
+    @Test
+    @DisplayName("a placed order plans READY, carrying the ids a cart is rebuilt from")
+    void aPlacedOrderPlansReady() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-ready"));
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.READY);
+        assertThat(plan.currency()).isEqualTo("UZS");
+        assertThat(plan.lines()).singleElement().satisfies(line -> {
+            assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.AVAILABLE);
+            // The whole reason this endpoint exists. Before ADR 0074 the wire
+            // carried "Qo'y burger" and a client had to guess which variant that
+            // was on today's menu.
+            assertThat(line.variantId()).isEqualTo(burgerVariant);
+            assertThat(line.productId()).isEqualTo(productIdByCode.get("BURGER"));
+            assertThat(line.quantity()).isEqualTo(2);
+            assertThat(line.unitAmountMinor()).isEqualTo(50_000L);
+            assertThat(line.originalUnitAmountMinor()).isEqualTo(50_000L);
+        });
+    }
+
+    @Test
+    @DisplayName("the plan's ids rebuild the same basket, priced to the total that was paid")
+    void aPlanRebuildsTheBasketItRepeats() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        var placed = orderStore
+                .find(TENANT, orderIdOf(placeOrder("idem-reorder-roundtrip")))
+                .orElseThrow();
+
+        var plan = reorderPlans.planFor(TENANT, placed.orderId(), CUSTOMER).orElseThrow();
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.READY);
+
+        UUID repeated = openCart();
+        for (var line : plan.lines()) {
+            tx(() -> carts.putLine(
+                    TENANT,
+                    BRAND,
+                    CUSTOMER,
+                    repeated,
+                    cartVersion(repeated),
+                    "r" + line.lineNumber(),
+                    line.variantId(),
+                    line.quantity(),
+                    line.modifierOptionIds(),
+                    null));
+        }
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, repeated, cartVersion(repeated)));
+
+        // A repeat that costs a different amount is not a repeat. This is the
+        // assertion the name-matching implementation could never have made.
+        assertThat(priced.quote().totalMinor()).isEqualTo(placed.totalMinor());
+    }
+
+    @Test
+    @DisplayName("the tenant taking the dish off this location's menu makes the line SOLD_OUT")
+    void anUnavailableOfferingIsSoldOut() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-offering-86"));
+
+        offer(burgerVariant, "UNAVAILABLE");
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.UNAVAILABLE);
+        assertThat(plan.lines())
+                .singleElement()
+                .extracting(ReorderPlanService.PlannedLine::status)
+                .isEqualTo(ReorderPlanService.LineStatus.SOLD_OUT);
+    }
+
+    @Test
+    @DisplayName("the kitchen's 86 hides the button while the tenant's own menu still offers the dish")
+    void anInventoryEightySixIsSoldOutEvenWhereTheOfferingSaysOtherwise() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-kitchen-86"));
+
+        // ADR 0060 §3's bot /86 and the operations stop list both land in
+        // inventory and nowhere near catalog.location_offerings. A plan that read
+        // only the offering row would still say READY here, which is exactly the
+        // failure this endpoint exists to prevent -- and exactly what
+        // StorefrontCatalogQuery.menuFor still does for the menu itself.
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+
+        assertThat(offeringStatusOf(burgerVariant))
+                .as("the premise: the tenant has not touched its own menu")
+                .isEqualTo("AVAILABLE");
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.lines())
+                .singleElement()
+                .extracting(ReorderPlanService.PlannedLine::status)
+                .isEqualTo(ReorderPlanService.LineStatus.SOLD_OUT);
+    }
+
+    @Test
+    @DisplayName("a dish this location has hidden is WITHDRAWN, which is not the same as sold out")
+    void aHiddenOfferingIsWithdrawn() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-hidden"));
+
+        offer(burgerVariant, "HIDDEN");
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.lines()).singleElement().satisfies(line -> {
+            assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.WITHDRAWN);
+            // Nothing to link to: the product is not on this location's menu.
+            assertThat(line.productId()).isNull();
+            // The snapshot survives regardless. A history row still reads.
+            assertThat(line.productName()).isEqualTo("Qo'y burger");
+            assertThat(line.variantId()).isEqualTo(burgerVariant);
+        });
+    }
+
+    @Test
+    @DisplayName("a dish dropped from the next publication is WITHDRAWN")
+    void aProductNoLongerPublishedIsWithdrawn() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-republished"));
+
+        // A republish, the way publications really change: the old one is retired
+        // and a new one is activated. The order still names the variant; the menu
+        // no longer does.
+        republishWithout("BURGER");
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.UNAVAILABLE);
+        assertThat(plan.lines())
+                .singleElement()
+                .extracting(ReorderPlanService.PlannedLine::status)
+                .isEqualTo(ReorderPlanService.LineStatus.WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName("a repeat is not quietly served without the extra the customer paid for")
+    void aWithdrawnOptionMakesTheLineModifiersWithdrawn() {
+        publishBurger(extrasGroup);
+        offer(burgerVariant, "AVAILABLE");
+        priceOption(extrasBacon, 7_000L);
+
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 1, List.of(extrasBacon), null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID order = orderIdOf(tx(() -> checkout.checkout(checkoutCommand(cart, "idem-reorder-bacon"))));
+
+        assertThat(reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow().lines())
+                .as("the premise: with bacon still published this repeats cleanly")
+                .singleElement()
+                .satisfies(line -> {
+                    assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.AVAILABLE);
+                    assertThat(line.modifierOptionIds()).containsExactly(extrasBacon);
+                });
+
+        // The burger stays on the menu; the extras group comes off it.
+        republishBurgerWithoutItsGroups();
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.UNAVAILABLE);
+        assertThat(plan.lines())
+                .singleElement()
+                .extracting(ReorderPlanService.PlannedLine::status)
+                .as("orderable, but not as the customer ordered it")
+                .isEqualTo(ReorderPlanService.LineStatus.MODIFIERS_WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName("one dish of two going sold out leaves the plan PARTIAL, not READY and not empty")
+    void oneMissingDishLeavesThePlanPartial() {
+        publishBurger();
+        publishPizzaWithoutGroups();
+        offer(burgerVariant, "AVAILABLE");
+        offer(pizzaVariant, "AVAILABLE");
+        priceVariant(pizzaVariant, 60_000L);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, pizzaVariant, TrackingMode.BINARY);
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        putLine(cart, "b", pizzaVariant, 1);
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID order = orderIdOf(tx(() -> checkout.checkout(checkoutCommand(cart, "idem-reorder-partial"))));
+
+        inventory.setAvailability(TENANT, LOCATION, pizzaVariant, false, "SOLD_OUT", null);
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.PARTIAL);
+        assertThat(plan.lines())
+                .extracting(ReorderPlanService.PlannedLine::variantId, ReorderPlanService.PlannedLine::status)
+                .containsExactlyInAnyOrder(
+                        tuple(burgerVariant, ReorderPlanService.LineStatus.AVAILABLE),
+                        tuple(pizzaVariant, ReorderPlanService.LineStatus.SOLD_OUT));
+    }
+
+    @Test
+    @DisplayName("an orderable dish with no price is UNPRICED rather than free")
+    void anUnpricedVariantIsNotRepeatable() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-unpriced"));
+
+        // The price book that priced the order is withdrawn. The menu still
+        // carries the dish, the kitchen still has it, and nothing can be charged
+        // for it -- which is a menu that is not finished, never a free burger.
+        jdbc.sql("DELETE FROM pricing.prices WHERE priceable_id = :variantId")
+                .param("variantId", burgerVariant)
+                .update();
+
+        var plan = reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow();
+        assertThat(plan.lines()).singleElement().satisfies(line -> {
+            assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.UNPRICED);
+            assertThat(line.unitAmountMinor()).isNull();
+            assertThat(line.originalUnitAmountMinor())
+                    .as("what was paid is a fact about the order and does not move")
+                    .isEqualTo(50_000L);
+        });
+    }
+
+    @Test
+    @DisplayName("another customer's order has no plan at all")
+    void aPlanIsScopedToItsOwner() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-owner"));
+
+        // Not "a plan with nothing in it" -- absent, the same answer an order id
+        // that names nothing gets, so the endpoint cannot be used to discover
+        // that somebody else's order exists.
+        assertThat(reorderPlans.planFor(TENANT, order, OTHER_CUSTOMER)).isEmpty();
+        assertThat(reorderPlans.planFor(TENANT, UUID.randomUUID(), CUSTOMER)).isEmpty();
+    }
+
     // ----------------------------------------------------------- fixtures
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
@@ -4457,7 +4711,7 @@ class CartCheckoutAndOrderTests {
         sizeSmall = UUID.randomUUID();
         sizeMedium = UUID.randomUUID();
         sizeLarge = UUID.randomUUID();
-        UUID extrasGroup = UUID.randomUUID();
+        extrasGroup = UUID.randomUUID();
         extrasBacon = UUID.randomUUID();
 
         // seedTenancyAndCatalog() seeds PIZZA before setUp() calls this method.
@@ -4709,5 +4963,154 @@ class CartCheckoutAndOrderTests {
         public Instant instant() {
             return now;
         }
+    }
+    // ---------------------------------------------- repeat fixtures (ADR 0074)
+
+    /**
+     * Publishes the burger, which {@link #seedPublishedModifierRules} deliberately
+     * leaves off the menu.
+     *
+     * <p>Called by the ADR 0074 tests rather than from {@code setUp}, so the
+     * "burger has no published rules" premise every other test in this class
+     * rests on stays exactly as it was.
+     */
+    private void publishBurger(UUID... groupIds) {
+        String groups = java.util.Arrays.stream(groupIds)
+                .map(id -> "\"" + id + "\"")
+                .collect(java.util.stream.Collectors.joining(", "));
+        insertPublicationItem(
+                "PRODUCT", Objects.requireNonNull(productIdByCode.get("BURGER")), """
+                {"code": "BURGER", "status": "ACTIVE",
+                 "variants": [{"variantId": "%s", "status": "ACTIVE"}],
+                 "modifierGroupIds": [%s]}
+                """.formatted(burgerVariant, groups));
+    }
+
+    /** The pizza without its size group, so a pizza line needs no selection. */
+    private void publishPizzaWithoutGroups() {
+        jdbc.sql("""
+                DELETE FROM catalog.publication_items
+                WHERE publication_id = :publicationId AND entity_type = 'PRODUCT' AND entity_id = :entityId
+                """)
+                .param("publicationId", publicationId)
+                .param("entityId", Objects.requireNonNull(productIdByCode.get("PIZZA")))
+                .update();
+        insertPublicationItem(
+                "PRODUCT", Objects.requireNonNull(productIdByCode.get("PIZZA")), """
+                {"code": "PIZZA", "status": "ACTIVE",
+                 "variants": [{"variantId": "%s", "status": "ACTIVE"}],
+                 "modifierGroupIds": []}
+                """.formatted(pizzaVariant));
+    }
+
+    /**
+     * What this location says about a dish (ADR 0016).
+     *
+     * <p>This suite never seeded {@code catalog.location_offerings} at all, which
+     * is why no test before ADR 0074 noticed that a customer's menu is filtered by
+     * it. The carts here are built by calling {@code CartService} directly and so
+     * never travel the menu read.
+     */
+    private void offer(UUID variantId, String status) {
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :status)
+                ON CONFLICT (location_id, variant_id) DO UPDATE SET status = EXCLUDED.status
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("variantId", variantId)
+                .param("status", status)
+                .update();
+    }
+
+    private String offeringStatusOf(UUID variantId) {
+        return jdbc.sql("""
+                SELECT status FROM catalog.location_offerings
+                WHERE tenant_id = :tenantId AND location_id = :locationId AND variant_id = :variantId
+                """)
+                .param("tenantId", TENANT)
+                .param("locationId", LOCATION)
+                .param("variantId", variantId)
+                .query(String.class)
+                .single();
+    }
+
+    /** Retires the live publication and activates a new one without one product. */
+    private void republishWithout(String productCode) {
+        UUID dropped = Objects.requireNonNull(productIdByCode.get(productCode));
+        List<PublishedItem> carried = liveItems().stream()
+                .filter(item -> !item.entityId().equals(dropped))
+                .toList();
+        retireAndActivateWith(carried);
+    }
+
+    /** Keeps the burger on the menu and takes every modifier group off it. */
+    private void republishBurgerWithoutItsGroups() {
+        UUID burgerProduct = Objects.requireNonNull(productIdByCode.get("BURGER"));
+        List<PublishedItem> carried = liveItems().stream()
+                .map(item -> item.entityId().equals(burgerProduct)
+                        ? new PublishedItem(item.entityType(), item.entityId(), """
+                                {"code": "BURGER", "status": "ACTIVE",
+                                 "variants": [{"variantId": "%s", "status": "ACTIVE"}],
+                                 "modifierGroupIds": []}
+                                """.formatted(burgerVariant))
+                        : item)
+                .toList();
+        retireAndActivateWith(carried);
+    }
+
+    private List<PublishedItem> liveItems() {
+        return jdbc.sql("""
+                SELECT entity_type, entity_id, immutable_content_json::text AS content
+                FROM catalog.publication_items WHERE publication_id = :publicationId
+                """)
+                .param("publicationId", publicationId)
+                .query((row, number) -> new PublishedItem(
+                        row.getString("entity_type"),
+                        Objects.requireNonNull(row.getObject("entity_id", UUID.class)),
+                        row.getString("content")))
+                .list();
+    }
+
+    private void retireAndActivateWith(List<PublishedItem> items) {
+        jdbc.sql("UPDATE catalog.publications SET status = 'RETIRED', retired_at = now() WHERE id = :id")
+                .param("id", publicationId)
+                .update();
+        seedPublication("STOREFRONT");
+        items.forEach(item -> insertPublicationItem(item.entityType(), item.entityId(), item.content()));
+    }
+
+    private record PublishedItem(String entityType, UUID entityId, String content) {}
+
+    private void priceVariant(UUID variantId, long amountMinor) {
+        insertPrice("VARIANT", variantId, amountMinor);
+    }
+
+    private void priceOption(UUID optionId, long amountMinor) {
+        insertPrice("MODIFIER_OPTION", optionId, amountMinor);
+    }
+
+    private void insertPrice(String priceableType, UUID priceableId, long amountMinor) {
+        UUID priceBook = jdbc.sql("SELECT id FROM pricing.price_books WHERE tenant_id = :tenantId LIMIT 1")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
+                    priceable_id, amount_minor, valid_from)
+                VALUES (:id, :tenantId, :brandId, :priceBookId, :priceableType, :priceableId, :amount, :from)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("priceableType", priceableType)
+                .param("priceableId", priceableId)
+                .param("amount", amountMinor)
+                .param("from", java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC))
+                .update();
     }
 }

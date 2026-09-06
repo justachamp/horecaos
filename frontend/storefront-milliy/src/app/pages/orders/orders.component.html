@@ -65,14 +65,16 @@
                 </div>
                 <span class="order-card__total">{{ totalLabel(order) }}</span>
               </div>
-              <button
-                type="button"
-                class="repeat-btn"
-                [disabled]="repeatingId() === order.id"
-                (click)="repeat(order)"
-              >
-                {{ (repeatingId() === order.id ? 'common.loading' : 'orders.repeat') | t }}
-              </button>
+              @if (canRepeat(order)) {
+                <button
+                  type="button"
+                  class="repeat-btn"
+                  [disabled]="repeatingId() === order.id"
+                  (click)="repeat(order)"
+                >
+                  {{ (repeatingId() === order.id ? 'common.loading' : 'orders.repeat') | t }}
+                </button>
+              }
             </article>
           }
         </div>

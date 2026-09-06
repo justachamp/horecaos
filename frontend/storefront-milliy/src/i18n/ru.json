@@ -174,8 +174,6 @@
     "historyTitle": "История",
     "repeat": "Повторить",
     "repeatAddedAll": "{{count}} блюд добавлено в корзину",
-    "repeatAddedPartial": "Добавлено {{added}} блюд, {{skipped}} больше недоступны",
-    "repeatFailed": "Ничего не добавлено — этих блюд больше нет в меню",
     "noOrdersTitle": "Заказов пока нет",
     "noOrdersSubtitle": "Оформите свой первый заказ.",
     "placeOrder": "Оформить заказ",
