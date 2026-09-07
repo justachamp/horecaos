@@ -665,6 +665,46 @@ public class CloposAdapter implements PosAdapter {
         return patchReceipt(context, "receipt.order-status", externalReceiptId, Map.of("order_status", status));
     }
 
+    /**
+     * Reads one order's own status — the field this vendor's clerk moves by
+     * hand, not the receipt's {@code order_status} {@link #writeFulfillmentStatus}
+     * writes.
+     *
+     * <p>{@code GET /orders/{id}} rather than the list endpoint {@link
+     * #findExportedOrder} uses: this call already knows which order it means,
+     * because {@link #exportOrder} named it on success, so there is no
+     * candidate-matching to do — only a value to read.
+     *
+     * <p>{@code Order.status} is one of {@code PENDING}, {@code RECEIVED},
+     * {@code IGNORE} or {@code DELIVERED} (docs/providers/clopos-api.md §6.2).
+     * {@code PENDING} is still waiting on the clerk; {@code RECEIVED} and the
+     * terminal {@code DELIVERED} it can only have been reached through are the
+     * clerk's accept; {@code IGNORE} is a decline, whether the clerk pressed
+     * it or a HorecaOS operator withdrew the order first through {@link
+     * #cancelExportedOrder} — either way the till is not printing this ticket,
+     * which is exactly what a reject means here. Anything else is a status
+     * this adapter does not know the vocabulary for, and reading no decision
+     * out of it is the safe answer: it polls again rather than settling an
+     * order on a guess.
+     */
+    @Override
+    public ApprovalRead readApprovalStatus(PosContext context, String externalOrderId) {
+        ProviderOutcome outcome = read(context, "order.approval-status", "/orders/" + externalOrderId);
+        if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
+            return new ApprovalRead(outcome, null);
+        }
+        Map<String, Object> order = CloposEnvelope.dataObject(outcome.normalized());
+        String status = CloposEnvelope.string(order, "status");
+        ApprovalRead.Decision decision =
+                switch (status == null ? "" : status) {
+                    case "PENDING" -> ApprovalRead.Decision.PENDING;
+                    case "RECEIVED", "DELIVERED" -> ApprovalRead.Decision.APPROVED;
+                    case "IGNORE" -> ApprovalRead.Decision.REJECTED;
+                    default -> null;
+                };
+        return new ApprovalRead(outcome, decision);
+    }
+
     private ProviderOutcome patchReceipt(
             PosContext context, String operation, String externalReceiptId, Map<String, Object> body) {
         CloposSession.Token token = session.token(context);

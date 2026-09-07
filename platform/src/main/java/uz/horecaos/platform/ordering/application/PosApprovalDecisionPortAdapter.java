@@ -1,0 +1,101 @@
+package uz.horecaos.platform.ordering.application;
+
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Component;
+import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
+
+/**
+ * The {@code ordering.api} face of {@link OrderStateService#decide} for a
+ * POS-sourced decision (ADR 0002, ADR 0011 §6.4).
+ *
+ * <p>A translation layer only, the same shape {@code OrderDecisionPortAdapter}
+ * is for the Telegram bot — see that class's own doc for why a second,
+ * near-identical adapter exists rather than one adapter both callers share.
+ * Every field this fills in that the port does not carry is fixed policy the
+ * adapter applies, never something a caller configures:
+ *
+ * <ul>
+ *   <li>{@code actorType = "SERVICE"} — {@link OrderStateService}'s own
+ *       {@code recordAudit} maps that to {@code ActorRef.Type.SERVICE}, the
+ *       same population support tooling and other machine callers occupy and
+ *       never the one staff decisions are recorded under. A POS-sourced
+ *       decision is a machine relaying a restaurant's choice, not a person,
+ *       and recording it as {@code USER} would put it in the same audit
+ *       population as an operator's own click.</li>
+ *   <li>{@code actorId = "pos:" + providerType} — honest about which
+ *       integration relayed the decision, e.g. {@code "pos:clopos"}. This is
+ *       the field that carries the vendor identity; {@code decisionChannel}
+ *       does not, and must not, per the next bullet.</li>
+ *   <li>{@code decisionChannel = "POS"} — the fixed literal, not
+ *       {@code "POS_" + providerType} as an earlier draft of this class had
+ *       it. {@code ordering.approval_decisions.decision_channel} (V0022) is
+ *       constrained by {@code ck_approval_channel} to exactly
+ *       {@code 'HORECAOS_OPERATIONS'}, {@code 'POS'} or
+ *       {@code 'SYSTEM_TIMEOUT'} — a per-vendor value would fail every insert
+ *       with a check-constraint violation, which is exactly what a
+ *       Postgres-backed test of this class caught. The web board's channel is
+ *       the hardcoded {@code "HORECAOS_OPERATIONS"}; this is its POS
+ *       counterpart, and {@code actorId} above is where "which vendor" lives.</li>
+ *   <li>the reason code — a clerk's accept or decline at the till carries no
+ *       free text of any kind (docs/providers/clopos-api.md §6.2), so the
+ *       honest audit reason is the fixed, stable string this adapter names
+ *       rather than a curated {@code RejectReasonDirectory} code nothing
+ *       chose. A POS reject therefore always reaches {@link
+ *       OrderStateService#decide} directly, the same path an unreasoned
+ *       Telegram reject takes, and never {@code OrderOutcomeService#reject}'s
+ *       registry-validated one — there is no reason to validate.</li>
+ * </ul>
+ */
+@Component
+public class PosApprovalDecisionPortAdapter implements PosApprovalDecisionPort {
+
+    static final String APPROVE_REASON_CODE = "POS_CLERK_ACCEPTED";
+    static final String REJECT_REASON_CODE = "POS_CLERK_DECLINED";
+
+    /**
+     * The only value {@code ck_approval_channel} (V0022) permits for a POS
+     * decision — see the class doc for why this is not per-vendor.
+     */
+    static final String DECISION_CHANNEL = OrderDecisionChannel.POS.name();
+
+    static final String ACTOR_ID_PREFIX = "pos:";
+
+    private final OrderStateService orderState;
+
+    public PosApprovalDecisionPortAdapter(OrderStateService orderState) {
+        this.orderState = orderState;
+    }
+
+    @Override
+    public Decision decide(UUID tenantId, UUID orderId, DecisionCommand command) {
+        String actorId = ACTOR_ID_PREFIX + command.providerType();
+
+        OrderStateService.DecisionResult result = orderState.decide(
+                tenantId,
+                orderId,
+                new OrderStateService.DecisionCommand(
+                        command.decisionId(),
+                        command.action() == Action.APPROVE
+                                ? OrderStateService.DecisionAction.APPROVE
+                                : OrderStateService.DecisionAction.REJECT,
+                        DECISION_CHANNEL,
+                        "SERVICE",
+                        actorId,
+                        command.action() == Action.APPROVE ? APPROVE_REASON_CODE : REJECT_REASON_CODE,
+                        command.issuedAt(),
+                        command.correlationId(),
+                        null));
+
+        return new Decision(result.applied(), result.status().name(), result.orderVersion(), settledBy(result));
+    }
+
+    private static @Nullable SettledBy settledBy(OrderStateService.DecisionResult result) {
+        var effective = result.effectiveDecision();
+        if (effective == null) {
+            return null;
+        }
+        return new SettledBy(effective.decisionId(), effective.action(), effective.actorId());
+    }
+}

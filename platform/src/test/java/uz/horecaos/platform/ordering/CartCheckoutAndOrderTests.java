@@ -59,6 +59,7 @@ import uz.horecaos.platform.ordering.api.PaymentFailed;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.api.PaymentRefunded;
 import uz.horecaos.platform.ordering.api.PaymentVoided;
+import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -71,6 +72,7 @@ import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
 import uz.horecaos.platform.ordering.application.PaymentProjectionTrigger;
+import uz.horecaos.platform.ordering.application.PosApprovalDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
@@ -162,6 +164,7 @@ class CartCheckoutAndOrderTests {
     private CartService carts;
     private CheckoutService checkout;
     private OrderStateService orderState;
+    private PosApprovalDecisionPortAdapter posDecisions;
     private OrderQueryService orderQuery;
     private ReorderPlanService reorderPlans;
     private uz.horecaos.platform.ordering.api.CustomerBotOrderingPort botOrdering;
@@ -399,6 +402,11 @@ class CartCheckoutAndOrderTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
                 clock);
+        // The ordering.api face a POS integration reaches OrderStateService.decide
+        // through (ADR 0002, ADR 0011 §6.4) — a translation layer only, so it is
+        // built directly over the same orderState this suite already wires by
+        // hand rather than duplicated.
+        posDecisions = new PosApprovalDecisionPortAdapter(orderState);
         // Another BEFORE_COMMIT listener stood in by hand, for the same reason as
         // confirmationSettles above: nothing would otherwise deliver PaymentCaptured
         // to OrderStateService, and that delivery is production code whose absence
@@ -1895,6 +1903,201 @@ class CartCheckoutAndOrderTests {
                 WHERE action_code = 'ordering.order.approval-decision'
                 ORDER BY occurred_at, outcome
                 """).query(String.class).list()).containsExactlyInAnyOrder("SUCCEEDED", "REJECTED");
+    }
+
+    // --------------------------------------------- POS approval (ADR 0002)
+
+    @Test
+    @DisplayName("a POS accept confirms an order awaiting POS approval")
+    void aPosAcceptConfirmsAnOrderAwaitingApproval() {
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-pos-accept"));
+
+        var decision = tx(() -> posDecisions.decide(
+                TENANT, order, posDecision("pos-decision-1", PosApprovalDecisionPort.Action.APPROVE)));
+
+        assertThat(decision.applied()).isTrue();
+        assertThat(decision.status()).isEqualTo(OrderStatus.CONFIRMED.name());
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        // ADR 0027: a POS-sourced decision is a machine relaying the
+        // restaurant's own choice, never a person and never the bot — so it is
+        // recorded as SERVICE, honestly identified by vendor, on the fixed POS
+        // channel the schema's ck_approval_channel constraint permits.
+        var settledBy = Objects.requireNonNull(decision.settledBy(), "an applied decision always settled the order");
+        assertThat(settledBy.actorId()).isEqualTo("pos:clopos");
+        assertThat(settledBy.action()).isEqualTo("APPROVE");
+
+        assertThat(jdbc.sql("""
+                SELECT action, decision_channel, actor_type, actor_id, reason_code, effective
+                FROM ordering.approval_decisions WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", order)
+                        .query()
+                        .singleRow())
+                .containsEntry("action", "APPROVE")
+                .containsEntry("decision_channel", "POS")
+                .containsEntry("actor_type", "SERVICE")
+                .containsEntry("actor_id", "pos:clopos")
+                .containsEntry("reason_code", "POS_CLERK_ACCEPTED")
+                .containsEntry("effective", true);
+
+        assertThat(jdbc.sql("""
+                SELECT actor_type, actor_subject FROM audit.audit_events
+                WHERE action_code = 'ordering.order.approval-decision' AND target_id = :orderId
+                """).param("orderId", order).query().singleRow())
+                .as("the audit fact names a machine, not a person, and which vendor relayed it")
+                .containsEntry("actor_type", "SERVICE")
+                .containsEntry("actor_subject", "pos:clopos");
+    }
+
+    @Test
+    @DisplayName("a POS reject rejects an order awaiting POS approval, carrying its reason")
+    void aPosRejectRejectsAnOrderAwaitingApproval() {
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-pos-reject"));
+
+        var decision = tx(() -> posDecisions.decide(
+                TENANT, order, posDecision("pos-decision-1", PosApprovalDecisionPort.Action.REJECT)));
+
+        assertThat(decision.applied()).isTrue();
+        assertThat(decision.status()).isEqualTo(OrderStatus.REJECTED.name());
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.REJECTED);
+
+        assertThat(jdbc.sql("""
+                SELECT reason_code FROM ordering.approval_decisions
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND effective
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", order)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("POS_CLERK_DECLINED");
+
+        // ADR 0039: a POS reject is the same commercial fact an operator's
+        // reject is — the restaurant refused before anything was cooked — so
+        // it lands in the same outcome row with the same category.
+        assertThat(jdbc.sql("""
+                SELECT kind, system_category, actor_type FROM ordering.order_outcomes
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", order)
+                        .query()
+                        .singleRow())
+                .containsEntry("kind", "REJECTED")
+                .containsEntry("system_category", "RESTAURANT_REFUSED")
+                .containsEntry("actor_type", "SERVICE");
+    }
+
+    @Test
+    @DisplayName("the same POS callback delivered twice decides once")
+    void theSamePosCallbackDeliveredTwiceDecidesOnce() {
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-pos-duplicate"));
+
+        // At-least-once delivery: a process restart between deciding and
+        // recording that it decided sends the same discovered outcome again.
+        // PosApprovalDecisionPort.DecisionCommand#decisionId is documented to
+        // be derived from something that does not change between two such
+        // observations — modelled here by reusing the same decisionId, the
+        // same dedup key OrderDecisionPort's own duplicate already relies on.
+        var first = tx(() -> posDecisions.decide(
+                TENANT, order, posDecision("export-7:clerk-decision", PosApprovalDecisionPort.Action.APPROVE)));
+        var second = tx(() -> posDecisions.decide(
+                TENANT, order, posDecision("export-7:clerk-decision", PosApprovalDecisionPort.Action.APPROVE)));
+
+        assertThat(first.applied()).isTrue();
+        // OrderStateService#decide answers a known decisionId with "the decision
+        // named by this id is the one in effect" (DecisionResult#applied ==
+        // ApprovalDecisionRow#effective for the replay's own row), which is true
+        // again here because this decisionId is the one that won — the same
+        // reason CartCheckoutAndOrderTests#aRepeatedDecisionIsIdempotent asserts
+        // nothing about applied() on its own replay. What actually proves "decides
+        // once" is that nothing ran a second time, checked below.
+        assertThat(second.status()).isEqualTo(first.status()).isEqualTo(OrderStatus.CONFIRMED.name());
+        assertThat(second.orderVersion()).isEqualTo(first.orderVersion());
+        assertThat(second.settledBy()).isEqualTo(first.settledBy());
+
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM ordering.approval_decisions
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", order)
+                        .query(Long.class)
+                        .single())
+                .as("one decision recorded, not two")
+                .isEqualTo(1L);
+
+        // The replay short-circuits on the known decisionId before
+        // OrderStateService#decide ever calls recordAudit again — so the actual
+        // content of "decides once" is that the second delivery leaves no second
+        // audit fact, not merely that it reports the same status.
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                WHERE action_code = 'ordering.order.approval-decision' AND target_id = :orderId
+                """).param("orderId", order).query(Long.class).single())
+                .as("the replayed callback left no second audit fact — it was answered, not re-run")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("a POS decision for an order not awaiting one is refused")
+    void aPosDecisionForAnOrderNotAwaitingOneIsRefused() {
+        // No requireApproval(): the fixture default is AUTO_CONFIRM, so this
+        // order is already CONFIRMED and was never AWAITING_APPROVAL.
+        var order = orderIdOf(placeOrder("idem-pos-not-awaiting"));
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        var decision = tx(() ->
+                posDecisions.decide(TENANT, order, posDecision("pos-late-1", PosApprovalDecisionPort.Action.APPROVE)));
+
+        assertThat(decision.applied()).isFalse();
+        assertThat(decision.status()).isEqualTo(OrderStatus.CONFIRMED.name());
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status())
+                .as("the order the till never had a say over is left exactly as it is")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        // The command is still on record, inert — "the till said it accepted
+        // an order it was never actually asked about" is answerable.
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM ordering.approval_decisions
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND NOT effective
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", order)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("a POS decision on another tenant's order is refused")
+    void aPosDecisionOnAnotherTenantsOrderIsRefused() {
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-pos-cross-tenant"));
+        UUID otherTenant = UUID.randomUUID();
+
+        assertThatThrownBy(() -> tx(() -> posDecisions.decide(
+                        otherTenant, order, posDecision("pos-cross-tenant-1", PosApprovalDecisionPort.Action.APPROVE))))
+                .isInstanceOf(OrderStateService.OrderNotFoundException.class);
+
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status())
+                .as("a decision purportedly from another tenant must not reach this order")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.approval_decisions WHERE order_id = :orderId")
+                        .param("orderId", order)
+                        .query(Long.class)
+                        .single())
+                .as("a refused cross-tenant call never reaches the row that would record it")
+                .isEqualTo(0L);
+    }
+
+    private PosApprovalDecisionPort.DecisionCommand posDecision(
+            String decisionId, PosApprovalDecisionPort.Action action) {
+        return new PosApprovalDecisionPort.DecisionCommand(decisionId, action, "clopos", clock.instant(), null);
     }
 
     // ------------------------------------------------- inventory process

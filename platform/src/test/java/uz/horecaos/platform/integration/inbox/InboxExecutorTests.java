@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,6 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
+import uz.horecaos.platform.integration.failures.FailureClassifier;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -379,6 +381,68 @@ class InboxExecutorTests {
         assertThat(availableAt(eventId)).isBefore(TEST_NOW.plusSeconds(2)).isAfterOrEqualTo(TEST_NOW.plusSeconds(1));
     }
 
+    /**
+     * ADR 0006's gap: {@code last_error} was written by every handler failure
+     * with no classification at all. {@link FailureClassifier} is what closes
+     * it, and this proves the wiring reaches the database column, not just the
+     * classifier's own unit tests.
+     */
+    @Test
+    void aHandlerFailureOfAKnownTransientShapeIsClassifiedInTheDatabase() {
+        // A CompletionException carrying the timeout: the shape a provider call
+        // through a CompletableFuture actually produces, and unchecked, which a
+        // handler's signature requires. FailureClassifier#unwrap sees through
+        // exactly this wrapper and no other, so the test exercises that path
+        // rather than side-stepping it with a bare unchecked exception.
+        handler.failNextWith(new java.util.concurrent.CompletionException(
+                new java.util.concurrent.TimeoutException("read timed out")));
+        UUID eventId = UUID.randomUUID();
+
+        assertThat(offer(eventId, "first", 0)).isEqualTo(InboxResult.RETRY_SCHEDULED);
+
+        assertThat(errorCode(eventId)).isEqualTo("TRANSIENT_INFRASTRUCTURE");
+    }
+
+    /**
+     * The other half of the same gap: a category assigned in error is worse
+     * than none, so a handler failure of no confidently-known shape must
+     * classify honestly rather than being forced into whichever category the
+     * old hardcoded write happened to name.
+     */
+    @Test
+    void aHandlerFailureOfNoKnownShapeClassifiesAsUnknownRatherThanBeingForced() {
+        handler.failNextWith(new ArithmeticException("simulated unrecognised failure"));
+        UUID eventId = UUID.randomUUID();
+
+        assertThat(offer(eventId, "first", 0)).isEqualTo(InboxResult.RETRY_SCHEDULED);
+
+        assertThat(errorCode(eventId)).isEqualTo("UNKNOWN");
+    }
+
+    /**
+     * ADR 0029: a provider or handler exception's message can quote the value
+     * it rejected — here, a customer's phone number. {@code last_error}
+     * already accepts that as a known, bounded gap (see {@code
+     * FailureOperationsService.OutboxFailureDetail}'s javadoc), but the
+     * classified category must not repeat the mistake: it is read by any
+     * holder of {@code integration.failure.read}, which is cross-tenant and
+     * does not require {@code customer.pii.reveal}.
+     */
+    @Test
+    void aClassifiedCategoryCarriesNoPersonalDataEvenWhenTheMessageDoes() {
+        String sentinelPhone = "+998901234567";
+        handler.failNextWith(new IllegalArgumentException("Missing required field for customer phone " + sentinelPhone));
+        UUID eventId = UUID.randomUUID();
+
+        assertThat(offer(eventId, "first", 0)).isEqualTo(InboxResult.RETRY_SCHEDULED);
+
+        assertThat(errorCode(eventId))
+                .as("IllegalArgumentException is exactly the shape PAYLOAD_INVALID promises")
+                .isEqualTo("PAYLOAD_INVALID")
+                .as("classification looks at the exception's type only, never its message")
+                .doesNotContain(sentinelPhone);
+    }
+
     private InboxResult offer(UUID eventId, String value, long offset) {
         return offer(eventId, value, offset, "TenantCreated", 1);
     }
@@ -460,7 +524,7 @@ class InboxExecutorTests {
         private final JdbcClient jdbc;
         private final String consumerName;
         private final List<UUID> handled = new java.util.concurrent.CopyOnWriteArrayList<>();
-        private volatile boolean failNext;
+        private volatile @Nullable RuntimeException nextFailure;
 
         private RecordingHandler(JdbcClient jdbc) {
             this(jdbc, CONSUMER);
@@ -472,7 +536,12 @@ class InboxExecutorTests {
         }
 
         void failNext() {
-            failNext = true;
+            failNextWith(new IllegalStateException("simulated transient handler failure"));
+        }
+
+        /** Like {@link #failNext()}, but with the exception a classification test needs. */
+        void failNextWith(RuntimeException exception) {
+            nextFailure = exception;
         }
 
         List<UUID> handled() {
@@ -511,9 +580,10 @@ class InboxExecutorTests {
                     .param("value", String.valueOf(event.payload().get("value")))
                     .update();
             handled.add(event.eventId());
-            if (failNext) {
-                failNext = false;
-                throw new IllegalStateException("simulated transient handler failure");
+            RuntimeException failure = nextFailure;
+            if (failure != null) {
+                nextFailure = null;
+                throw failure;
             }
         }
     }

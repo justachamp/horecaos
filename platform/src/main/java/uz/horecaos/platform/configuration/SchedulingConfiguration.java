@@ -125,7 +125,12 @@ public class SchedulingConfiguration {
      * projection staleness budget never had, and {@code
      * MarketingRetentionSweeper.sweepOnce}, enforcing the twenty-four-month
      * audience-snapshot-membership window {@code JdbcAudienceStore.purgeMembers}
-     * could already perform but nothing had ever called outside a test. ADR
+     * could already perform but nothing had ever called outside a test. Wave 73
+     * added the last one so far: {@code PosApprovalPoll.pollForDecisions}, which
+     * reads the till's answer for an export parked in {@code AWAITING_APPROVAL}.
+     * The export reached that state from the moment the adapter said the till
+     * wanted a manager, and nothing ever asked the till again — an order waited
+     * on a decision that had already been taken at the terminal. ADR
      * 0044's third named gap, the ADR 0029 erasure path, is deliberately
      * <b>not</b> among these: {@code CustomerMetricProjectionService.erase} and
      * {@code JdbcAudienceStore.eraseMembership} exist and are tested, but
@@ -139,7 +144,7 @@ public class SchedulingConfiguration {
      * obligation was met; it would not be, so it stays unscheduled and is
      * recorded as a gap instead.
      */
-    static final int DEFAULT_POOL_SIZE = 45;
+    static final int DEFAULT_POOL_SIZE = 46;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

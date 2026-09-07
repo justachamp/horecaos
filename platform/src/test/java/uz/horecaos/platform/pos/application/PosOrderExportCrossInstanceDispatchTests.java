@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +29,12 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
+import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
 import uz.horecaos.platform.pos.FakePosAdapter;
 import uz.horecaos.platform.pos.api.PosCapability;
+import uz.horecaos.platform.pos.application.port.PosAdapter;
 import uz.horecaos.platform.pos.application.port.PosOrderSource;
 import uz.horecaos.platform.pos.domain.ExportState;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
@@ -211,6 +215,169 @@ class PosOrderExportCrossInstanceDispatchTests {
     }
 
     // ------------------------------------------------------------------ wiring
+
+    // ------------------------------- the approval poll (ADR 0002, ADR 0011 §6.4)
+
+    @Test
+    @DisplayName("a till still deciding is polled again next tick, and nothing is decided")
+    void aPendingTillIsPolledAgainAndDecidesNothing() {
+        UUID orderId = insertConfirmedOrder("A-2001");
+        FakePosAdapter adapter = new FakePosAdapter();
+        UUID exportId = exportAwaitingApproval(adapter, orderId);
+        RecordingApprovalDecisions decisions = new RecordingApprovalDecisions();
+        PosApprovalPoll poll = newPoll(adapter, decisions);
+
+        // The fake answers PENDING for an external order it was told nothing about.
+        poll.pollForDecisions();
+        poll.pollForDecisions();
+
+        assertThat(decisions.calls)
+                .as("a clerk who has not decided is not a decision")
+                .isEmpty();
+        assertThat(stillAwaiting(exportId))
+                .as("and the export stays in the poll, or the answer would never be collected")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("an approved till decides exactly once, and the export leaves the poll")
+    void anApprovedTillDecidesOnceAndStopsBeingPolled() {
+        UUID orderId = insertConfirmedOrder("A-2002");
+        FakePosAdapter adapter = new FakePosAdapter();
+        UUID exportId = exportAwaitingApproval(adapter, orderId);
+        adapter.scriptApprovalDecision(externalIdOf(exportId), PosAdapter.ApprovalRead.Decision.APPROVED);
+        RecordingApprovalDecisions decisions = new RecordingApprovalDecisions();
+        PosApprovalPoll poll = newPoll(adapter, decisions);
+
+        poll.pollForDecisions();
+
+        assertThat(decisions.calls).hasSize(1);
+        assertThat(decisions.calls.get(0).action()).isEqualTo(PosApprovalDecisionPort.Action.APPROVE);
+        assertThat(decisions.calls.get(0).providerType())
+                .as("the vendor that actually answered, carried into the actor id")
+                .isEqualTo(FakePosAdapter.PROVIDER_TYPE);
+        assertThat(stillAwaiting(exportId))
+                .as("markApprovalDecided sticks, so the till is not asked again")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a rejected till relays the rejection, and a second tick is a no-op")
+    void aRejectedTillRelaysOnceAndTheNextTickDoesNothing() {
+        UUID orderId = insertConfirmedOrder("A-2003");
+        FakePosAdapter adapter = new FakePosAdapter();
+        UUID exportId = exportAwaitingApproval(adapter, orderId);
+        adapter.scriptApprovalDecision(externalIdOf(exportId), PosAdapter.ApprovalRead.Decision.REJECTED);
+        RecordingApprovalDecisions decisions = new RecordingApprovalDecisions();
+        PosApprovalPoll poll = newPoll(adapter, decisions);
+
+        poll.pollForDecisions();
+        poll.pollForDecisions();
+
+        assertThat(decisions.calls)
+                .as("the second tick found nothing awaiting, so it asked nothing and decided nothing")
+                .hasSize(1);
+        assertThat(decisions.calls.get(0).action()).isEqualTo(PosApprovalDecisionPort.Action.REJECT);
+        assertThat(stillAwaiting(exportId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a decision id repeats for a repeated observation, so a replay is a replay")
+    void theDecisionIdIsStableAcrossARepeatedObservation() {
+        UUID orderId = insertConfirmedOrder("A-2004");
+        FakePosAdapter adapter = new FakePosAdapter();
+        UUID exportId = exportAwaitingApproval(adapter, orderId);
+        adapter.scriptApprovalDecision(externalIdOf(exportId), PosAdapter.ApprovalRead.Decision.APPROVED);
+        RecordingApprovalDecisions decisions = new RecordingApprovalDecisions();
+
+        // Two polls that both see the decision, with the "we recorded it" write
+        // undone in between — exactly the crash window the derived id exists for.
+        newPoll(adapter, decisions).pollForDecisions();
+        reopenApproval(exportId);
+        newPoll(adapter, decisions).pollForDecisions();
+
+        assertThat(decisions.calls).hasSize(2);
+        assertThat(decisions.calls.get(1).decisionId())
+                .as("the same observation yields the same id, so ordering settles it as a replay "
+                        + "rather than deciding twice")
+                .isEqualTo(decisions.calls.get(0).decisionId());
+    }
+
+    /**
+     * An export flagged for POS approval and actually sent, so it carries a real
+     * external order id — the state {@code findAwaitingPosApproval} looks for.
+     */
+    private UUID exportAwaitingApproval(FakePosAdapter adapter, UUID orderId) {
+        adapter.exportsPendApproval();
+        PosOrderExportTrigger trigger = newTrigger(adapter);
+        TransactionSynchronizationManager.initSynchronization();
+        trigger.onOrderAwaitingApproval(new OrderAwaitingApproval(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                orderId,
+                clock.instant(),
+                BRAND,
+                LOCATION,
+                "POS",
+                clock.instant().plusSeconds(600),
+                "REJECT",
+                "AWAITING_APPROVAL",
+                1));
+        commit();
+        trigger.dispatchPending();
+
+        return jdbc.sql("""
+                SELECT id FROM integration.pos_order_exports
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .single();
+    }
+
+    private String externalIdOf(UUID exportId) {
+        return jdbc.sql("SELECT external_order_id FROM integration.pos_order_exports WHERE id = :id")
+                .param("id", exportId)
+                .query(String.class)
+                .single();
+    }
+
+    /** Whether the poll would still ask about this export. */
+    private boolean stillAwaiting(UUID exportId) {
+        return jdbc.sql("""
+                SELECT requires_pos_approval AND pos_approval_decided_at IS NULL
+                  FROM integration.pos_order_exports WHERE id = :id
+                """).param("id", exportId).query(Boolean.class).single();
+    }
+
+    /**
+     * Undoes only the "we recorded that we relayed it" write, leaving the
+     * decision itself in place — the crash window between the two writes that
+     * the derived decision id exists to make safe.
+     */
+    private void reopenApproval(UUID exportId) {
+        jdbc.sql("UPDATE integration.pos_order_exports SET pos_approval_decided_at = NULL WHERE id = :id")
+                .param("id", exportId)
+                .update();
+    }
+
+    private PosApprovalPoll newPoll(FakePosAdapter adapter, RecordingApprovalDecisions decisions) {
+        return new PosApprovalPoll(new JdbcPosExportStore(jdbc), newService(adapter), decisions, clock, 50);
+    }
+
+    /** Records what the poll asked ordering to do, without deciding anything. */
+    private static final class RecordingApprovalDecisions implements PosApprovalDecisionPort {
+
+        private final List<PosApprovalDecisionPort.DecisionCommand> calls = new ArrayList<>();
+
+        @Override
+        public PosApprovalDecisionPort.Decision decide(
+                UUID tenantId, UUID orderId, PosApprovalDecisionPort.DecisionCommand command) {
+            calls.add(command);
+            return new PosApprovalDecisionPort.Decision(true, "CONFIRMED", 2, null);
+        }
+    }
 
     private PosOrderExportTrigger newTrigger(FakePosAdapter adapter) {
         PosOrderExportService service = newService(adapter);
@@ -425,6 +592,17 @@ class PosOrderExportCrossInstanceDispatchTests {
                 return Optional.empty();
             }
             return Optional.of(BINDING_REF);
+        }
+
+        /**
+         * The lookup {@code PosOrderExportService#readApprovalStatus} uses. The
+         * interface's own default answers empty, so without this override the
+         * approval poll would read nothing and decide nothing — and would do so
+         * quietly, which is exactly the shape of bug a stub causes.
+         */
+        @Override
+        public Optional<BindingRef> binding(UUID tenantId, UUID bindingId) {
+            return TENANT.equals(tenantId) && BINDING.equals(bindingId) ? Optional.of(BINDING_REF) : Optional.empty();
         }
 
         @Override

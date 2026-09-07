@@ -27,6 +27,7 @@ import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -496,7 +497,7 @@ public class OrderStateService {
                     orderId,
                     "timeout:" + orderId,
                     "APPROVE",
-                    "SYSTEM_TIMEOUT",
+                    OrderDecisionChannel.SYSTEM_TIMEOUT.name(),
                     "SYSTEM_JOB",
                     "order-approval-timeout",
                     "APPROVAL_DEADLINE_REACHED",
@@ -528,7 +529,7 @@ public class OrderStateService {
                 target,
                 version,
                 "APPROVAL_DEADLINE_REACHED",
-                "SYSTEM_TIMEOUT",
+                OrderDecisionChannel.SYSTEM_TIMEOUT.name(),
                 "SYSTEM_JOB",
                 "order-approval-timeout",
                 outcome,
