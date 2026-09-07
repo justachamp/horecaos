@@ -23,10 +23,24 @@
   plans a settlement at checkout, so `refund` refuses every real order with "The
   order has no settlement", and the planning, reserving and settling path is
   reached only from `LoyaltyLedgerAndSplitTenderTests`; `CheckoutService` still
-  does not use it. `LoyaltyAccrualService.accrue(CompletedOrder)` likewise has no
-  caller outside that test and no listener on order completion, and
-  `JdbcSettlementStore.registerMethod` has none either, so no tenant holds the
-  `LOYALTY_POINTS` registry row the checklist describes as seeded per tenant. Also not built: the campaign-driven accrual rules ADR 0044
+  does not use it. **`LoyaltyAccrualService.accrue(CompletedOrder)` now has a
+  production caller.** `loyalty.application.OrderCompletionAccrualTrigger` is a
+  `@TransactionalEventListener(phase = BEFORE_COMMIT)` on
+  `ordering.api.OrderingEvent` — the shape `notifications.application.
+  OrderNotificationTrigger` already established for `OrderConfirmed` and
+  `OrderRejected` — that turns every real `OrderCompleted` fact into an accrual
+  attempt: it reads the order's customer, channel and delivery fee from
+  `JdbcLoyaltyStore.orderFacts` (the same cross-schema read
+  `PointsRedemptionService` already makes) and what the order already
+  discharged from points from the new `JdbcLoyaltyStore.settledRedemptionMinor`
+  (V0177's index), so the accrual base is money settled net of both the fee and
+  the redeemed portion rather than the order total. Idempotent by construction
+  — `accrue` already keys its entry on `"ACCRUAL:" + orderId` — proven by
+  replaying the identical `OrderCompleted` fact three times and reading the
+  account's own balance and entry count, not merely that the call returned.
+  `JdbcSettlementStore.registerMethod` still has no caller, so no tenant holds
+  the `LOYALTY_POINTS` registry row the checklist describes as seeded per
+  tenant. Also not built: the campaign-driven accrual rules ADR 0044
   owns; expiry warning notifications; `fiscal.fiscal_document_lines`, so the
   per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR
   0014's assignment; and the tax effect on the liability report. The storefront
@@ -757,6 +771,7 @@ Balances are a liability; they are not deleted to undo a feature.
 - [x] Implement adjustment with reason codes and ADR 0027 approval thresholds, and the ADR 0015 merge path as an audited `ACCOUNT_MERGE` adjustment pair. The adjustment command takes one account and one signed amount and has no paired form, which is the whole treatment of the transfer back door.
 - [x] Implement the per-line discount allocation and the refund cap that stops a points tender refunding as money. The allocation is `loyalty.api.RedemptionAllocation`, a pure function over the quote snapshot's lines; **`fiscal.fiscal_document_lines` does not exist yet**, so nothing writes to it. The refund cap is enforced inside the reversing transaction against the tender's settled amount, and `OrderSettlementService.refund` unwinds money tenders first.
 - [ ] Extend checkout to plan, reserve, and settle ordered tenders, enforce the money-tender invariant, and carry `cash_due_minor` onto the delivery assignment. `OrderSettlementService` does the planning, the ordering, and all five invariants, and computes `cash_due_minor`; **wiring it into the ADR 0019 checkout and onto the ADR 0014 assignment is outstanding** and belongs to those modules.
+- [x] Give `LoyaltyAccrualService.accrue` a production caller. `loyalty.application.OrderCompletionAccrualTrigger` listens for `ordering.api.OrderCompleted` the same way `OrderNotificationTrigger` does, computing the accrual base from what the order actually settled in money — net of the delivery fee and of whatever a points redemption already discharged, read from a real settlement rather than assumed absent — instead of the order total. Idempotent by inheriting `accrue`'s own `"ACCRUAL:" + orderId` key; a replayed completion, delivered three times, accrues once, proven against the account's own balance. V0177 adds the index `settledRedemptionMinor` reads.
 - [ ] Build the liability report including the tax effect of redemptions, and its finance reconciliation. The per-brand outstanding and held figures are built and never pooled into one tenant number; **the tax effect of redemptions is not yet on the report**, and it is the half finance actually needs, so this stays open.
 
 ## Exit criteria
@@ -779,4 +794,6 @@ recomputing today's accrual rules.
 - [ADR 0018](../partial/0018-deterministic-pricing-promotions-taxes-and-quotes.md) — inclusive VAT, whole-som money, and the quote snapshot the receipt lines derive from.
 - [ADR 0021](../partial/0021-saas-plans-entitlements-and-usage-metering.md) — the append-only usage ledger this ledger copies.
 - [ADR 0038](../partial/0038-legal-entities-fiscal-receipts-and-product-classification.md) — the payment-method registry, `fiscal.fiscal_document_lines.discount_minor`, and one `SALE` document per settled tender.
+- [ADR 0019](../partial/0019-cart-checkout-and-order-orchestration.md) — `OrderCompleted`, the fact `OrderCompletionAccrualTrigger` listens for, and `OrderStateService`'s publish site.
+- [ADR 0032](../built/0032-event-contract-governance-and-topic-policy.md) — why `OrderCompleted` has a catalogue entry and schema before this record's trigger could consume it.
 - [Fiscalization via payment providers](../../providers/fiscalization-via-payment-providers.md) — the Click and Payme field lists that force the discount representation.
