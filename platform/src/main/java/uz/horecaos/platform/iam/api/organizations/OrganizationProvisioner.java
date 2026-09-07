@@ -46,6 +46,24 @@ public interface OrganizationProvisioner {
     /** Links an existing verified subject, or creates and invites one. */
     MembershipRef ensureMembership(EnsureMembership command);
 
+    /**
+     * Disables or re-enables the organization, which is what stands between a
+     * suspended tenant and its members still being able to sign in: Keycloak
+     * refuses authentication for every member of a disabled organization,
+     * platform-side suspension or not.
+     *
+     * <p>Idempotent by design, not merely by accident: applying the same
+     * enabled state twice is a no-op rather than a second write, because a
+     * retried suspension must never fail just because the first attempt
+     * already landed.
+     *
+     * @throws OrganizationDriftException when the organization does not
+     *         resolve — the same refusal {@link #ensureOrganization} gives a
+     *         vanished stored id, and for the same reason: a human, not a
+     *         retry, decides what a missing organization means.
+     */
+    void setOrganizationEnabled(String organizationId, boolean enabled);
+
     record EnsureOrganization(
             UUID tenantId,
             String alias,
