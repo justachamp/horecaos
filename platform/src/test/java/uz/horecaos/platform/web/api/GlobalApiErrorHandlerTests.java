@@ -2,7 +2,9 @@ package uz.horecaos.platform.web.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.http.HttpHeaders;
@@ -51,6 +53,41 @@ class GlobalApiErrorHandlerTests {
         // The converter's own message can name an internal type or property path,
         // so it must never reach the client; only a generic sentence does.
         assertThat(problem.getDetail()).doesNotContain("converter bug");
+    }
+
+    /**
+     * ADR 0006 once claimed {@code FailureOperationsService.SecondApproverRequiredException}
+     * reached the caller through no handler here at all, which would answer 500
+     * with nothing naming the approval a checker has to decide. It never actually
+     * did — the class has extended {@link ApiException} since it was written —
+     * but this class's own {@link #apiException} method, the one every {@code
+     * ApiException} subtype including that one is routed through, had no direct
+     * test of its own until now, unlike every other handler method in this class.
+     * A generic {@code ApiException} carrying {@link ErrorCode#SECOND_APPROVER_REQUIRED}
+     * stands in for the real exception here rather than constructing it directly:
+     * its constructor is package-private to {@code integration.failures}, and this
+     * method's contract is generic over every {@code ApiException} subtype, not
+     * specific to that one.
+     */
+    @Test
+    void apiExceptionAnswersWithItsOwnRegisteredStatusAndCodeRatherThanACrash() {
+        UUID approvalRequestId = UUID.randomUUID();
+        ApiException exception = new ApiException(
+                ErrorCode.SECOND_APPROVER_REQUIRED,
+                "Resolving this failure requires a second approver. Approval request "
+                        + approvalRequestId + " is pending.",
+                Map.of("approvalRequestId", approvalRequestId.toString(), "approvalStatus", "PENDING"));
+
+        ProblemDetail problem = handler.apiException(exception);
+
+        assertThat(problem.getStatus())
+                .as("recorded and waiting for a checker is not a server crash")
+                .isEqualTo(422);
+        assertThat(problem.getProperties())
+                .as("the stable code a client branches on (ADR 0031), naming which state this is")
+                .containsEntry("code", "SECOND_APPROVER_REQUIRED")
+                .as("and which request a checker has to decide")
+                .containsEntry("approvalRequestId", approvalRequestId.toString());
     }
 
     @Test

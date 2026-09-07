@@ -33,17 +33,31 @@
   consumer holds its own decision; an id outside the tenant the caller narrowed
   to answers 404 with a body byte-identical to an id that exists nowhere, so the
   pair of statuses is not an enumeration oracle; and both runbooks now send an
-  operator to those reads rather than to `psql`. Not built: the dashboard, which
-  ADR 0023 owns and deliberately replaced with a probe;
-  `SecondApproverRequiredException` still has no entry in the ADR 0031 error
-  handler, so a resolve that a policy sends to the maker-checker answers 500
-  instead of a problem document naming the approval being waited on — the
-  refusal is correct and nothing is resolved, but the operator is told nothing;
-  and `last_error`, returned by both the list and the single read, is the one
-  projected field ADR 0029 does not actually guarantee, being the exception
-  class plus its message, bounded and stack-trace-free but unclassified.
-  Classifying it belongs to `OutboxRelay` and `InboxExecutor`, where it is
-  written.
+  operator to those reads rather than to `psql`. This record previously claimed
+  `SecondApproverRequiredException` had no entry in the ADR 0031 error handler
+  and so answered 500 — that was never accurate: the class has extended
+  `ApiException` since it was written, and `GlobalApiErrorHandler`'s generic
+  `ApiException` handler has always caught every subtype of it. What was
+  missing was a code specific enough to act on: it carried the same
+  `UNPROCESSABLE_STATE` this platform reuses for dozens of unrelated "current
+  state refuses this, stop" failures, which cannot be told apart from "wait,
+  a checker is deciding this" by `code` alone — the field ADR 0031 says a
+  client branches on. It now carries its own `ErrorCode.SECOND_APPROVER_REQUIRED`
+  (still 422), and `FailureResolutionEndpointTests` proves the real claim
+  through an actual `MockMvc` round trip: a resolve a policy sends to the
+  maker-checker answers a problem document naming the pending approval request,
+  not a crash. `FailureClassifier` now exists and both `OutboxRelay` and
+  `InboxExecutor` call it on every failed attempt, before the exception is
+  flattened to the free-text `last_error` a dead-letter row also carries — so
+  `error_code`, returned by both the list and the single read, is a `FailureCategory`
+  the platform is confident about or the honest `UNKNOWN`, never a guess, and
+  `MessagingBacklogMetrics`'s outbox dead-letter gauge reports it instead of the
+  `"unclassified"` label every outbox row carried before this record's
+  `FailureClassifier` existed. `last_error` itself remains the one projected
+  field ADR 0029 does not actually guarantee: the exception class plus its
+  message, bounded and stack-trace-free, but free text rather than a
+  classification. Not built: the dashboard, which ADR 0023 owns and
+  deliberately replaced with a probe.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), operations
@@ -300,7 +314,7 @@ records and dashboards. Never delete dead-letter evidence during rollback.
 ## Implementation checklist
 
 - [x] Add `RESOLVED` lifecycle support to both the outbox and the inbox (`V0010`).
-- [x] Implement the shared failure classification (`FailureCategory`).
+- [x] Implement the shared failure classification (`FailureCategory`). — `FailureClassifier` assigns it from the failed attempt's exception type alone, never its message (ADR 0029), and `OutboxRelay` and `InboxExecutor` both call it before dead-lettering or scheduling a retry; `MessagingBacklogMetrics`'s outbox dead-letter gauge reports the real category rather than the `"unclassified"` placeholder it carried before this existed.
 - [x] Implement retry workers with jitter, leases, and aggregate blockers. — `RetryBackoff` (equal jitter, injectable random source) is used by `OutboxRelay` and `InboxExecutor`; `InboxRetryWorker` re-drives due and lease-expired inbox rows; `JdbcInboxStore.hasEarlierUnresolvedForAggregate` is now called before every processing lease and parks the later event without spending its retry budget. The outbox has had its per-partition-key blocker in `claimBatch` since `V0008`.
 - [x] Add control-plane read, retry, and resolve endpoints behind ADR 0025 capabilities.
       — All eight in the Replay governance list exist, including the two

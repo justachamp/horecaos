@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.failures;
 import jakarta.validation.ValidationException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -118,8 +119,23 @@ public final class FailureClassifier {
         return cause instanceof ValidationException || cause instanceof IllegalArgumentException;
     }
 
+    /**
+     * Sees through the two wrappers a concurrency boundary adds and no others.
+     *
+     * <p>{@link ExecutionException} and {@link CompletionException} both exist
+     * only to carry another throwable across a {@code Future} boundary, so the
+     * failure that matters is always their cause — a provider timeout surfacing
+     * through a {@code CompletableFuture} is a timeout, and classifying it by
+     * the wrapper would make every async provider call permanent.
+     *
+     * <p>Deliberately not a general walk of the cause chain. A permanent failure
+     * whose cause happens to be a timeout somewhere underneath is still
+     * permanent, and a classifier that dug for the most convenient cause would
+     * retry things that will never succeed.
+     */
     private static Throwable unwrap(Throwable failure) {
-        if (failure instanceof ExecutionException && failure.getCause() != null) {
+        if ((failure instanceof ExecutionException || failure instanceof CompletionException)
+                && failure.getCause() != null) {
             return failure.getCause();
         }
         return failure;

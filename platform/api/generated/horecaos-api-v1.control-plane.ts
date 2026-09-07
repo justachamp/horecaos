@@ -726,7 +726,7 @@ export interface FailureOperationsControllerReasonRequest {
 }
 
 export interface FailureOperationsControllerResolveRequest {
-  category: "TRANSIENT_INFRASTRUCTURE" | "TRANSIENT_PROVIDER" | "CONTRACT_UNSUPPORTED" | "PAYLOAD_INVALID" | "DOMAIN_REJECTED" | "AUTHORIZATION_REJECTED" | "UNCERTAIN_EXTERNAL_OUTCOME";
+  category: "TRANSIENT_INFRASTRUCTURE" | "TRANSIENT_PROVIDER" | "CONTRACT_UNSUPPORTED" | "PAYLOAD_INVALID" | "DOMAIN_REJECTED" | "AUTHORIZATION_REJECTED" | "UNCERTAIN_EXTERNAL_OUTCOME" | "UNKNOWN";
   evidenceReference?: string;
   reason: string;
 }

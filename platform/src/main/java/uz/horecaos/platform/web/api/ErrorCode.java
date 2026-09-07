@@ -94,6 +94,24 @@ public enum ErrorCode {
      */
     UNPROCESSABLE_STATE(HttpStatus.UNPROCESSABLE_ENTITY, "Unprocessable in the current state"),
 
+    /**
+     * ADR 0027: the action was recorded, not refused — resolving it requires a
+     * second approver, and the maker-checker request that approver will decide
+     * already exists. The response names it, under {@code approvalRequestId}.
+     *
+     * <p>Deliberately distinct from {@link #UNPROCESSABLE_STATE}, which this
+     * platform otherwise reuses across dozens of unrelated "well-formed request,
+     * current state refuses it" call sites. Those all share one remediation: stop,
+     * there is nothing to wait for. This is the opposite state, and a client
+     * cannot tell the two apart without this code: wait or poll
+     * {@code approvalRequestId}, because a checker deciding it is what makes the
+     * action possible. Also distinct from {@link #APPROVAL_POLICY_REQUIRED}: that
+     * one means no policy exists for an operator to configure before anything can
+     * run; this one means a policy exists, fired, and produced a specific pending
+     * or declined request.
+     */
+    SECOND_APPROVER_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Second approver required"),
+
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
     /**

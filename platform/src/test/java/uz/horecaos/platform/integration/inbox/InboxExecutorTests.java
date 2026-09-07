@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -388,7 +389,13 @@ class InboxExecutorTests {
      */
     @Test
     void aHandlerFailureOfAKnownTransientShapeIsClassifiedInTheDatabase() {
-        handler.failNextWith(new java.util.concurrent.TimeoutException("simulated provider timeout"));
+        // A CompletionException carrying the timeout: the shape a provider call
+        // through a CompletableFuture actually produces, and unchecked, which a
+        // handler's signature requires. FailureClassifier#unwrap sees through
+        // exactly this wrapper and no other, so the test exercises that path
+        // rather than side-stepping it with a bare unchecked exception.
+        handler.failNextWith(new java.util.concurrent.CompletionException(
+                new java.util.concurrent.TimeoutException("read timed out")));
         UUID eventId = UUID.randomUUID();
 
         assertThat(offer(eventId, "first", 0)).isEqualTo(InboxResult.RETRY_SCHEDULED);
@@ -517,7 +524,7 @@ class InboxExecutorTests {
         private final JdbcClient jdbc;
         private final String consumerName;
         private final List<UUID> handled = new java.util.concurrent.CopyOnWriteArrayList<>();
-        private volatile RuntimeException nextFailure;
+        private volatile @Nullable RuntimeException nextFailure;
 
         private RecordingHandler(JdbcClient jdbc) {
             this(jdbc, CONSUMER);
