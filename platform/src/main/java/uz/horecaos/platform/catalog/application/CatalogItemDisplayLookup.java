@@ -20,4 +20,9 @@ public class CatalogItemDisplayLookup implements ItemDisplayLookup {
     public Optional<String> displayName(UUID tenantId, UUID variantId) {
         return store.productNameFor(tenantId, variantId);
     }
+
+    @Override
+    public java.util.Map<UUID, String> displayNames(UUID tenantId, java.util.Set<UUID> variantIds) {
+        return store.productNamesFor(tenantId, variantIds);
+    }
 }

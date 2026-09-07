@@ -1,6 +1,8 @@
 package uz.horecaos.platform.catalog.api;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -23,4 +25,15 @@ public interface ItemDisplayLookup {
      *         product carries no translation in any locale
      */
     Optional<String> displayName(UUID tenantId, UUID variantId);
+
+    /**
+     * The same answer for a set of variants, in one query rather than one each.
+     *
+     * <p>A caller naming a basket rather than an item must use this: asking the
+     * singular form in a loop is an N+1 on a path a customer is waiting on.
+     *
+     * @return a name per variant that resolved; absent means the same thing
+     *         {@link #displayName} means by empty
+     */
+    Map<UUID, String> displayNames(UUID tenantId, Set<UUID> variantIds);
 }
