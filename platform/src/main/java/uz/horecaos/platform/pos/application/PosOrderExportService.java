@@ -289,6 +289,16 @@ public class PosOrderExportService {
                 outcome.detail(),
                 clock.instant());
 
+        if (next == ExportState.ACCEPTED && result.approvalPending()) {
+            // The till is a genuine authority for this order and was asked to
+            // decide, not merely told about a decision already made (ADR 0002,
+            // ADR 0011 §6.4) — see OrderExport#requireProviderApproval on
+            // #prepare. Flagged after the settle above, on purpose: by the time
+            // this line runs the row is already ACCEPTED with its
+            // external_order_id, which is the poll's own precondition.
+            exports.markRequiresPosApproval(tenantId, exportId);
+        }
+
         if (next == ExportState.UNCERTAIN) {
             // Logged at warn because somebody has to look at it, and without a
             // customer identifier of any kind: ADR 0029 keeps an order's contact

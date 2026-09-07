@@ -396,12 +396,98 @@ public class JdbcPosExportStore {
                 .list();
     }
 
+    /**
+     * Flags an export as one the till was asked to decide on, not merely told
+     * about (V0179, ADR 0002, ADR 0011 §6.4).
+     *
+     * <p>Called once, right after a successful send whose {@code
+     * ExportResult#approvalPending} came back true — never conditional on the
+     * export's state the way {@link #settle} is, because by the time a caller
+     * knows {@code approvalPending} the send has already settled the row to
+     * {@code ACCEPTED} in the same call, and re-deriving that state here would
+     * be a second place the two facts could disagree.
+     */
+    public void markRequiresPosApproval(UUID tenantId, UUID exportId) {
+        jdbc.sql("""
+                UPDATE integration.pos_order_exports
+                   SET requires_pos_approval = true, updated_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", exportId)
+                .update();
+    }
+
+    /**
+     * Exports the till still owes a clerk's decision on — flagged by {@link
+     * #markRequiresPosApproval}, landed at the provider, and not yet decided
+     * (V0179).
+     *
+     * <p>Cross-tenant, like {@link #findStalePending}: a poll scheduler asks
+     * once for every tenant's due rows rather than once per tenant, and for the
+     * same reason that method gives — nothing here is a claim, so two ticks
+     * finding the same row both poll the provider and both land on {@code
+     * OrderStateService.decide}'s own decisionId dedup, which is where the
+     * actual safety against deciding twice lives.
+     */
+    public List<PendingApproval> findAwaitingPosApproval(int limit) {
+        return jdbc.sql("""
+                SELECT tenant_id, id, order_id, binding_id, external_order_id
+                  FROM integration.pos_order_exports
+                 WHERE requires_pos_approval AND pos_approval_decided_at IS NULL
+                   AND state = 'ACCEPTED' AND external_order_id IS NOT NULL
+                 ORDER BY requested_at
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((row, number) -> new PendingApproval(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        row.getObject("binding_id", UUID.class),
+                        row.getString("external_order_id")))
+                .list();
+    }
+
+    /**
+     * Records that a clerk's decision was discovered and relayed, so the poll
+     * stops asking (V0179).
+     *
+     * <p>Conditional on {@code pos_approval_decided_at IS NULL} rather than
+     * unconditional, so a delayed second tick that already found — and
+     * already relayed — the same decision leaves the first tick's timestamp
+     * standing rather than overwriting it with a later one.
+     *
+     * @return false when another tick already recorded this export's decision
+     */
+    public boolean markApprovalDecided(UUID tenantId, UUID exportId, Instant now) {
+        return jdbc.sql("""
+                UPDATE integration.pos_order_exports
+                   SET pos_approval_decided_at = :now, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND pos_approval_decided_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", exportId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update()
+                == 1;
+    }
+
     private static @Nullable Instant toInstant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
     /** One PENDING export a sweep found, past its staleness threshold. */
     public record StaleExport(UUID tenantId, UUID exportId) {}
+
+    /**
+     * One export the approval poll should ask the till about (V0179).
+     *
+     * @param externalOrderId the provider's own id for the order, named by a
+     *                        successful send — never null here, because {@link
+     *                        #findAwaitingPosApproval} excludes any row without one
+     */
+    public record PendingApproval(UUID tenantId, UUID exportId, UUID orderId, UUID bindingId, String externalOrderId) {}
 
     public record NewExport(
             UUID id,
