@@ -191,7 +191,8 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
                 })
                 .body(SINGLE);
         if (current == null) {
-            throw new OrganizationDriftException("Organization %s does not exist in Keycloak".formatted(organizationId));
+            throw new OrganizationDriftException(
+                    "Organization %s does not exist in Keycloak".formatted(organizationId));
         }
 
         // Idempotent by inspection, not by accident: a retried suspension (or a

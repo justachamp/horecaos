@@ -318,15 +318,31 @@ class KeycloakOrganizationIntegrationTests {
     }
 
     /**
-     * ADR 0009's gap with the security consequence: a tenant suspended in the
-     * platform must not leave its people still able to sign in. Proven end to
-     * end with a real password grant rather than an inspection of the
-     * organization's {@code enabled} flag, because "the flag flipped" and
-     * "Keycloak actually refuses the login" are two different claims and only
-     * the second is the property suspension exists for.
+     * The finding that overturned this record's own assumption. The first
+     * version of this test asserted the opposite of what is proven below —
+     * that Keycloak refuses the direct grant for a member of a disabled
+     * organization — on the strength of the ADR's prose, never checked
+     * against a real realm. It failed the very first time it ran for real:
+     * {@code TokenOutcome.Issued}, not {@code Refused}. Verified 2026-09-08
+     * against a live Keycloak 26.7.0 by hand (create org, add member, sign in,
+     * disable, sign in again) to rule out a test-harness bug before believing
+     * a security assumption was wrong — same token, same result.
+     *
+     * <p>So: disabling a Keycloak organization is not an authentication
+     * control. {@code setOrganizationEnabled} exists to keep the stored
+     * {@code enabled} flag consistent with tenant status — so {@code
+     * IdentityDriftReporter}'s {@code ORGANIZATION_DISABLED} comparison has
+     * something correct to compare against, and an operator reading Keycloak
+     * directly sees a state that matches the tenant record — never to gate
+     * sign-in by itself. Denying a suspended tenant's people access to tenant
+     * resources is, and must stay, {@code TenantAccessPolicy}'s job through
+     * real {@code iam.grants} capabilities: "authentication success alone
+     * never authorizes a domain operation" (AGENTS.md) covers exactly this
+     * case, and this test is the reason that sentence cannot be treated as
+     * satisfied by flipping this flag.
      */
     @Test
-    void disablingAnOrganizationPreventsAuthenticationAndReEnablingRestoresIt() {
+    void disablingAnOrganizationDoesNotByItselfBlockDirectGrantAuthentication() {
         UUID tenantId = UUID.randomUUID();
         var organization = provisioner.ensureOrganization(
                 new OrganizationProvisioner.EnsureOrganization(tenantId, alias, "Acme", null));
@@ -345,19 +361,17 @@ class KeycloakOrganizationIntegrationTests {
 
         provisioner.setOrganizationEnabled(organization.organizationId(), false);
         assertThat(directory.getOrganization(organization.organizationId()))
-                .as("the read side must see the same disabled state provisioning just wrote")
+                .as("the read side must see the same disabled state provisioning just wrote -- "
+                        + "the flag itself is real and reconciled, even though it does not gate sign-in")
                 .get()
                 .extracting(OrganizationProvisioner.OrganizationSnapshot::enabled)
                 .isEqualTo(false);
 
         assertThat(staffLogin.signIn(email, password))
-                .as("Keycloak must refuse authentication for a member of a disabled organization -- "
-                        + "this is the entire reason tenant suspension calls this method")
-                .isEqualTo(TokenOutcome.refused(TokenOutcome.FailureReason.INVALID_CREDENTIALS));
-
-        provisioner.setOrganizationEnabled(organization.organizationId(), true);
-        assertThat(staffLogin.signIn(email, password))
-                .as("re-enabling must restore authentication, not merely flip the flag back")
+                .as("documented, verified fact, not an endorsement: Keycloak 26.7's resource-owner "
+                        + "password grant does not consult organization membership or its enabled state, "
+                        + "so a disabled organization's member still signs in. A suspended tenant's access "
+                        + "must be denied by TenantAccessPolicy, not by this flag")
                 .isInstanceOf(TokenOutcome.Issued.class);
     }
 
