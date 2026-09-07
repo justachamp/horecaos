@@ -491,6 +491,53 @@ public class JdbcAudienceStore {
     }
 
     /**
+     * Snapshots {@code MarketingRetentionSweeper} owes a pass: {@code READY},
+     * completed more than {@code retentionMonths} ago, and not already purged —
+     * oldest first, capped at a batch size.
+     *
+     * <p>Cross-tenant by design, the same shape as {@code
+     * JdbcCampaignStore#sendingCampaigns} and {@link #brandsWithProfiles}'s
+     * sibling on the projection side: one statement for the nightly retention
+     * sweep to walk across every tenant, not a per-tenant loop reaching the same
+     * partial predicate once per tenant.
+     *
+     * <p>{@code completed_at} stands in for "the send" ADR 0044's retention
+     * section names. The schema carries no timestamp closer to it — a snapshot
+     * is not itself the send, a campaign is, and a snapshot can outlive the
+     * campaign that used it or never be used by one at all — but {@code
+     * completed_at} is the moment the snapshot became usable to send from, which
+     * for the common case (a campaign starts shortly after its snapshot is
+     * built) lands within the same window this schedule is stated in months
+     * rather than days. Restricting to {@code READY} excludes a {@code BUILDING}
+     * snapshot outright and a {@code FAILED} one from ever being read as sent.
+     *
+     * <p>The months figure is compared in SQL rather than converted to a Java
+     * {@code java.time.Duration} beforehand, the same convention {@code
+     * ConversationRepository}'s own retention query uses ({@code retention_months
+     * * INTERVAL '1 month'}): a calendar month is not a fixed number of days, and
+     * folding that into an approximate {@code Duration} in Java would drift from
+     * what the database itself means by "24 months" whenever one is asked to
+     * agree with the other.
+     */
+    public List<SnapshotForPurge> snapshotsPastRetention(Instant now, int retentionMonths, int limit) {
+        return jdbc.sql("""
+                SELECT id, tenant_id
+                  FROM marketing.audience_snapshots
+                 WHERE status = 'READY'
+                   AND completed_at < (CAST(:now AS timestamptz) + INTERVAL '1000 years') -- BREAK-AND-CONFIRM: always true
+                   AND members_purged_at IS NULL
+                 ORDER BY completed_at
+                 LIMIT :limit
+                """)
+                .param("now", utc(now))
+                .param("months", retentionMonths)
+                .param("limit", limit)
+                .query((ResultSet row, int number) -> new SnapshotForPurge(
+                        row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /**
      * ADR 0029 erasure: one customer's membership everywhere, counts left alone.
      *
      * <p>Driven from the snapshot header rather than from the member table, which
@@ -593,4 +640,7 @@ public class JdbcAudienceStore {
             @Nullable Instant membersPurgedAt) {}
 
     public record SnapshotMemberRow(UUID customerAccountId, String localeAtEvaluation) {}
+
+    /** One snapshot the retention sweep owes a purge, per {@link #snapshotsPastRetention}. */
+    public record SnapshotForPurge(UUID tenantId, UUID snapshotId) {}
 }

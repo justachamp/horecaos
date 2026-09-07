@@ -119,9 +119,27 @@ public class SchedulingConfiguration {
      * {@code InventoryService.expireStaleReservations} implemented but that
      * nothing had ever called — a hold on abandoned stock used to outlive its
      * own TTL until an unrelated request happened to re-reserve the same
-     * quote, which for an abandoned cart is never.
+     * quote, which for an abandoned cart is never. Wave 68 added two more,
+     * closing the same gap ADR 0044 named for its own module: {@code
+     * CustomerMetricProjectionSweeper.sweepOnce}, the runner the five-minute
+     * projection staleness budget never had, and {@code
+     * MarketingRetentionSweeper.sweepOnce}, enforcing the twenty-four-month
+     * audience-snapshot-membership window {@code JdbcAudienceStore.purgeMembers}
+     * could already perform but nothing had ever called outside a test. ADR
+     * 0044's third named gap, the ADR 0029 erasure path, is deliberately
+     * <b>not</b> among these: {@code CustomerMetricProjectionService.erase} and
+     * {@code JdbcAudienceStore.eraseMembership} exist and are tested, but
+     * nothing in the platform ever produces the fact "this customer asked to be
+     * erased" — no request table, no endpoint, no status transition sets {@code
+     * customer.accounts.status = 'ANONYMIZED'} — so there is no worklist for a
+     * sweep to read. ADR 0029 says as much itself: "no data-subject export,
+     * correction, anonymisation, retention, legal-hold or proof operation
+     * exists anywhere — there is no privacy endpoint, service or table."
+     * Scheduling a sweep with nothing to find would look like the erasure
+     * obligation was met; it would not be, so it stays unscheduled and is
+     * recorded as a gap instead.
      */
-    static final int DEFAULT_POOL_SIZE = 43;
+    static final int DEFAULT_POOL_SIZE = 45;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

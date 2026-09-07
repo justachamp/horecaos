@@ -24,10 +24,41 @@
   blocked-recipient counter so it measures the resumed run, and reports how many
   messages the pause suppressed with `CAMPAIGN_NOT_SENDING` — which are not
   retried — covered by `CampaignBroadcastIntegrationTest`,
-  `MarketingCampaignTests` and `OperationsMarketingResumeEndpointTests`. Nothing schedules the
-  projection sweep, the retention jobs or the erasure path either — the
-  expansion scheduler is the module's only `@Scheduled` method, so the
-  five-minute staleness budget still has no runner. Also not built: the
+  `MarketingCampaignTests` and `OperationsMarketingResumeEndpointTests`. Two more
+  `@Scheduled` methods run now (wave 68). `CustomerMetricProjectionSweeper` calls
+  `CustomerMetricProjectionService.sweep` for every brand
+  `JdbcCustomerMetricStore.brandsWithProfiles` returns, every four minutes —
+  inside this record's own five-minute p99 staleness figure rather than equal to
+  it, since the budget is measured between two sweeps finishing — so the
+  drift-then-recompute sweep, which used to have exactly one caller and that
+  caller was a test, now actually runs. `MarketingRetentionSweeper` calls
+  `JdbcAudienceStore.purgeMembers` for every snapshot
+  `JdbcAudienceStore.snapshotsPastRetention` (V0176's own partial index) reports
+  `READY`, past the twenty-four-month window, and not yet purged, hourly. Of the
+  other windows this record's Retention section states, none needed a job:
+  suppression's twelve-month `HARD_BOUNCE`/`INVALID_NUMBER` expiry is already
+  self-enforcing — `JdbcEngagementStore` stamps `expires_at` at write time and
+  every read that decides "is this suppression active" filters on it — and
+  trigger firing rows, coded benefit grants, and review free text have no rows to
+  age out because triggers, the coded grant, and reviews are all still unbuilt,
+  named below. Both new sweepers are covered end to end by
+  `CustomerMetricProjectionSweeperTests` and `MarketingRetentionSweeperTests`
+  against a real PostgreSQL and a clock genuinely advanced past, and separately
+  held short of, each threshold, including cross-tenant cases. **The ADR 0029
+  erasure path is deliberately left unscheduled.** `CustomerMetricProjectionService.erase`
+  and `JdbcAudienceStore.eraseMembership` exist and are tested
+  (`MarketingCampaignTests`), but nothing in the platform ever produces the fact
+  an erasure sweep would need to consume: there is no data-subject erasure
+  request table, endpoint, or account-status transition anywhere in this
+  codebase. ADR 0029 says so of its own implementation status — "no
+  data-subject export, correction, anonymisation, retention, legal-hold or proof
+  operation exists anywhere — there is no privacy endpoint, service or table" —
+  and nothing ever sets `customer.accounts.status = 'ANONYMIZED'` today, though
+  the column accepts it. A sweep built against a worklist that is always empty
+  would read as the erasure obligation being met when it is not, which is worse
+  than the gap being visible, so this stays a manual, tested operation — callable
+  once ADR 0029's own request mechanism exists to call it — rather than a
+  scheduled one that would run and find nothing, forever. Also not built: the
   four triggers and coded grant minting (`pricing.benefit_grants` does not exist),
   merchandising slots, attribution links, referral edges, reviews, the incremental
   inbox fold behind the projection, and the legacy `ratings` migration. The quiet
@@ -752,10 +783,18 @@ payments, for the same reason.
       three are independent of the send path and can ship in parallel, as the
       rollout section says.
 - [~] Implement the retention jobs and the ADR 0029 erasure path that preserves
-      campaign aggregates. The operations exist and are tested — snapshot
-      membership purges while the header, its counts, and the per-recipient reasons
-      survive, and an erasure removes the projection row and the membership while
-      leaving campaign counts and spend intact — but **nothing schedules them yet**.
+      campaign aggregates. Snapshot-membership retention is now scheduled
+      (`MarketingRetentionSweeper`, wave 68): the header, its counts, and the
+      per-recipient reasons survive a purge while the membership list goes at
+      twenty-four months. The erasure operations — `CustomerMetricProjectionService.erase`
+      and `JdbcAudienceStore.eraseMembership`, which remove the projection row
+      and the snapshot membership while leaving campaign counts and spend
+      intact — exist and are tested but are **still not scheduled, and cannot
+      honestly be**: no data-subject erasure request exists anywhere in this
+      platform for a sweep to read (ADR 0029's own status line says the same —
+      "no privacy endpoint, service or table"). This gates on ADR 0029's
+      erasure-request mechanism landing, not on marketing's own operations,
+      which are already correct and waiting.
 - [ ] Migrate legacy `ratings` as `CLOSED` reviews; migrate nothing from the
       `offer_*` tables, and confirm with each merchant before cutover that the
       migrated base carries no marketing consent. **Not built**, and it follows
