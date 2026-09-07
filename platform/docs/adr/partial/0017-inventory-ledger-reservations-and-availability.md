@@ -9,12 +9,32 @@
   ledger and sequence numbers), `InventoryController` exposes stock-item
   creation, availability set and availability read under `inventory.adjust` /
   `inventory.read`, and ordering actually calls the port
-  (`CheckoutService`, `OrderInventoryProcess`). Not built: QUANTITY tracking —
-  it throws `UnsupportedTrackingModeException`; the durable expiry lease —
-  `expireStaleReservations` has no caller and no `@Scheduled` job, so holds
-  expire only lazily when the same quote is re-reserved; the POS inventory apply;
-  any outbox event; reconciliation tooling; and there is no inventory test class
-  at all.
+  (`CheckoutService`, `OrderInventoryProcess`). `expireStaleReservations` is now
+  wired to `InventoryReservationSweeper`, a `@Scheduled` job in the
+  `LoyaltySweeper` genre (two-minute interval, log-and-continue, an
+  `horecaos.inventory.sweeper.enabled` switch), so an abandoned hold no longer
+  waits on the same quote being re-reserved to notice it lapsed. Multi-instance
+  safety is the simpler alternative this ADR's own "Expiration and restart
+  safety" section did not anticipate rather than a lease table: the sweep is
+  one idempotent, conditional `UPDATE ... WHERE status = 'HELD' AND expires_at
+  <= now`, safe under concurrent callers by construction, needing no due-time/
+  lease-owner/attempt-count row because there is no claim to leak. One outbox
+  event is now published — `InventoryAvailabilityChanged` on `inventory.events`,
+  written in the same `BEFORE_COMMIT` transaction as the toggle via
+  `InventoryOutboxEventListener`, catalogued in `EventCatalog` and
+  `docs/domains/events.md`. Not built: QUANTITY tracking — it throws
+  `UnsupportedTrackingModeException`; the six other ADR-named events
+  (`InventoryPositionChanged`, `InventoryReserved`,
+  `InventoryReservationCommitted`, `InventoryReservationReleased`,
+  `InventoryReservationExpired`, `InventoryReconciliationRequired`) — their
+  payload shape is not yet decided and none has a producer; the POS inventory
+  apply; and reconciliation tooling. `InventoryReservationAndAvailabilityTests`
+  now covers the hold lifecycle (commit, release, TTL-based sweep with a
+  mutable clock, a still-live hold surviving the sweep), both availability
+  refusals, and — complementing `RowLevelSecurityBackstopTests`'s proof that
+  the platform-bypass sweep reaches every tenant — the converse property, that
+  a sweep bound to one tenant alone cannot reach another's row. Concurrency and
+  production-scale race tests remain unbuilt.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
@@ -101,8 +121,9 @@ commit cannot undo it.
 outliving its quote would keep stock back for a price nobody can still accept.
 
 Not yet built: quantity tracking and its ledger reconciliation, POS observations,
-waste and correction flows, and the scheduled sweep that expires abandoned holds
-— `expireStaleReservations` exists and has no scheduler yet.
+and waste and correction flows. The scheduled sweep that expires abandoned
+holds is built — `InventoryReservationSweeper` calls `expireStaleReservations`
+every two minutes.
 
 ## Physical model
 
