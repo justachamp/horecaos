@@ -46,6 +46,40 @@ public interface OrganizationProvisioner {
     /** Links an existing verified subject, or creates and invites one. */
     MembershipRef ensureMembership(EnsureMembership command);
 
+    /**
+     * Disables or re-enables the organization's stored {@code enabled} flag.
+     *
+     * <p><strong>Not an authentication control.</strong> An earlier version of
+     * this javadoc claimed the opposite — that Keycloak refuses authentication
+     * for every member of a disabled organization — on the strength of this
+     * ADR's prose, never checked against a real realm. Verified 2026-09-08
+     * against a live Keycloak 26.7.0: a member of a disabled organization
+     * still completes the resource-owner password grant and receives a valid
+     * token. See {@code
+     * disablingAnOrganizationDoesNotByItselfBlockDirectGrantAuthentication} in
+     * {@code KeycloakOrganizationIntegrationTests} for the proof. Denying a
+     * suspended tenant's people access to tenant resources is, and must stay,
+     * {@code TenantAccessPolicy}'s job through real {@code iam.grants}
+     * capabilities — authentication success alone never authorizes a domain
+     * operation.
+     *
+     * <p>What this method is for: keeping the stored flag consistent with
+     * tenant status, so the drift reporter's {@code ORGANIZATION_DISABLED}
+     * comparison has something correct to compare against and an operator
+     * reading Keycloak directly sees a state that matches the tenant record.
+     *
+     * <p>Idempotent by design, not merely by accident: applying the same
+     * enabled state twice is a no-op rather than a second write, because a
+     * retried call must never fail just because the first attempt already
+     * landed.
+     *
+     * @throws OrganizationDriftException when the organization does not
+     *         resolve — the same refusal {@link #ensureOrganization} gives a
+     *         vanished stored id, and for the same reason: a human, not a
+     *         retry, decides what a missing organization means.
+     */
+    void setOrganizationEnabled(String organizationId, boolean enabled);
+
     record EnsureOrganization(
             UUID tenantId,
             String alias,

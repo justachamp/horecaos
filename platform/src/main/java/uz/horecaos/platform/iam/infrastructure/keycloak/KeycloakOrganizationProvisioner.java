@@ -180,6 +180,47 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
         return new MembershipRef(command.organizationId(), subjectId, created);
     }
 
+    @Override
+    public void setOrganizationEnabled(String organizationId, boolean enabled) {
+        Map<String, Object> current = client.get()
+                .uri("/admin/realms/{realm}/organizations/{id}", realm, organizationId)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new OrganizationDriftException(
+                            "Organization %s does not exist in Keycloak".formatted(organizationId));
+                })
+                .body(SINGLE);
+        if (current == null) {
+            throw new OrganizationDriftException(
+                    "Organization %s does not exist in Keycloak".formatted(organizationId));
+        }
+
+        // Idempotent by inspection, not by accident: a retried suspension (or a
+        // retried re-activation) must land as a no-op, never as a second write
+        // Keycloak has no reason to refuse but that would still cost a round
+        // trip on every retry of an already-applied disable.
+        boolean currentlyEnabled = !Boolean.FALSE.equals(current.get("enabled"));
+        if (currentlyEnabled == enabled) {
+            return;
+        }
+
+        // PUT replaces the whole representation, so the fetched body is echoed
+        // back with only "enabled" changed — never a hand-built one that would
+        // silently drop alias, name, or domains on the next admin console read.
+        Map<String, Object> updated = new java.util.LinkedHashMap<>(current);
+        updated.put("enabled", enabled);
+        client.put()
+                .uri("/admin/realms/{realm}/organizations/{id}", realm, organizationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(updated)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new OrganizationDriftException("Setting organization %s enabled=%s failed with %s"
+                            .formatted(organizationId, enabled, response.getStatusCode()));
+                })
+                .toBodilessEntity();
+    }
+
     private boolean isMember(String organizationId, String subjectId) {
         List<Map<String, Object>> members = client.get()
                 .uri("/admin/realms/{realm}/organizations/{org}/members", realm, organizationId)
@@ -203,5 +244,8 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
     }
 
     private static final org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>> LIST =
+            new org.springframework.core.ParameterizedTypeReference<>() {};
+
+    private static final org.springframework.core.ParameterizedTypeReference<Map<String, Object>> SINGLE =
             new org.springframework.core.ParameterizedTypeReference<>() {};
 }

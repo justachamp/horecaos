@@ -504,6 +504,11 @@ class OnboardingFullRunIntegrationTests {
         public MembershipRef ensureMembership(EnsureMembership command) {
             return new MembershipRef(command.organizationId(), "owner-subject-1", true);
         }
+
+        @Override
+        public void setOrganizationEnabled(String organizationId, boolean enabled) {
+            // Not exercised by the onboarding run this fake supports.
+        }
     }
 
     // ------------------------------------------------------------------------------ fixtures
