@@ -1562,6 +1562,7 @@ public class JdbcLoyaltyStore {
     public record OrderFacts(
             UUID brandId,
             UUID customerAccountId,
+            UUID channelId,
             String channelCode,
             String currency,
             long totalMinor,
@@ -1569,8 +1570,8 @@ public class JdbcLoyaltyStore {
 
     public Optional<OrderFacts> orderFacts(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                SELECT brand_id, customer_account_id, channel_code_snapshot, currency,
-                       total_minor, fee_minor
+                SELECT brand_id, customer_account_id, channel_id, channel_code_snapshot,
+                       currency, total_minor, fee_minor
                   FROM ordering.orders
                  WHERE tenant_id = :tenantId AND id = :orderId
                 """)
@@ -1579,11 +1580,42 @@ public class JdbcLoyaltyStore {
                 .query((row, number) -> new OrderFacts(
                         row.getObject("brand_id", UUID.class),
                         row.getObject("customer_account_id", UUID.class),
+                        row.getObject("channel_id", UUID.class),
                         row.getString("channel_code_snapshot"),
                         row.getString("currency"),
                         row.getLong("total_minor"),
                         row.getLong("fee_minor")))
                 .optional();
+    }
+
+    /**
+     * What of this order's total was discharged from a points balance and stayed
+     * discharged (ADR 0046, ADR 0067's own completion trigger).
+     *
+     * <p>{@code SETTLED} rather than every reservation the order ever had: a
+     * {@code HELD} reservation is a checkout still in flight and a {@code
+     * RELEASED} one never became money the customer didn't pay, so neither
+     * belongs in what "the money the customer paid" is net of. At most one
+     * balance tender exists per settlement (ADR 0046's own invariant), so this is
+     * a sum over zero or one row today, written as a sum because that is the
+     * honest shape of "how much, if any".
+     *
+     * <p>Read inside the same transaction {@code OrderStateService.advance}
+     * commits the completion in: {@code recordHandover} settles the order's
+     * tenders, including a balance one, before {@code OrderCompleted} is
+     * published, so a listener reading this after that event sees the finished
+     * split rather than a stale one.
+     */
+    public long settledRedemptionMinor(UUID tenantId, UUID orderId) {
+        Long total = jdbc.sql("""
+                SELECT COALESCE(SUM(amount_minor), 0) FROM loyalty.reservations
+                 WHERE tenant_id = :tenantId AND order_id = :orderId AND status = 'SETTLED'
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Long.class)
+                .single();
+        return total == null ? 0L : total;
     }
 
     // --------------------------------------------------------- liability

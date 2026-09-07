@@ -8,7 +8,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -21,6 +23,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.loyalty.application.ReferralGrantService;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
+import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderDirectory.OrderSummary;
+import uz.horecaos.platform.ordering.api.OrderDirectory.RecentOrder;
 import uz.horecaos.platform.referral.application.ReferralCodeService;
 import uz.horecaos.platform.referral.application.ReferralProgramAuthoringService;
 import uz.horecaos.platform.referral.application.ReferralProgramAuthoringService.ProgramDraft;
@@ -114,7 +119,7 @@ class ReferralProgramTests {
 
         authoring = new ReferralProgramAuthoringService(referralStore, CLOCK);
         codes = new ReferralCodeService(referralStore, CLOCK);
-        redemptions = new ReferralRedemptionService(referralStore, CLOCK);
+        redemptions = new ReferralRedemptionService(referralStore, CLOCK, orderDirectory());
         qualification = new ReferralQualificationService(referralStore, new ReferralGrantService(loyaltyStore));
         query = new ReferralQueryService(referralStore);
 
@@ -236,6 +241,43 @@ class ReferralProgramTests {
                 .extracting(RedemptionRow::id)
                 .as("the account's one redemption is still the first code, never overwritten by the refused second")
                 .isEqualTo(first.id());
+    }
+
+    @Test
+    @DisplayName("abuse case: a customer who already completed an order cannot redeem a friend's code")
+    void anAlreadyOrderingCustomerCannotRedeem() {
+        activateBothSides(10_000, 5_000);
+        UUID referrer = newCustomer();
+        UUID referee = newCustomer();
+        String code = codes.myCode(TENANT, BRAND, referrer).code();
+
+        // The referee already has a completed order at this brand -- not the
+        // referrer's fifty-first order dressed up as a new signup, but the
+        // referee's own history, read the same way CustomerOrderHistoryController
+        // and the voice module's screen-pop card already read it.
+        completedOrder(referee);
+
+        assertThatThrownBy(() -> redemptions.redeem(new RedeemCommand(TENANT, BRAND, referee, code)))
+                .isInstanceOf(ApiException.class)
+                .extracting(t -> ((ApiException) t).errorCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        assertThat(referralStore.findRedemptionByReferee(TENANT, BRAND, referee))
+                .as("the refused redemption leaves no row behind")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a genuinely new customer -- no completed order yet -- redeems normally")
+    void aGenuinelyNewCustomerRedeemsNormally() {
+        activateBothSides(10_000, 5_000);
+        UUID referrer = newCustomer();
+        UUID referee = newCustomer();
+        String code = codes.myCode(TENANT, BRAND, referrer).code();
+
+        RedemptionRow redemption = redemptions.redeem(new RedeemCommand(TENANT, BRAND, referee, code));
+
+        assertThat(redemption.status()).isEqualTo("PENDING");
     }
 
     // ---------------------------------------------------------- qualification
@@ -507,6 +549,48 @@ class ReferralProgramTests {
                 VALUES (:id, :tenantId, 'ACTIVE', 1, 1)
                 """).param("id", id).param("tenantId", TENANT).update();
         return id;
+    }
+
+    /**
+     * A real read against {@code ordering.orders}, the way the production
+     * adapter answers it -- not a hand-fed map, so the new "already ordered"
+     * check in {@link ReferralRedemptionService} is exercised against the same
+     * rows {@link #completedOrder} writes rather than a double that could drift
+     * from what production actually returns.
+     */
+    private OrderDirectory orderDirectory() {
+        return new OrderDirectory() {
+            @Override
+            public Optional<OrderSummary> summary(UUID tenantId, UUID orderId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<RecentOrder> recentForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId, int limit) {
+                return jdbc.sql("""
+                        SELECT id, public_order_number, location_id, status, currency, total_minor, created_at
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND brand_id = :brandId
+                           AND customer_account_id = :customer
+                         ORDER BY created_at DESC
+                         LIMIT :limit
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("customer", customerAccountId)
+                        .param("limit", limit)
+                        .query((row, number) -> new RecentOrder(
+                                row.getObject("id", UUID.class),
+                                row.getString("public_order_number"),
+                                row.getObject("location_id", UUID.class),
+                                row.getString("status"),
+                                row.getString("currency"),
+                                row.getLong("total_minor"),
+                                row.getObject("created_at", java.time.OffsetDateTime.class)
+                                        .toInstant()))
+                        .list();
+            }
+        };
     }
 
     private UUID completedOrder(UUID customerAccountId) {

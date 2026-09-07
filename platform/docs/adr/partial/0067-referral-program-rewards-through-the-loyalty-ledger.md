@@ -20,16 +20,25 @@
   (`ReferralStorefrontController`, `CustomerOwned`). The operations Marketing
   §6.6 screen authors a program and shows redemptions actually happening;
   website/Telegram acquisition links render there as an honest not-built
-  panel. **Two things are not built.** First, nothing calls
-  `onOrderOutcome` from a real order-completion event — the same gap ADR 0046
-  itself names for `LoyaltyAccrualService.accrue`, which also has no
-  production caller. Second, "the referee's first completed order" is a
-  structural property of the redemption row (it pays on the first COMPLETED
-  event that arrives while the row is still PENDING) rather than a verified
-  fact about the referee's full order history: no `ordering.api` port exposes
-  a per-customer order count, so a repeat customer who redeems a friend's code
-  is not distinguished from a genuinely new one. Both are named in the
-  checklist below with what would close them.
+  panel. **Both gaps this record originally named are closed.** First,
+  `onOrderOutcome` now has a production caller: `referral.application.
+  ReferralOrderCompletionTrigger` is a `@TransactionalEventListener(phase =
+  BEFORE_COMMIT)` on `ordering.api.OrderingEvent`, the same seam
+  `loyalty.application.OrderCompletionAccrualTrigger` closes ADR 0046's own
+  identical gap on — two independent listeners on the one order-completion
+  fact, the same way `OrderNotificationTrigger` and the outbox relay already
+  are, rather than one class reaching into the other module's internals.
+  Second, "the referee's first completed order" is now verified rather than
+  merely structural: `ReferralRedemptionService.redeem` refuses a redemption
+  outright when `ordering.api.OrderDirectory#recentForCustomer` — the
+  existing, published read `CustomerOrderHistoryController` and the ADR 0064
+  voice screen-pop card already use, not a new port built for this one
+  caller — shows the referee already holds a `COMPLETED` order at this brand.
+  The redemption row's own `PENDING`-until-claimed shape is unchanged and
+  still governs *when* a reward fires; what changed is that *who* may ever
+  hold a `PENDING` row is now checked against real order history at the one
+  moment that matters, before any row exists, rather than assumed from
+  the row's own state after the fact.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture; tenant-configurable
@@ -38,7 +47,9 @@
   [Product defaults](#product-defaults-there-are-none)); legal (referral
   program terms, alongside ADR 0046's own open terms-of-use question)
 - Depends on: ADR 0046, ADR 0044, ADR 0025, ADR 0027, ADR 0029, ADR 0015,
-  ADR 0031
+  ADR 0031, ADR 0019 (`OrderCompleted`, `OrderDirectory`), ADR 0032 (the event
+  catalogue entry `OrderCompleted` carries), ADR 0064 (`OrderDirectory
+  #recentForCustomer`, read here rather than rebuilt)
 - Supersedes / Superseded by: Resolves ADR 0044's "referral reward mechanics"
   open input, without superseding ADR 0044 — attribution links and the
   referral edge (website `?ref=`, Telegram deep links) remain that ADR's own,
@@ -47,11 +58,8 @@
   tenant sets are business numbers with no platform default (product,
   finance); whether referral program terms need disclosure in the customer
   terms of use, alongside ADR 0046's own open no-cash-value/expiry question
-  (legal); whether "first completed order" needs to verify the referee's full
-  order history once ordering exposes a per-customer count (product,
-  engineering) — see [Alternatives considered](#alternatives-considered).
-  **None is structural**: every one is a number, a policy value, or a stated
-  gap this record's own tables and services already accommodate.
+  (legal). **None is structural**: every one is a number, a policy value, or a
+  business decision this record's own tables and services already accommodate.
 
 ## Context
 
@@ -193,16 +201,20 @@ denied for.
 
 ### Negative
 
-- **The reward has no real trigger yet.** `ReferralQualificationService.
-  onOrderOutcome` is reachable, tested, and correct, and nothing in production
-  calls it — the same gap ADR 0046 already carries for its own accrual. Until
-  `ordering`/`CheckoutService` publishes a real order-completion fact, a
-  referral reward fires only when something calls this method directly.
-- **"First completed order" is a promise about the redemption, not about the
-  customer.** A repeat customer who redeems a friend's code after already
-  placing fifty orders is paid on their fifty-first, indistinguishable from a
-  genuinely new customer, because no port exists to ask "has this customer
-  ordered before". This is a real abuse surface this ADR does not close.
+- **Closed: the reward now has a real trigger.** `ReferralQualificationService.
+  onOrderOutcome` was reachable, tested, and correct, and nothing in production
+  called it — the same gap ADR 0046 carried for its own accrual, until this
+  wave wired both from the same `OrderCompleted` fact. `referral.application.
+  ReferralOrderCompletionTrigger` is that caller now.
+- **Closed: "first completed order" is verified at redemption, not merely
+  structural.** A repeat customer who already placed fifty orders and then
+  redeems a friend's code is now refused at redemption —
+  `ReferralRedemptionService.redeem` reads `OrderDirectory#recentForCustomer`
+  and refuses when the referee already holds a `COMPLETED` order at this
+  brand — rather than paid on their fifty-first indistinguishably from a
+  genuinely new customer. Bounded to the most recent 50 orders, the same class
+  of scan bound `LoyaltyAdjustmentService`'s own aggregate window already
+  accepts.
 - A referrer's cap is enforced against the program snapshotted at redemption,
   which means two redemptions under two different program versions could, in
   principle, be judged against two different cap values for the same
@@ -221,12 +233,16 @@ denied for.
 - Building the mechanism without its production trigger, in the same
   documented state ADR 0046's own accrual service has carried since wave 44.
   The alternative — inventing order-completion event infrastructure as a side
-  effect of a referral ADR — reaches into a decision that belongs to
-  `ordering`.
-- A structural, not a verified, "first order" gate. Closing it needs a
-  cross-module read this wave did not build; shipping without it is proposing
-  a weaker guarantee honestly rather than not shipping the reward mechanism
-  at all.
+  effect of a referral ADR — reached into a decision that belonged to
+  `ordering`, and `ordering` has since made it: both this service and
+  `LoyaltyAccrualService` now have that trigger, from the same
+  `OrderCompleted` fact.
+- A structural, not a verified, "first order" gate — accepted because closing
+  it needed a cross-module read this wave did not build. That read already
+  existed under a different name: `OrderDirectory#recentForCustomer`, ADR
+  0064's own screen-pop read, closes it instead — `redeem` now refuses a
+  referee who already holds a `COMPLETED` order, rather than shipping a
+  weaker guarantee honestly.
 - No liability-report visibility for referral spend, trading a finance
   reporting convenience for not touching ADR 0046's report in a wave that did
   not audit its other consumers.
@@ -353,19 +369,32 @@ a row lock, and a conditional `UPDATE`, none of which a mock can stand in for.
   actual balance, not only the redemption row's flag.
 - The operations read side lists every redemption and totals points paid out
   from the same rows the list shows.
+- A real `OrderCompleted` fact, published the way `OrderStateService`
+  actually publishes it and consumed through `ReferralOrderCompletionTrigger`
+  rather than by calling `onOrderOutcome` directly, pays the same reward once;
+  delivered three times, it still pays once; and an `OrderCancelled` fact
+  reaching the same trigger pays nothing (`ReferralOrderCompletionTriggerTests`).
+- A referee who already holds a `COMPLETED` order at this brand is refused at
+  redemption, before any redemption row exists; a genuinely new customer with
+  none redeems normally (`ReferralProgramTests`).
 
 ## Rollout and rollback
 
 1. Ship the schema, the authoring service, and the operations screen. A
    tenant can already draft and activate a program; nothing pays out because
    nothing calls `onOrderOutcome` in production yet.
-2. Wire `ReferralQualificationService.onOrderOutcome` into a real
-   order-completion signal once `ordering`/`CheckoutService` has one to offer
-   — the same wiring `LoyaltyAccrualService.accrue` is waiting for.
+2. ~~Wire `ReferralQualificationService.onOrderOutcome` into a real
+   order-completion signal once `ordering`/`CheckoutService` has one to
+   offer~~ **Done.** `ReferralOrderCompletionTrigger` is that wiring, from the
+   same `OrderCompleted` fact `LoyaltyAccrualService.accrue` was waiting for
+   and now has too.
 3. Enable for one brand with a conservative reward and a tight cap, verify a
    real redemption pays through the ledger correctly, then widen.
-4. Close the "first order" gap if product decides the structural guarantee is
-   not enough: add the `ordering.api` read this ADR names as missing.
+4. ~~Close the "first order" gap if product decides the structural guarantee
+   is not enough: add the `ordering.api` read this ADR names as missing.~~
+   **Done, without a new read.** `OrderDirectory#recentForCustomer` already
+   existed for ADR 0064's screen-pop card; `ReferralRedemptionService.redeem`
+   now refuses a referee who already holds a `COMPLETED` order at this brand.
 
 Rollback retires the affected program (new redemptions are refused; nothing
 already `PENDING` or `REWARDED` is touched) and, if needed, removes the
@@ -396,12 +425,23 @@ ADR 0046 takes toward disabling accrual.
 - [x] Correct ADR 0044's "referral reward mechanics" open input to record
       that this ADR resolves it, leaving the attribution-link half of §6.6
       as that ADR's own remaining, unbuilt work.
-- [ ] Wire `onOrderOutcome` to a real order-completion event or listener.
-      **Not built** — no such production signal exists yet for this or for
-      `LoyaltyAccrualService.accrue` to consume.
-- [ ] A per-customer completed-order count from `ordering.api`, so "first
-      completed order" can be verified against a referee's full history
-      rather than assumed from the redemption row's own state. **Not built.**
+- [x] Wire `onOrderOutcome` to a real order-completion event or listener.
+      `referral.application.ReferralOrderCompletionTrigger`, a
+      `@TransactionalEventListener(phase = BEFORE_COMMIT)` on
+      `ordering.api.OrderingEvent` matching `OrderNotificationTrigger`'s own
+      shape, resolves the referee's customer id from `OrderDirectory#summary`
+      and calls `onOrderOutcome` for every real `OrderCompleted`.
+      `loyalty.application.OrderCompletionAccrualTrigger` closes the identical
+      gap for `LoyaltyAccrualService.accrue` on the same fact, from a second,
+      independent listener rather than one class calling into both modules.
+- [x] Verify "first completed order" against the referee's order history.
+      No new `ordering.api` port: `OrderDirectory#recentForCustomer` already
+      existed for ADR 0064's screen-pop card, and
+      `ReferralRedemptionService.redeem` now refuses a referee who already
+      holds a `COMPLETED` order at this brand, bounded to the most recent 50
+      orders. The redemption row's own `PENDING`-until-claimed shape still
+      decides *when* the reward fires; this decides *who* may ever hold the
+      row.
 - [ ] Website `?ref=` links, Telegram `startapp` deep links, and the guided
       Mini-App/BotFather setup flow. **Not built, and not this ADR's to
       build** — see ADR 0044's own `marketing.attribution_links` checklist
@@ -427,7 +467,8 @@ redemption whose window has closed before a qualifying order arrives expires
 rather than pays. A referrer past their own cap is skipped, visibly, without
 affecting the referee's own reward. And a marketer can see every redemption a
 brand's program has produced, and what it has paid out, from the same rows a
-customer's own history is drawn from.
+customer's own history is drawn from. A customer who already has a completed
+order at the brand cannot redeem a friend's code at all.
 
 ## References
 
@@ -448,3 +489,12 @@ customer's own history is drawn from.
   — the customer account a code and a redemption are keyed on.
 - [ADR 0031](../built/0031-http-api-conventions.md) — the capability, scope,
   and idempotency conventions every endpoint here follows.
+- [ADR 0019](../partial/0019-cart-checkout-and-order-orchestration.md) — the
+  order lifecycle `OrderCompleted` and `OrderDirectory` come from, and the
+  `ReferralOrderCompletionTrigger` listens to.
+- [ADR 0032](../built/0032-event-contract-governance-and-topic-policy.md) —
+  why `OrderCompleted` has a catalogue entry and schema before this record's
+  listener could consume it.
+- [ADR 0064](../partial/0064-voice-channels-and-the-operator-presence-model.md)
+  — `OrderDirectory#recentForCustomer`, built there for a screen-pop card and
+  read again here to verify a referee's order history without a new port.
