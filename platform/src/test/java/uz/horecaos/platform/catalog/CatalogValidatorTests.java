@@ -123,8 +123,8 @@ class CatalogValidatorTests {
                 new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "PRICED", "PIECE", true, 0, Status.ACTIVE, 1);
         Variant unpriced = new Variant(
                 UUID.randomUUID(), TENANT, BRAND, productId, "UNPRICED", "PIECE", false, 1, Status.ACTIVE, 1);
-        Variant archivedUnpriced = new Variant(
-                UUID.randomUUID(), TENANT, BRAND, productId, "GONE", "PIECE", false, 2, Status.ARCHIVED, 1);
+        Variant archivedUnpriced =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "GONE", "PIECE", false, 2, Status.ARCHIVED, 1);
 
         Snapshot snapshot = snapshotOf(
                 List.of(),
@@ -157,8 +157,8 @@ class CatalogValidatorTests {
         UUID groupId = UUID.randomUUID();
         ModifierGroup group =
                 new ModifierGroup(groupId, TENANT, BRAND, "SAUCES", false, 0, 1, false, 0, Status.ACTIVE, 1);
-        ModifierOption archivedOption = new ModifierOption(
-                UUID.randomUUID(), TENANT, BRAND, groupId, "OLD", null, 1, 0, Status.ARCHIVED, 1);
+        ModifierOption archivedOption =
+                new ModifierOption(UUID.randomUUID(), TENANT, BRAND, groupId, "OLD", null, 1, 0, Status.ARCHIVED, 1);
 
         Snapshot snapshot = snapshotOf(
                 List.of(),
@@ -180,8 +180,8 @@ class CatalogValidatorTests {
     void repeatCountsTowardsSelectableCapacityOnlyWhenAllowed() {
         UUID groupId = UUID.randomUUID();
         // One option, worth three selections if repeats are allowed.
-        ModifierOption option =
-                new ModifierOption(UUID.randomUUID(), TENANT, BRAND, groupId, "EXTRA_CHEESE", null, 3, 0, Status.ACTIVE, 1);
+        ModifierOption option = new ModifierOption(
+                UUID.randomUUID(), TENANT, BRAND, groupId, "EXTRA_CHEESE", null, 3, 0, Status.ACTIVE, 1);
 
         ModifierGroup capacityInsufficientEvenWithRepeats =
                 new ModifierGroup(groupId, TENANT, BRAND, "CHEESE", true, 4, 4, true, 0, Status.ACTIVE, 1);
@@ -224,9 +224,10 @@ class CatalogValidatorTests {
     void modifierOptionLinkedToAnArchivedVariantIsBlocked() {
         UUID groupId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
-        Variant archivedVariant = new Variant(
-                UUID.randomUUID(), TENANT, BRAND, productId, "GONE", "PIECE", true, 0, Status.ARCHIVED, 1);
-        ModifierGroup group = new ModifierGroup(groupId, TENANT, BRAND, "ADDONS", false, 0, 1, false, 0, Status.ACTIVE, 1);
+        Variant archivedVariant =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "GONE", "PIECE", true, 0, Status.ARCHIVED, 1);
+        ModifierGroup group =
+                new ModifierGroup(groupId, TENANT, BRAND, "ADDONS", false, 0, 1, false, 0, Status.ACTIVE, 1);
         ModifierOption linkedToArchived = new ModifierOption(
                 UUID.randomUUID(), TENANT, BRAND, groupId, "ADD_GONE", archivedVariant.id(), 1, 0, Status.ACTIVE, 1);
 
@@ -281,8 +282,8 @@ class CatalogValidatorTests {
         Category catB = new Category(b, TENANT, BRAND, catalogId, a, "B", 1, Status.ACTIVE, 1);
         Category catC = new Category(c, TENANT, BRAND, catalogId, b, "C", 2, Status.ACTIVE, 1);
 
-        Snapshot snapshot =
-                snapshotOf(List.of(), List.of(), List.of(catA, catB, catC), List.of(), Map.of(), Map.of(), Set.of(), Set.of());
+        Snapshot snapshot = snapshotOf(
+                List.of(), List.of(), List.of(catA, catB, catC), List.of(), Map.of(), Map.of(), Set.of(), Set.of());
 
         List<ValidationFinding> cycleFindings = validator.validate(snapshot).blockers().stream()
                 .filter(finding -> finding.code().equals("CATEGORY_TREE_HAS_CYCLE"))
@@ -362,16 +363,7 @@ class CatalogValidatorTests {
         Map<MediaAssetId, Set<UUID>> reference = Map.of(asset, Set.of(productId));
 
         Snapshot notDisplayable = snapshotOf(
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                reference,
-                Set.of(),
-                Set.of(),
-                Set.of(),
+                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), reference, Set.of(), Set.of(), Set.of(),
                 true);
 
         assertThat(validator.validate(notDisplayable).blockers())
@@ -405,8 +397,8 @@ class CatalogValidatorTests {
     void offeringReferencingAnUnknownVariantIsBlocked() {
         UUID strayVariantId = UUID.randomUUID();
 
-        Snapshot snapshot =
-                snapshotOf(List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Set.of(), Set.of(strayVariantId));
+        Snapshot snapshot = snapshotOf(
+                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Set.of(), Set.of(strayVariantId));
 
         assertThat(validator.validate(snapshot).blockers())
                 .extracting(ValidationFinding::code)
@@ -438,14 +430,18 @@ class CatalogValidatorTests {
     @DisplayName("an unwired pricing port is reported as a warning, never as a blocker")
     void unwiredPricingIsAWarningOnly() {
         Snapshot unwired = snapshotOf(
-                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Map.of(), Set.of(), Set.of(), Set.of(), false);
+                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Map.of(), Set.of(), Set.of(), Set.of(),
+                false);
 
         ValidationFinding.Report report = validator.validate(unwired);
         assertThat(report.findings()).extracting(ValidationFinding::code).contains("PRICING_VALIDATION_NOT_WIRED");
-        assertThat(report.blockers()).extracting(ValidationFinding::code).doesNotContain("PRICING_VALIDATION_NOT_WIRED");
+        assertThat(report.blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("PRICING_VALIDATION_NOT_WIRED");
 
         Snapshot wired = snapshotOf(
-                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Map.of(), Set.of(), Set.of(), Set.of(), true);
+                List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of(), Map.of(), Set.of(), Set.of(), Set.of(),
+                true);
 
         assertThat(validator.validate(wired).findings())
                 .extracting(ValidationFinding::code)
@@ -494,7 +490,8 @@ class CatalogValidatorTests {
             Set<UUID> offeredVariantIds,
             boolean pricingWired) {
 
-        Map<UUID, List<Variant>> variantsByProduct = variants.stream().collect(Collectors.groupingBy(Variant::productId));
+        Map<UUID, List<Variant>> variantsByProduct =
+                variants.stream().collect(Collectors.groupingBy(Variant::productId));
         Map<UUID, Category> categoriesById = new LinkedHashMap<>();
         categories.forEach(category -> categoriesById.put(category.id(), category));
 

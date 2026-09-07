@@ -134,13 +134,26 @@ class StorefrontCatalogQueryTests {
         // comment names — the kiosk request below would come back with the
         // storefront's publication and never see this dish.
         var kioskOnly = authoring.createProduct(
-                TENANT, BRAND, catalogId, "KIOSK_ONLY", "Kiosk maxsus", null, LOCALE, "SKU-K", "PIECE", UNCLASSIFIED, ACTOR);
+                TENANT,
+                BRAND,
+                catalogId,
+                "KIOSK_ONLY",
+                "Kiosk maxsus",
+                null,
+                LOCALE,
+                "SKU-K",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
         authoring.setOffering(
                 TENANT, BRAND, LOCATION, kioskOnly.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("PICKUP"));
         var kioskPublication = publication.publish(TENANT, BRAND, catalogId, "KIOSK", null);
 
-        var storefrontMenu = storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
-        var kioskMenu = storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "KIOSK").orElseThrow();
+        var storefrontMenu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+        var kioskMenu =
+                storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "KIOSK").orElseThrow();
 
         assertThat(storefrontMenu.publicationId()).isEqualTo(storefrontPublication.publicationId());
         assertThat(kioskMenu.publicationId()).isEqualTo(kioskPublication.publicationId());
@@ -155,7 +168,16 @@ class StorefrontCatalogQueryTests {
         var pizza = authoring.createProduct(
                 TENANT, BRAND, catalogId, "PIZZA", "Pizza", null, LOCALE, "SKU-DEFAULT", "PIECE", UNCLASSIFIED, ACTOR);
         UUID neverOffered = authoring.addVariant(
-                TENANT, BRAND, pizza.productId(), "SKU-NEVER", "PIECE", "Never offered", LOCALE, 1, UNCLASSIFIED, ACTOR);
+                TENANT,
+                BRAND,
+                pizza.productId(),
+                "SKU-NEVER",
+                "PIECE",
+                "Never offered",
+                LOCALE,
+                1,
+                UNCLASSIFIED,
+                ACTOR);
         UUID hidden = authoring.addVariant(
                 TENANT, BRAND, pizza.productId(), "SKU-HIDDEN", "PIECE", "Hidden", LOCALE, 2, UNCLASSIFIED, ACTOR);
         UUID soldOut = authoring.addVariant(
@@ -168,7 +190,9 @@ class StorefrontCatalogQueryTests {
         authoring.setOffering(TENANT, BRAND, LOCATION, soldOut, OfferingStatus.UNAVAILABLE, List.of("DELIVERY"));
 
         publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
-        var menu = storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
 
         var variantsById = menu.products().stream()
                 .filter(product -> product.productId().equals(pizza.productId()))
@@ -199,7 +223,17 @@ class StorefrontCatalogQueryTests {
         var soup = authoring.createProduct(
                 TENANT, BRAND, catalogId, "SHURPA", "Shurpa", null, LOCALE, "SKU-SOUP", "PIECE", UNCLASSIFIED, ACTOR);
         var driedOut = authoring.createProduct(
-                TENANT, BRAND, catalogId, "STALE", "Bayot osh", null, LOCALE, "SKU-STALE-1", "PIECE", UNCLASSIFIED, ACTOR);
+                TENANT,
+                BRAND,
+                catalogId,
+                "STALE",
+                "Bayot osh",
+                null,
+                LOCALE,
+                "SKU-STALE-1",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
         UUID staleSecondVariant = authoring.addVariant(
                 TENANT, BRAND, driedOut.productId(), "SKU-STALE-2", "PIECE", "Katta", LOCALE, 1, UNCLASSIFIED, ACTOR);
 
@@ -213,7 +247,9 @@ class StorefrontCatalogQueryTests {
         authoring.setOffering(TENANT, BRAND, LOCATION, staleSecondVariant, OfferingStatus.HIDDEN, List.of("DELIVERY"));
 
         publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
-        var menu = storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
 
         assertThat(menu.products()).extracting(MenuProduct::productId).containsExactly(soup.productId());
         // And its id must not survive inside the category it was authored into,
@@ -239,7 +275,9 @@ class StorefrontCatalogQueryTests {
                 TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
 
         publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
-        var menu = storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
 
         // "root" holds no products of its own -- it holds "hot" -- and must
         // survive; "empty" holds nothing at all, not even a child, and must not.
@@ -269,10 +307,12 @@ class StorefrontCatalogQueryTests {
         UUID somePricedVariantElsewhere = UUID.randomUUID();
         StorefrontCatalogQuery pricedStorefront = new StorefrontCatalogQuery(
                 store,
-                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.of(new MenuPriceLookup.MenuPrices(
-                        "UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())));
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.of(
+                        new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())));
 
-        var menu = pricedStorefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
+        var menu = pricedStorefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
 
         assertThat(menu.currency()).isEqualTo("UZS");
         assertThat(menu.products())
@@ -287,7 +327,17 @@ class StorefrontCatalogQueryTests {
     void retiredPublicationContentIsUnchanged() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
         var burger = authoring.createProduct(
-                TENANT, BRAND, catalogId, "BURGER", "Original name", null, LOCALE, "SKU-B3", "PIECE", UNCLASSIFIED, ACTOR);
+                TENANT,
+                BRAND,
+                catalogId,
+                "BURGER",
+                "Original name",
+                null,
+                LOCALE,
+                "SKU-B3",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
         authoring.setOffering(
                 TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
         var first = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
@@ -305,7 +355,9 @@ class StorefrontCatalogQueryTests {
         // Byte-for-byte the same rows: a retired publication is not a live
         // document that happens to be off, it is an immutable one.
         assertThat(afterRetirement).isEqualTo(beforeRetirement);
-        assertThat(store.findPublication(TENANT, BRAND, first.publicationId()).orElseThrow().status())
+        assertThat(store.findPublication(TENANT, BRAND, first.publicationId())
+                        .orElseThrow()
+                        .status())
                 .isEqualTo(PublicationStatus.RETIRED);
     }
 
