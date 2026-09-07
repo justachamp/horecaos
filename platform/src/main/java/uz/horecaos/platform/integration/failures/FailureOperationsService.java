@@ -631,11 +631,16 @@ public class FailureOperationsService {
      *
      * <p>An {@link ApiException} rather than a bare {@code RuntimeException}, so
      * the surface answers 422 with the request identifier in the problem
-     * document instead of 500 with nothing. It is thrown after the transaction
-     * that wrote the request has committed, so the identifier in the message
-     * names a row a checker can actually open. A repeat of the same resolution
-     * finds that row and reports the same identifier rather than opening a
-     * second request.
+     * document instead of 500 with nothing. It carries {@link
+     * ErrorCode#SECOND_APPROVER_REQUIRED} rather than the generic {@link
+     * ErrorCode#UNPROCESSABLE_STATE} every other "current state refuses this"
+     * failure in this codebase shares, because the remediation here is the
+     * opposite of that code's: wait or poll the named request, rather than stop.
+     * A client branching on {@code code} — the ADR 0031 contract — cannot tell
+     * those apart any other way. It is thrown after the transaction that wrote
+     * the request has committed, so the identifier in the message names a row a
+     * checker can actually open. A repeat of the same resolution finds that row
+     * and reports the same identifier rather than opening a second request.
      *
      * <p>The reason the operator typed is deliberately not echoed here: ADR 0029
      * keeps free text a person wrote about a customer out of error messages, and
@@ -646,7 +651,7 @@ public class FailureOperationsService {
         private final transient ApprovalOutcome outcome;
 
         SecondApproverRequiredException(ApprovalOutcome outcome) {
-            super(ErrorCode.UNPROCESSABLE_STATE, message(outcome), properties(outcome));
+            super(ErrorCode.SECOND_APPROVER_REQUIRED, message(outcome), properties(outcome));
             this.outcome = outcome;
         }
 

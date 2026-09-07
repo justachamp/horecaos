@@ -96,6 +96,20 @@ public interface PosAdapter {
     ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId, String status);
 
     /**
+     * Reads whether the till's clerk has acted on an order exported while it
+     * was still asking for one (ADR 0002, ADR 0011 §6.4, {@code
+     * PosCapability#ORDER_APPROVAL}).
+     *
+     * <p>Polled, never pushed, where the vendor offers no push at all — the
+     * capability snapshot's {@code decisionLatency} entry is what tells a
+     * caller how stale the answer may be. A vendor that genuinely pushes
+     * decisions would still implement this the same way: a caller with an
+     * uncertain or stale local record asks and gets a current answer, exactly
+     * as {@link #findExportedOrder} does for the export itself.
+     */
+    ApprovalRead readApprovalStatus(PosContext context, String externalOrderId);
+
+    /**
      * Everything an adapter needs that is not the business request.
      *
      * @param externalVenueReference which of the vendor's venues this binding
@@ -154,6 +168,25 @@ public interface PosAdapter {
      *                        station is already food
      */
     record ExportResult(ProviderOutcome outcome, @Nullable String externalOrderId, boolean approvalPending) {}
+
+    /**
+     * What one poll of the till learned about a clerk's decision.
+     *
+     * @param decision null when the outcome did not succeed, or when it did
+     *                 but the vendor's own status is neither a recognized
+     *                 decision nor "still waiting" — an unrecognized value is
+     *                 answered the same as {@link Decision#PENDING}: poll
+     *                 again rather than guess
+     */
+    record ApprovalRead(ProviderOutcome outcome, @Nullable Decision decision) {
+
+        /** A clerk's decision, or its absence, exactly as {@code PosApprovalDecisionPort.Action} needs it. */
+        public enum Decision {
+            PENDING,
+            APPROVED,
+            REJECTED
+        }
+    }
 
     /**
      * What to look for when discovering whether an uncertain export landed.

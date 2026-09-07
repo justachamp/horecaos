@@ -23,12 +23,40 @@
   `PriceAuthoringController` and `PriceAuthoringService` write
   `pricing.price_books`, `pricing.prices` and `pricing.price_book_assignments`
   through `JdbcPricingStore`, behind `PRICING_AUTHOR` and `PRICING_ACTIVATE`, and
-  `QuoteService` refuses a brand that has never been through them. Not built: the
-  POS half of `RESTAURANT_APPROVAL` — `OperationsOrderController` has
-  `POST /{orderId}/approval-decisions`, but nothing outside the `pos` module
-  references it and no POS-originated decision path exists, so `POS` and
-  `EITHER` approval channels cannot be satisfied; only a Clopos adapter exists —
-  r_keeper and iiko have none. The divergence recorded here is closed: the
+  `QuoteService` refuses a brand that has never been through them. The POS half
+  of `RESTAURANT_APPROVAL` is now partly built, Clopos only (r_keeper and iiko
+  have no adapter at all, ADR 0011): `PosApprovalDecisionPort`
+  (`ordering.api`) and `PosApprovalDecisionPortAdapter` give a POS integration
+  the identical `OrderStateService#decide` call `OperationsOrderController`'s
+  `POST /{orderId}/approval-decisions` makes for Qoida Operations — same
+  compare-and-set, same first-decision-wins settlement, same ADR 0027 audit
+  fact, recorded as a `SERVICE` actor honestly identified by vendor
+  (`pos:clopos`) on the fixed `POS` decision channel `ck_approval_channel`
+  (`V0022`) permits (never a per-vendor channel value — that violates the
+  constraint, which `CartCheckoutAndOrderTests`'s POS-approval suite now
+  catches). `PosAdapter#readApprovalStatus` and `CloposAdapter`'s
+  implementation can read a clerk's accept/decline back from `GET
+  /orders/{id}`; `PosOrderExportTrigger#onOrderAwaitingApproval` opens an
+  export the moment an order reaches `AWAITING_APPROVAL` under a `POS` or
+  `EITHER` channel, and `PosOrderExportService`/`JdbcPosExportStore`
+  (`V0179`) flag which exports still owe a decision
+  (`requires_pos_approval`, `pos_approval_decided_at`). What is still missing
+  is closed. `PosApprovalPoll` schedules the read
+  (`findAwaitingPosApproval` → `PosOrderExportService#readApprovalStatus` →
+  `PosApprovalDecisionPort#decide` → `markApprovalDecided`), so a Clopos clerk's
+  decision now reaches the platform on its own and `POS` and `EITHER` approval
+  channels are satisfiable end to end. Two properties are load-bearing and
+  tested rather than assumed. The decision id is derived from the export and the
+  outcome observed, never freshly generated: a process that relays a decision
+  and dies before recording that it did is read again next tick, and a random id
+  would make that second reading a second decision. And the two writes are
+  ordered decide-then-mark, because the reverse loses a decision outright if the
+  process dies between them, while this way the worst case is the replay the
+  derived id already makes safe. The vendor travels with the read rather than
+  being assumed, so the actor recorded is the till that actually answered.
+  The adapter resolves through `PosOrderExportService`, the same binding →
+  adapter → configuration path an export already takes, rather than a second
+  resolution that could disagree the day a binding moves. The divergence recorded here is closed: the
   versioned `tenant.customer_identity_policies` that `JdbcTenantControlPlaneStore`
   writes is the source of truth, and `ConfiguredCustomerPolicyLookup` reads it —
   through `tenant.current_customer_identity_policy` (`V0063`), the one definition

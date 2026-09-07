@@ -36,6 +36,7 @@ import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
@@ -263,7 +264,7 @@ public class OperationsOrderController {
                                     body.decisionId(),
                                     body.reasonCode(),
                                     body.note(),
-                                    "HORECAOS_OPERATIONS",
+                                    OrderDecisionChannel.HORECAOS_OPERATIONS.name(),
                                     "USER",
                                     currentActor.get().subject(),
                                     body.issuedAt() == null ? Instant.now() : body.issuedAt(),
@@ -274,7 +275,7 @@ public class OperationsOrderController {
                             new OrderStateService.DecisionCommand(
                                     body.decisionId(),
                                     body.action(),
-                                    "HORECAOS_OPERATIONS",
+                                    OrderDecisionChannel.HORECAOS_OPERATIONS.name(),
                                     "USER",
                                     currentActor.get().subject(),
                                     body.reasonCode(),

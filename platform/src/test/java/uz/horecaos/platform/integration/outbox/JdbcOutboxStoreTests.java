@@ -112,13 +112,14 @@ class JdbcOutboxStoreTests {
 
         assertThat(relay.relayOnce()).isEqualTo(1);
         assertThat(jdbc.sql("""
-                        SELECT status, attempt_count, last_error, dead_lettered_at IS NOT NULL AS dead
+                        SELECT status, attempt_count, last_error, error_code, dead_lettered_at IS NOT NULL AS dead
                         FROM integration.outbox_events
                         """)
                         .query((resultSet, rowNumber) -> new Object[] {
                             resultSet.getString("status"),
                             resultSet.getInt("attempt_count"),
                             resultSet.getString("last_error"),
+                            resultSet.getString("error_code"),
                             resultSet.getBoolean("dead")
                         })
                         .single())
@@ -126,7 +127,12 @@ class JdbcOutboxStoreTests {
                     assertThat(row[0]).isEqualTo("DEAD_LETTER");
                     assertThat(row[1]).isEqualTo(1);
                     assertThat(row[2].toString()).doesNotContain("\n");
-                    assertThat(row[3]).isEqualTo(true);
+                    // IllegalStateException is not one of FailureClassifier's
+                    // confident shapes — this codebase's own fixtures use it to
+                    // mean unrelated things elsewhere (see FailureClassifier's
+                    // javadoc) — so the honest answer is UNKNOWN, not a guess.
+                    assertThat(row[3]).isEqualTo("UNKNOWN");
+                    assertThat(row[4]).isEqualTo(true);
                 });
     }
 
@@ -145,6 +151,7 @@ class JdbcOutboxStoreTests {
                         claimed.claimToken(),
                         NOW.plusSeconds(2),
                         NOW.plusSeconds(2),
+                        "UNKNOWN",
                         "retry budget exhausted",
                         true))
                 .isTrue();

@@ -25,5 +25,11 @@ public interface RelayStore {
     boolean markPublished(UUID eventId, UUID claimToken, Instant publishedAt);
 
     boolean markFailed(
-            UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter);
+            UUID eventId,
+            UUID claimToken,
+            Instant now,
+            Instant nextAttemptAt,
+            String errorCode,
+            String error,
+            boolean deadLetter);
 }

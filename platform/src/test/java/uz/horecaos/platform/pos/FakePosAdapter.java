@@ -52,6 +52,14 @@ public final class FakePosAdapter implements PosAdapter {
 
     private @Nullable ProviderOutcome nextExportOutcome;
 
+    /** What {@link #readApprovalStatus} answers next, per external order id. Absent means still PENDING. */
+    private final Map<String, PosAdapter.ApprovalRead.Decision> approvalDecisions = new ConcurrentHashMap<>();
+
+    private @Nullable ProviderOutcome nextApprovalOutcome;
+
+    /** Whether an export reports that the till still owes a clerk's decision. */
+    private boolean exportsPendApproval;
+
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {
         return sideEffects.get();
@@ -64,6 +72,27 @@ public final class FakePosAdapter implements PosAdapter {
     /** Makes the next export fail the way a real one does. */
     public FakePosAdapter failNextExportWith(ProviderOutcome outcome) {
         this.nextExportOutcome = outcome;
+        return this;
+    }
+
+    /** From the next {@link #readApprovalStatus} call for this order onward, the clerk has decided. */
+    public FakePosAdapter scriptApprovalDecision(String externalOrderId, PosAdapter.ApprovalRead.Decision decision) {
+        approvalDecisions.put(externalOrderId, decision);
+        return this;
+    }
+
+    /** Makes the next {@link #readApprovalStatus} call fail the way a real one does. */
+    /**
+     * Makes every export report {@code approvalPending}, which is what causes
+     * {@code PosOrderExportService} to flag the row for the approval poll.
+     */
+    public FakePosAdapter exportsPendApproval() {
+        this.exportsPendApproval = true;
+        return this;
+    }
+
+    public FakePosAdapter failNextApprovalReadWith(ProviderOutcome outcome) {
+        this.nextApprovalOutcome = outcome;
         return this;
     }
 
@@ -150,7 +179,7 @@ public final class FakePosAdapter implements PosAdapter {
                 ? "fake-order-" + sideEffects.incrementAndGet()
                 : ordersByCorrelation.computeIfAbsent(
                         correlation, key -> "fake-order-" + sideEffects.incrementAndGet());
-        return new ExportResult(ProviderOutcome.success(Map.of(), external), external, false);
+        return new ExportResult(ProviderOutcome.success(Map.of(), external), external, exportsPendApproval);
     }
 
     @Override
@@ -180,5 +209,17 @@ public final class FakePosAdapter implements PosAdapter {
     @Override
     public ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId, String status) {
         return ProviderOutcome.success(Map.of(), externalReceiptId);
+    }
+
+    @Override
+    public ApprovalRead readApprovalStatus(PosContext context, String externalOrderId) {
+        if (nextApprovalOutcome != null) {
+            ProviderOutcome scripted = nextApprovalOutcome;
+            nextApprovalOutcome = null;
+            return new ApprovalRead(scripted, null);
+        }
+        return new ApprovalRead(
+                ProviderOutcome.success(Map.of(), externalOrderId),
+                approvalDecisions.getOrDefault(externalOrderId, ApprovalRead.Decision.PENDING));
     }
 }
