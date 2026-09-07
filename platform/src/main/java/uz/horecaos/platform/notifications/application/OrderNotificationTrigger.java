@@ -21,6 +21,7 @@ import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
+import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderRejected;
@@ -65,6 +66,18 @@ public class OrderNotificationTrigger {
     public static final String ORDER_CONFIRMED = "ORDER_CONFIRMED";
 
     public static final String ORDER_REJECTED = "ORDER_REJECTED";
+
+    /**
+     * ADR 0075: the order is finished, and this is the message a rating prompt
+     * rides on. Customer-facing, like confirmation and rejection — it is the one
+     * moment a customer has an opinion worth asking for, and ADR 0071 accepts a
+     * review only once the order has reached COMPLETED.
+     *
+     * <p>A tenant that would rather not ask silences it the way it silences any
+     * other template: by not activating one. An unactivated template sends
+     * nothing, so this is opt-in per tenant without a second switch.
+     */
+    public static final String ORDER_COMPLETED = "ORDER_COMPLETED";
 
     /**
      * ADR 0060 §2: an order needs a restaurant decision. Operations-only —
@@ -132,6 +145,8 @@ public class OrderNotificationTrigger {
             // this never becomes a customer notification intent.
             case OrderAwaitingApproval awaiting ->
                 createOperationsOnly(awaiting, ORDER_AWAITING_APPROVAL, awaiting.brandId(), awaiting.locationId());
+            case OrderCompleted completed ->
+                create(completed, ORDER_COMPLETED, completed.brandId(), completed.locationId(), Map.of());
             // Every other ordering fact is deliberately silent. Adding a case here
             // is adding a message a customer receives, which is a product decision
             // and should look like one in a diff.

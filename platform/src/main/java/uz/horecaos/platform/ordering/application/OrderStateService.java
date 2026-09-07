@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
+import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.ordering.api.OrderRejected;
@@ -1163,11 +1164,24 @@ public class OrderStateService {
                         outcome == null || outcome.liabilityParty() == null
                                 ? null
                                 : outcome.liabilityParty().name()));
+            case COMPLETED ->
+                events.publishEvent(new OrderCompleted(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        now,
+                        order.currency(),
+                        order.totalMinor(),
+                        version));
             default -> {
-                // PREPARING, READY, FULFILLING and COMPLETED have no external
-                // consumer in this slice. They are recorded in the state history
-                // and will get their events with ADR 0014 and ADR 0020, rather
-                // than being published now to a catalogue nobody reads.
+                // PREPARING, READY and FULFILLING still have no external consumer,
+                // and stay unpublished for the reason this comment always gave.
+                // COMPLETED left the list when ADR 0075's rating prompt became its
+                // reader: a prompt has to know an order finished, and ADR 0071
+                // accepts a review only once it has.
             }
         }
     }

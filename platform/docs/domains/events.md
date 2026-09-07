@@ -104,6 +104,7 @@ holds organization and subject identifiers and applied configuration.
 | `OrderRejected` | 1 | `orderId` | [`OrderRejected.v1`](../../src/main/resources/events/ordering.events/OrderRejected.v1.schema.json) | `orderId`, brand/location, decision channel, reason code, status, version |
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
+| `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
 
 These payloads deliberately omit the order lines, the customer, the address, the
 contact details, and every customer note. ADR 0019 says events carry order and
@@ -124,10 +125,17 @@ first.
 `OrderCancelled` never follows `OrderConfirmed` in this release: cancellation
 after confirmation is ADR 0039's and the application refuses it.
 
-`PREPARING`, `READY`, `FULFILLING`, and `COMPLETED` transitions are recorded in
-`ordering.order_state_history` and have no event yet. They will get one with
-ADR 0014 delivery and ADR 0020 notifications, rather than being published now to
-a catalogue with no consumer.
+`PREPARING`, `READY` and `FULFILLING` transitions are recorded in
+`ordering.order_state_history` and have no event. They will get one when
+something reads it — ADR 0014 delivery or ADR 0020 notifications — rather than
+being published now to a catalogue with no consumer.
+
+`COMPLETED` was on that list until ADR 0075 became its reader: a rating prompt
+has to know an order finished, and ADR 0071 accepts a review only once it has.
+So `OrderCompleted` is published and the other three are not, which is the same
+rule applied rather than an exception to it. It carries no customer — who
+ordered is resolved through an authorized call, because ADR 0029 keeps personal
+data off every topic and a prompt needs only the order id to find the chat.
 
 ## `media.events`
 

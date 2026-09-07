@@ -17,7 +17,13 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * payload — a consumer needing those calls an authorized API with the order id.
  */
 public sealed interface OrderingEvent
-        permits OrderReceived, OrderAwaitingApproval, OrderConfirmed, OrderRejected, OrderExpired, OrderCancelled {
+        permits OrderReceived,
+                OrderAwaitingApproval,
+                OrderConfirmed,
+                OrderRejected,
+                OrderExpired,
+                OrderCancelled,
+                OrderCompleted {
 
     UUID eventId();
 

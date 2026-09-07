@@ -17,11 +17,14 @@
   `TelegramChannelAdapter` attaches a status button to `ORDER_CONFIRMED`.
   Nine PostgreSQL-backed authorizer tests and three ordering-port tests, all
   proven to bite.
+  The rating prompt now rides its own message: `ordering.api.OrderCompleted`
+  (contract, schema and baseline), published on the COMPLETED transition, drives
+  an `ORDER_COMPLETED` notification whose Telegram rendering carries five star
+  buttons.
   **Not built**: a delivery repeat whose source cart's address has since been
-  archived still hands off (by design, below); there is no `ORDER_COMPLETED`
-  notification for a rating prompt to ride on, so `RATE` is reachable only from a
-  status card; and no Mini App URL is configured anywhere on the installation, so
-  every "finish in the app" answer is a sentence rather than a button.
+  archived still hands off (by design, below); and no Mini App URL is configured
+  anywhere on the installation, so every "finish in the app" answer is a sentence
+  rather than a button.
 - Date proposed: 2026-09-06
 - Date decided: 2026-09-06
 - Deciders: Ayubkhon Abbosov (platform owner, directed the feature);
@@ -327,10 +330,14 @@ buttons harmlessly.
 - [x] `TelegramUpdateHandler` dispatch and rendering for customer callbacks
 - [x] Uzbek, Russian and English copy for every action and every refusal
 - [x] A status button on the `ORDER_CONFIRMED` message
-- [ ] An `ORDER_COMPLETED` customer notification, so a rating prompt has a
-      message to ride on. Does not exist today — `OrderNotificationTrigger`
-      declares `ORDER_CONFIRMED`, `ORDER_REJECTED` and the operations-only
-      `ORDER_AWAITING_APPROVAL`, and nothing else
+- [x] An `ORDER_COMPLETED` customer notification, so a rating prompt has a
+      message to ride on. This needed an `OrderCompleted` event first:
+      `OrderStateService` had deliberately published none for COMPLETED, saying
+      in place that PREPARING, READY, FULFILLING and COMPLETED "have no external
+      consumer in this slice… rather than being published now to a catalogue
+      nobody reads". This record is that consumer, so COMPLETED left the list
+      and the other three stay unpublished for the reason that comment gives.
+      The Telegram rendering of the new template carries the five-star row
 - [ ] A re-engagement message carrying Repeat
 - [ ] A Mini App URL on the installation, and the deep links that need one
 

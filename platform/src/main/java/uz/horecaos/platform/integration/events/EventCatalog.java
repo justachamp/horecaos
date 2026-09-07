@@ -204,6 +204,16 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "The commercial commitment. POS export never gates this."),
             new EventContract(
+                    "OrderCompleted",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderCompleted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The order was fulfilled. Terminal, and the fact a rating prompt waits on."),
+            new EventContract(
                     "OrderRejected",
                     1,
                     "ordering",

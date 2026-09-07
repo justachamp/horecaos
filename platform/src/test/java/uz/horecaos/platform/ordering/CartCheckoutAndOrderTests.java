@@ -3798,6 +3798,33 @@ class CartCheckoutAndOrderTests {
         assertThat(reorderPlans.planFor(TENANT, UUID.randomUUID(), CUSTOMER)).isEmpty();
     }
 
+    @Test
+    @DisplayName("a completed order publishes OrderCompleted, and the three non-terminal steps still publish nothing")
+    void completionPublishesItsOwnEvent() {
+        UUID order = orderIdOf(placeOrder("idem-completed-event"));
+        published.clear();
+
+        advance(order, OrderStatus.PREPARING);
+        advance(order, OrderStatus.READY);
+        assertThat(published.ordering())
+                .as("PREPARING and READY still have no reader, and this comment's own reason still holds")
+                .isEmpty();
+
+        advance(order, OrderStatus.COMPLETED);
+
+        assertThat(published.ordering())
+                .singleElement()
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderCompleted.class, completed -> {
+                    assertThat(completed.orderId()).isEqualTo(order);
+                    assertThat(completed.tenantId().value()).isEqualTo(TENANT);
+                    assertThat(completed.totalMinor()).isEqualTo(100_000L);
+                    // No customer anywhere on it: ADR 0029 keeps personal data out
+                    // of every payload, and a rating prompt resolves the chat from
+                    // the order id through an authorized call.
+                    assertThat(completed.payload().toString()).doesNotContain(CUSTOMER.toString());
+                });
+    }
+
     // ------------------------------------- the bot orders for a customer (ADR 0075)
 
     @Test
@@ -5019,6 +5046,15 @@ class CartCheckoutAndOrderTests {
             if (event instanceof PaymentRefunded refunded) {
                 onPaymentRefunded.accept(refunded);
             }
+        }
+
+        /** Every ordering event seen so far, oldest first. */
+        List<OrderingEvent> ordering() {
+            return List.copyOf(events);
+        }
+
+        void clear() {
+            events.clear();
         }
     }
 

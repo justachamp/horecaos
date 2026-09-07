@@ -4,6 +4,7 @@ import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,6 +80,14 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
      * status card.
      */
     static final String ORDER_CONFIRMED_TEMPLATE_KEY = "ORDER_CONFIRMED";
+
+    /**
+     * ADR 0075: the message the rating prompt rides on. When this record was
+     * written there was no such template and the star row was reachable only
+     * from a status card; ADR 0019's own deferral of an OrderCompleted event
+     * named "no external consumer" as the reason, and this is that consumer.
+     */
+    static final String ORDER_COMPLETED_TEMPLATE_KEY = "ORDER_COMPLETED";
 
     private static final String ORDER_SUBJECT_TYPE = "Order";
 
@@ -195,8 +204,9 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
      * possible answer is a refusal.
      */
     private @Nullable TelegramInlineKeyboard customerActionKeyboard(NotificationDispatch dispatch, ChatRef chat) {
-        if (!ORDER_CONFIRMED_TEMPLATE_KEY.equals(dispatch.templateKey())
-                || !ORDER_SUBJECT_TYPE.equals(dispatch.subjectType())) {
+        boolean confirmed = ORDER_CONFIRMED_TEMPLATE_KEY.equals(dispatch.templateKey());
+        boolean completed = ORDER_COMPLETED_TEMPLATE_KEY.equals(dispatch.templateKey());
+        if ((!confirmed && !completed) || !ORDER_SUBJECT_TYPE.equals(dispatch.subjectType())) {
             return null;
         }
         if (!entitlements.featureEnabled(
@@ -207,16 +217,37 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             return null;
         }
 
-        String token = actionTokens.mintCustomerActionToken(
-                dispatch.tenantId(),
-                dispatch.brandId(),
-                chat.chatId(),
-                "STATUS",
-                dispatch.subjectId(),
-                null,
-                clock.instant().plus(customerActionTokenTtl));
-        return TelegramInlineKeyboard.singleRow(
-                new Button(TelegramBotMessages.customerStatusButtonLabel(buttonLocale), token));
+        Instant expiresAt = clock.instant().plus(customerActionTokenTtl);
+        if (confirmed) {
+            return TelegramInlineKeyboard.singleRow(new Button(
+                    TelegramBotMessages.customerStatusButtonLabel(buttonLocale),
+                    actionTokens.mintCustomerActionToken(
+                            dispatch.tenantId(),
+                            dispatch.brandId(),
+                            chat.chatId(),
+                            "STATUS",
+                            dispatch.subjectId(),
+                            null,
+                            expiresAt)));
+        }
+
+        // Five stars on the finished order. One row, one tap: a rating a
+        // customer has to open something to give is a rating most of them
+        // never give.
+        List<Button> stars = new ArrayList<>(5);
+        for (int value = 1; value <= 5; value++) {
+            stars.add(new Button(
+                    TelegramBotMessages.customerRateButtonLabel(value),
+                    actionTokens.mintCustomerActionToken(
+                            dispatch.tenantId(),
+                            dispatch.brandId(),
+                            chat.chatId(),
+                            "RATE",
+                            dispatch.subjectId(),
+                            String.valueOf(value),
+                            expiresAt)));
+        }
+        return new TelegramInlineKeyboard(List.of(stars));
     }
 
     @Override

@@ -33,6 +33,10 @@
 - Deciders: Ayubkhon Abbosov (platform architecture), product
 - Depends on: ADR 0002, ADR 0013, ADR 0014, ADR 0015, ADR 0016, ADR 0017, ADR 0018
 - Supersedes / Superseded by: —
+  - `OrderCompleted` now exists and is published (ADR 0075 became its consumer,
+    which is the trigger `OrderStateService`'s own deferral named). `PREPARING`,
+    `READY` and `FULFILLING` remain unpublished on the same reasoning: no
+    reader. Adding one is what should bring them, not a wish for completeness.
 - Open inputs: Checkout payment timing, cancellation, approval timeout, and scheduled-order lead-time policy (product)
 
 ## Context

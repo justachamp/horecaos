@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderCompleted.v1.schema.json",
+  "title": "OrderCompleted v1 payload",
+  "description": "The order was fulfilled. Terminal and final: nothing leaves COMPLETED, so a consumer may treat this as the last word on the order. Carries no customer — who ordered is resolved through an authorized call, because ADR 0029 keeps personal data out of every payload and a rating prompt needs only the order id to find the chat to send it to.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "completedAt", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+    "totalMinor": { "type": "integer", "minimum": 0 },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}
