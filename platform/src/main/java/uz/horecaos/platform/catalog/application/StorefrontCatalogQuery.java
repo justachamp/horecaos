@@ -182,6 +182,12 @@ public class StorefrontCatalogQuery {
             UUID variantId = UUID.fromString(String.valueOf(variant.get("variantId")));
             OfferingStatus offering = offeringByVariant.get(variantId);
 
+            // The HIDDEN half looks redundant and is not safe to remove.
+            // JdbcCatalogStore.offeringsForLocation already excludes HIDDEN in
+            // SQL, so dropping either guard alone changes nothing and no test
+            // fails — which cost three separate wrong conclusions before
+            // somebody removed both at once and watched two tests go red. Take
+            // out the pair or neither; see that method's own javadoc.
             if (offering == null
                     || offering == OfferingStatus.HIDDEN
                     || channelExcludedVariantIds.contains(variantId)) {

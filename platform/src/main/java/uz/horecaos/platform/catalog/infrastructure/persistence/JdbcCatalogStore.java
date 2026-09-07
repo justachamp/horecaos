@@ -1137,6 +1137,16 @@ public class JdbcCatalogStore {
                 .list();
     }
 
+    /**
+     * This location's sellable offerings, HIDDEN excluded.
+     *
+     * <p>{@code StorefrontCatalogQuery.variantsOf} drops HIDDEN a second time
+     * on the result of this call. That is not a leftover: either guard alone
+     * hides the dish and no test can tell them apart, so removing this predicate
+     * because "the Java checks it" — or that check because "the SQL filters it"
+     * — leaves a hidden dish orderable with the suite still green. Take out the
+     * pair or neither.
+     */
     public List<LocationOffering> offeringsForLocation(UUID tenantId, UUID locationId) {
         return jdbc.sql("""
                 SELECT * FROM catalog.location_offerings

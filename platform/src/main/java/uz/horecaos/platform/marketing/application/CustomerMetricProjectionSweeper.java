@@ -63,7 +63,8 @@ public class CustomerMetricProjectionSweeper {
     private final JdbcCustomerMetricStore metrics;
     private final CustomerMetricProjectionService projection;
 
-    public CustomerMetricProjectionSweeper(JdbcCustomerMetricStore metrics, CustomerMetricProjectionService projection) {
+    public CustomerMetricProjectionSweeper(
+            JdbcCustomerMetricStore metrics, CustomerMetricProjectionService projection) {
         this.metrics = metrics;
         this.projection = projection;
     }
@@ -89,7 +90,8 @@ public class CustomerMetricProjectionSweeper {
         int driftObservations = 0;
         for (BrandRef brand : brands) {
             try {
-                CustomerMetricProjectionService.SweepResult result = projection.sweep(brand.tenantId(), brand.brandId());
+                CustomerMetricProjectionService.SweepResult result =
+                        projection.sweep(brand.tenantId(), brand.brandId());
                 rowsRecomputed += result.rowsRecomputed();
                 driftObservations += result.driftObservations();
             } catch (RuntimeException failure) {
