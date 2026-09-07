@@ -4,6 +4,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 
 /**
  * The {@code ordering.api} face of {@link OrderStateService#decide} for a
@@ -57,7 +58,7 @@ public class PosApprovalDecisionPortAdapter implements PosApprovalDecisionPort {
      * The only value {@code ck_approval_channel} (V0022) permits for a POS
      * decision — see the class doc for why this is not per-vendor.
      */
-    static final String DECISION_CHANNEL = "POS";
+    static final String DECISION_CHANNEL = OrderDecisionChannel.POS.name();
 
     static final String ACTOR_ID_PREFIX = "pos:";
 
