@@ -838,6 +838,49 @@ public class JdbcCatalogStore {
                 .optional();
     }
 
+    /**
+     * The same answer as {@link #productNameFor} for a set of variants, in one
+     * query.
+     *
+     * <p>Exists because the per-variant form is an N+1 the moment a caller has a
+     * basket rather than an item: a ten-line cart asking for ten names is ten
+     * round trips for a screen the customer is waiting on.
+     *
+     * <p>{@code DISTINCT ON (v.id)} with the same locale ranking in the
+     * {@code ORDER BY} reproduces the singular form's {@code LIMIT 1} exactly —
+     * one name per variant, chosen by the same fallback order — rather than
+     * approximating it with an aggregate that would pick an arbitrary locale.
+     *
+     * @return a name per variant that resolved; a variant absent from the map has
+     *         no product or no translation in any locale, exactly as the singular
+     *         form answers empty
+     */
+    public Map<UUID, String> productNamesFor(UUID tenantId, Set<UUID> variantIds) {
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> names = new HashMap<>();
+        jdbc.sql("""
+                SELECT DISTINCT ON (v.id) v.id AS variant_id, t.name AS product_name
+                FROM catalog.variants v
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                WHERE v.tenant_id = :tenantId AND v.id = ANY(:variantIds)
+                ORDER BY v.id,
+                         CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en' THEN 2 ELSE 3 END
+                """)
+                .param("tenantId", tenantId)
+                .param("variantIds", variantIds.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(
+                        java.util.Objects.requireNonNull(row.getObject("variant_id", UUID.class)),
+                        java.util.Objects.requireNonNull(row.getString("product_name"))))
+                .list()
+                .forEach(entry -> names.put(entry.getKey(), entry.getValue()));
+        return names;
+    }
+
     public List<VariantAvailabilityRow> variantsAtLocation(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursorVariantId, int limit) {
         return jdbc.sql("""

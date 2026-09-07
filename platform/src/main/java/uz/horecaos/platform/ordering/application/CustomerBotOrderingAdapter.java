@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -217,15 +218,19 @@ public class CustomerBotOrderingAdapter implements CustomerBotOrderingPort {
         var view =
                 carts.view(tenantId, brandId, customerAccountId, cart.cartId()).orElseThrow();
         // A cart line stores a variant id and no name — the snapshot only exists
-        // once the cart becomes an order. So the name is looked up, and a variant
-        // catalog can no longer name reads as its own id rather than as a blank
-        // row the customer cannot identify.
+        // once the cart becomes an order. So the names are looked up, in one
+        // query for the whole basket rather than one per line: the singular
+        // lookup in this stream was an N+1 on a path a customer is waiting on,
+        // ten round trips for a ten-line cart. A variant catalog can no longer
+        // name reads as its own id rather than as a blank row.
+        Map<UUID, String> names = itemNames.displayNames(
+                tenantId,
+                view.lines().stream()
+                        .map(JdbcCartStore.CartLineRow::variantId)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
         List<CartCard.Item> items = view.lines().stream()
                 .map(line -> new CartCard.Item(
-                        itemNames
-                                .displayName(tenantId, line.variantId())
-                                .orElseGet(() -> line.variantId().toString()),
-                        line.quantity()))
+                        names.getOrDefault(line.variantId(), line.variantId().toString()), line.quantity()))
                 .toList();
 
         String blocked = blockedReason(tenantId, brandId, customerAccountId, cart);
