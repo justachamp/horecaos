@@ -16,14 +16,55 @@
   beside the same keyed lookup hash `customer.contact_points` uses, and the six-digit code
   only as a keyed MAC over `challengeId + ":" + code`; and V0056's delivery destination,
   where `JdbcDeliveryOrderPort` and `JdbcCustomerAddressBook` protect the address a
-  courier is sent to. Not built: the
-  re-encryption job that moves `g1` records onto the current generation, so rotation has a
-  seam but no mover, and retired-key retention is undefined; no data-subject export,
-  correction, anonymisation, retention, legal-hold or proof operation exists anywhere —
-  there is no privacy endpoint, service or table; and there is now one masked
+  courier is sent to. There is now one masked
   projection for support — the order detail's customer phone (`PhoneMasking`,
   raw value behind a separate `customer.pii.reveal` call) — but still no
-  restricted database role, and no masked projection anywhere else. Retention periods and lawful basis remain
+  restricted database role, and no masked projection anywhere else.
+  **A data-subject erasure request now exists, and anonymisation is one of its
+  transitions.** `V0178` creates `customer.erasure_requests`: a durable,
+  tenant-scoped record with a `PENDING -> COMPLETED | CANCELLED` state machine,
+  raised by the subject themselves (`POST
+  .../storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request`,
+  `@CustomerOwned`, self-service) or by an operator on their behalf (`POST
+  .../tenants/{tenantId}/customers/{accountId}/erasure-requests`,
+  `customer.manage`) — both idempotent under retry against
+  `ux_erasure_request_pending`, a partial unique index admitting at most one
+  `PENDING` request per account, and against an account already anonymised,
+  which answers with the request that anonymised it rather than raising a new
+  one. Raising records intent only. `CustomerErasureService.execute`, gated by
+  a new capability held more tightly than `customer.manage` —
+  `customer.erasure.execute`, `TENANT_OWNER`/`TENANT_ADMIN` alone, not
+  `SUPPORT_AGENT` — is the one place in this codebase
+  `customer.customer_accounts.status` is ever written as `ANONYMIZED`: it
+  overwrites the account's display name and date of birth, every contact
+  point's ciphertext and keyed lookup hash, every address's protected fields
+  whether active or archived, and severs every principal link so a later
+  sign-in cannot reattach to the account it just anonymised. This is the
+  anonymisation this record's own Closed input names ("erasure by
+  anonymisation, not per-customer crypto-shredding"), scoped to exactly the
+  `customer` schema's own protected columns: `brand_profiles` (order-count and
+  spend aggregates, first/last order timestamps) and `consent_decisions` (the
+  append-only evidence of what someone agreed to and when) are deliberately
+  untouched, which is what "financial history survives and the person does
+  not" means in code rather than in decision prose. A new SPI,
+  `customers.spi.CustomerErasureParticipant`, is the seam another module's own
+  erasure operation is meant to be called through — nothing implements it yet,
+  so `marketing`'s own already-built and already-tested
+  `CustomerMetricProjectionService.erase` and `JdbcAudienceStore.eraseMembership`
+  (ADR 0044) are not yet wired to it; that adapter is `marketing`'s own file to
+  write, deliberately left to the wave that owns that module.
+  `customer.blacklist_entries.reason_encrypted` and `lift_reason_encrypted` are
+  a named, deliberate gap this wave leaves: they are not scrubbed.
+  `CustomerErasureTests` covers idempotent raising and execution under retry,
+  cross-tenant refusal, a second subject's contact and address data surviving
+  an erasure of the first untouched byte for byte, an ADR 0027 fact naming the
+  actor on every transition (requested, executed, cancelled), and the account
+  row, brand profile, and consent decisions surviving execution. **Still not
+  built:** the re-encryption job that moves `g1` records onto the current
+  generation, so rotation has a seam but no mover, and retired-key retention is
+  undefined; export, correction, retention-expiry enforcement, legal hold, and
+  proof — ADR 0029's own larger privacy-operations surface, deliberately out of
+  this wave's narrower scope. Retention periods and lawful basis remain
   provisional, per the Open input.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
@@ -166,8 +207,13 @@ a wrongly flagged field costs one annotation, a wrongly permitted one puts a
 phone number on a Kafka topic.
 
 Not yet delivered: rotation generations beyond the first, the background
-re-encryption job, masked projections, and the privacy operations. Anonymisation
-lands with ADR 0015, where the customer data it operates on is defined.
+re-encryption job, and masked projections beyond the one order-detail phone
+mask. Anonymisation lands with ADR 0015, where the customer data it operates on
+is defined — and now has an entry point: `V0178`'s `customer.erasure_requests`
+and `CustomerErasureService`, which overwrite an account's own protected fields
+on execution but do not yet implement export, correction, retention-expiry
+enforcement, legal hold, or proof, the rest of the privacy-operations surface
+this ADR names.
 
 ## Provisional retention
 
@@ -264,7 +310,13 @@ back into plaintext columns.
 - [x] Implement envelope encryption, associated-data binding, and keyed lookup hashing (`EnvelopeFieldProtection`).
 - [x] Implement the `@Classified` annotation and `ClassificationScanner`, consumed by the ADR 0032 event-payload check.
 - [ ] Implement rotation, re-encryption checkpoints, and retired-key retention.
-- [ ] Implement export, correction, anonymization, retention, legal hold, and proof.
+- [~] Implement export, correction, anonymization, retention, legal hold, and proof.
+      Anonymization has an entry point now: `V0178`'s `customer.erasure_requests`
+      request/execute/cancel lifecycle and `CustomerErasureService.execute`,
+      which overwrite the account's own protected fields and hand off to other
+      modules through `customers.spi.CustomerErasureParticipant` — no
+      implementation registered yet. Export, correction, retention-expiry
+      enforcement, legal hold, and proof remain unbuilt.
 - [ ] Add masked projections and restricted database roles for support and reporting.
 - [x] Add cross-tenant, cross-record, cross-column, tampering, and lookup-scoping tests. Anonymisation arrives with ADR 0015.
 

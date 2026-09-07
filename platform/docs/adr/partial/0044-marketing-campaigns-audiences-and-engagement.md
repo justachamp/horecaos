@@ -45,20 +45,27 @@
   `CustomerMetricProjectionSweeperTests` and `MarketingRetentionSweeperTests`
   against a real PostgreSQL and a clock genuinely advanced past, and separately
   held short of, each threshold, including cross-tenant cases. **The ADR 0029
-  erasure path is deliberately left unscheduled.** `CustomerMetricProjectionService.erase`
+  erasure path is still deliberately left unscheduled, and the worklist it
+  would consume is no longer permanently empty.** `CustomerMetricProjectionService.erase`
   and `JdbcAudienceStore.eraseMembership` exist and are tested
-  (`MarketingCampaignTests`), but nothing in the platform ever produces the fact
-  an erasure sweep would need to consume: there is no data-subject erasure
-  request table, endpoint, or account-status transition anywhere in this
-  codebase. ADR 0029 says so of its own implementation status — "no
-  data-subject export, correction, anonymisation, retention, legal-hold or proof
-  operation exists anywhere — there is no privacy endpoint, service or table" —
-  and nothing ever sets `customer.accounts.status = 'ANONYMIZED'` today, though
-  the column accepts it. A sweep built against a worklist that is always empty
-  would read as the erasure obligation being met when it is not, which is worse
-  than the gap being visible, so this stays a manual, tested operation — callable
-  once ADR 0029's own request mechanism exists to call it — rather than a
-  scheduled one that would run and find nothing, forever. Also not built: the
+  (`MarketingCampaignTests`), and as of wave 71 the request mechanism this
+  record's own words called for now exists: `V0178` adds `customer.erasure_requests`
+  with a `PENDING -> COMPLETED | CANCELLED` state machine, raised by a customer
+  through the storefront or an operator on their behalf, and
+  `CustomerErasureService.execute` is the transition that finally sets
+  `customer.customer_accounts.status = 'ANONYMIZED'` — the fact this record's
+  own words said nothing in the codebase ever produced. What it does not yet do
+  is call this module. `customers.spi.CustomerErasureParticipant` is a new
+  seam in the `customers` module built for exactly this: another module
+  registers a bean implementing it and `CustomerErasureService.execute` calls
+  every one, in the same transaction as its own anonymisation. Nothing
+  implements it yet — wiring `CustomerMetricProjectionService.erase` and
+  `JdbcAudienceStore.eraseMembership` behind it is this module's own file to
+  write, and wave 71 deliberately left it undone rather than reach into a
+  module another wave owns. So this still stays a manual, tested operation
+  rather than a scheduled sweep — not because the worklist is empty anymore,
+  but because nothing yet calls marketing's own erase operations when a
+  request completes. Also not built: the
   four triggers and coded grant minting (`pricing.benefit_grants` does not exist),
   merchandising slots, attribution links, referral edges, reviews, the incremental
   inbox fold behind the projection, and the legacy `ratings` migration. The quiet
@@ -789,12 +796,14 @@ payments, for the same reason.
       twenty-four months. The erasure operations — `CustomerMetricProjectionService.erase`
       and `JdbcAudienceStore.eraseMembership`, which remove the projection row
       and the snapshot membership while leaving campaign counts and spend
-      intact — exist and are tested but are **still not scheduled, and cannot
-      honestly be**: no data-subject erasure request exists anywhere in this
-      platform for a sweep to read (ADR 0029's own status line says the same —
-      "no privacy endpoint, service or table"). This gates on ADR 0029's
-      erasure-request mechanism landing, not on marketing's own operations,
-      which are already correct and waiting.
+      intact — exist and are tested but are **still not scheduled**. What
+      changed in wave 71: ADR 0029's erasure-request mechanism has landed —
+      `customer.erasure_requests`, `CustomerErasureService`, and the
+      `customers.spi.CustomerErasureParticipant` seam built for this module to
+      register an adapter behind — so the reason this stayed unscheduled is no
+      longer "there is nothing to schedule". It is now "nothing has registered
+      this module's two operations against the seam that calls them", which is
+      this module's own file to write rather than a gate on another record.
 - [ ] Migrate legacy `ratings` as `CLOSED` reviews; migrate nothing from the
       `offer_*` tables, and confirm with each merchant before cutover that the
       migrated base carries no marketing consent. **Not built**, and it follows

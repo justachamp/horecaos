@@ -1480,6 +1480,26 @@
         },
         "type" : "object"
       },
+      "StorefrontCustomerControllerErasureRequestResponse" : {
+        "properties" : {
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "StorefrontCustomerControllerUpdateProfileRequest" : {
         "properties" : {
           "displayName" : {
@@ -3272,6 +3292,115 @@
           }
         },
         "summary" : "Replace one of the caller's own addresses",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request" : {
+      "get" : {
+        "description" : "The outstanding PENDING request if there is one, else the most recent one of any status. 204 when the caller has never raised one.",
+        "operationId" : "currentErasureRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerErasureRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own current erasure request, if any",
+        "tags" : [ "Customer self-service" ]
+      },
+      "post" : {
+        "description" : "Records the request; it does not erase anything by itself (ADR 0029, ADR 0044). Execution is a separate, staff-performed act, because a real erasure has to be checked against things this endpoint does not decide on its own — an open dispute, a pending delivery, a legal hold. Idempotent: calling this again while a request is already outstanding, or after one already completed, returns that request rather than raising a duplicate.",
+        "operationId" : "requestErasure",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerErasureRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to be forgotten",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel" : {
+      "post" : {
+        "description" : "Idempotent for a request already cancelled. Refused for one that already completed — there is no undoing an erasure that already happened.",
+        "operationId" : "cancelErasureRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerErasureRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw the caller's own PENDING erasure request",
         "tags" : [ "Customer self-service" ]
       }
     },

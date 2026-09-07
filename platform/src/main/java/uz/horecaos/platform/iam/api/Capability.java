@@ -587,6 +587,21 @@ public enum Capability {
     CUSTOMER_PII_REVEAL("customer.pii.reveal", "customer", "pii-reveal"),
 
     /**
+     * ADR 0029, ADR 0044: performs the transition a raised erasure request only
+     * records the intent for — anonymising the account, overwriting its
+     * protected fields, and calling every registered erasure participant.
+     *
+     * <p>Separate from {@link #CUSTOMER_MANAGE}, which raises and cancels a
+     * request, for the reason {@link #CUSTOMER_IMPORT}'s own comment gives for
+     * the same split: not everyone who can edit a customer's profile should be
+     * able to do the one thing on this record that cannot be undone. Held by
+     * {@link PlatformRole#TENANT_OWNER} and {@link PlatformRole#TENANT_ADMIN}
+     * alone — {@link PlatformRole#SUPPORT_AGENT} raises requests on a customer's
+     * behalf and does not execute them.
+     */
+    CUSTOMER_ERASURE_EXECUTE("customer.erasure.execute", "customer", "erasure.execute"),
+
+    /**
      * ADR 0059 stage 3: importing a SendPulse contact export — creating or
      * matching customer accounts in bulk, binding their Telegram chats, and
      * recording consent provenance for every row in one call.

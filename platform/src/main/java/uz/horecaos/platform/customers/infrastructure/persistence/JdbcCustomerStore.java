@@ -1034,6 +1034,337 @@ public class JdbcCustomerStore {
                 > 0;
     }
 
+    // -------------------------------------------------------------------- erasure
+
+    /**
+     * Every one of an account's addresses, active or archived (ADR 0029).
+     *
+     * <p>Deliberately not {@link #addresses}, which filters to {@code ACTIVE} for
+     * the customer's own address book. {@code archiveAddress}'s own doc already
+     * says the ciphertext of an archived row is left where it is because "erasure
+     * ... is a separate, governed act over the whole account" — this is that act,
+     * and it has to reach every row an account ever wrote, not only the ones still
+     * shown in a list.
+     */
+    public List<AddressRow> allAddresses(UUID tenantId, UUID accountId) {
+        return jdbc.sql(SELECT_ADDRESS + """
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                 ORDER BY created_at
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(JdbcCustomerStore::addressRow)
+                .list();
+    }
+
+    /**
+     * Anonymises the account row itself: the transition ADR 0029's own status
+     * line said nothing in this codebase ever performed, though V0017's
+     * {@code ck_customer_status} has accepted {@code ANONYMIZED} since the table
+     * was created.
+     *
+     * <p>{@code status <> 'ANONYMIZED'} in the {@code WHERE} rather than a
+     * precondition the caller checks first, so a retried execution — the same
+     * request completed twice, or two concurrent executions of the same PENDING
+     * request — writes the same result at most once and never double-counts a
+     * {@code version} bump against a row that is already anonymised.
+     *
+     * <p>{@code preferred_locale} and {@code preferred_timezone} are left alone.
+     * Neither identifies a person on its own, and clearing them would strand a
+     * notification path that still needs a language for whatever remains of the
+     * account's commercial record.
+     *
+     * @return rows written: 1, or 0 when the account was not this tenant's or was
+     *         already anonymised
+     */
+    public int anonymizeAccount(UUID tenantId, UUID accountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.customer_accounts
+                SET status = 'ANONYMIZED', anonymized_at = :now,
+                    display_name = NULL, date_of_birth_encrypted = NULL,
+                    version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :accountId AND status <> 'ANONYMIZED'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * Overwrites one contact point's protected value and lookup hash in place.
+     *
+     * <p>An {@code UPDATE}, never a {@code DELETE}: {@code notifications.recipient_endpoints}
+     * carries a plain (not cascading) foreign key to this table's {@code id}
+     * (V0026), so deleting a row a delivery endpoint still references would fail
+     * the transaction with a constraint violation instead of completing an
+     * erasure. {@code normalizedHash} is overwritten too and not left as-is —
+     * leaving it would still let a search for the customer's old number find this
+     * row by its hash, even with the ciphertext gone, which is re-identification
+     * by a side door the encrypted column was supposed to close.
+     */
+    public int eraseContactPoint(UUID tenantId, UUID contactPointId, String encryptedValue, String normalizedHash) {
+        return jdbc.sql("""
+                UPDATE customer.contact_points
+                SET encrypted_value = :encrypted, normalized_hash = :hash
+                WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", contactPointId)
+                .param("encrypted", encryptedValue)
+                .param("hash", normalizedHash)
+                .update();
+    }
+
+    /**
+     * Overwrites one address's protected fields and label in place, whatever its
+     * {@code status}.
+     *
+     * <p>An {@code UPDATE}, matching {@link #eraseContactPoint}: nothing points a
+     * foreign key at {@code customer.addresses} (a cart and an order each hold
+     * their own copy, taken when the address was chosen — {@code
+     * archiveAddress}'s own doc), so nothing would be orphaned by a {@code DELETE}
+     * either, but the application role holds no {@code DELETE} grant on this table
+     * at all (V0017) and an {@code UPDATE} needs no new one.
+     */
+    public int eraseAddress(
+            UUID tenantId,
+            UUID addressId,
+            String label,
+            String encryptedFields,
+            @Nullable String encryptedInstructions) {
+        return jdbc.sql("""
+                UPDATE customer.addresses
+                SET label = :label, encrypted_fields = :fields,
+                    delivery_instructions_encrypted = :instructions
+                WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", addressId)
+                .param("label", label)
+                .param("fields", encryptedFields)
+                .param("instructions", encryptedInstructions, Types.VARCHAR)
+                .update();
+    }
+
+    /**
+     * Unlinks every active principal link an account holds.
+     *
+     * <p>Without this, {@code CustomerIdentityService#resolve} would find the same
+     * {@code (issuer, subject)} link on the next sign-in and hand the caller back
+     * the account this method just anonymised — which would let a phone number
+     * come straight back onto a supposedly-erased account, and a display name
+     * with it. Unlinking forces the next sign-in through {@code
+     * findLinkedAccount}'s empty path, which creates a fresh account exactly as
+     * a first-ever sign-in does.
+     *
+     * @return how many links were unlinked
+     */
+    public int unlinkPrincipalLinks(UUID tenantId, UUID accountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.principal_links
+                SET status = 'UNLINKED', unlinked_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    // ------------------------------------------------------------ erasure requests
+
+    /**
+     * Raises a request, unless one is already {@code PENDING} for this account.
+     *
+     * <p>{@code ON CONFLICT ... DO NOTHING} against {@code ux_erasure_request_pending},
+     * never a pre-check followed by a plain {@code INSERT}. ADR 0031's own
+     * implementation notes record why the obvious alternative — catch the unique
+     * violation, then query for the existing row — does not work inside a real
+     * transaction: PostgreSQL aborts the whole transaction on the constraint
+     * violation, so the follow-up query fails with "current transaction is
+     * aborted" rather than returning the row. This statement can never throw for
+     * that reason, so the caller reads the return value instead of a catch block.
+     *
+     * @return true when this call created the row; false when a {@code PENDING}
+     *         request already existed and nothing was written
+     */
+    public boolean insertErasureRequestIfNonePending(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            String requestedVia,
+            String actorType,
+            String actorId,
+            Instant now) {
+        int written = jdbc.sql("""
+                INSERT INTO customer.erasure_requests (
+                    id, tenant_id, customer_account_id, status,
+                    requested_via, requested_by_actor_type, requested_by_actor_id, requested_at)
+                VALUES (:id, :tenantId, :accountId, 'PENDING', :via, :actorType, :actorId, :now)
+                ON CONFLICT (tenant_id, customer_account_id) WHERE status = 'PENDING' DO NOTHING
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("via", requestedVia)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+        return written > 0;
+    }
+
+    /** The tenant's one outstanding request for this account, if any. */
+    public Optional<ErasureRequestRow> pendingErasureRequest(UUID tenantId, UUID accountId) {
+        return jdbc.sql(SELECT_ERASURE_REQUEST + """
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND status = 'PENDING'
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(JdbcCustomerStore::erasureRequestRow)
+                .optional();
+    }
+
+    /**
+     * The account's most recently completed request, if it has one.
+     *
+     * <p>Read after {@link #anonymizeAccount} finds an already-{@code ANONYMIZED}
+     * row, to answer "when, and by whom" without re-deriving it from the account
+     * row alone, which carries only {@code anonymized_at} and not the actor.
+     */
+    public Optional<ErasureRequestRow> latestCompletedErasureRequest(UUID tenantId, UUID accountId) {
+        return jdbc.sql(SELECT_ERASURE_REQUEST + """
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND status = 'COMPLETED'
+                 ORDER BY completed_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(JdbcCustomerStore::erasureRequestRow)
+                .optional();
+    }
+
+    /** One request by id, scoped to the tenant — never matched on id alone. */
+    public Optional<ErasureRequestRow> erasureRequest(UUID tenantId, UUID requestId) {
+        return jdbc.sql(SELECT_ERASURE_REQUEST + " WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", requestId)
+                .query(JdbcCustomerStore::erasureRequestRow)
+                .optional();
+    }
+
+    /** One account's full request history, newest first — the evidence trail. */
+    public List<ErasureRequestRow> erasureRequestHistory(UUID tenantId, UUID accountId) {
+        return jdbc.sql(SELECT_ERASURE_REQUEST + """
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                 ORDER BY requested_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(JdbcCustomerStore::erasureRequestRow)
+                .list();
+    }
+
+    /**
+     * Moves one request from {@code PENDING} to {@code COMPLETED}.
+     *
+     * <p>Conditional on {@code status = 'PENDING'} in the {@code WHERE}, mirroring
+     * {@code liftActiveBlacklistEntry}: two concurrent executions of the same
+     * request race here rather than earlier, the loser sees zero rows written, and
+     * the service re-reads and returns the winner's result instead of erasing
+     * twice or reporting a false failure.
+     *
+     * @return rows written: 1, or 0 when the request had already left {@code PENDING}
+     */
+    public int completeErasureRequest(UUID tenantId, UUID requestId, String actorType, String actorId, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.erasure_requests
+                SET status = 'COMPLETED', completed_at = :now,
+                    completed_by_actor_type = :actorType, completed_by_actor_id = :actorId
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'PENDING'
+                """)
+                .param("tenantId", tenantId)
+                .param("id", requestId)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    /** Moves one request from {@code PENDING} to {@code CANCELLED}. See {@link #completeErasureRequest}. */
+    public int cancelErasureRequest(UUID tenantId, UUID requestId, String actorType, String actorId, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.erasure_requests
+                SET status = 'CANCELLED', cancelled_at = :now,
+                    cancelled_by_actor_type = :actorType, cancelled_by_actor_id = :actorId
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'PENDING'
+                """)
+                .param("tenantId", tenantId)
+                .param("id", requestId)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    private static final String SELECT_ERASURE_REQUEST = """
+            SELECT id, tenant_id, customer_account_id, status,
+                   requested_via, requested_by_actor_type, requested_by_actor_id, requested_at,
+                   completed_at, completed_by_actor_type, completed_by_actor_id,
+                   cancelled_at, cancelled_by_actor_type, cancelled_by_actor_id
+            FROM customer.erasure_requests""";
+
+    private static ErasureRequestRow erasureRequestRow(java.sql.ResultSet row, int number)
+            throws java.sql.SQLException {
+        return new ErasureRequestRow(
+                row.getObject("id", UUID.class),
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("customer_account_id", UUID.class),
+                row.getString("status"),
+                row.getString("requested_via"),
+                row.getString("requested_by_actor_type"),
+                row.getString("requested_by_actor_id"),
+                row.getObject("requested_at", OffsetDateTime.class).toInstant(),
+                instantOrNull(row, "completed_at"),
+                row.getString("completed_by_actor_type"),
+                row.getString("completed_by_actor_id"),
+                instantOrNull(row, "cancelled_at"),
+                row.getString("cancelled_by_actor_type"),
+                row.getString("cancelled_by_actor_id"));
+    }
+
+    /**
+     * A data-subject erasure request (ADR 0029, ADR 0044), and the state it is in.
+     *
+     * <p>Carries no reason and no free text on either transition. A justification
+     * would be personal data the moment it names anything specific, and this
+     * request already is one: raising it, executing it, and cancelling it are each
+     * their own ADR 0027 audit fact naming the actor, which is the evidence this
+     * record's own existence is meant to leave behind.
+     */
+    public record ErasureRequestRow(
+            UUID id,
+            UUID tenantId,
+            UUID customerAccountId,
+            String status,
+            String requestedVia,
+            String requestedByActorType,
+            String requestedByActorId,
+            Instant requestedAt,
+            @Nullable Instant completedAt,
+            @Nullable String completedByActorType,
+            @Nullable String completedByActorId,
+            @Nullable Instant cancelledAt,
+            @Nullable String cancelledByActorType,
+            @Nullable String cancelledByActorId) {
+
+        @Override
+        public String toString() {
+            return "ErasureRequestRow[id=%s, status=%s]".formatted(id, status);
+        }
+    }
+
     public record ContactPointRow(
             UUID id,
             String type,

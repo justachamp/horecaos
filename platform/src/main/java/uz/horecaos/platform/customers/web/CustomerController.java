@@ -30,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
+import uz.horecaos.platform.customers.application.CustomerErasureService;
+import uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.application.CustomerListQueryService;
 import uz.horecaos.platform.customers.application.CustomerListQueryService.HeaderCounts;
@@ -38,6 +40,7 @@ import uz.horecaos.platform.customers.application.CustomerProfileService.Address
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.application.CustomerProfileService.CoordinateSource;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -71,6 +74,7 @@ public class CustomerController {
     private final ConsentService consent;
     private final CustomerListQueryService lists;
     private final CustomerBlacklistService blacklist;
+    private final CustomerErasureService erasure;
     private final CurrentActor currentActor;
     private final String trustedIssuer;
 
@@ -80,6 +84,7 @@ public class CustomerController {
             ConsentService consent,
             CustomerListQueryService lists,
             CustomerBlacklistService blacklist,
+            CustomerErasureService erasure,
             CurrentActor currentActor,
             @org.springframework.beans.factory.annotation.Value(
                             "${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
@@ -89,6 +94,7 @@ public class CustomerController {
         this.consent = consent;
         this.lists = lists;
         this.blacklist = blacklist;
+        this.erasure = erasure;
         this.currentActor = currentActor;
         this.trustedIssuer = trustedIssuer;
     }
@@ -556,6 +562,90 @@ public class CustomerController {
         return ResponseEntity.noContent().build();
     }
 
+    // ------------------------------------------------------------------- erasure
+
+    @PostMapping("/{accountId}/erasure-requests")
+    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @Operation(
+            summary = "Raise a data-subject erasure request on this customer's behalf",
+            description = "Records intent; it does not erase anything by itself (ADR 0029, ADR "
+                    + "0044). Idempotent: a second call while one request is already PENDING "
+                    + "returns that same request rather than raising a duplicate, and one for an "
+                    + "already-anonymised account returns the request that anonymised it.")
+    public ResponseEntity<ErasureRequestResponse> requestErasure(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId) {
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ErasureRequestResponse.of(
+                            erasure.request(tenantId, accountId, RequestedVia.OPERATIONS, staffActor())));
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        }
+    }
+
+    @GetMapping("/{accountId}/erasure-requests")
+    @RequiresCapability(Capability.CUSTOMER_READ)
+    @Operation(
+            summary = "This customer's erasure-request history, newest first",
+            description = "Whether a request is outstanding, was withdrawn, or already executed, " + "and by whom.")
+    public ResponseEntity<List<ErasureRequestResponse>> erasureRequests(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId) {
+        try {
+            return ResponseEntity.ok(erasure.history(tenantId, accountId).stream()
+                    .map(ErasureRequestResponse::of)
+                    .toList());
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        }
+    }
+
+    @PostMapping("/{accountId}/erasure-requests/{requestId}/execute")
+    @RequiresCapability(value = Capability.CUSTOMER_ERASURE_EXECUTE, mutating = true)
+    @Operation(
+            summary = "Execute an erasure request",
+            description = "The transition that actually anonymises the account and overwrites "
+                    + "its protected fields (ADR 0029) — deliberately a second, more tightly "
+                    + "held capability than the one that raises a request. Idempotent: executing "
+                    + "an already-COMPLETED request returns it unchanged rather than erasing "
+                    + "twice.")
+    public ResponseEntity<ErasureRequestResponse> executeErasure(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @PathVariable UUID requestId) {
+        try {
+            return ResponseEntity.ok(
+                    ErasureRequestResponse.of(erasure.execute(tenantId, accountId, requestId, staffActor())));
+        } catch (CustomerErasureService.NoSuchErasureRequestException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such erasure request");
+        } catch (CustomerErasureService.ErasureRequestCancelledException cancelled) {
+            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, cancelled.getMessage());
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        } catch (CustomerErasureService.MergedAccountException merged) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    merged.getMessage(),
+                    java.util.Map.of(
+                            "survivingAccountId", merged.survivingAccountId().toString()));
+        }
+    }
+
+    @PostMapping("/{accountId}/erasure-requests/{requestId}/cancel")
+    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @Operation(
+            summary = "Withdraw a PENDING erasure request",
+            description = "Idempotent for a request already CANCELLED. Refused for one that "
+                    + "already COMPLETED — there is no undoing an erasure that already happened.")
+    public ResponseEntity<ErasureRequestResponse> cancelErasure(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @PathVariable UUID requestId) {
+        try {
+            return ResponseEntity.ok(
+                    ErasureRequestResponse.of(erasure.cancel(tenantId, accountId, requestId, staffActor())));
+        } catch (CustomerErasureService.NoSuchErasureRequestException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such erasure request");
+        } catch (CustomerErasureService.ErasureRequestCompletedException completed) {
+            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, completed.getMessage());
+        }
+    }
+
     /** Only the brand. The identity is taken from the caller's token. */
     public record ResolveRequest(@NotNull UUID brandId) {}
 
@@ -679,4 +769,35 @@ public class CustomerController {
     public record LiftBlacklistRequest(@Nullable String reason) {}
 
     public record MergeRequest(@NotNull UUID targetAccountId) {}
+
+    /**
+     * One erasure request, at whatever point in its life it is asked about. No
+     * reason and no free text on any of the three transitions — see {@code
+     * JdbcCustomerStore.ErasureRequestRow}'s own doc for why.
+     */
+    public record ErasureRequestResponse(
+            UUID id,
+            String status,
+            String requestedVia,
+            String requestedByActorType,
+            String requestedByActorId,
+            Instant requestedAt,
+            @Nullable Instant completedAt,
+            @Nullable String completedByActorId,
+            @Nullable Instant cancelledAt,
+            @Nullable String cancelledByActorId) {
+        static ErasureRequestResponse of(ErasureRequestRow row) {
+            return new ErasureRequestResponse(
+                    row.id(),
+                    row.status(),
+                    row.requestedVia(),
+                    row.requestedByActorType(),
+                    row.requestedByActorId(),
+                    row.requestedAt(),
+                    row.completedAt(),
+                    row.completedByActorId(),
+                    row.cancelledAt(),
+                    row.cancelledByActorId());
+        }
+    }
 }

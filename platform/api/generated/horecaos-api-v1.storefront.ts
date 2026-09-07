@@ -276,10 +276,13 @@ export interface MyReferralResponse {
 export interface OrderLineResponse {
   finalAmountMinor?: number;
   lineNumber?: number;
+  modifierOptionIds?: Array<string>;
   modifiers?: Array<string>;
+  productId?: string;
   productName?: string;
   quantity?: number;
   unitAmountMinor?: number;
+  variantId?: string;
   variantName?: string;
 }
 
@@ -407,6 +410,29 @@ export interface RegistrationResponse {
   created?: boolean;
 }
 
+export interface ReorderLineResponse {
+  lineNumber?: number;
+  modifierOptionIds?: Array<string>;
+  originalUnitAmountMinor?: number;
+  productId?: string;
+  productName?: string;
+  quantity?: number;
+  status?: string;
+  unitAmountMinor?: number;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface ReorderPlanResponse {
+  channelCode?: string;
+  currency?: string;
+  lines?: Array<ReorderLineResponse>;
+  locationId?: string;
+  orderId?: string;
+  publicOrderNumber?: string;
+  verdict?: string;
+}
+
 export interface RequestCodeRequest {
   phone: string;
 }
@@ -461,6 +487,13 @@ export interface StorefrontCustomerControllerAddressResponse {
   latitude?: number;
   longitude?: number;
   version?: number;
+}
+
+export interface StorefrontCustomerControllerErasureRequestResponse {
+  completedAt?: string;
+  id?: string;
+  requestedAt?: string;
+  status?: string;
 }
 
 export interface StorefrontCustomerControllerUpdateProfileRequest {
@@ -569,6 +602,9 @@ export interface Operations {
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
+  "currentErasureRequest": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
+  "requestErasure": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
+  "cancelErasureRequest": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "favourites": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FavouritesResponse } };
   "removeFavourite": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "addFavourite": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -576,6 +612,7 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };

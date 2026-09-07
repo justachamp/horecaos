@@ -28,6 +28,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerOwned;
+import uz.horecaos.platform.customers.application.CustomerErasureService;
+import uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia;
 import uz.horecaos.platform.customers.application.CustomerPolicyLookup;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.customers.application.CustomerProfileService.AddressFields;
@@ -35,6 +37,7 @@ import uz.horecaos.platform.customers.application.CustomerProfileService.Contact
 import uz.horecaos.platform.customers.application.CustomerProfileService.CoordinateSource;
 import uz.horecaos.platform.customers.application.CustomerProfileService.RevealedAddress;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcFavouriteStore;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
@@ -121,6 +124,7 @@ public class StorefrontCustomerController {
     private static final ActorRef SELF_SERVICE_ACTOR = ActorRef.service("storefront-profile");
 
     private final CustomerProfileService profiles;
+    private final CustomerErasureService erasure;
     private final CurrentCustomer currentCustomer;
     private final CustomerPolicyLookup policies;
     private final Clock clock;
@@ -128,11 +132,13 @@ public class StorefrontCustomerController {
 
     public StorefrontCustomerController(
             CustomerProfileService profiles,
+            CustomerErasureService erasure,
             CurrentCustomer currentCustomer,
             CustomerPolicyLookup policies,
             Clock clock,
             JdbcFavouriteStore favourites) {
         this.profiles = profiles;
+        this.erasure = erasure;
         this.currentCustomer = currentCustomer;
         this.policies = policies;
         this.clock = clock;
@@ -396,6 +402,78 @@ public class StorefrontCustomerController {
         return ResponseEntity.noContent().build();
     }
 
+    // ------------------------------------------------------------------ erasure
+
+    /**
+     * The ADR 0027 actor behind a customer's own erasure request.
+     *
+     * <p>Its own value rather than {@link #SELF_SERVICE_ACTOR}: that one names
+     * the profile surface specifically, and an audit trail that read every
+     * self-service act as "storefront-profile" would blur an ordinary address
+     * edit together with the one act on this controller that cannot be undone.
+     */
+    private static final ActorRef SELF_SERVICE_ERASURE_ACTOR = ActorRef.service("storefront-erasure-request");
+
+    @PostMapping("/erasure-request")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Ask to be forgotten",
+            description = "Records the request; it does not erase anything by itself (ADR 0029, "
+                    + "ADR 0044). Execution is a separate, staff-performed act, because a real "
+                    + "erasure has to be checked against things this endpoint does not decide on "
+                    + "its own — an open dispute, a pending delivery, a legal hold. Idempotent: "
+                    + "calling this again while a request is already outstanding, or after one "
+                    + "already completed, returns that request rather than raising a duplicate.")
+    public ResponseEntity<ErasureRequestResponse> requestErasure(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ErasureRequestResponse.of(
+                            erasure.request(tenantId, accountId, RequestedVia.STOREFRONT, SELF_SERVICE_ERASURE_ACTOR)));
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such account");
+        }
+    }
+
+    @GetMapping("/erasure-request")
+    @CustomerOwned
+    @Operation(
+            summary = "The caller's own current erasure request, if any",
+            description = "The outstanding PENDING request if there is one, else the most recent "
+                    + "one of any status. 204 when the caller has never raised one.")
+    public ResponseEntity<ErasureRequestResponse> currentErasureRequest(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        return erasure.current(tenantId, accountId)
+                .map(row -> ResponseEntity.ok(ErasureRequestResponse.of(row)))
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PostMapping("/erasure-request/cancel")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Withdraw the caller's own PENDING erasure request",
+            description = "Idempotent for a request already cancelled. Refused for one that "
+                    + "already completed — there is no undoing an erasure that already happened.")
+    public ResponseEntity<ErasureRequestResponse> cancelErasureRequest(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        ErasureRequestRow current = erasure.current(tenantId, accountId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No erasure request on file"));
+        try {
+            return ResponseEntity.ok(ErasureRequestResponse.of(
+                    erasure.cancel(tenantId, accountId, current.id(), SELF_SERVICE_ERASURE_ACTOR)));
+        } catch (CustomerErasureService.ErasureRequestCompletedException completed) {
+            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, completed.getMessage());
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /**
@@ -584,4 +662,18 @@ public class StorefrontCustomerController {
             @DecimalMin("-90") @DecimalMax("90") @Nullable Double latitude,
             @DecimalMin("-180") @DecimalMax("180") @Nullable Double longitude,
             @NotNull CoordinateSource coordinateSource) {}
+
+    /**
+     * The caller's own erasure request. No reason and no free text at any stage —
+     * see {@code JdbcCustomerStore.ErasureRequestRow}'s own doc for why.
+     */
+    public record ErasureRequestResponse(
+            UUID id,
+            String status,
+            Instant requestedAt,
+            @Nullable Instant completedAt) {
+        static ErasureRequestResponse of(ErasureRequestRow row) {
+            return new ErasureRequestResponse(row.id(), row.status(), row.requestedAt(), row.completedAt());
+        }
+    }
 }
