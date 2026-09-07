@@ -179,7 +179,13 @@ class OutboxRelayBackoffTests {
 
         @Override
         public boolean markFailed(
-                UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter) {
+                UUID eventId,
+                UUID claimToken,
+                Instant now,
+                Instant nextAttemptAt,
+                String errorCode,
+                String error,
+                boolean deadLetter) {
             nextAttempts.add(nextAttemptAt);
             deadLettered.add(deadLetter);
             return true;

@@ -120,6 +120,7 @@ public class JdbcOutboxStore implements RelayStore {
                             claimed_at = NULL,
                             published_at = :publishedAt,
                             last_error = NULL,
+                            error_code = NULL,
                             updated_at = :publishedAt
                         WHERE event_id = :eventId
                           AND status = 'PUBLISHING'
@@ -135,7 +136,13 @@ public class JdbcOutboxStore implements RelayStore {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markFailed(
-            UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter) {
+            UUID eventId,
+            UUID claimToken,
+            Instant now,
+            Instant nextAttemptAt,
+            String errorCode,
+            String error,
+            boolean deadLetter) {
         return jdbc.sql("""
                         UPDATE integration.outbox_events
                         SET status = CASE WHEN :deadLetter THEN 'DEAD_LETTER' ELSE 'PENDING' END,
@@ -143,6 +150,7 @@ public class JdbcOutboxStore implements RelayStore {
                             claimed_at = NULL,
                             next_attempt_at = :nextAttemptAt,
                             dead_lettered_at = CASE WHEN :deadLetter THEN :now ELSE NULL END,
+                            error_code = :errorCode,
                             last_error = :error,
                             updated_at = :now
                         WHERE event_id = :eventId
@@ -153,6 +161,7 @@ public class JdbcOutboxStore implements RelayStore {
                         .param("claimToken", claimToken)
                         .param("now", utc(now))
                         .param("nextAttemptAt", utc(nextAttemptAt))
+                        .param("errorCode", errorCode)
                         .param("error", error)
                         .param("deadLetter", deadLetter)
                         .update()

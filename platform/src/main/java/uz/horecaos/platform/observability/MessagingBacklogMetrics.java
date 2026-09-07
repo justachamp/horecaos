@@ -158,7 +158,7 @@ public class MessagingBacklogMetrics {
                 .register(meters);
 
         this.outboxDeadLetters = MultiGauge.builder("horecaos.outbox.dead.letters")
-                .description("Outbox rows in DEAD_LETTER, by topic domain")
+                .description("Outbox rows in DEAD_LETTER, by topic domain and failure category")
                 .register(meters);
         this.inboxDeadLetters = MultiGauge.builder("horecaos.inbox.dead.letters")
                 .description("Inbox rows in DEAD_LETTER, by topic domain and failure category")
@@ -283,21 +283,22 @@ public class MessagingBacklogMetrics {
 
         List<DeadLetterRow> rows = jdbc.sql("""
                         SELECT split_part(topic, '.', 1) AS topic_domain,
+                               coalesce(error_code, 'UNKNOWN') AS failure_category,
                                count(*) AS total
                         FROM integration.outbox_events
                         WHERE status = 'DEAD_LETTER'
-                        GROUP BY 1
-                        ORDER BY 2 DESC
+                        GROUP BY 1, 2
+                        ORDER BY 3 DESC
                         """)
                 .query((resultSet, rowNumber) -> new DeadLetterRow(
                         resultSet.getString("topic_domain"),
-                        // Outbox rows carry no classified failure category. The
-                        // relay writes only `last_error` free text, so the
-                        // category the inbox reports cannot be reported here
-                        // without a schema change. Labelled "unclassified"
-                        // rather than omitted, so the gap is visible on the
-                        // dashboard instead of being mistaken for zero.
-                        "unclassified",
+                        // OutboxRelay classifies every failure through
+                        // FailureClassifier before it ever reaches this column
+                        // (ADR 0006). A row that dead-lettered before that
+                        // classifier existed still reads NULL here, hence the
+                        // same UNKNOWN fallback the inbox side has always used
+                        // for exactly that reason.
+                        resultSet.getString("failure_category"),
                         resultSet.getLong("total")))
                 .list();
         register(outboxDeadLetters, rows);
