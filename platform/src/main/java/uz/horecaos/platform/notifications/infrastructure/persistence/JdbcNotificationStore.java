@@ -1,6 +1,7 @@
 package uz.horecaos.platform.notifications.infrastructure.persistence;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -258,6 +259,45 @@ public class JdbcNotificationStore {
                         .param("id", notificationId)
                         .param("token", claimToken)
                         .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Holds a message for ADR 0020 quiet hours, rather than sending it now.
+     *
+     * <p>Status is left exactly where it was — CREATED, always, since this is
+     * only ever called from eligibility before {@link #markReady} — and only
+     * {@code next_attempt_at} moves, out to {@code until} (the window's own
+     * close, computed once by {@link uz.horecaos.platform.notifications.domain.QuietHours},
+     * never a short repeating backoff). {@link #claimDue} increments {@code
+     * attempt_count} on every claim regardless of what eligibility decides, so a
+     * message reclaimed every few seconds for the length of an all-night window
+     * would burn its entire retry budget doing nothing but waiting and reach
+     * {@code MANUAL_REVIEW} hours before the window ever closed — the same
+     * failure {@code CampaignPacer}'s own quiet-hours idiom computes its slot
+     * up front to avoid. Jumping straight to the close means this row is
+     * claimed exactly twice for a full night's hold: once to discover the
+     * window, once to leave it.
+     *
+     * <p>The claim is released ({@code claim_token}/{@code claimed_at} cleared)
+     * so any node may pick the row up once it is actually due, the same as
+     * every other settle-style write in this class.
+     */
+    public boolean deferForQuietHours(
+            UUID tenantId, UUID notificationId, @Nullable UUID claimToken, Instant until, Instant now) {
+        return jdbc.sql("""
+                UPDATE notifications.notifications
+                SET next_attempt_at = :until, claim_token = NULL, claimed_at = NULL,
+                    version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
+                  AND status = 'CREATED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", notificationId)
+                        .param("token", claimToken)
+                        .param("until", utc(until))
                         .param("now", utc(now))
                         .update()
                 == 1;
@@ -823,12 +863,20 @@ public class JdbcNotificationStore {
     }
 
     /**
-     * Sets one preference.
+     * Sets one preference's {@code enabled} flag, leaving any quiet-hours
+     * window on the row exactly as it was.
      *
      * <p>The conflict targets are the two partial indexes, so the tenant-wide row
      * and a brand override are separate rows that never overwrite one another. A
      * single upsert over a nullable brand column would treat them as unrelated and
      * insert duplicates, because NULL does not compare equal to itself.
+     *
+     * <p>{@code CustomerProviderBindingSyncService}'s own call site — syncing a
+     * TELEGRAM preference on and off as a binding links, is imported, or
+     * retires — is the reason this stays narrow rather than growing quiet-hours
+     * parameters too. That sync has no opinion on a window the customer set
+     * through {@link #upsertPreferenceWindow}, and a binding event is not the
+     * moment to silently clear one.
      */
     public void upsertPreference(
             UUID tenantId,
@@ -861,6 +909,68 @@ public class JdbcNotificationStore {
                     :enabled, :now, :now)
                 ON CONFLICT %s
                 DO UPDATE SET enabled = excluded.enabled,
+                              version = notifications.notification_preferences.version + 1,
+                              updated_at = excluded.updated_at
+                """.formatted(conflictTarget)).params(parameters).update();
+    }
+
+    /**
+     * Sets one preference in full, quiet hours included — {@link
+     * NotificationPreferenceService#set}'s own store call, matching the
+     * customer-facing endpoint's {@code PUT} semantics.
+     *
+     * <p>Full replace, not a patch: {@code quietHoursStart}/{@code
+     * quietHoursEnd}/{@code timezone} are written exactly as given, including
+     * {@code null}, the same way {@code enabled} already is on {@link
+     * #upsertPreference}. A {@code PUT} that omitted a previously-set window
+     * would otherwise leave it in force with no way for the caller to see that
+     * from the request they just sent.
+     *
+     * @param quietHoursStart null together with {@code quietHoursEnd} for no
+     *                        window; {@code NotificationPreferenceService#set}
+     *                        is what enforces the pairing and the timezone
+     *                        requirement before this method is ever called
+     */
+    public void upsertPreferenceWindow(
+            UUID tenantId,
+            UUID accountId,
+            @Nullable UUID brandId,
+            String notificationClass,
+            String channel,
+            boolean enabled,
+            @Nullable LocalTime quietHoursStart,
+            @Nullable LocalTime quietHoursEnd,
+            @Nullable String timezone,
+            Instant now) {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("id", UUID.randomUUID());
+        parameters.put("tenantId", tenantId);
+        parameters.put("accountId", accountId);
+        parameters.put("brandId", brandId);
+        parameters.put("class", notificationClass);
+        parameters.put("channel", channel);
+        parameters.put("enabled", enabled);
+        parameters.put("quietHoursStart", quietHoursStart);
+        parameters.put("quietHoursEnd", quietHoursEnd);
+        parameters.put("timezone", timezone);
+        parameters.put("now", utc(now));
+
+        String conflictTarget = brandId == null
+                ? "(tenant_id, customer_account_id, notification_class, channel) WHERE brand_id IS NULL"
+                : "(tenant_id, customer_account_id, brand_id, notification_class, channel) "
+                        + "WHERE brand_id IS NOT NULL";
+
+        jdbc.sql("""
+                INSERT INTO notifications.notification_preferences (
+                    id, tenant_id, customer_account_id, brand_id, notification_class, channel,
+                    enabled, quiet_hours_start, quiet_hours_end, timezone, created_at, updated_at)
+                VALUES (:id, :tenantId, :accountId, :brandId, :class, :channel,
+                    :enabled, :quietHoursStart, :quietHoursEnd, :timezone, :now, :now)
+                ON CONFLICT %s
+                DO UPDATE SET enabled = excluded.enabled,
+                              quiet_hours_start = excluded.quiet_hours_start,
+                              quiet_hours_end = excluded.quiet_hours_end,
+                              timezone = excluded.timezone,
                               version = notifications.notification_preferences.version + 1,
                               updated_at = excluded.updated_at
                 """.formatted(conflictTarget)).params(parameters).update();
@@ -1128,8 +1238,8 @@ public class JdbcNotificationStore {
             String notificationClass,
             String channel,
             boolean enabled,
-            java.time.LocalTime quietHoursStart,
-            java.time.LocalTime quietHoursEnd,
+            LocalTime quietHoursStart,
+            LocalTime quietHoursEnd,
             String timezone,
             int version) {}
 }

@@ -9989,6 +9989,15 @@
           "notificationClass" : {
             "type" : "string"
           },
+          "quietHoursEnd" : {
+            "type" : "string"
+          },
+          "quietHoursStart" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
@@ -13282,6 +13291,15 @@
           },
           "enabled" : {
             "type" : "boolean"
+          },
+          "quietHoursEnd" : {
+            "type" : "string"
+          },
+          "quietHoursStart" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
           }
         },
         "required" : [ "enabled" ],
