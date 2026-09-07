@@ -15,15 +15,26 @@
   plans and orders the tenders, enforces all five invariants and computes
   `cash_due_minor`. The three not-money properties are enforced rather than
   asserted: no withdrawal path exists, no transfer between accounts exists, and a
-  redemption can only reduce an order. **The unwind half now has a production
-  caller and the settle half still does not.** ADR 0013's `OrderRemedyService`
-  calls `OrderSettlementService.refund` behind `POST
-  /api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds` (V0052), which
-  is what would reverse a points tender in reverse settlement order — but nothing
-  plans a settlement at checkout, so `refund` refuses every real order with "The
-  order has no settlement", and the planning, reserving and settling path is
-  reached only from `LoyaltyLedgerAndSplitTenderTests`; `CheckoutService` still
-  does not use it. **`LoyaltyAccrualService.accrue(CompletedOrder)` now has a
+  redemption can only reduce an order. **Both halves now have production
+  callers.** Settlement planning is step 8 of checkout:
+  `CheckoutService.checkout` calls `CheckoutSettlementStep.planAndCreateIntent`
+  unconditionally after the order row is written, and that in turn calls
+  `OrderSettlementService.planSettlement` — the code labels it "Ungated ... this
+  cannot be the branch that quietly did not run", and it plans before the payment
+  intent rather than after it, so the intent is told the money leg instead of
+  recomputing the order total and asking a provider for an amount the customer
+  had partly paid in points. A settlement row therefore exists for every order
+  whose method this build can tender against; `planSettlement` answers empty and
+  logs a warning only for an unimplemented method code, and is idempotent on the
+  order id so a replayed checkout reads back the existing money leg rather than
+  taking a second points hold. Unwinding works against that: ADR 0013's
+  `OrderRemedyService` calls `OrderSettlementService.refund` behind `POST
+  /api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds` (V0052), and
+  `CartCheckoutAndOrderTests.anOrderPlacedTheRealWayCanBeRefunded` places an
+  order through the production `checkout()` path and refunds it to
+  `TenderStatus.REVERSED` — a real order, not a settlement a fixture planned by
+  hand, which is what the earlier revision of this paragraph correctly said did
+  not work. **`LoyaltyAccrualService.accrue(CompletedOrder)` now has a
   production caller.** `loyalty.application.OrderCompletionAccrualTrigger` is a
   `@TransactionalEventListener(phase = BEFORE_COMMIT)` on
   `ordering.api.OrderingEvent` — the shape `notifications.application.
@@ -38,9 +49,14 @@
   — `accrue` already keys its entry on `"ACCRUAL:" + orderId` — proven by
   replaying the identical `OrderCompleted` fact three times and reading the
   account's own balance and entry count, not merely that the call returned.
-  `JdbcSettlementStore.registerMethod` still has no caller, so no tenant holds
-  the `LOYALTY_POINTS` registry row the checklist describes as seeded per
-  tenant. Also not built: the campaign-driven accrual rules ADR 0044
+  `JdbcSettlementStore.registerMethod` has a production caller after all:
+  `CheckoutSettlementPlanner.registryIdOf` registers a method row on first use
+  and reuses it thereafter, refusing a row whose status is not `ACTIVE` or whose
+  `settles_from_balance` disagrees with the way this platform tenders it. So the
+  `LOYALTY_POINTS` row exists once a tenant's first points redemption settles —
+  created lazily on demand rather than seeded per tenant as the checklist below
+  describes, which is a difference worth knowing before anybody writes the
+  seeding step it asks for. Also not built: the campaign-driven accrual rules ADR 0044
   owns; expiry warning notifications; `fiscal.fiscal_document_lines`, so the
   per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR
   0014's assignment; and the tax effect on the liability report. The storefront
@@ -770,7 +786,7 @@ Balances are a liability; they are not deleted to undo a feature.
 - [x] Implement reservation, release, redemption, and reversal with conditional SQL, plus deferred accrual, the expiry sweep and forfeiture. The hold is a debit taken by one conditional `UPDATE`, so two tabs are separated by PostgreSQL rather than by a read; `RELEASE` returns points whose tender never settled and `REVERSAL` returns points whose settled tender is refunded, at the lots' original `expires_at`. **Expiry warning notifications are not built**: the `expiry_warning_days` column and the nearest-expiry field on the balance read are there, and the ADR 0020 message is outstanding.
 - [x] Implement adjustment with reason codes and ADR 0027 approval thresholds, and the ADR 0015 merge path as an audited `ACCOUNT_MERGE` adjustment pair. The adjustment command takes one account and one signed amount and has no paired form, which is the whole treatment of the transfer back door.
 - [x] Implement the per-line discount allocation and the refund cap that stops a points tender refunding as money. The allocation is `loyalty.api.RedemptionAllocation`, a pure function over the quote snapshot's lines; **`fiscal.fiscal_document_lines` does not exist yet**, so nothing writes to it. The refund cap is enforced inside the reversing transaction against the tender's settled amount, and `OrderSettlementService.refund` unwinds money tenders first.
-- [ ] Extend checkout to plan, reserve, and settle ordered tenders, enforce the money-tender invariant, and carry `cash_due_minor` onto the delivery assignment. `OrderSettlementService` does the planning, the ordering, and all five invariants, and computes `cash_due_minor`; **wiring it into the ADR 0019 checkout and onto the ADR 0014 assignment is outstanding** and belongs to those modules.
+- [ ] Extend checkout to plan, reserve, and settle ordered tenders, enforce the money-tender invariant, and carry `cash_due_minor` onto the delivery assignment. The checkout half is done: `CheckoutSettlementStep` is step 8 of `CheckoutService.checkout` and calls `planSettlement` unconditionally, so every order this build can tender against gets a settlement, its tenders ordered with the balance leg first, all five invariants enforced, and `cash_due_minor` computed. **The ADR 0014 half is still outstanding**, and it is the whole of what is left here: `cash_due_minor` is written by `payments.settlement` and read by nothing outside it, `fulfillment` carries no cash figure on an assignment at all, and `CourierAccrualService.recordDelivery` — which takes a `cashToCollectMinor` — has no production caller to receive one. So a courier is still handed no figure, and that belongs to ADR 0014's module rather than this one.
 - [x] Give `LoyaltyAccrualService.accrue` a production caller. `loyalty.application.OrderCompletionAccrualTrigger` listens for `ordering.api.OrderCompleted` the same way `OrderNotificationTrigger` does, computing the accrual base from what the order actually settled in money — net of the delivery fee and of whatever a points redemption already discharged, read from a real settlement rather than assumed absent — instead of the order total. Idempotent by inheriting `accrue`'s own `"ACCRUAL:" + orderId` key; a replayed completion, delivered three times, accrues once, proven against the account's own balance. V0177 adds the index `settledRedemptionMinor` reads.
 - [ ] Build the liability report including the tax effect of redemptions, and its finance reconciliation. The per-brand outstanding and held figures are built and never pooled into one tenant number; **the tax effect of redemptions is not yet on the report**, and it is the half finance actually needs, so this stays open.
 
