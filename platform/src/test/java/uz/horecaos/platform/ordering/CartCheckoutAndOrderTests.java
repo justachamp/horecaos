@@ -2081,9 +2081,7 @@ class CartCheckoutAndOrderTests {
         UUID otherTenant = UUID.randomUUID();
 
         assertThatThrownBy(() -> tx(() -> posDecisions.decide(
-                        otherTenant,
-                        order,
-                        posDecision("pos-cross-tenant-1", PosApprovalDecisionPort.Action.APPROVE))))
+                        otherTenant, order, posDecision("pos-cross-tenant-1", PosApprovalDecisionPort.Action.APPROVE))))
                 .isInstanceOf(OrderStateService.OrderNotFoundException.class);
 
         assertThat(orderStore.find(TENANT, order).orElseThrow().status())
