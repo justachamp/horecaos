@@ -396,6 +396,12 @@ class OnboardingOutboxIntegrationTests {
                 public MembershipRef ensureMembership(EnsureMembership command) {
                     return new MembershipRef(command.organizationId(), "subject-1", true);
                 }
+
+                @Override
+                public void setOrganizationEnabled(String organizationId, boolean enabled) {
+                    // Not exercised: this stand-in proves outbox atomicity, not
+                    // ADR 0009 disable/re-enable.
+                }
             };
         }
 

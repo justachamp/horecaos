@@ -964,5 +964,11 @@ class OnboardingServiceTests {
             lastMembershipOrganizationId = command.organizationId();
             return new MembershipRef(command.organizationId(), "subject-1", true);
         }
+
+        @Override
+        public void setOrganizationEnabled(String organizationId, boolean enabled) {
+            // Not exercised by onboarding: nothing in this test drives ADR 0009
+            // disable/re-enable, only organization and membership provisioning.
+        }
     }
 }

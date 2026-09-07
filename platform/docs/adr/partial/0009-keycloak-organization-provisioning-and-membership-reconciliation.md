@@ -61,8 +61,7 @@
   `iam.identity_reconciliation_runs` has never held a row. Also not built:
   organization-scoped role reconciliation — no `ensureOrganizationRoles` exists
   anywhere in `src/main/java`, and the `OrganizationMembershipProvisioner` port
-  sketched below was never split out of `OrganizationProvisioner`; disable and
-  re-enable handling (`setOrganizationEnabled` is likewise absent); the three
+  sketched below was never split out of `OrganizationProvisioner`; the three
   control-plane identity endpoints this record specifies; the four events; and
   the probe stanza reading `horecaos.iam.identity.drift.report.age.seconds`. Every
   claim in this implementation status line was checked against the source tree on
@@ -72,6 +71,45 @@
   `iam.grants` capabilities instead of an org-nested role Keycloak cannot grant —
   and `ensureMembership` sets non-blank name attributes while the realm's User
   Profile relaxes the requirement, closing the keycloak#36108 password-grant trap.
+  Disable and re-enable closed 2026-09-08, and a wrong assumption caught doing
+  it: `OrganizationProvisioner.setOrganizationEnabled` fetches the
+  organization, no-ops when the requested state already holds, and otherwise
+  `PUT`s the full fetched representation back with only `enabled` flipped —
+  never a hand-built body that would drop alias, name, or domains — refusing
+  on a vanished id the same way `ensureOrganization` does. The first version of
+  this closure, and of this paragraph, claimed a disabled organization's
+  members are refused Keycloak authentication, on the strength of this
+  record's own "Disable, suspend, and delete" section, never checked against a
+  real realm. Proven wrong the first time the integration test ran for real:
+  `disablingAnOrganizationDoesNotByItselfBlockDirectGrantAuthentication` (using
+  the ADR 0062 `horecaos-staff-login` direct-grant client) shows a member of a
+  disabled organization still completing the resource-owner password grant and
+  receiving a valid token against a live Keycloak 26.7.0, confirmed independently
+  by hand outside the test harness before believing it. Keycloak's Organizations
+  API is not an authentication control in this version: **`setOrganizationEnabled`
+  reconciles a status flag — the value `IdentityDriftReporter`'s
+  `ORGANIZATION_DISABLED` comparison and a console-reading operator see — it does
+  not gate sign-in, and must never be treated as tenant suspension's enforcement.**
+  Where that enforcement lives is, as of 2026-09-08, nowhere. This paragraph
+  first named `TenantAccessPolicy`'s `iam.grants` capability checks, and that is
+  wrong for the same reason the Keycloak claim was: it was reasoned from what
+  the code ought to do rather than read. `TenantAccessPolicy` contains no
+  reference to `TenantStatus` or `SUSPENDED`, and
+  `JdbcAuthorizationService.SELECT_GRANTS` filters on `g.status = 'ACTIVE'`,
+  `r.status = 'ACTIVE'` and the grant's validity window without ever consulting
+  the tenant's own status — so every capability a suspended tenant's staff held
+  is still live. Suspending a tenant sets a column in `tenancy` and stops
+  nobody. That is a gap this record names and does not close: deciding where
+  the check belongs (the grant lookup, `TenantAccessPolicy`, or a request-scoped
+  gate) is an ADR 0025 question, and it has to keep a platform administrator
+  able to read and reactivate the tenant they just suspended. Two further integration tests cover idempotent retry in both
+  directions (`disablingAnAlreadyDisabledOrganizationIsANoOpRatherThanAnError`)
+  and that disabling one tenant's organization leaves another's members
+  unaffected (`disablingOneOrganizationDoesNotAffectAnother`). Still missing:
+  nothing in `tenancy` calls `setOrganizationEnabled` from a suspend/reactivate
+  use case yet — this closes the ADR 0009 port and its Keycloak adapter, not a
+  wired tenant suspension workflow, and that workflow's actual enforcement was
+  never this method to begin with.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
@@ -163,8 +201,9 @@ ADR 0031 idempotency bug. Two module boundary fixes came with it: a
 `iam.api.organizations`, `iam.api.protection`, and `iam.api.secrets` each need
 their own or they stay internal to `iam`.
 
-Not yet delivered: organization-scoped role reconciliation, the drift report
-using the read-only account, and disable and re-enable handling.
+Not yet delivered: organization-scoped role reconciliation and the drift report
+using the read-only account. Disable and re-enable handling closed 2026-09-08
+(see Implementation status).
 
 ## IAM ports
 
@@ -352,6 +391,7 @@ evidence; do not delete external objects automatically.
 - [x] Implement the organization ensure, read-back, and link algorithm, including the refusal to create a replacement on drift.
 - [x] Implement subject link and create-or-link membership. Organization-scoped role reconciliation remains.
 - [x] Connect the organization and membership steps to the ADR 0008 workflow, reconciling by stored identifier on retry.
+- [x] Implement disable/re-enable (`setOrganizationEnabled`), idempotent by inspection against a real Keycloak. A real password grant against a live Keycloak 26.7.0 proved the opposite of what this box originally assumed: the flag flips and is read back correctly, but Keycloak does not itself refuse sign-in for a member of a disabled organization — see Implementation status, 2026-09-08, and do not read "implemented" here as "authentication is gated." No caller in `tenancy` invokes it yet.
 - [ ] Add drift reporting, audit facts, metrics, and alerts. Organization-level drift, its `SECURITY` audit facts and its four metrics are built and tested. Membership-level drift no longer waits on a migration — `V0057` shipped it — but on something writing `iam.tenant_membership_links`, since a drift report over an empty table would report every tenant clean. The probe stanza that reads `horecaos.iam.identity.drift.report.age.seconds` still belongs in `infra/observability/horecaos-probe.sh` and is not there.
 - [x] Add isolated Keycloak integration and cross-tenant security tests. `KeycloakOrganizationIntegrationTests` covers double-ensure, uncertain-create readback, refusal to replace a vanished organization, double link, per-organization membership isolation, and both least-privilege 403s — against a real Keycloak. It still skips loudly (`Assumptions.abort`) if Keycloak is absent or the realm grants `horecaos-provisioning` no roles, but as of 2026-08-30 `make up` runs `assign-service-account-roles.sh` with wait/retry, so the normal path runs all 8 rather than skipping.
 
