@@ -2046,7 +2046,6 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a POS decision for an order not awaiting one is refused")
     void aPosDecisionForAnOrderNotAwaitingOneIsRefused() {
-        requireApproval(); // BREAK: order now really is AWAITING_APPROVAL
         // No requireApproval(): the fixture default is AUTO_CONFIRM, so this
         // order is already CONFIRMED and was never AWAITING_APPROVAL.
         var order = orderIdOf(placeOrder("idem-pos-not-awaiting"));
@@ -2082,7 +2081,7 @@ class CartCheckoutAndOrderTests {
         UUID otherTenant = UUID.randomUUID();
 
         assertThatThrownBy(() -> tx(() -> posDecisions.decide(
-                        TENANT /* BREAK: should be otherTenant */,
+                        otherTenant,
                         order,
                         posDecision("pos-cross-tenant-1", PosApprovalDecisionPort.Action.APPROVE))))
                 .isInstanceOf(OrderStateService.OrderNotFoundException.class);
