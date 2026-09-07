@@ -431,7 +431,8 @@ class InboxExecutorTests {
     @Test
     void aClassifiedCategoryCarriesNoPersonalDataEvenWhenTheMessageDoes() {
         String sentinelPhone = "+998901234567";
-        handler.failNextWith(new IllegalArgumentException("Missing required field for customer phone " + sentinelPhone));
+        handler.failNextWith(
+                new IllegalArgumentException("Missing required field for customer phone " + sentinelPhone));
         UUID eventId = UUID.randomUUID();
 
         assertThat(offer(eventId, "first", 0)).isEqualTo(InboxResult.RETRY_SCHEDULED);

@@ -42,7 +42,8 @@ class FailureClassifierTests {
         // finish", but a deliberately cancelled operation was not stopped by
         // infrastructure, and retrying it on a timer would be wrong.
         assertThat(FailureClassifier.classify(new CancellationException("cancelled")))
-                .as("a cancellation is not an infrastructure failure, and this classifier is not confident enough to guess")
+                .as(
+                        "a cancellation is not an infrastructure failure, and this classifier is not confident enough to guess")
                 .isEqualTo(FailureCategory.UNKNOWN);
     }
 

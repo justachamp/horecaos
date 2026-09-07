@@ -357,7 +357,9 @@ class FailureOperationsServiceTests {
                 .as("a stable code a client can branch on, distinct from the generic "
                         + "'current state refuses this' bucket this platform uses everywhere else")
                 .isEqualTo(ErrorCode.SECOND_APPROVER_REQUIRED);
-        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal).errorCode().status())
+        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal)
+                        .errorCode()
+                        .status())
                 .as("recorded and waiting for a checker is not a server crash")
                 .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
 
