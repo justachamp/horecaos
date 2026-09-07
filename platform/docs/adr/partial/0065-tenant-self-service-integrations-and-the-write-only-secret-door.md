@@ -32,6 +32,14 @@
   value "never passes through this API" was written for an operator who can
   reach the secret store directly; a tenant cannot, so this record opens
   exactly one ingress — everything else 0028 mandates stands untouched)
+  - **An installation's non-secret configuration has no write path either.**
+    `InstallRequest` takes no configuration map and no endpoint updates one
+    afterwards, yet `non_sensitive_config` is read in production by the SMS
+    account lookup, the voice/Asterisk connection config, and the Telegram bot
+    identity cache. Everything in there today is either platform-written or
+    seeded out of band. A tenant cannot configure their own installation, which
+    is the other half of this record's own title. Found while looking for
+    somewhere to put ADR 0075's Mini App URL. Owner and platform.
   - An installation has no path to `RETIRED`. `integration.installations.status`
     accepts the value (V0013) and **nothing anywhere writes it** — every write to
     that table was checked. So the archive action this record names as missing

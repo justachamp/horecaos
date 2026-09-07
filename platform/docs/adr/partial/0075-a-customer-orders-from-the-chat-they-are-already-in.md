@@ -46,9 +46,20 @@
     Abbosov) to review. Real copy is written in `TelegramBotMessages`, in the
     three-language `pick` shape every other bot message uses; what is open is
     the wording, not its absence.
-  - Where the tenant's Mini App lives — owner. Nothing on the Telegram
-    installation carries a URL today, so the handoffs are text. The natural home
-    is the installation's own `non_sensitive_config`, beside `botUsername`.
+  - Where the tenant's Mini App lives — owner, and it is not the small change it
+    looks like. `non_sensitive_config` is the natural home (it already holds
+    `botUsername`, the SMS sender, and the Asterisk connection), but **nothing
+    tenant-facing writes it**: `ProviderInstallationController.InstallRequest`
+    carries a category, provider type, environment, display name, secret
+    reference and external account reference, and no configuration at all, and
+    no endpoint updates it afterwards. So a `miniAppUrl` key would be a setting
+    nobody can set. Giving it one means extending the install contract with a
+    non-secret config map and validating it — and a tenant-supplied URL that the
+    platform renders as a button inside a message it sends is a link the
+    platform vouches for, which is a trust decision and not a field. That is
+    ADR 0065's missing half rather than this record's, and it needs deciding
+    before it is built. Until then the handoffs stay as sentences, which is
+    honest: a customer told to finish in the app can find the app.
 
 ## Context
 
