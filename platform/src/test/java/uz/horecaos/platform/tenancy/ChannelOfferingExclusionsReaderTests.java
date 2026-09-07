@@ -324,12 +324,7 @@ class ChannelOfferingExclusionsReaderTests {
     }
 
     private void excludeVariantFor(
-            UUID tenantId,
-            UUID brandId,
-            UUID channelId,
-            UUID variantId,
-            @Nullable UUID locationId,
-            String reasonCode) {
+            UUID tenantId, UUID brandId, UUID channelId, UUID variantId, @Nullable UUID locationId, String reasonCode) {
         jdbc.sql("""
                 INSERT INTO catalog.channel_offering_exclusions (
                     id, tenant_id, brand_id, location_id, variant_id, channel_id, reason_code)
