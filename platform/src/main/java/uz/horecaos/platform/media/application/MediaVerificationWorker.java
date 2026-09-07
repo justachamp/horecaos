@@ -20,7 +20,7 @@ import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJob
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore.ClaimedJob;
 
 /**
- * Drains {@code media.verification_jobs} (ADR 0010, V0183).
+ * Drains {@code media.verification_jobs} (ADR 0010, V0180).
  *
  * <p><b>What this replaces.</b> {@code finalizeUpload} used to verify an upload
  * inline: a {@code HeadObject}, a ranged read of at most 128KB, and header

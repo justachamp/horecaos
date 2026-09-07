@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
- * {@code media.verification_jobs} (ADR 0010, V0183).
+ * {@code media.verification_jobs} (ADR 0010, V0180).
  *
  * <p>The claim is {@code JdbcDerivativeJobStore}'s, which is {@code
  * JdbcSourcingJobStore}'s, which is {@code JdbcOutboxStore.claimBatch}'s: {@code

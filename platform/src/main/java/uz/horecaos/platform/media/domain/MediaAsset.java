@@ -16,7 +16,7 @@ import uz.horecaos.platform.media.api.MediaAssetStatus;
  * @param declaredContentType   what the client said it would upload
  * @param declaredChecksumSha256 null unless the client declared one
  * @param verifiedContentType   what the object store reports. The trusted one.
- *                              Null until {@code finalizeUpload} verifies the
+ *                              Null until {@code verifyUpload} verifies the
  *                              upload
  * @param verifiedSizeBytes     null until verified, for the same reason
  * @param verifiedChecksumSha256 null until verified, for the same reason

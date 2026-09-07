@@ -142,9 +142,20 @@ public class SchedulingConfiguration {
      * exists anywhere — there is no privacy endpoint, service or table."
      * Scheduling a sweep with nothing to find would look like the erasure
      * obligation was met; it would not be, so it stays unscheduled and is
-     * recorded as a gap instead.
+     * recorded as a gap instead. Wave 77 added the last one so far: {@code
+     * MediaVerificationWorker.verifyScheduledBatch}, the leased worker that
+     * drains {@code media.verification_jobs} (ADR 0010, V0180) — the separate
+     * asynchronous validation worker the record always asked for, replacing the
+     * synchronous {@code HeadObject}/header-probe check that used to run inline
+     * inside {@code finalizeUpload} on the request thread. Waves 73 and 77 each
+     * raised this number from 45 to 46 for their own job, on branches that could
+     * not see each other; git merged the two identical edits into one and left
+     * the pool one thread short of the job count. Anything adding a
+     * {@code @Scheduled} method here should expect that, and trust
+     * {@code SchedulerPoolSizeTests}, which counts them, over the number written
+     * here.
      */
-    static final int DEFAULT_POOL_SIZE = 46;
+    static final int DEFAULT_POOL_SIZE = 47;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

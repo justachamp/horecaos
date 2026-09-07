@@ -210,9 +210,7 @@ public class MediaAssetService implements MediaAvailability {
             // Lost the race: another finalize call moved this asset past
             // PENDING_UPLOAD between the read above and this write. Whatever it
             // is now is the honest answer, not necessarily UPLOADED.
-            return store.findOwned(tenantId, assetId)
-                    .map(MediaAsset::status)
-                    .orElse(MediaAssetStatus.UPLOADED);
+            return store.findOwned(tenantId, assetId).map(MediaAsset::status).orElse(MediaAssetStatus.UPLOADED);
         }
 
         verificationJobs.enqueue(UUID.randomUUID(), tenantId, assetId, now);
@@ -266,8 +264,8 @@ public class MediaAssetService implements MediaAvailability {
             return asset.status();
         }
         if (asset.status() != MediaAssetStatus.UPLOADED) {
-            throw new IllegalStateException("Media asset %s is not awaiting verification (status %s)"
-                    .formatted(assetId, asset.status()));
+            throw new IllegalStateException(
+                    "Media asset %s is not awaiting verification (status %s)".formatted(assetId, asset.status()));
         }
 
         Optional<ObjectStorage.StoredObject> stored = storage.head(asset.bucket(), asset.objectKey());
@@ -354,10 +352,7 @@ public class MediaAssetService implements MediaAvailability {
         if (malwareScanner.isPresent()) {
             MalwareScanner.Verdict verdict = malwareScanner.get().scan(asset.bucket(), asset.objectKey());
             if (!verdict.clean()) {
-                return reject(
-                        asset,
-                        "MALWARE_DETECTED",
-                        "Scanner reported " + verdict.signature());
+                return reject(asset, "MALWARE_DETECTED", "Scanner reported " + verdict.signature());
             }
         }
 

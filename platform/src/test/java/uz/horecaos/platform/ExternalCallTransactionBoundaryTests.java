@@ -44,12 +44,14 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
@@ -80,10 +82,11 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControl
  *
  * <p>One test class for three modules, because it is one property and it is
  * architectural rather than local. The pool is ten connections wide and shared by
- * every module: a media finalize waiting on a degraded MinIO, an onboarding step
- * waiting on Keycloak, and a checkout waiting on Click each used to hold one for
- * the whole of that wait, so ten slow calls to any <em>one</em> of those three
- * stalled all of the others — ordering, tenancy, reporting and the rest included.
+ * every module: a media verification waiting on a degraded MinIO, an onboarding
+ * step waiting on Keycloak, and a checkout waiting on Click each used to hold one
+ * for the whole of that wait, so ten slow calls to any <em>one</em> of those
+ * three stalled all of the others — ordering, tenancy, reporting and the rest
+ * included.
  *
  * <p>These run through a real Spring context on purpose. The property under test
  * is what {@code @Transactional} does when the proxy is in place, and every other
@@ -141,14 +144,21 @@ class ExternalCallTransactionBoundaryTests {
     }
 
     @Test
-    @DisplayName("finalizing an upload asks the object store with no connection checked out")
+    @DisplayName("verifying an upload asks the object store with no connection checked out")
     void mediaFinalizeDoesNotHoldAConnection() {
         WatchfulStorage storage = context.getBean(WatchfulStorage.class);
         MediaAssetService media = context.getBean(MediaAssetService.class);
 
         var ticket = media.requestUpload(
                 TENANT, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC, "image/jpeg", 1024, "burger.jpg", null);
-        media.finalizeUpload(TENANT, ticket.assetId());
+        // finalizeUpload itself never touches the object store any more — it
+        // only records the client's claim and queues verification (ADR 0010,
+        // V0180). The blocking round trip this test is about now happens in
+        // verifyUpload, which is what MediaVerificationWorker calls under its
+        // own lease, never on a request thread.
+        assertThat(media.finalizeUpload(TENANT, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+
+        media.verifyUpload(TENANT, ticket.assetId());
 
         assertThat(storage.headCalls).isEqualTo(1);
         assertThat(storage.insideTransaction)
@@ -310,13 +320,20 @@ class ExternalCallTransactionBoundaryTests {
                 WatchfulStorage storage,
                 TransactionTemplate transactions,
                 ApplicationEventPublisher events,
+                AuditRecorder recorder,
                 Clock clock) {
             return new MediaAssetService(
                     new JdbcMediaAssetStore(client),
                     new JdbcDerivativeJobStore(client),
+                    new JdbcVerificationJobStore(client),
                     storage,
                     transactions,
                     events,
+                    recorder,
+                    // No malware scanner registered in this test context either —
+                    // matches production today, where no adapter exists (see
+                    // MalwareScanner's own doc).
+                    Optional.empty(),
                     clock,
                     "test-bucket");
         }
