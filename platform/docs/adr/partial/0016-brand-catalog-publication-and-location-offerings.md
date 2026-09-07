@@ -15,9 +15,28 @@
   answers the publication validator from real rows rather than from an empty
   table. A published menu still carries no money of its own, and that is the
   design — money reaches a customer through an ADR 0018 quote, not through
-  `publication_items`. Not built: the ADR 0012 apply seam (0012 has no apply at
-  all), brand migration and render comparison, the reconciliation reports, and
-  any catalog test beyond `CatalogPublicationTests`.
+  `publication_items`. `CatalogValidatorTests` now proves every
+  `CatalogValidator` rule directly on a constructed snapshot — the
+  default-variant tie-break's `variants.size() > 1` boundary, modifier
+  capacity counted by summed quantity when repeats are allowed rather than by
+  option count, a multi-node category cycle caught from every node in the
+  loop rather than only the one the walk starts from, a missing category
+  parent, an offering or a modifier link naming a variant that is not
+  active, and the translation-locale-specific fallback — each with the
+  adjacent case that should not trip it. `StorefrontCatalogQueryTests` proves
+  the storefront read itself: a channel is served only its own publication
+  and never another channel's (the regression `StorefrontCatalogQuery`'s own
+  class comment names), the three-way distinction between a variant with no
+  offering row, one that is `HIDDEN`, and one that is `UNAVAILABLE`, a
+  product whose every variant is unoffered dropped from the menu and from
+  every category's `productIds`, a category with no products of its own but
+  a real child category kept while an empty leaf is dropped, an unpriced
+  variant reporting a null amount and never zero, and a retired
+  publication's stored content staying byte-for-byte what it was. Not
+  built: the ADR 0012 apply seam (0012 has no apply at all), brand migration
+  and render comparison, the reconciliation reports, a publication-race
+  test, and API-level tests for the control-plane and storefront
+  controllers.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product
@@ -416,7 +435,7 @@ authoring rows and external mappings are retained.
 - [x] Implement control-plane and storefront APIs with ETags. `CatalogAuthoringController` and `CatalogPublicationController` under `/api/v1/control-plane/...`, and `StorefrontCatalogController` returning the location menu with the publication id as its ETag.
 - [ ] Connect ADR 0012 apply through catalog commands, initially disabled. ADR 0012 has no apply path to connect; nothing in `pos` writes to `catalog.*`.
 - [ ] Build brand migration/render comparison and reconciliation reports. Nothing compares a rendered Qoida menu to a legacy one.
-- [ ] Add domain, PostgreSQL, publication-race, API, and isolation tests. `CatalogPublicationTests` is the only catalog test class; there is no publication-race or cross-brand isolation test.
+- [ ] Add domain, PostgreSQL, publication-race, API, and isolation tests. `CatalogPublicationTests` proves the authoring-to-storefront pipeline end to end, including cross-brand isolation (`catalogsAreBrandIsolated`); `CatalogValidatorTests` (wave 67) proves `CatalogValidator`'s rules directly on constructed snapshots, and `StorefrontCatalogQueryTests` (wave 67) proves the storefront read's channel isolation, offering three-way distinction, category drop/keep rule, and publication immutability. Still missing: a publication-race test and any API-level (controller) test for `CatalogAuthoringController`, `CatalogQueryController`, `CatalogPublicationController`, or `StorefrontCatalogController`.
 
 ## Exit criteria
 
