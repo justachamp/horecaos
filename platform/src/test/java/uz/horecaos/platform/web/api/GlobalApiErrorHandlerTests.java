@@ -74,8 +74,8 @@ class GlobalApiErrorHandlerTests {
         UUID approvalRequestId = UUID.randomUUID();
         ApiException exception = new ApiException(
                 ErrorCode.SECOND_APPROVER_REQUIRED,
-                "Resolving this failure requires a second approver. Approval request "
-                        + approvalRequestId + " is pending.",
+                "Resolving this failure requires a second approver. Approval request " + approvalRequestId
+                        + " is pending.",
                 Map.of("approvalRequestId", approvalRequestId.toString(), "approvalStatus", "PENDING"));
 
         ProblemDetail problem = handler.apiException(exception);
