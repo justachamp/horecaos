@@ -91,7 +91,8 @@ class MarketingRetentionSweeperTests {
         RecipientContactService contacts = new RecipientContactService(customerStore, protection);
         MarketingEligibility eligibility = new MarketingEligibility(consent, contacts, engagementStore);
 
-        audienceService = new AudienceService(audienceStore, metricStore, engagementStore, eligibility, fact -> {}, clock);
+        audienceService =
+                new AudienceService(audienceStore, metricStore, engagementStore, eligibility, fact -> {}, clock);
         sweeper = new MarketingRetentionSweeper(audienceStore, audienceService, clock, 24, 200);
     }
 
@@ -136,8 +137,9 @@ class MarketingRetentionSweeperTests {
         assertThat(memberCount(snapshot))
                 .as("a snapshot inside its window must survive with its membership intact")
                 .isEqualTo(1);
-        assertThat(audienceStore.findSnapshot(tenant, snapshot)).hasValueSatisfying(header ->
-                assertThat(header.membersPurgedAt()).isNull());
+        assertThat(audienceStore.findSnapshot(tenant, snapshot))
+                .hasValueSatisfying(
+                        header -> assertThat(header.membersPurgedAt()).isNull());
     }
 
     @Test
@@ -160,16 +162,16 @@ class MarketingRetentionSweeperTests {
 
         assertThat(result.snapshotsDue()).isEqualTo(2);
         assertThat(result.membersPurged()).isEqualTo(2);
-        assertThat(memberCount(snapshotA))
-                .as("tenant A's snapshot is purged")
-                .isZero();
+        assertThat(memberCount(snapshotA)).as("tenant A's snapshot is purged").isZero();
         assertThat(memberCount(snapshotB))
                 .as("tenant B's snapshot is purged independently of tenant A's")
                 .isZero();
         assertThat(audienceStore.findSnapshot(tenantA, snapshotA))
-                .hasValueSatisfying(header -> assertThat(header.membersPurgedAt()).isNotNull());
+                .hasValueSatisfying(
+                        header -> assertThat(header.membersPurgedAt()).isNotNull());
         assertThat(audienceStore.findSnapshot(tenantB, snapshotB))
-                .hasValueSatisfying(header -> assertThat(header.membersPurgedAt()).isNotNull());
+                .hasValueSatisfying(
+                        header -> assertThat(header.membersPurgedAt()).isNotNull());
     }
 
     @Test
@@ -206,7 +208,13 @@ class MarketingRetentionSweeperTests {
     private UUID buildReadySnapshot(UUID tenant, UUID brand, List<UUID> members, Instant completedAt) {
         UUID audienceId = UUID.randomUUID();
         audienceStore.insertAudience(
-                audienceId, tenant, brand, "Retention fixture " + UUID.randomUUID(), null, UUID.randomUUID(), completedAt);
+                audienceId,
+                tenant,
+                brand,
+                "Retention fixture " + UUID.randomUUID(),
+                null,
+                UUID.randomUUID(),
+                completedAt);
 
         UUID snapshotId = UUID.randomUUID();
         audienceStore.openSnapshot(
@@ -241,10 +249,7 @@ class MarketingRetentionSweeperTests {
                 INSERT INTO tenant.tenants (
                     id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Pilot', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", tenant)
-                .param("slug", slug)
-                .update();
+                """).param("id", tenant).param("slug", slug).update();
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', :slug, 'Pilot brand', 'ACTIVE')

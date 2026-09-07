@@ -235,8 +235,8 @@ public class JdbcCustomerMetricStore {
      */
     public List<BrandRef> brandsWithProfiles() {
         return jdbc.sql("SELECT DISTINCT tenant_id, brand_id FROM customer.brand_profiles")
-                .query((ResultSet row, int number) -> new BrandRef(
-                        row.getObject("tenant_id", UUID.class), row.getObject("brand_id", UUID.class)))
+                .query((ResultSet row, int number) ->
+                        new BrandRef(row.getObject("tenant_id", UUID.class), row.getObject("brand_id", UUID.class)))
                 .list();
     }
 

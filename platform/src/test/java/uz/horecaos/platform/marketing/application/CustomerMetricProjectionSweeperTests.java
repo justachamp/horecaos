@@ -152,10 +152,7 @@ class CustomerMetricProjectionSweeperTests {
                 INSERT INTO tenant.tenants (
                     id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Pilot', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", tenant)
-                .param("slug", slug)
-                .update();
+                """).param("id", tenant).param("slug", slug).update();
         seedBrandOnly(tenant, brand, slug);
     }
 

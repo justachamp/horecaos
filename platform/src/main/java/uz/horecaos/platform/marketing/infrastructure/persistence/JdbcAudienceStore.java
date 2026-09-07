@@ -532,8 +532,8 @@ public class JdbcAudienceStore {
                 .param("now", utc(now))
                 .param("months", retentionMonths)
                 .param("limit", limit)
-                .query((ResultSet row, int number) -> new SnapshotForPurge(
-                        row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .query((ResultSet row, int number) ->
+                        new SnapshotForPurge(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
                 .list();
     }
 
