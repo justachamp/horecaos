@@ -412,10 +412,7 @@ public class JdbcPosExportStore {
                 UPDATE integration.pos_order_exports
                    SET requires_pos_approval = true, updated_at = now()
                  WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .param("tenantId", tenantId)
-                .param("id", exportId)
-                .update();
+                """).param("tenantId", tenantId).param("id", exportId).update();
     }
 
     /**
@@ -466,10 +463,10 @@ public class JdbcPosExportStore {
                    SET pos_approval_decided_at = :now, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND pos_approval_decided_at IS NULL
                 """)
-                .param("tenantId", tenantId)
-                .param("id", exportId)
-                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-                .update()
+                        .param("tenantId", tenantId)
+                        .param("id", exportId)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
                 == 1;
     }
 

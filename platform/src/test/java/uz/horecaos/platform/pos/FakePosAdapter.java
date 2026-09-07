@@ -57,6 +57,9 @@ public final class FakePosAdapter implements PosAdapter {
 
     private @Nullable ProviderOutcome nextApprovalOutcome;
 
+    /** Whether an export reports that the till still owes a clerk's decision. */
+    private boolean exportsPendApproval;
+
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {
         return sideEffects.get();
@@ -79,6 +82,15 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     /** Makes the next {@link #readApprovalStatus} call fail the way a real one does. */
+    /**
+     * Makes every export report {@code approvalPending}, which is what causes
+     * {@code PosOrderExportService} to flag the row for the approval poll.
+     */
+    public FakePosAdapter exportsPendApproval() {
+        this.exportsPendApproval = true;
+        return this;
+    }
+
     public FakePosAdapter failNextApprovalReadWith(ProviderOutcome outcome) {
         this.nextApprovalOutcome = outcome;
         return this;
@@ -167,7 +179,7 @@ public final class FakePosAdapter implements PosAdapter {
                 ? "fake-order-" + sideEffects.incrementAndGet()
                 : ordersByCorrelation.computeIfAbsent(
                         correlation, key -> "fake-order-" + sideEffects.incrementAndGet());
-        return new ExportResult(ProviderOutcome.success(Map.of(), external), external, false);
+        return new ExportResult(ProviderOutcome.success(Map.of(), external), external, exportsPendApproval);
     }
 
     @Override

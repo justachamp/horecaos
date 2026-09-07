@@ -49,12 +49,21 @@ public interface PosApprovalDecisionPort {
      *                     relies on for its own caller settles a repeat
      *                     without deciding twice
      * @param providerType the POS vendor relaying this, e.g. {@code "clopos"}
-     *                     — carried into the actor id and decision channel so
-     *                     an audit trail never has to guess which integration
-     *                     produced a given decision
+     *                     — carried into the actor id ({@code "pos:" +
+     *                     providerType}) so an audit trail never has to guess
+     *                     which integration produced a given decision. Not
+     *                     carried into the decision channel: {@code
+     *                     ordering.approval_decisions.decision_channel}
+     *                     (V0022) is constrained to a fixed, small set of
+     *                     literal values, and a POS decision always records
+     *                     the shared {@code "POS"} channel regardless of vendor
      */
     record DecisionCommand(
-            String decisionId, Action action, String providerType, Instant issuedAt, @Nullable String correlationId) {}
+            String decisionId,
+            Action action,
+            String providerType,
+            Instant issuedAt,
+            @Nullable String correlationId) {}
 
     /**
      * @param applied whether this call's command is the one that moved the
@@ -64,7 +73,11 @@ public interface PosApprovalDecisionPort {
      *                  be this call's own or somebody else's; null only when
      *                  the order carries no approval decision at all
      */
-    record Decision(boolean applied, String status, int orderVersion, @Nullable SettledBy settledBy) {}
+    record Decision(
+            boolean applied,
+            String status,
+            int orderVersion,
+            @Nullable SettledBy settledBy) {}
 
     /** Who and what actually settled the order — the audit trail's own answer. */
     record SettledBy(String decisionId, String action, String actorId) {}

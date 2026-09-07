@@ -515,6 +515,60 @@ public class PosOrderExportService {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Asks the till what it did about one order awaiting its decision (ADR 0011
+     * §6.4).
+     *
+     * <p>Lives here rather than in the poller so binding, adapter and
+     * configuration resolve exactly once in this codebase: {@link #prepare} does
+     * the same three lookups for an export, and a second resolution path would
+     * be a second thing to get wrong the day a binding moves.
+     *
+     * <p>Resolved from the binding the export was actually sent through, not
+     * from the order's current primary binding. A tenant that repoints a branch
+     * at a new till between the export and the clerk's decision must still be
+     * asked the question by the till that holds the ticket.
+     *
+     * @return empty when the binding, its adapter or its venue reference cannot
+     *         be resolved — the caller polls again rather than deciding, because
+     *         "we could not ask" is not "the clerk said no"
+     */
+    public Optional<ApprovalObservation> readApprovalStatus(
+            UUID tenantId, UUID bindingId, String externalOrderId, String correlationId) {
+
+        Optional<BindingRef> binding = installations.binding(tenantId, bindingId);
+        if (binding.isEmpty()) {
+            log.debug("Binding {} no longer resolves; cannot read its approval status", bindingId);
+            return Optional.empty();
+        }
+        Optional<PosAdapter> adapter = adapters.forProvider(binding.get().providerType());
+        if (adapter.isEmpty()) {
+            log.debug("No POS adapter registered for {}", binding.get().providerType());
+            return Optional.empty();
+        }
+
+        Map<String, String> config = configuration.resolve(binding.get()).orElse(Map.of());
+        PosContext context = new PosContext(
+                tenantId,
+                binding.get().installationId(),
+                binding.get().bindingId(),
+                config.getOrDefault("clopos.venueId", venueOf(config)),
+                config,
+                correlationId);
+        return Optional.of(new ApprovalObservation(
+                adapter.get().readApprovalStatus(context, externalOrderId),
+                binding.get().providerType()));
+    }
+
+    /**
+     * What a till answered, and which vendor answered it.
+     *
+     * <p>The vendor travels with the read because the caller records it in the
+     * actor id — {@code "pos:<providerType>"} — and resolving it a second time
+     * from the binding would be a second chance for the two to disagree.
+     */
+    public record ApprovalObservation(PosAdapter.ApprovalRead read, String providerType) {}
+
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {
         PosOrderSource.ExportableOrder order = orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)
                 .orElseThrow(

@@ -1,6 +1,5 @@
 package uz.horecaos.platform.ordering.application;
 
-import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -25,10 +24,19 @@ import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
  *       and recording it as {@code USER} would put it in the same audit
  *       population as an operator's own click.</li>
  *   <li>{@code actorId = "pos:" + providerType} — honest about which
- *       integration relayed the decision, e.g. {@code "pos:clopos"}.</li>
- *   <li>{@code decisionChannel = "POS_" + PROVIDERTYPE} — the POS counterpart
- *       of the web board's hardcoded {@code "HORECAOS_OPERATIONS"} and the
- *       bot's {@code "HORECAOS_TELEGRAM_BOT"}.</li>
+ *       integration relayed the decision, e.g. {@code "pos:clopos"}. This is
+ *       the field that carries the vendor identity; {@code decisionChannel}
+ *       does not, and must not, per the next bullet.</li>
+ *   <li>{@code decisionChannel = "POS"} — the fixed literal, not
+ *       {@code "POS_" + providerType} as an earlier draft of this class had
+ *       it. {@code ordering.approval_decisions.decision_channel} (V0022) is
+ *       constrained by {@code ck_approval_channel} to exactly
+ *       {@code 'HORECAOS_OPERATIONS'}, {@code 'POS'} or
+ *       {@code 'SYSTEM_TIMEOUT'} — a per-vendor value would fail every insert
+ *       with a check-constraint violation, which is exactly what a
+ *       Postgres-backed test of this class caught. The web board's channel is
+ *       the hardcoded {@code "HORECAOS_OPERATIONS"}; this is its POS
+ *       counterpart, and {@code actorId} above is where "which vendor" lives.</li>
  *   <li>the reason code — a clerk's accept or decline at the till carries no
  *       free text of any kind (docs/providers/clopos-api.md §6.2), so the
  *       honest audit reason is the fixed, stable string this adapter names
@@ -44,7 +52,13 @@ public class PosApprovalDecisionPortAdapter implements PosApprovalDecisionPort {
 
     static final String APPROVE_REASON_CODE = "POS_CLERK_ACCEPTED";
     static final String REJECT_REASON_CODE = "POS_CLERK_DECLINED";
-    static final String DECISION_CHANNEL_PREFIX = "POS_";
+
+    /**
+     * The only value {@code ck_approval_channel} (V0022) permits for a POS
+     * decision — see the class doc for why this is not per-vendor.
+     */
+    static final String DECISION_CHANNEL = "POS";
+
     static final String ACTOR_ID_PREFIX = "pos:";
 
     private final OrderStateService orderState;
@@ -56,7 +70,6 @@ public class PosApprovalDecisionPortAdapter implements PosApprovalDecisionPort {
     @Override
     public Decision decide(UUID tenantId, UUID orderId, DecisionCommand command) {
         String actorId = ACTOR_ID_PREFIX + command.providerType();
-        String decisionChannel = DECISION_CHANNEL_PREFIX + command.providerType().toUpperCase(Locale.ROOT);
 
         OrderStateService.DecisionResult result = orderState.decide(
                 tenantId,
@@ -66,7 +79,7 @@ public class PosApprovalDecisionPortAdapter implements PosApprovalDecisionPort {
                         command.action() == Action.APPROVE
                                 ? OrderStateService.DecisionAction.APPROVE
                                 : OrderStateService.DecisionAction.REJECT,
-                        decisionChannel,
+                        DECISION_CHANNEL,
                         "SERVICE",
                         actorId,
                         command.action() == Action.APPROVE ? APPROVE_REASON_CODE : REJECT_REASON_CODE,
