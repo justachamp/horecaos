@@ -32,7 +32,23 @@ public enum FailureCategory {
      * The provider may have accepted the command. Reconcile before retrying;
      * a blind retry here is how a customer gets charged twice.
      */
-    UNCERTAIN_EXTERNAL_OUTCOME(false);
+    UNCERTAIN_EXTERNAL_OUTCOME(false),
+
+    /**
+     * The failure's cause is not one of the shapes this platform classifies
+     * with confidence.
+     *
+     * <p>Deliberately not the same thing as an absent classification. {@link
+     * FailureClassifier} answers this rather than guessing, because an
+     * operator who trusts a wrong category acts on it: {@code
+     * TRANSIENT_INFRASTRUCTURE} left for the retry timer forever, or {@code
+     * DOMAIN_REJECTED} never retried when the fault would have cleared on its
+     * own. {@code UNKNOWN} is the honest answer, not a defect in the
+     * classifier — see {@code MessagingBacklogMetrics}, which has coalesced an
+     * absent inbox category to this same literal since before the outbox side
+     * was ever classified.
+     */
+    UNKNOWN(false);
 
     private final boolean retryable;
 

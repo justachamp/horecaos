@@ -19,6 +19,7 @@ import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.ExternalWorkInboxHandler;
 import uz.horecaos.platform.integration.api.InboxHandler;
+import uz.horecaos.platform.integration.failures.FailureClassifier;
 import uz.horecaos.platform.integration.inbox.EnvelopeValidator.InvalidEnvelopeException;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
@@ -283,16 +284,20 @@ public class InboxExecutor {
         } catch (RuntimeException failure) {
             int attempts = row.attemptCount() + 1;
             String safeMessage = failure.getClass().getSimpleName() + ": " + failure.getMessage();
+            // Classified on the exception's type before it is flattened to
+            // safeMessage above (ADR 0006, ADR 0029): the type is known with
+            // confidence, the message can quote whatever the handler rejected.
+            String category = FailureClassifier.classify(failure).name();
 
             if (attempts >= maximumAttempts) {
-                store.deadLetter(row.id(), "TRANSIENT_INFRASTRUCTURE", safeMessage);
+                store.deadLetter(row.id(), category, safeMessage);
                 log.error("Inbox item {} for {} exhausted {} attempts", row.id(), consumerName, attempts, failure);
-                publishDeadLetter(envelope, "TRANSIENT_INFRASTRUCTURE");
+                publishDeadLetter(envelope, category);
                 count(consumerName, envelope.eventType(), "dead_letter");
                 return InboxResult.DEAD_LETTERED;
             }
 
-            store.scheduleRetry(row.id(), backoff.delayAfter(attempts), "TRANSIENT_INFRASTRUCTURE", safeMessage);
+            store.scheduleRetry(row.id(), backoff.delayAfter(attempts), category, safeMessage);
             log.warn("Inbox item {} for {} failed on attempt {}", row.id(), consumerName, attempts, failure);
             count(consumerName, envelope.eventType(), "retry");
             return InboxResult.RETRY_SCHEDULED;

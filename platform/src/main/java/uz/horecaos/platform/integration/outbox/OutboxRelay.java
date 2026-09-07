@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.DeadLetterRecorded;
+import uz.horecaos.platform.integration.failures.FailureCategory;
+import uz.horecaos.platform.integration.failures.FailureClassifier;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
 @Component
@@ -118,8 +120,19 @@ public class OutboxRelay {
             Instant failedAt = clock.instant();
             boolean deadLetter = event.attemptCount() >= maxAttempts;
             Instant nextAttempt = deadLetter ? failedAt : failedAt.plus(backoff.delayAfter(event.attemptCount()));
+            // Classified on the exception's type, before it is flattened to
+            // safeError()'s free text below (ADR 0006, ADR 0029): the type is
+            // known with confidence, the message can quote whatever the
+            // failed publish carried.
+            FailureCategory category = FailureClassifier.classify(exception);
             boolean updated = outbox.markFailed(
-                    event.eventId(), event.claimToken(), failedAt, nextAttempt, safeError(exception), deadLetter);
+                    event.eventId(),
+                    event.claimToken(),
+                    failedAt,
+                    nextAttempt,
+                    category.name(),
+                    safeError(exception),
+                    deadLetter);
             if (!updated) {
                 logger.warn("Outbox failure lease was lost before completion eventId={}", event.eventId());
                 return;
@@ -151,7 +164,7 @@ public class OutboxRelay {
                         DeadLetterRecorded.SOURCE_OUTBOX,
                         event.aggregateType(),
                         event.aggregateId(),
-                        "RETRY_EXHAUSTED",
+                        category.name(),
                         failedAt));
             } else {
                 failedCounter.increment();

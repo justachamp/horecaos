@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -30,6 +31,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * ADR 0006 exit criterion: operations can identify, safely retry, and audit
@@ -333,14 +335,31 @@ class FailureOperationsServiceTests {
         insertApprovalPolicy();
         UUID eventId = deadLetteredOutboxEvent();
 
-        assertThatThrownBy(() -> operations.resolveOutboxEvent(
-                        eventId,
-                        FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
-                        OPERATOR,
-                        "provider says no charge",
-                        "recon-2026-08-20-17"))
+        Throwable refusal = catchThrowable(() -> operations.resolveOutboxEvent(
+                eventId,
+                FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
+                OPERATOR,
+                "provider says no charge",
+                "recon-2026-08-20-17"));
+
+        assertThat(refusal)
                 .as("an irreversible decision about money needs a second pair of eyes")
                 .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
+        // ADR 0006 once documented this exception as reaching the caller with no
+        // ADR 0031 error-code mapping at all, which would answer 500. It never
+        // actually did — SecondApproverRequiredException has extended ApiException
+        // since it was introduced — but nothing pinned that down until this
+        // assertion, so a regression back to a bare RuntimeException, or to the
+        // generic UNPROCESSABLE_STATE this platform reuses for the unrelated "stop,
+        // there is nothing to wait for" case, would previously have passed every
+        // test in this class silently.
+        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal).errorCode())
+                .as("a stable code a client can branch on, distinct from the generic "
+                        + "'current state refuses this' bucket this platform uses everywhere else")
+                .isEqualTo(ErrorCode.SECOND_APPROVER_REQUIRED);
+        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal).errorCode().status())
+                .as("recorded and waiting for a checker is not a server crash")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
 
         assertThat(outboxStatus(eventId))
                 .as("nothing changes while approval is pending")
