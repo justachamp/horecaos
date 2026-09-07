@@ -20,16 +20,21 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 
 /**
- * What puts a confirmed order in front of a till (ADR 0011, ADR 0019).
+ * What puts an order in front of a till — confirmed, or asking the till to
+ * decide (ADR 0002, ADR 0011, ADR 0019).
  *
  * <p>{@link PosOrderExportService} was built with no caller, so until now every
  * kitchen ticket was somebody retyping an order from a screen. This class is the
- * caller, and it is split across two phases because the two halves of an export
- * have opposite requirements.
+ * caller, listening for two different moments an order becomes the till's
+ * business — {@link #onOrderConfirmed}, always, and {@link
+ * #onOrderAwaitingApproval}, only for a {@code POS}/{@code EITHER} approval
+ * channel where Clopos itself is the one being asked — and it is split across
+ * two phases because the two halves of an export have opposite requirements.
  *
  * <p><strong>Opening the export runs in the confirming transaction.</strong>
  * {@link TransactionPhase#BEFORE_COMMIT}, like ADR 0020's notification trigger
@@ -158,6 +163,41 @@ public class PosOrderExportTrigger {
                         // POS binding takes its orders exactly as it did before there was
                         // one, and that is most branches during the pilot.
                         () -> log.debug("Order {} opened no POS export", event.orderId()));
+    }
+
+    /**
+     * Opens the export for an order routed to the till for a decision, rather
+     * than one already decided (ADR 0002, ADR 0011 §6.4).
+     *
+     * <p>The gap {@link #onOrderConfirmed} alone left: a {@code POS} or {@code
+     * EITHER} approval channel means Clopos is a genuine authority for this
+     * order's acceptance, and it cannot decide on an order it has never seen.
+     * Gated on the channel the order's own pinned acceptance policy snapshotted
+     * — {@code HORECAOS_OPERATIONS} and {@code NONE} orders still export only
+     * once confirmed, exactly as before.
+     *
+     * <p>Opening here and opening on confirmation are the same idempotent call
+     * against the same {@code uq_pos_export_per_order} row (see {@link
+     * PosOrderExportService#open}), so a {@code POS}/{@code EITHER} order that
+     * later fires {@code OrderConfirmed} too — decided by Operations, or by the
+     * till itself — finds its export already {@code ACCEPTED} and {@link
+     * PosOrderExportService#send} refuses to send it again.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onOrderAwaitingApproval(OrderAwaitingApproval event) {
+        if (!tillMayDecide(event.approvalChannel())) {
+            return;
+        }
+        UUID tenantId = event.tenantId().value();
+
+        exports.open(tenantId, event.orderId())
+                .ifPresentOrElse(
+                        exportId -> afterCommit(() -> hint(new Dispatch(tenantId, exportId))),
+                        () -> log.debug("Order {} awaiting POS approval opened no POS export", event.orderId()));
+    }
+
+    private static boolean tillMayDecide(String approvalChannel) {
+        return "POS".equals(approvalChannel) || "EITHER".equals(approvalChannel);
     }
 
     /**
