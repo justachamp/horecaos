@@ -448,7 +448,8 @@ class KeycloakOrganizationIntegrationTests {
 
     @Test
     void settingEnabledOnAVanishedOrganizationStopsRatherThanSucceeding() {
-        assertThatThrownBy(() -> provisioner.setOrganizationEnabled(UUID.randomUUID().toString(), false))
+        assertThatThrownBy(() ->
+                        provisioner.setOrganizationEnabled(UUID.randomUUID().toString(), false))
                 .isInstanceOf(OrganizationProvisioner.OrganizationDriftException.class);
     }
 

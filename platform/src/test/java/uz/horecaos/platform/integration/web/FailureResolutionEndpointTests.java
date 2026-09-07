@@ -119,8 +119,7 @@ class FailureResolutionEndpointTests {
                         .with(tokenFor(OPERATOR))
                         .header("Idempotency-Key", "resolve-" + eventId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                """
+                        .content("""
                                 {"category":"UNCERTAIN_EXTERNAL_OUTCOME",
                                  "reason":"provider says no charge",
                                  "evidenceReference":"recon-2026-09-07-01"}
@@ -223,9 +222,8 @@ class FailureResolutionEndpointTests {
                 """)
                 .param(
                         "id",
-                        UUID.nameUUIDFromBytes(
-                                (subject + PlatformRole.PLATFORM_ADMIN.code())
-                                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_ADMIN.code())
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
                 // Backdated rather than the column's own now(): a grant read back
