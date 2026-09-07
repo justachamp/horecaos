@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.CRC32;
@@ -48,9 +49,12 @@ import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MediaOutboxEventListener;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
+import uz.horecaos.platform.media.api.MalwareScanner;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.MediaEvent;
@@ -58,6 +62,7 @@ import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.application.MediaDerivativeService;
 import uz.horecaos.platform.media.application.MediaDerivativeStore;
 import uz.horecaos.platform.media.application.MediaDerivativeWorker;
+import uz.horecaos.platform.media.application.MediaVerificationWorker;
 import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.MediaDerivative;
@@ -68,6 +73,7 @@ import uz.horecaos.platform.media.infrastructure.imaging.ImageIoDerivativeRender
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaDerivativeStore;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
 import uz.horecaos.platform.media.infrastructure.storage.S3ObjectStorage;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -125,8 +131,11 @@ class MediaLifecycleTests {
     private MediaAssetService media;
     private MediaDerivativeService derivatives;
     private MediaDerivativeWorker worker;
+    private MediaVerificationWorker verificationWorker;
     private JdbcDerivativeJobStore jobs;
+    private JdbcVerificationJobStore verificationJobs;
     private MediaDerivativeStore derivativeRows;
+    private AuditRecorder audit;
     private JdbcClient jdbc;
     private MovableClock clock;
     private S3ObjectStorage storage;
@@ -230,8 +239,10 @@ class MediaLifecycleTests {
         ApplicationEventPublisher events = event -> outbox.append((MediaEvent) event);
 
         jobs = new JdbcDerivativeJobStore(jdbc);
-        media = new MediaAssetService(
-                new JdbcMediaAssetStore(jdbc), jobs, storage, transactions, events, clock, BUCKET);
+        verificationJobs = new JdbcVerificationJobStore(jdbc);
+        audit = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        media = mediaServiceOver(Optional.empty());
+        verificationWorker = verificationWorkerOver(media);
 
         // Everything here is real: real originals, a real renderer, real objects
         // written to and read back from MinIO, and — since V0058 landed the table
