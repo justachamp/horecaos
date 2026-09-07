@@ -25,8 +25,8 @@ class InventoryOperationsAlertTriggerTests {
     @Test
     void goingUnavailableFansOutNamingTheItem() {
         RecordingOperationsAlertPort port = new RecordingOperationsAlertPort();
-        InventoryOperationsAlertTrigger trigger = new InventoryOperationsAlertTrigger(
-                port, named("Lagman"), Duration.ofMinutes(30));
+        InventoryOperationsAlertTrigger trigger =
+                new InventoryOperationsAlertTrigger(port, named("Lagman"), Duration.ofMinutes(30));
 
         trigger.onAvailabilityChanged(new ItemAvailabilityChanged(
                 UUID.randomUUID(), TENANT, BRAND, LOCATION, VARIANT, false, "SOLD_OUT", Instant.now()));
@@ -42,8 +42,8 @@ class InventoryOperationsAlertTriggerTests {
     @Test
     void comingBackAvailableRaisesNoAlert() {
         RecordingOperationsAlertPort port = new RecordingOperationsAlertPort();
-        InventoryOperationsAlertTrigger trigger = new InventoryOperationsAlertTrigger(
-                port, named("Lagman"), Duration.ofMinutes(30));
+        InventoryOperationsAlertTrigger trigger =
+                new InventoryOperationsAlertTrigger(port, named("Lagman"), Duration.ofMinutes(30));
 
         trigger.onAvailabilityChanged(new ItemAvailabilityChanged(
                 UUID.randomUUID(), TENANT, BRAND, LOCATION, VARIANT, true, "RESTOCKED", Instant.now()));
@@ -54,8 +54,8 @@ class InventoryOperationsAlertTriggerTests {
     @Test
     void anUnresolvableNameRendersAsAnEmptyStringRatherThanFailing() {
         RecordingOperationsAlertPort port = new RecordingOperationsAlertPort();
-        InventoryOperationsAlertTrigger trigger = new InventoryOperationsAlertTrigger(
-                port, named(null), Duration.ofMinutes(30));
+        InventoryOperationsAlertTrigger trigger =
+                new InventoryOperationsAlertTrigger(port, named(null), Duration.ofMinutes(30));
 
         trigger.onAvailabilityChanged(new ItemAvailabilityChanged(
                 UUID.randomUUID(), TENANT, BRAND, LOCATION, VARIANT, false, "SOLD_OUT", Instant.now()));
