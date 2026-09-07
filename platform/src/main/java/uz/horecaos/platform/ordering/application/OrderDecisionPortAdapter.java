@@ -4,6 +4,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 
 /**
@@ -19,8 +20,12 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
  * does not carry (actor type, decision channel) is fixed, not guessed: a bot
  * decision is always {@code actorType = "USER"} (a resolved staff principal,
  * never the bot itself — see {@code BotCallbackAuthorizer}) on the
- * {@code HORECAOS_TELEGRAM_BOT} channel, the Telegram-bot counterpart of the
- * web board's hardcoded {@code "HORECAOS_OPERATIONS"}. An approve's reason is
+ * {@code HORECAOS_TELEGRAM_BOT} channel. That channel is the bot's own and not
+ * the board's: the actor here is a staff subject exactly as the board's is, so
+ * collapsing the two would make a decision taken on a phone in a chat
+ * indistinguishable from one taken at the pass. Both values now come from
+ * {@link OrderDecisionChannel}, which the database agrees with by test — for
+ * the reason that enum's own doc gives. An approve's reason is
  * always the fixed {@link #REASON_CODE} (wave 24 changes nothing there); a
  * reject that names a chosen reason routes through {@link
  * OrderOutcomeService#reject} instead — the same registry-validated,
@@ -45,7 +50,7 @@ public class OrderDecisionPortAdapter implements OrderDecisionPort {
      */
     static final String REASON_CODE = "TELEGRAM_BOT_TAP";
 
-    static final String DECISION_CHANNEL = "HORECAOS_TELEGRAM_BOT";
+    static final String DECISION_CHANNEL = OrderDecisionChannel.HORECAOS_TELEGRAM_BOT.name();
 
     private final OrderStateService orderState;
     private final OrderOutcomeService outcomes;

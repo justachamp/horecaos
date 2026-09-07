@@ -42,12 +42,14 @@ import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventorySt
 import uz.horecaos.platform.migration.application.MigrationOwnershipService;
 import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationScopeStore;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
+import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
@@ -58,6 +60,7 @@ import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
+import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 import uz.horecaos.platform.ordering.domain.OutcomeSystemCategory;
@@ -1380,6 +1383,130 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(order.acceptedByActorType()).isEqualTo("SYSTEM_JOB");
         assertThat(order.acceptedByActorId()).isEqualTo("order-acceptance-policy");
+    }
+
+    // ------------------------------------------- the bot's own decision channel
+
+    /**
+     * ADR 0060 §4's decision path, driven through the real
+     * {@link OrderDecisionPortAdapter} rather than a fake.
+     *
+     * <p>These live in this suite because the adapter's two branches end in
+     * this suite's two services: an approve reaches {@code
+     * OrderStateService.decide} directly, and a reject naming a reason goes
+     * through {@code OrderOutcomeService.reject} first. Both end in the insert
+     * into {@code ordering.approval_decisions}, and both carried a decision
+     * channel the table's own CHECK refused from wave 6 to wave 78, so every
+     * Approve or Reject tapped in Telegram raised a constraint violation in
+     * production.
+     * Nothing saw it: {@code TelegramInteractiveBotIntegrationTest} injects a
+     * {@code FakeOrderDecisionPort}, so the real adapter was constructed
+     * nowhere, and its own comment called it "a direct field-mapping
+     * translator" — the one untested line held the one wrong value. A fake
+     * cannot fail this way, which is exactly why these assert against the
+     * database.
+     */
+    @Test
+    @DisplayName("a bot approval is recorded on the bot's own channel, not the board's")
+    void aBotApprovalIsRecordedOnTheBotsChannel() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-bot-approve"));
+        var adapter = new OrderDecisionPortAdapter(orderState, outcomes);
+
+        OrderDecisionPort.Decision decision = tx(() -> adapter.decide(
+                TENANT,
+                orderId,
+                new OrderDecisionPort.DecisionCommand(
+                        "bot-token-approve-1",
+                        OrderDecisionPort.Action.APPROVE,
+                        "staff-sharif",
+                        clock.instant(),
+                        "corr-bot-1",
+                        null)));
+
+        assertThat(decision.applied())
+                .as("the tap that a constraint violation used to abort")
+                .isTrue();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        Map<String, Object> row = jdbc.sql("""
+                SELECT decision_channel, actor_type, actor_id, effective
+                  FROM ordering.approval_decisions
+                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .query()
+                .singleRow();
+
+        assertThat(row.get("decision_channel"))
+                .as("which surface accepted this order is the question the column exists to answer")
+                .isEqualTo("HORECAOS_TELEGRAM_BOT");
+        assertThat(row.get("actor_type"))
+                .as("a bot tap is a resolved staff principal, never the bot itself")
+                .isEqualTo("USER");
+        assertThat(row.get("actor_id")).isEqualTo("staff-sharif");
+        assertThat(row.get("effective")).isEqualTo(true);
+    }
+
+    @Test
+    @DisplayName("a bot rejection naming a reason lands on the same channel through the outcome service")
+    void aBotRejectionIsRecordedOnTheBotsChannel() {
+        requireApproval();
+        UUID orderId = orderIdOf(placeOrder("idem-bot-reject"));
+        var adapter = new OrderDecisionPortAdapter(orderState, outcomes);
+
+        // The adapter's other branch. A named reason routes through
+        // OrderOutcomeService, which validates the code and encrypts the note
+        // before delegating to the same OrderStateService.decide — so this
+        // shares the insert with the approve above but not the path to it, and
+        // it is the path that carries the channel constant.
+        OrderDecisionPort.Decision decision = tx(() -> adapter.decide(
+                TENANT,
+                orderId,
+                new OrderDecisionPort.DecisionCommand(
+                        "bot-token-reject-1",
+                        OrderDecisionPort.Action.REJECT,
+                        "staff-sharif",
+                        clock.instant(),
+                        "corr-bot-2",
+                        "ITEM_UNAVAILABLE")));
+
+        assertThat(decision.applied()).isTrue();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.REJECTED);
+
+        assertThat(jdbc.sql("""
+                SELECT decision_channel FROM ordering.approval_decisions
+                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", orderId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("HORECAOS_TELEGRAM_BOT");
+    }
+
+    @Test
+    @DisplayName("every channel the platform can emit is one the table accepts")
+    void theDecisionChannelsAgreeWithTheDatabase() {
+        // The structural half of the fix. The bug was not that one constant was
+        // wrong; it was that a decision channel is a bare string at every call
+        // site with nothing to compare it against, so a value no table would
+        // accept read exactly like a value every table would. This is the same
+        // guard ck_order_status has against OrderStateMachine.
+        String definition = jdbc.sql("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                 WHERE conname = 'ck_approval_channel'
+                """).query(String.class).single();
+
+        for (OrderDecisionChannel channel : OrderDecisionChannel.values()) {
+            assertThat(definition)
+                    .as(
+                            "%s is emitted by code the CHECK would reject, so every decision "
+                                    + "taken on that surface aborts",
+                            channel)
+                    .contains("'" + channel.name() + "'");
+        }
     }
 
     // ------------------------------------------------------------- helpers
