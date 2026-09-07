@@ -83,9 +83,11 @@ public class MediaController {
     @PostMapping("/{assetId}/finalize")
     @RequiresCapability(value = Capability.MEDIA_UPLOAD, mutating = true)
     @Operation(
-            summary = "Verify the uploaded object and make it displayable",
-            description = "Reads the object store's own metadata. The request body carries no claims "
-                    + "about the upload, because a client's claim is not evidence.")
+            summary = "Record that the upload is complete and queue verification",
+            description = "Never touches the object store. Records the client's claim that the upload "
+                    + "finished and queues asynchronous verification; the returned status is UPLOADED, "
+                    + "not AVAILABLE. A client's claim is not evidence, so nothing becomes displayable "
+                    + "until a separate verification worker has read the object store's own metadata.")
     public ResponseEntity<AssetResponse> finalizeUpload(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
         MediaAssetStatus status;
         try {

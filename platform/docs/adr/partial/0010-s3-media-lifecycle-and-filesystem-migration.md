@@ -12,11 +12,12 @@
   the domain lifecycle and tenant-aware storage, and `MediaController` exposes
   presigned `upload-requests`, `finalize`, read and `download-url` behind
   `MEDIA_UPLOAD` / `MEDIA_READ` — so the third and fifth checklist boxes are in
-  fact done, except that verification is synchronous inside `finalizeUpload`
-  (read back from the store, then `AVAILABLE`) rather than a separate validation
-  worker. MinIO is in `compose.yaml` and `MediaLifecycleTests` proves
-  tenant isolation, signature-enforced size and content-type, disallowed types,
-  finalize idempotency and that a pending asset is not servable. `V0058` adds
+  fact done, and as of `V0180` verification also runs on a separate leased
+  worker (`MediaVerificationWorker`) rather than inline inside `finalize`; see
+  the dedicated paragraph below. MinIO is in `compose.yaml` and
+  `MediaLifecycleTests` proves tenant isolation, signature-enforced size and
+  content-type, disallowed types, finalize idempotency and that a pending asset
+  is not servable. `V0058` adds
   `media.derivatives`, `media.migration_runs`, `media.legacy_path_mappings` and
   `media.migration_items`, plus `media.assets.legacy_path` and the tenant-scoped
   `uq_media_assets_tenant_scoped` key that lets any reference to an asset be
@@ -86,17 +87,51 @@
   the only relation anything writes and it is now a checked reference, so three
   empty media-owned tables were not added, and no relation is brand-scoped by the
   database because `media.assets` carries no key a brand-scoped reference could
-  point at; the separate validation worker, since verification is still
-  synchronous inside `finalizeUpload`; WebP and AVIF renditions, because the JDK
-  ships no encoder for either, so every variant is JPEG and a WebP or AVIF
-  original gets no derivative at all; any inventory, copy, checksum or
-  reconciliation tooling for the legacy filesystem, so `media.migration_runs` and
-  `media.migration_items` have never held a row and no legacy image has a
-  migration path (`LegacyPath` and `LegacyPathMapping` are value objects with a
-  unit test and no store); malware scanning; media audit facts, the worker's
-  `horecaos.media.derivative.jobs` counters being the only observability the module
-  has; and the production media origin, still listed as unproven in
-  `infra/production/README.md`.
+  point at; WebP and AVIF renditions, because the JDK ships no encoder for
+  either, so every variant is JPEG and a WebP or AVIF original gets no
+  derivative at all; any inventory, copy, checksum or reconciliation tooling for
+  the legacy filesystem, so `media.migration_runs` and `media.migration_items`
+  have never held a row and no legacy image has a migration path (`LegacyPath`
+  and `LegacyPathMapping` are value objects with a unit test and no store); and
+  malware scanning itself — see the next paragraph for the seam that now exists
+  for it and does not yet do it — and the production media origin, still listed
+  as unproven in `infra/production/README.md`.
+
+  The validation worker this record always asked for now exists, and
+  `finalizeUpload` no longer verifies anything. `V0180` adds
+  `media.assets.uploaded_at` and `media.verification_jobs` — a claim, a lease
+  and an attempt budget in `media.derivative_jobs`' own shape (`V0065`), because
+  a third hand-written `FOR UPDATE SKIP LOCKED` claim query is a third chance to
+  get it subtly wrong. `finalizeUpload` now does one thing: it moves
+  `PENDING_UPLOAD` to `UPLOADED` and enqueues a verification job, never touching
+  the object store, so a client is never made to wait on MinIO to learn its
+  upload was received. Everything finalize used to do synchronously — the
+  `HeadObject`, the ranged read, the header probe, the cost-limit check — moved
+  unchanged into a new `verifyUpload`, callable only by `MediaVerificationWorker`,
+  which drains the queue under a lease exactly the way `MediaDerivativeWorker`
+  drains derivative jobs: same batch/lease/backoff/attempt-budget shape, same
+  reasoning for not being an `InboxHandler`. `MediaLifecycleTests` now runs every
+  asset in this suite through `requestUpload` → upload → `finalizeUpload`
+  (asserted `UPLOADED`) → one `verificationWorker.verifyOnce()` pass (asserted
+  `AVAILABLE` or `REJECTED` afterward) rather than trusting a synchronous
+  `finalizeUpload` return value, and a dedicated test proves the asset is not yet
+  displayable — no download URL, not in `allDisplayable` — in the window between
+  finalize and that first verification pass, which is the property a synchronous
+  finalize could never exhibit and the whole reason this worker exists.
+
+  Two more gaps close as a side effect of the same change. Media audit facts are
+  now written: `verifyUpload` records an `AuditFact` (ADR 0027) in the same
+  transaction as the `AVAILABLE` or `REJECTED` verdict, attributed to the worker
+  rather than the uploader, since the worker is what actually decided the
+  outcome and on its own lease rather than the uploader's request. And
+  `MalwareScanner` (`media.api`) is a new port — `scan(bucket, key) -> Verdict`
+  — that `verifyUpload` consults when a bean is registered; none is, in any
+  environment today, so this closes the seam without closing the gap: every
+  asset that reaches `AVAILABLE` still does so unscanned for malware, exactly as
+  before, and `MalwareScanner`'s own doc says so rather than a default
+  implementation quietly answering clean. `MediaLifecycleTests` proves the
+  rejection path works when a scanner is registered, using a stand-in verdict
+  rather than a real scanning dependency.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
@@ -378,10 +413,10 @@ deletes legacy files; deletion is a later separately approved action.
 - [~] Add asset, derivative, relation, and migration tables. Assets are `V0015`; derivatives, `migration_runs`, `legacy_path_mappings` and `migration_items` are `V0058`, which also adds the tenant-scoped unique key on `media.assets` that a checked reference needs; `media.derivative_jobs` is `V0065`. The relation is now checked: `V0065` gives `catalog.media_relations` a composite foreign key `(media_asset_id, tenant_id)` against that key, having first moved any row it could not satisfy into `catalog.media_relation_orphans`. What is still not built is the media-owned split this record sketches — `brand_media`, `location_media`, `product_media` — because `catalog` owns the only relation anything writes; and no relation is brand-scoped by the database, since `media.assets` has no key a brand-scoped reference could point at.
 - [x] Implement domain lifecycle and tenant-aware storage port.
 - [ ] Provision S3-compatible local/test infrastructure and production IAM plan.
-- [ ] Implement presigned allocation/finalize APIs and validation worker. The APIs are built — `MediaController` allocates a constrained presigned PUT and finalizes from `HeadObject`, never from the request body. There is no validation worker: verification runs synchronously inside `finalizeUpload`, which is adequate for a head and a header read and is not what this box asked for.
-- [~] Implement derivative pipeline through outbox/inbox. Built and reached from `finalizeUpload`: one transaction marks the asset `AVAILABLE`, writes a `media.derivative_jobs` row (`V0065`) and publishes `MediaAssetAvailable`, which `MediaOutboxEventListener` appends to the outbox on `BEFORE_COMMIT` for the relay to publish on `media.events`. `MediaDerivativeWorker` claims jobs under a lease and renders outside any transaction. The inbox half is deliberately absent rather than pending: `InboxExecutor` runs a handler inside the transaction that records it, so a handler that downloaded an original and decoded it three times would hold a pooled connection for the length of both — the render is owed by a durable job row instead, and nothing consumes `media.events` yet.
+- [x] Implement presigned allocation/finalize APIs and validation worker. `MediaController` allocates a constrained presigned PUT and finalizes from the client's claim alone — finalize never touches the store. `V0180` adds `media.verification_jobs`, and `MediaVerificationWorker` claims jobs under a lease and calls the new `verifyUpload` (the old synchronous finalize logic, unchanged, moved wholesale), which does the `HeadObject`, the header read and the cost check outside any transaction, exactly as this box asked.
+- [~] Implement derivative pipeline through outbox/inbox. Built and reached from `verifyUpload`: one transaction marks the asset `AVAILABLE`, writes a `media.derivative_jobs` row (`V0065`) and publishes `MediaAssetAvailable`, which `MediaOutboxEventListener` appends to the outbox on `BEFORE_COMMIT` for the relay to publish on `media.events`. `MediaDerivativeWorker` claims jobs under a lease and renders outside any transaction. The inbox half is deliberately absent rather than pending: `InboxExecutor` runs a handler inside the transaction that records it, so a handler that downloaded an original and decoded it three times would hold a pooled connection for the length of both — the render is owed by a durable job row instead, and nothing consumes `media.events` yet.
 - [ ] Implement inventory/copy/checksum/reconciliation tooling.
-- [ ] Add metrics, audit, access-denial, corruption, resume, and rollback tests.
+- [~] Add metrics, audit, access-denial, corruption, resume, and rollback tests. `MediaVerificationWorker` and `MediaDerivativeWorker` both emit outcome counters, and `verifyUpload` now records an `AuditFact` (ADR 0027) on both the `AVAILABLE` and `REJECTED` paths, in the same transaction as the verdict — closing the audit half of this box. Access-denial (tenant isolation on both `finalizeUpload` and `verifyUpload`) and this module's own corruption cases (raster bombs, malformed originals, out-of-memory decodes) are covered by `MediaLifecycleTests`. What is still missing is everything this box asks about the legacy migration — resume and rollback tests — because the migration tooling itself is not built (the box above).
 
 ## Exit criteria
 

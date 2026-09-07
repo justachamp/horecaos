@@ -71,6 +71,30 @@ public class JdbcMediaAssetStore {
     }
 
     /**
+     * The client's claim that its upload is complete.
+     *
+     * <p>Guarded by {@code WHERE status = 'PENDING_UPLOAD'} rather than by
+     * {@code asset_id} alone, so this is the one statement that decides a race
+     * between two concurrent finalize calls: exactly one of them moves the row,
+     * and the other's {@code false} return tells {@link
+     * uz.horecaos.platform.media.application.MediaAssetService#finalizeUpload}
+     * to re-read rather than assume it won.
+     *
+     * @return true when this call performed the transition
+     */
+    public boolean markUploaded(MediaAssetId assetId, Instant now) {
+        return jdbc.sql("""
+                UPDATE media.assets
+                SET status = 'UPLOADED', uploaded_at = :now
+                WHERE asset_id = :assetId AND status = 'PENDING_UPLOAD'
+                """)
+                        .param("assetId", assetId.value())
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
+    }
+
+    /**
      * Records a verified asset as available and stores what verification found.
      *
      * @param contentType what the image's own header says, not what the client
@@ -142,6 +166,9 @@ public class JdbcMediaAssetStore {
                 (Integer) row.getObject("width_px"),
                 (Integer) row.getObject("height_px"),
                 row.getObject("created_by", UUID.class),
+                java.util.Optional.ofNullable(row.getObject("uploaded_at", OffsetDateTime.class))
+                        .map(OffsetDateTime::toInstant)
+                        .orElse(null),
                 row.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 }

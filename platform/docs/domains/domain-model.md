@@ -224,6 +224,14 @@ transaction; `MediaDerivativeWorker` claims a job under a lease and renders
 outside any transaction, because decoding an image is neither fast enough for a
 request thread nor safe to hold a pooled connection across.
 
+Verification is owed the same way (`V0180`). Finalize only moves an asset from
+`PENDING_UPLOAD` to `UPLOADED` and writes a `media.verification_jobs` row; it
+never calls the object store. `MediaVerificationWorker` claims that job under a
+lease and calls `HeadObject`, the ranged header read and the decoded-cost check
+outside any transaction — the same shape as the derivative worker, for the same
+reason. An asset is briefly `UPLOADED` and not yet displayable between those two
+steps, which is the state a synchronous finalize could never produce.
+
 ## Cross-cutting database invariants
 
 - Use UUID public identifiers, UTC `timestamptz`, and optimistic-lock versions.

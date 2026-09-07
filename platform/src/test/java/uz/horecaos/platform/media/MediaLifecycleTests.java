@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.CRC32;
@@ -48,9 +49,12 @@ import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MediaOutboxEventListener;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
+import uz.horecaos.platform.media.api.MalwareScanner;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.MediaEvent;
@@ -58,6 +62,7 @@ import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.application.MediaDerivativeService;
 import uz.horecaos.platform.media.application.MediaDerivativeStore;
 import uz.horecaos.platform.media.application.MediaDerivativeWorker;
+import uz.horecaos.platform.media.application.MediaVerificationWorker;
 import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.MediaDerivative;
@@ -68,6 +73,7 @@ import uz.horecaos.platform.media.infrastructure.imaging.ImageIoDerivativeRender
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaDerivativeStore;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
 import uz.horecaos.platform.media.infrastructure.storage.S3ObjectStorage;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -125,12 +131,26 @@ class MediaLifecycleTests {
     private MediaAssetService media;
     private MediaDerivativeService derivatives;
     private MediaDerivativeWorker worker;
+    private MediaVerificationWorker verificationWorker;
     private JdbcDerivativeJobStore jobs;
+    private JdbcVerificationJobStore verificationJobs;
     private MediaDerivativeStore derivativeRows;
+    private AuditRecorder audit;
     private JdbcClient jdbc;
     private MovableClock clock;
     private S3ObjectStorage storage;
     private SimpleMeterRegistry meters;
+
+    /**
+     * Fields rather than {@code setUp()} locals, because {@link #mediaServiceOver}
+     * is called again from inside individual tests — the malware-scanner tests
+     * need a second {@link MediaAssetService} wired over the same transaction
+     * machinery and a different scanner, the same way {@link #serviceOver}
+     * already lets a test swap in a different {@link ImageDerivativeRenderer}.
+     */
+    private TransactionTemplate transactions;
+
+    private ApplicationEventPublisher events;
 
     @BeforeAll
     static void startInfrastructure() {
@@ -216,7 +236,7 @@ class MediaLifecycleTests {
         // file used to assert single-pass behaviour only.
         clock = new MovableClock(START);
         storage = new S3ObjectStorage(s3, presigner);
-        TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
         // Stands in for the @TransactionalEventListener(BEFORE_COMMIT) Spring
         // wires in production. finalize publishes from inside its own
@@ -227,21 +247,65 @@ class MediaLifecycleTests {
         // where its row lands.
         MediaOutboxEventListener outbox = new MediaOutboxEventListener(
                 new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), "media.events");
-        ApplicationEventPublisher events = event -> outbox.append((MediaEvent) event);
+        events = event -> outbox.append((MediaEvent) event);
 
         jobs = new JdbcDerivativeJobStore(jdbc);
-        media = new MediaAssetService(
-                new JdbcMediaAssetStore(jdbc), jobs, storage, transactions, events, clock, BUCKET);
+        verificationJobs = new JdbcVerificationJobStore(jdbc);
+        audit = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        // meters before either worker: both MediaVerificationWorker and
+        // MediaDerivativeWorker take the registry in their constructor.
+        meters = new SimpleMeterRegistry();
+        media = mediaServiceOver(Optional.empty());
+        verificationWorker = verificationWorkerOver(media);
 
         // Everything here is real: real originals, a real renderer, real objects
         // written to and read back from MinIO, and — since V0058 landed the table
         // — real rows in media.derivatives rather than the in-memory stand-in
         // this suite used while that table was still only proposed.
         derivativeRows = new JdbcMediaDerivativeStore(jdbc);
-        meters = new SimpleMeterRegistry();
         derivatives = new MediaDerivativeService(
                 new JdbcMediaAssetStore(jdbc), derivativeRows, storage, new ImageIoDerivativeRenderer(), clock);
         worker = workerOver(derivatives);
+    }
+
+    /**
+     * The production wiring, minus what Spring would inject: a real
+     * {@link JdbcMediaAssetStore}, this fixture's job stores, storage, clock and
+     * bucket, and whichever {@link MalwareScanner} the caller wants standing in
+     * for the port no adapter binds in production today.
+     */
+    private MediaAssetService mediaServiceOver(Optional<MalwareScanner> malwareScanner) {
+        return new MediaAssetService(
+                new JdbcMediaAssetStore(jdbc),
+                jobs,
+                verificationJobs,
+                storage,
+                transactions,
+                events,
+                audit,
+                malwareScanner,
+                clock,
+                BUCKET);
+    }
+
+    /**
+     * The production settings, except a larger batch and a shorter lease than
+     * the derivative worker's — see {@link MediaVerificationWorker}'s own
+     * constructor doc for why — and three attempts rather than six, so a budget
+     * is spendable within a test, the same reasoning as {@link #workerOver}.
+     */
+    private MediaVerificationWorker verificationWorkerOver(MediaAssetService service) {
+        return new MediaVerificationWorker(
+                verificationJobs,
+                service,
+                clock,
+                meters,
+                8,
+                Duration.ofMinutes(2),
+                Duration.ofSeconds(15),
+                Duration.ofMinutes(10),
+                3,
+                "media-lifecycle-tests");
     }
 
     @Test
@@ -259,15 +323,26 @@ class MediaLifecycleTests {
         int uploadStatus = put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG);
         assertThat(uploadStatus).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
+        // finalize only claims the upload complete and queues verification; the
+        // worker's pass is what actually reads the store and publishes it.
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.AVAILABLE);
 
         URI download = media.downloadUrl(TENANT_A, ticket.assetId()).orElseThrow();
         assertThat(get(download)).isEqualTo(JPEG);
 
-        // Dimensions come from the image's own header at finalize. A storefront
-        // that knows them can reserve the right box before the bytes arrive,
-        // which is the difference between a menu that loads and one that jumps.
+        // Dimensions come from the image's own header, read at verification. A
+        // storefront that knows them can reserve the right box before the bytes
+        // arrive, which is the difference between a menu that loads and one that
+        // jumps.
         assertThat(dimensions(ticket.assetId())).containsExactly(640, 480);
+
+        // ADR 0027: an availability decided on a worker's own lease still needs
+        // evidence somebody can find later, the same as one a request thread
+        // decided.
+        assertThat(auditActionCodes(ticket.assetId())).containsExactly("media.asset.available");
     }
 
     @Test
@@ -288,9 +363,14 @@ class MediaLifecycleTests {
 
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), HTML)).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("CONTENT_NOT_AN_IMAGE");
         assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
+        assertThat(auditActionCodes(ticket.assetId())).containsExactly("media.asset.rejected");
     }
 
     @Test
@@ -310,7 +390,11 @@ class MediaLifecycleTests {
         // The bytes are a perfectly good PNG. It is still not the upload that was
         // authorised, and the stored object's own metadata will keep telling every
         // future reader it is a JPEG.
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("TYPE_MISMATCH");
     }
 
@@ -322,12 +406,16 @@ class MediaLifecycleTests {
 
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), PNG)).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.AVAILABLE);
         assertThat(dimensions(ticket.assetId())).containsExactly(320, 240);
     }
 
     @Test
-    @DisplayName("finalizing without uploading is rejected, not left pending")
+    @DisplayName("a claimed upload that was never sent is rejected by verification, not left pending")
     void finalizeWithoutUploadIsRejected() {
         var ticket = media.requestUpload(
                 TENANT_A,
@@ -338,7 +426,14 @@ class MediaLifecycleTests {
                 "never-sent.png",
                 null);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        // A client is free to call finalize having sent nothing — finalize itself
+        // never asks the store. Verification is what discovers there is no
+        // object at the key.
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("OBJECT_MISSING");
     }
 
@@ -361,7 +456,11 @@ class MediaLifecycleTests {
         // URL a bounded capability rather than a write-anything token: a leaked
         // URL cannot be used to upload a gigabyte.
         assertThat(uploadStatus).isEqualTo(403);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("OBJECT_MISSING");
     }
 
@@ -406,10 +505,15 @@ class MediaLifecycleTests {
         assertThat(org.assertj.core.api.Assertions.catchThrowable(
                         () -> media.finalizeUpload(TENANT_B, ticket.assetId())))
                 .isInstanceOf(IllegalArgumentException.class);
+        // verifyUpload carries the same ownership check as finalizeUpload — a
+        // worker processing a queued job is not exempt from it just because no
+        // request is behind the call any more.
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.verifyUpload(TENANT_B, ticket.assetId())))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    @DisplayName("finalize is idempotent, so a retried call cannot un-publish an image")
+    @DisplayName("finalize is idempotent, and a redelivered verification cannot un-publish an image")
     void finalizeIsIdempotent() throws Exception {
         var ticket = media.requestUpload(
                 TENANT_A,
@@ -421,8 +525,86 @@ class MediaLifecycleTests {
                 null);
         put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        // A retried finalize call must not queue a second verification job —
+        // ux_verification_job_one_active is what actually enforces that, and a
+        // second job would mean the worker's next pass claims two jobs here
+        // rather than one.
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.AVAILABLE);
+
+        // A redelivered job, or a second worker racing an expired lease: calling
+        // verifyUpload again directly must report AVAILABLE rather than
+        // re-checking and potentially un-publishing an image whose bytes never
+        // changed.
+        assertThat(media.verifyUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
+    }
+
+    @Test
+    @DisplayName(
+            "finalize queues verification rather than publishing inline; only the worker's pass makes it AVAILABLE")
+    void finalizeQueuesVerificationRatherThanPublishingInline() throws Exception {
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "queued.jpg",
+                null);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG)).isEqualTo(200);
+
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+
+        // Not yet displayable: finalize never touched the object store, and
+        // nothing has yet decided this upload is what it claims to be. This is
+        // the property a synchronous finalize could never exhibit, and the whole
+        // reason ADR 0010 asked for a separate worker rather than a
+        // request-thread check.
+        assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
+        assertThat(media.allDisplayable(TENANT_A, Set.of(ticket.assetId()))).isFalse();
+        assertThat(verificationJobStatus(ticket.assetId())).isEqualTo("PENDING");
+
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(verificationJobStatus(ticket.assetId())).isEqualTo("COMPLETED");
+        assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("a registered malware scanner can still reject an upload that passes every other check")
+    void aRegisteredScannerRejectsAnInfectedUpload() throws Exception {
+        // The seam ADR 0010 asks for, exercised with a stand-in rather than left
+        // untested because production binds no adapter today (see
+        // MalwareScanner's own doc). A lambda is a legitimate MalwareScanner: the
+        // interface has exactly one abstract method.
+        MediaAssetService scanned =
+                mediaServiceOver(Optional.of((bucket, key) -> MalwareScanner.Verdict.infected("EICAR-TEST")));
+        MediaVerificationWorker scannedWorker = verificationWorkerOver(scanned);
+
+        var ticket = scanned.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "infected.jpg",
+                null);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG)).isEqualTo(200);
+        assertThat(scanned.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+
+        assertThat(scannedWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(scanned.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(rejectionCode(ticket.assetId())).isEqualTo("MALWARE_DETECTED");
+        assertThat(rejectionDetail(ticket.assetId())).contains("EICAR-TEST");
+        assertThat(auditActionCodes(ticket.assetId())).containsExactly("media.asset.rejected");
     }
 
     @Test
@@ -716,7 +898,11 @@ class MediaLifecycleTests {
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), RASTER_BOMB))
                 .isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("DIMENSIONS_EXCEEDED");
         // The reason names the quantity the verdict is actually about. 305MB,
         // from two bytes of IHDR that nothing used to read.
@@ -979,7 +1165,11 @@ class MediaLifecycleTests {
         }
     }
 
-    /** Uploads and finalizes, so the asset under test reached AVAILABLE the way a real one does. */
+    /**
+     * Uploads, finalizes and runs one verification pass, so the asset under test
+     * reached AVAILABLE the way a real one does: through the worker, not by
+     * calling {@code verifyUpload} directly from a test.
+     */
     private MediaAssetId anAvailableAsset(String contentType, byte[] content) throws Exception {
         var ticket = media.requestUpload(
                 TENANT_A,
@@ -990,7 +1180,10 @@ class MediaLifecycleTests {
                 "dish" + contentType.hashCode(),
                 null);
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.AVAILABLE);
         return ticket.assetId();
     }
 
@@ -1036,6 +1229,22 @@ class MediaLifecycleTests {
         return jdbc.sql("SELECT status FROM media.derivative_jobs")
                 .query(String.class)
                 .list();
+    }
+
+    private String verificationJobStatus(MediaAssetId assetId) {
+        return jdbc.sql("SELECT status FROM media.verification_jobs WHERE asset_id = :id")
+                .param("id", assetId.value())
+                .query(String.class)
+                .single();
+    }
+
+    /** Action codes recorded for this asset, in the order they were written (ADR 0027). */
+    private List<String> auditActionCodes(MediaAssetId assetId) {
+        return jdbc.sql("""
+                        SELECT action_code FROM audit.audit_events
+                         WHERE target_type = 'media_asset' AND target_id = :id
+                         ORDER BY occurred_at
+                        """).param("id", assetId.value()).query(String.class).list();
     }
 
     private @Nullable String jobErrorCode(MediaAssetId assetId) {
@@ -1094,13 +1303,14 @@ class MediaLifecycleTests {
     }
 
     /**
-     * An AVAILABLE asset whose bytes today's finalize would refuse.
+     * An AVAILABLE asset whose bytes today's verification would refuse.
      *
-     * <p>Uploaded and finalized for real — so the object in MinIO is the real
-     * file at the real key — and then marked available by hand, because that is
-     * exactly the row a re-render sweep finds: one written before the gate
-     * existed. Faking the verdict rather than the object is the point; the
-     * renderer is what is under test.
+     * <p>Uploaded, finalized and verified for real — so the object in MinIO is
+     * the real file at the real key, and verification really did reject it —
+     * and then marked available by hand, because that is exactly the row a
+     * re-render sweep finds: one written before the gate existed. Faking the
+     * verdict rather than the object is the point; the renderer is what is
+     * under test.
      */
     private MediaAssetId anAssetTheGateWouldNowRefuse(String contentType, byte[] content) throws Exception {
 
@@ -1113,7 +1323,10 @@ class MediaLifecycleTests {
                 "legacy" + contentType.hashCode(),
                 null);
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
 
         ProbedImage header = ImageProbe.probe(content).orElseThrow();
         jdbc.sql("""

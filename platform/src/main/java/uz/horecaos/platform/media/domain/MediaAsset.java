@@ -16,7 +16,7 @@ import uz.horecaos.platform.media.api.MediaAssetStatus;
  * @param declaredContentType   what the client said it would upload
  * @param declaredChecksumSha256 null unless the client declared one
  * @param verifiedContentType   what the object store reports. The trusted one.
- *                              Null until {@code finalizeUpload} verifies the
+ *                              Null until {@code verifyUpload} verifies the
  *                              upload
  * @param verifiedSizeBytes     null until verified, for the same reason
  * @param verifiedChecksumSha256 null until verified, for the same reason
@@ -31,6 +31,13 @@ import uz.horecaos.platform.media.api.MediaAssetStatus;
  *                              Keycloak subject was not a UUID — recorded for
  *                              attribution only, so an upload is never refused
  *                              over it
+ * @param uploadedAt            when a {@code finalize} call last claimed the
+ *                              upload complete, moving the asset out of
+ *                              {@code PENDING_UPLOAD}. Null until then. Distinct
+ *                              from {@code media.assets.finalized_at}, which is
+ *                              set later still, when a verdict is reached — the
+ *                              gap between the two is the queueing delay this
+ *                              being a claim rather than a verdict makes possible
  */
 public record MediaAsset(
         MediaAssetId assetId,
@@ -50,4 +57,5 @@ public record MediaAsset(
         @Nullable Integer widthPx,
         @Nullable Integer heightPx,
         @Nullable UUID createdBy,
+        @Nullable Instant uploadedAt,
         Instant createdAt) {}
