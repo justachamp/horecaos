@@ -295,6 +295,22 @@ public class AudienceService {
         return audiences.memberLocaleCounts(tenantId, snapshotId);
     }
 
+    /**
+     * One retention-due snapshot's own purge (ADR 0044's twenty-four months).
+     *
+     * <p>Called once per snapshot from {@code MarketingRetentionSweeper}'s own
+     * loop rather than wrapped around the whole pass, the same isolation {@code
+     * CampaignExpansionScheduler} gets from calling {@code
+     * CampaignSendService#expandNextBatch} once per campaign: one snapshot's
+     * failure — a lock, a transient error — must not roll back the snapshots
+     * already purged earlier in the same pass, and the next tick retries
+     * whatever this one could not reach.
+     */
+    @Transactional
+    public int purgeExpiredMembers(UUID tenantId, UUID snapshotId, Instant now) {
+        return audiences.purgeMembers(tenantId, snapshotId, now);
+    }
+
     private static void requireWorkablePredicates(List<AudiencePredicate> predicates) {
         if (predicates == null || predicates.isEmpty()) {
             // An audience with no predicates is every customer of the brand. That

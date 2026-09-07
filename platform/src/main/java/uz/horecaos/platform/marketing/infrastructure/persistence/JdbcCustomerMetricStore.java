@@ -222,6 +222,25 @@ public class JdbcCustomerMetricStore {
     }
 
     /**
+     * Every (tenant, brand) with at least one registered customer — the nightly
+     * projection sweep's own worklist ({@code CustomerMetricProjectionSweeper}).
+     *
+     * <p>Cross-tenant by design, matching {@code JdbcCampaignStore#sendingCampaigns}:
+     * one statement for the sweep to walk rather than a per-tenant loop reaching
+     * the same table once per tenant. Driven from {@code customer.brand_profiles}
+     * rather than from {@code marketing.customer_metrics} itself, so a brand's
+     * first night runs the sweep exactly as every later one does instead of
+     * needing a separate {@link #recompute} call first: the sweep's own upsert
+     * builds every row from source either way, whether or not one already exists.
+     */
+    public List<BrandRef> brandsWithProfiles() {
+        return jdbc.sql("SELECT DISTINCT tenant_id, brand_id FROM customer.brand_profiles")
+                .query((ResultSet row, int number) -> new BrandRef(
+                        row.getObject("tenant_id", UUID.class), row.getObject("brand_id", UUID.class)))
+                .list();
+    }
+
+    /**
      * ADR 0029 erasure: the customer's projection row goes.
      *
      * <p>Campaign counts and spend are deliberately not touched by the caller. An
@@ -461,4 +480,7 @@ public class JdbcCustomerMetricStore {
 
     /** What one {@link #sweep} rebuilt, and what it refused to fix. */
     public record SweepCounts(int rowsRecomputed, int driftObservations) {}
+
+    /** One brand the nightly projection sweep owes a pass, per {@link #brandsWithProfiles}. */
+    public record BrandRef(UUID tenantId, UUID brandId) {}
 }
