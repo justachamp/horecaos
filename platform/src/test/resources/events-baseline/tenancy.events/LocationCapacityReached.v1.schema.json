@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/LocationCapacityReached.v1.schema.json",
+  "title": "LocationCapacityReached v1 payload",
+  "description": "The authoritative checkout-time claim just filled the last concurrent-order slot. Identifiers only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locationId", "brandId", "maxConcurrentOrders"],
+  "properties": {
+    "locationId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "maxConcurrentOrders": { "type": "integer", "minimum": 1 }
+  }
+}

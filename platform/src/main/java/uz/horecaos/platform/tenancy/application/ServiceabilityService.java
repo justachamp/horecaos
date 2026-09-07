@@ -9,14 +9,21 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.LocationCapacityCleared;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
+import uz.horecaos.platform.tenancy.api.LocationCapacityReached;
+import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.ServiceabilityReason;
 import uz.horecaos.platform.tenancy.api.ServiceabilityResolver;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.channel.PreparationPromise;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
@@ -50,10 +57,18 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
 
     private final JdbcServiceabilityStore store;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
+    /** See {@code SalesChannelService}'s matching overload for why this exists. */
     public ServiceabilityService(JdbcServiceabilityStore store, Clock clock) {
+        this(store, clock, event -> {});
+    }
+
+    @Autowired
+    public ServiceabilityService(JdbcServiceabilityStore store, Clock clock, ApplicationEventPublisher events) {
         this.store = store;
         this.clock = clock;
+        this.events = events;
     }
 
     @Override
@@ -191,17 +206,49 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
             return CapacityOutcome.CLAIMED;
         }
         Optional<Integer> ceiling = store.lockCapacityCeiling(tenantId, locationId);
-        if (ceiling.isPresent() && store.openCapacityHolds(tenantId, locationId) >= ceiling.get()) {
+        long openBefore = store.openCapacityHolds(tenantId, locationId);
+        if (ceiling.isPresent() && openBefore >= ceiling.get()) {
             return CapacityOutcome.AT_CAPACITY;
         }
         store.claimCapacity(holdId, tenantId, brandId, locationId, clock.instant());
+        // Fired only on the claim that fills the last slot, never on every claim
+        // below the ceiling — a kitchen with slack claims silently, and only the
+        // crossing itself is a fact a consumer was not already told.
+        if (ceiling.isPresent() && openBefore + 1 == ceiling.get()) {
+            events.publishEvent(new LocationCapacityReached(
+                    UUID.randomUUID(),
+                    new TenantId(tenantId),
+                    new BrandId(brandId),
+                    new LocationId(locationId),
+                    clock.instant(),
+                    ceiling.get()));
+        }
         return CapacityOutcome.CLAIMED;
     }
 
     @Override
     @Transactional
     public boolean releaseCapacity(UUID tenantId, UUID holdId) {
-        return store.releaseCapacity(holdId, tenantId, clock.instant());
+        Optional<JdbcServiceabilityStore.ReleasedCapacityHold> released =
+                store.releaseCapacity(holdId, tenantId, clock.instant());
+        if (released.isEmpty()) {
+            return false;
+        }
+        UUID locationId = released.get().locationId();
+        Optional<Integer> ceiling = store.lockCapacityCeiling(tenantId, locationId);
+        // The mirror of claimCapacity's crossing check: fired only when this
+        // release is the one that takes the open count from exactly the ceiling
+        // down to one below it, never on a release that leaves slack either side.
+        if (ceiling.isPresent() && store.openCapacityHolds(tenantId, locationId) == ceiling.get() - 1) {
+            events.publishEvent(new LocationCapacityCleared(
+                    UUID.randomUUID(),
+                    new TenantId(tenantId),
+                    new BrandId(released.get().brandId()),
+                    new LocationId(locationId),
+                    clock.instant(),
+                    ceiling.get()));
+        }
+        return true;
     }
 
     /**

@@ -88,6 +88,18 @@ VALUES (
     '10000000-0000-0000-0000-000000000003', 'ACTIVE'
 ) ON CONFLICT DO NOTHING;
 
+-- V0175: channel_payment_methods.payment_method_code is now a foreign key onto
+-- payments.payment_methods, so the registry row must exist before the matrix
+-- names it. CASH here matches exactly what CheckoutSettlementPlanner would have
+-- registered lazily on the fixture's first cash checkout.
+INSERT INTO payments.payment_methods (
+    id, tenant_id, code, display_name, responsibility, status
+) VALUES (
+    '10000000-0000-0000-0000-000000000008',
+    '10000000-0000-0000-0000-000000000001',
+    'CASH', 'CASH', 'OPERATOR', 'ACTIVE'
+) ON CONFLICT DO NOTHING;
+
 INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
 VALUES (
     '10000000-0000-0000-0000-000000000001',

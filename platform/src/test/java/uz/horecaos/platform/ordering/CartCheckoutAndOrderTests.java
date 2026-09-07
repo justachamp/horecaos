@@ -3882,6 +3882,15 @@ class CartCheckoutAndOrderTests {
      * this row has to exist for the bot path and not for theirs.
      */
     private void enableCashOnTheStorefrontChannel() {
+        // V0175 points payment_method_code at payments.payment_methods with a
+        // foreign key, so the registry row must exist before this insert names
+        // it. Same code and responsibility CheckoutSettlementPlanner would have
+        // registered lazily on this suite's first cash checkout.
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, 'CASH', 'CASH', 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
         jdbc.sql("""
                 INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
                 VALUES (:tenantId, :channelId, 'CASH', true)

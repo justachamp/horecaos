@@ -64,13 +64,20 @@ public class StorefrontCatalogQuery {
                 .collect(Collectors.toMap(
                         LocationOffering::variantId, LocationOffering::status, (first, second) -> first));
 
+        // ADR 0036's sparse per-channel exclusions: default is offered, and a row
+        // removes one item from one channel, optionally at one location. Read live
+        // for the same reason offeringByVariant above is -- hiding a dish on this
+        // channel must take effect now, not after a republish.
+        Set<UUID> channelExcludedVariantIds =
+                store.channelExcludedVariantIds(tenantId, brandId, channelCode, locationId);
+
         List<PublicationItem> categoryItems = store.publicationItems(publication, EntityType.CATEGORY);
         List<PublicationItem> productItems = store.publicationItems(publication, EntityType.PRODUCT);
         List<PublicationItem> groupItems = store.publicationItems(publication, EntityType.MODIFIER_GROUP);
 
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
-            List<MenuVariant> variants = variantsOf(item, offeringByVariant);
+            List<MenuVariant> variants = variantsOf(item, offeringByVariant, channelExcludedVariantIds);
             if (variants.isEmpty()) {
                 // Not offered at this location at all. Absent rather than shown
                 // as unavailable: the location genuinely does not sell it.
@@ -161,7 +168,8 @@ public class StorefrontCatalogQuery {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<MenuVariant> variantsOf(PublicationItem item, Map<UUID, OfferingStatus> offeringByVariant) {
+    private static List<MenuVariant> variantsOf(
+            PublicationItem item, Map<UUID, OfferingStatus> offeringByVariant, Set<UUID> channelExcludedVariantIds) {
 
         Object raw = item.content().get("variants");
         if (!(raw instanceof List<?> list)) {
@@ -174,7 +182,9 @@ public class StorefrontCatalogQuery {
             UUID variantId = UUID.fromString(String.valueOf(variant.get("variantId")));
             OfferingStatus offering = offeringByVariant.get(variantId);
 
-            if (offering == null || offering == OfferingStatus.HIDDEN) {
+            if (offering == null
+                    || offering == OfferingStatus.HIDDEN
+                    || channelExcludedVariantIds.contains(variantId)) {
                 continue;
             }
             variants.add(new MenuVariant(

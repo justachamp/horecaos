@@ -812,6 +812,28 @@ class StorefrontCustomerSurfaceTests {
         jdbc.sql("DELETE FROM tenant.channel_payment_methods WHERE tenant_id = :t")
                 .param("t", SHARED_TENANT)
                 .update();
+
+        // V0175: channel_payment_methods.payment_method_code is now a foreign key
+        // onto payments.payment_methods, so onlyOfferableMethodsAreListed and its
+        // neighbours -- which enable CASH/CLICK/PAYME/TELEGRAM on the channel
+        // matrix directly, the way SalesChannelController's whole-matrix PUT does
+        // -- need those four registered first. Same codes and responsibilities
+        // CheckoutSettlementPlanner.responsibilityOf assigns each.
+        for (String[] method : new String[][] {
+            {"CASH", "OPERATOR"}, {"CLICK", "PARTNER"}, {"PAYME", "PARTNER"}, {"TELEGRAM", "PARTNER"}
+        }) {
+            jdbc.sql("""
+                    INSERT INTO payments.payment_methods (
+                        id, tenant_id, code, display_name, responsibility, status)
+                    VALUES (:id, :tenantId, :code, :code, :responsibility, 'ACTIVE')
+                    ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("tenantId", SHARED_TENANT)
+                    .param("code", method[0])
+                    .param("responsibility", method[1])
+                    .update();
+        }
     }
 
     private void tenant(UUID id, String slug, String identityMode) {

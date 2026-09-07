@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -18,7 +20,12 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.LocationId;
+import uz.horecaos.platform.tenancy.api.LocationServiceStateChanged;
+import uz.horecaos.platform.tenancy.api.ServiceScheduleChanged;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
@@ -39,13 +46,26 @@ public class ServiceScheduleService {
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
+    /** See {@code SalesChannelService}'s matching overload for why this exists. */
     public ServiceScheduleService(
             JdbcServiceabilityStore store, AuditRecorder audit, CurrentActor currentActor, Clock clock) {
+        this(store, audit, currentActor, clock, event -> {});
+    }
+
+    @Autowired
+    public ServiceScheduleService(
+            JdbcServiceabilityStore store,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.audit = audit;
         this.currentActor = currentActor;
         this.clock = clock;
+        this.events = events;
     }
 
     // ------------------------------------------------------------------- reads
@@ -90,6 +110,7 @@ public class ServiceScheduleService {
         store.insertSchedule(
                 scheduleId, tenantId, brandId, command.name(), command.acceptsScheduledOrders(), clock.instant());
         store.replaceRules(scheduleId, command.rules());
+        publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.CREATED);
         return scheduleId;
     }
 
@@ -97,12 +118,14 @@ public class ServiceScheduleService {
     public void replaceRules(UUID tenantId, UUID brandId, UUID scheduleId, List<WeeklySchedule.Rule> rules) {
         requireOwned(tenantId, brandId, scheduleId);
         store.replaceRules(scheduleId, rules);
+        publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.RULES_REPLACED);
     }
 
     @Transactional
     public void closeForDay(UUID tenantId, UUID brandId, UUID scheduleId, LocalDate date, String label, String reason) {
         requireOwned(tenantId, brandId, scheduleId);
         store.upsertException(scheduleId, date, true, null, null, label, reason, actorId());
+        publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.EXCEPTION_UPSERTED);
     }
 
     @Transactional
@@ -117,6 +140,18 @@ public class ServiceScheduleService {
             String reason) {
         requireOwned(tenantId, brandId, scheduleId);
         store.upsertException(scheduleId, date, false, opensAt, closesAt, label, reason, actorId());
+        publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.EXCEPTION_UPSERTED);
+    }
+
+    private void publishScheduleChanged(
+            UUID tenantId, UUID brandId, UUID scheduleId, ServiceScheduleChanged.ChangeKind changeKind) {
+        events.publishEvent(new ServiceScheduleChanged(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                scheduleId,
+                clock.instant(),
+                changeKind.name()));
     }
 
     /**
@@ -166,7 +201,7 @@ public class ServiceScheduleService {
 
         Instant now = clock.instant();
         String reasonCode = command.mode() == ServiceMode.FOLLOW_SCHEDULE ? null : command.reasonCode();
-        store.upsertServiceState(
+        int version = store.upsertServiceState(
                 tenantId,
                 brandId,
                 locationId,
@@ -191,6 +226,16 @@ public class ServiceScheduleService {
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
+
+        events.publishEvent(new LocationServiceStateChanged(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                new LocationId(locationId),
+                now,
+                command.mode().name(),
+                reasonCode,
+                version));
     }
 
     /** Sets or clears the concurrent-order ceiling. */

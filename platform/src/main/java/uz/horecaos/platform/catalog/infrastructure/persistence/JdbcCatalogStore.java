@@ -1315,6 +1315,42 @@ public class JdbcCatalogStore {
                 .optional();
     }
 
+    /**
+     * Variants ADR 0036's sparse per-channel exclusions hide from this menu.
+     *
+     * <p>Read live, exactly like {@link #offeringsForLocation}, and for the same
+     * reason: hiding a dish must take effect now, not after a republish. A row
+     * with {@code location_id IS NULL} excludes the variant brand-wide on this
+     * channel; a row naming this location adds to that rather than replacing
+     * it, matching the two independent partial unique indexes {@code
+     * catalog.channel_offering_exclusions} carries — a variant can be excluded
+     * brand-wide and, separately, would need no location-specific row to stay
+     * hidden everywhere.
+     *
+     * <p>Joined on {@code tenant.sales_channels.code} rather than taking a
+     * channel id, because every other read in this class already carries the
+     * channel as the code {@code catalog.publications.channel} references — a
+     * caller resolving a second id for this one query would be the exact
+     * "channel is not a scope level" seam ADR 0036 warns about, restated here
+     * as a join instead of an extra port dependency.
+     */
+    public Set<UUID> channelExcludedVariantIds(UUID tenantId, UUID brandId, String channelCode, UUID locationId) {
+        return new java.util.HashSet<>(jdbc.sql("""
+                SELECT e.variant_id
+                FROM catalog.channel_offering_exclusions e
+                JOIN tenant.sales_channels sc
+                  ON sc.tenant_id = e.tenant_id AND sc.id = e.channel_id
+                WHERE e.tenant_id = :tenantId AND e.brand_id = :brandId AND sc.code = :channelCode
+                  AND (e.location_id IS NULL OR e.location_id = :locationId)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channelCode", channelCode)
+                .param("locationId", locationId)
+                .query(UUID.class)
+                .list());
+    }
+
     /** Reads a published snapshot. The storefront's only source. */
     public List<PublicationItem> publicationItems(UUID publicationId, EntityType entityType) {
         return jdbc.sql("""
