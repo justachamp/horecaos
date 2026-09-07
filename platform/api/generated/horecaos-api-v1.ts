@@ -3172,6 +3172,9 @@ export interface PreferenceResponse {
   channel?: string;
   enabled?: boolean;
   notificationClass?: string;
+  quietHoursEnd?: string;
+  quietHoursStart?: string;
+  timezone?: string;
   version?: number;
 }
 
@@ -4200,6 +4203,9 @@ export interface SetOfferingRequest {
 export interface SetPreferenceRequest {
   brandId?: string;
   enabled: boolean;
+  quietHoursEnd?: string;
+  quietHoursStart?: string;
+  timezone?: string;
 }
 
 export interface SetPresenceRequest {

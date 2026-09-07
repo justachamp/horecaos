@@ -4,8 +4,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -75,7 +77,14 @@ public class CustomerNotificationPreferenceController {
         requireOwnAccount(tenantId, accountId);
         return ResponseEntity.ok(preferences.preferences(tenantId, accountId).stream()
                 .map(row -> new PreferenceResponse(
-                        row.brandId(), row.notificationClass(), row.channel(), row.enabled(), row.version()))
+                        row.brandId(),
+                        row.notificationClass(),
+                        row.channel(),
+                        row.enabled(),
+                        row.quietHoursStart(),
+                        row.quietHoursEnd(),
+                        row.timezone(),
+                        row.version()))
                 .toList());
     }
 
@@ -101,7 +110,10 @@ public class CustomerNotificationPreferenceController {
                     request.brandId(),
                     parseClass(notificationClass),
                     parseChannel(channel),
-                    request.enabled());
+                    request.enabled(),
+                    request.quietHoursStart(),
+                    request.quietHoursEnd(),
+                    request.timezone());
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
@@ -139,15 +151,34 @@ public class CustomerNotificationPreferenceController {
     }
 
     /**
-     * One class-and-channel toggle, at the tenant or one brand.
+     * One class-and-channel toggle, at the tenant or one brand, with an
+     * optional quiet-hours window.
      *
-     * @param brandId null for the customer's tenant-wide answer
-     * @param enabled boxed and {@code @NotNull}, so a body that omits it is a
-     *                validation failure rather than a silent opt-out
+     * @param brandId         null for the customer's tenant-wide answer
+     * @param enabled         boxed and {@code @NotNull}, so a body that omits
+     *                        it is a validation failure rather than a silent
+     *                        opt-out
+     * @param quietHoursStart local start of the window this class/channel
+     *                        should be held during, or null with {@code
+     *                        quietHoursEnd} for no window
+     * @param quietHoursEnd   local end of the window
+     * @param timezone        the IANA zone the two times above are read in;
+     *                        required whenever a window is set
      */
     public record SetPreferenceRequest(
-            UUID brandId, @NotNull Boolean enabled) {}
+            UUID brandId,
+            @NotNull Boolean enabled,
+            @Nullable LocalTime quietHoursStart,
+            @Nullable LocalTime quietHoursEnd,
+            @Nullable String timezone) {}
 
     public record PreferenceResponse(
-            UUID brandId, String notificationClass, String channel, boolean enabled, int version) {}
+            UUID brandId,
+            String notificationClass,
+            String channel,
+            boolean enabled,
+            @Nullable LocalTime quietHoursStart,
+            @Nullable LocalTime quietHoursEnd,
+            @Nullable String timezone,
+            int version) {}
 }

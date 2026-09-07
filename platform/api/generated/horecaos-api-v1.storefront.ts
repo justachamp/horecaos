@@ -276,10 +276,13 @@ export interface MyReferralResponse {
 export interface OrderLineResponse {
   finalAmountMinor?: number;
   lineNumber?: number;
+  modifierOptionIds?: Array<string>;
   modifiers?: Array<string>;
+  productId?: string;
   productName?: string;
   quantity?: number;
   unitAmountMinor?: number;
+  variantId?: string;
   variantName?: string;
 }
 
@@ -405,6 +408,29 @@ export interface RegisterRequest {
 export interface RegistrationResponse {
   accountId?: string;
   created?: boolean;
+}
+
+export interface ReorderLineResponse {
+  lineNumber?: number;
+  modifierOptionIds?: Array<string>;
+  originalUnitAmountMinor?: number;
+  productId?: string;
+  productName?: string;
+  quantity?: number;
+  status?: string;
+  unitAmountMinor?: number;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface ReorderPlanResponse {
+  channelCode?: string;
+  currency?: string;
+  lines?: Array<ReorderLineResponse>;
+  locationId?: string;
+  orderId?: string;
+  publicOrderNumber?: string;
+  verdict?: string;
 }
 
 export interface RequestCodeRequest {
@@ -576,6 +602,7 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };

@@ -16,10 +16,22 @@
   but the adapter in the committed tree is still the generic JSON-over-HTTP
   gateway. Also absent: every channel but SMS
   (`NotificationChannel.isWired()` is false for the rest), multi-channel fallback,
-  quiet hours (columns nothing reads), marketing, the template approval workflow,
+  marketing, the template approval workflow,
   webhook status ingestion, the platform-default template layer, the eight ADR
   0032 events, and any metric, audit fact or alert — the module registers none.
-  Only order events trigger it; payment, fulfillment and recovery do not.
+  Order, payment, and refund facts trigger it; fulfillment and recovery still do
+  not, because neither module publishes anything a trigger could listen to yet
+  (checked, not assumed — see wave 72's notes below). Quiet hours are real:
+  `NotificationClass#respectsQuietHours` decides which classes a
+  `notification_preferences` window may hold (today, the same set
+  `respectsPreference` already gates — `TRANSACTIONAL_OPTIONAL`/`MARKETING`),
+  `QuietHours.heldUntil` computes the window's own close from the row's local
+  time and IANA zone, and `NotificationEligibilityService` defers a held row to
+  exactly that instant rather than a repeating backoff. `TRANSACTIONAL_REQUIRED`
+  and `SECURITY` are exempt on purpose and cannot be given a window even by a
+  customer who asks: `NotificationPreferenceService#set` still refuses those
+  classes. The customer-facing preference endpoint now accepts and returns the
+  window alongside `enabled`.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), legal
@@ -301,7 +313,7 @@ already-started attempts finish/reconcile under one owner and evidence remains.
 - [x] Implement typed template validation, locale resolution, and safe rendering. `NotificationTemplateService`, `MessageLocale`, `TemplateRenderer` and `MoneyText`, covered by `TemplateRenderingTests`; resolution is brand override then tenant default, with no platform layer.
 - [ ] Implement eligibility, deduplication, routing, scheduling, and uncertainty flows. Eligibility, subject-derived deduplication, the lease/backoff schedule and the uncertain-provider path are built (`NotificationEligibilityService`, `NotificationWorker`, `NotificationDispatchService`); channel routing and fallback are not — SMS is the only wired channel.
 - [ ] Implement controlled fake and first real Camel provider adapters. `FakeSmsGateway` and the generic `SmsGatewayAdapter` on the ADR 0007 route exist. The first vendor contract now does too — `docs/providers/sms-gateway-vas.md` transcribes the VAS gateway's `/send`, `/send_msgs`, `/search` and delivery callback and maps all twenty-eight status codes onto ADR 0007's Rejected / Retryable / Uncertain model — but no adapter in the committed tree implements it, so the generic gateway is still what a deployment gets.
-- [ ] Connect order/payment/fulfillment/recovery semantic events. `OrderNotificationTrigger` connects `OrderConfirmed` and `OrderRejected` only; payments, fulfillment and service recovery raise nothing this module listens to.
+- [ ] Connect order/payment/fulfillment/recovery semantic events. `OrderNotificationTrigger` connects `OrderConfirmed`, `OrderRejected`, and `OrderCompleted`; `PaymentFailureCustomerTrigger` and `PaymentRefundNotificationTrigger` (wave 72) connect a declined payment attempt and a refund/reversal. Fulfillment and service recovery still raise nothing this module listens to — checked, not assumed: neither module publishes any event today, so there is nothing yet to connect a trigger to (see wave 72's notes below).
 - [x] Build customer preference, control-plane template, and Operations APIs. `CustomerNotificationPreferenceController`, `NotificationTemplateController` and `OperationsNotificationController` — all three staff-scoped, so the "customer" preference API is one an operator uses on a customer's behalf.
 - [ ] Add audit, metrics, provider dashboards, alerting, and reconciliation runbooks. The module references neither `AuditRecorder` nor `MeterRegistry`; there is no notification dashboard, alert or runbook.
 - [ ] Add duplicate, PII, consent, fallback, provider-contract, and isolation tests. `NotificationDeliveryTests` and `TemplateRenderingTests` cover duplicates, consent suppression and the provider-contract path against the fake; fallback, PII and cross-tenant isolation tests are not written.
@@ -382,16 +394,95 @@ capabilities the registry already had are used unchanged.
 
 ### Deliberately not built
 
-Multi-channel fallback, marketing, quiet-hour enforcement, the template approval
+Multi-channel fallback, marketing, the template approval
 workflow, webhook status ingestion, push, email, and messaging-app channels, and
 the platform-default template layer.
 
 The channels are declared on `NotificationChannel` with `isWired()` false, so a
 tenant authoring an email template gets a `CHANNEL_NOT_AVAILABLE` suppression with
 a reason rather than a message that is created, resolved, rendered, and then
-silently fails. Quiet hours are columns on `notification_preferences` that nothing
-reads: the window a tenant may not text inside is a legal decision, and this build
-must not invent one.
+silently fails. Quiet-hour enforcement is no longer on this list — see wave 72's
+notes below.
+
+### Wave 72: the payment/refund triggers and quiet hours
+
+Two of this record's named gaps, picked up together because the second could not
+be tested honestly without a live class to hold.
+
+**Triggers.** `payments.notifications.PaymentFailureCustomerTrigger` listens for
+`payments.api.PaymentAttemptFailed` and tells the order's own customer — the same
+`TRANSACTIONAL_REQUIRED` class `OrderNotificationTrigger` gives confirmation and
+rejection, and exempt from quiet hours for the same reason. It exists because a
+declined attempt is discovered from a provider webhook
+(`ClickCallbackProcessor`/`PaymeMerchantApi`), never synchronously from the
+checkout call the customer is watching, and `ordering.api.PaymentFailed`'s own
+Javadoc is explicit that a decline does not, on its own, give up on the order —
+so nothing else was telling this customer their order was now waiting on a retry
+that might never come.
+`notifications.application.PaymentRefundNotificationTrigger` listens for
+`ordering.api.PaymentRefunded` — raised for both a provider-side reversal and an
+operator-recorded `OrderRemedyService` refund — and tells the customer once per
+order; the event carries no remedy id, so a second, later remedy against the same
+order is not narrated a second time, a documented limitation rather than a silent
+one. Both call the existing `CustomerAlertPort` seam
+(`FiscalCustomerReceiptTrigger`'s own), so neither had to reinvent recipient
+resolution, dedup, or channel routing.
+
+Deliberately not built alongside these: a customer-facing message for a courier
+being on the way. Checked first, per this ADR's own testing section — neither
+`fulfillment` nor `courier` publishes any event today (no `publishEvent` call
+exists in either module); `fulfillment.domain.sourcing.ShipmentStatus` moves
+(`PENDING` → `ASSIGNED` → `PICKED_UP` → `DELIVERED`) but nothing announces a
+transition. Building this trigger would mean inventing fulfillment's own
+event-publishing plumbing first, which is that module's decision to make, not a
+notifications-side add-on. Also not built: a customer message for
+`PaymentVoided` (a released, uncaptured attempt) — it always follows an
+order-ending decision already made elsewhere (or is pure attempt-management
+noise from a retry), and a message naming only "payment voided" without the
+context of why the order ended would confuse more than it would help. And not
+built: a message on `PaymentAttemptNeedsOperator` — that event means automation
+is handing an attempt to a person, which by itself is not yet a fact about the
+customer's order; its resolution surfaces through `PaymentCaptured` (already an
+`ORDER_CONFIRMED`) or `PaymentAttemptFailed`/`PaymentRefunded` (this wave's own
+triggers), so a third message at the handoff itself would be a duplicate signal
+for the same underlying event.
+
+**Quiet hours.** `NotificationClass` gained `respectsQuietHours()`, a named
+predicate kept separate from `respectsPreference()` even though the two agree for
+every class today — the same reasoning that class's own Javadoc already gives for
+keeping `requiresConsent`/`respectsPreference` apart. It answers true for
+`TRANSACTIONAL_OPTIONAL`/`MARKETING` and false for `TRANSACTIONAL_REQUIRED`,
+`SECURITY`, and `OPERATIONS_ALERT`: ADR 0020 reads required transactional and
+security messages as quiet hours' own exception, and a customer waiting on a
+confirmation, a payment failure, or a refund is not helped by a multi-hour hold.
+`notifications.domain.QuietHours.heldUntil` is a pure function of an instant, a
+local start/end time, and an IANA zone — it handles a window that wraps midnight
+and returns the exact instant the window closes, never "later," so the message
+comes back through eligibility once, not on a repeating poll. Held messages stay
+`CREATED` with `next_attempt_at` pushed straight to that close instant
+(`JdbcNotificationStore.deferForQuietHours`) rather than requeued on the ordinary
+retry backoff — `claimDue` increments `attempt_count` on every claim regardless of
+outcome, so a short repeating hold across an all-night window would burn the
+whole retry budget doing nothing but waiting and land in `MANUAL_REVIEW` hours
+before the window ever closed, the same failure mode `CampaignPacer`'s own ADR
+0044 quiet-hours idiom computes its slot up front to avoid.
+
+The columns could not only be read; nothing could write them either —
+`NotificationPreferenceService#set` took no quiet-hours parameters and
+`upsertPreference`'s SQL never touched those columns. A second `set` overload
+(and `JdbcNotificationStore#upsertPreferenceWindow`) now accepts and validates a
+window — both-or-neither, a real IANA zone, start distinct from end — and the
+customer-facing preference endpoint reads and writes it alongside `enabled`. The
+original overload is untouched and still used where nothing has an opinion about
+quiet hours (`CustomerProviderBindingSyncService`'s Telegram on/off sync), so
+that sync cannot silently clear a window a customer set through the real
+endpoint.
+
+Proven with `PaymentAndQuietHoursNotificationTests`, whose quiet-hours cases use a
+mutable clock advanced across the window boundary itself — a fixture already
+inside the window when the assertion runs would prove nothing about where the
+window actually closes — plus `PaymentFailureCustomerTrigger`/
+`PaymentRefundNotificationTrigger`'s own lightweight port-recording tests.
 
 `delivery_status_events` is written only from synchronous provider answers today.
 Its shape and its uniqueness on the provider's own event id are what a webhook
@@ -403,7 +494,14 @@ produces statuses that have to be recorded verbatim.
 The ADR's open inputs — consent legal basis, quiet hours, and message retention —
 remain open and are legal decisions. What the build fixes is the *shape*: the
 purpose is explicit per template, consent resolves per purpose, and every default
-is a stated configuration value rather than an assumption buried in code.
+is a stated configuration value rather than an assumption buried in code. Wave 72
+fixes quiet hours' shape the same way: which classes a window may hold
+(`NotificationClass#respectsQuietHours`), what "held" does (deferred to the
+window's own close, never dropped), and a real read/write path
+(`QuietHours`, `NotificationPreferenceService`'s window overload). No default
+window exists anywhere — every customer starts with none, exactly as before —
+and which classes *should* respect one, if the answer ever needs to differ from
+`respectsPreference`'s own set, is still a product call this build does not make.
 
 - `horecaos.notifications.order-expiry` (default `PT6H`) — how long an unsent
   confirmation is still worth sending. A product decision, not a considered answer.

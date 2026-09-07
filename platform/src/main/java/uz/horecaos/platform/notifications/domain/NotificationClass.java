@@ -61,4 +61,30 @@ public enum NotificationClass {
     public boolean respectsPreference() {
         return requiresConsent;
     }
+
+    /**
+     * Whether a customer's own quiet-hours window may hold this message rather
+     * than send it immediately.
+     *
+     * <p>The same answer as {@link #respectsPreference} today — a
+     * {@code notification_preferences} row (the only place a quiet-hours window
+     * lives) can only exist for a class {@code NotificationPreferenceService#set}
+     * lets a customer edit, which is exactly {@link #respectsPreference}'s set —
+     * and kept as its own named question anyway, for the reason that method's own
+     * Javadoc gives: folding two different questions into one flag is how one of
+     * them quietly changes meaning when only the other was intended.
+     *
+     * <p>{@code TRANSACTIONAL_REQUIRED} and {@code SECURITY} answer {@code
+     * false} on purpose. ADR 0020: "required transactional and security messages
+     * ... still respect channel feasibility and quiet-hour exceptions" — read as
+     * required transactional and security messages <em>being</em> the exception,
+     * not as a window that can silently sit a customer's own order confirmation,
+     * payment failure, or refund notice in a queue for hours while they are
+     * waiting on it. {@code OPERATIONS_ALERT} answers {@code false} for the
+     * reason {@link #requiresConsent} does: there is no data subject, so there is
+     * no preference row and no window to read.
+     */
+    public boolean respectsQuietHours() {
+        return requiresConsent;
+    }
 }

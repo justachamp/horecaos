@@ -25,6 +25,7 @@ import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.MoneyText;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.domain.QuietHours;
 import uz.horecaos.platform.notifications.domain.SuppressionReason;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
@@ -108,8 +109,12 @@ public class NotificationEligibilityService {
      * Runs the gate for one claimed message.
      *
      * @return true when the message became {@code READY}, false when it was
-     *         suppressed. Either way the row is settled and the caller's claim is
-     *         no longer held
+     *         suppressed <em>or</em> held for quiet hours. A suppressed row is
+     *         settled, terminally, and the caller's claim is released; a held
+     *         row is also released but stays {@code CREATED} with a later
+     *         {@code next_attempt_at}, so it returns through this same method
+     *         once its quiet-hours window closes rather than being retried on
+     *         the ordinary backoff schedule
      */
     @Transactional
     public boolean evaluate(NotificationRow row) {
@@ -239,22 +244,54 @@ public class NotificationEligibilityService {
             }
         }
 
-        if (notificationClass.respectsPreference()) {
-            // Same guarantee as above: respectsPreference() mirrors
-            // requiresConsent() for every class today (see NotificationClass).
+        if (notificationClass.respectsPreference() || notificationClass.respectsQuietHours()) {
+            // A class answering true to either question has a data subject in
+            // the ADR 0015 sense, which is never OPERATIONS_ALERT (see
+            // NotificationClass), so the non-operations branch above already
+            // resolved accountId, or this method already returned for a
+            // guest order.
             UUID preferenceAccountId = Objects.requireNonNull(
-                    accountId, "a class that respects preference must have resolved a customer account");
-            boolean disabled = notifications
-                    .effectivePreference(
-                            row.tenantId(),
-                            preferenceAccountId,
-                            row.brandId(),
-                            notificationClass.name(),
-                            channel.name())
-                    .map(preference -> !preference.enabled())
-                    .orElse(false);
-            if (disabled) {
-                return suppress(row, SuppressionReason.PREFERENCE_DISABLED, now);
+                    accountId, "a class that respects preference or quiet hours must have resolved a customer account");
+            // Fetched once and used for whichever of the two questions below
+            // apply: whether the customer disabled this class/channel
+            // outright, and — a separate question sharing the same row —
+            // whether they are inside a quiet-hours window for it right now.
+            // Kept as two independent NotificationClass predicates rather
+            // than one nested inside the other, so a class that cannot be
+            // switched off is not thereby exempt from ever being held, and a
+            // class that can be held is not thereby made switchable — see
+            // NotificationClass#respectsQuietHours's own Javadoc.
+            Optional<JdbcNotificationStore.PreferenceRow> preference = notifications.effectivePreference(
+                    row.tenantId(), preferenceAccountId, row.brandId(), notificationClass.name(), channel.name());
+
+            if (notificationClass.respectsPreference()) {
+                boolean disabled = preference.map(p -> !p.enabled()).orElse(false);
+                if (disabled) {
+                    return suppress(row, SuppressionReason.PREFERENCE_DISABLED, now);
+                }
+            }
+
+            if (notificationClass.respectsQuietHours()) {
+                Optional<Instant> heldUntil = preference.flatMap(
+                        p -> QuietHours.heldUntil(now, p.quietHoursStart(), p.quietHoursEnd(), p.timezone()));
+                if (heldUntil.isPresent()) {
+                    // Not a suppression: nothing about this message was
+                    // refused, it is simply not yet its turn. The row stays
+                    // CREATED and comes back through this same method once the
+                    // window closes — see deferForQuietHours's own Javadoc for
+                    // why the jump is straight to the close rather than a
+                    // repeating backoff.
+                    boolean deferred = notifications.deferForQuietHours(
+                            row.tenantId(), row.id(), claimToken, heldUntil.get(), now);
+                    if (!deferred) {
+                        log.debug(
+                                "Notification {} was settled by another worker before quiet hours could hold it",
+                                row.id());
+                    } else {
+                        log.debug("Notification {} held for quiet hours until {}", row.id(), heldUntil.get());
+                    }
+                    return false;
+                }
             }
         }
 
