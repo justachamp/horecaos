@@ -524,7 +524,7 @@ public class JdbcAudienceStore {
                 SELECT id, tenant_id
                   FROM marketing.audience_snapshots
                  WHERE status = 'READY'
-                   AND completed_at < (CAST(:now AS timestamptz) + INTERVAL '1000 years') -- BREAK-AND-CONFIRM: always true
+                   AND completed_at < (CAST(:now AS timestamptz) - (:months * INTERVAL '1 month'))
                    AND members_purged_at IS NULL
                  ORDER BY completed_at
                  LIMIT :limit
