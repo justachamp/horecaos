@@ -14,13 +14,28 @@
   the capacity check is now wired — `CheckoutService` claims the slot inside the
   ADR 0019 checkout transaction against `tenant.location_capacity_holds` keyed by
   order id (V0022), releases it when acceptance fails, and `OrderStateService`
-  releases it when the order reaches a terminal state. Not built: the travel component of the promise (ADR
-  0037's routing port answers empty on every call), the foreign key from
-  `tenant.channel_payment_methods.payment_method_code` to
-  `payments.payment_methods` — the table landed in V0042 and the column is still
-  unconstrained text — the `SalesChannelActivated` family of events, and
-  `catalog.channel_offering_exclusions`, which has its table and constraints and
-  no reader anywhere in the codebase
+  releases it when the order reaches a terminal state. V0175 points
+  `tenant.channel_payment_methods.payment_method_code` at `payments.payment_methods`
+  with a foreign key, backfilling the tenant registry for any of the five
+  provisional codes an existing row already named; declares and emits
+  `SalesChannelActivated`, `SalesChannelArchived`, `ChannelAvailabilityChanged`,
+  `ServiceScheduleChanged`, `LocationServiceStateChanged`, `LocationCapacityReached`
+  and `LocationCapacityCleared` through the ADR 0032 outbox, from
+  `SalesChannelService`, `ServiceScheduleService` and `ServiceabilityService`
+  respectively; and gives `catalog.channel_offering_exclusions` its first reader,
+  `JdbcCatalogStore.channelExcludedVariantIds`, wired into
+  `StorefrontCatalogQuery.menuFor`. Not built: the travel component of the promise
+  (ADR 0037's routing port answers empty on every call). Found while wiring the
+  payment-method foreign key and deliberately not fixed in this pass:
+  `CheckoutService` never consults the channel's payment-method matrix.
+  `CartPaymentOptions.forCart` (ADR 0075) correctly refuses to offer a method
+  the matrix does not enable, but `CheckoutEligibilityGuard` accepts any code
+  `PaymentIntentPort.canAcceptPayment` allows, which is unconditional for CASH
+  regardless of the matrix — so a cart can check out with a method the matrix
+  never enabled, on a channel whose matrix is empty. The fix is a few lines in
+  `CheckoutEligibilityGuard`, but nearly every checkout in
+  `CartCheckoutAndOrderTests` relies on today's laxity to pay with CASH on a
+  channel with no matrix configured, so this is reported rather than changed
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product (channel and serviceability semantics), finance (channel price planes)
@@ -418,7 +433,15 @@ snapshotted by code.
       ADR specifies create schedules under a brand, so nothing it decides needs
       the nullable form.
 - [x] Implement `SalesChannelLookup` and `ServiceabilityResolver` ports in `tenancy`.
-- [ ] Point `channel_payment_methods.payment_method_code` at `payments.payment_methods` once ADR 0038 lands it, and seed `orders.pricing_authority` from `externally_priced` at order creation per ADR 0040. Both wait on their ADRs; the column and the flag exist and are unread.
+- [x] Point `channel_payment_methods.payment_method_code` at `payments.payment_methods`.
+      `V0175`: `payments.payment_methods` already carried the exact two-column
+      unique constraint (`tenant_id, code`) the reference needs, so no schema
+      change was required there; the migration backfills a registry row for any
+      of the five provisional codes (`CASH`, `CLICK`, `PAYME`, `TELEGRAM`,
+      `MARKETPLACE`) an existing `channel_payment_methods` row already named,
+      and lets the `ALTER TABLE` refuse loudly against anything else.
+- [ ] Seed `orders.pricing_authority` from `externally_priced` at order creation
+      per ADR 0040. Still waits on that ADR; the flag exists and is unread.
 - [x] Bind the channel argument in `JdbcPricingStore.resolvePriceBook` and add the regression test.
       The context section above is stale about this method: by the time this ADR
       was implemented the unbound parameter had already been removed and the
@@ -436,11 +459,22 @@ snapshotted by code.
       the same migration.
 - [x] Add control-plane, operations and storefront APIs with ADR 0025 capabilities. Caching under ADR 0033 is **not** built: the browse endpoint carries a 30-second `Cache-Control` and nothing reads a server-side cache, so there is no invalidation that can be wrong yet.
 
-Not built in this pass, and deliberately: the events listed above
-(`SalesChannelActivated` and the rest), and `catalog.channel_offering_exclusions`
-has its table and its constraints but no service or endpoint reading it — the
-sparse-exclusion read path belongs with the storefront menu query rather than
-with the channel registry.
+- [x] Declare and emit the events listed above. `V0175` adds `SalesChannelActivated`,
+      `SalesChannelArchived`, `ChannelAvailabilityChanged`, `ServiceScheduleChanged`,
+      `LocationServiceStateChanged`, `LocationCapacityReached` and
+      `LocationCapacityCleared` to `TenancyEvent`'s permitted set, their ADR 0032
+      catalogue entries and JSON Schemas, and their producers in
+      `SalesChannelService`, `ServiceScheduleService` and `ServiceabilityService`.
+      The two capacity events fire only on the claim or release that crosses the
+      concurrent-order ceiling, never on every claim or release.
+- [x] Give `catalog.channel_offering_exclusions` a reader. `JdbcCatalogStore.channelExcludedVariantIds`,
+      wired into `StorefrontCatalogQuery.menuFor` — the sparse-exclusion read path
+      sits with the storefront menu query rather than with the channel registry,
+      as this section originally said it should.
+
+Not built in this pass, and deliberately: `CheckoutService` consulting the
+channel's payment-method matrix at all. See the implementation status line
+above for the gap and why it is reported rather than closed here.
 
 ## Exit criteria
 

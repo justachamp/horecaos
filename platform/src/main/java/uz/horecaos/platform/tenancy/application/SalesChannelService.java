@@ -5,12 +5,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.tenancy.api.ChannelAvailabilityChanged;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
+import uz.horecaos.platform.tenancy.api.SalesChannelActivated;
+import uz.horecaos.platform.tenancy.api.SalesChannelArchived;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
 /**
@@ -26,10 +32,23 @@ public class SalesChannelService {
 
     private final JdbcSalesChannelStore store;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
+    /**
+     * The two-argument form a caller could always construct without a Spring
+     * context. Events published through it go nowhere, which is no change from
+     * before this class published any — a test built this way is asserting
+     * something other than the outbox and was never wired to it.
+     */
     public SalesChannelService(JdbcSalesChannelStore store, Clock clock) {
+        this(store, clock, event -> {});
+    }
+
+    @Autowired
+    public SalesChannelService(JdbcSalesChannelStore store, Clock clock, ApplicationEventPublisher events) {
         this.store = store;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional
@@ -54,6 +73,14 @@ public class SalesChannelService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcSalesChannelStore.explain(violation);
         }
+        events.publishEvent(new SalesChannelActivated(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                channel.id(),
+                clock.instant(),
+                channel.code(),
+                channel.systemType().name(),
+                channel.version()));
         return channel;
     }
 
@@ -86,6 +113,9 @@ public class SalesChannelService {
         if (!store.updateStatus(tenantId, channelId, SalesChannel.Status.ARCHIVED, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        int newVersion = channel.version() + 1;
+        events.publishEvent(new SalesChannelArchived(
+                UUID.randomUUID(), new TenantId(tenantId), channelId, clock.instant(), channel.code(), newVersion));
         return new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
@@ -97,7 +127,7 @@ public class SalesChannelService {
                 channel.externallyPriced(),
                 channel.guestOrdersAllowed(),
                 channel.providerInstallationId(),
-                channel.version() + 1);
+                newVersion);
     }
 
     /**
@@ -113,6 +143,8 @@ public class SalesChannelService {
         if (!store.replacePaymentMethods(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        publishAvailabilityChanged(
+                tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.PAYMENT_METHODS, expectedVersion);
     }
 
     @Transactional
@@ -122,6 +154,8 @@ public class SalesChannelService {
         if (!store.replaceFulfillmentModes(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        publishAvailabilityChanged(
+                tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.FULFILLMENT_MODES, expectedVersion);
     }
 
     @Transactional
@@ -134,6 +168,25 @@ public class SalesChannelService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcSalesChannelStore.explain(violation);
         }
+        publishAvailabilityChanged(
+                tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.LOCATIONS, expectedVersion);
+    }
+
+    /**
+     * {@code bumpVersion} inside each {@code replace*} store call above moved
+     * the channel from {@code expectedVersion} to exactly one past it on
+     * success — the same arithmetic {@code archive} above does by hand, because
+     * none of those store methods hand the new value back.
+     */
+    private void publishAvailabilityChanged(
+            UUID tenantId, UUID channelId, ChannelAvailabilityChanged.MatrixKind matrixKind, int expectedVersion) {
+        events.publishEvent(new ChannelAvailabilityChanged(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                channelId,
+                clock.instant(),
+                matrixKind.name(),
+                expectedVersion + 1));
     }
 
     @Transactional(readOnly = true)

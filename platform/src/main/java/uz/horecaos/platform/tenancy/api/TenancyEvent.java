@@ -19,7 +19,14 @@ public sealed interface TenancyEvent
                 TenantOnboardingStepCompleted,
                 TenantOnboardingFailed,
                 TenantReady,
-                TenantActivated {
+                TenantActivated,
+                SalesChannelActivated,
+                SalesChannelArchived,
+                ChannelAvailabilityChanged,
+                ServiceScheduleChanged,
+                LocationServiceStateChanged,
+                LocationCapacityReached,
+                LocationCapacityCleared {
 
     UUID eventId();
 

@@ -408,7 +408,14 @@ public class JdbcServiceabilityStore {
      * rather than only "closed". The mandatory reason is enforced by
      * {@code ck_location_service_reason} in V0020 as well as here.
      */
-    public void upsertServiceState(
+    /**
+     * @return the row's version after the write — {@code 1} for a location's first
+     *     override, its predecessor's successor thereafter. Returned rather than
+     *     left for the caller to infer, so {@code ServiceScheduleService} can stamp
+     *     {@link uz.horecaos.platform.tenancy.api.LocationServiceStateChanged} with
+     *     the version this write actually produced instead of guessing at one.
+     */
+    public int upsertServiceState(
             UUID tenantId,
             UUID brandId,
             UUID locationId,
@@ -418,7 +425,7 @@ public class JdbcServiceabilityStore {
             @Nullable Instant effectiveUntil,
             @Nullable UUID actorId,
             Instant now) {
-        jdbc.sql("""
+        return jdbc.sql("""
                 INSERT INTO tenant.location_service_state (
                     location_id, tenant_id, brand_id, mode, reason_code, note,
                     effective_until, changed_by, changed_at)
@@ -432,6 +439,7 @@ public class JdbcServiceabilityStore {
                     changed_by = EXCLUDED.changed_by,
                     changed_at = EXCLUDED.changed_at,
                     version = tenant.location_service_state.version + 1
+                RETURNING version
                 """)
                 .param("locationId", locationId)
                 .param("tenantId", tenantId)
@@ -442,7 +450,8 @@ public class JdbcServiceabilityStore {
                 .param("effectiveUntil", effectiveUntil == null ? null : timestamp(effectiveUntil))
                 .param("actorId", actorId)
                 .param("now", timestamp(now))
-                .update();
+                .query(Integer.class)
+                .single();
     }
 
     /** Sets the ceiling without touching the open/closed override or its reason. */
@@ -542,17 +551,29 @@ public class JdbcServiceabilityStore {
                 .update();
     }
 
-    public boolean releaseCapacity(UUID holdId, UUID tenantId, Instant now) {
+    /**
+     * @return the brand and location the released hold named, or empty when
+     *     nothing matched — already released, another tenant's id, or never
+     *     claimed. Returned rather than a bare boolean so {@code
+     *     ServiceabilityService} can decide whether this release crossed the
+     *     capacity ceiling without a second lookup of a row that no longer
+     *     carries the fact once released.
+     */
+    public Optional<ReleasedCapacityHold> releaseCapacity(UUID holdId, UUID tenantId, Instant now) {
         return jdbc.sql("""
                 UPDATE tenant.location_capacity_holds SET released_at = :now
                 WHERE id = :id AND tenant_id = :tenantId AND released_at IS NULL
+                RETURNING brand_id, location_id
                 """)
-                        .param("id", holdId)
-                        .param("tenantId", tenantId)
-                        .param("now", timestamp(now))
-                        .update()
-                == 1;
+                .param("id", holdId)
+                .param("tenantId", tenantId)
+                .param("now", timestamp(now))
+                .query((row, number) -> new ReleasedCapacityHold(
+                        row.getObject("brand_id", UUID.class), row.getObject("location_id", UUID.class)))
+                .optional();
     }
+
+    public record ReleasedCapacityHold(UUID brandId, UUID locationId) {}
 
     public boolean holdsCapacity(UUID holdId, UUID tenantId) {
         return jdbc.sql("""

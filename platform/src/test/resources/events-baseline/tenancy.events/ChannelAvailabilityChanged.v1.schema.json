@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/ChannelAvailabilityChanged.v1.schema.json",
+  "title": "ChannelAvailabilityChanged v1 payload",
+  "description": "One of a channel's whole-matrix writes settled. Never carries the matrix itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["channelId", "matrixKind", "version"],
+  "properties": {
+    "channelId": { "type": "string", "format": "uuid" },
+    "matrixKind": {
+      "type": "string",
+      "enum": ["PAYMENT_METHODS", "FULFILLMENT_MODES", "LOCATIONS"]
+    },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}

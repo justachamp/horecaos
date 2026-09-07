@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/LocationServiceStateChanged.v1.schema.json",
+  "title": "LocationServiceStateChanged v1 payload",
+  "description": "The manual open/closed switch moved. Carries no personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locationId", "brandId", "mode", "version"],
+  "properties": {
+    "locationId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "mode": {
+      "type": "string",
+      "enum": ["FOLLOW_SCHEDULE", "FORCE_OPEN", "FORCE_CLOSED"]
+    },
+    "reasonCode": { "type": ["string", "null"], "maxLength": 48 },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}

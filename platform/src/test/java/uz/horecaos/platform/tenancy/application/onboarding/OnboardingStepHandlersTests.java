@@ -408,6 +408,26 @@ class OnboardingStepHandlersTests {
     }
 
     private void enablePaymentMethod(UUID channelId, String code) {
+        // V0175: payment_method_code is now a foreign key onto
+        // payments.payment_methods, so the registry row has to exist first. The
+        // responsibility matches CheckoutSettlementPlanner.responsibilityOf's own
+        // mapping for each of these provisional codes.
+        String responsibility =
+                switch (code) {
+                    case "CASH" -> "OPERATOR";
+                    case "MARKETPLACE" -> "MARKETPLACE";
+                    default -> "PARTNER";
+                };
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, :code, :code, :responsibility, 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("responsibility", responsibility)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
                 VALUES (:tenantId, :channelId, :code, true)

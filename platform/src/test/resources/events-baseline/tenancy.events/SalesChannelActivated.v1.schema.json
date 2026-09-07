@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/SalesChannelActivated.v1.schema.json",
+  "title": "SalesChannelActivated v1 payload",
+  "description": "A sales channel became sellable. Carries no personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["channelId", "code", "systemType", "version"],
+  "properties": {
+    "channelId": { "type": "string", "format": "uuid" },
+    "code": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+    "systemType": {
+      "type": "string",
+      "enum": ["WEB", "IOS", "ANDROID", "TELEGRAM", "KIOSK", "QR_TABLE", "CALL_CENTRE", "AGGREGATOR", "POS"]
+    },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/ServiceScheduleChanged.v1.schema.json",
+  "title": "ServiceScheduleChanged v1 payload",
+  "description": "A named opening timetable changed shape, or a new one was created. Never carries the rule or exception contents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scheduleId", "brandId", "changeKind"],
+  "properties": {
+    "scheduleId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "changeKind": {
+      "type": "string",
+      "enum": ["CREATED", "RULES_REPLACED", "EXCEPTION_UPSERTED"]
+    }
+  }
+}

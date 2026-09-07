@@ -69,6 +69,24 @@ minute would deliver stale screen-refresh instructions after a reconnect.
 | `TenantOnboardingFailed` | 1 | `tenantId` | [`TenantOnboardingFailed.v1`](../../src/main/resources/events/tenancy.events/TenantOnboardingFailed.v1.schema.json) | `tenantId`, `runId`, step key, error code |
 | `TenantReady` | 1 | `tenantId` | [`TenantReady.v1`](../../src/main/resources/events/tenancy.events/TenantReady.v1.schema.json) | `tenantId`, `runId` |
 | `TenantActivated` | 1 | `tenantId` | [`TenantActivated.v1`](../../src/main/resources/events/tenancy.events/TenantActivated.v1.schema.json) | `tenantId`, `runId`, status |
+| `SalesChannelActivated` | 1 | `channelId` | [`SalesChannelActivated.v1`](../../src/main/resources/events/tenancy.events/SalesChannelActivated.v1.schema.json) | `channelId`, code, system type, version |
+| `SalesChannelArchived` | 1 | `channelId` | [`SalesChannelArchived.v1`](../../src/main/resources/events/tenancy.events/SalesChannelArchived.v1.schema.json) | `channelId`, code, version |
+| `ChannelAvailabilityChanged` | 1 | `channelId` | [`ChannelAvailabilityChanged.v1`](../../src/main/resources/events/tenancy.events/ChannelAvailabilityChanged.v1.schema.json) | `channelId`, which matrix changed (payment methods / fulfilment modes / locations), version |
+| `ServiceScheduleChanged` | 1 | `scheduleId` | [`ServiceScheduleChanged.v1`](../../src/main/resources/events/tenancy.events/ServiceScheduleChanged.v1.schema.json) | `scheduleId`, `brandId`, what changed (created / rules replaced / exception upserted) |
+| `LocationServiceStateChanged` | 1 | `locationId` | [`LocationServiceStateChanged.v1`](../../src/main/resources/events/tenancy.events/LocationServiceStateChanged.v1.schema.json) | `locationId`, `brandId`, mode, reason code, version |
+| `LocationCapacityReached` | 1 | `locationId` | [`LocationCapacityReached.v1`](../../src/main/resources/events/tenancy.events/LocationCapacityReached.v1.schema.json) | `locationId`, `brandId`, the concurrent-order ceiling |
+| `LocationCapacityCleared` | 1 | `locationId` | [`LocationCapacityCleared.v1`](../../src/main/resources/events/tenancy.events/LocationCapacityCleared.v1.schema.json) | `locationId`, `brandId`, the concurrent-order ceiling |
+
+`SalesChannelActivated`, `SalesChannelArchived`, `ChannelAvailabilityChanged`,
+`ServiceScheduleChanged`, `LocationServiceStateChanged`,
+`LocationCapacityReached` and `LocationCapacityCleared` are ADR 0036's channel
+and serviceability facts. Matrix writes carry which matrix moved and never its
+contents, per that ADR's own rule that a consumer re-reads the shape through
+`SalesChannelLookup` or `ServiceabilityResolver` rather than trusting the
+event's payload as a cache. The two capacity events fire only on the claim or
+release that crosses the ceiling — a claim or release that leaves the kitchen
+short of full, or already over it, publishes nothing, because only the
+crossing itself is a fact a consumer was not already told.
 
 `LocationCreated` deliberately omits the location address. Events carry
 identifiers; a consumer needing more calls an authorized API.

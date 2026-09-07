@@ -574,6 +574,13 @@ class OnboardingFullRunIntegrationTests {
                 .param("channelId", channelId)
                 .param("locationId", locationId)
                 .update();
+        // V0175: payment_method_code is now a foreign key onto
+        // payments.payment_methods, so the registry row has to exist first.
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, 'CASH', 'CASH', 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """).param("id", UUID.randomUUID()).param("tenantId", tenantId).update();
         jdbc.sql("""
                 INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
                 VALUES (:tenantId, :channelId, 'CASH', true)
