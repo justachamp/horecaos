@@ -22,6 +22,24 @@
   and `OrderDecisionPort.settledDecisionIfAny` lets a late tap on a
   since-settled order still get the audited "already decided" answer instead
   of a picker; covered by `TelegramInteractiveBotIntegrationTest`.
+  Wave 78 corrects a claim this record carried from wave 6: the decision path
+  was described as callable end to end and was not. `OrderDecisionPortAdapter`
+  passed the literal `HORECAOS_TELEGRAM_BOT` as the decision channel, and
+  `ck_approval_channel` (V0022) admitted only `HORECAOS_OPERATIONS`, `POS` and
+  `SYSTEM_TIMEOUT`, so every Approve or Reject tapped in Telegram raised a
+  check violation — the feature this ADR leads with could not complete one
+  decision. It was invisible because the only test of the path injects a
+  `FakeOrderDecisionPort`; nothing anywhere constructed the real adapter, whose
+  own comment called it a direct field-mapping translator. V0181 widens the
+  constraint to admit the bot as a channel of its own rather than collapsing it
+  into the board's — the actor is a staff subject either way, so a collapsed
+  channel would leave a decision taken on a phone indistinguishable from one
+  taken at the pass, which is the question that column exists to answer. The
+  channels are now code-owned in `OrderDecisionChannel` and
+  `theDecisionChannelsAgreeWithTheDatabase` asserts the enum and the CHECK
+  agree, so the next value added at one call site cannot pass unnoticed; two
+  further tests drive the real adapter through to a committed
+  `approval_decisions` row on both its branches.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed both surfaces and the no-POS tenant focus), Claude
