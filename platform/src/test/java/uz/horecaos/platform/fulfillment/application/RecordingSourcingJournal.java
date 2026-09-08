@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
@@ -30,6 +31,10 @@ class RecordingSourcingJournal implements SourcingJournal {
     final List<InternalOffer> offers = new ArrayList<>();
     final List<String> exceptions = new ArrayList<>();
     final List<DeliveryQuote> quotes = new ArrayList<>();
+    final List<CostSubsidy> subsidies = new ArrayList<>();
+
+    /** Set the instant {@link #settlePartnerAttempt} reports a BOOKED receipt as won. */
+    private @Nullable UUID wonShipmentId;
 
     @Override
     public SourcingProgress progress(UUID tenantId, UUID planId, Instant startedAt) {
@@ -57,7 +62,15 @@ class RecordingSourcingJournal implements SourcingJournal {
             case REJECTED -> AttemptStatus.FAILED;
             case RETRYABLE -> AttemptStatus.REQUESTED;
         };
-        return receipt.status() == BookingStatus.BOOKED;
+        boolean won = receipt.status() == BookingStatus.BOOKED;
+        if (won) {
+            // A real JdbcSourcingJournal's win() just created this shipment;
+            // assignedShipment() has to be able to answer it back for the same
+            // reason production DeliverySourcingService needs the id: to record
+            // a DELIVERY_COST_SUBSIDY against it.
+            wonShipmentId = UUID.randomUUID();
+        }
+        return won;
     }
 
     @Override
@@ -72,7 +85,7 @@ class RecordingSourcingJournal implements SourcingJournal {
 
     @Override
     public java.util.Optional<UUID> assignedShipment(UUID tenantId, UUID planId) {
-        return java.util.Optional.empty();
+        return java.util.Optional.ofNullable(wonShipmentId);
     }
 
     @Override
@@ -89,6 +102,11 @@ class RecordingSourcingJournal implements SourcingJournal {
     public void raiseException(
             UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now) {
         exceptions.add(reasonCode);
+    }
+
+    @Override
+    public void recordCostSubsidy(CostSubsidy subsidy) {
+        subsidies.add(subsidy);
     }
 
     private OpenAttempt open(String key, AttemptStatus initial) {

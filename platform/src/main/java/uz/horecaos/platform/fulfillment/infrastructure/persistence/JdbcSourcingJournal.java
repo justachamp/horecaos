@@ -45,12 +45,17 @@ public class JdbcSourcingJournal implements SourcingJournal {
     private final JdbcAssignmentStore assignments;
     private final JdbcDeliveryQuoteStore quotes;
     private final JdbcDeliveryExceptionStore exceptions;
+    private final JdbcDeliveryCostSubsidyStore subsidies;
 
     public JdbcSourcingJournal(
-            JdbcAssignmentStore assignments, JdbcDeliveryQuoteStore quotes, JdbcDeliveryExceptionStore exceptions) {
+            JdbcAssignmentStore assignments,
+            JdbcDeliveryQuoteStore quotes,
+            JdbcDeliveryExceptionStore exceptions,
+            JdbcDeliveryCostSubsidyStore subsidies) {
         this.assignments = assignments;
         this.quotes = quotes;
         this.exceptions = exceptions;
+        this.subsidies = subsidies;
     }
 
     @Override
@@ -202,6 +207,18 @@ public class JdbcSourcingJournal implements SourcingJournal {
 
         if (exceptions.raise(tenantId, brandId, locationId, planId, reasonCode, detail, RAISED_BY, now)) {
             log.warn("Delivery plan {} needs manual action: {}", planId, reasonCode);
+        }
+    }
+
+    @Override
+    public void recordCostSubsidy(CostSubsidy subsidy) {
+        if (subsidies.record(subsidy, RAISED_BY)) {
+            log.info(
+                    "Plan {} recognised a DELIVERY_COST_SUBSIDY of {} {} ({} bears it)",
+                    subsidy.planId(),
+                    subsidy.subsidyAmountMinor(),
+                    subsidy.currency(),
+                    subsidy.bearer());
         }
     }
 

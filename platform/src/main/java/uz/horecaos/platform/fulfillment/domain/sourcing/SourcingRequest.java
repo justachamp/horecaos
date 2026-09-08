@@ -27,6 +27,13 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
  *                        {@code NoorDeliveryAdapterTests} rather than trusted
  * @param itemValueMinor  integer minor units, whole som for UZS. The goods value
  *                        being carried, never the delivery fee
+ * @param customerDeliveryFeeMinor integer minor units, whole som for UZS. What
+ *                        the customer was charged for delivery, snapshotted on
+ *                        {@code fulfillment.delivery_plans} at checkout and
+ *                        never re-derived here. Read only for {@code
+ *                        DELIVERY_COST_SUBSIDY} — comparing a winning partner
+ *                        quote against it, never for anything that could move
+ *                        the fee itself
  */
 public record SourcingRequest(
         UUID tenantId,
@@ -43,6 +50,7 @@ public record SourcingRequest(
         boolean prepaid,
         long itemValueMinor,
         String currency,
+        long customerDeliveryFeeMinor,
         String correlationId) {
 
     public SourcingRequest {
@@ -58,6 +66,9 @@ public record SourcingRequest(
         Objects.requireNonNull(currency, "A currency is required");
         if (distanceMeters < 0) {
             throw new IllegalArgumentException("A delivery distance cannot be negative, was " + distanceMeters);
+        }
+        if (customerDeliveryFeeMinor < 0) {
+            throw new IllegalArgumentException("A delivery fee cannot be negative, was " + customerDeliveryFeeMinor);
         }
     }
 

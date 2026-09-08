@@ -303,6 +303,7 @@ public class DeliverySourcingRunner {
                 order.prepaid(),
                 order.itemValueMinor(),
                 order.currency(),
+                plan.customerDeliveryFeeMinor(),
                 // The plan id, not a request id: every log line and every provider
                 // call for this order correlates on the one thing that identifies
                 // the sourcing effort and names nobody.

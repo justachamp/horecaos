@@ -48,6 +48,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourceType;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryCostSubsidyStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryQuoteStore;
@@ -98,6 +99,7 @@ class DeliverySourcingTests {
     private JdbcSourcingJobStore jobStore;
     private JdbcAssignmentStore assignmentStore;
     private JdbcDeliveryExceptionStore exceptionStore;
+    private JdbcDeliveryCostSubsidyStore subsidyStore;
     private JdbcSourcingJournal journal;
     private DeliveryPlanningService planning;
     private DeliverySourcingRunner runner;
@@ -132,6 +134,7 @@ class DeliverySourcingTests {
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("""
                 TRUNCATE TABLE
+                    fulfillment.delivery_cost_subsidies,
                     fulfillment.delivery_exceptions,
                     fulfillment.delivery_sourcing_jobs,
                     fulfillment.assignment_attempts,
@@ -154,10 +157,12 @@ class DeliverySourcingTests {
         jobStore = new JdbcSourcingJobStore(jdbc);
         assignmentStore = new JdbcAssignmentStore(jdbc);
         exceptionStore = new JdbcDeliveryExceptionStore(jdbc);
+        subsidyStore = new JdbcDeliveryCostSubsidyStore(jdbc);
         journal = new JdbcSourcingJournal(
                 assignmentStore,
                 new JdbcDeliveryQuoteStore(jdbc, JsonMapper.builder().build()),
-                exceptionStore);
+                exceptionStore,
+                subsidyStore);
 
         JdbcDispatchBranchStore branches = new JdbcDispatchBranchStore(jdbc);
         orders = new ConfigurableOrders();
@@ -165,7 +170,8 @@ class DeliverySourcingTests {
         fleet = new ConfigurableFleet();
 
         planning = new DeliveryPlanningService(orders, planStore, jobStore, branches, unconfigured(), clock);
-        DeliverySourcingService sourcing = new DeliverySourcingService(fleet, bookings, journal, unconfigured(), clock);
+        DeliverySourcingService sourcing =
+                new DeliverySourcingService(fleet, bookings, journal, unconfigured(), fact -> {}, clock);
         runner = new DeliverySourcingRunner(
                 sourcing,
                 journal,
@@ -556,8 +562,8 @@ class DeliverySourcingTests {
     @Test
     @DisplayName("several partners answer, the cheapest is booked, and every answer is kept")
     void thecheapestQuotedPartnerWins() {
-        assertThat(planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED))
-                .isPresent();
+        DeliveryPlan plan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
+                .orElseThrow();
         bookings.quotes.put(noorBinding, QuoteOutcome.priced(28_000L, "UZS", 480, 1_500, 3_400, 900));
         bookings.quotes.put(yandexBinding, QuoteOutcome.priced(19_000L, "UZS", 600, 1_800, 3_400, 1_200));
 
@@ -579,6 +585,41 @@ class DeliverySourcingTests {
                 .isEqualTo(2);
         assertThat(countWhere("fulfillment.assignment_attempts", "quote_id IS NOT NULL"))
                 .isEqualTo(1);
+
+        // Yandex's 19,000 against a 12,000 customer fee is the DELIVERY_COST_SUBSIDY
+        // ADR 0014's own comment above was written for: the gap is real, recorded
+        // once, against the winning shipment, and never against the order or the
+        // customer's fee.
+        UUID shipmentId =
+                assignmentStore.findShipment(TENANT, plan.id()).orElseThrow().id();
+        assertThat(count("fulfillment.delivery_cost_subsidies")).isEqualTo(1);
+        JdbcDeliveryCostSubsidyStore.Row subsidy =
+                subsidyStore.findByShipment(TENANT, shipmentId).orElseThrow();
+        assertThat(subsidy.customerDeliveryFeeMinor()).isEqualTo(12_000L);
+        assertThat(subsidy.providerCostMinor()).isEqualTo(19_000L);
+        assertThat(subsidy.subsidyAmountMinor()).isEqualTo(7_000L);
+        assertThat(subsidy.currency()).isEqualTo("UZS");
+        // Nothing is configured, so ADR 0014's provisional bearer applies: the
+        // platform, never a tenant contract nobody agreed to.
+        assertThat(subsidy.bearer()).isEqualTo("PLATFORM");
+    }
+
+    @Test
+    @DisplayName("a partner cheaper than the customer fee subsidises nobody")
+    void aCheaperPartnerRecordsNoSubsidy() {
+        DeliveryPlan plan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
+                .orElseThrow();
+        bookings.quotes.put(noorBinding, QuoteOutcome.priced(9_000L, "UZS", 480, 1_500, 3_400, 900));
+        bookings.quotes.put(yandexBinding, QuoteOutcome.priced(11_000L, "UZS", 600, 1_800, 3_400, 1_200));
+
+        ClaimedJob job =
+                jobStore.claim(CONFIRMED, Duration.ofMinutes(2), 10, "worker").getFirst();
+        runner.run(job);
+
+        assertThat(bookings.booked.getFirst().bindingId()).isEqualTo(noorBinding);
+        // Both quotes came in under the 12,000 customer fee: nobody subsidises a
+        // delivery that cost less than what the customer paid for it.
+        assertThat(count("fulfillment.delivery_cost_subsidies")).isEqualTo(0);
     }
 
     @Test

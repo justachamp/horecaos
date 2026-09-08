@@ -34,10 +34,59 @@
   `courier.shift.enforcement` of `ADVISORY` or `OFF` — where the gate forgives a
   missing shift — the fleet is still enumerated from shifts, because ADR 0042's
   roster and availability tables are not built and nothing else says which
-  branch a shift-less courier belongs to. Not built: the
-  operations API (no sourcing controller exists in `fulfillment.web`), partner
-  tracking callbacks, and the cost-subsidy line, so no `DELIVERY_COST_SUBSIDY`
-  is written and the cost test in the checklist below stays open.
+  branch a shift-less courier belongs to. **Two more of this line's own gaps
+  have since closed.** The operations API is no longer absent — added
+  2026-09-03, after this line was last read, `fulfillment.web`'s
+  `DispatchController` exposes the dispatch board at `/api/v1/operations/
+  tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch`:
+  `GET .../queue` (every open plan at a branch), `POST .../plans/{planId}/assign`
+  and `.../unassign` through `ManualDispatchService`, which opens exactly the
+  `assignment_attempts` row automated sourcing would have and wins it through
+  the same `JdbcAssignmentStore.win` compare-and-set, so a dispatcher's click
+  loses the same race a second dispatcher's would. It now also exposes
+  `GET .../plans/{planId}/exceptions`, reading the `fulfillment.delivery_exceptions`
+  row automated sourcing already wrote and that nothing could previously show an
+  operator. Manual assign and unassign are now audited too: `ManualDispatchService`
+  had no `AuditRecorder` at all, contradicting this ADR's own "manual assignment...
+  [is] audited" line below; it raises `fulfillment.dispatch.assign` /
+  `fulfillment.dispatch.unassign` ADR 0027 facts now, asserted by
+  `ManualDispatchServiceTests`, which also proves a refused conflict (a stale
+  version, an already-carried plan, an unassign past `PICKUP_PENDING`) writes no
+  fact at all. What the original `## APIs` sketch below still lacks: an
+  operator-triggered `source`, `reschedule`, a shipment-level `cancel`
+  independent of unassign, `reconcile`, and `GET .../tracking`.
+  **The cost-subsidy line is now written.** `DeliverySourcingService
+  .recordSubsidyIfAny` runs the instant a partner booking wins the plan's single
+  shipment: when the winning quote — never a partner's later invoice, that
+  recognition is ADR 0042's `PartnerInvoiceService.recordPartnerCost` and it is
+  still unwired from sourcing — costs more, in the same currency, than
+  `SourcingRequest.customerDeliveryFeeMinor`, the figure `fulfillment
+  .delivery_plans` snapshotted at checkout and threaded through
+  `DeliverySourcingRunner` rather than re-derived, V0186's append-only
+  `fulfillment.delivery_cost_subsidies` gets one row — `subsidy_amount_minor`
+  tied to its own two inputs by a check constraint — and one
+  `fulfillment.delivery.cost-subsidy` ADR 0027 fact. A new ADR 0030 policy,
+  `DeliverySourcingPolicies.SUBSIDY` (`fulfillment.delivery_subsidy`, resolved
+  down to the branch), decides who bears it — `TENANT`, `BRAND`, `LOCATION`,
+  `PLATFORM`, or `MANUAL_APPROVAL_REQUIRED` — and its provisional default is
+  `PLATFORM`, the one answer that commits nobody's contract, exactly as
+  provisional as `DeliverySourcingPolicy.DEFAULTS` already was for timing and
+  for the same reason: the bearer is still the open input ADR 0013 raised and
+  ADR 0048 carried forward unanswered. `DeliverySourcingTests
+  .thecheapestQuotedPartnerWins` now asserts the row directly — Yandex's 19,000
+  against a 12,000 customer fee records a 7,000 `PLATFORM` subsidy — and a new
+  `aCheaperPartnerRecordsNoSubsidy` proves nobody is subsidised when the winning
+  quote already undercuts the fee. The cost row in the implementation checklist
+  below is no longer open. **Partner tracking callbacks are still not built**,
+  and are left that way rather than faked. `DeliveryCapability
+  .VERIFY_DELIVERY_WEBHOOK` is declared — `NoorDeliveryAdapter` claims it — but
+  no `DeliveryPartner` method exists to verify or normalise a pushed status
+  update, and no controller receives one anywhere: `integration.web` has
+  webhook receivers for Telegram and the hosted PBX and nothing for Noor or
+  Yandex. Building one now, with neither partner's signature scheme
+  sandbox-verified, Noor's own create-idempotency still an open input, and no
+  live installation binding to route a push to, would be exactly the endpoint
+  nothing calls that an honest gap is better than.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal
@@ -578,7 +627,7 @@ reconciliation evidence.
 
 - [x] Obtain capability matrices for Yandex Delivery and Noor (documentation-verified 2026-08-20).
 - [ ] Verify Noor create idempotency and Yandex callback support in sandbox.
-- [ ] Approve preparation estimate, pickup window, promise, scoring, and subsidy policies.
+- [ ] Approve preparation estimate, pickup window, promise, scoring, and subsidy policies. A provisional answer now exists for the subsidy half: `DeliverySubsidyPolicy.DEFAULTS` bears every recognised `DELIVERY_COST_SUBSIDY` on the platform until product and finance pick a bearer, the same trade `DeliverySourcingPolicy.DEFAULTS` already made for timing. Nothing here has been approved.
 - [ ] Approve internal courier identity, dispatch pool/zone, shift, restriction, and location privacy rules. Identity, shift, restriction and location privacy are settled and in the schema (`fulfillment.couriers`, `courier_engagements`, `courier_shifts`, `courier_location_tracks` with its 30-day retention, V0040/V0041); the dispatch pool and zone rules have no representation anywhere.
 - [ ] Decide courier document/vehicle/referral and bonus/settlement migration rules. Vehicle class and its dispatch ceilings exist on `fulfillment.courier_types`, and ADR 0042's settlement periods and statements are built; courier documents, referral and the legacy bonus migration rules are undecided and unrepresented.
 - [x] Add plan, shipment, quote, attempt, sourcing-job, and exception tables. All six in V0054, whose section 7 also makes V0040's `shipment_id` and `assignment_attempt_id` real foreign keys.
@@ -587,8 +636,8 @@ reconciliation evidence.
 - [x] Implement quote filtering/scoring and single-winner compare-and-set. `QuoteScoring` is pure and versioned; the compare-and-set is `JdbcAssignmentStore.win`.
 - [ ] Implement or explicitly defer the internal courier model and legacy courier disposition. The courier model is built by ADR 0042/0045 (V0040, V0041, the `courier` and `telemetry` modules) and the seam is now closed: `courier.infrastructure.dispatch.InternalFleetAdapter` implements `fulfillment.api.InternalFleetPort`, so `SourcingPlanner`'s in-house branch is taken in production and a courier on shift is offered the order before any partner is called. What remains open under this box is the fleet's reach — a courier is enumerated only through an open shift at the branch, since ADR 0042's roster and availability tables are not built — and the legacy courier disposition, still neither built nor explicitly deferred.
 - [x] Implement first real partner adapter with uncertainty reconciliation. `NoorDeliveryAdapter` and `YandexDeliveryAdapter` classify a request that reached the partner as `UNCERTAIN` and resolve by query rather than retry. Production code now reaches both: `DeliveryPlanTrigger` opens the plan, `DeliverySourcingScheduler` claims the job, and `DeliverySourcingService` books through `CamelShipmentBookingPort`, against an `integration.bindings` row `ProviderInstallationController` can author.
-- [ ] Implement Operations APIs, tracking, recovery triggers, audit, metrics, and alerts. `ProviderCircuitMetrics` and ADR 0045's courier tracking endpoints exist, and a failed sourcing pass opens one `fulfillment.delivery_exceptions` row per plan; `fulfillment.web` holds only the ADR 0037 tariff, fee and zone controllers, so there is no sourcing Operations API to read that exception from, no partner tracking callback, and no sourcing alert.
-- [ ] Add timing, duplicate, uncertainty, cost, fallback, restart, and isolation tests. All but cost. `DeliverySourcingTests` covers timing (a job before its due time is not claimed; a revised estimate moves it), duplicate (a replayed tick does not book twice; two bookings produce one shipment; an answered attempt is never resent), fallback (the cheapest quoting partner wins; a partner that refuses a quote is not booked), restart (a dead worker loses its lease and a lost lease cannot finish somebody else's job) and isolation (a plan is not readable by another tenant); uncertainty and gateway classification are covered by the adapter tests. Cost cannot be tested until a subsidy line exists to write.
+- [ ] Implement Operations APIs, tracking, recovery triggers, audit, metrics, and alerts. `fulfillment.web`'s `DispatchController` now holds a sourcing Operations API beside the ADR 0037 tariff, fee and zone controllers: the dispatch queue, audited manual assign/unassign (`ManualDispatchService`, `fulfillment.dispatch.assign`/`.unassign` ADR 0027 facts), and a read over the `fulfillment.delivery_exceptions` row a failed sourcing pass already opens. `ProviderCircuitMetrics` and ADR 0045's courier tracking endpoints exist. Still missing: an operator-triggered `source`/`reschedule`/`reconcile`, a shipment `cancel` independent of unassign, `GET .../tracking`, a partner tracking callback (see the Implementation status line above), and any sourcing-specific alert.
+- [x] Add timing, duplicate, uncertainty, cost, fallback, restart, and isolation tests. `DeliverySourcingTests` covers timing (a job before its due time is not claimed; a revised estimate moves it), duplicate (a replayed tick does not book twice; two bookings produce one shipment; an answered attempt is never resent), fallback (the cheapest quoting partner wins; a partner that refuses a quote is not booked), restart (a dead worker loses its lease and a lost lease cannot finish somebody else's job), isolation (a plan is not readable by another tenant), and now cost (`thecheapestQuotedPartnerWins` asserts the `DELIVERY_COST_SUBSIDY` row and its amount; `aCheaperPartnerRecordsNoSubsidy` proves a cheaper winning quote writes none); uncertainty and gateway classification are covered by the adapter tests.
 
 ## Exit criteria
 

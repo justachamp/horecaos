@@ -4725,6 +4725,31 @@
         },
         "type" : "object"
       },
+      "DispatchControllerExceptionResponse" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "exceptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "raisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DispatchResponse" : {
         "properties" : {
           "applied" : {
@@ -5424,26 +5449,6 @@
           }
         },
         "required" : [ "date", "label", "reason" ],
-        "type" : "object"
-      },
-      "ExceptionResponse" : {
-        "properties" : {
-          "closedAllDay" : {
-            "type" : "boolean"
-          },
-          "closesAt" : {
-            "format" : "time-local",
-            "type" : "string"
-          },
-          "date" : {
-            "format" : "date",
-            "type" : "string"
-          },
-          "opensAt" : {
-            "format" : "time-local",
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "ExchangeRequest" : {
@@ -6744,6 +6749,26 @@
         "required" : [ "endsAt", "startsAt" ],
         "type" : "object"
       },
+      "LocationServiceOperationsControllerExceptionResponse" : {
+        "properties" : {
+          "closedAllDay" : {
+            "type" : "boolean"
+          },
+          "closesAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "opensAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationSetRequest" : {
         "properties" : {
           "locationIds" : {
@@ -7413,7 +7438,7 @@
           },
           "exceptions" : {
             "items" : {
-              "$ref" : "#/components/schemas/ExceptionResponse"
+              "$ref" : "#/components/schemas/LocationServiceOperationsControllerExceptionResponse"
             },
             "type" : "array"
           },
@@ -23703,6 +23728,62 @@
           }
         },
         "summary" : "Assign one courier to one plan",
+        "tags" : [ "Dispatch board" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/exceptions" : {
+      "get" : {
+        "description" : "Every open ADR 0014 sourcing exception against this plan -- no provider, a booking whose outcome is still uncertain, a promise sourcing could not meet. Empty for a plan sourcing has not flagged, which is the ordinary case.",
+        "operationId" : "exceptions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "planId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/DispatchControllerExceptionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Why this plan needs a human",
         "tags" : [ "Dispatch board" ]
       }
     },
