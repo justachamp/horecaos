@@ -12,9 +12,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
@@ -42,6 +49,7 @@ class TenantControlPlaneServiceTests {
         AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
         List<uz.horecaos.platform.audit.api.AuditFact> auditFacts = new ArrayList<>();
         List<java.util.UUID> evicted = new ArrayList<>();
+        RecordingOrganizationProvisioner provisioner = new RecordingOrganizationProvisioner();
         TenantControlPlaneService service = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
@@ -49,7 +57,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 auditFacts::add,
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                provisioner);
 
         var created = service.createTenant(new CreateTenantCommand(
                 "food-group",
@@ -59,6 +69,7 @@ class TenantControlPlaneServiceTests {
                 "Asia/Tashkent",
                 CustomerIdentityMode.TENANT_SHARED));
         TenantId tenantId = new TenantId(created.id());
+        service.linkKeycloakOrganization(tenantId, "keycloak-organization-food-group");
         takeLive(store, tenantId);
 
         var suspended = service.suspendTenant(tenantId, "non-payment");
@@ -72,6 +83,9 @@ class TenantControlPlaneServiceTests {
                 .as("a suspension that waits out a cache TTL is a suspension that is not yet in force")
                 .contains(tenantId.value());
         assertThat(auditFacts).extracting(fact -> fact.actionCode()).contains("tenant.suspended");
+        assertThat(provisioner.calls)
+                .as("ADR 0009: suspension reconciles the tenant's Keycloak organization to disabled")
+                .containsExactly(Map.entry("keycloak-organization-food-group", false));
 
         // The other half of the rule: whoever suspends must still be able to
         // undo it. A platform administrator's authority is the realm role, which
@@ -82,6 +96,63 @@ class TenantControlPlaneServiceTests {
         assertThat(reactivated.status()).isEqualTo(TenantStatus.ACTIVE);
         assertThat(store.findTenant(tenantId).orElseThrow().status()).isEqualTo(TenantStatus.ACTIVE);
         assertThat(auditFacts).extracting(fact -> fact.actionCode()).contains("tenant.reactivated");
+        assertThat(provisioner.calls)
+                .as("reactivation reconciles the same organization back to enabled")
+                .containsExactly(
+                        Map.entry("keycloak-organization-food-group", false),
+                        Map.entry("keycloak-organization-food-group", true));
+    }
+
+    /**
+     * The whole reason the Keycloak reconciliation is a second, best-effort
+     * call rather than part of the status transaction: a suspension must land
+     * in full even when Keycloak refuses it, because the status row -- not the
+     * organization's {@code enabled} flag -- is what {@code
+     * JdbcAuthorizationService} and ADR 0078's grant filter actually read.
+     */
+    @Test
+    @DisplayName("a suspension is not undone, retried inline, or failed when Keycloak reconciliation fails")
+    void keycloakReconciliationFailureDoesNotUndoOrBlockTheStatusChange() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        RecordingOrganizationProvisioner provisioner = new RecordingOrganizationProvisioner();
+        provisioner.failNextCall = true;
+        TenantControlPlaneService service = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> platformAdmin,
+                noTransactions(),
+                provisioner);
+
+        var created = service.createTenant(new CreateTenantCommand(
+                "food-group-2",
+                "Food Group LLC",
+                "Food Group",
+                "UZS",
+                "Asia/Tashkent",
+                CustomerIdentityMode.TENANT_SHARED));
+        TenantId tenantId = new TenantId(created.id());
+        service.linkKeycloakOrganization(tenantId, "keycloak-organization-food-group-2");
+        takeLive(store, tenantId);
+
+        var suspended = service.suspendTenant(tenantId, "non-payment");
+
+        assertThat(suspended.status())
+                .as("Keycloak refusing the call must not be visible to the caller as a failed suspension")
+                .isEqualTo(TenantStatus.SUSPENDED);
+        assertThat(store.findTenant(tenantId).orElseThrow().status())
+                .as("and the write it depends on must actually be durable, not rolled back with the exception")
+                .isEqualTo(TenantStatus.SUSPENDED);
+        assertThat(provisioner.attempts)
+                .as("exactly one attempt -- a failure here is left for IdentityDriftReporter, not retried inline")
+                .isEqualTo(1);
+        assertThat(provisioner.calls)
+                .as("the failed attempt never recorded a completed reconciliation")
+                .isEmpty();
     }
 
     @Test
@@ -96,7 +167,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
         var created = asPlatform.createTenant(new CreateTenantCommand(
                 "food-group",
                 "Food Group LLC",
@@ -117,7 +190,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> owner);
+                () -> owner,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
 
         assertThatThrownBy(() -> asOwner.suspendTenant(tenantId, "trying it on"))
                 .as("the reasons a tenant is suspended are the platform's side of the relationship")
@@ -138,7 +213,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 events::add,
                 auditFacts::add,
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "food-group",
@@ -214,7 +291,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "horecaos", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
@@ -238,7 +317,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
 
         var first = service.createTenant(new CreateTenantCommand(
                 "directory-a",
@@ -268,7 +349,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> tenantOwner);
+                () -> tenantOwner,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
         assertThatThrownBy(() -> asOwner.listTenants(null, 50))
                 .as("the directory is a cross-tenant read; organization membership in one tenant "
                         + "must never substitute for platform scope")
@@ -286,7 +369,9 @@ class TenantControlPlaneServiceTests {
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
-                () -> platformAdmin);
+                () -> platformAdmin,
+                noTransactions(),
+                new RecordingOrganizationProvisioner());
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "horecaos-2", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
@@ -509,5 +594,65 @@ class TenantControlPlaneServiceTests {
                         subject, "", java.util.Set.of(), java.util.List.of(), 0);
             }
         };
+    }
+
+    /**
+     * A {@link TransactionTemplate} with nothing behind it: every collaborator
+     * here is {@link InMemoryStore}, which has no real transactionality to
+     * demarcate, so this exists only to satisfy {@code changeTenantStatus}'s
+     * dependency on the type without pulling a real database into what is
+     * otherwise a fast, Docker-free unit test -- the same reason {@code
+     * PaymentAttemptService} and {@code OnboardingService} are exercised
+     * against a real one only in their Testcontainers-backed suites.
+     */
+    private static TransactionTemplate noTransactions() {
+        return new TransactionTemplate(new NoTransactionManager());
+    }
+
+    private static final class NoTransactionManager implements PlatformTransactionManager {
+
+        @Override
+        public TransactionStatus getTransaction(@Nullable TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {}
+
+        @Override
+        public void rollback(TransactionStatus status) {}
+    }
+
+    /** Records what it was asked to reconcile, and can be told to fail once. */
+    private static final class RecordingOrganizationProvisioner implements OrganizationProvisioner {
+
+        private final List<Map.Entry<String, Boolean>> calls = new ArrayList<>();
+        private int attempts;
+        private boolean failNextCall;
+
+        @Override
+        public OrganizationRef ensureOrganization(EnsureOrganization command) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public Optional<OrganizationSnapshot> getOrganization(String organizationId) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public MembershipRef ensureMembership(EnsureMembership command) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public void setOrganizationEnabled(String organizationId, boolean enabled) {
+            attempts++;
+            if (failNextCall) {
+                failNextCall = false;
+                throw new IllegalStateException("Keycloak is unreachable");
+            }
+            calls.add(Map.entry(organizationId, enabled));
+        }
     }
 }

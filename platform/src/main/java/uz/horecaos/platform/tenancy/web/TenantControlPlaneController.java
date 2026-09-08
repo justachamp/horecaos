@@ -131,6 +131,55 @@ public class TenantControlPlaneController {
         return service.linkKeycloakOrganization(new TenantId(tenantId), request.organizationId());
     }
 
+    /**
+     * Stops a tenant trading (ADR 0077, ADR 0078).
+     *
+     * <p>Platform-admin only, the same {@code TENANT_WRITE} at {@code
+     * ScopeType.PLATFORM} {@link #createTenant} and {@link #listTenants}
+     * already require: a tenant cannot lift its own suspension, and there is
+     * no tenant-scoped path variable here to check organization membership
+     * against in the first place. {@code mutating = true} gives this the same
+     * {@code Idempotency-Key} replay protection as every other action on this
+     * controller — load-bearing here specifically, since a retried suspend
+     * must not re-audit or re-attempt the Keycloak reconciliation below as a
+     * second, independent action.
+     *
+     * <p>Also reconciles the tenant's Keycloak organization to disabled, best
+     * effort — see {@code TenantControlPlaneService.changeTenantStatus} for
+     * why that never blocks or reverts this response. The flag is not what
+     * stops a suspended tenant's people from acting: that is ADR 0078's grant
+     * filter, which does not read Keycloak at all.
+     */
+    @PostMapping("/{tenantId}/suspend")
+    @RequiresCapability(value = Capability.TENANT_WRITE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Suspend a tenant",
+            description = "Requires the global platform-admin role. Narrows every capability the tenant's "
+                    + "people hold to a rationed read-only subset (ADR 0078) and best-effort disables the "
+                    + "tenant's Keycloak organization so an operator reading Keycloak sees a matching state "
+                    + "(ADR 0009) -- the flag is not itself an authentication control.")
+    TenantView suspendTenant(@PathVariable UUID tenantId, @Valid @RequestBody TenantStatusChangeRequest request) {
+        return service.suspendTenant(new TenantId(tenantId), request.reason());
+    }
+
+    /**
+     * Lets a suspended tenant trade again (ADR 0077, ADR 0078).
+     *
+     * <p>See {@link #suspendTenant} for the capability and idempotency
+     * reasoning, which is identical. Reachable against a suspended tenant
+     * because platform-admin authority is the Keycloak realm role and a
+     * {@code PLATFORM}-scope grant, neither of which suspension touches.
+     */
+    @PostMapping("/{tenantId}/reactivate")
+    @RequiresCapability(value = Capability.TENANT_WRITE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Reactivate a suspended tenant",
+            description = "Requires the global platform-admin role. Only a SUSPENDED tenant can be "
+                    + "reactivated. Best-effort re-enables the tenant's Keycloak organization to match.")
+    TenantView reactivateTenant(@PathVariable UUID tenantId, @Valid @RequestBody TenantStatusChangeRequest request) {
+        return service.reactivateTenant(new TenantId(tenantId), request.reason());
+    }
+
     @PostMapping("/{tenantId}/brands")
     @RequiresCapability(value = Capability.BRAND_WRITE, mutating = true)
     @Operation(summary = "Create a brand within a tenant")
@@ -273,6 +322,10 @@ public class TenantControlPlaneController {
     record LinkKeycloakOrganizationRequest(
             @NotBlank @Size(max = 64) @Schema(description = "Immutable Keycloak organization UUID")
             String organizationId) {}
+
+    /** ADR 0027 requires a reason on the audit fact a {@code USER} actor produces. */
+    record TenantStatusChangeRequest(
+            @NotBlank @Size(max = 1000) String reason) {}
 
     record CreateOperatingUnitRequest(
             @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")

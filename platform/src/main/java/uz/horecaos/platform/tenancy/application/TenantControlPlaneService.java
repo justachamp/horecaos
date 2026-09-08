@@ -11,9 +11,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -21,6 +24,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -44,6 +48,8 @@ import uz.horecaos.platform.tenancy.domain.TenantStatus;
 @Service
 public class TenantControlPlaneService {
 
+    private static final Logger log = LoggerFactory.getLogger(TenantControlPlaneService.class);
+
     private final TenantControlPlaneStore store;
     private final TenantAccessPolicy accessPolicy;
     private final TenantStatusCache suspensions;
@@ -51,12 +57,23 @@ public class TenantControlPlaneService {
     private final ApplicationEventPublisher events;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
+    private final TransactionTemplate transactions;
+    private final OrganizationProvisioner organizationProvisioner;
 
     // Public rather than package-private: uz.horecaos.platform.tenancy.application.onboarding
     // (a subpackage of this same module) needs to construct this in
     // OnboardingFullRunIntegrationTests exactly the way it already constructs
     // JdbcTenantControlPlaneStore, and OnboardingService itself takes it as a
     // collaborator (see that class's activateDraftBrandsAndLocations).
+    //
+    // transactions/organizationProvisioner exist for exactly one thing:
+    // changeTenantStatus's Keycloak reconciliation. @Transactional cannot
+    // express "commit this write, then call an external system outside the
+    // transaction" from inside a single bean, because a method calling its own
+    // annotated method skips the proxy entirely -- the same reason
+    // PaymentAttemptService and OnboardingService already carry a
+    // TransactionTemplate alongside their @Transactional methods rather than
+    // trying to express everything through the annotation.
     public TenantControlPlaneService(
             TenantControlPlaneStore store,
             TenantAccessPolicy accessPolicy,
@@ -64,7 +81,9 @@ public class TenantControlPlaneService {
             Clock clock,
             ApplicationEventPublisher events,
             AuditRecorder audit,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            TransactionTemplate transactions,
+            OrganizationProvisioner organizationProvisioner) {
         this.store = store;
         this.accessPolicy = accessPolicy;
         this.suspensions = suspensions;
@@ -72,6 +91,8 @@ public class TenantControlPlaneService {
         this.events = events;
         this.audit = audit;
         this.currentActor = currentActor;
+        this.transactions = transactions;
+        this.organizationProvisioner = organizationProvisioner;
     }
 
     /**
@@ -247,10 +268,17 @@ public class TenantControlPlaneService {
      * tenant-scoped grants for a suspended tenant, and this evicts the cache
      * that answer is read from, so the refusal starts at the next request rather
      * than at the end of a TTL.
+     *
+     * <p>Also reconciles the tenant's Keycloak organization to disabled — see
+     * {@link #changeTenantStatus} for why that is a second, best-effort call
+     * rather than part of this write, and {@link
+     * OrganizationProvisioner#setOrganizationEnabled} for why the flag it
+     * flips is not what stops a suspended tenant's people: that is ADR 0078's
+     * grant filter, proven against a live realm to keep working regardless of
+     * this flag.
      */
-    @Transactional
     public TenantView suspendTenant(TenantId tenantId, String reason) {
-        return changeTenantStatus(tenantId, reason, Tenant::suspend, "tenant.suspended");
+        return changeTenantStatus(tenantId, reason, Tenant::suspend, "tenant.suspended", false);
     }
 
     /**
@@ -261,8 +289,10 @@ public class TenantControlPlaneService {
      * platform-scoped grant — neither of which suspension touches. If
      * suspension could lock out the person who lifts it, it would be a one-way
      * door, and this is the test that says it is not.
+     *
+     * <p>Reconciles the tenant's Keycloak organization back to enabled; see
+     * {@link #suspendTenant} for what that flag does and does not do.
      */
-    @Transactional
     public TenantView reactivateTenant(TenantId tenantId, String reason) {
         return changeTenantStatus(
                 tenantId,
@@ -279,28 +309,102 @@ public class TenantControlPlaneService {
                     }
                     tenant.activate();
                 },
-                "tenant.reactivated");
+                "tenant.reactivated",
+                true);
     }
 
+    /**
+     * Changes status in one committed transaction, then reconciles the
+     * tenant's Keycloak organization outside it.
+     *
+     * <p>Two steps, deliberately never one. {@code
+     * OrganizationProvisioner.setOrganizationEnabled} is a blocking HTTPS round
+     * trip to Keycloak, and {@code ExternalCallTransactionBoundaryTests} exists
+     * precisely because a transaction spanning a call like that holds one of
+     * the platform's ten pooled connections for as long as Keycloak takes to
+     * answer — every other module sharing that pool stalls with it. Not
+     * {@code @Transactional} for the same reason {@code
+     * uz.horecaos.platform.payments.application.PaymentAttemptService} and
+     * {@link uz.horecaos.platform.tenancy.application.onboarding.OnboardingService}
+     * are not on their own external-call paths: a method calling its own
+     * annotated method never goes through the proxy, so the only way to commit
+     * before calling out is to demarcate the transaction explicitly.
+     *
+     * <p>The tenant status row is the source of truth for suspension —
+     * {@code JdbcAuthorizationService} and ADR 0078's grant filter read
+     * {@code tenant.tenants.status}, never Keycloak's {@code enabled} flag — so
+     * committing it here never waits on, and is never undone by, the Keycloak
+     * call that follows. If that call fails, the tenant is suspended (or
+     * reactivated) in every way that actually matters; an operator reading the
+     * Keycloak console directly would see a stale flag until it is corrected.
+     * That correction is deliberately not retried inline: {@link
+     * uz.horecaos.platform.tenancy.application.identity.IdentityDriftReporter}
+     * already runs a scheduled comparison of tenant status against the
+     * organization's {@code enabled} flag in both directions, so the mismatch
+     * this leaves behind is caught and audited on its next pass rather than
+     * escalated from here — see that class's {@code
+     * ORGANIZATION_ENABLED_WHILE_SUSPENDED} and {@code ORGANIZATION_DISABLED}
+     * findings.
+     */
     private TenantView changeTenantStatus(
-            TenantId tenantId, String reason, java.util.function.Consumer<Tenant> transition, String actionCode) {
-        Tenant tenant = requireTenant(tenantId);
-        accessPolicy.requirePlatformAdministrator();
-        TenantStatus before = tenant.status();
-        transition.accept(tenant);
-        store.updateTenantStatus(tenant);
-        suspensions.evict(tenantId.value());
-        recordAudit(
-                actionCode,
-                ResourceScope.tenant(tenantId.value()),
-                "Tenant",
-                tenantId.value(),
-                reason,
-                Map.of("from", before.name(), "to", tenant.status().name()));
-        CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
-                .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
-        return toView(tenant, identityMode);
+            TenantId tenantId,
+            String reason,
+            java.util.function.Consumer<Tenant> transition,
+            String actionCode,
+            boolean keycloakEnabled) {
+
+        StatusChange change = transactions.execute(ignored -> {
+            Tenant tenant = requireTenant(tenantId);
+            accessPolicy.requirePlatformAdministrator();
+            TenantStatus before = tenant.status();
+            transition.accept(tenant);
+            store.updateTenantStatus(tenant);
+            suspensions.evict(tenantId.value());
+            recordAudit(
+                    actionCode,
+                    ResourceScope.tenant(tenantId.value()),
+                    "Tenant",
+                    tenantId.value(),
+                    reason,
+                    Map.of("from", before.name(), "to", tenant.status().name()));
+            CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
+                    .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
+            return new StatusChange(
+                    toView(tenant, identityMode),
+                    tenant.keycloakOrganizationId().orElse(null));
+        });
+
+        reconcileKeycloakOrganization(Objects.requireNonNull(change).organizationId(), keycloakEnabled, tenantId);
+        return change.view();
     }
+
+    /**
+     * Best-effort by design; see {@link #changeTenantStatus} for why a failure
+     * here must never undo, retry inline against, or fail the request for a
+     * status change that already committed.
+     */
+    private void reconcileKeycloakOrganization(@Nullable String organizationId, boolean enabled, TenantId tenantId) {
+        if (organizationId == null) {
+            // Not linked yet -- IdentityDriftReporter's ORGANIZATION_UNLINKED
+            // already names that gap for an ACTIVE tenant. Nothing to reconcile
+            // here until a link exists.
+            return;
+        }
+        try {
+            organizationProvisioner.setOrganizationEnabled(organizationId, enabled);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Could not reconcile Keycloak organization {} to enabled={} for tenant {} after its status "
+                            + "committed; IdentityDriftReporter will report the mismatch on its next scheduled pass",
+                    organizationId,
+                    enabled,
+                    tenantId.value(),
+                    failure);
+        }
+    }
+
+    /** What {@link #changeTenantStatus}'s committed transaction hands to its post-commit Keycloak call. */
+    private record StatusChange(TenantView view, @Nullable String organizationId) {}
 
     @Transactional
     public BrandView createBrand(TenantId tenantId, CreateBrandCommand command) {

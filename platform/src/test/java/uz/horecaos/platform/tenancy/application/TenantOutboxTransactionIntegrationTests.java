@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -182,15 +183,58 @@ class TenantOutboxTransactionIntegrationTests {
         }
 
         @Bean
+        org.springframework.transaction.support.TransactionTemplate transactionTemplate(
+                PlatformTransactionManager transactionManager) {
+            return new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        }
+
+        /** Stands in for Keycloak; ADR 0009's own adapter is tested against a real one. */
+        @Bean
+        uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner organizationProvisioner() {
+            return new uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner() {
+
+                @Override
+                public OrganizationRef ensureOrganization(EnsureOrganization command) {
+                    return new OrganizationRef("org-" + command.tenantId(), command.alias(), true);
+                }
+
+                @Override
+                public Optional<OrganizationSnapshot> getOrganization(String organizationId) {
+                    return Optional.of(new OrganizationSnapshot(organizationId, "acme", "Acme", true));
+                }
+
+                @Override
+                public MembershipRef ensureMembership(EnsureMembership command) {
+                    return new MembershipRef(command.organizationId(), "subject-1", true);
+                }
+
+                @Override
+                public void setOrganizationEnabled(String organizationId, boolean enabled) {
+                    // Not exercised: this suite proves outbox atomicity, not ADR 0009 disable/re-enable.
+                }
+            };
+        }
+
+        @Bean
         TenantControlPlaneService tenantControlPlaneService(
                 TenantControlPlaneStore store,
                 TenantAccessPolicy accessPolicy,
                 Clock clock,
                 ApplicationEventPublisher events,
                 uz.horecaos.platform.audit.api.AuditRecorder auditRecorder,
-                CurrentActor currentActor) {
+                CurrentActor currentActor,
+                org.springframework.transaction.support.TransactionTemplate transactions,
+                uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner organizationProvisioner) {
             return new TenantControlPlaneService(
-                    store, accessPolicy, tenantId -> {}, clock, events, auditRecorder, currentActor);
+                    store,
+                    accessPolicy,
+                    tenantId -> {},
+                    clock,
+                    events,
+                    auditRecorder,
+                    currentActor,
+                    transactions,
+                    organizationProvisioner);
         }
     }
 

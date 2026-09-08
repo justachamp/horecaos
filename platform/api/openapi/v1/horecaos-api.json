@@ -14742,6 +14742,17 @@
         },
         "type" : "object"
       },
+      "TenantStatusChangeRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "TenantSummaryView" : {
         "properties" : {
           "createdAt" : {
@@ -21874,6 +21885,45 @@
         "tags" : [ "POS catalog synchronization" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/reactivate" : {
+      "post" : {
+        "description" : "Requires the global platform-admin role. Only a SUSPENDED tenant can be reactivated. Best-effort re-enables the tenant's Keycloak organization to match.",
+        "operationId" : "reactivateTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantStatusChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reactivate a suspended tenant",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/roles" : {
       "get" : {
         "description" : "The eight tenant-visible PlatformRole bundles (staff-and-access.md §5 \"Должности\"), each with its capability codes. platform-admin and platform-support are never included. Tenant-defined roles are not yet supported (ADR 0025's deferred item) and so are not yet in this list.",
@@ -22334,6 +22384,45 @@
         },
         "summary" : "The tenant's live subscription",
         "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/suspend" : {
+      "post" : {
+        "description" : "Requires the global platform-admin role. Narrows every capability the tenant's people hold to a rationed read-only subset (ADR 0078) and best-effort disables the tenant's Keycloak organization so an operator reading Keycloak sees a matching state (ADR 0009) -- the flag is not itself an authentication control.",
+        "operationId" : "suspendTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantStatusChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a tenant",
+        "tags" : [ "SaaS control plane" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/usage" : {

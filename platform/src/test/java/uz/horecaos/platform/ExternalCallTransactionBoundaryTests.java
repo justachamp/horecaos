@@ -43,6 +43,7 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.ObjectStorage;
@@ -68,6 +69,7 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttem
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentTransactionStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
@@ -185,6 +187,41 @@ class ExternalCallTransactionBoundaryTests {
         // anything. A handler that saw its own RUNNING row would also have been
         // inside the claim's transaction.
         assertThat(handler.observedStatus).isEqualTo("RUNNING");
+    }
+
+    @Test
+    @DisplayName("suspending a tenant calls Keycloak with no connection checked out, and the status commits regardless")
+    void tenantSuspensionDoesNotHoldAConnection() {
+        WatchfulProvisioner provisioner = context.getBean(WatchfulProvisioner.class);
+        TenantControlPlaneService controlPlane = context.getBean(TenantControlPlaneService.class);
+        TenantId tenantId = new TenantId(TENANT);
+
+        jdbc.sql("UPDATE tenant.tenants SET status = 'ACTIVE' WHERE id = :id")
+                .param("id", TENANT)
+                .update();
+        // TenantControlPlaneService.toView requires a current customer identity
+        // policy for every tenant it renders a view of; seedTenantAndTemplate()
+        // above inserts the tenant row directly rather than through
+        // createTenant(), which is what normally writes this alongside it.
+        jdbc.sql("""
+                        INSERT INTO tenant.customer_identity_policies
+                            (id, tenant_id, version, identity_mode, effective_from)
+                        VALUES (:id, :tenantId, 1, 'TENANT_SHARED', :effectiveFrom)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("effectiveFrom", NOW.atOffset(ZoneOffset.UTC))
+                .update();
+        controlPlane.linkKeycloakOrganization(tenantId, "org-" + TENANT);
+
+        var suspended = controlPlane.suspendTenant(tenantId, "non-payment");
+
+        assertThat(suspended.status()).isEqualTo(uz.horecaos.platform.tenancy.domain.TenantStatus.SUSPENDED);
+        assertThat(provisioner.calls).isEqualTo(1);
+        assertThat(provisioner.insideTransaction)
+                .as("setOrganizationEnabled is an HTTPS call to Keycloak; a transaction around it "
+                        + "would hold a pooled connection for however long Keycloak takes to answer")
+                .isFalse();
     }
 
     @Test
@@ -397,15 +434,30 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
+        WatchfulProvisioner watchfulProvisioner() {
+            return new WatchfulProvisioner();
+        }
+
+        @Bean
         TenantControlPlaneService tenantControlPlaneService(
                 TenantControlPlaneStore store,
                 TenantAccessPolicy accessPolicy,
                 Clock clock,
                 ApplicationEventPublisher events,
                 AuditRecorder recorder,
-                CurrentActor currentActor) {
+                CurrentActor currentActor,
+                TransactionTemplate transactions,
+                WatchfulProvisioner provisioner) {
             return new TenantControlPlaneService(
-                    store, accessPolicy, tenantId -> {}, clock, events, recorder, currentActor);
+                    store,
+                    accessPolicy,
+                    tenantId -> {},
+                    clock,
+                    events,
+                    recorder,
+                    currentActor,
+                    transactions,
+                    provisioner);
         }
 
         @Bean
@@ -510,6 +562,34 @@ class ExternalCallTransactionBoundaryTests {
                     .query(String.class)
                     .single();
             return StepResult.completed(Map.of("organizationId", "org-" + context.tenantId()), null);
+        }
+    }
+
+    /** Stands in for the Keycloak organization adapter's {@code setOrganizationEnabled}. */
+    static final class WatchfulProvisioner implements OrganizationProvisioner {
+
+        private int calls;
+        private boolean insideTransaction;
+
+        @Override
+        public OrganizationRef ensureOrganization(EnsureOrganization command) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public Optional<OrganizationSnapshot> getOrganization(String organizationId) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public MembershipRef ensureMembership(EnsureMembership command) {
+            throw new UnsupportedOperationException("Not exercised by these tests");
+        }
+
+        @Override
+        public void setOrganizationEnabled(String organizationId, boolean enabled) {
+            calls++;
+            insideTransaction = TransactionSynchronizationManager.isActualTransactionActive();
         }
     }
 

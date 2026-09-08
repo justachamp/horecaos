@@ -130,6 +130,22 @@ class IdentityDriftReporterTests {
                 .isEmpty();
     }
 
+    /**
+     * The mirror image of {@link #aSuspendedTenantWithADisabledOrganizationIsNotDrift}:
+     * a suspension whose Keycloak reconciliation never landed, most likely
+     * because {@code TenantControlPlaneService.suspendTenant}'s best-effort
+     * call to Keycloak failed after its status write had already committed.
+     */
+    @Test
+    void aSuspendedTenantWithAnEnabledOrganizationIsDrift() {
+        insertTenant(TENANT_A, "acme", "SUSPENDED", "org-a");
+        keycloak.holds("org-a", "acme", true);
+
+        assertThat(reporter.scan().findings())
+                .extracting(DriftFinding::code)
+                .containsExactly(DriftCode.ORGANIZATION_ENABLED_WHILE_SUSPENDED);
+    }
+
     @Test
     void anAliasThatNoLongerMatchesTheTenantIsReported() {
         insertTenant(TENANT_A, "acme", "ACTIVE", "org-a");
