@@ -104,7 +104,7 @@ re-implement any of them locally.
 - **Secrets** live only in the ADR 0028 manager. The database stores a reference.
 - **Personal data** is classified and encrypted per [ADR 0029](docs/adr/partial/0029-pii-protection-envelope-encryption-and-key-rotation.md),
   and never appears in an event, log, trace, metric, or dead-letter summary.
-- **Scoped behavior** resolves through [ADR 0030](docs/adr/partial/0030-configuration-and-policy-resolution.md).
+- **Scoped behavior** resolves through [ADR 0030](docs/adr/built/0030-configuration-and-policy-resolution.md).
   A durable decision persists the policy id and version it used.
 - **HTTP** follows [ADR 0031](docs/adr/built/0031-http-api-conventions.md): Problem
   Details with stable codes, `Idempotency-Key` on effectful mutations, expected
