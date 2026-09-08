@@ -24,6 +24,23 @@ not, the entry reads **not built — ADR NNNN** and names the owning decision. A
 screen may be designed against an unbuilt field; it may not be built against
 one.
 
+One more state showed up on the last pass and is worth naming here rather than
+repeating at each site: several tables this document leans on for delivery
+(`fulfillment.delivery_plans`, `shipments`, `delivery_quotes`,
+`assignment_attempts`, `service_zones`, `delivery_tariffs`,
+`delivery_fee_resolutions` — all ADR 0014/0037, V0025/V0032/V0054) are now
+**built** and already serve the dispatch board (`operations-spec/couriers.md`
+§1, §3) — but nothing in the `ordering` module joins to them yet:
+`OrderQueryService` and `OperationsOrderController` read only `ordering.*`.
+Such a field reads **built, not read by ordering — ADR 0014** below: the data
+exists and is real, the gap is one join in the order board and detail query,
+not a missing schema. The same applies to `ordering.orders.promised_at` (+
+`promise_basis`, `promise_prep_minutes`, `promise_travel_minutes`) — ADR
+0036's promise column (`V0023`), written at checkout by `CheckoutOrderWriter`
+for delivery and pickup alike — which the ordering module's own board and
+detail queries also do not read yet, even though nothing about it is
+unbuilt.
+
 ---
 
 ## 0. Rulings made before the screens
@@ -99,10 +116,16 @@ Two edges are conditional on the order, not the actor: `READY -> FULFILLING` is
 delivery only, `READY -> COMPLETED` is pickup and dine-in only. The console must
 not render a "на доставку" affordance on a pickup order.
 
-`CONFIRMED -> CANCELLED` exists in the model and is **refused by the application
-today** (`OrderStateService.CancellationNotPermittedException`). It opens when
-ADR 0039 lands. Until then the cancel action disappears at `CONFIRMED` and the
-detail states why, in words, rather than showing a greyed button.
+`CONFIRMED -> CANCELLED` exists in the model and, with no reason supplied, is
+still **refused by the application**
+(`OrderStateService.CancellationNotPermittedException`). ADR 0039 has landed
+the other half of this: `POST .../cancellations` with a `reasonId` from the
+tenant's `ordering.order_outcome_reasons` registry is permitted after
+confirmation, because the reason names the stock disposition and the liable
+party — exactly what a bare `CONFIRMED -> CANCELLED` with no reason cannot
+supply. The plain, reasonless cancel action still disappears at `CONFIRMED`
+and the detail states why in words rather than showing a greyed button; the
+reasoned cancel dialog (§4.5) is the one that works there.
 
 ### 1.2 The two projections and the three lanes
 
@@ -120,8 +143,8 @@ single linear bar destroys the distinction between "the kitchen is late" and
 | Lane | Column / source | Owner |
 |---|---|---|
 | Commercial | `ordering.orders.status` | ADR 0019, built |
-| Production | `fulfillment_status_projection` (`IN_PREPARATION`/`READY`), later the kitchen ticket | ADR 0041, not built |
-| Delivery | `fulfillment.shipments.status` | ADR 0014, not built |
+| Production | `fulfillment_status_projection` (`IN_PREPARATION`/`READY`), later the kitchen ticket | ADR 0041's tables are **built** (V0030, `kitchen.tickets`/`ticket_events`, serving the kitchen board itself) but the order timeline does not read them |
+| Delivery | `fulfillment.shipments.status` | ADR 0014, built, not read by ordering |
 
 The detail's timeline (§4.9) renders these as parallel strips, not one line.
 
@@ -256,18 +279,18 @@ Primary row, always visible:
 | Канал | multi-select, `<optgroup>` by `system_type` | all | `tenant.sales_channels.display_name`, matched via `channel_id`; the row displays `channel_code_snapshot` |
 | Тип | segmented control Доставка / Самовывоз / В зале | all | `fulfillment_mode` |
 | Оплата | multi-select | all | `payment_status_projection` + method (**not built — ADR 0013**) |
-| Курьер | searchable single-select, with an "Без курьера" option | all | **not built — ADR 0014** `fulfillment.assignment_attempts.courier_id` |
+| Курьер | searchable single-select, with an "Без курьера" option | all | **built, not read by ordering — ADR 0014** `fulfillment.assignment_attempts.courier_id` |
 
 Secondary row behind **⋯ ещё**, and a chip appears in the primary row for each
 one that is set:
 
 | Filter | Control | Source |
 |---|---|---|
-| Мои заказы | toggle | `created_by_actor_id = me` — **not built — ADR 0039** |
+| Мои заказы | toggle | `created_by_actor_id` is **built** (ADR 0039, V0029), written on every order; the `= me` filter on the list query is not |
 | Только опаздывающие | toggle | derived, §2.7 |
 | С проблемой | toggle | `order_process_states.status` in the two failure states |
-| Требуется звонок | toggle | `callback_requested` — **not built — ADR 0039** |
-| Агрегатор | multi-select of bindings | **not built — ADR 0040** `marketplace_binding_id` |
+| Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter on the list query is not |
+| Агрегатор | multi-select of bindings | **built, not read by ordering — ADR 0040** `marketplace_binding_id` (V0038) |
 | Способ оплаты | multi-select | **not built — ADR 0013** |
 | Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **not built — ADR 0038** `fiscal.fiscal_documents.status` |
 
@@ -290,7 +313,7 @@ the rest; `Филиал` auto-hides for a single-location tenant.
 | 1 | selection | checkbox | — | §2.10; header checkbox selects the loaded page only, and says so |
 | 2 | severity rail | 4 px left border | derived §2.7 | transparent when normal, so rows stay aligned |
 | 3 | **№** | mono text + copy | `ordering.orders.public_order_number` | scoped per location per business date (`order_number_counters`), so it is short and repeats across branches — always render the branch beside it when several are in view. Under it: the severity caption (§2.7) and any external reference badge (§2.8) |
-| 4 | **Время** | time | `created_at` | second line: the promise — `→ 15:20` from **not built — ADR 0014** `delivery_plans.promised_delivery_end`, or `estimated_ready_at` for pickup |
+| 4 | **Время** | time | `created_at` | second line: the promise — `→ 15:20`. `ordering.orders.promised_at` is **built** (ADR 0036, V0023, written at checkout) but not yet read by the board query; `fulfillment.delivery_plans.promised_delivery_end` / `estimated_ready_at` are also **built, not read by ordering — ADR 0014** |
 | 5 | **Филиал** | text | `tenant.locations.display_name` | |
 | 6 | **Тип / канал** | icon pair + text | `fulfillment_mode`, `channel_code_snapshot`, `tenant.sales_channels.system_type` | one cell; the channel icon carries a `title` and an accessible name |
 | 7 | **Клиент** | text + masked phone | `order_customer_snapshots.display_name_encrypted`, `contact_encrypted` | §1.5. Guest orders (`guest_reference_hash` set) show **Гость** |
@@ -298,7 +321,7 @@ the rest; `Филиал` auto-hides for a single-location tenant.
 | 9 | **Сумма** | mono money | `total_minor`, `currency` | right-aligned |
 | 10 | **Оплата** | badge + method | `payment_status_projection`; method **not built — ADR 0013** | `NOT_REQUIRED` renders as **Наличными** once ADR 0013 lands, and as `—` before |
 | 11 | **Статус** | badge | `status` | §1.1 vocabulary; `AWAITING_APPROVAL` additionally shows the countdown to `approval_deadline_at` |
-| 12 | **Курьер** | name + shift dot | **not built — ADR 0014 / 0042** | `—` when unassigned; a hollow dot when the courier is off shift (§2.9) |
+| 12 | **Курьер** | name + shift dot | **built, not read by ordering — ADR 0014 / 0042** (`fulfillment.shipments.courier_id`, `fulfillment.couriers`, both built) | `—` when unassigned; a hollow dot when the courier is off shift (§2.9) |
 | 13 | ⋯ | overflow menu | — | §2.9 |
 
 Behind the picker: **Создал** (`created_by_actor_id`, ADR 0039), **Принял**
@@ -347,9 +370,20 @@ admin-chosen highlight colour. Match the threshold; refuse the colour. Severity
 colour is semantic and belongs to the design system — a tenant who picks green
 for "late" has broken every screen at once.
 
-**Inputs.** `promised_delivery_end` for delivery, `estimated_ready_at` for
-pickup and dine-in (both **not built — ADR 0014**), `now`, `status`, and a
-policy resolved through ADR 0030 at key `ordering.lateness`:
+**Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
+`ordering.lateness`. The promise itself is **built**, just not from the table
+this document originally expected: `ordering.orders.promised_at` (+
+`promise_basis`, `promise_prep_minutes`, `promise_travel_minutes`) is ADR
+0036's column (`V0023`), written once at checkout by `CheckoutOrderWriter` —
+`promised_at` is already the kitchen-plus-road figure for a delivery order and
+the kitchen figure alone for pickup and dine-in, so a separate
+`promised_delivery_end` / `estimated_ready_at` split is not needed for this
+purpose (`fulfillment.delivery_plans` carries its own copy of both, built by
+ADR 0014's `V0054`, for the dispatch board's separate reasons). What is
+missing is narrower than "the promise": neither `OrderQueryService` nor
+`OperationsOrderController` reads `promised_at` yet, so the board and the
+detail have nothing to compute severity from today, even though checkout has
+written a real promise on every order since `V0023`.
 
 ```
 ordering.lateness            (ADR 0030 document, per fulfilment mode)
@@ -403,7 +437,9 @@ four kinds of thing, in this order, and **says which one it matched**:
    keyed `normalized_hash`, which is deliberately not unique: several accounts
    may come back and the operator picks from masked name plus last-order date.
    Every lookup is a `SECURITY`-class ADR 0027 audit fact.
-3. **An aggregator's id** — **not built — ADR 0040**
+3. **An aggregator's id** — the table is **built, not read by ordering's
+   search — ADR 0040** (V0038), written by the marketplace intake
+   (`JdbcMarketplaceOrderIntake`):
    `ordering.order_external_references.reference_value_normalised`, matched
    across the tenant. Normalisation uppercases and strips whitespace, hyphens
    and a leading `#`, so an operator reading `YE-2291-04` off a courier's phone
@@ -582,11 +618,11 @@ operator needs to glance at while talking.
 | Branch | `tenant.locations.display_name` |
 | Status badge | `status` |
 | Severity caption | derived §2.7 |
-| Promise clock | `promised_delivery_end` / `estimated_ready_at` — **not built — ADR 0014**; live countdown, turning warning then danger |
+| Promise clock | `ordering.orders.promised_at` — **built** (ADR 0036, V0023), not yet read by the order detail; `fulfillment.delivery_plans.promised_delivery_end` / `estimated_ready_at` also **built, not read by ordering — ADR 0014**; live countdown, turning warning then danger |
 | Approval countdown | `approval_deadline_at`, only on `AWAITING_APPROVAL` |
 | Version | `version`, mono, small — support asks for it, and it is what `If-Match` carries |
 | Primary action | §3.11 table |
-| Ревизия N | **not built — ADR 0039** `current_revision`; a chip that opens §3.10 |
+| Ревизия N | **built — ADR 0039** (V0029) `current_revision`, read via `GET .../orders/{orderId}/revisions`; a chip that opens §3.10 |
 
 ### 3.4 Состав — the lines
 
@@ -626,19 +662,19 @@ reorder affordance for it is absent.
 | Сумма позиций | `subtotal_minor` | |
 | Скидка | `discount_minor` | expandable into `order_adjustments` where `adjustment_type IN ('ITEM_DISCOUNT','ORDER_DISCOUNT')`, each with `description_code`, `source_type`, `source_id`, `source_version` — which promotion, at which version |
 | Сборы | `fee_minor` | expandable into `adjustment_type = 'FEE'`, which is where packaging (the legacy `Посуда`) and the service charge live |
-| Доставка | **not built — ADR 0014/0037** `delivery_plans.customer_delivery_fee_minor` | shown as a separate line even though it arrives inside `fee_minor`, because it is the number a customer argues about |
+| Доставка | **built, not read by ordering — ADR 0014/0037** `delivery_plans.customer_delivery_fee_minor` | shown as a separate line even though it arrives inside `fee_minor`, because it is the number a customer argues about |
 | НДС (в сумме) | `tax_minor` | labelled as included — ADR 0018 prices are VAT-inclusive |
 | **Итого** | `total_minor` | |
-| Сдача с | **not built — ADR 0039** `cash_tendered_expected_minor` | plus the derived `tendered − total`; recomputed on every revision. It is an operational hint, never a payment transaction |
+| Сдача с | **built — ADR 0039** (V0029, `SET_CASH_TENDERED`) `cash_tendered_expected_minor` | plus the derived `tendered − total`; recomputed on every revision. It is an operational hint, never a payment transaction |
 
 Two figures Delever puts side by side and the external-logistics report depends
 on: **what the customer paid for delivery** and **what the provider billed us**
-(`fulfillment.delivery_quotes.price_minor` / the settled cost — **not built —
-ADR 0014**). Show both here, not only in IA 8.4, because the operator refunding
+(`fulfillment.delivery_quotes.price_minor` / the settled cost — **built, not
+read by ordering — ADR 0014**). Show both here, not only in IA 8.4, because the operator refunding
 a delivery fee needs to know which number they are giving away.
 
-**Externally priced orders.** When `pricing_authority = 'EXTERNAL'` (**not built
-— ADR 0040**) the whole panel is read-only and headed **Цены партнёра — HorecaOS
+**Externally priced orders.** When `pricing_authority = 'EXTERNAL'` (**built,
+not read by ordering — ADR 0040**, V0038) the whole panel is read-only and headed **Цены партнёра — HorecaOS
 их не пересчитывает**, sourced from `ordering.order_external_pricing`. If
 `arithmetic_verified` is false the panel carries a warning. Never silently show
 a partner's numbers in the same styling as our own.
@@ -654,7 +690,7 @@ Staff use all three.
 |---|---|---|
 | Комментарий клиента к заказу | customer → us | `order_customer_snapshots.delivery_instructions_encrypted` — built, reveal-gated |
 | Комментарий клиента к позиции | customer → kitchen | `order_lines.note_encrypted` — built, reveal-gated, §3.4 |
-| Комментарий кухне | operator → kitchen | **not built — ADR 0039** `SET_KITCHEN_NOTE` |
+| Комментарий кухне | operator → kitchen | **built — ADR 0039** `SET_KITCHEN_NOTE`, one of the three amendment commands actually carried out (`OrderAmendmentService`) |
 | Комментарий курьеру | operator → courier | **no owner** — see §11 |
 | Внутренняя заметка | operator → operator | **no owner** — see §11 |
 
@@ -673,7 +709,7 @@ group chat.
 | Можно связаться по заказу | `transactional_contact_allowed` — when false, the call and message affordances are absent and the panel says why |
 | История заказов | link to IA 5.2, plus an inline count and last-order date |
 | Происхождение | **not built — ADR 0039** `customer_accounts.origin` — an `OPERATOR` account is labelled **создан оператором**, has no consent, and shows no marketing affordance at all |
-| Требуется звонок | **not built — ADR 0039** `callback_requested`; cleared only by an operator, recording `callback_resolved_at` / `_by` |
+| Требуется звонок | **built — ADR 0039** (V0029) `callback_requested`; cleared only by an operator via `SET_CALLBACK_REQUESTED(false)`, which records `callback_resolved_at` / `_by` |
 | Анонимизирован | `anonymized_at` — §1.5 |
 
 ### 3.8 Адрес и доставка
@@ -684,12 +720,12 @@ group chat.
 | дом / квартира / подъезд / этаж / ориентир | structured fields **inside** `customer.addresses.encrypted_fields` (V0021 note) — decrypted and rendered as labelled fields, never as one string |
 | Координаты | `customer.addresses.latitude` / `longitude` — in clear |
 | Точность геокодирования | `customer.addresses.coordinate_source`; `NOT_GEOCODED` is legitimate here, not an error — a mahalla house described by its ориентир has no point, and the panel says **адрес по ориентиру** rather than showing a broken map |
-| Зона | **not built — ADR 0037** `delivery_fee_resolutions.zone_id` + the resolution's `outcome` and `reason_code` — the answer to "why did this cost 25 000" |
-| Расстояние | **not built — ADR 0037** `distance_meters`, `distance_mode` |
-| Обещано | **not built — ADR 0014** `promised_delivery_start/end` |
-| Курьер | **not built — ADR 0014** name, phone, vehicle; shift state from ADR 0042 `courier_shifts` |
-| Служба доставки | **not built — ADR 0014** `shipments.provider_type`, `external_shipment_id`, live status |
-| Код выдачи | **not built — ADR 0040** `order_handover_challenges.status` — `PENDING/VERIFIED/BYPASSED/FAILED/EXPIRED`. The expected value is **never** sent to the client; verification is server-side |
+| Зона | **built, not read by ordering — ADR 0037** `delivery_fee_resolutions.zone_id` + the resolution's `outcome` and `reason_code` — the answer to "why did this cost 25 000" |
+| Расстояние | **built, not read by ordering — ADR 0037** `distance_meters`, `distance_mode` |
+| Обещано | **built, not read by ordering** — `ordering.orders.promised_at` (ADR 0036, V0023) or `fulfillment.delivery_plans.promised_delivery_start/end` (ADR 0014, V0054) |
+| Курьер | **built, not read by ordering — ADR 0014** name, phone, vehicle; shift state from ADR 0042 `courier_shifts` (all built — see `couriers.md`) |
+| Служба доставки | **built, not read by ordering — ADR 0014** `shipments.provider_type`, `external_shipment_id`, live status |
+| Код выдачи | **built, not read by ordering — ADR 0040** (V0038) `order_handover_challenges.status` — `PENDING/VERIFIED/BYPASSED/FAILED/EXPIRED`. The expected value is **never** sent to the client; verification is server-side |
 
 A map is shown only when coordinates exist, and the legacy behaviour of opening
 Yandex Maps in a new tab (`addressOnMap` in `Order.detail.page.tsx`) is kept as
@@ -706,7 +742,7 @@ a secondary affordance, because couriers ask for a shareable link.
 | Способ | **not built — ADR 0013**; the registry is ADR 0038 §"tenant payment-method registry" |
 | Транзакции | **not built — ADR 0013** append-only transactions, each with provider, amount, time, external reference |
 | Возвраты | **not built — ADR 0013** |
-| Сдача | **not built — ADR 0039** `cash_tendered_expected_minor` |
+| Сдача | **built — ADR 0039** (V0029) `cash_tendered_expected_minor` |
 
 The legacy dashboard let an operator set `payment_status` and
 `payment_transaction_id` **by hand** from a dropdown (`updateOrderSchema`).
@@ -741,8 +777,8 @@ Render as parallel lanes, not one line (§1.2, Togora §2f):
 Коммерческий  ●─────●─────●─────○
               14:02  14:03 14:11  Готовится
               Принят Подтв. Кухня
-Кухня         ●─────○                    (ADR 0041, not built)
-Доставка      ○                          (ADR 0014, not built)
+Кухня         ●─────○                    (kitchen.tickets built — V0030 — not read here)
+Доставка      ○                          (fulfillment.shipments built — V0054 — not read here)
 ```
 
 Rules: completed stage = filled mark **with its timestamp printed underneath as
@@ -763,11 +799,15 @@ gap the panel says **пропущена запись N**, because hiding it hide
 подтверждён»*. Delever shows only the winner. Showing the loser is how two
 operators stop arguing about who did what.
 
-**Ревизии** — **not built — ADR 0039** `ordering.order_revisions`. One row per
-revision: number, source (`CHECKOUT | AMENDMENT`), the amendment that produced
-it, `created_by`, `created_at`, the five money figures, and the delta against
-its predecessor. Revision 1 is the checkout snapshot and is byte-identical
-forever.
+**Ревизии** — **built — ADR 0039** (V0029) `ordering.order_revisions`, served
+by `GET .../orders/{orderId}/revisions`. One row per revision: number, source
+(`CHECKOUT | AMENDMENT`), the amendment that produced it, `created_by`,
+`created_at`, the five money figures, and the delta against its predecessor.
+Revision 1 is the checkout snapshot and is byte-identical forever; every order
+in the platform already has one, backfilled by V0029 from its own stored
+totals. A second revision appears only once an amendment applies (§4.4), which
+today means one of the three non-financial commands — the seven that would
+actually change the lines or the money are still refused.
 
 Every read on this screen that involves lines or money is **revision-aware**.
 The default view is `current_revision`; a revision selector re-renders the
@@ -808,11 +848,13 @@ cooking the first.
 
 ### 3.12 Attribution
 
-**not built — ADR 0039**. `created_by_actor_type/id` — who entered the order;
-`accepted_by_actor_type/id` and `accepted_at` — who moved it to `CONFIRMED`.
-Written once, never overwritten: a leaderboard a later action can rewrite
-measures nothing. Machine principals appear as pseudo-operators (IA 7.5), so an
-auto-confirmed order shows **система**, not an empty cell.
+**Built — ADR 0039** (V0029). `created_by_actor_type/id` — who entered the
+order; `accepted_by_actor_type/id` and `accepted_at` — who moved it to
+`CONFIRMED`. Written once by `JdbcOrderStore` and the marketplace intake, and a
+trigger (`trg_orders_attribution_written_once`) refuses the rewrite a
+well-meant support fix would otherwise make: a leaderboard a later action can
+rewrite measures nothing. Machine principals appear as pseudo-operators
+(IA 7.5), so an auto-confirmed order shows **система**, not an empty cell.
 
 The legacy dashboard showed `Оператор: (Не указан)` in red italic on every
 self-service order, which trained staff to ignore the field. Show the channel
@@ -859,7 +901,7 @@ visible and explained.
 | **Принять** | `POST .../approval-decisions` `{decisionId, action:APPROVE, reasonCode?}` | `ORDER_APPROVE` | status ≠ `AWAITING_APPROVAL` | no |
 | **Отклонить** | same, `action:REJECT` | `ORDER_APPROVE` | status ≠ `AWAITING_APPROVAL` | yes — reason required |
 | **Продвинуть** | `POST .../state-actions` `{targetStatus, reasonCode}` + `If-Match` | `ORDER_ADVANCE` | the transition is not in the machine; `READY→FULFILLING` on a pickup order | no |
-| **Отменить** | `POST .../cancellations` `{reasonCode}` + `If-Match` | `ORDER_CANCEL` | status is `CONFIRMED` or later (**refused today**), or terminal | yes |
+| **Отменить** | `POST .../cancellations` `{reasonCode}` and, for the reasoned path, `{reasonId}` + `If-Match` | `ORDER_CANCEL` | `CONFIRMED` or later **without** a `reasonId` from the tenant's registry (§4.5 supplies one); terminal always | yes |
 | **Показать комментарий** | `GET .../lines/{lineId}/note?purpose=` | `CUSTOMER_PII_REVEAL` | no note | no |
 
 `decisionId` is client-supplied and stable across retries of one human decision,
@@ -869,7 +911,7 @@ a second click gives the same answer as the first rather than an error. The UI
 must render that honestly: **«Уже принят — Ш. Каримов, 14:03»**, not a generic
 success.
 
-### 4.4 Amendment (ADR 0039, not built)
+### 4.4 Amendment (ADR 0039, partial — three of ten commands)
 
 Ten commands, closed set. Each produces a **new immutable revision**; none edits
 a revision and none creates a second order.
@@ -883,11 +925,28 @@ a revision and none creates a second order.
 | `CHANGE_DELIVERY_ADDRESS` | Изменить адрес | address picker + map | reprice — the ADR 0037 zone fee may change · charge or refund the difference |
 | `CHANGE_FULFILLMENT_TIME` | Изменить время | now / scheduled | reprice if it crosses a price plane · re-evaluate the hold |
 | `CHANGE_CONTACT` | Изменить контакт | name, phone | none |
-| `SET_KITCHEN_NOTE` | Комментарий кухне | textarea | none |
-| `SET_CALLBACK_REQUESTED` | Требуется звонок | toggle | none |
-| `SET_CASH_TENDERED` | Сдача с | amount | none |
+| `SET_KITCHEN_NOTE` | Комментарий кухне | textarea | none — **built** |
+| `SET_CALLBACK_REQUESTED` | Требуется звонок | toggle | none — **built** |
+| `SET_CASH_TENDERED` | Сдача с | amount | none — **built** |
 
-Amendment lifecycle, and the UI state for each:
+**Three of the ten are built** — `SET_KITCHEN_NOTE`, `SET_CALLBACK_REQUESTED`
+and `SET_CASH_TENDERED` (`OrderAmendmentService`, `OperationsOrderController`,
+covered by `OrderAmendmentAndOutcomeTests`) — deliberately the three that move
+no money, so the revision machinery, the idempotency key, the open-amendment
+lock (`ux_order_amendment_open`) and the POS-export interlock (§3.11) are all
+exercised with nothing financial at risk. `POST .../amendments` proposes and,
+with `applyOnPrice` set, applies in the same call; `GET .../amendments` lists
+an order's amendments; `POST .../amendments/{id}/confirmation` records the
+customer's attestation. The other seven — every command that touches money,
+the basket or the address — are named in `ck_amendment_command_type` and
+refused by name (`AmendmentNotPermittedException`) rather than
+half-performed: each needs a consequence carried out in payment, inventory,
+fiscal and POS, and those modules are unbuilt.
+
+Amendment lifecycle, and the UI state for each — built for the three
+non-financial commands, which take `PRICED -> APPLIED` directly since none of
+them raises a total or needs an incremental payment; the states below in
+between exist for, and remain unexercised by, the seven financial commands:
 
 ```
 DRAFT -> PRICED
@@ -921,9 +980,9 @@ any non-terminal -> REJECTED | EXPIRED
 quote acceptance, no revision. The dialog reports which item and offers to
 remove it and re-price.
 
-### 4.5 Cancellation (ADR 0039, not built)
+### 4.5 Cancellation (ADR 0039, built)
 
-`POST /api/v1/operations/orders/{orderId}/cancellation`.
+`POST /api/v1/operations/orders/{orderId}/cancellations` (`OrderOutcomeService.cancel`).
 
 The dialog:
 
@@ -962,7 +1021,7 @@ it, the dialog says so and the cancellation still proceeds, raising a
 Bulk cancellation uses this same registry and the same approval thresholds,
 applied per item.
 
-### 4.6 Completion (ADR 0039, not built)
+### 4.6 Completion (ADR 0039, built)
 
 `POST .../completion`. Reason from the same registry with `kind = 'COMPLETION'`
 — «Доставлен», «Забрали заказ», «Доставлен сторонней службой», «Самовывоз
@@ -975,7 +1034,13 @@ otherwise, the action completes without a dialog. An operator confirming
 «Доставлен» on every delivery three hundred times a shift is a dialog that
 teaches people to click through dialogs.
 
-### 4.7 Courier (ADR 0014 / 0042, not built)
+### 4.7 Courier (ADR 0014 / 0042, tables built, not wired into order detail)
+
+`fulfillment.couriers`, `courier_shifts`, `assignment_attempts` and
+`shipments` all exist (V0040, V0054) and already back the dispatch board's own
+manual assign/unassign (`couriers.md` §3, `DispatchController`). Nothing below
+is blocked on a missing table any more; it is blocked on the order detail
+screen having no path to that controller yet.
 
 - **Назначить курьера** — searchable picker showing name, vehicle, current
   load, distance, and shift state. A courier who is **off shift** appears with a
@@ -1150,7 +1215,7 @@ in words, not a silent empty menu.
 | Field | Source / rule |
 |---|---|
 | Филиал | resolved from the zone, overridable. **Changing it rebuilds the cart** — `ordering.reject_cart_rebinding()` refuses to move a cart between locations, so the UI must warn that prices and availability change, and re-price |
-| Канал | fixed to the tenant's operator channel (`tenant.sales_channels`, `system_type` for the admin panel). Aggregator orders entered by hand set `entry_mode = 'MANUAL'` with no live binding — **not built — ADR 0040** |
+| Канал | fixed to the tenant's operator channel (`tenant.sales_channels`, `system_type` for the admin panel). Aggregator orders entered by hand set `entry_mode = 'MANUAL'` with no live binding — the column is **built** (ADR 0040, V0038), but this whole screen is not: see §11's order-creation gap |
 | Тип | `fulfillment_mode`, offered only where `tenant.channel_fulfillment_modes.enabled` |
 | Время | Сейчас / Ко времени. Out-of-hours shows the branch-resolution warning before it is committed, not after |
 | Оплата | from `tenant.channel_payment_methods` intersected with the ADR 0030 operator policy — which methods an operator may offer is configurable and is not the same set the storefront shows |
@@ -1298,10 +1363,11 @@ Read from `legacy-archive/qoida-dashboard/src`.
 | Capability | Grants |
 |---|---|
 | `order.read` | The board and the detail, at `LOCATION` scope |
-| `order.place` | New order (§5) |
+| `order.place` | New order (§5) — **the capability does not exist yet**: `Capability.ORDER_PLACE` is not in the registry, and neither `POST /api/v1/operations/orders` nor the customer-lookup endpoint beside it is built (ADR 0039), so an operator cannot take an order by phone today |
 | `order.approve` | Принять / Отклонить |
 | `order.advance` | The kitchen path |
-| `order.cancel` | Cancellation |
+| `order.cancel` | Cancellation — **built**, `Capability.ORDER_CANCEL` |
+| `order.amend` | Amendment (§4.4) — **built**, `Capability.ORDER_AMEND`, for the three non-financial commands |
 | `order.state.override` | Compensating transitions — **not yet declared by the state machine**, §0.2 |
 | `customer.pii.reveal` | Phone, address and note reveal, with a stated purpose |
 | `customer.read` | The customer panel and the lookup |
@@ -1318,38 +1384,45 @@ nobody who to ask.
 
 ## 11. Data the backend does not have yet
 
-Named precisely, with the owning decision. Everything not listed here exists in
-`V0022` or earlier and can be built against today.
+Named precisely, with the owning decision. Everything not listed here exists
+in `V0022` or earlier, or was added since — `V0023`'s order promise, `V0029`'s
+ADR 0039 revision/attribution/outcome spine, `V0030`'s kitchen tickets,
+`V0038`'s marketplace columns, `V0040`/`V0054`'s courier and delivery tables —
+and can be built against today. A growing share of what follows is not a
+missing table at all: it is a table that exists and is written, that the
+*ordering module's own board and detail queries* do not yet read. That state
+reads **built, not read by ordering** below, distinct from genuinely
+**not built**.
 
 | Missing | Owner | Blocks |
 |---|---|---|
-| `order_revisions`, `order_amendments`, `order_amendment_commands`, `order_lines.revision_from/to` | ADR 0039 | Every amendment; §4.4 |
-| `order_outcome_reasons` (+ `_texts`), `order_outcomes` | ADR 0039 | Cancellation and completion reasons, the write-off, the liability party; §4.5, §4.6 |
-| `orders.created_by_actor_type/id`, `accepted_by_actor_type/id`, `accepted_at` | ADR 0039 | Мои заказы filter, the Создал/Принял columns, operator leaderboards; §3.12 |
-| `orders.callback_requested`, `callback_resolved_at/by` | ADR 0039 | The callback flag and its filter |
-| `orders.cash_tendered_expected_minor` | ADR 0039 | Сдача; §3.5, §5.6 |
+| The seven financial amendment commands' consequences in payment, inventory, fiscal and POS — `ADD_LINES`, `CHANGE_LINE_QUANTITY`, `REMOVE_LINES`, `CHANGE_PAYMENT_METHOD`, `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME`, `CHANGE_CONTACT` | ADR 0039 (+ 0013, 0017, 0038, 0011/0012) | The financial half of amendment; §4.4. (`order_revisions`, `order_amendments`, `order_amendment_commands`, `order_lines.revision_from/to` and the three non-financial commands are **built** — V0029.) |
+| Operator-assisted order **creation** — `POST /api/v1/operations/orders` and the phone-lookup endpoint beside it (`POST /api/v1/operations/customer-lookups`); no `ORDER_PLACE` capability is declared either | ADR 0039 | The entire New order screen; §5. An operator cannot take an order by phone today — every other action in this document presumes an order that already exists |
+| Мои заказы filter (`created_by_actor_id = me` on the order-list query) and operator leaderboards (`reporting.fact_order` has no operator column) | ADR 0039 + 0043 | §2.4, §3.12. (`orders.created_by_actor_type/id`, `accepted_by_actor_type/id` and `accepted_at` are themselves **built** — V0029 — written by `JdbcOrderStore`.) |
+| Требуется звонок filter on the order-list query | ADR 0039 | §2.4. (The column, `SET_CALLBACK_REQUESTED` and its resolution are **built** — V0029.) |
 | `bulk_operations`, `bulk_operation_items` | ADR 0039 | Bulk result panel and safe re-run; §2.10 |
 | `customer_accounts.origin`, `created_by_actor_id` | ADR 0039 (extends 0015) | Operator-created customers and their marketing suppression; §5.3 |
-| Payment method on the order, transactions, refunds, invoice re-issue | ADR 0013 | The Оплата panel beyond the projection; §3.9, §4.9 |
+| Payment method on the order, transactions, refunds, invoice re-issue, reaching an **operations** screen | ADR 0013 is now Partial (Click/Payme adapters, the attempt state machine and the storefront checkout session are built — `POST /api/v1/storefront/.../payment-sessions`), but that is the customer-facing checkout path, not an operations panel; refunds are [ADR 0048](../adr/partial/0048-refunds-as-bookkeeping-and-the-order-remedy-model.md)'s scope now, itself Partial | The Оплата panel beyond the projection; §3.9, §4.9 |
 | `fiscal.fiscal_documents`, `_lines`, `_unit_marks` | ADR 0038 | The Фискализация panel, the fiscal chip, manual retry; §3.9, §4.10 |
-| `fulfillment.delivery_plans` (`promised_delivery_start/end`, `estimated_ready_at`, `customer_delivery_fee_minor`), `shipments`, `delivery_quotes`, `assignment_attempts` | ADR 0014 | The promise clock, **the whole late overlay**, courier assignment, provider dispatch, the quote-delta confirmation; §2.7, §3.8, §4.7 |
-| `fulfillment.delivery_fee_resolutions`, `service_zones` | ADR 0037 | Zone, distance, the fee explanation, address→branch resolution; §3.8, §5.4 |
-| `ordering.orders.origin`, `pricing_authority`, `entry_mode`, `marketplace_binding_id`; `order_external_references`; `order_external_pricing`; `order_handover_challenges` | ADR 0040 | Aggregator id search, externally priced orders, the handover code; §2.8, §3.5, §3.8 |
-| Kitchen ticket and station state | ADR 0041 | The production lane of the timeline; §1.2, §3.10 |
-| `courier_shifts` and shift enforcement on assignment | ADR 0042 | The off-shift courier state; §4.7 |
+| The order board and detail reading the promise, the shipment, the courier and the zone at all | ADR 0014 + 0036 + 0037 (nothing left to build; a join to write) | The promise clock, **the whole late overlay**, courier assignment, provider dispatch, the quote-delta confirmation; §2.7, §3.8, §4.7. (`ordering.orders.promised_at` — ADR 0036, V0023 — and `fulfillment.delivery_plans`, `shipments`, `delivery_quotes`, `assignment_attempts`, `service_zones`, `delivery_fee_resolutions` — ADR 0014/0037, V0025/V0032/V0054 — are all **built** and already serve the dispatch board; `OrderQueryService` and `OperationsOrderController` simply do not join to any of them yet.) |
+| The order board and detail reading the marketplace columns | ADR 0040 (nothing left to build; a join to write) | Aggregator id search, externally priced orders, the handover code; §2.8, §3.5, §3.8. (`ordering.orders.origin`, `pricing_authority`, `entry_mode`, `marketplace_binding_id`, `order_external_references`, `order_external_pricing` and `order_handover_challenges` are all **built** — V0038 — and written by `JdbcMarketplaceOrderIntake`.) |
+| The order timeline reading the kitchen ticket | ADR 0041 (nothing left to build; a join to write) | The production lane of the timeline; §1.2, §3.10. (`kitchen.tickets`/`ticket_events` are **built** — V0030 — and serve the kitchen board itself.) |
+| Shift enforcement on assignment | ADR 0042 | The off-shift courier state; §4.7. (`fulfillment.courier_shifts` is itself **built** — V0040.) |
 | `GET /operations/streams` and the `ORDER_QUEUE` / `ORDER_DETAIL` / `COUNTERS` channels | ADR 0045 | Live counts and live rows; §1.6 |
-| POS export driven at all — `order_process_states.POS_ORDER_EXPORT` is recognised by the schema and written by nothing | ADR 0011 / 0012 | Печать в POS, resend, the amendment interlock; §3.11, §4.8 |
+| POS export driven at all through `order_process_states.POS_ORDER_EXPORT`, which is recognised by the schema and written by nothing | ADR 0011 / 0012 | Печать в POS and resend, §3.11, §4.8. Not the amendment interlock (§3.11, §4.4) any more: `OrderAmendmentService` now reads the export's real state from `integration.pos_order_exports` via `PosExportStatus` instead of this dead column. |
 
 Three things that have **no owning decision at all**, and each is a genuine gap
 rather than an unbuilt one:
 
-1. **Lateness as a defined projection.** The promise (ADR 0014) and the
-   threshold (ADR 0030 key `ordering.lateness`) both have homes; the derived
-   `LATE` / `AT_RISK` levels, their precedence against `BLOCKED`, and the rule
-   that terminal orders are never flagged, do not. Togora's report already names
-   this: a "threat" is a computed comparison of a promise time, a live estimate
-   and a boundary, and HorecaOS has no such concept. §2.7 specifies it; something
-   must own it.
+1. **Lateness as a defined projection.** The promise (`ordering.orders.promised_at`
+   — ADR 0036, built — plus `fulfillment.delivery_plans`' own copy — ADR 0014,
+   also built) and the threshold (ADR 0030 key `ordering.lateness`) both have
+   homes; the derived `LATE` / `AT_RISK` levels, their precedence against
+   `BLOCKED`, and the rule that terminal orders are never flagged, do not.
+   Togora's report already names this: a "threat" is a computed comparison of a
+   promise time, a live estimate and a boundary, and the ordering module's own
+   query layer has no such concept yet, even though the promise it would read
+   has existed since V0023. §2.7 specifies it; something must own building it.
 2. **The operator→courier note and the internal operator note.** ADR 0039's
    command set is closed and carries only `SET_KITCHEN_NOTE`. The legacy
    dashboard had three note channels and staff use all three. Adding two
