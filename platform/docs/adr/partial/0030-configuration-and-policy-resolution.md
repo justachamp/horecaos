@@ -16,11 +16,17 @@
   the canonical precedence rule, but approval-policy rows remain an audit-owned
   snapshotting exception rather than a `PolicyResolver` consumer; their V0082 scope shape
   now matches the shared model exactly. V0012 moved order acceptance off its specialised
-  table. Not built: authoring.
-  No production code inserts or updates any of the three tables — the only rows ever
-  written are V0012's seeded order-acceptance policies — and there is no control-plane
-  read or write API, so an operator cannot set a configuration value or activate a policy
-  version at all. Caching is registered in `CacheRegistry` as `tenant.configuration` and
+  table. Not built: **configuration-value** authoring, and only that.
+  This line claimed until 2026-09-08 that neither half could be authored, and the
+  policy half of that was false from 2026-08-31: `tenancy.api.PolicyAuthor` and
+  `JdbcPolicyAuthor` are the versioned writer — never mutating a version in
+  place, moving only the `tenant.policy_current` pointer so a pinned resolution
+  stays stable for an order already accepted — and
+  `ordering.web.OrderAcceptancePolicyController` exposes it, so an operator can
+  activate an order-acceptance policy version today. What remains genuinely
+  unbuilt is the other table: nothing in production inserts or updates
+  `tenant.configuration_values`, and there is no control-plane API for one, so a
+  configuration value can still only be set by hand in SQL. Caching is registered in `CacheRegistry` as `tenant.configuration` and
   `tenant.policy_current` but no resolver is `@Cacheable` and no outbox-driven eviction
   exists.
   Authoring now exists for exactly one consumer as of 2026-08-31:

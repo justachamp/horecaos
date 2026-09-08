@@ -650,7 +650,7 @@ rather than from memory.
 
 ## References
 
-- [ADR 0006: Message retry, dead-letter, and replay operations](../partial/0006-message-retry-dead-letter-and-replay-operations.md)
+- [ADR 0006: Message retry, dead-letter, and replay operations](../built/0006-message-retry-dead-letter-and-replay-operations.md)
 - [ADR 0013: Payments, refunds, and service recovery compensation](../partial/0013-payment-refund-and-service-recovery-compensation.md)
 - [ADR 0024: Legacy data migration, cutover, and retirement](../partial/0024-legacy-data-migration-cutover-and-retirement.md)
 - [ADR 0027: Audit evidence and the approval model](../partial/0027-audit-evidence-and-approval-model.md)
