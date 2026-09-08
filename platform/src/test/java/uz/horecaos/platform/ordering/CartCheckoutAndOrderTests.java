@@ -376,7 +376,8 @@ class CartCheckoutAndOrderTests {
                         jdbc,
                         objectMapper,
                         new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper),
-                        clock));
+                        clock,
+                        (keyCode, scope) -> {}));
 
         carts = new CartService(
                 cartStore,

@@ -24,6 +24,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.tenancy.application.port.PolicyCurrentCache;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -40,12 +41,19 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
     private final ObjectMapper objectMapper;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final PolicyCurrentCache policyCurrentCache;
 
-    public JdbcPolicyAuthor(JdbcClient jdbc, ObjectMapper objectMapper, AuditRecorder audit, Clock clock) {
+    public JdbcPolicyAuthor(
+            JdbcClient jdbc,
+            ObjectMapper objectMapper,
+            AuditRecorder audit,
+            Clock clock,
+            PolicyCurrentCache policyCurrentCache) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.audit = audit;
         this.clock = clock;
+        this.policyCurrentCache = policyCurrentCache;
     }
 
     @Override
@@ -142,6 +150,13 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                 .param("now", at(now))
                 .param("activatedBy", authoredBy.subject())
                 .update();
+
+        // Right after the pointer moves, not before: an eviction that fires
+        // and is then rolled back with its transaction is merely a wasted
+        // cache miss, but one that fires before the write would let a
+        // concurrent reader repopulate the cache with the version this call
+        // is about to replace.
+        policyCurrentCache.evict(key.code(), scope);
 
         audit.record(AuditFact.of("tenant.policy.authored", AuditClass.BUSINESS)
                 .by(authoredBy)

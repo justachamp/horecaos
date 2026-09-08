@@ -16,7 +16,7 @@
 > production readiness moved out of this record: secrets to
 > [ADR 0028](../partial/0028-secrets-management-and-credential-lifecycle.md), audit and
 > approvals to [ADR 0027](../partial/0027-audit-evidence-and-approval-model.md), caching and
-> rate limiting to [ADR 0033](../partial/0033-caching-rate-limiting-and-shared-runtime-state.md),
+> rate limiting to [ADR 0033](../built/0033-caching-rate-limiting-and-shared-runtime-state.md),
 > and hosting, environments, and residency to
 > [ADR 0034](../partial/0034-hosting-environments-topology-and-data-residency.md).
 
@@ -656,5 +656,5 @@ rather than from memory.
 - [ADR 0027: Audit evidence and the approval model](../partial/0027-audit-evidence-and-approval-model.md)
 - [ADR 0028: Secrets management and credential lifecycle](../partial/0028-secrets-management-and-credential-lifecycle.md)
 - [ADR 0029: PII protection, envelope encryption, and key rotation](../partial/0029-pii-protection-envelope-encryption-and-key-rotation.md)
-- [ADR 0033: Caching, rate limiting, and shared runtime state](../partial/0033-caching-rate-limiting-and-shared-runtime-state.md)
+- [ADR 0033: Caching, rate limiting, and shared runtime state](../built/0033-caching-rate-limiting-and-shared-runtime-state.md)
 - [ADR 0034: Hosting environments, topology, and data residency](../partial/0034-hosting-environments-topology-and-data-residency.md)

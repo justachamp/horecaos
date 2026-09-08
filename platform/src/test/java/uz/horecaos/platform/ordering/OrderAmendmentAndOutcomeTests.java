@@ -249,7 +249,7 @@ class OrderAmendmentAndOutcomeTests {
         var policies = new OrderAcceptancePolicyService(
                 new JdbcPolicyResolver(jdbc, objectMapper),
                 new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                        jdbc, objectMapper, new JdbcAuditRecorder(jdbc, objectMapper), clock));
+                        jdbc, objectMapper, new JdbcAuditRecorder(jdbc, objectMapper), clock, (keyCode, scope) -> {}));
         var auditRecorder = new JdbcAuditRecorder(jdbc, objectMapper);
 
         // ADR 0046's real planner. No checkout in this suite names a payment

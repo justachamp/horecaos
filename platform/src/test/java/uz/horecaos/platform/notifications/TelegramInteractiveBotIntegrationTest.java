@@ -58,6 +58,7 @@ import uz.horecaos.platform.integration.camel.notification.NotificationRouteBuil
 import uz.horecaos.platform.integration.camel.notification.telegram.FakeTelegramBotApi;
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramChannelAdapter;
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramCircuitBreakers;
+import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
 import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
@@ -1036,7 +1037,9 @@ class TelegramInteractiveBotIntegrationTest {
                 Duration.ofHours(24),
                 "en");
         return new NotificationGateway(
-                List.of(adapter), new JdbcProviderInstallationLookup(jdbc, clock), secretResolver());
+                List.of(adapter),
+                new JdbcProviderInstallationLookup(jdbc, clock, new JdbcProviderEnvironmentLookup(jdbc)),
+                secretResolver());
     }
 
     private void activateAwaitingApprovalTemplate(UUID tenantId, UUID brandId) {

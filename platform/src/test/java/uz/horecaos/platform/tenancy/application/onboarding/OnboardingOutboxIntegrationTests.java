@@ -320,7 +320,7 @@ class OnboardingOutboxIntegrationTests {
         uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor(
                 JdbcClient jdbc, ObjectMapper objectMapper, AuditRecorder recorder, Clock clock) {
             return new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                    jdbc, objectMapper, recorder, clock);
+                    jdbc, objectMapper, recorder, clock, (keyCode, scope) -> {});
         }
 
         @Bean

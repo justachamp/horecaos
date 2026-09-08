@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -21,6 +22,18 @@ import uz.horecaos.platform.tenancy.domain.configuration.ScopedConfigurationRow;
  * <p>This class only fetches the candidate rows for a scope chain. Precedence
  * itself lives in {@link ScopeResolution} so it stays exhaustively testable
  * without a database.
+ *
+ * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.configuration}.
+ * No writer exists yet for {@code tenant.configuration_values} — authoring a
+ * scoped override is still an unbuilt tenant-administration act (see {@link
+ * uz.horecaos.platform.tenancy.web.ConfigurationController}'s class Javadoc)
+ * — so the registry's declared {@code ConfigurationChanged} invalidation has
+ * nothing to fire from today; the sixty-second TTL is the only thing bounding
+ * staleness, exactly the backstop ADR 0033's Decision describes for a missed
+ * invalidation. That is a real gap to close, not a design choice, the day a
+ * writer exists: whoever adds one must evict this cache the same way {@link
+ * uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor}
+ * evicts {@code tenant.policy_current}.
  */
 @Repository
 public class JdbcConfigurationResolver implements ConfigurationResolver {
@@ -46,6 +59,10 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
     }
 
     @Override
+    @Cacheable(
+            cacheNames = "tenant.configuration",
+            key = "#key.code() + '|' + #scope.type() + ':' + #scope.tenantId() "
+                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
     public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
         return ScopeResolution.resolve(key, scope, storedValues(key, scope));
     }

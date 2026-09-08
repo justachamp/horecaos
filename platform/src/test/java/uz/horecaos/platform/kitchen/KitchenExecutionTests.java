@@ -175,7 +175,7 @@ class KitchenExecutionTests {
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, objectMapper),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                                jdbc, objectMapper, audit, clock)),
+                                jdbc, objectMapper, audit, clock, (keyCode, scope) -> {})),
                 settlements,
                 audit,
                 event -> {},
@@ -799,7 +799,11 @@ class KitchenExecutionTests {
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
+                                jdbc,
+                                JsonMapper.builder().build(),
+                                audit,
+                                Clock.fixed(NOON, ZoneOffset.UTC),
+                                (keyCode, scope) -> {})),
                 settlements,
                 audit,
                 event -> {},
@@ -852,7 +856,11 @@ class KitchenExecutionTests {
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
+                                jdbc,
+                                JsonMapper.builder().build(),
+                                audit,
+                                Clock.fixed(NOON, ZoneOffset.UTC),
+                                (keyCode, scope) -> {})),
                 settlements,
                 audit,
                 event -> {},
@@ -911,7 +919,11 @@ class KitchenExecutionTests {
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
+                                jdbc,
+                                JsonMapper.builder().build(),
+                                audit,
+                                Clock.fixed(NOON, ZoneOffset.UTC),
+                                (keyCode, scope) -> {})),
                 settlements,
                 audit,
                 event -> {},

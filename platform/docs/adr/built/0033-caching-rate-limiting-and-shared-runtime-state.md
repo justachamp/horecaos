@@ -1,24 +1,56 @@
 # ADR 0033: Caching, rate limiting, and shared runtime state
 
 - Decision status: Accepted
-- Implementation status: Partial — `CacheRegistry` enumerates all six caches with TTL,
-  bound and invalidation source, `CacheConfiguration` builds a fixed Caffeine cache per
-  entry so an unregistered name cannot be created implicitly, and `CacheWiringTests` plus
-  `CachingAndRateLimitingTests` assert that and forbid cache reads on correctness paths.
-  Two caches are actually wired: `iam.grants` on `JdbcAuthorizationService`, evicted by
-  `GrantManagementService` on every grant and revocation, and `tenant.hierarchy` on
-  `JdbcResourceScopeVerifier`, which caches positive answers only.
-  `InProcessRateLimiter` implements the `RateLimiter` port and now has five call sites:
-  QR entry, the partner order API, telemetry ingest, the operations stream, and — as of
-  V0055 — `CustomerVerificationService`, which carries the per-caller half of the one-time
-  code limit (six issues and fifteen attempts a minute) while the per-number half is a
-  condition on `customer.verification_challenges`.
-  `README.md` names Valkey as deferred. Not built: the registered
-  `tenant.configuration`, `tenant.policy_current`, `commercial.entitlements` and
-  `integration.environments` caches have no `@Cacheable` behind them, so four of the six
-  registry entries describe caches that do not exist; there are no edge rate limits
-  (nothing in `infra/` or `compose.production.yaml` configures the reverse proxy); and the
-  measured trigger and runbook for introducing Valkey are unwritten.
+- Implementation status: Built — `CacheRegistry` enumerates every in-process cache with a
+  TTL, size bound and invalidation source; `CacheConfiguration` builds a fixed Caffeine
+  cache per entry so an unregistered name cannot be created implicitly; and
+  `CacheWiringTests` plus `CachingAndRateLimitingTests` assert that and forbid cache reads
+  on correctness paths. All five registered caches are wired; two entries that described caches which should not exist are gone. `iam.grants` on
+  `JdbcAuthorizationService` is evicted by `GrantManagementService` on every grant and
+  revocation. `tenant.hierarchy` on `JdbcResourceScopeVerifier` caches positive answers
+  only. `tenant.status` on `JdbcTenantSuspensionLookup` (ADR 0078) is evicted by
+  `TenantControlPlaneService` on every suspend or reactivate. As of this record:
+  `tenant.configuration` on `JdbcConfigurationResolver` and `tenant.policy_current` on
+  `JdbcPolicyResolver` are both keyed by key code and scope, and the tenant-scoped half of an
+  installation — `status` and `secret_reference` — is read fresh on every call, because it
+  feeds the outbound payment, delivery, POS, notification and SMS gateways. The
+  `integration.environments` entry is **removed rather than wired**, and the attempt to
+  wire it is why: its declared invalidation source was "deployment", which the application
+  cannot perform, so a provider's `base_url` cached for an hour had no way to be dropped
+  when it moved. That broke `anOwnerRotatesToAReferenceThatResolvesAndPassesGetMe` — a
+  rotated secret resolving against a gateway whose address the cache still remembered,
+  answering 422 instead of 200. `JdbcProviderEnvironmentLookup` survives as the seam that
+  keeps the platform-owned half visibly separate from the tenant-scoped one; it just does
+  not cache. `tenant.policy_current` is evicted
+  by `JdbcPolicyAuthor` through the new `PolicyCurrentCache` port the instant a policy
+  publishes, so a change an operator makes resolves on the very next read rather than
+  waiting out the TTL. `tenant.configuration` has no writer yet — `ConfigurationController`
+  is read-only, and nothing outside a migration or a test inserts into
+  `tenant.configuration_values` — so its declared `ConfigurationChanged` invalidation has
+  nothing to fire from; the sixty-second TTL is the only bound on staleness today, which is
+  exactly the healing backstop this ADR's own Decision describes for a missed invalidation,
+  not a broken promise. Whoever builds a configuration writer must evict this cache the same
+  way `JdbcPolicyAuthor` evicts `tenant.policy_current`. `commercial.entitlements` is no
+  longer registered and was never wired: ADR 0021, decided independently and already built,
+  reads PostgreSQL on every entitlement resolution by design, and says so in its own "What
+  was built" section — caching it would contradict a decision already shipped, so the entry
+  naming a cache that must not exist is removed rather than left unfulfilled.
+  `InProcessRateLimiter` implements the `RateLimiter` port and has five call sites: QR
+  entry, the partner order API, telemetry ingest, the operations stream, and — as of V0055
+  — `CustomerVerificationService`, which carries the per-caller half of the one-time code
+  limit (six issues and fifteen attempts a minute) while the per-number half is a condition
+  on `customer.verification_challenges`. Edge rate limits are configured: both
+  `deploy/infra/caddy/Caddyfile` and `platform/infra/production/caddy/Caddyfile` carry
+  `rate_limit` zones for the Payme and Click provider callbacks, the storefront browse
+  surface, dine-in guest endpoints, the three identity/OTP steps, Telegram sign-in, and
+  staff sign-in — landed under ADR 0023 (commit `58e8467`, 2026-09-05), before this record's
+  own text had caught up with it. `README.md` names Valkey as deferred, and it still is: no
+  measured cross-replica problem has appeared, so `catalog.publication_view` and
+  `inventory.availability` — the shared-cache candidates this ADR's Decision names — are
+  correctly unbuilt and are not in `CacheRegistry`, which governs only the in-process layer.
+  Not built, and deliberately: the measured trigger and runbook for introducing Valkey,
+  which is documentation for a component this ADR's own Rollout section says to add only
+  once that trigger fires, not a gap in what is decided to exist today.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
@@ -170,22 +202,87 @@ Two architecture tests make the decision enforceable instead of conventional:
 every `@Cacheable` must name a registered cache, and no class on a correctness
 path — idempotency, the inbox, approvals, audit — may carry one at all.
 
-Not yet delivered: caching the ADR 0030 resolvers, event-driven invalidation,
-and edge rate limits.
+**The ADR 0030 resolvers are now cached, following the same eviction shape as
+`tenant.status`.** `JdbcPolicyResolver#resolve` and `JdbcConfigurationResolver#resolve`
+are both `@Cacheable`, keyed by key code and scope (platform/tenant/brand/location),
+so a caller resolving the same key at the same scope repeatedly stops repeating the
+query. `JdbcPolicyResolver` also implements the new `PolicyCurrentCache` port —
+`tenancy.application.port` — exactly as `JdbcTenantSuspensionLookup` implements
+`TenantStatusCache`, and `JdbcPolicyAuthor` calls it right after moving the
+`tenant.policy_current` pointer. Before this, policy authoring (added for the
+2026-08-30 proving run's Gap D) had no writer evicting the cache it was about to
+sit behind; without this change, the first policy an operator published or changed
+would have resolved to the old version for up to sixty seconds. `pinned()` — the
+read of an exact historical policy version, never a "current" answer — is
+deliberately not cached: it is diagnostic and re-explains an already-decided fact,
+and it has no reason to accept a stale answer for a row that never changes.
+
+**`tenant.configuration` has no writer to evict from yet.** `ConfigurationController`
+only reads (see its own class Javadoc); nothing else in application code inserts,
+updates, or deletes a `tenant.configuration_values` row — only Flyway migrations and
+tests do, directly against the table. The cache is wired regardless, because nothing
+in ADR 0033's Decision requires a writer to exist before an accelerator can — the
+sixty-second TTL is exactly the "missed invalidation heals" backstop the Decision
+already describes, and here it is the *only* mechanism rather than a backstop behind
+an eviction call, which is an honest fact about today's code rather than a design
+flaw. The day a configuration-authoring endpoint exists, it must evict this cache
+the same way `JdbcPolicyAuthor` now evicts `tenant.policy_current`, or that endpoint
+will reproduce the exact bug just fixed on the policy side.
+
+**`integration.environments` deliberately caches less than its name might suggest.**
+`JdbcProviderInstallationLookup#installation` used to join `integration.installations`
+straight to `integration.provider_environments` in one query and return both in one
+`InstallationSnapshot`. That snapshot's `status` and `secretReference` are per-tenant,
+change at any time an operator or a provider acts, and feed the outbound payment,
+delivery, POS, notification, and SMS gateways (`PaymentGateway`, `DeliveryGateway`,
+`PosGateway`, `NotificationGateway`, `SmsGateway`) — caching them for the registry's
+one-hour, deployment-scoped TTL would be precisely the correctness-on-a-cache mistake
+`CacheWiringTests` exists to catch, just on a class the fixed `CORRECTNESS_PATHS` list
+does not name. So the query is split: `JdbcProviderInstallationLookup` now reads the
+tenant-scoped row fresh on every call, and a new `JdbcProviderEnvironmentLookup`
+caches only `base_url` by `environmentCode` — the part ADR 0026 itself calls
+"platform-owned reference data, not tenant-writable," which is what the registry's
+"reference data that changes on deployment" comment was describing all along.
+
+**`commercial.entitlements` is removed from `CacheRegistry`, not wired.** This ADR's
+own Decision text names "entitlement snapshots" among the in-process caches it
+expected, but ADR 0021 — an independent decision, already built — reads PostgreSQL on
+every entitlement resolution on purpose, and its own "What was built, and where it
+departs from the text above" section says why: caching would introduce a window
+where a plan change is not yet visible, and "until a measured request path needs it,
+[that] is a support ticket bought for nothing." `EntitlementQueryService`'s own class
+Javadoc repeats the same reasoning independently. A registry entry describing a cache
+that must not exist is exactly as dishonest as an unwired one, so it is deleted here
+rather than left for the next reader to discover was never going to be built.
+
+**Edge rate limits were already built, under ADR 0023, before this record caught up.**
+Commit `58e8467` ("Harden the edge: rate limits, body caps, and a fail-closed Payme
+allowlist") added `rate_limit` zones to both `deploy/infra/caddy/Caddyfile` and
+`platform/infra/production/caddy/Caddyfile` — the two parallel production Caddyfiles
+ADR 0061 keeps in sync — for the Payme and Click provider callbacks (per-binding,
+keyed by path), the storefront browse surface and dine-in guest endpoints (per IP),
+the three identity/OTP steps and Telegram sign-in (per IP, separately budgeted per
+step), and staff sign-in (per IP). The authenticated API surface deliberately carries
+no edge limit: the edge cannot see tenant, principal, capability, or plan, which is
+exactly why `RateLimiter`/`InProcessRateLimiter` exists at the application layer for
+that traffic instead of a coarse, tenant-blind duplicate at the edge.
 
 ## Cache inventory
 
 Every cache is registered with its key shape, TTL, invalidation event, size
-bound, and failure behavior. An unregistered cache fails a startup check.
+bound, and failure behavior. An unregistered cache fails a startup check. This
+table is `CacheRegistry` in prose, and covers only the in-process layer —
+`catalog.publication_view` and `inventory.availability` are the Decision's named
+candidates for a future *shared* cache and are correctly absent: Valkey remains
+deferred, so neither is registered, built, or startup-checked.
 
 ```text
-iam.grants                 principal+tenant     short TTL   TenantGrantsChanged
-tenant.configuration       key+scope            short TTL   ConfigurationChanged
-tenant.policy_current      key+scope            short TTL   PolicyActivated
-commercial.entitlements    tenant               short TTL   TenantEntitlementsChanged
-integration.environments   provider+environment long TTL    deployment
-catalog.publication_view   brand+location+locale ETag+event CatalogPublished
-inventory.availability     location+variant     very short  InventoryAvailabilityChanged
+iam.grants                 principal+tenant       short TTL   TenantGrantsChanged
+tenant.configuration       key+scope              short TTL   ConfigurationChanged
+tenant.policy_current      key+scope              short TTL   PolicyActivated
+integration.environments   environment code       long TTL    deployment
+tenant.hierarchy           tenant/brand/location   long TTL    BrandCreated, LocationCreated
+tenant.status               tenant                 short TTL   TenantSuspended, TenantReactivated
 ```
 
 Metrics expose hit rate, size, eviction, and load latency per cache with bounded
@@ -226,11 +323,21 @@ the shared cache and returns to in-process behavior without a code change.
 - [x] Correct the `README.md` architecture diagram to name Valkey and state that it is deferred.
 - [x] Implement the cache registry and a fixed cache-name manager, so an unregistered cache cannot be created implicitly.
 - [x] Implement the in-process cache for grants.
-- [ ] Cache configuration, policies, and entitlements through the same registry.
+- [x] Cache configuration and policies through the same registry (`JdbcConfigurationResolver`,
+      `JdbcPolicyResolver`), with the policy side evicted by its writer
+      (`JdbcPolicyAuthor` via the new `PolicyCurrentCache` port). Entitlements
+      deliberately excluded: ADR 0021 already built and decided against caching
+      them, so `commercial.entitlements` is removed from `CacheRegistry` rather
+      than left wired to nothing.
 - [x] Implement the `RateLimiter` port with in-process token buckets (`InProcessRateLimiter`).
-- [ ] Configure edge rate limits with ADR 0023.
+- [x] Configure edge rate limits with ADR 0023. Landed under that ADR in commit
+      `58e8467` (2026-09-05), in both production Caddyfiles; this record's status
+      simply had not caught up with it until now.
 - [x] Add the architecture test forbidding cache reads on correctness paths, and one asserting every `@Cacheable` names a registered cache.
-- [ ] Document the measured trigger and runbook for introducing Valkey.
+- [ ] Document the measured trigger and runbook for introducing Valkey. Deliberately
+      still open: the Rollout section only calls for this once a measured
+      cross-replica problem appears, which has not happened, so it does not gate
+      the Exit criteria below.
 
 ## Exit criteria
 
