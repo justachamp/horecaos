@@ -26,6 +26,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -87,10 +88,13 @@ class CatalogQueryServiceTests {
         insertTenantAndBrand(OTHER_TENANT, OTHER_BRAND, "query-other-tenant", "OTHER-MAIN");
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
         authoring = new CatalogAuthoringService(
                 store,
                 new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
                         jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
                 Clock.systemUTC());
         query = new CatalogQueryService(store, LOCALE);
     }

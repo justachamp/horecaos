@@ -188,8 +188,9 @@ class ManualDispatchServiceTests {
         assertThat(assigned.planStatus()).isEqualTo(PlanStatus.ASSIGNED);
 
         // One fact for the assign, one for the unassign — both audited, neither silent.
-        assertThat(audit.facts).extracting(AuditFact::actionCode).containsExactly(
-                "fulfillment.dispatch.assign", "fulfillment.dispatch.unassign");
+        assertThat(audit.facts)
+                .extracting(AuditFact::actionCode)
+                .containsExactly("fulfillment.dispatch.assign", "fulfillment.dispatch.unassign");
     }
 
     @Test
