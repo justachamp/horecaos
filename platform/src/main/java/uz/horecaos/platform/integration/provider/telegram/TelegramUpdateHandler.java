@@ -49,6 +49,8 @@ import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.RejectReasonDirectory;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
@@ -1256,7 +1258,11 @@ public class TelegramUpdateHandler {
      * before anything is resolved or created, exactly the order ADR 0063
      * states them in: a forwarded stranger's contact is refused first, and a
      * non-matching own number is refused second, without either check ever
-     * touching the identity path.
+     * touching the identity path. A third, narrower refusal can still surface
+     * once the identity path is reached: a number that clears the configured
+     * pattern but fails {@code PhoneNumber}'s own hard Uzbek-mobile floor is
+     * caught there too and answered exactly the same polite way, never left
+     * to escape this method as an unhandled exception.
      */
     private void handleContactShare(
             WebhookInstallation installation, Map<String, Object> contact, Map<String, Object> message) {
@@ -1345,8 +1351,41 @@ public class TelegramUpdateHandler {
             return;
         }
 
-        CustomerTelegramSignIn.Resolved resolved =
-                telegramSignIn.resolveAccount(link.tenantId(), link.brandId(), phone);
+        CustomerTelegramSignIn.Resolved resolved;
+        try {
+            resolved = telegramSignIn.resolveAccount(link.tenantId(), link.brandId(), phone);
+        } catch (ApiException refused) {
+            if (refused.errorCode() != ErrorCode.VALIDATION_FAILED) {
+                // Not a refusal this method understands — a genuine failure
+                // somewhere downstream (a database or provider problem), not
+                // something the customer did. Rethrown rather than answered
+                // politely, so it is handled exactly like every other
+                // unexpected failure on this webhook: logged as a failure by
+                // the caller, not dressed up as the customer's mistake.
+                throw refused;
+            }
+            // The number cleared this brand's own configured pattern above,
+            // but PhoneNumber.requireDeliverableMobile — resolveAccount's own
+            // hard floor — still refused it: a brand's pattern only narrows,
+            // it can never widen past what the platform will actually send
+            // to (see TelegramAuthSignInIntegrationTest
+            // #aBrandScopedPatternNarrowsThisBotAndCannotWidenPastPhoneNumber).
+            // Same polite, name-nothing refusal the pattern check above gives
+            // — the customer cannot tell which of the two checks caught their
+            // number, and nothing here reveals that a different brand's
+            // configuration would have accepted it.
+            log.warn(
+                    "Telegram share-contact sign-in refused an undeliverable phone number for tenant {} brand {}",
+                    link.tenantId(),
+                    link.brandId());
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    null,
+                    TelegramBotMessages.authPhoneNotAllowed(defaultLocale),
+                    TelegramReplyKeyboard.remove());
+            return;
+        }
 
         UUID bindingId = customerLinks.link(
                 link.tenantId(),

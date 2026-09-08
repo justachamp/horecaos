@@ -46,6 +46,13 @@ public interface CustomerTelegramSignIn {
      * @param rawPhone the E.164-ish number Telegram's {@code contact} payload
      *                 carried, already passed the own-contact and configured
      *                 allowed-pattern checks by the caller
+     * @throws uz.horecaos.platform.web.api.ApiException with
+     *         {@link uz.horecaos.platform.web.api.ErrorCode#VALIDATION_FAILED}
+     *         when the number still fails the platform's own hard
+     *         Uzbek-mobile floor — a configured allowed-pattern narrows what a
+     *         brand's bot accepts, but can never widen past this. The caller
+     *         is expected to treat that one code as a customer-facing refusal
+     *         and anything else as a failure to propagate, not answer kindly.
      */
     Resolved resolveAccount(UUID tenantId, UUID brandId, String rawPhone);
 
