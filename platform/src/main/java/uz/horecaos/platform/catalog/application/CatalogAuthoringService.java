@@ -19,6 +19,10 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.commercial.api.UsageMeter;
+import uz.horecaos.platform.commercial.api.UsageMovement;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -30,17 +34,36 @@ import uz.horecaos.platform.media.api.MediaAssetId;
  * and a menu only changes when {@link CatalogPublicationService} takes a snapshot
  * — which is what lets an operator edit a live brand's catalog in the middle of
  * service without anything changing under the customers currently ordering.
+ *
+ * <p>{@link #createProduct} is also this ADR 0021 wave's one enforced quantity
+ * limit: {@code catalog.products.max_count} is checked with {@link
+ * EntitlementService#require} before the insert, the same "before mutation"
+ * shape ADR 0021's own enforcement semantics describe and {@code
+ * CampaignService#start} already demonstrates for a feature gate. {@code
+ * commercial} does not import {@code catalog}, so — unlike {@code tenancy},
+ * which {@code commercial} already depends on for its ADR 0030 configuration
+ * lookup — calling the port here creates no module cycle, which is why this
+ * key is the one enforced synchronously rather than metered through a listener.
  */
 @Service
 public class CatalogAuthoringService {
 
     private final JdbcCatalogStore store;
     private final AuditRecorder audit;
+    private final EntitlementService entitlements;
+    private final UsageMeter usage;
     private final Clock clock;
 
-    public CatalogAuthoringService(JdbcCatalogStore store, AuditRecorder audit, Clock clock) {
+    public CatalogAuthoringService(
+            JdbcCatalogStore store,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            UsageMeter usage,
+            Clock clock) {
         this.store = store;
         this.audit = audit;
+        this.entitlements = entitlements;
+        this.usage = usage;
         this.clock = clock;
     }
 
@@ -73,10 +96,26 @@ public class CatalogAuthoringService {
             FiscalClassification fiscal,
             @Nullable UUID actorId) {
 
+        // Before the insert, per ADR 0021's own enforcement semantics ("reject a
+        // capacity-increasing action before mutation"). Under this wave's
+        // meter-only default this never throws; once a plan sets a real limit
+        // under HARD, a tenant that is over is refused here rather than after a
+        // product row already exists that the response then has to pretend was
+        // never created.
+        entitlements.require(tenantId, EntitlementKeys.CATALOG_PRODUCTS_MAX_COUNT, 1);
+
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
         store.insertProduct(productId, tenantId, brandId, code, Status.ACTIVE);
+        usage.record(new UsageMovement(
+                tenantId,
+                EntitlementKeys.CATALOG_PRODUCTS_MAX_COUNT,
+                1,
+                "catalog.ProductCreated",
+                productId.toString(),
+                clock.instant(),
+                Map.of("brand_id", brandId.toString())));
         store.insertVariant(
                 variantId,
                 tenantId,
