@@ -45,6 +45,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.AuditArchiveStore;
+import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionArchiver;
 import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionManager;
 import uz.horecaos.platform.configuration.DatabasePrivilegeGuard;
 import uz.horecaos.platform.reporting.infrastructure.persistence.ReportingPartitionManager;
@@ -446,6 +448,79 @@ class DatabasePrivilegeTests {
     }
 
     /**
+     * ADR 0027 archival, run under the same restricted connection as everything
+     * above rather than the owner's — the grants V0188 adds are only real if the
+     * role they name can actually use them.
+     */
+    @Test
+    @DisplayName("V0188: the archival sweep runs end to end under the application role")
+    void theArchivalSweepRunsUnderTheApplicationRole() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC);
+
+        AuditPartitionManager partitions = new AuditPartitionManager(application, clock);
+        assertThat(partitions.ensurePartition(2024)).isTrue();
+
+        application.sql("""
+                        INSERT INTO audit.audit_events (
+                            id, audit_class, action_code, actor_type, actor_subject,
+                            scope_type, outcome, correlation_id, occurred_at, recorded_at)
+                        VALUES (
+                            gen_random_uuid(), 'BUSINESS', 'tenant.created', 'SYSTEM_JOB', 'fixture',
+                            'PLATFORM', 'SUCCEEDED', 'fixture-correlation',
+                            '2024-05-01T00:00:00Z', '2024-05-01T00:00:00Z')
+                        """).update();
+
+        AuditPartitionArchiver archiver = new AuditPartitionArchiver(application, canned("test-bucket"), clock);
+
+        assertThat(archiver.archiveOnce())
+                .as("SELECT on audit_events, and INSERT/SELECT/UPDATE on partition_archives, must "
+                        + "be enough for the whole pass — archive, verify, and the guarded drop. "
+                        + "Not asserted exactly: this class shares one database across test methods "
+                        + "and an earlier one may leave its own closed, empty partition standing")
+                .contains(2024);
+        assertThat(privilege("audit.partition_archives", "SELECT")).isTrue();
+        assertThat(privilege("audit.partition_archives", "INSERT")).isTrue();
+        assertThat(privilege("audit.partition_archives", "UPDATE")).isTrue();
+        assertThat(privilege("audit.partition_archives", "DELETE"))
+                .as("a row here only ever advances; the application never deletes one")
+                .isFalse();
+    }
+
+    /**
+     * The one statement in this whole feature that destroys something, refused by
+     * the database itself rather than by the caller's own discipline.
+     */
+    @Test
+    @DisplayName("V0188: drop_archived_partition refuses a year with no VERIFIED archive")
+    void theArchivalDropRefusesAYearThatWasNeverVerified() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC);
+        // A year of its own — not 2024, which theArchivalSweepRunsUnderTheApplicationRole
+        // already carries all the way to DROPPED, and drop_archived_partition
+        // answers a year already dropped with a quiet false rather than this
+        // test's exception.
+        new AuditPartitionManager(application, clock).ensurePartition(2025);
+
+        assertThatThrownBy(() -> application
+                        .sql("SELECT audit.drop_archived_partition(:year)")
+                        .param("year", 2025)
+                        .query(Boolean.class)
+                        .single())
+                .as("no row in audit.partition_archives claims year 2025 is VERIFIED")
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .hasMessageContaining("VERIFIED");
+
+        assertThat(tableExists("audit", "audit_events_2025"))
+                .as("refused, not merely logged — the partition is still there")
+                .isTrue();
+    }
+
+    private static AuditArchiveStore canned(String bucket) {
+        return (key, content, retainUntil) ->
+                new AuditArchiveStore.ArchiveReceipt(bucket, key, content.length, "test-sha256", retainUntil);
+    }
+
+    /**
      * The sweep is the one thing here that destroys personal data on purpose, so
      * what it refuses is the interesting half.
      *
@@ -523,6 +598,7 @@ class DatabasePrivilegeTests {
     void theMaintenanceFunctionsAreNarrowGrantsAndNotBackDoors() {
         List<String> functions = List.of(
                 "audit.ensure_event_partition(integer)",
+                "audit.drop_archived_partition(integer)",
                 "fulfillment.ensure_track_partition(date)",
                 "fulfillment.sweep_expired_track_partitions(integer, boolean)",
                 "reporting.ensure_fact_partition(text, date)");
@@ -618,9 +694,10 @@ class DatabasePrivilegeTests {
                         + "broken rather than satisfied")
                 .isNotEmpty();
         assertThat(definers.stream().map(row -> (String) row.get("signature")))
-                .as("the four the application may call must be among them")
+                .as("the ones the application may call must be among them")
                 .contains(
                         "audit.ensure_event_partition(integer)",
+                        "audit.drop_archived_partition(integer)",
                         "fulfillment.ensure_track_partition(date)",
                         "fulfillment.sweep_expired_track_partitions(integer,boolean)",
                         "reporting.ensure_fact_partition(text,date)");

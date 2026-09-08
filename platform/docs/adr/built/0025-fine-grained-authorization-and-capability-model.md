@@ -283,5 +283,5 @@ enforcement, and no authorization decision depends on a role name string.
 
 - [ADR 0003: Keycloak tenant authorization](../built/0003-keycloak-tenant-authorization.md)
 - [ADR 0021: SaaS plans, entitlements, and usage metering](../partial/0021-saas-plans-entitlements-and-usage-metering.md)
-- [ADR 0027: Audit evidence and approval model](../partial/0027-audit-evidence-and-approval-model.md)
+- [ADR 0027: Audit evidence and approval model](../built/0027-audit-evidence-and-approval-model.md)
 - [ADR 0049: Non-staff principal authorization](../built/0049-non-staff-principal-authorization.md)

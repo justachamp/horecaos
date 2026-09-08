@@ -143,10 +143,12 @@ public final class ConfigurationKeys {
      * ten years for both classes" — this key and {@link
      * #AUDIT_BUSINESS_RETENTION_DAYS} are that answer. 3,653 days is ten
      * Gregorian years counted from a non-leap 1 January, matching how a legal
-     * retention period is normally quoted. Registering the period is not the
-     * same as enforcing it: nothing in this build reads either key yet, and
-     * {@code AuditPartitionManager} still only rolls partitions forward, never
-     * drops or archives one — see ADR 0027's own Implementation notes.
+     * retention period is normally quoted. {@code AuditPartitionArchiver}
+     * reads this key — the longer of the two, taken with {@link
+     * #AUDIT_BUSINESS_RETENTION_DAYS} — to compute the retention lock on a
+     * closed partition's archive object before moving it to protected storage
+     * and dropping the live partition; see ADR 0027's own Implementation
+     * notes.
      */
     public static final ConfigurationKey<Integer> AUDIT_SECURITY_RETENTION_DAYS = ConfigurationKey.of(
                     "audit.security_retention_days", Integer.class)
@@ -154,7 +156,8 @@ public final class ConfigurationKeys {
             .ownedBy("audit")
             .settableAt(ScopeType.PLATFORM)
             .describedAs("Days a SECURITY-class audit event is retained before archival. "
-                    + "Defaults to ten years. Registered but not yet enforced: no sweep reads it.")
+                    + "Defaults to ten years. Read by AuditPartitionArchiver when it locks a "
+                    + "closed partition's archive object.")
             .build();
 
     /**
@@ -171,7 +174,8 @@ public final class ConfigurationKeys {
             .ownedBy("audit")
             .settableAt(ScopeType.PLATFORM)
             .describedAs("Days a BUSINESS-class audit event is retained before archival. "
-                    + "Defaults to ten years. Registered but not yet enforced: no sweep reads it.")
+                    + "Defaults to ten years. Read by AuditPartitionArchiver when it locks a "
+                    + "closed partition's archive object.")
             .build();
 
     /**

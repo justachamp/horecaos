@@ -99,7 +99,7 @@ re-implement any of them locally.
   `provider_binding_id` always means that row. No module keeps a private
   provider credential, mapping, or configuration table.
 - **Audit** is an append-only fact written in the same transaction as the change
-  it describes, per [ADR 0027](docs/adr/partial/0027-audit-evidence-and-approval-model.md).
+  it describes, per [ADR 0027](docs/adr/built/0027-audit-evidence-and-approval-model.md).
   Maker-checker uses the one shared approval model.
 - **Secrets** live only in the ADR 0028 manager. The database stores a reference.
 - **Personal data** is classified and encrypted per [ADR 0029](docs/adr/partial/0029-pii-protection-envelope-encryption-and-key-rotation.md),

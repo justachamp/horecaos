@@ -15,7 +15,7 @@
 > **Scope narrowed 2026-08-20.** Controls that later ADRs need long before
 > production readiness moved out of this record: secrets to
 > [ADR 0028](../partial/0028-secrets-management-and-credential-lifecycle.md), audit and
-> approvals to [ADR 0027](../partial/0027-audit-evidence-and-approval-model.md), caching and
+> approvals to [ADR 0027](../built/0027-audit-evidence-and-approval-model.md), caching and
 > rate limiting to [ADR 0033](../built/0033-caching-rate-limiting-and-shared-runtime-state.md),
 > and hosting, environments, and residency to
 > [ADR 0034](../partial/0034-hosting-environments-topology-and-data-residency.md).
@@ -653,7 +653,7 @@ rather than from memory.
 - [ADR 0006: Message retry, dead-letter, and replay operations](../built/0006-message-retry-dead-letter-and-replay-operations.md)
 - [ADR 0013: Payments, refunds, and service recovery compensation](../partial/0013-payment-refund-and-service-recovery-compensation.md)
 - [ADR 0024: Legacy data migration, cutover, and retirement](../partial/0024-legacy-data-migration-cutover-and-retirement.md)
-- [ADR 0027: Audit evidence and the approval model](../partial/0027-audit-evidence-and-approval-model.md)
+- [ADR 0027: Audit evidence and the approval model](../built/0027-audit-evidence-and-approval-model.md)
 - [ADR 0028: Secrets management and credential lifecycle](../partial/0028-secrets-management-and-credential-lifecycle.md)
 - [ADR 0029: PII protection, envelope encryption, and key rotation](../partial/0029-pii-protection-envelope-encryption-and-key-rotation.md)
 - [ADR 0033: Caching, rate limiting, and shared runtime state](../built/0033-caching-rate-limiting-and-shared-runtime-state.md)

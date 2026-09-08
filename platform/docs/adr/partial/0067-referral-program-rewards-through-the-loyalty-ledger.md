@@ -480,7 +480,7 @@ order at the brand cannot redeem a friend's code at all.
   mechanics" open input this ADR resolves.
 - [ADR 0025](../built/0025-fine-grained-authorization-and-capability-model.md)
   — `REFERRAL_READ` and `REFERRAL_POLICY_MANAGE`.
-- [ADR 0027](../partial/0027-audit-evidence-and-approval-model.md) — why a
+- [ADR 0027](../built/0027-audit-evidence-and-approval-model.md) — why a
   referral credit needs no separate audit fact: the ledger entry is the
   evidence.
 - [ADR 0029](../partial/0029-pii-protection-envelope-encryption-and-key-rotation.md)

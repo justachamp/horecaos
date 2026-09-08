@@ -500,7 +500,7 @@ settlement import calls the existing `recordVerification`.
 - [ADR 0013: Payment, refund, and service-recovery compensation](../partial/0013-payment-refund-and-service-recovery-compensation.md) — superseded here on refunds and remedies; current on the provider port, the payment state machine, uncertainty resolution and the som/tiyin boundary
 - [ADR 0046: Loyalty points and split tender](../partial/0046-loyalty-points-and-split-tender.md) — the settlement, the tenders, and the cap this decision borrows rather than reimplements
 - [ADR 0018: Deterministic pricing, promotions, taxes, and quotes](../partial/0018-deterministic-pricing-promotions-taxes-and-quotes.md) — owns what a future discount is worth against a cart
-- [ADR 0027: Audit evidence and approval model](../partial/0027-audit-evidence-and-approval-model.md) — the approval threshold and the immutable facts
+- [ADR 0027: Audit evidence and approval model](../built/0027-audit-evidence-and-approval-model.md) — the approval threshold and the immutable facts
 - [ADR 0025: Fine-grained authorization and the capability model](../built/0025-fine-grained-authorization-and-capability-model.md) — `refund.request`, `refund.execute`, `payment.read`
 - [ADR 0029: PII protection, envelope encryption, and key rotation](../partial/0029-pii-protection-envelope-encryption-and-key-rotation.md) — why `reason` is called out above
 - [ADR 0031: HTTP API conventions](../built/0031-http-api-conventions.md)

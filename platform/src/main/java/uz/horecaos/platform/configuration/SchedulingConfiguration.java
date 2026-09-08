@@ -161,11 +161,19 @@ public class SchedulingConfiguration {
      * "driven by nothing at all". Neither drives a provider effect; both only
      * ever read a signal that already exists elsewhere and reflect it, which is
      * why closing two more of ADR 0019's four missing rows cost two jobs and not
-     * two new failure modes. Anything adding a {@code @Scheduled} method here
-     * should expect the same off-by-one wave 73/77 hit, and trust {@code
+     * two new failure modes. Wave 92 added the last one so far: {@code
+     * AuditPartitionArchiver.archiveClosedPartitions}, ADR 0027's own named gap —
+     * the two retention keys V0030 registered on 2026-09-08 had a value and no
+     * reader, and {@code AuditPartitionManager} only ever rolled partitions
+     * forward, never archived or dropped one. It holds a connection for as long
+     * as one closed year's rows take to export and a protected-storage round
+     * trip takes to verify, which on the daily cadence this job runs at is the
+     * same shape as every other partition sweeper on this pool, not a reason to
+     * exempt it. Anything adding a {@code @Scheduled} method here should expect
+     * the same off-by-one wave 73/77 hit, and trust {@code
      * SchedulerPoolSizeTests}, which counts them, over the number written here.
      */
-    static final int DEFAULT_POOL_SIZE = 49;
+    static final int DEFAULT_POOL_SIZE = 50;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
