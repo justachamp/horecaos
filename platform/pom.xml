@@ -43,6 +43,7 @@
         <json-schema-validator.version>1.5.8</json-schema-validator.version>
         <aws-sdk.version>2.54.1</aws-sdk.version>
         <commons-csv.version>1.12.0</commons-csv.version>
+        <java-uuid-generator.version>5.2.0</java-uuid-generator.version>
         <!-- spring-boot-dependencies 4.1.1 manages kafka.version at 4.2.1;
              overridden here to the latest 4.x patch (4.3.1) per the same
              child-property mechanism Spring Boot documents for every managed
@@ -241,6 +242,23 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-csv</artifactId>
             <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <!-- ADR 0076: RFC 9562 UUIDv7 generation for row identity
+                 (uz.horecaos.platform.configuration.Ids). The owner's answer
+                 to the ADR's "dependency or hand-rolled" open input
+                 (2026-09-08): prefer a maintained Maven Central library over
+                 ~20 lines of this platform's own bit-twiddling. Verified
+                 current on Maven Central as of this change (5.2.0,
+                 2025-12-05); its only runtime dependency is slf4j-api, already
+                 on this application's classpath via Spring Boot's own
+                 logging, so this does not widen the transitive dependency
+                 surface the ADR's own alternatives table worried about. Not
+                 managed by spring-boot-starter-parent's BOM, so pinned
+                 explicitly. -->
+            <groupId>com.fasterxml.uuid</groupId>
+            <artifactId>java-uuid-generator</artifactId>
+            <version>${java-uuid-generator.version}</version>
         </dependency>
     </dependencies>
 

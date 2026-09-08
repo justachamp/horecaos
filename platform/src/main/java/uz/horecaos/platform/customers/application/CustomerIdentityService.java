@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerDirectory;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
@@ -145,7 +146,11 @@ public class CustomerIdentityService implements CustomerDirectory {
             @Nullable UUID partition,
             Instant now) {
 
-        UUID accountId = UUID.randomUUID();
+        // ADR 0076: a customer account id is handed to tenant staff and, unlike
+        // most row identity, its creation instant is the fact that must not
+        // leak — a v7 id would read as a signup date. See Ids.newUndisclosedTimestampId's
+        // own doc for why this is not the same generator every other new row uses.
+        UUID accountId = Ids.newUndisclosedTimestampId();
         CustomerIdentityPolicy policy = resolved.mode();
 
         // The version comes from the policy row that was read, not from the mode
@@ -208,7 +213,10 @@ public class CustomerIdentityService implements CustomerDirectory {
         ResolvedIdentityPolicy resolved = policies.policyFor(tenantId, now);
         UUID partition = resolved.mode().partitionFor(brandId);
 
-        UUID accountId = UUID.randomUUID();
+        // Same reasoning as the sign-in creation path above (ADR 0076): this is
+        // still a customer.customer_accounts id, so it must not disclose when
+        // the row was created.
+        UUID accountId = Ids.newUndisclosedTimestampId();
         store.insertAccount(accountId, tenantId, partition, resolved.version(), now);
         ensureBrandProfile(tenantId, brandId, accountId);
         log.info("Created channel-only customer account {} in tenant {} (no principal link)", accountId, tenantId);

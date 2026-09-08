@@ -1,9 +1,20 @@
 # ADR 0076: New rows get time-ordered identifiers, and old rows keep theirs
 
-- Decision status: Proposed
-- Implementation status: Not started
+- Decision status: Accepted
+- Implementation status: Partial — `uz.horecaos.platform.configuration.Ids`
+  exists with `newId()` and `newUndisclosedTimestampId()`, both backed by
+  `com.fasterxml.uuid:java-uuid-generator` and both tested against every
+  property this record's Testing section names.
+  `customer.customer_accounts` is wired to the undisclosed-timestamp
+  generator, at both creation paths in `CustomerIdentityService`. Nothing
+  else has moved: `ordering`, `audit`, `integration`, and every other
+  `UUID.randomUUID()` row-identity site named in the Rollout below is
+  unchanged, each remaining its own future change with its own gate, as the
+  Rollout requires. `V0077`'s `DEFAULT gen_random_uuid()` is unchanged —
+  nothing in the application reads that default, and this wave's scope was
+  the generator and the PII open input, not the module-by-module rollout.
 - Date proposed: 2026-09-07
-- Date decided: —
+- Date decided: 2026-09-08
 - Deciders: Ayubkhon Abbosov (platform owner, raised the question); Claude (architecture)
 - Depends on: ADR 0031 (cursor pagination), ADR 0029 (PII), ADR 0056 (tenant
   isolation), ADR 0054 (build-time quality gates)
@@ -16,8 +27,27 @@
     readable by any tenant staff member who can see the id. Proposed below as
     **v7 everywhere except where the record's own Specification excludes it**,
     but this one is the owner's to confirm.
+    **Resolved 2026-09-08** (owner): not acceptable disclosure.
+    `customer.customer_accounts` gets a v7-*shaped* id whose timestamp
+    component is a `SecureRandom` draw rather than the real clock, minted by
+    the new `Ids.newUndisclosedTimestampId()` (see Specification). It keeps
+    the column's v7 shape and sorts arbitrarily; every other row identity
+    still uses plain `Ids.newId()`.
   - Whether the generator is a dependency or ~20 lines of this platform's own
     code — owner. Proposed as **our own**, for the reason in Alternatives.
+    **Resolved 2026-09-08** (owner): a dependency, if a maintained one exists
+    on Maven Central — it does. `com.fasterxml.uuid:java-uuid-generator`
+    5.2.0 (Maven Central, released 2025-12-05, verified current at the time
+    of this change) implements RFC 9562 v7 via
+    `Generators.timeBasedEpochGenerator(...)`, including the
+    same-millisecond monotonic-entropy behavior this record's Specification
+    originally asked for a hand-rolled generator to provide, and its 5.2.0
+    release itself fixed an entropy-overflow bug in that same code path
+    (upstream issue #124). Its only runtime dependency is `slf4j-api`,
+    already on this application's classpath via Spring Boot's own logging —
+    the "eleven transitive artifacts" concern in Alternatives does not apply
+    to it. See Specification for the one property the bare library call does
+    not provide on its own (backward-clock safety) and how `Ids` adds it.
 
 ## Context
 
@@ -100,6 +130,17 @@ thing most likely to cause a bug — see Consequences.
 | ULIDs, or a `bigint` sequence | Both order better than v4. A `bigint` also leaks row counts and makes ids guessable across tenants, which ADR 0056 exists to prevent; a ULID is not a `uuid` column type and would mean changing every column, every foreign key and every serializer. v7 is the one option that is a drop-in for the type already in the schema | — |
 | Change all 315 sites in one commit | It would conflict with every branch in flight and be unreviewable. Worse, it would apply v7 to the deterministic and token uses that must not have it | — |
 
+**Note (resolved 2026-09-08):** the "Add a UUID library" row above records why
+the record's *default* proposal leaned hand-rolled; it was never the final
+word; Open input #2 explicitly left this choice to the owner regardless of
+that default, and the owner chose the dependency —
+`com.fasterxml.uuid:java-uuid-generator`. This is not the row's own "revisit
+when" trigger firing (no hand-rolled generator was ever built or found wrong);
+it is the open input being answered. The transitive-surface concern in the
+row's "why not chosen" does not apply to the library actually adopted: its
+only runtime dependency is `slf4j-api`, already on this application's
+classpath via Spring Boot's own logging.
+
 ## Consequences
 
 ### Positive
@@ -126,6 +167,11 @@ thing most likely to cause a bug — see Consequences.
   order id in a URL discloses a fact the customer already knows. A customer
   account id discloses a signup date. That is an ADR 0029 question and it is the
   first open input.
+  **Resolved 2026-09-08:** `customer.customer_accounts` uses
+  `Ids.newUndisclosedTimestampId()` instead of plain `Ids.newId()` (see
+  Specification), so this risk does not apply to that table. It remains true,
+  and accepted, of every other v7 id — an order id, for instance — disclosing
+  its own creation time to whoever holds it.
 - 315 call sites is a large mechanical change that will conflict with anything
   in flight, which is why the rollout below is per-module rather than one commit.
 - A generator that does not handle two ids minted in the same millisecond loses
@@ -146,33 +192,59 @@ thing most likely to cause a bug — see Consequences.
 
 ### The generator
 
-One class, `uz.horecaos.platform.configuration.Ids` (or the module the owner
-prefers), with `Ids.newId()` returning an RFC 9562 v7:
+One class, `uz.horecaos.platform.configuration.Ids`, with two methods.
 
-- bits 0–47: milliseconds since the Unix epoch, big-endian;
-- bits 48–51: version, `0b0111`;
-- bits 52–63: `rand_a`, used as a monotonic counter within a millisecond;
-- bits 64–65: variant, `0b10`;
-- bits 66–127: `rand_b`, from a `SecureRandom`.
+`Ids.newId()` returns an RFC 9562 v7 for row identity — 48 bits of millisecond
+Unix epoch time, version `0b0111`, ~74 bits of entropy split into `rand_a` and
+`rand_b`, variant `0b10`. **Resolved 2026-09-08** (see Open inputs): built on
+`com.fasterxml.uuid:java-uuid-generator` 5.2.0's
+`Generators.timeBasedEpochGenerator(...)` rather than hand-rolled. Within one
+millisecond that generator increments its entropy rather than re-randomising
+it, so a minting burst stays ordered — the same guarantee this section
+originally specified for a hand-rolled implementation, already built and
+already proven by a library with years of production use. Two adjustments sit
+on top of the bare library call, in `Ids`:
 
-Within one millisecond the generator increments `rand_a` rather than re-randomising
-it, so a burst stays ordered; on `rand_a` overflow it waits for the next
-millisecond rather than emitting an out-of-order id. A clock that moves backwards
-must not emit an id ahead of one already issued — hold the last emitted timestamp
-and never go below it.
+- The `UUIDClock` passed to the generator is not the system clock directly but
+  a wrapper (`Ids.NeverGoesBackwardClock`) that clamps to a non-decreasing
+  high-water mark. A clock that moves backwards — an NTP step is the realistic
+  cause — cannot make the generator emit an id that sorts before one already
+  issued, which the library does not guard on its own: its own generator, read
+  directly against the system clock, re-randomises its entropy the moment the
+  clock repeats a smaller value, exactly the failure this record's Testing
+  section rules out.
+- On same-millisecond entropy exhaustion, the adopted version throws
+  `IllegalStateException` (its own fix for upstream issue #124) rather than
+  emitting an out-of-order id — a stronger guarantee than "waits for the next
+  millisecond" as originally specified here, not a weaker one, since the
+  counter space involved is 74 bits and exhausting it inside one millisecond
+  is not an event this platform will produce.
+
+`Ids.newUndisclosedTimestampId()` resolves the PII open input above: the same
+v7 shape (version `0b0111`, variant `0b10`), but every one of the other 122
+bits — including the 48 that would otherwise be a millisecond timestamp — is
+drawn fresh from a `SecureRandom` rather than derived from the clock at all.
+Not a jitter around the true instant: a uniform draw across the entire 48-bit
+field, a span of roughly 8.9 million years, so no bucket — not a day, not a
+year — is more likely to contain the true creation time than any other.
+Applied to `customer.customer_accounts` only; every other row identity uses
+`Ids.newId()`.
 
 ### Which uses change
 
 | Use | Version | Why |
 |---|---|---|
 | Row identity (primary keys) | **v7** | The subject of this record |
+| `customer.customer_accounts` id, specifically | **v7-shaped, timestamp randomised** | **Resolved 2026-09-08** (owner): row identity's v7 timestamp would disclose a signup date to any tenant staff member who can see the id; `Ids.newUndisclosedTimestampId()` keeps the shape and discloses nothing. See Open inputs and Consequences |
 | `UUID.nameUUIDFromBytes` derived ids | **unchanged (v3)** | Determinism is the feature; the same input must yield the same id |
 | Lease and fencing tokens (`claim_token`, `processingToken`, `leaseToken`) | **unchanged (v4)** | Never ordered, never external, and working |
 | Anything an untrusted caller presents as proof | **not a UUID version question** | If a value must be unguessable, its security cannot rest on which UUID version it is. Audit each such value on its own terms; do not assume v7 is safe there because it has 74 random bits |
 
 The one `DEFAULT gen_random_uuid()` in V0077 becomes `DEFAULT uuidv7()` in a
 forward migration — PostgreSQL 18.6 has it natively, so this costs nothing and
-needs no extension.
+needs no extension. Not done in this change: nothing in the application reads
+that default (every insert supplies its own id), and no migration number was
+free to spend on it opportunistically (see Implementation checklist).
 
 ### Testing
 
@@ -184,12 +256,19 @@ needs no extension.
 - Under concurrent minting no two ids are equal, and the count is exact.
 - A `Set` of a large batch has no duplicates — the cheap test that catches a
   broken `rand_b`.
+- **Added 2026-09-08, for `Ids.newUndisclosedTimestampId()`:** two ids minted
+  in the same millisecond do not sort adjacently, and the timestamp-shaped
+  component does not correlate with the real instant they were minted at.
 
 An architecture test asserts that new production code calls `Ids.newId()` rather
 than `UUID.randomUUID()` for row identity, with the deterministic and token uses
 named as the exceptions, so the next contributor does not have to remember this
 record. That test is what makes the decision durable; without it the convention
-decays to whatever the last person copied.
+decays to whatever the last person copied. **Not built in this change** — see
+Implementation checklist; writing it correctly needs a grandfather list for the
+~306 row-identity sites the Rollout below has not migrated yet, and building
+that list is exactly the kind of sweeping, cross-module edit the Rollout
+section warns against doing in one commit while other modules are in flight.
 
 ## Rollout and rollback
 
@@ -202,19 +281,33 @@ and inbox), `notifications`, `loyalty`, `telemetry` — then the rest as they ar
 touched for other reasons. There is no deadline on the tail; a low-volume
 configuration table gains nothing measurable and can stay v4 indefinitely.
 
+`customer.customer_accounts`'s move to `Ids.newUndisclosedTimestampId()` is
+not part of this ordering — it was pulled forward because the PII open input
+required an answer before any `customer.customer_accounts` id analysis could
+close, not because `customers` is next in the row-identity queue. The rest of
+that module's ids (contact points, addresses, sessions, consent, blacklist
+entries) are untouched and remain `UUID.randomUUID()` until their own turn.
+
 Rollback is to stop calling the generator. Nothing needs undoing, because
 nothing existing was changed — which is the main argument for doing it this way.
 
 ## Implementation checklist
 
-- [ ] `Ids.newId()` with the layout and monotonicity rules above, and its tests
-- [ ] The architecture test that keeps new code on it
-- [ ] Forward migration changing V0077's default to `uuidv7()`
+- [x] `Ids.newId()` with the layout and monotonicity rules above, and its tests
+- [x] `Ids.newUndisclosedTimestampId()` for the PII open input, and its tests
+      (resolved 2026-09-08); wired to both `customer.customer_accounts`
+      creation paths in `CustomerIdentityService`
+- [ ] The architecture test that keeps new code on it — needs the grandfather
+      list noted in Testing; deferred rather than built against a partial
+      rollout
+- [ ] Forward migration changing V0077's default to `uuidv7()` — deferred;
+      nothing reads that default today, and `V0182`/`V0183` were already
+      claimed by other in-flight work at the time of this change
 - [ ] `ordering` call sites
 - [ ] `audit` and `integration` (outbox, inbox) call sites
 - [ ] `notifications`, `loyalty`, `telemetry` call sites
 - [ ] Remaining modules, opportunistically
-- [ ] A note in `platform/CLAUDE.md`, since "which UUID do I use" is exactly the
+- [x] A note in `platform/CLAUDE.md`, since "which UUID do I use" is exactly the
       kind of question that file exists to answer
 
 ## Exit criteria
@@ -228,5 +321,9 @@ derive the same value from the same input; and a contributor who writes
 
 - RFC 9562 §5.7 (UUID version 7)
 - PostgreSQL 18 `uuidv7()` — verified present in this project's own 18.6 database
+- `com.fasterxml.uuid:java-uuid-generator` 5.2.0 — Maven Central; single
+  runtime dependency (`slf4j-api`); `Generators.timeBasedEpochGenerator`
+  (RFC 9562 v7) and `UUIDClock` (the extension point `Ids.NeverGoesBackwardClock`
+  uses)
 - `JdbcAudienceStore.includedMembersAfter` — the keyset comment this record's
   pagination note refers to
