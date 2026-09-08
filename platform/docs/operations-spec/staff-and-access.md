@@ -126,7 +126,7 @@ both, with the row's job cell showing only the job relevant to that group.
 | 4 | **Где работает** | Text: `Вся компания` \| brand name \| branch name; multiple scopes render as «Чиланзар +2» with the rest in the row's detail | `iam.grants.scope_type`, `iam.grants.scope_id` |
 | 5 | **Доступ** | Status pill — see §2.4 | Derived: `iam.grants.status`, `valid_until`, and Keycloak `enabled` (**not projected — §11.3**) |
 | 6 | **Последний вход** | Relative time («2 ч назад», «12.08»), `—` when never | **Not built.** Keycloak holds it; nothing projects it. §11.6 |
-| 7 | **Заказов сегодня** | Integer, right-aligned, mono, `—` for people who do not take orders | **Not built.** `ordering.orders` has no `created_by_actor_id`. §11.5 |
+| 7 | **Заказов сегодня** | Integer, right-aligned, mono, `—` for people who do not take orders | `ordering.orders.created_by_actor_id` exists and is populated (`V0029`); **no endpoint counts by actor per day yet** — a query away, not a schema gap. §11.5 |
 
 Column 7 earns its place only because it answers the question that actually
 brings a manager to this screen — *is this account still being used* — faster
@@ -592,11 +592,17 @@ The negative answer is where the scope rule gets taught, at the exact moment
 someone needs to learn it, and it ends in the action that fixes it.
 
 Backed by `AuthorizationService.has(subject, capability, scope)` plus the grant
-rows behind the decision. There is no such endpoint today — `viewFor` returns the
-actor's own view only. A new read endpoint is required:
-`GET /control-plane/tenants/{id}/access-check?subject&capability&scopeType&scopeId`,
-guarded by `iam.grant.manage`, returning the decision and the covering grant.
-This is a small addition to ADR 0025's surface, not a new decision.
+rows behind the decision. A shaped endpoint exists, but not for this
+audience: `GET /control-plane/access-debugger?subject&tenantId&brandId&locationId&capability`
+(`GrantController.debugAccess`) already does the yes/no-plus-view computation
+this screen needs, right down to an `AccessDebugResponse` shaped like the
+answer here — but it is gated by `Capability.PLATFORM_ADMIN`, "because this
+reveals another principal's grants" (the controller's own words), which no
+tenant manager holds. `viewFor` otherwise still returns only the caller's own
+view. So a tenant-facing endpoint is still required, guarded by
+`iam.grant.manage` and scoped to grants the caller's own scope covers:
+`GET /control-plane/tenants/{id}/access-check?subject&capability&scopeType&scopeId`.
+The shape to copy already exists; the tenant-scoped guard on it does not.
 
 **Entitlement is a distinct answer.** When the capability passes but the tenant's
 plan does not permit the feature, the answer is neither yes nor no:
@@ -605,7 +611,9 @@ plan does not permit the feature, the answer is neither yes nor no:
 > подключён.  → **Подключить**
 
 `ErrorCode.INSUFFICIENT_CAPABILITY` and `ErrorCode.ENTITLEMENT_REQUIRED` already
-exist as separate codes; the entitlement source does not (§11.10).
+exist as separate codes, and the entitlement itself is computed
+(`commercial.application.EntitlementQueryService`, §11.10) — just not by this
+endpoint, and not folded into `CapabilityView` the way this answer needs.
 
 ---
 
@@ -833,10 +841,10 @@ the highest-value item in this section.
 2. — divider —
 3. **Кто** — person picker → `actorSubject`
 4. **Что** — action picker, grouped by area, showing sentences → `actionCode`
-5. **Где** — branch/brand dropdown → filtered client-side against `scope_id`;
-   the API takes no scope parameter today and should (§11.12)
-6. **Итог** — `Все` / `Отклонено` / `Ошибка` → `auditClass` is separate; outcome
-   is **not a supported query parameter today** (§11.12)
+5. **Где** — branch/brand dropdown → `scopeType` + `scopeId`, both supported
+   query parameters on `AuditController.search` today (§11.12)
+6. **Итог** — `Все` / `Отклонено` / `Ошибка` → `outcome`, a supported query
+   parameter distinct from `auditClass` (§11.12)
 7. **Период** — date range, **defaulting to today**, with presets
    `Сегодня` · `7 дней` · `30 дней`. Never default to all time: the query is
    bounded at 200 rows and an unbounded default silently truncates the answer.
@@ -860,9 +868,11 @@ after:
 comment is explicit that it can carry redacted structure that is still revealing
 in bulk, so retrieving it must be a separate, individually audited read.
 
-That endpoint does not exist (§11.13). Build it as
-`GET /control-plane/tenants/{id}/audit-events/{eventId}`, guarded by
-`audit.read`, recording its own `audit.read` fact with the event id. The drawer
+That endpoint is now built (§11.13), as
+`GET /control-plane/tenants/{tenantId}/audit-events/{eventId}` and its
+`/operations/...` twin (`AuditController.detail`), guarded by `AUDIT_READ`
+and recording its own `audit.read` fact with the event id — the doc's own
+description down to the recorded fact matches what shipped. The drawer
 therefore has two loading phases: the row's fields render instantly from the list
 data, and the diff block loads separately with its own skeleton. Do not block the
 drawer on the diff.
@@ -949,22 +959,37 @@ Named precisely, in the order that blocks the most screens.
 **Blocks: every screen in this section.**
 
 `iam.grants.principal_subject` is a `varchar(255)` holding a Keycloak subject
-UUID. There is no table anywhere in `V0001`–`V0022` holding a staff person's
-display name, phone, email, photo, employment status, employee number, spoken
-languages, or POS operator id. `GrantManagementService.GrantView` returns the
-subject string and nothing else.
+UUID. There is no table anywhere holding a staff person's display name,
+phone, email, photo, employment status, employee number, spoken languages, or
+POS operator id. `GrantManagementService.GrantView` returns the subject string
+and nothing else.
 
 ADR 0009 specifies `iam.principals` (`keycloak_realm`, `keycloak_subject_id`,
 `status`) and `iam.tenant_membership_links` (`tenant_id`, `principal_id`,
 `keycloak_organization_id`, `keycloak_membership_id`, `status`,
-`last_reconciled_at`) — **neither has been migrated**, and neither carries a
-profile field even when it is. The ADR's checklist item "Add IAM principal,
-membership-link, and reconciliation migrations" is unticked.
+`last_reconciled_at`) — **the tables exist now.** `V0057` migrated both,
+plus `iam.identity_reconciliation_runs`, closing the checklist item this
+section originally cited as unticked. But nothing reads or writes them:
+`IdentityDriftReporter`'s own javadoc still says "half of ADR 0009's
+comparison is here and half is blocked... because `iam.tenant_membership_links`
+has no migration yet" — a comment `V0057` left stale rather than an
+accurate account of today, and a search of the codebase for either table
+name outside that one comment and the migration itself finds nothing.
+ADR 0009's own status line is blunter: "the IAM evidence tables still exist
+with no code writing them." And the migration says outright what it
+deliberately does not carry regardless of who eventually writes it: *"Nothing
+here holds a name, an email address, a phone number, an invitation link, or a
+token. A principal is a realm and a subject id; the profile behind it stays
+in Keycloak"* — envelope encryption included, because ADR 0029 has nothing to
+protect here. So the table this section actually needs did not appear —
+`iam.principals` closes ADR 0009's gap, not this one.
 
-So two things are needed and only one has an owner:
+So the thing that blocks every screen here is exactly as missing as before,
+just for a narrower reason:
 
-- `iam.principals` and `iam.tenant_membership_links` — **ADR 0009**, specified,
-  unbuilt.
+- `iam.principals` and `iam.tenant_membership_links` exist (`V0057`) but
+  nothing reads or writes them, and they were never going to solve this even
+  fully wired — they hold identifiers, by design, not a profile.
 - A staff profile: display name, phone (PII, ADR 0029 envelope-encrypted, and
   therefore a `CUSTOMER_PII_REVEAL`-equivalent question for staff data too),
   email, photo `media_asset_id`, employment status, employee number, POS operator
@@ -978,37 +1003,69 @@ activity log — the most valuable thing here — is unreadable.
 
 ### 11.2 Grant history
 
-`GrantManagementService.listForTenant` filters `WHERE status = 'ACTIVE'`. Revoked
-grants are retained in the table (revocation is an `UPDATE` to `REVOKED`, not a
-delete) but no read path returns them. The person record's "past access" and the
-list's `Доступ отозван` state both need them. **ADR 0025** — a query-parameter
-addition, not a decision.
+`GrantManagementService.listForTenant(tenantId)` still defaults to
+`WHERE status = 'ACTIVE'`, but the overload this section asked for now
+exists: `listForTenant(tenantId, includeInactive)`, and `GrantController`
+exposes it as `GET .../tenants/{tenantId}/grants?includeInactive=true`. Both
+the method's own Javadoc and the endpoint's `@Operation` description name
+this section by number — "for staff-and-access.md §2's suspended-row state
+and §11.2's restore action" — so this was built against this document, not
+independently of it. The person record's "past access" and the list's
+`Доступ отозван` state can both be built against it now.
 
 ### 11.3 Disabling a person
 
 ADR 0009's "Disable, suspend and delete" section covers *tenant* suspension. There
-is no per-user disable: no endpoint, no projection of Keycloak's `enabled` flag,
-no `iam.principals.status` to read. Revoking grants is not the same thing and
-this spec is explicit about the difference (§2.6). **ADR 0009.**
+is still no per-user disable: no endpoint, no projection of Keycloak's `enabled`
+flag. `iam.principals.status` exists as a column now (`V0057`,
+`ACTIVE`/`DISABLED`/`UNKNOWN`, default `UNKNOWN`) but nothing in the
+application writes or reads it — ADR 0009's own status line says the table it
+lives on has no code writing it at all yet, so there is no live value this
+screen could show even if it read the column. Revoking grants is not the same
+thing and this spec is explicit about the difference (§2.6). **ADR 0009.**
 
 ### 11.4 Tenant-defined jobs
 
 `iam.roles` carries `tenant_id` and `is_platform_defined`, and
-`uq_role_tenant_code` exists — the schema is ready. `GrantManagementService.grant`
-resolves through `PlatformRole.find(command.roleCode())` and therefore accepts
-platform roles only. ADR 0025 defers this deliberately: "Tenants may later define
-custom roles from the same capability catalogue." This is the trigger for
-building the permission grid described in §5. **ADR 0025**, explicitly deferred.
+`uq_role_tenant_code` exists — the schema is ready, and more of the plumbing
+around it is built than a grant-creation reading would suggest.
+`GrantManagementService`'s private `resolveRole` no longer stops at
+`PlatformRole.find(roleCode)`: when a code names no platform role it falls
+back to a tenant-scoped lookup in `iam.roles` itself, so a grant *can* name a
+tenant-owned role today. `V0086` and `V0089` closed the security gap that
+made this safe to allow — `fk_grant_role` originally referenced `iam.roles`
+on `id` alone, so a grant in one tenant could have named a role another
+tenant defined privately, which the two migrations closed with a composite
+key and a trigger doing the same check for every writer that is not this
+method.
+
+None of that creates a tenant-owned role. There is no `POST` for one —
+`RoleRegistrySynchronizer` only projects the code-owned `PlatformRole`
+catalogue into `iam.roles` at startup — so `iam.roles` today holds platform
+roles alone regardless of what the grant path can now resolve. ADR 0025's own
+decision record still closes this for v1: "no tenant-defined roles in v1" is
+listed among its closed inputs. What changed is that granting one would work
+correctly the day a creation path exists; what has not changed is that the
+creation path, and therefore the feature, does not exist. This is still the
+trigger for building the permission grid described in §5, not before.
+**ADR 0025**, explicitly deferred; the resolution and boundary-safety half is
+done ahead of the decision to build the rest.
 
 ### 11.5 Order attribution
 
 ADR 0039 §"Attribution is written once" specifies `created_by_actor_type/id` and
-`accepted_by_actor_type/id` on the order. `V0022`'s `ordering.orders` has neither.
-`ordering.order_state_history` has `actor_type` and `actor_id`, which can
-reconstruct "who confirmed it" but not "who typed it in" — a cart that became an
-order carries no author. Blocks the People list's `Заказов сегодня` column, the
-person record's activity counts, and the operator leaderboard in Reports 7.5.
-**ADR 0039.**
+`accepted_by_actor_type/id` on the order. `V0022`'s `ordering.orders` had
+neither at the time this was written; `V0029` added both, populated,
+constrained (`ck_order_created_by_actor`, `ck_order_accepted_by_actor`,
+`ix_orders_created_by`) and exposed on both the list and detail responses of
+`OperationsOrderController`. "Who typed it in" is answerable today, not just
+"who confirmed it" from `ordering.order_state_history.actor_type/actor_id`.
+
+What is still missing is narrower: nothing counts "orders created by this
+actor today". No endpoint aggregates `created_by_actor_id` per day — building
+the People list's `Заказов сегодня` column and the operator leaderboard in
+Reports 7.5 is a query against a column that already exists, not a schema
+change. **ADR 0039** for the read; the write path is done.
 
 ### 11.6 Last sign-in, active sessions, session termination
 
@@ -1045,22 +1102,48 @@ exists. **ADR 0003 / ADR 0009.**
 ### 11.10 Entitlement state
 
 `ErrorCode.ENTITLEMENT_REQUIRED` exists and is distinct from
-`INSUFFICIENT_CAPABILITY`, exactly as ADR 0025 requires. Nothing computes an
-entitlement: ADR 0021 is `Not started` and `CapabilityView` has no entitlement
-field despite ADR 0025 stating that `/session/context` returns an "entitlement
-summary". The locked-by-plan versus denied-by-permission distinction — which the
-IA lists as something HorecaOS owns and Delever ships as "module locks" — cannot be
-rendered until this lands. **ADR 0021**, with a `CapabilityView` change under
-**ADR 0025**.
+`INSUFFICIENT_CAPABILITY`, exactly as ADR 0025 requires. ADR 0021 is no
+longer `Not started` — it is Accepted, Partial, and its `commercial` module
+genuinely computes entitlements: `EntitlementQueryService.snapshot`,
+`.check`, `.require` and `.featureEnabled` resolve plan, subscription and
+usage into a real yes/no (or a limit), and `.require`/`.requireFeature` are
+what throw `ENTITLEMENT_REQUIRED` in practice — `CampaignService.launch` calls
+`entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED)`
+before a Telegram campaign may send, which is a real production caller, not a
+test. A tenant's own entitlement snapshot is readable today through
+`CommercialOperationsController`.
+
+What is still missing is exactly the gap ADR 0025 named: `CapabilityView` —
+what `/session/context` and the access-check answer are built from — carries
+no entitlement field, so nothing folds "does she have the permission" and
+"does the plan allow the feature" into one call the way ADR 0025 sketched.
+The locked-by-plan versus denied-by-permission distinction has to be read
+from two different modules' endpoints today rather than rendered from one.
+**`CapabilityView` change under ADR 0025**; the entitlement computation this
+was blocked on is done.
 
 ### 11.11 Staff rosters and shifts
 
-`fulfillment.courier_shifts`, `courier_roster_entries` and the courier ledger are
-ADR 0042's, are courier-scoped, and are unbuilt in any case (ADR 0042 is
-`Proposed` / `Not started`). Nothing models a non-courier person's planned or
-worked hours. §7 argues these should reuse 0042's roster/shift split and drop its
-gate and cash reconciliation, which is either an amendment to ADR 0042 or a
-section of the new staff-identity ADR. It should not be a third shift model.
+ADR 0042 is Accepted, Partial, not `Proposed` / `Not started` — and most of
+what §7 wants to reuse is itself already built and in production use, not
+merely modelled: `fulfillment.courier_shifts` and `courier_shift_breaks`
+(`V0040`) carry the real `OPEN → CLOSE_REQUESTED → RECONCILING → CLOSED →
+SETTLED` lifecycle with auto-close, `CourierShiftController` and
+`OperationsCourierController` serve it, and the append-only ledger, rate
+cards, settlement periods and payouts alongside it are built too. The one
+table §7's own comparison table names that is genuinely still missing is
+`fulfillment.courier_roster_entries` — the `DRAFT → PUBLISHED → CONSUMED |
+MISSED | CANCELLED` roster half of the plan/fact split does not exist for
+couriers either, so there is nothing there yet for branch staff to model
+after beyond the shift itself.
+
+None of this is wired to a non-courier person's hours regardless: it is
+courier-scoped code against courier-scoped tables, and nothing models a
+branch cook or cashier's planned or worked time. §7 argues for reusing
+0042's shift lifecycle and dropping its authorization gate and cash
+reconciliation, which is either an amendment to ADR 0042 or a section of the
+new staff-identity ADR — that design work is unstarted regardless of how much
+of the courier side now exists. It should not be a third shift model.
 
 New capabilities are implied and do not exist in `Capability`:
 `staff.shift.manage`, `staff.shift.approve`, `terminal.manage`. ADR 0042 already
@@ -1069,20 +1152,27 @@ proposes `courier.shift.open`, `courier.shift.approve` and
 
 ### 11.12 Audit query surface
 
-`AuditQueryService.AuditQuery` supports `tenantId`, `actorSubject`, `actionCode`,
-`targetId`, `auditClass`, `from`, `to`, `limit`. §9's filter bar additionally
-needs **outcome** and **scope** predicates, and its «Часть массового действия»
-chip needs a `correlationId` predicate — the index `ix_audit_correlation` already
-exists for it. Cursor pagination is also absent: `Page.last(events)` returns a
-terminal page, so 200 rows is a hard ceiling rather than a page size. **ADR 0027**
-+ **ADR 0031** for the cursor.
+`AuditQueryService.AuditQuery` now supports `outcome`, `scopeType`, `scopeId`
+and `correlationId` alongside `tenantId`, `actorSubject`, `actionCode`,
+`targetId`, `auditClass`, `from`, `to`, `limit` — the code's own comment marks
+the addition "ADR 0027 §11.12: outcome, scope, and correlation id, added this
+wave", and `V0140` indexes scope and outcome to serve it. §9's filter bar and
+its «Часть массового действия» chip (`correlationId`, served by
+`ix_audit_correlation`) can both be built against this today. What is still
+absent is cursor pagination: `AuditController` still returns `Page.last(events)`,
+a terminal page, so `AuditQueryService.MAXIMUM_PAGE` (200) is a hard ceiling
+rather than a page size. **ADR 0031** for the cursor; the predicates are done.
 
 ### 11.13 Audit event detail endpoint
 
-There is no `GET .../audit-events/{id}`, so `change_document` — the before/after
-diff that makes the log useful — is unreachable from any API. The exclusion from
-the list response is correct and deliberate; the missing single-record read is
-not. **ADR 0027.**
+`GET .../audit-events/{eventId}` exists, at both
+`/control-plane/tenants/{tenantId}/audit-events/{eventId}` and its
+`/operations/...` twin (`AuditController.detail`/`detailAndRecord`), guarded
+by `AUDIT_READ`, and it records its own `audit.read` fact naming the event —
+again, the controller's own `@Operation` description cites "ADR 0027 §11.13"
+by name. `change_document` — the before/after diff — is reachable from it.
+The exclusion from the list response remains correct and deliberate; the
+single-record read this section asked for now exists.
 
 ### 11.14 Enforcement is on
 
@@ -1110,7 +1200,7 @@ ADR 0025's checklist.
 | Delever | Why |
 |---|---|
 | Permission-gated navigation — a section renders only when the user holds the associated permission | Correct, and the IA already requires it. HorecaOS's version is server-driven from `CapabilityView.capabilities` and enforced again per request, unlike Delever's route-visibility flag |
-| Module locks as a second, independent gate | This is the entitlement layer. ADR 0025 is emphatic that entitlement never grants permission and permission never satisfies entitlement, and that the two produce distinguishable errors. Match the concept; §11.10 blocks the implementation |
+| Module locks as a second, independent gate | This is the entitlement layer. ADR 0025 is emphatic that entitlement never grants permission and permission never satisfies entitlement, and that the two produce distinguishable errors. The computation is built (§11.10); rendering the two as one answer still needs the `CapabilityView` change §11.10 and §6 both describe |
 | «История изменений» with a «Что изменилось?» before/after view | The single most valuable thing in Delever's settings area. HorecaOS's `change_document` is better structured than a rendered diff, and §9's drawer should use it |
 | Filters by parameter and by period on the change log | Match, with outcome and scope added (§11.12) |
 | Attendance for staff, at all | Delever ships it courier-only and undocumented; §7 covers everyone and separates plan from fact |
@@ -1229,6 +1319,7 @@ person with no active jobs and an intact audit trail.
 3. **9.4 Должности.** Cheap, static, and it is what makes step 2's job picker
    trustworthy.
 4. **§11.14** — flip enforcement, after the shadow comparison is quiet.
-5. **9.8 Журнал**, once §11.13 exists. Wave 2.
+5. **9.8 Журнал.** §11.13's detail endpoint is already built; this step is no
+   longer waiting on it. Wave 2.
 6. **9.6 Смены** and **9.7 Терминалы**, on the new staff-identity ADR. Wave 2.
 7. **9.5 Проверка доступа** and **9.9 Мой профиль**. Wave 3.
