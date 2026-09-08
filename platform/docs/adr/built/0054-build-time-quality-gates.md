@@ -216,6 +216,51 @@ a throwaway file, `./mvnw compile` failed with
 `[NullAway] dereferenced expression 'value' is @Nullable` as a hard
 `COMPILATION ERROR`, and the scratch file was then deleted.
 
+## Security-audit run log (2026-09-08)
+
+Main was bumped to Spring Boot 4.1.1, springdoc 3.1.1, and kafka-clients 4.3.1
+without claiming which CVEs the bump closes, because the `security-audit`
+scan described above had never actually been run. This entry runs it and
+records the honest result: **it could not run.**
+
+Attempted from `wave85-cvescan` (worktree of `main` at `772a643`):
+
+```
+tools/mvn-serial --batch-mode -Psecurity-audit dependency-check:check
+```
+
+- No `NVD_API_KEY` was set in the environment, in the worktree, or in any
+  dotfile on the machine this ran on. (Whether the `secrets.NVD_API_KEY`
+  GitHub Actions secret referenced by `.github/workflows/security-audit.yml`
+  is configured could not be checked from a worktree and is out of scope
+  here.)
+- Network reachability to NVD itself was not the problem — `services.nvd.
+  nist.gov` answered a plain HTTPS request during this run.
+- The scan reached the update step and hard-failed in 4.7s:
+  `NvdApiException: Invalid API Key, length of 0 too short to provided a
+  masked partial key`, followed by `NoDataException: No documents exist`.
+
+This contradicts what the `nvdApiKeyEnvironmentVariable` comment beside the
+profile (and this ADR, until now) claimed: that an unset key degrades to
+slower unauthenticated access. In `dependency-check-maven` 13.0.0 it does
+not — an absent `NVD_API_KEY` is read as an empty-string key and the update
+step refuses to run at all, a known upstream defect
+(dependency-check/DependencyCheck#7517, #7473, #8715). The pom comment is
+corrected in the same change that adds this entry.
+
+No findings are recorded, no dependency was bumped, and no suppression was
+added as a result of this run, because none of those would be honest
+without real scan output — there is none. **What running this profile for
+real needs:** an NVD API key
+(https://nvd.nist.gov/developers/request-an-api-key, free, tied to an
+email) exported as `NVD_API_KEY`, for a local run, or confirmed present as
+the `NVD_API_KEY` GitHub Actions secret for the scheduled workflow. Once a
+key is available, rerun the command above from `platform/` and record
+findings — CVE id, dependency, version, severity, fixed-version
+availability, and applicability to this codebase — in a new dated entry
+here, applying safe patch-level fixes directly and suppressing (with an
+expiry and a reason, never blanket) whatever has none.
+
 ## References
 
 - [Founding review](../../../../docs/qoida-review.md) — queue item 2
