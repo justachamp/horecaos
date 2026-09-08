@@ -6,7 +6,7 @@ The menu, as one restaurant's staff manage it. This specification covers
 written so screens can be built from it without returning to the sources.
 
 Authority order used throughout: the built backend (migrations `V0015`, `V0016`,
-`V0018`, `V0019`, `V0020`, `V0021` and the `catalog`, `pricing`, `inventory`,
+`V0018`, `V0019`, `V0020`, `V0021`, `V0028` and the `catalog`, `pricing`, `inventory`,
 `media`, `tenancy` Java modules) beats the parity matrix; the parity matrix beats
 Delever's live documentation; the legacy dashboard wins where staff habit is the
 argument. Where a source is wrong for this product it is named and overruled.
@@ -94,7 +94,7 @@ here by keeping filters in query params and never unmounting the list.
 | Категория | chips, one per category the product sits in | `catalog.category_products` → `catalog.translations` (CATEGORY) |
 | Вариантов | integer, right-aligned; `1` renders as `—` | count of `catalog.variants` where `status<>'ARCHIVED'` |
 | Цена | money, or a range `28 000 – 46 000 so'm` across variants | `pricing.prices.amount_minor` for the resolved price book (`pricing.price_book_assignments`, brand scope, current instant) |
-| ИКПУ | mono, or a warning chip **Нет ИКПУ** | `catalog.variants.mxik_code` falling back to `catalog.products.mxik_code` — the inheritance the validator implements in `Snapshot.effectiveClassification` |
+| ИКПУ | mono, or a warning chip **Нет ИКПУ** | `catalog.fiscal_classifications.mxik_code` for the default variant — there is no product-level code to fall back to since `V0028` dropped `catalog.products.mxik_code`; `Snapshot.effectiveClassification` inherits a modifier option from its linked variant, never a variant from its product |
 | Статус | badge: Черновик / Активен / Архив | `catalog.products.status` |
 | В меню | integer "n/4 филиалов" | count of `catalog.location_offerings` with `status='AVAILABLE'` over the product's variants, against the brand's location count |
 | Опубликован | check or **Не опубликован** chip | product id present in `catalog.publication_items` of the current `PUBLISHED` publication for the brand |
@@ -265,8 +265,8 @@ Inline editable grid, one row per variant, drag handle for `sort_order`:
 | Ед. изм. | `catalog.variants.unit_code` (default `PIECE`) |
 | По умолчанию | `catalog.variants.is_default` — radio, not checkbox; the DB enforces one per product (`ux_variant_single_default`) |
 | Базовая цена | `pricing.prices.amount_minor` in the brand's active price book; editing writes a new price row and closes the old one — never an UPDATE, because `ux_price_current` is the determinism guarantee |
-| ИКПУ | `catalog.variants.mxik_code`, placeholder showing the inherited product code in muted ink |
-| Код упаковки | `catalog.variants.package_code` |
+| ИКПУ | `catalog.fiscal_classifications.mxik_code` for this variant (`PUT …/variants/{id}/fiscal-classification`); empty until set — `V0028` removed the product-level code this cell once showed as a placeholder |
+| Код упаковки | `catalog.fiscal_classifications.package_code` for this variant, same endpoint |
 | Статус | `catalog.variants.status` |
 | Модификаторы | count → opens tab 3 scoped to this variant (`catalog.variant_modifier_groups`) |
 
@@ -274,7 +274,8 @@ Two blockers surface here live: `PRODUCT_HAS_NO_ACTIVE_VARIANT` and
 `PRODUCT_HAS_NO_DEFAULT_VARIANT` (raised only when there is more than one
 variant). `VARIANT_HAS_NO_ACTIVE_PRICE` renders as a red cell, not a footnote.
 
-Actions: **Добавить вариант** (opens with the product's ИКПУ pre-inherited),
+Actions: **Добавить вариант** (opens with fiscal classification blank — there
+is no product-level code to pre-fill it from since `V0028`),
 **Дублировать вариант**, **Архивировать вариант** (confirm; blocked if it is the
 only active one, blocked if it is the target of a `modifier_options.linked_variant_id`
 that is still active — that is `MODIFIER_OPTION_LINKS_INACTIVE_VARIANT` caught
@@ -321,19 +322,37 @@ slot and states it.
 
 ### Tab 5 — Фискальные данные
 
-`ИКПУ/MXIK`, `Код упаковки` for the product (the inherited default) with a
-per-variant table beneath. Today both are plain `varchar(32)` columns on
-`catalog.products` / `catalog.variants` / `catalog.modifier_options` with a
-not-blank check and deliberately **no format validation** (`V0021`).
+`ИКПУ/MXIK`, `Код упаковки`, fiscal unit, fiscal name, barcode, marking,
+excise, ABV and age restriction, per variant. This table was written when these
+were interim `varchar(32)` columns on `catalog.products` / `catalog.variants`
+/ `catalog.modifier_options` with a not-blank check and no format validation
+(`V0021`). `V0028` replaced that: those three columns are gone, and
+`catalog.fiscal_classifications` — one row per variant, modifier option or
+fee, all ten fields, written through
+`PUT …/variants/{id}/fiscal-classification`,
+`…/modifier-options/{id}/fiscal-classification` and
+`…/fees/{feeCode}/fiscal-classification` on `CatalogAuthoringController` — is
+the whole of it now. No format is asserted on the code, still, for `V0021`'s
+original reason: its shape belongs to the official list, not to a regex
+someone will have to migrate. Build this tab against those fields directly;
+there is no interim column left to build against.
 
-Everything else fiscal is **not built — ADR 0038 (Proposed)**: `marking_required`
-and `marking_scheme`, `excisable`, `alcohol_by_volume_bp`, `age_restriction_years`,
-`tax_profile_id` override, `source (MANUAL|IMPORT|POS_SYNC)`, `classified_by`,
-and validation of the code against `catalog.mxik_reference`. When 0038 is
-accepted these move into `catalog.fiscal_classifications` and the warnings become
-blockers. Build this tab against the interim columns, and build the search
-control as a **typeahead over a reference list** even while the list is a stub —
-retrofitting free text into a validated picker is the expensive direction.
+`catalog.mxik_reference` — the official code list — is built too, with a
+search endpoint (`GET /api/v1/control-plane/fiscal-reference/mxik`,
+`FiscalReferenceController`) and a status check
+(`GET …/mxik/status`). It is seeded empty: the source and refresh cadence of
+the list are an open input on ADR 0038 (finance), so the endpoint has nothing
+to suggest yet. Build the search control as a **typeahead over that endpoint**
+now — it exists even though the table is empty — and let `…/mxik/status`
+drive whatever the UI says about an empty result.
+
+**All of this reports as a warning today, not a blocker.** `CatalogValidator`
+already raises `FISCAL_CLASSIFICATION_MISSING` per node and the catalog-level
+`FISCAL_CLASSIFICATION_NOT_ENFORCED`, but ADR 0038 — Accepted, not Proposed —
+gates the blocker on rollout stage 3, "once bulk classification tooling and
+the ИКПУ/MXIK reference import exist" (the validator's own comment), and the
+reference import has not happened. When it does, these findings stop being
+things a menu can publish around.
 
 **No AI generation of ИКПУ.** Delever ships it behind a liability disclaimer. A
 wrong code is a tax classification error on a legal document. Assistive search
@@ -463,15 +482,16 @@ alongside dishes and must be filtered out of every product query forever.
 | Повтор | `allow_same_option_multiple_times` |
 | Опций | count of active `catalog.modifier_options` |
 | Используется в | count of `product_modifier_groups` + `variant_modifier_groups`, a link |
-| Без ИКПУ | count of options with no `mxik_code` and no classified `linked_variant_id` |
+| Без ИКПУ | count of options with no `catalog.fiscal_classifications` row (or an incomplete one) and no classified `linked_variant_id` |
 | Статус | `catalog.modifier_groups.status` |
 
 ### Detail drawer — options table
 
 `code` · name per locale · price (`pricing.prices`, `MODIFIER_OPTION`) ·
 `maximum_quantity` · `linked_variant_id` (a picker over active variants;
-"этот модификатор — сам товар") · `mxik_code` · `package_code` · `sort_order` ·
-`status`. Inline editable, drag-ordered.
+"этот модификатор — сам товар") · `mxik_code` · `package_code` (both from
+`catalog.fiscal_classifications`, keyed by this option's `modifier_option_id`)
+· `sort_order` · `status`. Inline editable, drag-ordered.
 
 A live capacity line above the table computes selectable capacity exactly as
 `CatalogValidator` does — `options.size()`, or `Σ maximum_quantity` when repeats
@@ -965,6 +985,8 @@ Header: a single verdict line — **Готово к публикации** or
 | `OFFERING_REFERENCES_UNKNOWN_VARIANT` | blocker | «Филиал предлагает неизвестный вариант» |
 | `FISCAL_CLASSIFICATION_MISSING` | warning today | «Нет ИКПУ/MXIK» |
 | `FISCAL_CLASSIFICATION_NOT_ENFORCED` | warning, catalog-level | «N позиций без ИКПУ — агрегаторы отклонят меню» |
+| `FISCAL_DELIVERY_FEE_UNCLASSIFIED` | warning today, brands that deliver only | «Тариф доставки без ИКПУ/MXIK» |
+| `FISCAL_MXIK_CODE_UNKNOWN` | warning today, silent while the reference is unimported | «Код не найден в справочнике» |
 | `PRICING_VALIDATION_NOT_WIRED` | warning, catalog-level | «Проверка цен не выполнялась» |
 
 Every finding row carries the entity name and a **deep link to the exact tab of
@@ -979,10 +1001,16 @@ list rows. `PRICING_VALIDATION_NOT_WIRED` in particular means a check **did not
 run** — a different and more alarming thing than a check that failed — and the
 validator emits it on every report for exactly that reason.
 
-**When ADR 0038 is accepted**, `FISCAL_CLASSIFICATION_MISSING` becomes a blocker
-and two more join it: `FISCAL_DELIVERY_FEE_UNCLASSIFIED` and
-`FISCAL_RESTRICTED_NODE_ON_UNVERIFIED_CHANNEL`. Build the severity from the
-payload, never from a client-side table, so this is a backend change only.
+**At ADR 0038's rollout stage 3** — "once bulk classification tooling and the
+ИКПУ/MXIK reference import exist" (`CatalogValidator`'s own words) —
+`FISCAL_CLASSIFICATION_MISSING` becomes a blocker. `FISCAL_DELIVERY_FEE_UNCLASSIFIED`
+does not join it later: it already fires today, as a warning, alongside
+`FISCAL_CLASSIFICATION_MISSING` — ADR 0038 was accepted on 2026-08-22 and
+`V0028` built the delivery-fee node and its validation in the same migration.
+`FISCAL_RESTRICTED_NODE_ON_UNVERIFIED_CHANNEL` is the one genuinely still
+missing — no such check exists in `CatalogValidator` yet. Build the severity
+from the payload, never from a client-side table, so raising the existing
+findings to blocker at stage 3 is a backend change only.
 
 ### Region 2 — channels
 
@@ -1151,10 +1179,13 @@ entire ergonomic argument.
 
 Three figures with the sources that already support them:
 `Варианты: 540 из 601 (90%)` · `Модификаторы: 88 из 140` ·
-`Доставка (FEE): не классифицирована`. The partial indexes
-`ix_variants_unclassified` and `ix_modifier_options_unclassified` exist in `V0021`
-to serve exactly this question. Each figure links to the grid filtered to the
-gap.
+`Доставка (FEE): не классифицирована`. `V0021`'s partial indexes
+(`ix_variants_unclassified`, `ix_modifier_options_unclassified`) are gone —
+`V0028` dropped them along with the interim columns they served, and replaced
+them with `ix_fiscal_classifications_incomplete`, a partial index over
+`catalog.fiscal_classifications` (any of the four required fields null) that
+serves exactly this question across variants, modifier options and the
+delivery fee alike. Each figure links to the grid filtered to the gap.
 
 ### Grid columns
 
@@ -1165,29 +1196,39 @@ gap.
 | Товар · вариант | `catalog.translations` |
 | SKU / код | `catalog.variants.sku`, `catalog.modifier_options.code` |
 | Категория | `catalog.category_products` |
-| ИКПУ / MXIK | editable; `catalog.variants.mxik_code`, `modifier_options.mxik_code`, falling back to `catalog.products.mxik_code` shown in muted ink as the inherited value |
-| Код упаковки | editable; `package_code` |
-| Источник | **not built — ADR 0038** (`fiscal_classifications.source`) |
-| Кто, когда | **not built — ADR 0038** (`classified_by`, `classified_at`) |
-| Маркировка · акциз · возраст | **not built — ADR 0038** |
+| ИКПУ / MXIK | editable; `catalog.fiscal_classifications.mxik_code`, keyed by `variant_id` / `modifier_option_id` / `fee_id`; a modifier option shows its linked variant's code in muted ink when it has none of its own (`effectiveClassification`) — there is no product-level fallback, `V0028` dropped `catalog.products.mxik_code` |
+| Код упаковки | editable; `catalog.fiscal_classifications.package_code`, same keying |
+| Источник | `catalog.fiscal_classifications.source` — `MANUAL` for every row this screen writes (`CatalogAuthoringService.classify`); `IMPORT` and `POS_SYNC` are the other two values and this screen never sets them |
+| Кто, когда | `catalog.fiscal_classifications.classified_by`, `classified_at` — set by the endpoint on every write |
+| Маркировка · акциз · возраст | `marking_required`/`marking_scheme`, `excisable`, `alcohol_by_volume_bp`, `age_restriction_years` — columns on `catalog.fiscal_classifications`, all four in `PUT …/fiscal-classification`'s request body today |
 
-Inherited values render distinctly from own values, because a variant showing its
-product's code must not read as classified in its own right — the validator's
-inheritance rule (`effectiveClassification`) is what makes a single-variant dish
-classifiable in one place, and the UI has to teach it.
+Inherited values render distinctly from own values, because a modifier option
+showing its linked variant's code must not read as classified in its own
+right — the validator's inheritance rule (`effectiveClassification`) is what
+makes "этот модификатор — сам товар" classifiable in one place, and the UI
+has to teach it. A variant itself never inherits: there is no product-level
+classification left to inherit from since `V0028`.
 
 ### Editing
 
 Inline cell edit, `Enter` commits and moves down, `Ctrl+D` fills down from the
 cell above, paste from a spreadsheet fills a column. The ИКПУ cell is a
-**typeahead over the reference list** (`catalog.mxik_reference` — not built,
-ADR 0038) showing `code — label_ru`; until the list exists it accepts free text
-with the same control shape, so the retrofit is data, not UI.
+**typeahead over `FiscalReferenceController`'s search**
+(`GET /api/v1/control-plane/fiscal-reference/mxik`, built, over
+`catalog.mxik_reference`) showing `code — label_ru`. The table and the
+endpoint exist; the official list has never been imported into it — source and
+cadence are an open input on ADR 0038 (finance) — so the control has a real
+search to call and nothing to return yet. `GET …/mxik/status` tells the
+screen whether to say so, and the field still accepts free text meanwhile,
+with the same control shape, so the retrofit when the list lands is data, not
+UI.
 
-No format validation client-side. `V0021` is explicit: the code's shape belongs
-to the official list, not to a regex someone will have to migrate. What **is**
-checked is that a present code is not blank — an empty string satisfies "set"
-while classifying nothing, and would make the coverage figure lie.
+No format validation client-side. `V0021` reasoned it first and `V0028`
+carries it forward on `catalog.fiscal_classifications`: the code's shape
+belongs to the official list, not to a regex someone will have to migrate.
+What **is** checked, by `ck_fiscal_classification_codes_not_blank`, is that a
+present code is not blank — an empty string satisfies "set" while classifying
+nothing, and would make the coverage figure lie.
 
 ### Bulk
 
@@ -1199,10 +1240,12 @@ Delever's `Массовое редактирование товаров` and it 
 
 Fully classified (a green summary line, and the grid still reachable) · Partially
 classified (the default; the gap filter is the landing) · Unverified code
-(once `mxik_reference` exists: an amber cell with `Код не найден в справочнике`,
-non-blocking until ADR 0038 is accepted, blocking after) · Denied (`catalog.read`
-without `catalog.author` renders read-only) · Save conflict (per-cell 409 with
-the other value shown).
+(an amber cell with `Код не найден в справочнике`, sourced from the
+validator's `FISCAL_MXIK_CODE_UNKNOWN` — built, and silent today because the
+reference has never been imported; non-blocking until ADR 0038's rollout
+stage 3, which is a schedule, not an acceptance ADR 0038 already has) · Denied
+(`catalog.read` without `catalog.author` renders read-only) · Save conflict
+(per-cell 409 with the other value shown).
 
 ---
 
@@ -1296,9 +1339,8 @@ an existing table.
 | Counted per-item stock with a daily default and automatic reset | 4.6 | **ADR 0017** — `QUANTITY` mode is decided and refused by the service; the scheduled daily seed is unowned |
 | Stop **scope** and stop **source** (operator / POS terminal / rule) | 4.6 | **ADR 0017 + ADR 0041** |
 | Per-aggregator stop threshold | 4.5, 4.6 | **ADR 0040** |
-| `catalog.fiscal_classifications` — `marking_required`, `marking_scheme`, `excisable`, `alcohol_by_volume_bp`, `age_restriction_years`, `tax_profile_id`, `source`, `classified_by`, `classified_at` | 4.2 tab 5, 4.12 | **ADR 0038 (Proposed)** |
-| `catalog.mxik_reference` — `code`, `parent_code`, `label_ru/uz/en`, `default_package_codes`, validity window | 4.12 typeahead | **ADR 0038 (Proposed)** |
-| Blocker-severity fiscal findings: `FISCAL_DELIVERY_FEE_UNCLASSIFIED`, `FISCAL_RESTRICTED_NODE_ON_UNVERIFIED_CHANNEL` | 4.10 | **ADR 0038 (Proposed)** |
+| The ИКПУ/MXIK list actually imported — `catalog.mxik_reference` and its search endpoint (`FiscalReferenceController`) are built and empty; source and refresh cadence are an open input for finance | 4.12 typeahead | **ADR 0038 (Accepted, Partial)** |
+| Blocker-severity enforcement of fiscal classification (ADR 0038 rollout stage 3) and `FISCAL_RESTRICTED_NODE_ON_UNVERIFIED_CHANNEL` — `FISCAL_CLASSIFICATION_MISSING` and `FISCAL_DELIVERY_FEE_UNCLASSIFIED` already fire as warnings via `catalog.fiscal_classifications`, which is fully built (`V0028`) | 4.10 | **ADR 0038 (Accepted, Partial)** |
 | Combo/bundle products with choice-sets and per-variant price maps | 4.2 | **ADR 0016** |
 | Nested variant-modifiers; hidden modifiers auto-selected by order type; modifier-level fallback to group values | 4.2 tab 3 | **ADR 0016** |
 | Product physical and nutritional attributes: weight, measure, КБЖУ, `splittable`, catchweight + weight quantum, **portions as a decimal** | 4.2 tab 1 | **ADR 0016** (portions also block auto-add type 3) |
@@ -1309,7 +1351,7 @@ an existing table.
 | Excel import job entity: mapping profile, dry-run result, per-row outcomes | 4.11a | **ADR 0012** — currently scoped to POS sources only and must be widened |
 | POS external-id mapping table with linked / unlinked / conflict states | 4.11b | **ADR 0012** |
 | Auto-add rules: plain, product-triggered, portion-band | 4.9 of the IA | Unowned; closest **ADR 0018 / ADR 0019**. Needs a decision before design |
-| Aggregator menu preview and per-marketplace pre-publication checks | 4.10 | **ADR 0040 (Proposed)** |
+| Aggregator menu preview and per-marketplace pre-publication checks | 4.10 | **ADR 0040 (Accepted, Partial — this specific feature not built)** |
 | ABC-XYZ, demand forecasting, holiday calendar, kitchen buffer, and the business-day boundary that crosses midnight | not in this section | **ADR 0043** |
 | Promotions, promo codes, markup (наценка), redemption ledger | 4.8 | **ADR 0018** — decided, unbuilt |
 | Tenant-level catalog switches (`Использовать логику остатков`, QR/kiosk price plane) | 4.5, 4.6 | **ADR 0030** scoped configuration; the QR/kiosk half is already expressible as `sales_channels.price_plane_channel_id` and needs no switch |
