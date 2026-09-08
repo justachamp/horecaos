@@ -120,7 +120,7 @@ public class OrderPaymentProcess {
     private void sweepRow(ProcessRow row, Instant now, Duration staleAfter, Duration recheckInterval) {
         Instant enteredAt = enteredAtOf(row);
 
-        if (false) { // TEMPORARY BREAK-AND-CONFIRM
+        if (!enteredAt.isAfter(now.minus(staleAfter))) {
             // A fact, not a decision. ADR 0019 leaves cancellation-on-timeout as
             // an open product input; this never cancels, only says an operator
             // should look.
