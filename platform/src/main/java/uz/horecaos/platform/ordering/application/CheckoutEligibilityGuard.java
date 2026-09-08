@@ -244,10 +244,26 @@ class CheckoutEligibilityGuard {
                     "An order says how it will be paid, or it cannot be settled or refunded");
         }
 
-        // ADR 0013's precondition, and the last read-only refusal. A method with no
-        // merchant account behind it is refused here rather than at the payment
-        // step, because the alternative is an order that has taken a kitchen slot
-        // and a quote and can never be paid.
+        // ADR 0036's channel payment matrix — the operator's own choice of what
+        // this channel sells, checked here for the same reason CartPaymentOptions
+        // filters by it before ever offering a method: an absent or disabled row
+        // is "we do not take that here", and it must refuse a checkout that names
+        // the code directly exactly as it already keeps that code off the
+        // offered list. Checked before canAcceptPayment, and deliberately: the
+        // matrix is the tenant's own configuration and the merchant-account
+        // question below is a separate precondition, so a method the channel
+        // never enabled is refused for what it is rather than folded into "no
+        // merchant account", which it may have one of and still not be sold here.
+        if (!channels.enabledPaymentMethodCodes(command.tenantId(), cart.channelId())
+                .contains(paymentMethodCode)) {
+            return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + paymentMethodCode);
+        }
+
+        // ADR 0013's precondition, and the last read-only refusal about the
+        // payment method itself. A method with no merchant account behind it is
+        // refused here rather than at the payment step, because the alternative
+        // is an order that has taken a kitchen slot and a quote and can never be
+        // paid.
         if (!payments.canAcceptPayment(command.tenantId(), cart.locationId(), paymentMethodCode)) {
             return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This location cannot take " + paymentMethodCode);
         }
