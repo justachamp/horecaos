@@ -203,12 +203,12 @@ then by count descending.
 
 | Condition | Source | Severity |
 |---|---|---|
-| Location has no active fiscal assignment | `tenant.location_fiscal_assignments` — *not built, ADR 0038* | Blocking |
+| Location has no active fiscal assignment | `tenant.location_fiscal_assignments` — table exists (V0053) and `payments` already resolves a seller from it, but only control-plane's `LegalEntityController` can read or write an assignment; this panel has nothing of its own to query yet | Blocking |
 | Location active but bound to no sales channel | `tenant.sales_channel_locations` absent for the location | Blocking |
 | Channel active with no enabled payment method | `tenant.channel_payment_methods` — zero enabled rows | Blocking |
 | Channel active with no enabled fulfilment mode | `tenant.channel_fulfillment_modes` — zero enabled rows | Blocking |
 | Location with no schedule bound for an enabled mode | `tenant.location_service_bindings` missing `(location, mode)` | Blocking |
-| Priceable nodes without ИКПУ | `catalog.variants.mxik_code IS NULL`, `catalog.modifier_options.mxik_code IS NULL` (indexes `ix_variants_unclassified`, `ix_modifier_options_unclassified` exist for exactly this count) | Blocking once ADR 0038 lands; **advisory today**, because V0021 deliberately left the columns nullable while 0038 is Proposed |
+| Priceable nodes without ИКПУ | `catalog.variants.mxik_code IS NULL`, `catalog.modifier_options.mxik_code IS NULL` (indexes `ix_variants_unclassified`, `ix_modifier_options_unclassified` exist for exactly this count) | **Advisory today**, and stays that way until the `CatalogValidator` rules ADR 0038 names turn from warnings into publication errors — everything else this row needs (the classification columns, `catalog.mxik_reference`, the per-node classification endpoints) is already built |
 | Installation credential unverified or failing | `integration.installations.last_connection_status = 'FAILED'` / `'UNVERIFIED'` | Blocking for POS/payment, advisory otherwise |
 | Notification template blocked in provider moderation | *not built, ADR 0020* | Blocking for OTP, advisory otherwise |
 | Location manually forced closed with no expiry | `tenant.location_service_state.mode='FORCE_CLOSED' AND effective_until IS NULL` | Advisory, and the single most valuable row here — it is the fryer-broke-on-Tuesday-still-closed-on-Saturday failure ADR 0036's comment names |
@@ -311,7 +311,7 @@ has genuinely independent concerns edited by different people.
 | Приготовление | minutes | resolved `tenant.preparation_bands.duration_minutes` for now |
 | Лимит заказов | integer or `—` | `tenant.location_service_state.max_concurrent_orders` |
 | Каналы | count, links to 10.4 filtered | `tenant.sales_channel_locations` where `status='ACTIVE'` |
-| Юр. лицо / ИНН | text | **not built, ADR 0038** (`tenant.location_fiscal_assignments` → `tenant.legal_entities.tin`) |
+| Юр. лицо / ИНН | text | `tenant.location_fiscal_assignments` → `tenant.legal_entities.tin` — the tables exist (V0053), but only control-plane's `LegalEntityController` reads or writes them; **no operations endpoint exists for this column to call** |
 | Часовой пояс | IANA, shown only when it differs from the brand's | `tenant.locations.timezone` |
 
 **Filters.** Status tabs with live counts — `Все (12) · Активные (9) · Черновики (1) · Приостановлены (2)`
@@ -357,9 +357,9 @@ Nine tabs is Delever's observed ceiling (Togora §2k); this uses six.
 | Название, код, slug | `tenant.locations.display_name`, `.code`, `.slug` |
 | Часовой пояс | `tenant.locations.timezone` |
 | Статус | `tenant.locations.status`, read-only |
-| Телефон | **not built, ADR 0002** |
-| Адрес (структурированный) | **not built, ADR 0002.** Note the asymmetry worth fixing together: `customer.addresses` gained structure and a `coordinate_source` in V0021, while a *branch* has no address at all |
-| Точка на карте (широта/долгота) | **not built, ADR 0002** — and ADR 0037 needs it: `RADIUS` distance mode is haversine *from the location point*, so this column must land with 0037 or the default distance mode cannot be computed |
+| Телефон | `tenant.locations.contact_phone` — column exists (V0023, E.164 enforced), readable via `LocationView.contactPhone`; **no operations write endpoint yet**, only control-plane's `describeLocation` sets it |
+| Адрес (структурированный) | `tenant.locations.address_line`, `.district`, `.city`, `.landmark` — built by V0023, closing the asymmetry with `customer.addresses`'s V0021 structure. Same operations-write gap as above |
+| Точка на карте (широта/долгота) | `tenant.locations.latitude`, `.longitude`, `.coordinate_source` — built by V0023, and ADR 0037's `ServiceZoneService` already originates zones from this point. Still no operations write endpoint |
 | Обложка | `media.assets` `owner_scope='LOCATION'`, purpose gap as in 10.1 |
 | Теги | **not built** — Delever's *Теги филиалов* page exists but is empty; low value, wave 2 |
 | Порядок сортировки | **not built** — drives storefront branch ordering |
@@ -410,8 +410,10 @@ constraint name. Overlaps are legal and resolved by `priority` — show the reso
 
 **Tab 4 — Фискальные данные** — read-only summary plus a link to 10.7.
 Legal entity, ИНН, VAT registration, effective-from date, and the fiscal terminals bound here.
-All **not built, ADR 0038**. Read-only here on purpose: assigning a branch to a legal entity is an
-approval-bearing act and belongs on one screen (10.7), not on thirty branch pages.
+The underlying tables are built (`tenant.legal_entities`, `.location_fiscal_assignments`, V0053;
+`fiscal.fiscal_terminals`, V0039), but nothing in operations reads them yet — same gap as 10.7,
+not a separate one. Read-only here on purpose regardless: assigning a branch to a legal entity is
+an approval-bearing act and belongs on one screen (10.7), not on thirty branch pages.
 
 **Tab 5 — Каналы** — which channels sell from this location.
 A checkbox list of `tenant.sales_channels` for the tenant, writing `tenant.sales_channel_locations`.
@@ -500,7 +502,7 @@ inside five provider pages and consequently cannot express provider fallback at 
 | Field | Source |
 |---|---|
 | Ограничение по количеству заказов на филиал | `tenant.location_service_state.max_concurrent_orders` — echoed here read-only, edited in 10.2 |
-| Не принимать заказы из других зон доставки | `CATCHMENT` zone enforcement, ADR 0037 — **not built** |
+| Не принимать заказы из других зон доставки | `CATCHMENT` zone enforcement — **the resolver behaviour is built**: `DeliveryFeeResolver` already refuses an address outside a branch's `CATCHMENT`-role zone (`OUTSIDE_CATCHMENT`) rather than matching nothing. There is no separate on/off setting because there does not need to be one — a brand with no `CATCHMENT` zone enforces nothing. What is missing is that zone authoring itself is control-plane only (see brands-and-locations.md §9), so this row has nothing to link to from here yet |
 | Что делать с адресом вне зоны | `REJECT` / `OFFER_PICKUP` / `MANUAL_REVIEW` | `delivery.out_of_zone_policy`, ADR 0030 key — **not built** |
 | Подбор филиала для предзаказа вне рабочего времени | `по расстоянию` / `по времени открытия` | **not built**, config key |
 | Показывать курьеру и кухне только оплаченные заказы | boolean | **not built**, ADR 0042 |
@@ -705,20 +707,26 @@ receipt.
 |---|---|---|
 | Порядок | drag handle | `display_order` — **not built**; add it, because operators pick from this list under pressure |
 | Иконка | image 1:1 ≤1 MB | `media.assets` |
-| Название | localized ru / uz-Latn / en | `payments.payment_methods.display_name` + a texts table — **not built, ADR 0038** |
-| Код | immutable string | `.code` — **not built, ADR 0038** |
+| Название | localized ru / uz-Latn / en | `payments.payment_methods.display_name` exists (V0042) but is a single `varchar(120)`, not localized — a texts table is still **not built** |
+| Код | immutable string | `.code` — **built** (V0042), unique per tenant |
 | Базовый тип | `CASH / CARD / ONLINE / CASHBACK / DEPOSIT / GLOBAL_PAY` | Delever's enum; HorecaOS's equivalent is `responsibility` plus `settles_from_balance` — see below |
-| Кто выдаёт чек | `PARTNER / TERMINAL / MARKETPLACE / OPERATOR` | `.responsibility` — **not built, ADR 0038** |
-| Эквайринг | installation → 10.8 | `.provider_installation_id` — required when `PARTNER` |
-| Договор | reference | `.contract_reference` — required when `MARKETPLACE` |
-| Списывается с баланса | boolean | `.settles_from_balance` — ADR 0046, for `LOYALTY_POINTS`. `CUSTOMER_DEPOSIT` is withdrawn: HorecaOS holds no customer funds |
-| Активен | boolean | `.active` |
+| Кто выдаёт чек | `PARTNER / TERMINAL / MARKETPLACE / OPERATOR` | `.responsibility` — **built** (V0042); applied at checkout by `CheckoutSettlementPlanner.responsibilityOf`, though not yet validated at method activation as ADR 0038 wants — see Validation below |
+| Эквайринг | installation → 10.8 | `.provider_installation_id` — **still not built**; `payments.payment_methods` carries no such column |
+| Договор | reference | `.contract_reference` — **still not built**, same gap |
+| Списывается с баланса | boolean | `.settles_from_balance` — ADR 0046, built (V0042), for `LOYALTY_POINTS`. `CUSTOMER_DEPOSIT` is withdrawn: HorecaOS holds no customer funds |
+| Активен | boolean | `.status` — built |
 | Каналы | count → 10.4 | `tenant.channel_payment_methods` |
 
-**Everything in this table is unbuilt.** Today `tenant.channel_payment_methods.payment_method_code`
-is a bare `varchar(32)` with a format check and **no foreign key** — the migration's own comment
-says so and names ADR 0038 as the owner. That means today a channel can enable a payment method that
-names nothing. This screen is the fix, and it is a pilot blocker.
+**The pilot blocker this screen was written to fix is closed; the screen itself is not.**
+`payments.payment_methods` and its `(tenant_id, code)` uniqueness landed in V0042 (ADR 0046), and
+V0175 finally added the foreign key from `tenant.channel_payment_methods.payment_method_code` onto
+it — the migration's own comment names both this gap and ADR 0038's decision record as asking for
+exactly that. **A channel can no longer enable a payment method that names nothing.** The five rows
+tenants were already using (`CASH`, `CLICK`, `PAYME`, `TELEGRAM`, `MARKETPLACE`) were backfilled by
+that same migration, and `CheckoutSettlementPlanner` lazily registers a new one the first time a
+checkout tenders against it — **no create, edit or disable endpoint exists yet, on either
+control-plane or operations.** This screen is still the fix for that: the registry has a shape to
+manage by hand, and nothing manages it that way today.
 
 **Actions.** `Добавить`, `Изменить`, `Отключить`. **Never delete** — a delivered order's tender and
 its fiscal document both point at the row that governed them.
@@ -758,11 +766,22 @@ legally appear on a receipt.
 three different times: a bookkeeper assigns entities, an IT admin registers terminals, and a
 catalog manager fills in ИКПУ codes.
 
-**Everything on this screen is ADR 0038, Proposed, Not started.** V0021 shipped an interim slice:
-`catalog.products.mxik_code`, `catalog.variants.mxik_code`, `catalog.modifier_options.mxik_code`
-and the matching `package_code` columns, nullable, unvalidated except non-blank, plus two partial
-indexes for the coverage question. That is deliberately the smaller thing, so operators can start
-entering codes before the full model lands.
+**This screen was written when ADR 0038 was Proposed; it is now Accepted and substantially
+built, just not from here.** `tenant.legal_entities` and `tenant.location_fiscal_assignments`
+exist (V0053) with `LegalEntityService` behind them; `fiscal.fiscal_terminals` and
+`fiscal.fiscal_documents` exist (V0039, V0053) with a document lifecycle, a `BLOCKED` state and
+a reporting sweeper running on a timer; `catalog.fiscal_classifications` and the ИКПУ reference
+`catalog.mxik_reference` exist (V0028) with per-node classification endpoints. **None of it is
+reachable from this screen yet**, which is the actual gap: `LegalEntityController` and
+`CatalogAuthoringController` both sit on control-plane (`/api/v1/control-plane/...`), and no
+controller of any kind exists yet for `fiscal.fiscal_terminals`. Tab 1 and Tab 3 below describe
+real, running machinery that only HorecaOS staff can currently drive; Tab 2 describes a table
+nobody can drive at all. V0021's interim slice — `catalog.products.mxik_code`, `catalog.variants.mxik_code`,
+`catalog.modifier_options.mxik_code` and the matching `package_code` columns, nullable,
+unvalidated except non-blank, plus the two partial indexes for the coverage question — is what
+those endpoints write. A tenant's own staff can act on none of it yet; every classification
+column here is set through `CatalogAuthoringController`, on control-plane, same as the rest of
+this screen.
 
 ### Tab 1 — Юридические лица
 
@@ -792,6 +811,8 @@ receipt obligation. Surface that on the row, in 10.2's list, and in the 10.0 rea
 
 `fiscal.fiscal_terminals`: kind (`POS / COURIER_TERMINAL / KIOSK / VIRTUAL`), location, legal
 entity, provider binding, terminal reference, capability snapshot, status, last health check.
+The table exists (V0039/V0053); **no controller reads or writes it yet, on control-plane or
+operations** — this tab has a schema to render and nothing to call.
 Sort by severity: failing health (0) → never checked (1) → healthy (2).
 Actions: `Проверить связь` (writes `last_health_check_at`/`last_health_status`), `Отключить`.
 Endpoints come from the platform-owned approved catalogue (`integration.provider_environments`),
@@ -802,7 +823,10 @@ form must show a *chooser*, not a URL input.
 
 Not an editor — a **coverage report and a bulk tool**. The editing happens in the product editor
 (Catalog 4.2); this tab exists because the fiscal blocker is a per-brand number and somebody has to
-close it before launch.
+close it before launch. Per-node classification itself is built —
+`CatalogAuthoringController.classifyVariant`/`classifyModifierOption`/`classifyFee` exist and
+write the columns below — but only from control-plane, same as this whole screen; the bulk tool
+this tab specifically adds is, separately, genuinely **not built** (see below).
 
 - A headline: `неклассифицировано: 143 из 1 204 позиций` from `ix_variants_unclassified` +
   `ix_modifier_options_unclassified`.
@@ -918,10 +942,18 @@ the restaurant's own staff alerts go.
 **Layout.** Two tabs — *Шаблоны* (templates) and *Маршрутизация* (routing). Templates are a
 list-plus-editor; routing is a form per location.
 
-**Everything here is ADR 0020, Accepted, Not started.** Name the tables precisely so the screens can
-be built against them: `notifications.templates`, `notifications.template_versions`,
-`notifications.preferences`, `notifications.recipient_endpoints`, `notifications.notifications`,
-`notifications.delivery_attempts`, `notifications.delivery_status_events`.
+**This was true when ADR 0020 was Proposed; Tab 1 no longer is.** All seven tables exist
+(V0026): `notifications.templates`, `notifications.template_versions`,
+`notifications.notification_preferences` (named `.preferences` above; the migration's own name
+is longer), `notifications.recipient_endpoints`, `notifications.notifications`,
+`notifications.delivery_attempts`, `notifications.delivery_status_events`. Template authoring is
+built and reachable from operations today — `NotificationTemplateController` at
+`/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates` lists, creates, adds a
+version and activates one, matching Tab 1's `Создать` / `Изменить` / `Активировать` below —
+plus `OperationsNotificationController` for delivery evidence and manual retry on one message.
+**Tab 2 is still not built**: `recipient_endpoints.operations_endpoint_reference` exists as a
+column, but no controller reads or writes per-location routing, so a tenant admin cannot set
+where their own alerts go yet.
 
 ### Tab 1 — Шаблоны
 
@@ -959,14 +991,18 @@ indicated). Right pane: the key fields — event, source channels, fulfilment mo
 language, delivery channel, price toggle, active. This is Delever's exact layout and it is good;
 keep it.
 
-**Moderation state is a first-class column and a hard gate.** Eskiz and Playmobile pre-approve SMS
+**Moderation state is a first-class column and a hard gate — genuinely not built.**
+`notifications.template_versions.status` is `DRAFT` / `ACTIVE` / `SUPERSEDED` only; there is no
+provider-moderation state and no send block behind one. Eskiz and Playmobile pre-approve SMS
 texts; ADR 0020 keeps the local record referencing the approved external template. A template
 `PENDING` or `REJECTED` **blocks sending**, and the editor shows that as a banner with the provider's
 reason and a `Отправить на модерацию` action — not as a badge someone might miss. Delever's docs do
 not model this at all and the IA calls it out as something HorecaOS adds.
 
-**Actions.** `Создать`, `Изменить` (creates a new `template_version`, never mutates), `Активировать`,
-`Тестовая отправка` (to a staff phone, recorded as an audit fact), `Дублировать на другой язык`.
+**Actions.** `Создать` and `Активировать` are built exactly as specified —
+`NotificationTemplateController.create`/`.activate`. `Изменить` (creates a new
+`template_version`, never mutates) is built as `.addVersion`. `Тестовая отправка` (to a staff
+phone, recorded as an audit fact) and `Дублировать на другой язык` have no matching endpoint yet.
 Activation of a `TRANSACTIONAL_REQUIRED` template is confirmed by naming what it changes.
 
 **Consent is visible but not editable here.** A `MARKETING`-class template shows
@@ -1013,13 +1049,15 @@ because each list is five to fifteen rows and giving each its own screen is the 
 ### Причины отмены
 
 The most-used list in the console, and the one Delever and HorecaOS model most differently.
-`ordering.order_outcome_reasons` + `ordering.order_outcome_reasons_texts` — **ADR 0039,
-Accepted, Not started.** Today `ordering.order_state_history.reason_code` is a bare `varchar(64)`
-with no registry behind it.
+`ordering.order_outcome_reasons` + `ordering.order_outcome_reason_texts` — **built by V0029**, and
+managed today by `OrderOutcomeReasonController`, which sits on control-plane, not operations, so
+this screen still has nothing to call. `ordering.order_state_history.reason_code` itself remains a
+bare `varchar(64)` with no registry behind it, unrelated to the new tables — a transition still
+free-types its reason even though a curated list now exists elsewhere for it to point at.
 
 | Field | Type | Source |
 |---|---|---|
-| Порядок | drag | `display_order` |
+| Порядок | drag | **not built** — `order_outcome_reasons` carries no `display_order` column; the platform-owned sibling table `order_reject_reasons` (V0119, a different registry for pre-acceptance rejection) does, which is worth reusing the shape of rather than the table |
 | Внутреннее название | text, operator-facing | `.internal_name` — *«Не дозвонились»* |
 | Текст для клиента | localized ru / uz-Latn / en | `_texts.customer_text` — the softened wording |
 | Системная категория | closed platform enum | `.system_category` — what cross-tenant reporting groups by |
@@ -1155,7 +1193,7 @@ table. This card set links out with a one-line summary of what is currently in f
 | Field | Source |
 |---|---|
 | Что делать с адресом вне зоны | `delivery.out_of_zone_policy` ∈ `REJECT / OFFER_PICKUP / MANUAL_REVIEW` — ADR 0030 key, ADR 0037 consumer. **Not built** |
-| Не принимать заказы из чужих зон (catchment) | ADR 0037 `CATCHMENT` zone role. **Not built** |
+| Не принимать заказы из чужих зон (catchment) | ADR 0037 `CATCHMENT` zone role — **the enforcement is built** (`DeliveryFeeResolver`'s `OUTSIDE_CATCHMENT` refusal), driven by whether a `CATCHMENT` zone is configured rather than by a separate switch; blocked only on zone authoring itself still being control-plane only (brands-and-locations.md §9) |
 | Резервный коэффициент дистанции при недоступности маршрутизации | `fulfillment.delivery_tariffs.road_factor_basis_points` — per tariff, shown read-only with a link |
 
 `MANUAL_REVIEW` holds the cart for an operator to approve a manual fee with a reason, audited —
@@ -1227,8 +1265,11 @@ graying it out.
 
 Read-only projection of 10.7: which legal entity issues, which responsibility discharges the
 obligation for each payment method, and where the customer receives the receipt (a link, an SMS, a
-paper roll at the kiosk). Sourced from `payments.payment_methods.responsibility` and
-`fiscal.fiscal_documents` — **not built, ADR 0038**.
+paper roll at the kiosk). Sourced from `payments.payment_methods.responsibility` (built, V0042) and
+`fiscal.fiscal_documents` (built, V0039/V0053) — and unlike most of 10.7, this one already has an
+operations reader: `FiscalDocumentController` at `/api/v1/tenants/{tenantId}/fiscal` serves exactly
+the blocked worklist and coverage report this card projects, plus the retry and unblock commands
+ADR 0038 asks for. This card's own read-only summary is what is not yet wired up.
 
 The one thing that must be true and visible: **every accepted order resolves to issued, evidenced
 as not required, or visibly blocked.** ADR 0038's words. There is no path where an order is
@@ -1351,21 +1392,29 @@ Named precisely, with the owning decision. Everything not listed here is built a
 
 | Missing | Owner |
 |---|---|
-| `payments.payment_methods` (code, display name, `responsibility`, `provider_installation_id`, `contract_reference`, `settles_from_balance`, active) — and the foreign key from `tenant.channel_payment_methods.payment_method_code` onto it | ADR 0038, Proposed |
-| `tenant.legal_entities` (tin, vat_registered, tax_profile_id, registered_address) | ADR 0038 |
-| `tenant.location_fiscal_assignments` with the non-overlap exclusion constraint | ADR 0038 |
-| `fiscal.fiscal_terminals`, `fiscal.fiscal_documents` | ADR 0038 |
-| `catalog.fiscal_classifications` and `catalog.mxik_reference`; the three `CatalogValidator` blockers | ADR 0038 |
-| Location contact and geography: phone, structured address, latitude/longitude on `tenant.locations`. **`RADIUS` distance mode cannot be computed without the point**, so this lands with ADR 0037 at the latest | ADR 0002 + ADR 0037 |
-| The whole `notifications` schema — templates, template versions, endpoints, notifications, delivery attempts, status events | ADR 0020, Accepted, Not started |
-| Provider template moderation state and the send block it implies | ADR 0020 |
-| `ordering.order_outcome_reasons` + `_texts`, `ordering.order_outcomes` | ADR 0039, Accepted, Not started |
-| `fulfillment.service_zones` / `_versions` / `zone_location_bindings` / `regions` / `delivery_tariffs` / `_bands` / `_time_rules` / `delivery_fee_resolutions` | ADR 0037, Accepted, Not started |
+| `payments.payment_methods.provider_installation_id` and `.contract_reference`; a localized-name texts table | ADR 0038 — the table itself, `code`, `responsibility`, `settles_from_balance` and the foreign key from `channel_payment_methods.payment_method_code` are built (V0042, V0175); see §10.6 |
 | `delivery.out_of_zone_policy` as a registered ADR 0030 key | ADR 0037 + ADR 0030 |
 | Order-policy config keys with no declaration today: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
 | Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document | ADR 0002 + ADR 0030 |
-| ADR 0030 control-plane read and write APIs, and the resolution trace endpoint the origin chip calls | ADR 0030 — the checklist item is open |
+| An operations-facing resolution-trace endpoint for the §1.2 origin chip, and operations controllers over the ADR 0037 zone/tariff registry and the ADR 0038 legal-entity registry | `ConfigurationController`, `ServiceZoneController`, `DeliveryTariffController` and `LegalEntityController` all exist and do the work — every one of them sits on `/api/v1/control-plane/...`, none on `/api/v1/operations/...` |
+| An operations controller over `fiscal.fiscal_terminals` | ADR 0038 — the table exists (V0039/V0053) and nothing reads or writes it yet, on either surface |
+| `payments.payment_method_entity_bindings`, fiscal-responsibility validation at method activation, bulk fiscal-classification assignment, and the three `CatalogValidator` rules becoming publication errors rather than warnings | ADR 0038 |
+| Provider template moderation state and the send block it implies | ADR 0020 — the rest of the `notifications` schema and template authoring are built; see §10.9 |
+| Per-location notification routing (`recipient_endpoints.operations_endpoint_reference` has no reader or writer) | ADR 0020 |
+| An operations controller over `ordering.order_outcome_reasons` (built, V0029, but control-plane only via `OrderOutcomeReasonController`) | ADR 0039 |
 | ADR 0030 caching with outbox-driven invalidation (a settings screen that shows a stale value after save is unusable) | ADR 0030 + ADR 0033 |
+
+**No longer missing, corrected here because this list said otherwise:**
+
+| Was listed as missing | What actually shipped |
+|---|---|
+| `tenant.legal_entities`, `tenant.location_fiscal_assignments` with the non-overlap exclusion constraint | Built by V0053, with `LegalEntityService` and `payments.PaymentLegalEntityResolver` already using them. Control-plane can manage both today; operations still cannot (§10.7) |
+| `fulfillment.service_zones` / `_versions` / `zone_location_bindings` / `regions` / `delivery_tariffs` / `_bands` / `_time_rules` / `delivery_fee_resolutions` | The whole schema was built by V0025 (PostGIS included) and corrected by V0032, with `ServiceZoneService` and `DeliveryFeeResolver` implementing the model in full. Control-plane can manage zones and tariffs today; operations still cannot (§10.13) |
+| Location contact and geography: phone, structured address, latitude/longitude on `tenant.locations` | Built by V0023. `RADIUS` distance mode can already compute from the point; the point just has no operations write path yet (§10.2b) |
+| The whole `notifications` schema | Built by V0026 (seven tables). Template authoring is reachable from operations today (§10.9); routing and moderation are the actual remaining gaps, listed above |
+| `ordering.order_outcome_reasons` + `order_outcome_reason_texts`, `ordering.order_outcomes` | Built by V0029. Control-plane can manage the registry (`OrderOutcomeReasonController`); operations still cannot |
+| `catalog.fiscal_classifications` and `catalog.mxik_reference` | Built by V0028, with per-node classification endpoints on `CatalogAuthoringController` (§10.7) — control-plane only, and the three `CatalogValidator` rules genuinely remain warnings, not blockers |
+| `payments.payment_methods` and the foreign key from `channel_payment_methods.payment_method_code` | Built by V0042 (ADR 0046) and V0175. What is still missing from the row is narrower — see above |
 
 ### Blocks a good version of the section, not the pilot
 

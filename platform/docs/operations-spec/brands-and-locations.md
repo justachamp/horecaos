@@ -7,9 +7,13 @@ is configured for trade.
 are seen from a branch.
 **Primary ADRs:** 0002 (domain model), 0036 (sales channels and serviceability — **built**,
 migration V0020), 0030 (configuration resolution), 0037 (delivery zones and tariffs — accepted,
-**not started**), 0038 (legal entities and fiscal identity — proposed, **not started**),
-0016 (catalog publication and location offerings — built), 0010/0015 (media), 0027 (audit and
-approvals), 0025 (capabilities).
+**partial**: `fulfillment`'s zone, tariff and fee-resolution schema and the resolver are built
+(V0025, V0032), but zone and tariff authoring lives on control-plane only — operations has no
+reader or writer of its own yet), 0038 (legal entities and fiscal identity — accepted,
+**partial**: `tenant.legal_entities` and `tenant.location_fiscal_assignments` exist (V0053) and
+`payments` already resolves a seller from them, but the same control-plane-only gap applies —
+see §10), 0016 (catalog publication and location offerings — built), 0010/0015 (media), 0027
+(audit and approvals), 0025 (capabilities).
 
 **Conventions used throughout.** 24-hour clock, no AM/PM. Dates `DD.MM` inside the current
 year, `DD.MM.YYYY` otherwise. Money in whole so'm with a narrow no-break space as the
@@ -51,9 +55,9 @@ So the section splits in two:
        ├─ Графики работы             (brand-scoped named timetables; library + editor)
        ├─ Исключения                 (all dated exceptions across all schedules, calendar view)
        ├─ Каналы × Филиалы           (matrix)
-       ├─ Зоны доставки              (map; ADR 0037, not built)
-       ├─ Тарифы доставки            (list + editor + simulator; ADR 0037, not built)
-       └─ Юридические лица           (registry; ADR 0038, not built)
+       ├─ Зоны доставки              (map; ADR 0037, schema and resolver built — control-plane only)
+       ├─ Тарифы доставки            (list + editor + simulator; ADR 0037, schema and resolver built — control-plane only)
+       └─ Юридические лица           (registry; ADR 0038, schema built — control-plane only)
 ```
 
 The brand list is **suppressed when the tenant has exactly one brand** and the section lands
@@ -97,8 +101,8 @@ harmless.
 | Готовка | minutes | `tenant.preparation_bands.duration_minutes` for the band matching now (highest `priority`, then narrowest); `—` when no band covers now |
 | Меню | count + warning dot | available offerings: `count(*) from catalog.location_offerings where location_id = ? and status = 'AVAILABLE'`; the dot lights when the brand has no live `catalog.publications` row for a channel this branch trades on (`NO_LIVE_MENU`) |
 | Часовой пояс | text, shown only when the tenant spans more than one | `tenant.locations.timezone` |
-| ИНН | mono | **not built — ADR 0038** (`tenant.location_fiscal_assignments` → `tenant.legal_entities.tin`) |
-| Зона | count | **not built — ADR 0037** (`fulfillment.zone_location_bindings`) |
+| ИНН | mono | `tenant.location_fiscal_assignments` → `tenant.legal_entities.tin` — the tables exist (V0053) and `payments.PaymentLegalEntityResolver` already resolves a seller from them at checkout, but only the control-plane `LegalEntityController` can read or write an assignment today; **no operations endpoint exists for this column to call** |
+| Зона | count | `fulfillment.zone_location_bindings` — exists (V0025, refined by V0032), but zone membership is managed only through the control-plane `ServiceZoneController`; **operations has no reader for it yet** |
 | Статус записи | badge, only visible when the Все tab is active | `tenant.locations.status` — DRAFT / ACTIVE / SUSPENDED / ARCHIVED |
 | Изменён | `DD.MM HH:mm` | `tenant.locations.updated_at` |
 
@@ -108,7 +112,10 @@ location's offerings. A number in a table always raises "which ones?"; answer it
 
 Default visible columns: Филиал, Код, Торговое состояние, Причина/до, Загрузка, Часы сегодня,
 Режимы, Каналы, Готовка. The rest are behind a column chooser persisted per user. ИНН and Зона
-are hidden until 0038 and 0037 land rather than shown as a column of dashes.
+stay hidden until an *operations* endpoint exists for each — 0038 and 0037 themselves have
+landed (`tenant.legal_entities` / `tenant.location_fiscal_assignments` in V0053,
+`fulfillment.service_zones` / `zone_location_bindings` in V0025/V0032), but both are reachable
+only from control-plane today, so this list still has nothing of its own to query.
 
 ### 1.4 Filters
 
@@ -264,15 +271,24 @@ the bottom that appears only when the form is dirty and states what will change.
 | Статус записи | segmented DRAFT / ACTIVE / SUSPENDED / ARCHIVED | `tenant.locations.status` |
 | Описание (ru / uz / en) | textarea | **not built** — same gap as localized name |
 
-**Секция «Контакты и адрес»** — *the entire section is unbuilt.*
+**Секция «Контакты и адрес»** — *the columns exist; nothing in operations can write them yet.*
+
+V0023 added exactly this section's fields to `tenant.locations` — its own header comment names
+the gap it closes as "the operations console and ADR 0037" — and `TenantControlPlaneService
+.describeLocation` already writes them transactionally, with a full audit entry per change. The
+catch is where that write lives: `describeLocation` sits behind
+`/api/v1/control-plane/tenants`, not behind `apps/operations`, so a tenant admin cannot edit
+their own branch's phone or pin today. The read half is closer: `GET
+.../operations/tenants/{tenantId}/brands/{brandId}/locations` already returns every field below
+on `LocationView`, so the record can *show* an address before this tab can *edit* one.
 
 | Field | Type | Source |
 |---|---|---|
-| Телефон | phone, `+998 XX XXX-XX-XX` mask, required | **not built** — no column on `tenant.locations`, no owning ADR |
-| Адрес | text | **not built** |
-| Ориентир | text | **not built** — the market needs this as a first-class field (ADR 0015 makes the same point for customer addresses) |
-| Точка на карте | map pin, lat/lon | **not built** — and this one blocks ADR 0037: `RADIUS` distance is "haversine from the location point" and there is no location point column. ADR 0037's implementation must add it or a schema-extension ADR must own it |
-| Регион | dropdown | **not built — ADR 0037** (`fulfillment.regions`) |
+| Телефон | phone, `+998 XX XXX-XX-XX` mask, required | `tenant.locations.contact_phone` — column exists (V0023, E.164 enforced by `ck_locations_contact_phone`), readable via `LocationView.contactPhone`; **no operations write endpoint yet** — only control-plane's `describeLocation` sets it |
+| Адрес | text | `tenant.locations.address_line`, `.district`, `.city` — columns exist (V0023), same read-only-from-operations state as above |
+| Ориентир | text | `tenant.locations.landmark` — exists (V0023); the market needs this as a first-class field and it already is one (ADR 0015 makes the same point for customer addresses, and V0023 borrows its vocabulary) |
+| Точка на карте | map pin, lat/lon | `tenant.locations.latitude`, `.longitude`, `.coordinate_source` — exist (V0023), and ADR 0037's `ServiceZoneService` already originates zones from this point; still no operations write endpoint |
+| Регион | dropdown | `fulfillment.regions` exists (V0025) — a code, name, centre and bounding box that constrain geocoding and zone activation — but `tenant.locations` has no `region_id` column, so a location has nothing to bind to it with yet. This row is blocked on the relationship, not the table |
 
 **Секция «Медиа»**
 
@@ -729,7 +745,7 @@ five branches in Tashkent", and it is the component ADR 0035 lists as missing (`
 | Состояние канала | badge | `tenant.sales_channels.status` — ACTIVE / INACTIVE / ARCHIVED |
 | Подключён здесь | tri-state | `tenant.sales_channel_locations.status` or row absence |
 | Режимы канала | pills, read-only on this tab | `tenant.channel_fulfillment_modes.fulfillment_mode` where `enabled` |
-| Способы оплаты | pills, read-only | `tenant.channel_payment_methods.payment_method_code` where `enabled` — **codes only; the registry they should point at is ADR 0038's `payments.payment_methods`, not built** |
+| Способы оплаты | pills, read-only | `tenant.channel_payment_methods.payment_method_code` where `enabled`, now a real foreign key into `payments.payment_methods` (ADR 0046's V0042, constrained by V0175) rather than a bare code — a channel cannot enable a method the tenant has not registered |
 | Ценовая плоскость | text, read-only | `tenant.sales_channels.price_plane_channel_id` |
 | Внешнее ценообразование | pill | `tenant.sales_channels.externally_priced` |
 | Живое меню | ✓/✗ per channel | `catalog.publications` for (tenant, brand, channel code) |
@@ -775,16 +791,33 @@ normal case, not the exotic one.
 
 ---
 
-## 9. View — Филиал → Доставка, and Зоны доставки (ADR 0037 — not built)
+## 9. View — Филиал → Доставка, and Зоны доставки (ADR 0037 — schema built, operations screens are not)
 
 ### 9.1 What they are for
 
 *"Where does this branch deliver, and what does the customer pay?"*
 
-**Everything in this section is unbuilt.** `fulfillment` currently contains only
-`package-info.java`: no zone table, no tariff table, no PostGIS, no distance calculation. The
-spec below is written against ADR 0037's accepted physical model so the screens can be built
-the moment the migration lands, and so nothing is designed that the model cannot support.
+**This was true when the schema was empty; it no longer is.** `fulfillment` carries the full
+physical model below — `service_zones`, `service_zone_versions`, `zone_location_bindings`,
+`regions`, `delivery_tariffs`, `delivery_tariff_versions`, `delivery_tariff_bands`,
+`delivery_tariff_time_rules` and `delivery_fee_resolutions` — built by V0025 (PostGIS and
+`btree_gist` enabled in the same migration) and corrected by V0032. `ServiceZoneService`
+implements exactly the versioning and activation validation §9.5 describes (self-intersection,
+the area ceiling, the region bounding-box check), and `DeliveryFeeResolver` runs the ordered
+resolution with full evidence written to `delivery_fee_resolutions` — the same evidence a
+customer's quote already carries via `pricing.QuoteService`.
+
+**What is still missing is not the model but this screen's access to it.**
+`ServiceZoneController` and `DeliveryTariffController` exist and do everything §9.3–9.5
+describe, but both sit behind `/api/v1/control-plane/tenants/...` — HorecaOS staff, not the
+tenant's own admins. `DeliveryFeeController` does have an operations-facing endpoint, but it is
+narrower than this section: `GET .../operations/tenants/{tenantId}/quotes/{quoteId}
+/delivery-fee-evidence` explains one already-quoted order, not a zone or a tariff. Until an
+operations controller exists for zones and tariffs themselves, §9.2's screens describe a
+capability a tenant admin cannot reach — they would have to ask HorecaOS staff to draw a zone on
+their behalf. The spec below stays written against the built model, since that is exactly what
+an operations controller would sit on top of; nothing here asks for anything the schema or the
+resolver cannot support.
 
 ### 9.2 Layout
 
@@ -863,18 +896,29 @@ resolved zone, band, time rule, distance, distance source and the fee — the sa
   corrected zone in DRAFT. Counter it: a persistent `Черновики зон: 3` chip in the section
   header, and the branch's Доставка tab showing `Есть неактивированная версия` on any zone
   bound to it.
-- **PostGIS absent** — the whole section renders a single explanatory card rather than an
-  error, because until the migration lands this is a not-yet, not a fault.
+- **No operations endpoint yet** — until zones and tariffs have their own operations
+  controller, the whole section renders a single explanatory card pointing at control-plane
+  rather than an error, because this is a not-yet-reachable-from-here, not a fault in the model.
 
 ---
 
-## 10. View — Филиал → Фискальные данные, and Юридические лица (ADR 0038 — not built)
+## 10. View — Филиал → Фискальные данные, and Юридические лица (ADR 0038 — schema built, no operations screen)
 
 ### 10.1 What it is for
 
 *"Which company issues the receipt for orders taken at this branch, and from when?"*
 
 ### 10.2 Layout
+
+The model below is built, not proposed: V0053 created `tenant.legal_entities` and
+`tenant.location_fiscal_assignments` with exactly the exclusion constraint §10.3 describes,
+`LegalEntityService` registers, activates, suspends and archives an entity and assigns a
+location close-then-open in one transaction, and `payments.PaymentLegalEntityResolver` already
+uses the result to decide where CLICK and PAYME can be offered. What is missing is this screen:
+`LegalEntityController` exists and does everything §10.4 asks for, but it sits at
+`/api/v1/control-plane/tenants/{tenantId}/legal-entities` — HorecaOS staff can register and
+assign entities today, and a tenant's own admin cannot, because operations has no controller
+of its own over this registry yet.
 
 On the branch: a **timeline of assignments**, not a single INN field. The whole point of ADR
 0038's model is that a branch's fiscal identity has a validity range and history — a
@@ -1065,7 +1109,7 @@ was computed. A stale availability explainer is worse than none.
 | Per-day-of-week open/close, separate venue and delivery schedules, 24/7 shortcut | The need is real; our shape (named schedules bound per mode) is strictly more expressive and covers theirs |
 | Time-of-day preparation intervals | Built (`tenant.preparation_bands`); a Friday rush quoting 45 minutes instead of 25 is the difference between a late order and an honest one |
 | Per-branch order limit | Built (`max_concurrent_orders`) |
-| Per-branch phone, address, landmark, map pin, INN | Not built and must be — every one of these blocks a real workflow |
+| Per-branch phone, address, landmark, map pin, INN | The columns exist now (`tenant.locations` via V0023; `tenant.location_fiscal_assignments` via V0053) — what still blocks the workflow is that only control-plane can read or write them, not operations (§2.3, §10.2) |
 | Order types permitted per branch | Built as `location_service_bindings` per mode, intersected with the channel |
 | Delivery zones with per-zone tariff, free-delivery-from threshold, minimum basket | ADR 0037 |
 | Zone tariff outranking branch tariff | ADR 0037 fee-resolution step 4, stated once and in one place — which Delever never does |
@@ -1144,10 +1188,10 @@ legacy `Vendor` = branch (`tenant.locations.legacy_vendor_id`).
 | Legacy behaviour | Where it went |
 |---|---|
 | `name` and `description` as `{en, ru, uz}` on both company and vendor | **Regression risk.** `display_name` is a single string today. Staff type three languages and will notice. Named as a gap below |
-| Vendor list columns: Название, Телефон, Максимальная видимость, Цена доставки | Phone returns in §2.3 (unbuilt). "Максимальная видимость" (`visibility_distance`, default 100 000) is Delever's max-distance under another name → ADR 0037 `delivery_tariffs.max_distance_meters`. "Цена доставки" (`delivery_price`, default 12 000) → the tariff's base band |
+| Vendor list columns: Название, Телефон, Максимальная видимость, Цена доставки | Phone returns in §2.3 — the column is built (V0023), only the operations write path is not. "Максимальная видимость" (`visibility_distance`, default 100 000) is Delever's max-distance under another name → ADR 0037 `delivery_tariffs.max_distance_meters`. "Цена доставки" (`delivery_price`, default 12 000) → the tariff's base band |
 | `tin` on the vendor form | §10, as a dated assignment rather than a text field |
 | `pre_order` boolean per vendor | `service_schedules.accepts_scheduled_orders` — moved to the schedule, which is more expressive. Explain the move in the UI copy, because the field moved screens |
-| `latitude` / `longitude` with regex-validated manual entry | Replaced by a map pin, keeping numeric entry as a fallback — operators here do paste coordinates. **Column unbuilt** |
+| `latitude` / `longitude` with regex-validated manual entry | Replaced by a map pin, keeping numeric entry as a fallback — operators here do paste coordinates. **Column built (V0023); no operations write path yet** |
 | `city_id` free text | → ADR 0037 `fulfillment.regions` |
 | `image` + `background_image` upload | `media.assets` LOCATION/BRAND scope; role binding unbuilt |
 | Work-time config: `working_days.{monday..sunday}.{start,end}` + `non_working_days[{date,start,end}]` | Exactly `service_schedule_rules` + `service_schedule_exceptions`. Note the legacy shape allowed **one window per day**; ours allows several, so nothing is lost. Note also that legacy `non_working_days` carried replacement hours — so did the exception model, and the schema enforces the either/or the legacy JSON did not |
@@ -1166,26 +1210,30 @@ legacy `Vendor` = branch (`tenant.locations.legacy_vendor_id`).
 
 | Missing | Precisely what | Owner |
 |---|---|---|
-| Location contact phone | column on `tenant.locations` | **No ADR.** Nearest owner ADR 0002. Needs a schema-extension decision |
-| Location address and landmark | columns or a structured value on `tenant.locations` | **No ADR.** ADR 0015 fixes the shape for *customer* addresses (entrance/floor/apartment/landmark inside `encrypted_fields`); a branch address is not personal data and should be plain columns |
-| Location coordinates | `latitude`, `longitude` on `tenant.locations` | **ADR 0037 depends on it and does not create it.** `RADIUS` distance is "haversine from the location point"; the point does not exist. Must land with 0037 or before |
 | Localized names and descriptions for brands and locations | `catalog.translations.ck_translation_entity_type` admits catalog entities only | **No ADR.** ADR 0016 owns the catalog table; a tenant-scope equivalent needs a decision |
 | Media role binding for brand logo, branch cover, aggregator banner | `media.assets` carries `owner_scope IN ('TENANT','BRAND','LOCATION')` but nothing records which asset plays which role; `catalog.media_relations` is catalog-only | **ADR 0010** |
 | Per-brand country, currency, locale set | `tenant.tenants.default_currency` / `.default_timezone` are tenant-scope only; IA 2.3 requires per-brand | **ADR 0034** (residency, country → currency/locale/timezone) + **ADR 0002** |
 | Service-state reason vocabulary | `location_service_state.reason_code` is free `varchar(48)` with no registry | **ADR 0036** left it open; IA 10.10 reference data would own the table. Code-owned enum in the frontend until then |
 | Channel binding pause reason | `sales_channel_locations` has `status` and no reason | **ADR 0036**. Candidate addition; the same argument that made a close reason mandatory applies |
 | Pre-order lead time per fulfilment mode | Delever and legacy both have it; `accepts_scheduled_orders` is a boolean only | **ADR 0019** |
-| Payment-method registry behind `channel_payment_methods.payment_method_code` | The column is a code with no FK; V0020's own comment says point it at `payments.payment_methods` once 0038 lands | **ADR 0038** |
-| Legal entities and per-branch fiscal assignment | `tenant.legal_entities`, `tenant.location_fiscal_assignments` | **ADR 0038** — Proposed, not started |
-| Delivery zones, regions, tariffs, bands, time rules, fee resolutions | the whole `fulfillment` schema per §9.3–9.4 | **ADR 0037** — Accepted, not started. PostGIS not enabled |
 | Branch tags | vocabulary + assignment | **No ADR.** IA 10.10 |
 | Named `Menu` entity bound to a branch | `catalog.location_offerings` is variant-level; copy-menu and bind-to-branch have nothing to hang on | **ADR 0016 divergence**, named in IA §4.4 as the single biggest gap |
 | Storefront sort order for branches | integer on the location | **No ADR.** IA 6.8 |
-| Per-branch Telegram chat IDs by event class | five channels per branch, with topic ids | **ADR 0020** |
+| Per-branch Telegram chat IDs by event class | `notifications.recipient_endpoints.operations_endpoint_reference` exists (V0026) but nothing in operations reads or writes it per location — five channels per branch, with topic ids, is still a screen nobody can open | **ADR 0020** |
 | Business calendar (public and movable Islamic holidays, weekend definition, business-day boundary crossing midnight) | needed by `Импорт праздников` (§5.6) and by reporting | **No ADR.** IA 10.10 |
 | Venue attributes | seats, average cheque, parking, playground, virtual tour | **No ADR — and deliberately not requested.** See §14 Skip |
 
-Two of these are **blocking**, not merely missing: a branch has no coordinates, so ADR 0037
-cannot compute a fee; and a branch has no phone or address, so no courier and no customer can
-reach it. Everything else in this section can be built and shipped around its gap. These two
-cannot.
+**No longer missing, corrected here because this list said otherwise:**
+
+| Was listed as missing | What actually shipped |
+|---|---|
+| Location contact phone, address and landmark | `tenant.locations.contact_phone`, `.address_line`, `.district`, `.city`, `.landmark` — all built by V0023. Read-only from operations today (§2.3): the control-plane write path exists, the operations one does not |
+| Location coordinates | `tenant.locations.latitude`, `.longitude`, `.coordinate_source` — built by V0023, and ADR 0037's zones already originate from this point |
+| Payment-method registry behind `channel_payment_methods.payment_method_code` | `payments.payment_methods` was created by ADR 0046 in V0042, and V0175 added exactly the foreign key this row asked for (`fk_channel_payment_method_code`) — a channel cannot enable an unregistered method any more. Still open: `provider_installation_id`, `contract_reference`, localized names and an icon (see settings.md §10.6) |
+| Legal entities and per-branch fiscal assignment | `tenant.legal_entities`, `tenant.location_fiscal_assignments` — built by V0053, with `LegalEntityService` and `payments.PaymentLegalEntityResolver` already using them. Control-plane can manage both today (§10); operations still cannot |
+| Delivery zones, regions, tariffs, bands, time rules, fee resolutions | the whole `fulfillment` schema — built by V0025 (PostGIS included) and corrected by V0032, with `ServiceZoneService` and `DeliveryFeeResolver` implementing the model in full. Control-plane can manage zones and tariffs today (§9); operations still cannot |
+
+One of the corrections above is still **blocking** in practice, even though the schema gap it
+named is closed: nothing in operations can *write* a branch's phone, address or coordinates, so
+a branch provisioned without a control-plane operator manually typing in its point still cannot
+be zoned or called. Everything else in this section can be built and shipped around its gap.
