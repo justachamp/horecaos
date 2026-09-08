@@ -54,6 +54,18 @@
              release train the CLAUDE.md stack line already commits to
              ("Kafka 4.3"). -->
         <kafka.version>4.3.1</kafka.version>
+        <!-- spring-boot-dependencies 4.1.1 manages tomcat.version at 11.0.24,
+             and the OWASP scheduled scan of 2026-09-08 (run 34248754358) found
+             every one of its eleven remaining findings there and nowhere else:
+             four scored 9.x, including CVE-2026-65637 and CVE-2026-65905 at 9.8.
+             Boot 4.1.1 had already closed the other sixty-six the previous run
+             reported, so this single override is what is left between the
+             platform and a clean scan. 11.0.25 is the current 11.0.x release.
+             Overridden by the same child-property mechanism kafka.version uses
+             above, and the scan is re-run after this lands rather than assumed
+             to have worked: a version bump that does not actually clear the
+             advisory is worth knowing about before launch, not after. -->
+        <tomcat.version>11.0.25</tomcat.version>
     </properties>
 
     <dependencies>
