@@ -1,7 +1,6 @@
 package uz.horecaos.platform.integration.provider.telegram;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
@@ -78,7 +77,6 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationValueAuthor;
-import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.cache.InProcessRateLimiter;
 
 /**
@@ -341,22 +339,25 @@ class TelegramAuthSignInIntegrationTest {
         long widenedChat = 55011L;
         deliver(privateStartUpdate("auth_" + widened, widenedChat));
 
-        assertThatThrownBy(() -> deliver(contactUpdate(widenedChat, widenedChat, "+15551234567")))
-                .as("this key narrows and never widens: the number clears the brand pattern and is "
-                        + "then refused by PhoneNumber, which is deliberately Uzbek-only because "
-                        + "every OTP to a destination nobody decided to pay for is money reaching "
-                        + "nobody we serve. Opening a market is a change to PhoneNumber and the "
-                        + "pricing conversation its comment demands, not a regular expression an "
-                        + "operator can set")
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("Uzbek mobile");
+        // This key narrows and never widens: the number clears the brand pattern
+        // and is then refused by PhoneNumber, which is deliberately Uzbek-only
+        // because every OTP to a destination nobody decided to pay for is money
+        // reaching nobody we serve. Opening a market is a change to PhoneNumber
+        // and the pricing conversation its comment demands, not a regular
+        // expression an operator can set.
+        deliver(contactUpdate(widenedChat, widenedChat, "+15551234567"));
 
-        // Asserted as a throw rather than a polite decline because that is what
-        // it currently is, and the difference is worth seeing: a customer who
-        // shares a foreign contact with a widened bot gets an error rather than
-        // a message telling them why. Handling it kindly is a change to
-        // TelegramUpdateHandler.handleContactShare, not to this rule.
         assertThat(customerAccountCount()).isZero();
+        // PhoneNumber's own hard floor refused it exactly as a plain pattern
+        // mismatch would (see aNonMatchingPhoneIsRefused): the same polite,
+        // name-nothing message, no echoed number, no mention of "pattern" or
+        // "Uzbek" or "998" -- nothing here tells this customer that a
+        // differently configured brand's bot would have accepted their number.
+        assertThat(bot.messagesSentTo(widenedChat).getLast())
+                .doesNotContain("15551234567")
+                .doesNotContain("pattern")
+                .doesNotContain("Uzbek")
+                .doesNotContain("998");
 
         // Narrowing is what the key is for, and it works: this brand's bot now
         // accepts one operator prefix rather than every Uzbek mobile. The second
