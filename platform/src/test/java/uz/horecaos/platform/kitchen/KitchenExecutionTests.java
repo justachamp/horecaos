@@ -49,6 +49,7 @@ import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
+import uz.horecaos.platform.ordering.application.OrderPaymentProcess;
 import uz.horecaos.platform.ordering.application.OrderProgressAdapter;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -172,6 +173,7 @@ class KitchenExecutionTests {
                 orderStore,
                 new RecordingCapacity(),
                 new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY, objectMapper, clock),
+                new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper),
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, objectMapper),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
@@ -796,6 +798,8 @@ class KitchenExecutionTests {
                         REFUSES_INVENTORY,
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderPaymentProcess(
+                        new JdbcOrderProcessStore(jdbc), JsonMapper.builder().build()),
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
@@ -853,6 +857,8 @@ class KitchenExecutionTests {
                         REFUSES_INVENTORY,
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderPaymentProcess(
+                        new JdbcOrderProcessStore(jdbc), JsonMapper.builder().build()),
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
@@ -916,6 +922,8 @@ class KitchenExecutionTests {
                         REFUSES_INVENTORY,
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderPaymentProcess(
+                        new JdbcOrderProcessStore(jdbc), JsonMapper.builder().build()),
                 new OrderAcceptancePolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                         new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(

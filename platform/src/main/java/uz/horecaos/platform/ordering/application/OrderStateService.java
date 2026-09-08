@@ -66,6 +66,7 @@ public class OrderStateService {
     private final JdbcOrderStore orders;
     private final LocationCapacityPort capacity;
     private final OrderInventoryProcess inventoryProcess;
+    private final OrderPaymentProcess paymentProcess;
     private final OrderAcceptancePolicyService acceptancePolicies;
     private final OrderSettlementPort settlements;
     private final AuditRecorder audit;
@@ -76,6 +77,7 @@ public class OrderStateService {
             JdbcOrderStore orders,
             LocationCapacityPort capacity,
             OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
             OrderAcceptancePolicyService acceptancePolicies,
             OrderSettlementPort settlements,
             AuditRecorder audit,
@@ -84,6 +86,7 @@ public class OrderStateService {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
+        this.paymentProcess = paymentProcess;
         this.acceptancePolicies = acceptancePolicies;
         this.settlements = settlements;
         this.audit = audit;
@@ -367,6 +370,11 @@ public class OrderStateService {
                 PAYMENT_CAPTURE_ACTOR,
                 null,
                 now);
+
+        // The payment process manager's row closes here, in the same
+        // transaction as the transition that resolved it (ADR 0019). Whichever
+        // branch below the order takes next, its payment has landed either way.
+        paymentProcess.settleResolved(orderId, now);
 
         if (approvalRequired) {
             Instant deadline = now.plus(policy.approvalTimeout());
@@ -1065,6 +1073,15 @@ public class OrderStateService {
             inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
         } else if (target == OrderStatus.CONFIRMED) {
             inventoryProcess.enqueueCommit(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+        }
+
+        // The payment process manager's row closes wherever this consequence
+        // moved an order out of PAYMENT_AUTHORIZING from — a cancellation is the
+        // only path through this method that can, since approvalDeadlineReached
+        // only ever starts from AWAITING_APPROVAL. paymentCaptured settles the
+        // row itself, for the one path that never reaches applyConsequences.
+        if (order.status() == OrderStatus.PAYMENT_AUTHORIZING) {
+            paymentProcess.settleResolved(order.orderId(), now);
         }
 
         // The ADR 0036 kitchen slot is freed the moment the order stops occupying

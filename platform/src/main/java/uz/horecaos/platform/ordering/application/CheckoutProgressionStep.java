@@ -33,12 +33,17 @@ class CheckoutProgressionStep {
 
     private final JdbcOrderStore orders;
     private final OrderInventoryProcess inventoryProcess;
+    private final OrderPaymentProcess paymentProcess;
     private final ApplicationEventPublisher events;
 
     CheckoutProgressionStep(
-            JdbcOrderStore orders, OrderInventoryProcess inventoryProcess, ApplicationEventPublisher events) {
+            JdbcOrderStore orders,
+            OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
+            ApplicationEventPublisher events) {
         this.orders = orders;
         this.inventoryProcess = inventoryProcess;
+        this.paymentProcess = paymentProcess;
         this.events = events;
     }
 
@@ -76,6 +81,13 @@ class CheckoutProgressionStep {
                 command.actorId(),
                 command.correlationId(),
                 now);
+
+        // The payment process manager (ADR 0019): durable state, not the
+        // silence there used to be. Nothing here performs a provider effect —
+        // the row exists so a customer who never returns to pay is a fact an
+        // operator can find rather than an order sitting unindexed in
+        // PAYMENT_AUTHORIZING for ever.
+        paymentProcess.enqueue(orderId, command.tenantId(), now);
 
         return OrderStatus.PAYMENT_AUTHORIZING;
     }

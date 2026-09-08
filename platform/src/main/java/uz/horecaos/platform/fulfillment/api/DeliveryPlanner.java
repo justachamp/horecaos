@@ -42,4 +42,38 @@ public interface DeliveryPlanner {
      * @return the delivery plan id, or empty when there was nothing to plan
      */
     Optional<UUID> planFor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId, Instant confirmedAt);
+
+    /**
+     * Where sourcing has got to for an order this planner already opened a plan
+     * for (ADR 0014, ADR 0019's {@code ORDER_FULFILLMENT} process manager).
+     *
+     * <p>A narrow read, not the plan itself: {@code
+     * fulfillment.domain.sourcing.PlanStatus} stays internal, and this answers
+     * exactly the question {@code OrderFulfillmentProcess} has, in the buckets
+     * it needs to decide COMPLETED, MANUAL_ACTION_REQUIRED, or "check again
+     * later" — never in terms this module might reshape its own states around
+     * later.
+     *
+     * @return empty when no plan exists for this order — an anomaly for a row
+     *         this process manager only enqueues after a successful {@link
+     *         #planFor}, not the ordinary "nothing to plan" answer that method
+     *         itself already gives
+     */
+    Optional<SourcingOutcome> sourcingOutcome(UUID tenantId, UUID orderId);
+
+    /** The buckets {@link #sourcingOutcome} answers in. */
+    enum SourcingOutcome {
+
+        /** Still working. Neither resolved nor given up on. */
+        IN_PROGRESS,
+
+        /** A courier or pickup arrangement was found; sourcing's job is done. */
+        SOURCED,
+
+        /** The plan itself was cancelled — a normal, resolved outcome. */
+        CANCELLED,
+
+        /** Sourcing has already given up and named it so; a person decides next. */
+        MANUAL_ACTION_REQUIRED
+    }
 }

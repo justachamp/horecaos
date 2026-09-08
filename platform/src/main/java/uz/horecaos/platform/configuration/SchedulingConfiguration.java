@@ -126,7 +126,7 @@ public class SchedulingConfiguration {
      * MarketingRetentionSweeper.sweepOnce}, enforcing the twenty-four-month
      * audience-snapshot-membership window {@code JdbcAudienceStore.purgeMembers}
      * could already perform but nothing had ever called outside a test. Wave 73
-     * added the last one so far: {@code PosApprovalPoll.pollForDecisions}, which
+     * added one more: {@code PosApprovalPoll.pollForDecisions}, which
      * reads the till's answer for an export parked in {@code AWAITING_APPROVAL}.
      * The export reached that state from the moment the adapter said the till
      * wanted a manager, and nothing ever asked the till again — an order waited
@@ -142,7 +142,7 @@ public class SchedulingConfiguration {
      * exists anywhere — there is no privacy endpoint, service or table."
      * Scheduling a sweep with nothing to find would look like the erasure
      * obligation was met; it would not be, so it stays unscheduled and is
-     * recorded as a gap instead. Wave 77 added the last one so far: {@code
+     * recorded as a gap instead. Wave 77 added one more: {@code
      * MediaVerificationWorker.verifyScheduledBatch}, the leased worker that
      * drains {@code media.verification_jobs} (ADR 0010, V0180) — the separate
      * asynchronous validation worker the record always asked for, replacing the
@@ -150,12 +150,22 @@ public class SchedulingConfiguration {
      * inside {@code finalizeUpload} on the request thread. Waves 73 and 77 each
      * raised this number from 45 to 46 for their own job, on branches that could
      * not see each other; git merged the two identical edits into one and left
-     * the pool one thread short of the job count. Anything adding a
-     * {@code @Scheduled} method here should expect that, and trust
-     * {@code SchedulerPoolSizeTests}, which counts them, over the number written
-     * here.
+     * the pool one thread short of the job count. Wave 90 added the last two so
+     * far, closing ADR 0019's own named gap that only {@code ORDER_INVENTORY}
+     * among its process managers had durable resumable state: {@code
+     * OrderProcessWorker.runFulfillmentProcess}, which reflects fulfillment's
+     * own sourcing outcome onto the shared {@code ordering.order_process_states}
+     * row {@code DeliveryPlanTrigger} now opens beside the plan, and {@code
+     * .sweepStalePayments}, the safety net and stuck list for {@code
+     * ORDER_PAYMENT} — a row that used, in the record's own words, to be
+     * "driven by nothing at all". Neither drives a provider effect; both only
+     * ever read a signal that already exists elsewhere and reflect it, which is
+     * why closing two more of ADR 0019's four missing rows cost two jobs and not
+     * two new failure modes. Anything adding a {@code @Scheduled} method here
+     * should expect the same off-by-one wave 73/77 hit, and trust {@code
+     * SchedulerPoolSizeTests}, which counts them, over the number written here.
      */
-    static final int DEFAULT_POOL_SIZE = 47;
+    static final int DEFAULT_POOL_SIZE = 49;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

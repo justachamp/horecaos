@@ -150,6 +150,42 @@ public class JdbcOrderProcessStore {
                 == 1;
     }
 
+    /**
+     * Marks an active process {@code COMPLETED} without a prior claim.
+     *
+     * <p>{@link #settle} names the version a claim already read; this is for the
+     * caller that has none, because its own state change is what resolved the
+     * process rather than a scheduled worker's batch. {@code ORDER_PAYMENT} is
+     * the case: the order's own transition out of {@code PAYMENT_AUTHORIZING}
+     * settles the row in the same transaction, with no {@link #claim} step
+     * before it to hand back a version.
+     *
+     * <p>Guarded by status instead: a row already {@code COMPLETED} or {@code
+     * COMPENSATED} is left untouched, so a duplicate delivery of the fact that
+     * resolved it — a replayed payment capture, a cancellation racing a capture —
+     * settles nothing a second time.
+     */
+    public boolean settleCompletedIfActive(UUID orderId, String processName, String checkpointJson, Instant now) {
+        return jdbc.sql("""
+                UPDATE ordering.order_process_states
+                SET status = 'COMPLETED',
+                    checkpoint = CAST(:checkpoint AS jsonb),
+                    attempt_count = attempt_count + 1,
+                    next_attempt_at = NULL,
+                    last_error = NULL,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE order_id = :orderId AND process_name = :process
+                  AND status NOT IN ('COMPLETED', 'COMPENSATED')
+                """)
+                        .param("orderId", orderId)
+                        .param("process", processName)
+                        .param("checkpoint", checkpointJson)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     /** Everything an operator needs to answer "which processes are stuck". */
     public List<ProcessRow> stuck(UUID tenantId, int limit) {
         return jdbc.sql("""
