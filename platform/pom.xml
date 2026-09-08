@@ -531,10 +531,20 @@
                                  empty key. Passing an explicit empty string
                                  through ${env.NVD_API_KEY} instead fails hard
                                  ("Invalid API Key, length of 0") — this is the
-                                 fix for that. Unset, the plugin runs
-                                 unauthenticated and more slowly; NVD throttles
-                                 unkeyed requests heavily enough that a full
-                                 scan may not finish in CI without a key. -->
+                                 fix for that. This mechanism is documented to
+                                 fall back to slower, unauthenticated NVD
+                                 access when unset, but confirmed 2026-09-08
+                                 (see this ADR's run log) that
+                                 dependency-check-maven 13.0.0 does not honor
+                                 that fallback: an unset NVD_API_KEY still
+                                 hard-fails with the same "Invalid API Key,
+                                 length of 0" error before any analysis runs
+                                 (dependency-check/DependencyCheck#7517,
+                                 #8715). A real key from
+                                 https://nvd.nist.gov/developers/request-an-api-key
+                                 is required to run this profile at all in
+                                 this plugin version, not merely to run it
+                                 faster. -->
                             <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
                         </configuration>
                         <executions>
