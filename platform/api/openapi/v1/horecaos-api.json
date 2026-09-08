@@ -389,6 +389,7 @@
             "type" : "string"
           },
           "maximumQuantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -398,6 +399,7 @@
           },
           "sortOrder" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -421,6 +423,7 @@
           },
           "sortOrder" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "unitCode" : {
@@ -536,6 +539,7 @@
       "AdvanceScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -581,6 +585,7 @@
           },
           "cashTenderedMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "kitchenNote" : {
@@ -822,6 +827,7 @@
         "properties" : {
           "priority" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "validFrom" : {
@@ -843,6 +849,7 @@
           },
           "sortOrder" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -1411,6 +1418,7 @@
             "type" : "integer"
           },
           "endsAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "fulfillmentMode" : {
@@ -1422,6 +1430,7 @@
             "type" : "integer"
           },
           "startsAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -2208,6 +2217,7 @@
       "ChangeProgramStatusRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2294,6 +2304,7 @@
             "type" : "string"
           },
           "cartVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2313,6 +2324,7 @@
           },
           "redeemFromBalanceMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -2354,6 +2366,7 @@
             "type" : "string"
           },
           "radiusMeters" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           }
@@ -3365,6 +3378,7 @@
       "CoverageRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -3375,6 +3389,7 @@
           },
           "undecidedSources" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -3465,6 +3480,7 @@
           },
           "costCeilingMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "currency" : {
@@ -3482,6 +3498,7 @@
             "type" : "string"
           },
           "recipientCap" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -3551,6 +3568,7 @@
           },
           "sortOrder" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -3606,6 +3624,7 @@
             "type" : "string"
           },
           "maxConcurrentAssignments" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -3615,9 +3634,11 @@
           },
           "minDistanceMeters" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "offerTtlSeconds" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -3692,11 +3713,13 @@
             "type" : "string"
           },
           "maximumSelections" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
           "minimumSelections" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "name" : {
@@ -3768,6 +3791,7 @@
           },
           "priority" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "validFrom" : {
@@ -3820,6 +3844,7 @@
             "type" : "string"
           },
           "policyVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -4254,6 +4279,7 @@
             "type" : "object"
           },
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -4413,17 +4439,21 @@
           },
           "baseMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "fromMeters" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "perKmMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "toMeters" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           }
@@ -4621,10 +4651,12 @@
         "properties" : {
           "allowanceMeters" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "amountMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "dayMask" : {
@@ -4634,6 +4666,7 @@
             "type" : "integer"
           },
           "fromTime" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "kind" : {
@@ -4645,6 +4678,7 @@
             "type" : "integer"
           },
           "toTime" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -4666,6 +4700,7 @@
             "type" : "integer"
           },
           "fromTime" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "kind" : {
@@ -4676,6 +4711,7 @@
             "type" : "integer"
           },
           "toTime" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -4735,10 +4771,12 @@
         "properties" : {
           "earnDelayHours" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "expiryWarningDays" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "lotLifetimeDays" : {
@@ -4818,6 +4856,7 @@
       "DraftProgramRequest" : {
         "properties" : {
           "maxRewardedReferralsPerReferrer" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -4828,9 +4867,11 @@
           },
           "refereeRewardMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "referrerRewardMinor" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "type" : "integer"
           },
@@ -4890,6 +4931,7 @@
           },
           "minBasketMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "name" : {
@@ -4897,6 +4939,7 @@
             "type" : "string"
           },
           "perCustomerLimit" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -4944,6 +4987,7 @@
           },
           "minOrderMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "validFrom" : {
@@ -4994,6 +5038,7 @@
             "type" : "string"
           },
           "feeRoundingStepMinor" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "type" : "integer"
           },
@@ -5002,15 +5047,18 @@
             "type" : "string"
           },
           "maxDistanceMeters" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
           "maxFeeMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "minFeeMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "roadFactorBasisPoints" : {
@@ -5345,6 +5393,7 @@
             "type" : "boolean"
           },
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "date" : {
@@ -5357,6 +5406,7 @@
             "type" : "string"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "reason" : {
@@ -5374,6 +5424,7 @@
             "type" : "boolean"
           },
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "date" : {
@@ -5381,6 +5432,7 @@
             "type" : "string"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -5587,6 +5639,7 @@
             "type" : "string"
           },
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -5606,6 +5659,7 @@
       "FiscalClassificationRequest" : {
         "properties" : {
           "ageRestrictionYears" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "maximum" : 120,
             "type" : "integer"
@@ -5613,6 +5667,7 @@
           "alcoholByVolumeBp" : {
             "format" : "int32",
             "maximum" : 10000,
+            "minimum" : 0,
             "type" : "integer"
           },
           "barcode" : {
@@ -5629,6 +5684,7 @@
             "type" : "string"
           },
           "fiscalUnitCode" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -6454,6 +6510,7 @@
             "type" : "string"
           },
           "quantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -6486,6 +6543,7 @@
             "type" : "array"
           },
           "quantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "maximum" : 999,
             "type" : "integer"
@@ -6659,6 +6717,7 @@
             "type" : "integer"
           },
           "endsAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "fulfillmentMode" : {
@@ -6670,6 +6729,7 @@
             "type" : "integer"
           },
           "startsAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -7545,6 +7605,7 @@
             "type" : "string"
           },
           "cardVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -9990,9 +10051,11 @@
             "type" : "string"
           },
           "quietHoursEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "quietHoursStart" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "timezone" : {
@@ -10099,6 +10162,7 @@
         "properties" : {
           "amountMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -10702,6 +10766,7 @@
             "type" : "array"
           },
           "quantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "maximum" : 999,
             "type" : "integer"
@@ -11460,6 +11525,7 @@
       "RefundRequest" : {
         "properties" : {
           "amountMinor" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "type" : "integer"
           },
@@ -12130,6 +12196,7 @@
       "ResumeScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -12396,6 +12463,7 @@
       "RollbackScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -12685,6 +12753,7 @@
       "RuleRequest" : {
         "properties" : {
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "dayOfWeek" : {
@@ -12694,6 +12763,7 @@
             "type" : "integer"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -12703,6 +12773,7 @@
       "RuleResponse" : {
         "properties" : {
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "dayOfWeek" : {
@@ -12710,6 +12781,7 @@
             "type" : "integer"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -13128,6 +13200,7 @@
           },
           "freeDeliveryFromMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "geoJson" : {
@@ -13135,6 +13208,7 @@
           },
           "minBasketMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "priority" : {
@@ -13293,9 +13367,11 @@
             "type" : "boolean"
           },
           "quietHoursEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "quietHoursStart" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "timezone" : {
@@ -13622,6 +13698,7 @@
         "properties" : {
           "sortOrder" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -13729,6 +13806,7 @@
             "type" : "string"
           },
           "transformationVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           }
@@ -13793,9 +13871,11 @@
             "type" : "integer"
           },
           "windowEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "windowStart" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -13825,9 +13905,11 @@
             "type" : "integer"
           },
           "windowEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "windowStart" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -14320,6 +14402,7 @@
       "SuspendScopeRequest" : {
         "properties" : {
           "expectedVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -14550,6 +14633,7 @@
           "rateBasisPoints" : {
             "format" : "int32",
             "maximum" : 9999,
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -14879,9 +14963,11 @@
             "type" : "integer"
           },
           "fromTime" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "multiplierBasisPoints" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -14891,9 +14977,11 @@
           },
           "surchargeMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "toTime" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -14910,6 +14998,7 @@
             "type" : "integer"
           },
           "fromTime" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "multiplierBasisPoints" : {
@@ -14925,6 +15014,7 @@
             "type" : "integer"
           },
           "toTime" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -15099,6 +15189,7 @@
             "type" : "string"
           },
           "sizeBytes" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "maximum" : 10485760,
             "type" : "integer"

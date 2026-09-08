@@ -18,6 +18,7 @@
             "type" : "string"
           },
           "quantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },

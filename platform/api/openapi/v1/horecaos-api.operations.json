@@ -253,6 +253,7 @@
           },
           "cashTenderedMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "kitchenNote" : {
@@ -899,6 +900,7 @@
             "type" : "integer"
           },
           "endsAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "fulfillmentMode" : {
@@ -910,6 +912,7 @@
             "type" : "integer"
           },
           "startsAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -2236,6 +2239,7 @@
           },
           "costCeilingMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "currency" : {
@@ -2253,6 +2257,7 @@
             "type" : "string"
           },
           "recipientCap" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2278,6 +2283,7 @@
             "type" : "string"
           },
           "maxConcurrentAssignments" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2287,9 +2293,11 @@
           },
           "minDistanceMeters" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "offerTtlSeconds" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2682,10 +2690,12 @@
         "properties" : {
           "earnDelayHours" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "expiryWarningDays" : {
             "format" : "int32",
+            "minimum" : 0,
             "type" : "integer"
           },
           "lotLifetimeDays" : {
@@ -2765,6 +2775,7 @@
       "DraftProgramRequest" : {
         "properties" : {
           "maxRewardedReferralsPerReferrer" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2775,9 +2786,11 @@
           },
           "refereeRewardMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "referrerRewardMinor" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "type" : "integer"
           },
@@ -2837,6 +2850,7 @@
           },
           "minBasketMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "name" : {
@@ -2844,6 +2858,7 @@
             "type" : "string"
           },
           "perCustomerLimit" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -2891,6 +2906,7 @@
           },
           "minOrderMinor" : {
             "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           },
           "validFrom" : {
@@ -3077,6 +3093,7 @@
             "type" : "boolean"
           },
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "date" : {
@@ -3084,6 +3101,7 @@
             "type" : "string"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -3530,6 +3548,7 @@
             "type" : "array"
           },
           "quantity" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "maximum" : 999,
             "type" : "integer"
@@ -3630,6 +3649,7 @@
             "type" : "integer"
           },
           "endsAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "fulfillmentMode" : {
@@ -3641,6 +3661,7 @@
             "type" : "integer"
           },
           "startsAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -4076,6 +4097,7 @@
             "type" : "string"
           },
           "cardVersion" : {
+            "exclusiveMinimum" : 0,
             "format" : "int32",
             "type" : "integer"
           },
@@ -5511,9 +5533,11 @@
             "type" : "string"
           },
           "quietHoursEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "quietHoursStart" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "timezone" : {
@@ -6295,6 +6319,7 @@
       "RefundRequest" : {
         "properties" : {
           "amountMinor" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "type" : "integer"
           },
@@ -7246,6 +7271,7 @@
       "RuleResponse" : {
         "properties" : {
           "closesAt" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "dayOfWeek" : {
@@ -7253,6 +7279,7 @@
             "type" : "integer"
           },
           "opensAt" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -7514,9 +7541,11 @@
             "type" : "boolean"
           },
           "quietHoursEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "quietHoursStart" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "timezone" : {
@@ -7863,9 +7892,11 @@
             "type" : "integer"
           },
           "windowEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "windowStart" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -7895,9 +7926,11 @@
             "type" : "integer"
           },
           "windowEnd" : {
+            "format" : "time-local",
             "type" : "string"
           },
           "windowStart" : {
+            "format" : "time-local",
             "type" : "string"
           }
         },
@@ -8471,6 +8504,7 @@
             "type" : "string"
           },
           "sizeBytes" : {
+            "exclusiveMinimum" : 0,
             "format" : "int64",
             "maximum" : 10485760,
             "type" : "integer"
