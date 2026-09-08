@@ -373,9 +373,19 @@ class OnboardingOutboxIntegrationTests {
                 Clock clock,
                 ApplicationEventPublisher events,
                 AuditRecorder recorder,
-                CurrentActor currentActor) {
+                CurrentActor currentActor,
+                TransactionTemplate transactions,
+                OrganizationProvisioner organizationProvisioner) {
             return new TenantControlPlaneService(
-                    store, accessPolicy, tenantId -> {}, clock, events, recorder, currentActor);
+                    store,
+                    accessPolicy,
+                    tenantId -> {},
+                    clock,
+                    events,
+                    recorder,
+                    currentActor,
+                    transactions,
+                    organizationProvisioner);
         }
 
         /** Stands in for Keycloak; ADR 0009's own adapter is tested against a real one. */

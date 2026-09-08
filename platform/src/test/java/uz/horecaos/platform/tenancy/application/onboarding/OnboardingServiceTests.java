@@ -119,6 +119,7 @@ class OnboardingServiceTests {
         // matching how the real activate() endpoint is reached in practice —
         // see OnboardingService.activate's own javadoc.
         CurrentActor systemActor = () -> new AuthenticatedActor("platform-admin-1", Set.of("platform-admin"), Map.of());
+        transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         controlPlane = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(systemActor, deniesEverything(), false),
@@ -126,9 +127,10 @@ class OnboardingServiceTests {
                 clock,
                 published,
                 recorder,
-                systemActor);
+                systemActor,
+                transactions,
+                provisioner);
 
-        transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         service = new OnboardingService(
                 jdbc,
                 // A real one, because runNextStep now decides for itself where a

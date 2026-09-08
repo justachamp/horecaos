@@ -309,6 +309,125 @@ class ControlPlaneWiringIntegrationTests {
                 .isEqualTo(200);
     }
 
+    // ----------------------------------------------------------------- ADR 0077/0078/0009: suspend/reactivate
+
+    /**
+     * The whole point of piece 2: a suspension is now reachable from an
+     * operator's screen, not only from code. No local Keycloak runs in this
+     * suite, so {@code TenantControlPlaneService}'s best-effort reconciliation
+     * call fails against {@code http://localhost:8081} — proving live, over a
+     * real HTTP request, that a suspension the platform records is never
+     * blocked, undone, or left half-applied by that failure.
+     */
+    @Test
+    void suspendingAndReactivatingATenantWorksOverHttpEvenWhenKeycloakIsUnreachable() throws Exception {
+        mvc.perform(post(TENANTS)
+                .with(platformAdmin())
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-create")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(tenantBody("acme-suspend")));
+        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants WHERE slug = 'acme-suspend'")
+                .query(String.class)
+                .single();
+        jdbc.sql("UPDATE tenant.tenants SET status = 'ACTIVE' WHERE id::text = :id")
+                .param("id", tenantId)
+                .update();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                        TENANTS + "/" + tenantId + "/identity/keycloak-organization")
+                .with(platformAdmin())
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-link")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationId":"acme-suspend-org"}"""));
+
+        MvcResult suspend = mvc.perform(post(TENANTS + "/" + tenantId + "/suspend")
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"non-payment"}"""))
+                .andReturn();
+
+        assertThat(suspend.getResponse().getStatus())
+                .as(suspend.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(tenantStatus(tenantId)).isEqualTo("SUSPENDED");
+        assertThat(auditActions()).contains("tenant.suspended");
+
+        // The other half of ADR 0077's rule: a platform administrator must
+        // still be able to reverse the suspension it issued.
+        MvcResult reactivate = mvc.perform(post(TENANTS + "/" + tenantId + "/reactivate")
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reactivate-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"paid"}"""))
+                .andReturn();
+
+        assertThat(reactivate.getResponse().getStatus())
+                .as(reactivate.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(tenantStatus(tenantId)).isEqualTo("ACTIVE");
+        assertThat(auditActions()).contains("tenant.reactivated");
+
+        // Tenant.activate()'s own requireStatus(SUSPENDED) refuses an already-ACTIVE
+        // tenant with a bare IllegalStateException; TenantApiErrorHandler maps that
+        // to RESOURCE_CONFLICT for exactly this controller rather than a bare 500.
+        MvcResult alreadyActive = mvc.perform(post(TENANTS + "/" + tenantId + "/reactivate")
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reactivate-again-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"already fine"}"""))
+                .andReturn();
+        assertThat(alreadyActive.getResponse().getStatus()).isEqualTo(409);
+        assertThat(alreadyActive.getResponse().getContentAsString()).contains("RESOURCE_CONFLICT");
+    }
+
+    @Test
+    void suspendingATenantRequiresPlatformAdminAndAnIdempotencyKey() throws Exception {
+        mvc.perform(post(TENANTS)
+                .with(platformAdmin())
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-refuse-create")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(tenantBody("acme-suspend-refused")));
+        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants WHERE slug = 'acme-suspend-refused'")
+                .query(String.class)
+                .single();
+        jdbc.sql("UPDATE tenant.tenants SET status = 'ACTIVE' WHERE id::text = :id")
+                .param("id", tenantId)
+                .update();
+
+        MvcResult withoutKey = mvc.perform(post(TENANTS + "/" + tenantId + "/suspend")
+                        .with(platformAdmin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"non-payment"}"""))
+                .andReturn();
+        assertThat(withoutKey.getResponse().getStatus()).isEqualTo(400);
+
+        // A member of the organization's own Keycloak role is not platform
+        // administration; suspending is the platform's side of the relationship.
+        MvcResult withoutGrant = mvc.perform(post(TENANTS + "/" + tenantId + "/suspend")
+                        .with(operatorWithoutAGrant())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-refuse-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"non-payment"}"""))
+                .andReturn();
+        assertThat(withoutGrant.getResponse().getStatus()).isEqualTo(403);
+        assertThat(tenantStatus(tenantId))
+                .as("a refused request must never reach the status write")
+                .isEqualTo("ACTIVE");
+    }
+
+    private String tenantStatus(String tenantId) {
+        return jdbc.sql("SELECT status FROM tenant.tenants WHERE id::text = :id")
+                .param("id", tenantId)
+                .query(String.class)
+                .single();
+    }
+
     // ----------------------------------------------------------------- Gap C: tenant-owner management
 
     private static final String OWNER_SUBJECT = "gap-c-owner-subject";

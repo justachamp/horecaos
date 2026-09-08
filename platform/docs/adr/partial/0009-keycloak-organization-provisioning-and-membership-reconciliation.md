@@ -105,11 +105,35 @@
   able to read and reactivate the tenant they just suspended. Two further integration tests cover idempotent retry in both
   directions (`disablingAnAlreadyDisabledOrganizationIsANoOpRatherThanAnError`)
   and that disabling one tenant's organization leaves another's members
-  unaffected (`disablingOneOrganizationDoesNotAffectAnother`). Still missing:
-  nothing in `tenancy` calls `setOrganizationEnabled` from a suspend/reactivate
-  use case yet — this closes the ADR 0009 port and its Keycloak adapter, not a
-  wired tenant suspension workflow, and that workflow's actual enforcement was
-  never this method to begin with.
+  unaffected (`disablingOneOrganizationDoesNotAffectAnother`). Wired 2026-09-08:
+  `TenantControlPlaneService.suspendTenant`/`reactivateTenant` now call
+  `setOrganizationEnabled` — after their status transaction commits, never
+  inside it. `setOrganizationEnabled` is a blocking HTTPS round trip and the
+  status write is a database transaction; spanning both in one would hold a
+  pooled connection for as long as Keycloak takes to answer, which is exactly
+  what `ExternalCallTransactionBoundaryTests` exists to police, and it gained a
+  case (`tenantSuspensionDoesNotHoldAConnection`) proving this call holds none
+  — the same split `PaymentAttemptService` and `OnboardingService` already use,
+  for the same reason: a method calling its own `@Transactional` method skips
+  the proxy, so committing before calling out needs an explicit
+  `TransactionTemplate`. The tenant status row commits regardless of whether
+  Keycloak answers; a reconciliation failure is caught, logged, and left rather
+  than retried inline or allowed to undo or block the status change, because a
+  suspension whose Keycloak flag failed to flip is still a suspension in every
+  way that matters — its enforcement was never this method, as the previous
+  paragraph found the hard way. What closes the resulting gap is
+  `IdentityDriftReporter`, extended the same day to compare both directions
+  instead of one: `ORGANIZATION_DISABLED` for a live tenant wrongly disabled,
+  and the new `ORGANIZATION_ENABLED_WHILE_SUSPENDED` for a suspended tenant
+  whose reconciliation never landed. `POST
+  /api/v1/control-plane/tenants/{tenantId}/suspend` and `.../reactivate` also
+  now exist on `TenantControlPlaneController` (platform-admin `TENANT_WRITE` at
+  `PLATFORM` scope, `Idempotency-Key` required), so a suspension is reachable
+  from an operator's screen and not only from code —
+  `ControlPlaneWiringIntegrationTests` proves the full round trip live over
+  HTTP with no local Keycloak running, specifically because that is the
+  condition under which the reconciliation call is expected to fail and the
+  status change is not.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
@@ -391,7 +415,7 @@ evidence; do not delete external objects automatically.
 - [x] Implement the organization ensure, read-back, and link algorithm, including the refusal to create a replacement on drift.
 - [x] Implement subject link and create-or-link membership. Organization-scoped role reconciliation remains.
 - [x] Connect the organization and membership steps to the ADR 0008 workflow, reconciling by stored identifier on retry.
-- [x] Implement disable/re-enable (`setOrganizationEnabled`), idempotent by inspection against a real Keycloak. A real password grant against a live Keycloak 26.7.0 proved the opposite of what this box originally assumed: the flag flips and is read back correctly, but Keycloak does not itself refuse sign-in for a member of a disabled organization — see Implementation status, 2026-09-08, and do not read "implemented" here as "authentication is gated." No caller in `tenancy` invokes it yet.
+- [x] Implement disable/re-enable (`setOrganizationEnabled`), idempotent by inspection against a real Keycloak. A real password grant against a live Keycloak 26.7.0 proved the opposite of what this box originally assumed: the flag flips and is read back correctly, but Keycloak does not itself refuse sign-in for a member of a disabled organization — see Implementation status, 2026-09-08, and do not read "implemented" here as "authentication is gated." `TenantControlPlaneService.suspendTenant`/`reactivateTenant` call it now, after their status transaction commits — see Implementation status, 2026-09-08, for why that is two steps and never one.
 - [ ] Add drift reporting, audit facts, metrics, and alerts. Organization-level drift, its `SECURITY` audit facts and its four metrics are built and tested. Membership-level drift no longer waits on a migration — `V0057` shipped it — but on something writing `iam.tenant_membership_links`, since a drift report over an empty table would report every tenant clean. The probe stanza that reads `horecaos.iam.identity.drift.report.age.seconds` still belongs in `infra/observability/horecaos-probe.sh` and is not there.
 - [x] Add isolated Keycloak integration and cross-tenant security tests. `KeycloakOrganizationIntegrationTests` covers double-ensure, uncertain-create readback, refusal to replace a vanished organization, double link, per-organization membership isolation, and both least-privilege 403s — against a real Keycloak. It still skips loudly (`Assumptions.abort`) if Keycloak is absent or the realm grants `horecaos-provisioning` no roles, but as of 2026-08-30 `make up` runs `assign-service-account-roles.sh` with wait/retry, so the normal path runs all 8 rather than skipping.
 

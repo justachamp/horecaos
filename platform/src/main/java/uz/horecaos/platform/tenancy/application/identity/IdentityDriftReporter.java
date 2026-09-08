@@ -74,8 +74,25 @@ public class IdentityDriftReporter {
         /** The stored organization id does not resolve. Never auto-repaired. */
         ORGANIZATION_MISSING,
 
-        /** Resolves, but disabled while the tenant is not. Nobody can sign in. */
+        /**
+         * Resolves, but disabled while the tenant is not suspended. Not itself an
+         * authentication gap -- Keycloak 26.7's disabled-organization flag does
+         * not refuse sign-in on its own (see {@code
+         * OrganizationProvisioner#setOrganizationEnabled}'s javadoc) -- but it
+         * means an operator reading Keycloak directly sees a state that does not
+         * match the tenant record.
+         */
         ORGANIZATION_DISABLED,
+
+        /**
+         * Resolves and is enabled, but the tenant is {@code SUSPENDED}. The
+         * mirror image of {@link #ORGANIZATION_DISABLED}: {@code
+         * TenantControlPlaneService.suspendTenant} reconciles this flag after
+         * its status write commits, best-effort, so a finding here means that
+         * reconciliation did not land -- most likely because Keycloak was
+         * unreachable at the time.
+         */
+        ORGANIZATION_ENABLED_WHILE_SUSPENDED,
 
         /** Resolves under an alias that is not the one the tenant derives. */
         ORGANIZATION_ALIAS_MISMATCH,
@@ -224,6 +241,12 @@ public class IdentityDriftReporter {
                     DriftCode.ORGANIZATION_DISABLED,
                     "Organization %s is disabled while the tenant is %s"
                             .formatted(organizationId, link.tenantStatus())));
+        }
+        if (found.enabled() && "SUSPENDED".equals(link.tenantStatus())) {
+            return Optional.of(new DriftFinding(
+                    link.tenantId(),
+                    DriftCode.ORGANIZATION_ENABLED_WHILE_SUSPENDED,
+                    "Organization %s is still enabled while the tenant is SUSPENDED".formatted(organizationId)));
         }
         if (!link.expectedAlias().equals(found.alias())) {
             // Reported rather than corrected even though the alias is a mutable

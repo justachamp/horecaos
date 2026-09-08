@@ -159,6 +159,7 @@ class OnboardingFullRunIntegrationTests {
         // in the workflow where calling a capability-checked service is safe.
         CurrentActor systemActor =
                 () -> new AuthenticatedActor("platform-admin-1", java.util.Set.of("platform-admin"), Map.of());
+        FakeOrganizationProvisioner organizationProvisioner = new FakeOrganizationProvisioner();
         controlPlane = new TenantControlPlaneService(
                 new JdbcTenantControlPlaneStore(jdbc),
                 new TenantAccessPolicy(systemActor, deniesEverything(), false),
@@ -166,11 +167,13 @@ class OnboardingFullRunIntegrationTests {
                 CLOCK,
                 event -> {},
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
-                systemActor);
+                systemActor,
+                transactions,
+                organizationProvisioner);
         service = new OnboardingService(
                 jdbc,
                 transactions,
-                allElevenHandlers(),
+                allElevenHandlers(organizationProvisioner),
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
                 new JdbcApprovalService(
                         jdbc,
@@ -421,9 +424,8 @@ class OnboardingFullRunIntegrationTests {
 
     // --------------------------------------------------------------------- the handler graph
 
-    private List<OnboardingStepHandler> allElevenHandlers() {
+    private List<OnboardingStepHandler> allElevenHandlers(OrganizationProvisioner provisioner) {
         var tenants = new JdbcTenantControlPlaneStore(jdbc);
-        var provisioner = new FakeOrganizationProvisioner();
 
         var currentActor = new uz.horecaos.platform.iam.api.CurrentActor() {
             @Override
