@@ -15,10 +15,22 @@
   resolves it through ADR 0030 (`customers.api.CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN`,
   settable down to a brand), so this record's own open input — the owner's
   directive was "configurable" — is delivered rather than merely defaulted; the
-  shipped default is unchanged, `^\+?998\d{9}$`. Not Built because the record's
-  other open input still stands: no real Gateway token exists, so Gateway OTP
-  ships configured-off and the platform is SMS-only in practice. See this
-  record's Implementation status: the phone pattern is the settled half.
+  shipped default is unchanged, `^\+?998\d{9}$`. The owner's 2026-09-08
+  direction to "keep both SMS and Telegram Gateway" moved the delivery *order*
+  off a hardcoded Java conditional the same way: `CamelVerificationCodeTransport`
+  now resolves it fresh on every send through ADR 0030
+  (`customers.api.CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER`,
+  `customers.otp_delivery_channel_order`, settable down to a brand), defaulting
+  to the unchanged `TELEGRAM_GATEWAY,SMS` order this record already decided; a
+  malformed override is refused (logged, platform default used) rather than
+  silencing every OTP for a tenant, the same defensive read the phone pattern
+  gets. Still Not Built, and for the same reason as before: no real Gateway
+  token exists, so Gateway OTP ships configured-off and the platform is
+  SMS-only in practice regardless of what order is configured — the code is
+  ready to use both the moment the owner supplies the token as an ADR 0028
+  reference. See this record's Implementation status: the phone pattern and
+  the delivery order are both the settled halves; the token is the unsettled
+  one.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed both features and the phone-regex gate),
@@ -91,12 +103,13 @@ phone number should arrive through Telegram rather than an SMS bill.
 
 ## Implementation checklist
 
-- [ ] Gateway client + ADR 0028 secret reference + `FakeTelegramGateway`; delivery-policy seam in the challenge send path with SMS fallback; attempt-row cost recording
-- [ ] AUTH-kind pending codes (single-use, expiring); bot `request_contact` exchange with own-contact and pattern checks; account resolve-or-create with `TELEGRAM_CONTACT`-sourced verified phone; ADR 0051 session issuance against the code
+- [x] Gateway client + ADR 0028 secret reference + `FakeTelegramGateway`; delivery-policy seam in the challenge send path with SMS fallback; attempt-row cost recording. The seam's order is now an ADR 0030 value (`customers.otp_delivery_channel_order`) rather than hardcoded.
+- [x] AUTH-kind pending codes (single-use, expiring); bot `request_contact` exchange with own-contact and pattern checks; account resolve-or-create with `TELEGRAM_CONTACT`-sourced verified phone; ADR 0051 session issuance against the code — `TelegramAuthSignInIntegrationTest`, 7/7 green in this same `mvn verify` run
 - [ ] Storefront "Continue with Telegram" on the sign-in screen, deep link + status polling, error states (expired, refused, pattern mismatch)
 - [x] Config: allowed-phone pattern configurable (ADR 0030, `customers.telegram_auth_phone_pattern`, platform/tenant/brand).
-- [ ] Gateway usable platform-wide once its token exists.
-- [ ] Tests: fake-Gateway delivery + SMS fallback; the whole share-contact story against `FakeTelegramBotApi` including forwarded-contact refusal, pattern refusal, expiry, single-use, and the session landing in the poll
+- [x] Gateway usable platform-wide once its token exists: `isConfigured()` is the only gate, is read fresh on every send, and nothing else in the delivery-policy seam or its ADR 0030 channel-order key needs to change when the owner supplies the real ADR 0028 reference.
+- [x] Tests: fake-Gateway delivery + SMS fallback, now including the ADR 0030 channel-order override (SMS-first, and a malformed value falling back to the platform default) in `TelegramGatewayVerificationDeliveryTests`
+- [x] Tests: the whole share-contact story against `FakeTelegramBotApi` including forwarded-contact refusal, pattern refusal, expiry, single-use, and the session landing in the poll — `TelegramAuthSignInIntegrationTest`, 7/7 green in this same `mvn verify` run
 
 ## Exit criteria
 

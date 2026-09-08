@@ -1,15 +1,22 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayClient;
 import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayVerificationOperation;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 
 /**
  * {@link VerificationCodeTransport} over the ADR 0007 route (ADR 0015, ADR 0020).
@@ -38,13 +45,24 @@ import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGateway
  * document the caller turns this into.
  *
  * <p><strong>ADR 0063's delivery-policy seam lives here.</strong> This is the one
- * place every verification message already funnels through, so it is where "try
- * Telegram Gateway first, fall back to SMS" is decided rather than a third place
- * that has to agree with both. The policy: Gateway is attempted only when
- * {@link TelegramGatewayClient#isConfigured()} — an unconfigured deployment never
- * pays a network round trip finding that out — and only its <em>refusal</em>
- * (a business rejection, an unreachable provider, a rate limit) falls through to
- * SMS; a Gateway {@code SUCCESS} returns immediately and SMS is never asked.
+ * place every verification message already funnels through, so it is where the
+ * two channels are ordered rather than a third place that has to agree with
+ * both. Which channel goes first is no longer a Java conditional: the owner's
+ * 2026-09-08 direction is that platform configuration belongs at the control
+ * plane, so the order is {@link CustomerConfigurationKeys#OTP_DELIVERY_CHANNEL_ORDER},
+ * an ADR 0030 value resolved fresh on every send. The default,
+ * {@code TELEGRAM_GATEWAY,SMS}, is ADR 0063's own decision — Gateway is
+ * attempted only when {@link TelegramGatewayClient#isConfigured()} (an
+ * unconfigured deployment never pays a network round trip finding that out),
+ * and only a channel's <em>refusal</em> (a business rejection, an unreachable
+ * provider, a rate limit, or an answer too uncertain to trust — see {@link
+ * TelegramGatewayClient#sendVerificationMessage} for what "uncertain" means
+ * on the Gateway side) falls through to the next channel in the order; a
+ * channel's {@code ACCEPTED} returns immediately and nothing further is
+ * asked. Whichever value is configured, both channels stay reachable — an
+ * operator can flip which one goes first, never drop one, matching ADR
+ * 0063's own Alternatives table ("SMS stays the fallback... Never fully"
+ * dropped).
  */
 @Component
 public class CamelVerificationCodeTransport implements VerificationCodeTransport {
@@ -54,15 +72,23 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
     /** The route never started, so no provider was contacted. See the route README. */
     static final String ROUTE_UNAVAILABLE = "SMS_ROUTE_UNAVAILABLE";
 
-    static final String SMS_CHANNEL = "SMS";
-    static final String TELEGRAM_GATEWAY_CHANNEL = "TELEGRAM_GATEWAY";
+    static final String SMS_CHANNEL = CustomerConfigurationKeys.CHANNEL_SMS;
+    static final String TELEGRAM_GATEWAY_CHANNEL = CustomerConfigurationKeys.CHANNEL_TELEGRAM_GATEWAY;
+
+    /** Both channels, ADR 0063's own order — used when no valid override is configured. */
+    private static final List<String> DEFAULT_ORDER = List.of(TELEGRAM_GATEWAY_CHANNEL, SMS_CHANNEL);
+
+    private static final Set<String> VALID_CHANNELS = Set.of(TELEGRAM_GATEWAY_CHANNEL, SMS_CHANNEL);
 
     private final ProducerTemplate producer;
     private final TelegramGatewayClient gateway;
+    private final ConfigurationResolver configuration;
 
-    public CamelVerificationCodeTransport(ProducerTemplate producer, TelegramGatewayClient gateway) {
+    public CamelVerificationCodeTransport(
+            ProducerTemplate producer, TelegramGatewayClient gateway, ConfigurationResolver configuration) {
         this.producer = producer;
         this.gateway = gateway;
+        this.configuration = configuration;
     }
 
     @Override
@@ -74,41 +100,110 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
             return Outcome.refused("CHANNEL_UNSUPPORTED");
         }
 
-        if (gateway.isConfigured()) {
-            Outcome viaGateway = tryGateway(message);
-            if (viaGateway != null) {
-                return viaGateway;
+        Outcome last = null;
+        for (String channel : resolveChannelOrder(message.tenantId(), message.brandId())) {
+            Outcome attempt =
+                    switch (channel) {
+                        case TELEGRAM_GATEWAY_CHANNEL -> gateway.isConfigured() ? tryGateway(message) : null;
+                        case SMS_CHANNEL -> trySms(message);
+                        default -> null; // unreachable: resolveChannelOrder only ever returns VALID_CHANNELS
+                    };
+
+            if (attempt == null) {
+                // Gateway named in the order but no token configured yet (ADR
+                // 0063's open input): skip straight to the next channel rather
+                // than spend a network round trip finding that out again.
+                continue;
             }
-            // Fell through: Gateway refused, was unreachable, or answered
-            // uncertainly. SMS is the fallback for exactly this — the challenge,
-            // its attempts and its rate limits are untouched either way.
+            if (attempt.status() == Outcome.Status.ACCEPTED) {
+                return attempt;
+            }
+            last = attempt;
         }
 
-        SmsVerificationOperation operation = SmsVerificationOperation.send(
-                message, VerificationCodeText.render(message.code(), message.validFor(), message.locale()));
-
-        return translate(dispatch(operation));
+        // SMS is always one of the two entries resolveChannelOrder returns and
+        // trySms never answers null, so `last` is set by the time the loop
+        // ends. The fallback below exists only so this can never NPE if that
+        // invariant is ever broken, not because it is expected to run.
+        return last != null ? last : Outcome.unavailable("NO_CHANNEL_CONFIGURED");
     }
 
     /**
-     * @return the accepted {@link Outcome} when Gateway took the message, or null
-     *         to fall through to SMS
+     * Which order to try the two channels in, for this tenant and brand
+     * (ADR 0030, ADR 0063).
+     *
+     * <p>Resolved fresh on every send rather than cached here: resolution
+     * itself is already cached (ADR 0033's {@code tenant.configuration},
+     * sixty-second TTL), so an operator's change to the control-plane value
+     * takes effect within that window without a deploy.
+     *
+     * <p>A configured value that is not a permutation of both channels — a
+     * typo, a single channel named alone, a channel named twice — is refused
+     * the same way {@code TelegramUpdateHandler} refuses a phone pattern that
+     * fails to compile: logged, and the platform default is used instead,
+     * rather than letting one operator mistake in the control plane stop
+     * every OTP for a tenant.
      */
-    private @Nullable Outcome tryGateway(VerificationMessage message) {
+    private List<String> resolveChannelOrder(UUID tenantId, UUID brandId) {
+        String configured = configuration
+                .resolve(CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER, ResourceScope.brand(tenantId, brandId))
+                .value();
+        List<String> parsed = parseOrder(configured);
+        if (parsed != null) {
+            return parsed;
+        }
+        log.error(
+                "Configured OTP delivery channel order \"{}\" for tenant {} brand {} is not a valid ordering of "
+                        + "{} and {}; using the platform default order",
+                configured,
+                tenantId,
+                brandId,
+                SMS_CHANNEL,
+                TELEGRAM_GATEWAY_CHANNEL);
+        return DEFAULT_ORDER;
+    }
+
+    private static @Nullable List<String> parseOrder(@Nullable String raw) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> channels = Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(token -> !token.isEmpty())
+                .toList();
+        if (channels.size() != VALID_CHANNELS.size() || !Set.copyOf(channels).equals(VALID_CHANNELS)) {
+            return null;
+        }
+        return channels;
+    }
+
+    /**
+     * @return the {@link Outcome} Gateway produced: {@code ACCEPTED} when it
+     *         took the message, or its refusal translated for the caller to
+     *         weigh against the next channel in the order
+     */
+    private Outcome tryGateway(VerificationMessage message) {
         ProviderOutcome outcome = gateway.sendVerificationMessage(new TelegramGatewayVerificationOperation(
                 message.tenantId(), message.challengeId(), message.destination(), message.code()));
 
-        if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
-            log.info(
-                    "Telegram Gateway declined verification delivery for challenge {}: {}; falling back to SMS",
-                    message.challengeId(),
-                    outcome.errorCode());
-            return null;
+        if (outcome.status() == ProviderOutcome.Status.SUCCESS) {
+            Long costMinor = longOrNull(outcome.normalized().get(TelegramGatewayClient.COST_MINOR_KEY));
+            String costCurrency = stringOrNull(outcome.normalized().get(TelegramGatewayClient.COST_CURRENCY_KEY));
+            return Outcome.accepted(TELEGRAM_GATEWAY_CHANNEL, outcome.externalReference(), costMinor, costCurrency);
         }
 
-        Long costMinor = longOrNull(outcome.normalized().get(TelegramGatewayClient.COST_MINOR_KEY));
-        String costCurrency = stringOrNull(outcome.normalized().get(TelegramGatewayClient.COST_CURRENCY_KEY));
-        return Outcome.accepted(TELEGRAM_GATEWAY_CHANNEL, outcome.externalReference(), costMinor, costCurrency);
+        log.info(
+                "Telegram Gateway declined verification delivery for challenge {}: {}",
+                message.challengeId(),
+                outcome.errorCode());
+        return translate(outcome);
+    }
+
+    /** SMS's own attempt, always answered — never null the way a skipped Gateway try is. */
+    private Outcome trySms(VerificationMessage message) {
+        SmsVerificationOperation operation = SmsVerificationOperation.send(
+                message, VerificationCodeText.render(message.code(), message.validFor(), message.locale()));
+        return translate(dispatch(operation));
     }
 
     private static @Nullable Long longOrNull(@Nullable Object value) {

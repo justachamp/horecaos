@@ -15,10 +15,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.ContactChannel;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.Outcome;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.VerificationMessage;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -30,6 +32,10 @@ import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
 import uz.horecaos.platform.integration.provider.telegramgateway.FakeTelegramGateway;
 import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayClient;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
+import uz.horecaos.platform.tenancy.api.Resolved;
 
 /**
  * ADR 0063's delivery-policy seam: Gateway first when a token is configured, SMS
@@ -41,6 +47,12 @@ import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGateway
  * {@link RecordingSmsGateway}) and a real Camel route for the SMS half, the same
  * "prove the bytes, not the stub" discipline {@link SmsVerificationRouteTests}
  * already applies to the SMS-only path.
+ *
+ * <p>The first four tests exercise the platform default order
+ * ({@code TELEGRAM_GATEWAY,SMS}) with no scoped override, which is what an
+ * unconfigured control plane resolves to. The tests below them exercise the
+ * ADR 0030 override itself: a configured {@code SMS,TELEGRAM_GATEWAY} order,
+ * and a malformed value refusing to silence every OTP for the tenant.
  */
 class TelegramGatewayVerificationDeliveryTests {
 
@@ -145,7 +157,85 @@ class TelegramGatewayVerificationDeliveryTests {
         }
     }
 
+    @Test
+    @DisplayName(
+            "an ADR 0030 order of SMS,TELEGRAM_GATEWAY tries SMS first, and Gateway is never asked once it accepts")
+    void configuredOrderPutsSmsFirstAndGatewayIsNeverAskedOnAcceptance() throws Exception {
+        telegramGateway = FakeTelegramGateway.start();
+        telegramGateway.expectToken(TOKEN);
+
+        StubConfiguration configuration = new StubConfiguration();
+        configuration.overrideChannelOrder("SMS,TELEGRAM_GATEWAY");
+
+        try (RecordingSmsGateway sms = RecordingSmsGateway.start()) {
+            sms.reply("/send", """
+                    {"status":{"code":0,"description":"success"},"id":"5981980","parts":1}""");
+
+            Outcome outcome = transport(sms, configuredGateway(), configuration).send(message());
+
+            assertThat(outcome.status()).isEqualTo(Outcome.Status.ACCEPTED);
+            assertThat(outcome.deliveryChannel()).isEqualTo("SMS");
+            assertThat(sms.callsTo("/send")).isEqualTo(1);
+            // The order put SMS first and SMS accepted, so Gateway -- configured
+            // and reachable -- was never asked. Reversing the order reverses which
+            // provider pays for an accepted send, not just which one is tried.
+            assertThat(telegramGateway.requestsSent()).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("an ADR 0030 order of SMS,TELEGRAM_GATEWAY falls back to Gateway when SMS refuses")
+    void configuredOrderPutsSmsFirstAndFallsBackToGatewayOnRefusal() throws Exception {
+        telegramGateway = FakeTelegramGateway.start();
+        telegramGateway.expectToken(TOKEN);
+        telegramGateway.setRequestCostUsd(0.03);
+
+        StubConfiguration configuration = new StubConfiguration();
+        configuration.overrideChannelOrder("SMS,TELEGRAM_GATEWAY");
+
+        try (RecordingSmsGateway sms = RecordingSmsGateway.start()) {
+            sms.reply("/send", """
+                    {"status":{"code":20,"description":"receiver in blacklist"}}""");
+
+            Outcome outcome = transport(sms, configuredGateway(), configuration).send(message());
+
+            assertThat(outcome.status()).isEqualTo(Outcome.Status.ACCEPTED);
+            assertThat(outcome.deliveryChannel()).isEqualTo("TELEGRAM_GATEWAY");
+            assertThat(sms.callsTo("/send")).isEqualTo(1);
+            assertThat(telegramGateway.requestsSent()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("a malformed configured order (naming SMS alone) falls back to the platform default, Gateway first")
+    void aMalformedConfiguredOrderFallsBackToThePlatformDefault() throws Exception {
+        telegramGateway = FakeTelegramGateway.start();
+        telegramGateway.expectToken(TOKEN);
+        telegramGateway.setRequestCostUsd(0.03);
+
+        StubConfiguration configuration = new StubConfiguration();
+        // Names one channel, not a permutation of both -- an operator's typo
+        // in the control plane, refused the same way TelegramUpdateHandler
+        // refuses a phone pattern that fails to compile.
+        configuration.overrideChannelOrder("SMS");
+
+        try (RecordingSmsGateway sms = RecordingSmsGateway.start()) {
+            Outcome outcome = transport(sms, configuredGateway(), configuration).send(message());
+
+            assertThat(outcome.status()).isEqualTo(Outcome.Status.ACCEPTED);
+            assertThat(outcome.deliveryChannel()).isEqualTo("TELEGRAM_GATEWAY");
+            assertThat(telegramGateway.requestsSent()).isEqualTo(1);
+            assertThat(sms.calls()).isEmpty();
+        }
+    }
+
     private VerificationCodeTransport transport(RecordingSmsGateway sms, TelegramGatewayClient gateway)
+            throws Exception {
+        return transport(sms, gateway, new StubConfiguration());
+    }
+
+    private VerificationCodeTransport transport(
+            RecordingSmsGateway sms, TelegramGatewayClient gateway, ConfigurationResolver configuration)
             throws Exception {
         SmsGateway smsGateway = new SmsGateway(
                 new StubLookup(sms.baseUrl()),
@@ -159,7 +249,7 @@ class TelegramGatewayVerificationDeliveryTests {
         camel = new DefaultCamelContext();
         camel.addRoutes(new SmsRouteBuilder(processor));
         camel.start();
-        return new CamelVerificationCodeTransport(camel.createProducerTemplate(), gateway);
+        return new CamelVerificationCodeTransport(camel.createProducerTemplate(), gateway, configuration);
     }
 
     private TelegramGatewayClient configuredGateway() {
@@ -216,6 +306,35 @@ class TelegramGatewayVerificationDeliveryTests {
                 return SecretValue.of("sms-key");
             }
         };
+    }
+
+    /**
+     * A minimal ADR 0030 resolver: the code default for every key unless a
+     * test has overridden the OTP channel order, the same "resolve without a
+     * scope chain; precedence is tested elsewhere" scope {@code
+     * telemetry.CourierTelemetryTests.StubConfiguration} uses.
+     */
+    private static final class StubConfiguration implements ConfigurationResolver {
+
+        private @Nullable String channelOrder;
+
+        void overrideChannelOrder(String value) {
+            this.channelOrder = value;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
+            if (channelOrder != null && key.code().equals(CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER_CODE)) {
+                return new Resolved<>((T) channelOrder, explain(key, scope));
+            }
+            return new Resolved<>(key.defaultValue(), explain(key, scope));
+        }
+
+        @Override
+        public ResolutionTrace explain(ConfigurationKey<?> key, ResourceScope scope) {
+            return new ResolutionTrace(key.code(), ResolutionTrace.Source.CODE_DEFAULT, null, List.of());
+        }
     }
 
     private static VerificationMessage message() {
