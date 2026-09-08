@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/pricing.events/PriceBookActivated.v1.schema.json",
+  "title": "PriceBookActivated v1 payload",
+  "description": "A price book was put in front of customers (ADR 0018). version is the book's new version after activation, the same number a stale quote's context hash fails to match against. Never an amount — a consumer resolves current prices through the authorized price-query API with priceBookId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["priceBookId", "brandId", "version", "currency"],
+  "properties": {
+    "priceBookId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer", "minimum": 1 },
+    "currency": { "type": "string", "minLength": 3, "maxLength": 3 }
+  }
+}

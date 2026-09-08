@@ -92,6 +92,18 @@ class PricingEngineTests {
         assertThat(TaxCalculation.extractInclusiveTax(1_050L, 10_000)).isEqualTo(525L);
         // A zero rate extracts nothing rather than dividing by a zero-ish figure.
         assertThat(TaxCalculation.extractInclusiveTax(50_000L, 0)).isZero();
+
+        // The EXCLUSIVE direction, on the same kind of boundary: 1 som at 50%
+        // is exactly 0.5 of tax. HALF_UP takes it to 1; HALF_EVEN — banker's
+        // rounding, explicitly rejected by ADR 0018's money policy — would
+        // round the same 0.5 down to the nearest even figure, 0. A naive
+        // truncating division would also give 0, so this also proves rounding
+        // happens at all rather than being silently floored.
+        assertThat(TaxCalculation.addExclusiveTax(1L, 5_000)).isEqualTo(1L);
+        // 3 som at 50% is 1.5: HALF_UP takes it to 2, where truncation would
+        // give 1.
+        assertThat(TaxCalculation.addExclusiveTax(3L, 5_000)).isEqualTo(2L);
+        assertThat(TaxCalculation.addExclusiveTax(50_000L, 0)).isZero();
     }
 
     @Test
@@ -127,8 +139,12 @@ class PricingEngineTests {
     }
 
     @Test
-    @DisplayName("an exclusive tax profile is refused rather than approximated")
-    void exclusiveTaxModeIsRefused() {
+    @DisplayName("an exclusive tax profile adds VAT on top of the price book amount")
+    void vatIsAddedOnTopOfAnExclusivePrice() {
+        // 33,333 som net at 12% VAT, exclusive. Tax is 33333 × 1200 / 10000 =
+        // 3999.96, rounded HALF_UP to 4000 — deliberately not a round number,
+        // so this actually exercises rounding rather than an exact division
+        // that would pass the same way whether or not rounding worked.
         var exclusive = new PricingInputs(
                 "UZS",
                 PUBLICATION,
@@ -138,14 +154,22 @@ class PricingEngineTests {
                 1,
                 1_200,
                 TaxMode.EXCLUSIVE,
-                Map.of(BURGER, 50_000L),
+                Map.of(BURGER, 33_333L),
                 Map.of(),
                 Map.of());
 
-        // A half-implemented mode producing plausible wrong totals is worse than
-        // an error nobody can ignore.
-        assertThat(catchThrowable(() -> engine.price(cart(BURGER, 1), exclusive, NOW)))
-                .isInstanceOf(PricingEngine.UnsupportedTaxModeException.class);
+        var result = engine.price(cart(BURGER, 1), exclusive, NOW);
+
+        assertThat(result.subtotal().minor())
+                .as("under EXCLUSIVE the price book amount is what the customer pays before tax")
+                .isEqualTo(33_333L);
+        assertThat(result.tax().minor()).isEqualTo(4_000L);
+        assertThat(result.total().minor())
+                .as("EXCLUSIVE adds tax on top of the price rather than extracting it")
+                .isEqualTo(37_333L);
+        // The identity a fiscal receipt has to satisfy, same as under INCLUSIVE.
+        assertThat(result.subtotal().minor() + result.tax().minor())
+                .isEqualTo(result.total().minor());
     }
 
     @Test

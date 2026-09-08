@@ -47,6 +47,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `realtime.signals` | 3 | 1 | `PT1M` | `delete` |
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
+| `pricing.events` | 3 | 1 | `PT168H` | `delete` |
 
 Business-fact retention is the seven-day operational replay window. Commands
 are durable in PostgreSQL and need only outlive a consumer restart. Realtime
@@ -320,6 +321,34 @@ catalogued here: their payload shape (a reservation's lines? a quantity delta?)
 is not yet decided, and a contract with no producer is a promise this
 repository has not made — the same restraint `media.events` states for its own
 five unpublished siblings.
+
+## `pricing.events`
+
+- Producing module: `pricing`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `priceBookId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `PriceBookActivated` | 1 | `priceBookId` | [`PriceBookActivated.v1`](../../src/main/resources/events/pricing.events/PriceBookActivated.v1.schema.json) | `priceBookId`, `brandId`, `version`, `currency` |
+
+Fired once per activation, alongside the ADR 0027 audit fact
+`PriceAuthoringService#activate` writes in the same transaction — a price book
+going live is both facts, and neither commits without the other. `version` is
+the book's new version after activation, the same number a stale quote's
+context hash fails to match. Never an amount: a consumer resolves current
+prices through the authorized price-query API with `priceBookId`, the same
+discipline `inventory.events` applies to a product name.
+
+ADR 0018 names five further pricing facts — `PromotionActivated`,
+`PromotionSuspended`, `PricingQuoteCreated`, `PricingQuoteAccepted`, and the
+coupon/benefit lifecycle events. None is published yet, and none is catalogued
+here: there is no promotion-activation flow yet to produce the first, and
+quote creation/acceptance are high-volume per-request facts whose payload
+shape and retention deserve their own decision rather than riding along with
+a once-a-day control-plane activation — the same restraint `inventory.events`
+states for its own six unpublished siblings.
 
 ## Delivery and ordering guarantees
 

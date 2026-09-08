@@ -89,6 +89,14 @@ public final class EventCatalog {
      */
     public static final String INVENTORY_EVENTS_TOPIC = KafkaTopicCatalog.INVENTORY_EVENTS;
 
+    /**
+     * ADR 0018 pricing facts. Its own topic rather than a share of {@code
+     * tenancy.events}: nothing that reads price-book activations should have to
+     * filter out tenant and brand creations to get them, and the two have
+     * nothing in common to retain or partition alike.
+     */
+    public static final String PRICING_EVENTS_TOPIC = KafkaTopicCatalog.PRICING_EVENTS;
+
     private static final Map<String, EventContract> CONTRACTS = index(List.of(
             new EventContract(
                     "TenantCreated",
@@ -392,7 +400,20 @@ public final class EventCatalog {
                     "A binary-tracked item was marked available or unavailable at one location. "
                             + "Symmetric — the direction is a field, not two event types — and never "
                             + "a product name, only the identifiers a consumer already needs to look "
-                            + "one up.")));
+                            + "one up."),
+            new EventContract(
+                    "PriceBookActivated",
+                    1,
+                    "pricing",
+                    PRICING_EVENTS_TOPIC,
+                    "priceBookId",
+                    "events/pricing.events/PriceBookActivated.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A price book was put in front of customers, superseding whatever "
+                            + "previously served its scope. Carries the book's new version, never "
+                            + "an amount — a consumer resolves current prices through the "
+                            + "authorized price-query API.")));
 
     private EventCatalog() {}
 

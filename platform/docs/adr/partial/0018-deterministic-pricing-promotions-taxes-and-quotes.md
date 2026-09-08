@@ -10,10 +10,29 @@
   its own totals, so a customer at the payment step pays what they were shown for its
   fifteen minutes, and the book version bump is what the context hash pins. V0051 makes
   one open tax profile per brand per jurisdiction and one assignment per scope a database
-  rule rather than a Java pre-check. Not built: promotions, coupons and benefit grants;
-  exclusive tax; and neither an ADR 0027 audit fact nor a `PriceBookActivated` event is
-  emitted on activation, because no authoring path in this codebase emits either yet and
-  inventing one here would have been a second style.
+  rule rather than a Java pre-check. Promotions and coupons are built, corrected here
+  because this line had gone stale: V0093 tables `pricing.promotions`, `promotion_conditions`,
+  `promotion_actions`, `coupon_codes`, `coupon_customer_usage` and `coupon_redemptions`;
+  `PricingEngine`'s stages 3 and 4 (`PromotionEvaluator`) apply them; and ADR 0072 added
+  the promo-code authoring surface, the storefront apply/remove endpoints, and the atomic
+  concurrent redemption — see that ADR for the coupon-gated slice it built and the
+  automatic no-code promotion screen it deliberately left undone. Benefit grants remain
+  unbuilt: `pricing.benefit_grants` has no migration, ADR 0013 has no recovery case to grant
+  from, and ADR 0044's own checklist still names its coded-grant path as the open item.
+  Exclusive tax is now built: `PricingEngine.price` handles `TaxMode.EXCLUSIVE` by adding
+  tax to the price-book amount instead of extracting it (`TaxCalculation.addExclusiveTax`,
+  the same HALF_UP-to-the-nearest-whole-som rounding `extractInclusiveTax` already used),
+  and `PriceAuthoringService.setTaxProfile` stores it rather than refusing it — covered by
+  `PricingEngineTests` (a non-round amount, and a HALF_UP-vs-truncation boundary case) and
+  `PriceAuthoringTests` end to end. Activation now writes an ADR 0027 audit fact
+  (`pricing.price_book.activated`) and publishes a `PriceBookActivated` event through the
+  ADR 0032 outbox (`PricingOutboxEventListener`, `pricing.events` topic, schema and
+  catalogue entry present) in the same transaction as the activation, proven by
+  `PricingOutboxTransactionIntegrationTests`. Not built: benefit grants; the ADR's other
+  five pricing events (`PromotionActivated`, `PromotionSuspended`, `PricingQuoteCreated`,
+  `PricingQuoteAccepted`, the coupon/benefit lifecycle events — none has a producer yet, so
+  none is catalogued); the scheduled sweep for stale quotes (`expireStaleQuotes` exists,
+  nothing calls it); and property/performance tests.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), finance
@@ -349,15 +368,15 @@ definitions are suspended, not deleted.
 ## Implementation checklist
 
 - [ ] Approve currency, tax, fee, rounding, allocation, and stacking policies.
-- [ ] Define and version the initial condition/action schema. No promotion rule schema exists; `PricingEngine` leaves stages 3 and 4 out because there is nothing to apply.
-- [ ] Add price, promotion, coupon, tax, benefit, and quote tables via Flyway. V0019 adds price, tax and quote tables and V0051 constrains them; there is no promotion or coupon table in any of the fifty-eight migrations. The nearest thing to a benefit is V0052's `payments.remedy_entitlements`, which ADR 0013 owns and which this module neither reads nor grants.
+- [x] Define and version the initial condition/action schema. V0093 tables `pricing.promotion_conditions`/`promotion_actions` with a versioned `attributes_json`; `PricingEngine` stages 3 and 4 (`PromotionEvaluator`) evaluate eleven condition types and eight action types, covered by `PromotionEvaluatorTests`. ADR 0072's promo-code authoring surface writes only three action types and three condition fields from typed request fields — see that ADR for why the rest stay reachable but unexposed.
+- [ ] Add price, promotion, coupon, tax, benefit, and quote tables via Flyway. V0019 adds price, tax and quote tables and V0051 constrains them; V0093 adds `pricing.promotions`, `promotion_conditions`, `promotion_actions`, `coupon_codes`, `coupon_customer_usage` and `coupon_redemptions`, and V0171 gives `ordering.carts` its `applied_coupon_code` column (ADR 0072). Still missing: `pricing.benefit_grants` and `pricing.benefit_usages` — the nearest thing to a benefit remains V0052's `payments.remedy_entitlements`, which ADR 0013 owns and which this module neither reads nor grants.
 - [x] Implement money types and a pure deterministic staged calculator. `pricing.domain.Money` and `PricingEngine.price`, a pure staged function of `(QuoteRequest, PricingInputs, Instant)` with a canonical fingerprint over its inputs, covered by `PricingEngineTests`.
-- [ ] Implement rule validation, activation, simulation, and audit. Authoring and activation are built: `PriceAuthoringService` and `PriceAuthoringController` create a book, assign it to a brand, a location or a channel, price a variant and a modifier option, set a VAT profile, and activate under an expected version behind `pricing.author` and `pricing.activate`, with V0051 making one open profile per scope a database rule. There is no rule validation, because there is no rule schema to validate; there is no simulation endpoint; and activation emits neither an ADR 0027 audit fact nor a `PriceBookActivated` event.
-- [ ] Implement atomic coupon/benefit reservation, release, and consumption. No coupon or benefit exists to reserve.
+- [ ] Implement rule validation, activation, simulation, and audit. Authoring and activation are built: `PriceAuthoringService` and `PriceAuthoringController` create a book, assign it to a brand, a location or a channel, price a variant and a modifier option, set a VAT profile (`INCLUSIVE` or `EXCLUSIVE`), and activate under an expected version behind `pricing.author` and `pricing.activate`, with V0051 making one open profile per scope a database rule. Activation now writes an ADR 0027 audit fact and publishes `PriceBookActivated` through the ADR 0032 outbox, both in the activation's own transaction (`PricingOutboxTransactionIntegrationTests`). `PromoCodeAuthoringService` (ADR 0072) validates a promo code's typed request fields before storing it, but there is still no validation endpoint for a promotion's own condition/action rows and no simulation/preview endpoint for either.
+- [ ] Implement atomic coupon/benefit reservation, release, and consumption. Coupon redemption is built (ADR 0072): `PromoCodeRedemptionService` claims a coupon's global and per-customer limits with two conditional writes inside `CheckoutReservationStep`, proven single-winner under concurrency by a Testcontainers test. Benefit reservation remains unbuilt — there is no `pricing.benefit_grants` row to reserve against.
 - [ ] Integrate catalog/inventory context and ADR 0013 recovery grants. Catalog context is wired (`JdbcCatalogPricingContext`, and `PricingVariantLookup` answers catalog's publication validator) and inventory reserves against the quote id; ADR 0013 has no recovery grant to integrate.
 - [ ] Implement storefront quote and Operations evidence APIs. A customer can now reach a quote, but not through this module's own surface: `POST /api/v1/storefront/.../carts/{cartId}/pricing` on `StorefrontOrderingController` prices a cart under `@CustomerOwned` through `pricing.api.CartPricingPort`. `QuoteController` itself still issues and accepts quotes under `pricing.read`, a staff capability on a `/api/v1/tenants/...` path, and there is still no quote-evidence read for Operations.
 - [ ] Build legacy import, shadow comparison, mismatch classification, and dashboards. Nothing compares a Qoida quote to a legacy total.
-- [ ] Add golden, property, concurrency, isolation, and performance tests. `PricingEngineTests` and `QuoteAndReservationTests` cover determinism and the quote/reservation pairing, and `PriceAuthoringTests` adds concurrency and isolation against PostgreSQL — concurrent activations settle once, a stale expected version loses, an exactly tied price book is refused at activation, and a price cannot be written for another brand's variant. Property and performance tests are not written.
+- [ ] Add golden, property, concurrency, isolation, and performance tests. `PricingEngineTests` and `QuoteAndReservationTests` cover determinism and the quote/reservation pairing — including, now, INCLUSIVE and EXCLUSIVE tax on non-round amounts and a HALF_UP-vs-truncation boundary case — and `PriceAuthoringTests` adds concurrency and isolation against PostgreSQL — concurrent activations settle once, a stale expected version loses, an exactly tied price book is refused at activation, a price cannot be written for another brand's variant, and an EXCLUSIVE profile is stored and priced end to end. `PricingOutboxTransactionIntegrationTests` proves the activation audit fact and the `PriceBookActivated` outbox row commit in the activation's own transaction. Property and performance tests are not written.
 
 ## Exit criteria
 
