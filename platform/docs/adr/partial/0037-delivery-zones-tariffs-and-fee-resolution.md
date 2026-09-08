@@ -22,7 +22,14 @@
   `FISCAL_DELIVERY_FEE_UNCLASSIFIED`; the storefront quote, the control-plane
   simulator and the operations evidence read are `DeliveryFeeController`, and zone
   and tariff authoring are `ServiceZoneController` and `DeliveryTariffController`
-  under ADR 0025 capabilities. `DeliveryFeeResolutionTests` and
+  under ADR 0025 capabilities. 2026-09-09: both are now mirrored onto the
+  operations surface — `OperationsServiceZoneController` and
+  `OperationsDeliveryTariffController` — so a tenant's own owner, administrator,
+  brand manager (draw/manage) and finance (tariff activation only) reach the exact
+  capabilities `PlatformRole` already granted them, without control-plane access;
+  `ServiceZoneService` and `DeliveryTariffService` now write an ADR 0027 audit fact
+  on every zone and tariff mutation on either surface, closing part of the gap the
+  "Not built" list below still names for *approval*. `DeliveryFeeResolutionTests` and
   `LegacyDeliveryParityTests` cover the golden legacy fees, overlap and priority,
   band gaps and overlaps, the `RADIUS_FALLBACK` path, the threshold waiver, and
   cross-tenant and cross-brand isolation. The contract with ADR 0014 is now kept
@@ -596,6 +603,12 @@ resolution to a flat per-location tariff; accepted quotes keep their fee.
 - [x] Add the delivery-fee quote line with a fiscal classification placeholder.
 - [ ] Implement serviceability search, out-of-zone policy, and catchment guard.
 - [x] Implement control-plane zone and tariff APIs and the simulator.
+- [x] Mirror zone and tariff authoring onto the operations surface
+      (`OperationsServiceZoneController`, `OperationsDeliveryTariffController`),
+      under the same ADR 0025 capabilities `PlatformRole` already granted, and
+      add the ADR 0027 audit fact this record's own status line had not yet
+      closed. Zone/tariff activation approval remains capability-gated only,
+      unchanged from the line above.
 - [x] Correct the rate-table model against the legacy writer and reader (V0032):
       accumulating bands, band sets a time rule can substitute, per-tariff accrual
       and rounding, and the tariff's own discount.

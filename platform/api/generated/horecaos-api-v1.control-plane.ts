@@ -593,6 +593,24 @@ export interface DeliveryTariffControllerBindLocationRequest {
   locationId: string;
 }
 
+export interface DeliveryTariffControllerDraftTariffVersionRequest {
+  actorId: string;
+  bands: Array<DeliveryTariffControllerBandRequest>;
+  currency: string;
+  discounts?: Array<DiscountRequest>;
+  distanceAccrual?: "STARTED_KILOMETRE" | "PRORATED_METRE";
+  distanceMode: "RADIUS" | "ROAD";
+  feeRoundingRule?: "HALF_UP" | "HALF_EVEN";
+  feeRoundingStepMinor?: number;
+  feeSource: "TARIFF" | "PROVIDER_QUOTE";
+  maxDistanceMeters?: number;
+  maxFeeMinor?: number;
+  minFeeMinor?: number;
+  roadFactorBasisPoints?: number;
+  routingProviderInstallationId?: string;
+  timeRules?: Array<TimeRuleRequest>;
+}
+
 export interface DeliveryTariffControllerVersionView {
   status?: string;
   tariffId?: string;
@@ -648,24 +666,6 @@ export interface Divergence {
   periodKey?: string;
   recomputed?: number;
   stored?: number;
-}
-
-export interface DraftTariffVersionRequest {
-  actorId: string;
-  bands: Array<DeliveryTariffControllerBandRequest>;
-  currency: string;
-  discounts?: Array<DiscountRequest>;
-  distanceAccrual?: "STARTED_KILOMETRE" | "PRORATED_METRE";
-  distanceMode: "RADIUS" | "ROAD";
-  feeRoundingRule?: "HALF_UP" | "HALF_EVEN";
-  feeRoundingStepMinor?: number;
-  feeSource: "TARIFF" | "PROVIDER_QUOTE";
-  maxDistanceMeters?: number;
-  maxFeeMinor?: number;
-  minFeeMinor?: number;
-  roadFactorBasisPoints?: number;
-  routingProviderInstallationId?: string;
-  timeRules?: Array<TimeRuleRequest>;
 }
 
 export interface EndPolicyRequest {
@@ -1992,7 +1992,7 @@ export interface Operations {
   "create_6": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTariffRequest }; responses: { "200": TariffView } };
   "detail_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } } }; responses: { "200": TariffDetailResponse } };
   "bind_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DeliveryTariffControllerBindLocationRequest }; responses: { "200": unknown } };
-  "draftVersion_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DraftTariffVersionRequest }; responses: { "200": DeliveryTariffControllerVersionView } };
+  "draftVersion_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DeliveryTariffControllerDraftTariffVersionRequest }; responses: { "200": DeliveryTariffControllerVersionView } };
   "activate_5": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string; version: number } }; body: ActorRequest }; responses: { "200": DeliveryTariffControllerVersionView } };
   "simulate": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { at?: string; currency: string; lat: number; locationId: string; lon: number; subtotalMinor?: number } } }; responses: { "200": SimulationView } };
   "getLocations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };

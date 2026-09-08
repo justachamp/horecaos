@@ -4,12 +4,19 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -40,10 +47,14 @@ public class LegalEntityService {
 
     private final JdbcLegalEntityStore store;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public LegalEntityService(JdbcLegalEntityStore store, Clock clock) {
+    public LegalEntityService(JdbcLegalEntityStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
         this.store = store;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     /**
@@ -69,17 +80,30 @@ public class LegalEntityService {
         entity.describeRegistration(command.registeredAddress(), command.contactPhone());
         entity.useTaxProfile(command.taxProfileId());
 
+        Instant now = clock.instant();
         try {
-            store.insert(entity, clock.instant());
+            store.insert(entity, now);
         } catch (DataIntegrityViolationException violation) {
             throw JdbcLegalEntityStore.explain(violation);
         }
+
+        audit.record(AuditFact.of("legal-entity.registered", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.tenant(tenantId))
+                .target("LegalEntity", entity.id().value())
+                .because("Registered legal entity '%s' (TIN %s)".formatted(command.code(), command.tin()))
+                .changed(Map.of("code", command.code(), "legalName", command.legalName(), "tin", command.tin()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return entity;
     }
 
     @Transactional
     public LegalEntity activate(UUID tenantId, UUID entityId, int expectedVersion) {
-        return transition(tenantId, entityId, expectedVersion, LegalEntity::activate);
+        LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::activate);
+        auditTransition("legal-entity.activated", tenantId, entity, "Activated legal entity " + entity.code());
+        return entity;
     }
 
     /**
@@ -93,12 +117,16 @@ public class LegalEntityService {
      */
     @Transactional
     public LegalEntity suspend(UUID tenantId, UUID entityId, int expectedVersion) {
-        return transition(tenantId, entityId, expectedVersion, LegalEntity::suspend);
+        LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::suspend);
+        auditTransition("legal-entity.suspended", tenantId, entity, "Suspended legal entity " + entity.code());
+        return entity;
     }
 
     @Transactional
     public LegalEntity archive(UUID tenantId, UUID entityId, int expectedVersion) {
-        return transition(tenantId, entityId, expectedVersion, LegalEntity::archive);
+        LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::archive);
+        auditTransition("legal-entity.archived", tenantId, entity, "Archived legal entity " + entity.code());
+        return entity;
     }
 
     @Transactional(readOnly = true)
@@ -167,6 +195,22 @@ public class LegalEntityService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcLegalEntityStore.explain(violation);
         }
+
+        audit.record(AuditFact.of("legal-entity.assigned", AuditClass.BUSINESS)
+                .by(ActorRef.user(command.approvedBy(), null))
+                .at(ResourceScope.location(tenantId, command.brandId(), command.locationId()))
+                .target("LocationFiscalAssignment", assignment.id())
+                .because(
+                        command.approvalReference() != null
+                                        && !command.approvalReference().isBlank()
+                                ? command.approvalReference()
+                                : "Assigned legal entity as this location's fiscal seller")
+                .changed(Map.of(
+                        "legalEntityId", command.legalEntityId().toString(),
+                        "effectiveFrom", command.effectiveFrom().toString()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return assignment;
     }
 
@@ -195,6 +239,30 @@ public class LegalEntityService {
                     "Legal entity %s has moved on from version %d".formatted(entityId, expectedVersion));
         }
         return entity;
+    }
+
+    private void auditTransition(String actionCode, UUID tenantId, LegalEntity entity, String reason) {
+        audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.tenant(tenantId))
+                .target("LegalEntity", entity.id().value())
+                .targetVersion((long) entity.version())
+                .because(reason)
+                .changed(Map.of("status", entity.status().name()))
+                .correlatedBy(correlationId())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    private static String correlationId() {
+        String correlationId = org.slf4j.MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 
     /**

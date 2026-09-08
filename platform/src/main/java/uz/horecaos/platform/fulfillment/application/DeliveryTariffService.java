@@ -1,15 +1,23 @@
 package uz.horecaos.platform.fulfillment.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
  * Authoring rate tables and activating their versions (ADR 0037).
@@ -29,16 +37,32 @@ public class DeliveryTariffService {
 
     private final JdbcDeliveryTariffStore store;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public DeliveryTariffService(JdbcDeliveryTariffStore store, Clock clock) {
+    public DeliveryTariffService(
+            JdbcDeliveryTariffStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
         this.store = store;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     @Transactional
     public UUID createTariff(UUID tenantId, UUID brandId, String code, String name, boolean brandDefault) {
         UUID id = UUID.randomUUID();
-        store.insertTariff(id, tenantId, brandId, code, name, brandDefault, clock.instant());
+        Instant now = clock.instant();
+        store.insertTariff(id, tenantId, brandId, code, name, brandDefault, now);
+
+        audit.record(AuditFact.of("delivery.tariff.registered", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("DeliveryTariff", id)
+                .because("Registered a rate table lineage '%s'".formatted(code))
+                .changed(Map.of("code", code, "name", name, "brandDefault", brandDefault))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return id;
     }
 
@@ -76,7 +100,22 @@ public class DeliveryTariffService {
                 draft.discounts());
 
         UUID id = UUID.randomUUID();
-        store.insertVersion(id, tenantId, versioned, createdBy, clock.instant());
+        Instant now = clock.instant();
+        store.insertVersion(id, tenantId, versioned, createdBy, now);
+
+        audit.record(AuditFact.of("delivery.tariff.version.drafted", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("DeliveryTariff", draft.tariffId())
+                .targetVersion((long) version)
+                .because("Drafted version %d of rate table %s".formatted(version, draft.tariffId()))
+                .changed(Map.of(
+                        "feeSource", draft.feeSource().name(),
+                        "distanceMode", draft.distanceMode().name(),
+                        "maxDistanceMeters", draft.maxDistanceMeters()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return new DraftedVersion(id, draft.tariffId(), version);
     }
 
@@ -98,15 +137,38 @@ public class DeliveryTariffService {
             throw new TariffActivationRefusedException(problems);
         }
 
-        if (store.activateVersion(tenantId, tariffId, version, actorId, clock.instant()) != 1) {
+        Instant now = clock.instant();
+        if (store.activateVersion(tenantId, tariffId, version, actorId, now) != 1) {
             throw new TariffActivationRefusedException(
                     List.of("This version was activated or withdrawn by someone else"));
         }
+
+        audit.record(AuditFact.of("delivery.tariff.version.activated", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("DeliveryTariff", tariffId)
+                .targetVersion((long) version)
+                .because("Activated version %d of rate table %s".formatted(version, tariffId))
+                .changed(Map.of("version", version))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     @Transactional
     public void bindLocation(UUID tenantId, UUID brandId, UUID locationId, UUID tariffId) {
-        store.bindLocation(tenantId, brandId, locationId, tariffId, clock.instant());
+        Instant now = clock.instant();
+        store.bindLocation(tenantId, brandId, locationId, tariffId, now);
+
+        audit.record(AuditFact.of("delivery.tariff.location.bound", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("DeliveryTariff", tariffId)
+                .because("Bound location %s to rate table %s".formatted(locationId, tariffId))
+                .changed(Map.of("locationId", locationId.toString()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     /** Every rate table this brand has registered (operations §3.7 Delivery tariffs). */
@@ -161,5 +223,16 @@ public class DeliveryTariffService {
         if (!store.tariffBelongsToBrand(tenantId, brandId, tariffId)) {
             throw new DeliveryResourceNotFoundException("Tariff %s does not belong to this brand".formatted(tariffId));
         }
+    }
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    private static String correlationId() {
+        String correlationId = org.slf4j.MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 }

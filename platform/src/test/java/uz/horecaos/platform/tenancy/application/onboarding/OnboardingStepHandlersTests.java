@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
@@ -29,6 +31,8 @@ import uz.horecaos.platform.fulfillment.domain.tariff.FeeSource;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.support.TestDatabase;
@@ -54,6 +58,12 @@ class OnboardingStepHandlersTests {
     private static final Instant NOW = Instant.parse("2026-08-21T10:00:00Z");
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 21);
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+
+    /** Zones and tariffs now write an ADR 0027 audit fact on every mutation; this suite is not about the audit trail. */
+    private static final AuditRecorder NO_OP_AUDIT = fact -> {};
+
+    private static final CurrentActor TEST_ACTOR =
+            () -> new AuthenticatedActor("onboarding-step-handlers-test", Set.of(), Map.of());
 
     private static TestDatabase.Handle db;
 
@@ -678,7 +688,7 @@ class OnboardingStepHandlersTests {
     /** Creates, activates and binds a DELIVERY zone at {@code locationId}, naming {@code tariffId} or none. */
     private void activeDeliveryZone(@Nullable UUID tariffId) {
         var zoneStore = new JdbcServiceZoneStore(jdbc);
-        var zones = new ServiceZoneService(zoneStore, JsonMapper.builder().build(), CLOCK);
+        var zones = new ServiceZoneService(zoneStore, JsonMapper.builder().build(), CLOCK, NO_OP_AUDIT, TEST_ACTOR);
         UUID actor = UUID.randomUUID();
         UUID zoneId = zones.createZone(tenantId, brandId, ZoneRole.DELIVERY, "ZONE1", "Zone", "Zone", "Zone");
         var drafted = zones.draftCircleVersion(
@@ -693,7 +703,7 @@ class OnboardingStepHandlersTests {
     /** A flat-fee tariff, activated and ready to be named by a zone. */
     private UUID seedFlatTariff(String code, long feeMinor) {
         var tariffStore = new JdbcDeliveryTariffStore(jdbc);
-        var tariffs = new DeliveryTariffService(tariffStore, CLOCK);
+        var tariffs = new DeliveryTariffService(tariffStore, CLOCK, NO_OP_AUDIT, TEST_ACTOR);
         UUID actor = UUID.randomUUID();
         UUID tariffId = tariffs.createTariff(tenantId, brandId, code, code, false);
         var drafted = tariffs.draftVersion(

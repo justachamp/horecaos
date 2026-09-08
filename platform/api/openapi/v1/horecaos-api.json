@@ -4506,6 +4506,85 @@
         "required" : [ "locationId" ],
         "type" : "object"
       },
+      "DeliveryTariffControllerDraftTariffVersionRequest" : {
+        "properties" : {
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "discounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DiscountRequest"
+            },
+            "type" : "array"
+          },
+          "distanceAccrual" : {
+            "enum" : [ "STARTED_KILOMETRE", "PRORATED_METRE" ],
+            "type" : "string"
+          },
+          "distanceMode" : {
+            "enum" : [ "RADIUS", "ROAD" ],
+            "type" : "string"
+          },
+          "feeRoundingRule" : {
+            "enum" : [ "HALF_UP", "HALF_EVEN" ],
+            "type" : "string"
+          },
+          "feeRoundingStepMinor" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeSource" : {
+            "enum" : [ "TARIFF", "PROVIDER_QUOTE" ],
+            "type" : "string"
+          },
+          "maxDistanceMeters" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "minFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "minimum" : 10000,
+            "type" : "integer"
+          },
+          "routingProviderInstallationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "timeRules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeRuleRequest"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
+        "type" : "object"
+      },
       "DeliveryTariffControllerVersionView" : {
         "properties" : {
           "status" : {
@@ -5060,85 +5139,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "DraftTariffVersionRequest" : {
-        "properties" : {
-          "actorId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "bands" : {
-            "items" : {
-              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
-            },
-            "minItems" : 1,
-            "type" : "array"
-          },
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "discounts" : {
-            "items" : {
-              "$ref" : "#/components/schemas/DiscountRequest"
-            },
-            "type" : "array"
-          },
-          "distanceAccrual" : {
-            "enum" : [ "STARTED_KILOMETRE", "PRORATED_METRE" ],
-            "type" : "string"
-          },
-          "distanceMode" : {
-            "enum" : [ "RADIUS", "ROAD" ],
-            "type" : "string"
-          },
-          "feeRoundingRule" : {
-            "enum" : [ "HALF_UP", "HALF_EVEN" ],
-            "type" : "string"
-          },
-          "feeRoundingStepMinor" : {
-            "exclusiveMinimum" : 0,
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "feeSource" : {
-            "enum" : [ "TARIFF", "PROVIDER_QUOTE" ],
-            "type" : "string"
-          },
-          "maxDistanceMeters" : {
-            "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "maxFeeMinor" : {
-            "format" : "int64",
-            "minimum" : 0,
-            "type" : "integer"
-          },
-          "minFeeMinor" : {
-            "format" : "int64",
-            "minimum" : 0,
-            "type" : "integer"
-          },
-          "roadFactorBasisPoints" : {
-            "format" : "int32",
-            "minimum" : 10000,
-            "type" : "integer"
-          },
-          "routingProviderInstallationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "timeRules" : {
-            "items" : {
-              "$ref" : "#/components/schemas/TimeRuleRequest"
-            },
-            "type" : "array"
-          }
-        },
-        "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
         "type" : "object"
       },
       "DutySessionResponse" : {
@@ -8104,6 +8104,81 @@
         },
         "type" : "object"
       },
+      "OperationsDeliveryTariffControllerDraftTariffVersionRequest" : {
+        "properties" : {
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "discounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DiscountRequest"
+            },
+            "type" : "array"
+          },
+          "distanceAccrual" : {
+            "enum" : [ "STARTED_KILOMETRE", "PRORATED_METRE" ],
+            "type" : "string"
+          },
+          "distanceMode" : {
+            "enum" : [ "RADIUS", "ROAD" ],
+            "type" : "string"
+          },
+          "feeRoundingRule" : {
+            "enum" : [ "HALF_UP", "HALF_EVEN" ],
+            "type" : "string"
+          },
+          "feeRoundingStepMinor" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeSource" : {
+            "enum" : [ "TARIFF", "PROVIDER_QUOTE" ],
+            "type" : "string"
+          },
+          "maxDistanceMeters" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "minFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "minimum" : 10000,
+            "type" : "integer"
+          },
+          "routingProviderInstallationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "timeRules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeRuleRequest"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "bands", "currency", "distanceMode", "feeSource" ],
+        "type" : "object"
+      },
       "OperationsMarketingControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -8450,6 +8525,45 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "OperationsServiceZoneControllerDraftVersionRequest" : {
+        "properties" : {
+          "circle" : {
+            "$ref" : "#/components/schemas/CircleRequest"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "geoJson" : {
+            "type" : "string"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "currency" ],
         "type" : "object"
       },
       "OrderActionResponse" : {
@@ -15852,7 +15966,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_24",
+        "operationId" : "list_27",
         "responses" : {
           "200" : {
             "content" : {
@@ -15996,7 +16110,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_23",
+        "operationId" : "list_26",
         "responses" : {
           "200" : {
             "content" : {
@@ -16073,7 +16187,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_15",
+        "operationId" : "list_18",
         "responses" : {
           "200" : {
             "content" : {
@@ -16549,7 +16663,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_22",
+        "operationId" : "list_25",
         "responses" : {
           "200" : {
             "content" : {
@@ -16591,7 +16705,7 @@
     },
     "/api/v1/control-plane/onboarding-templates/{templateId}" : {
       "get" : {
-        "operationId" : "get_10",
+        "operationId" : "get_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "templateId",
@@ -16689,7 +16803,7 @@
     "/api/v1/control-plane/reference-data" : {
       "get" : {
         "description" : "Countries this platform markets to (ADR 0034) with their default currency and timezone, and the locales the staff consoles ship. Holiday seeds and SLA bucket defaults are not modeled and are not returned.",
-        "operationId" : "get_9",
+        "operationId" : "get_10",
         "responses" : {
           "200" : {
             "content" : {
@@ -16833,7 +16947,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_14",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17203,7 +17317,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/audit-events/{eventId}" : {
       "get" : {
         "description" : "The diff a settings or an order dispute is actually resolved with. Excluded from the list response on purpose (ADR 0027 §11.13): a change document can carry redacted structure that is still revealing in bulk, so retrieving it is a separate, individually audited read.",
-        "operationId" : "detail_5",
+        "operationId" : "detail_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18604,7 +18718,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_21",
+        "operationId" : "list_24",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18698,7 +18812,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_13",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18736,7 +18850,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default, which is the last rung of fee resolution — and there is no rung after it, because a missing rate table and free delivery must never look alike.",
-        "operationId" : "create_8",
+        "operationId" : "create_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18783,7 +18897,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
       "get" : {
         "description" : "activeVersion is absent for a tariff drafted but never activated.",
-        "operationId" : "detail_4",
+        "operationId" : "detail_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18828,7 +18942,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
       "post" : {
         "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
-        "operationId" : "bind_3",
+        "operationId" : "bind_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18876,7 +18990,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions" : {
       "post" : {
         "description" : "Bands must tile [0, maxDistanceMeters) with no gap and no overlap. Overlap is refused by the database on insert; the gap check runs at activation, because it is a property of the whole set. A gap makes 4,700 m unpriceable while 4,600 m and 4,800 m both price fine.",
-        "operationId" : "draftVersion_2",
+        "operationId" : "draftVersion_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18906,7 +19020,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DraftTariffVersionRequest"
+                "$ref" : "#/components/schemas/DeliveryTariffControllerDraftTariffVersionRequest"
               }
             }
           },
@@ -18931,7 +19045,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_8",
+        "operationId" : "activate_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19298,7 +19412,7 @@
       },
       "post" : {
         "description" : "Draft: nothing in it prices anything until it is activated, so a season's prices can be built during service without moving a live one.",
-        "operationId" : "create_7",
+        "operationId" : "create_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19463,7 +19577,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation" : {
       "post" : {
         "description" : "Requires If-Match carrying the book's version, so two operators activating at once cannot both win. Quotes already issued are untouched: they carry their own totals and are honoured at the price the customer was shown until they expire.",
-        "operationId" : "activate_7",
+        "operationId" : "activate_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19869,7 +19983,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
-        "operationId" : "create_6",
+        "operationId" : "create_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20012,7 +20126,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_12",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20050,7 +20164,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_5",
+        "operationId" : "create_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20097,7 +20211,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}" : {
       "get" : {
         "description" : "The zone → branch set (§3.6). Empty when the zone is drawn but never bound.",
-        "operationId" : "detail_3",
+        "operationId" : "detail_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20142,7 +20256,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
       "post" : {
         "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
-        "operationId" : "bind_2",
+        "operationId" : "bind_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20190,7 +20304,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions" : {
       "post" : {
         "description" : "Every edit to geometry, priority, tariff binding or threshold is a new version; the live one is never mutated. A payout dispute six weeks later asks whether that address was inside that polygon, and today's geometry cannot answer it. Supply either a circle around a branch or a GeoJSON polygon, never both.",
-        "operationId" : "draftVersion_1",
+        "operationId" : "draftVersion_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20245,7 +20359,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum — which is what stops an operator drawing a polygon around the country by accident. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_6",
+        "operationId" : "activate_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20337,7 +20451,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_11",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20501,7 +20615,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20639,7 +20753,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings" : {
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
-        "operationId" : "bind_1",
+        "operationId" : "bind_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21011,7 +21125,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_9",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21041,7 +21155,7 @@
       },
       "post" : {
         "description" : "Registered in DRAFT. A draft entity cannot be named as a seller until it is activated, so typing an INN never immediately puts it on a receipt.",
-        "operationId" : "register_3",
+        "operationId" : "register_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21079,7 +21193,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments" : {
       "get" : {
-        "operationId" : "assignmentHistory",
+        "operationId" : "assignmentHistory_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21126,7 +21240,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}" : {
       "get" : {
-        "operationId" : "get_8",
+        "operationId" : "get_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21163,7 +21277,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_5",
+        "operationId" : "activate_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21208,7 +21322,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/assignments" : {
       "post" : {
         "description" : "Closes the location's currently open assignment, if any, at the new one's start date. Backdating is permitted; backdating over an existing assignment is refused.",
-        "operationId" : "assign_1",
+        "operationId" : "assign_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21323,7 +21437,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}" : {
       "get" : {
         "description" : "Blocked steps are listed with the decision that would unblock them, so a tenant that is live without a check is visible rather than implied.",
-        "operationId" : "get_7",
+        "operationId" : "get_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21360,7 +21474,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate" : {
       "post" : {
         "description" : "Requires every required step to have completed, plus platform approval where a policy demands it. Activating twice produces one transition.",
-        "operationId" : "activate_4",
+        "operationId" : "activate_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21622,7 +21736,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_8",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21668,7 +21782,7 @@
       },
       "post" : {
         "description" : "A cancellation reason decides the stock disposition, the liable party and the refund posture; none of the three has a safe default and all three are required. A completion reason names the fulfilment modes it is valid for, because without that «Самовывоз выполнен» lands on a delivery order and the courier SLA report quietly loses it.",
-        "operationId" : "create_4",
+        "operationId" : "create_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22196,7 +22310,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it.",
-        "operationId" : "list_7",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22226,7 +22340,7 @@
       },
       "post" : {
         "description" : "The system type comes from a closed, code-owned list. A tenant may run several channels of one type — Uzum Tezkor and Yandex Eda are both AGGREGATOR and must differ in price plane, payment mix, and reporting.",
-        "operationId" : "create_3",
+        "operationId" : "create_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23282,7 +23396,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_18",
+        "operationId" : "list_21",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23313,7 +23427,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
       "get" : {
-        "operationId" : "get_5",
+        "operationId" : "get_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23350,7 +23464,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_20",
+        "operationId" : "list_23",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23400,7 +23514,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}" : {
       "get" : {
         "description" : "The envelope-decrypted free text is this screen's whole purpose (ADR 0059). The first time a given operator opens a given conversation this way, it writes a conversation.history.read audit fact (ADR 0027); a later poll of an already-open thread by the same operator does not repeat it.",
-        "operationId" : "detail_2",
+        "operationId" : "detail_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23650,6 +23764,291 @@
         "tags" : [ "Operator inbox" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
+      "get" : {
+        "operationId" : "list_9",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TariffSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every rate table this brand has registered",
+        "tags" : [ "Delivery tariffs" ]
+      },
+      "post" : {
+        "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default.",
+        "operationId" : "create_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTariffRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a rate table",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
+      "get" : {
+        "description" : "activeVersion is absent for a tariff drafted but never activated.",
+        "operationId" : "detail_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tariffId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One tariff's live bands, time rules and discounts",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
+      "post" : {
+        "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
+        "operationId" : "bind_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tariffId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeliveryTariffControllerBindLocationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind the rate table to a branch",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions" : {
+      "post" : {
+        "description" : "Bands must tile [0, maxDistanceMeters) with no gap and no overlap. Overlap is refused by the database on insert; the gap check runs at activation.",
+        "operationId" : "draftVersion_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tariffId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OperationsDeliveryTariffControllerDraftTariffVersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a new version of a rate table",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
+      "post" : {
+        "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
+        "operationId" : "activate_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tariffId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "version",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a rate table version live",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations" : {
       "get" : {
         "operationId" : "locations",
@@ -23784,7 +24183,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/assign" : {
       "post" : {
         "description" : "Idempotent and audited (§3.1): a second identical click settles once. Refused as a conflict, never an error, when the plan is already carried.",
-        "operationId" : "assign",
+        "operationId" : "assign_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24915,7 +25314,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_6",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25000,7 +25399,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/activate" : {
       "post" : {
         "description" : "Promotes the promotion and the coupon together, in one transaction. Unlike a loyalty policy, activating one code never retires another: a brand may run several promo codes at once.",
-        "operationId" : "activate_3",
+        "operationId" : "activate_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25314,7 +25713,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_19",
+        "operationId" : "list_22",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25467,6 +25866,290 @@
         "tags" : [ "Reviews" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
+      "get" : {
+        "operationId" : "list_7",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ZoneSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every zone this brand has registered",
+        "tags" : [ "Service zones" ]
+      },
+      "post" : {
+        "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
+        "operationId" : "create_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateZoneRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ZoneView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a zone",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}" : {
+      "get" : {
+        "operationId" : "detail_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "zoneId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ZoneDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One zone's live numbers and the branches it applies to",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
+      "post" : {
+        "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
+        "operationId" : "bind_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "zoneId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ServiceZoneControllerBindLocationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind the zone to a branch",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions" : {
+      "post" : {
+        "description" : "Every edit to geometry, priority, tariff binding or threshold is a new version; the live one is never mutated. Supply either a circle around a branch or a GeoJSON polygon, never both.",
+        "operationId" : "draftVersion_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "zoneId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OperationsServiceZoneControllerDraftVersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a new version of a zone",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
+      "post" : {
+        "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum. Every reason is returned at once rather than one attempt at a time.",
+        "operationId" : "activate_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "zoneId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "version",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a zone version live",
+        "tags" : [ "Service zones" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents" : {
       "get" : {
         "operationId" : "history",
@@ -25590,7 +26273,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}" : {
       "get" : {
-        "operationId" : "get_6",
+        "operationId" : "get_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26275,7 +26958,7 @@
       },
       "post" : {
         "description" : "Opens in PENDING_VERIFICATION. Onboarding somebody and attesting to their registration are different acts by different people, and this call deliberately cannot do the second.",
-        "operationId" : "register_2",
+        "operationId" : "register_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26593,7 +27276,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27099,6 +27782,249 @@
         },
         "summary" : "Set whether Clopos still needs a clerk's acceptance",
         "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities" : {
+      "get" : {
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LegalEntityView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the tenant's registered legal entities",
+        "tags" : [ "Legal entities" ]
+      },
+      "post" : {
+        "description" : "Registered in DRAFT. A draft entity cannot be named as a seller until it is activated.",
+        "operationId" : "register_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterLegalEntityRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a company inside a tenant",
+        "tags" : [ "Legal entities" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments" : {
+      "get" : {
+        "operationId" : "assignmentHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationFiscalAssignmentView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A location's fiscal-assignment history, most recent first",
+        "tags" : [ "Legal entities" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}" : {
+      "get" : {
+        "operationId" : "get_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get a legal entity",
+        "tags" : [ "Legal entities" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
+      "post" : {
+        "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
+        "operationId" : "activate_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a legal entity",
+        "tags" : [ "Legal entities" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/assignments" : {
+      "post" : {
+        "description" : "Closes the location's currently open assignment, if any, at the new one's start date. Backdating is permitted; backdating over an existing assignment is refused.",
+        "operationId" : "assign",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AssignLocationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationFiscalAssignmentView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Assign a legal entity as a location's seller from a date",
+        "tags" : [ "Legal entities" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/marketplace/liveness" : {
@@ -34626,7 +35552,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
         "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
-        "operationId" : "list_17",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38558,7 +39484,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_16",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40034,6 +40960,9 @@
     "description" : "Which optional messages a customer receives, per class and channel",
     "name" : "Notification preferences"
   }, {
+    "description" : "A tenant's own delivery and catchment geometry (ADR 0037)",
+    "name" : "Service zones"
+  }, {
     "description" : "A brand's own accrual rate and redemption cap",
     "name" : "Loyalty policy"
   }, {
@@ -40178,6 +41107,9 @@
     "description" : "Binary availability and stock listing at a location",
     "name" : "Inventory"
   }, {
+    "description" : "A tenant's own versioned distance bands and peak-hour rules (ADR 0037)",
+    "name" : "Delivery tariffs"
+  }, {
     "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
     "name" : "Order acceptance policy"
   }, {
@@ -40204,6 +41136,9 @@
   }, {
     "description" : "Referral codes and redemptions actually happening at a brand",
     "name" : "Referrals"
+  }, {
+    "description" : "A tenant's own read of ADR 0038 legal entities and their location assignments",
+    "name" : "Legal entities"
   }, {
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
