@@ -1096,6 +1096,34 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("a checkout is refused for a method the channel's own matrix never enabled, "
+            + "even though a merchant account would have taken it")
+    void aMethodTheChannelDoesNotOfferIsRefusedAtCheckout() {
+        // CASH always passes canAcceptPayment (ADR 0013 needs no merchant
+        // account for it), which is exactly what isolates this to the channel
+        // matrix: disabling the row here changes nothing about whether a
+        // merchant account exists, only whether this channel is configured to
+        // sell CASH at all. CartPaymentOptions.forCart already refuses to offer
+        // CASH once this row is disabled (ADR 0036) — this posts the same
+        // checkout the way something that skipped that read would, straight to
+        // CheckoutService, to prove the guard refuses it too rather than
+        // silently accepting a method the offered list would never have shown.
+        jdbc.sql("""
+                UPDATE tenant.channel_payment_methods SET enabled = false
+                WHERE tenant_id = :tenantId AND channel_id = :channelId AND payment_method_code = 'CASH'
+                """)
+                .param("tenantId", TENANT)
+                .param("channelId", storefrontChannel)
+                .update();
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(readyCart(), "idem-matrix-off", "CASH")));
+
+        assertThat(result.rejectionCode()).isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+        assertThat(result.orderId()).isNull();
+        assertThat(countOrders()).isZero();
+    }
+
+    @Test
     @DisplayName("Click holds the order in PAYMENT_AUTHORIZING instead of confirming it")
     void clickWaitsForTheMoney() {
         assertProviderMethodWaitsForPayment("CLICK", PaymentProviderType.CLICK);
@@ -4076,7 +4104,6 @@ class CartCheckoutAndOrderTests {
     void theBotChecksOutForCash() {
         publishBurger();
         offer(burgerVariant, "AVAILABLE");
-        enableCashOnTheStorefrontChannel();
         UUID first = orderIdOf(placeOrder("idem-bot-first"));
 
         var repeat = botOrdering.repeat(TENANT, BRAND, CUSTOMER, first);
@@ -4101,33 +4128,40 @@ class CartCheckoutAndOrderTests {
     }
 
     /**
-     * The channel's payment matrix, which this suite never seeded.
+     * A row in the channel's payment matrix (ADR 0036), so a checkout naming
+     * this code is one the storefront channel actually offers.
      *
-     * <p>V0020 makes an absent row a "we do not take that here", so
-     * {@code CartPaymentOptions} correctly offers nothing for a channel with no
-     * matrix — and a bot checkout, which asks that question before it spends
-     * anybody's money, is refused. {@code CheckoutService} itself does not
-     * consult the matrix, which is why every other checkout in this class
-     * succeeds on CASH without one; that difference is real and is the reason
-     * this row has to exist for the bot path and not for theirs.
+     * <p>V0020 makes an absent row a "we do not take that here", and both
+     * {@code CartPaymentOptions} and {@code CheckoutEligibilityGuard} now read
+     * it — the guard used not to, which is what let nearly every checkout in
+     * this class pay with a code the fixture never enabled; see ADR 0036's
+     * implementation status line for that history. {@code seedTenancyAndCatalog}
+     * calls this for every code a test in this class checks out with, so the
+     * matrix is no longer a gap a test has to route around.
      */
-    private void enableCashOnTheStorefrontChannel() {
+    private void enablePaymentMethodOnTheStorefrontChannel(String code, String responsibility) {
         // V0175 points payment_method_code at payments.payment_methods with a
         // foreign key, so the registry row must exist before this insert names
         // it. Same code and responsibility CheckoutSettlementPlanner would have
-        // registered lazily on this suite's first cash checkout.
+        // registered lazily on this suite's first checkout with it.
         jdbc.sql("""
                 INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
-                VALUES (:id, :tenantId, 'CASH', 'CASH', 'OPERATOR', 'ACTIVE')
+                VALUES (:id, :tenantId, :code, :code, :responsibility, 'ACTIVE')
                 ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("responsibility", responsibility)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
-                VALUES (:tenantId, :channelId, 'CASH', true)
+                VALUES (:tenantId, :channelId, :code, true)
                 ON CONFLICT DO NOTHING
                 """)
                 .param("tenantId", TENANT)
                 .param("channelId", storefrontChannel)
+                .param("code", code)
                 .update();
     }
 
@@ -4958,6 +4992,15 @@ class CartCheckoutAndOrderTests {
                     .param("mode", mode.name())
                     .update();
         }
+
+        // ADR 0036's channel payment matrix. Every code a checkout test in this
+        // class names — CASH, CLICK, PAYME — must be enabled here or
+        // CheckoutEligibilityGuard now refuses it before a single test method
+        // runs; the responsibilities mirror V0175's backfill and
+        // CheckoutSettlementPlanner.responsibilityOf.
+        enablePaymentMethodOnTheStorefrontChannel("CASH", "OPERATOR");
+        enablePaymentMethodOnTheStorefrontChannel("CLICK", "PARTNER");
+        enablePaymentMethodOnTheStorefrontChannel("PAYME", "PARTNER");
 
         UUID scheduleId = UUID.randomUUID();
         jdbc.sql("""

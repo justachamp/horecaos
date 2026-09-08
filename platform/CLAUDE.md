@@ -98,6 +98,22 @@ Spring JDBC with explicit SQL — **no ORM**), Kafka 4.3, Keycloak 26.7, S3-comp
   method, not a `computed()`, for exactly this reason — see `session.ts`'s
   `accessToken()` doc comment. Reach for `computed()` for reactive, signal-driven state;
   check the clock imperatively, on every read, for anything with a deadline.
+- **Which UUID do I use?** (ADR 0076) A new row's primary key is
+  `uz.horecaos.platform.configuration.Ids.newId()` — RFC 9562 v7, not
+  `UUID.randomUUID()`. Two named exceptions stay exactly as they are:
+  `UUID.nameUUIDFromBytes` derived ids (the digest scheduler, delivery
+  assignment/quote ids, the role registry, voice event and operator presence
+  ids — determinism is the feature) and lease/fencing tokens (`claim_token`,
+  `processingToken`, `leaseToken` — never ordered, never external). Never
+  rewrite an existing row's id to v7; ADR 0076 is new rows only, no backfill.
+  A v7 id also tells its holder the millisecond it was minted, which is fine
+  for most rows but not for `customer.customer_accounts` — that id would read
+  as a signup date to any tenant staff member who can see it. That one table
+  uses `Ids.newUndisclosedTimestampId()` instead: same v7 shape, but every bit
+  including the timestamp field is random, so it sorts arbitrarily and
+  discloses nothing. Reach for it only where a value both leaves the tenant's
+  own staff and its creation time is the sensitive part — reaching for it by
+  default would quietly give up the ordering property `Ids.newId()` exists for.
 
 ## Definition of done
 

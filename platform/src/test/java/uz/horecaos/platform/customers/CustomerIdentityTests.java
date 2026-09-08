@@ -148,6 +148,25 @@ class CustomerIdentityTests {
     }
 
     @Test
+    @DisplayName("a customer account id has the v7 shape but is minted by Ids.newUndisclosedTimestampId (ADR 0076)")
+    void accountIdsDoNotDiscloseCreationTime() {
+        // Ids.newUndisclosedTimestampId's own unit tests (IdsTests) cover the
+        // no-adjacency and no-correlation properties in isolation. This test
+        // exists only to prove both account-creation paths actually call it —
+        // that would not be visible from the schema, which stores a plain
+        // uuid column either way.
+        UUID viaSignIn = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-adr0076-signin")
+                .account()
+                .accountId();
+        UUID viaImport = identity.createAccountWithoutPrincipal(TENANT, BRAND_A).accountId();
+
+        assertThat(viaSignIn.version()).isEqualTo(7);
+        assertThat(viaSignIn.variant()).isEqualTo(2);
+        assertThat(viaImport.version()).isEqualTo(7);
+        assertThat(viaImport.variant()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("under TENANT_SHARED, two brands share one account with a profile each")
     void tenantSharedGivesOneAccountAcrossBrands() {
         var atBrandA = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-2");

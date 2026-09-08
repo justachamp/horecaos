@@ -1720,6 +1720,25 @@ class OrderAmendmentAndOutcomeTests {
                     .update();
         }
 
+        // ADR 0036's channel payment matrix. Every checkout in this class pays
+        // with CASH (placeOrder, below), and CheckoutEligibilityGuard now checks
+        // the matrix as well as the merchant account, so the row must exist
+        // before a single test method runs — V0175 points the matrix at this
+        // registry row by foreign key, so it goes first.
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, 'CASH', 'CASH', 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+                VALUES (:tenantId, :channelId, 'CASH', true)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("tenantId", TENANT)
+                .param("channelId", storefrontChannel)
+                .update();
+
         UUID scheduleId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO tenant.service_schedules (id, tenant_id, brand_id, name,
