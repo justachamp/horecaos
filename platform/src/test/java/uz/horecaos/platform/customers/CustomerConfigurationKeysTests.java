@@ -49,4 +49,35 @@ class CustomerConfigurationKeysTests {
                 .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
                 .doesNotContain(ScopeType.LOCATION);
     }
+
+    @Test
+    void theRegistryAndTheCustomersModuleDeclareTheSameOtpChannelOrderKey() {
+        ConfigurationKey<?> registered =
+                ConfigurationKeys.require(CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER_CODE);
+        ConfigurationKey<String> used = CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER;
+
+        assertThat(registered.valueType()).isEqualTo(used.valueType());
+        assertThat(registered.defaultValue()).isEqualTo(used.defaultValue());
+        assertThat(registered.settableScopes()).isEqualTo(used.settableScopes());
+        assertThat(registered.owningModule()).isEqualTo(used.owningModule());
+        assertThat(registered.explicitNullTerminates()).isEqualTo(used.explicitNullTerminates());
+    }
+
+    @Test
+    void theOtpChannelOrderDefaultsToGatewayFirstThenSms() {
+        // ADR 0063's own Decision, restated as data: Telegram Gateway is
+        // cheaper but reaches only a number with a Telegram account, so it
+        // goes first and SMS -- which the ADR's Alternatives table says can
+        // never fully be dropped -- catches everyone else.
+        assertThat(CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER.defaultValue())
+                .isEqualTo("TELEGRAM_GATEWAY,SMS")
+                .isEqualTo(CustomerConfigurationKeys.DEFAULT_OTP_DELIVERY_CHANNEL_ORDER);
+    }
+
+    @Test
+    void theOtpChannelOrderIsSettableDownToABrand() {
+        assertThat(CustomerConfigurationKeys.OTP_DELIVERY_CHANNEL_ORDER.settableScopes())
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+                .doesNotContain(ScopeType.LOCATION);
+    }
 }

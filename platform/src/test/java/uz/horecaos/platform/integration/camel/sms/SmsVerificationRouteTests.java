@@ -20,6 +20,7 @@ import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.ContactChannel;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.Outcome;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.VerificationMessage;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -31,6 +32,10 @@ import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
 import uz.horecaos.platform.integration.provider.telegramgateway.TelegramGatewayClient;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
+import uz.horecaos.platform.tenancy.api.Resolved;
 
 /**
  * The route's policy, end to end, from the port a customer's code leaves through
@@ -151,7 +156,8 @@ class SmsVerificationRouteTests {
         camel = new DefaultCamelContext();
         camel.start();
         try (ProducerTemplate producer = camel.createProducerTemplate()) {
-            VerificationCodeTransport transport = new CamelVerificationCodeTransport(producer, unconfiguredGateway());
+            VerificationCodeTransport transport =
+                    new CamelVerificationCodeTransport(producer, unconfiguredGateway(), defaultOrderConfiguration());
 
             Outcome outcome = transport.send(message());
 
@@ -181,7 +187,29 @@ class SmsVerificationRouteTests {
         camel = new DefaultCamelContext();
         camel.addRoutes(new SmsRouteBuilder(processor));
         camel.start();
-        return new CamelVerificationCodeTransport(camel.createProducerTemplate(), unconfiguredGateway());
+        return new CamelVerificationCodeTransport(
+                camel.createProducerTemplate(), unconfiguredGateway(), defaultOrderConfiguration());
+    }
+
+    /**
+     * Every test in this class exercises the SMS path specifically with
+     * Gateway left unconfigured, so the ADR 0063 channel order never matters
+     * here — the platform default (code default, no scoped override) is
+     * enough. The order itself is {@code TelegramGatewayVerificationDeliveryTests}'s
+     * own subject.
+     */
+    private static ConfigurationResolver defaultOrderConfiguration() {
+        return new ConfigurationResolver() {
+            @Override
+            public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
+                return new Resolved<>(key.defaultValue(), explain(key, scope));
+            }
+
+            @Override
+            public ResolutionTrace explain(ConfigurationKey<?> key, ResourceScope scope) {
+                return new ResolutionTrace(key.code(), ResolutionTrace.Source.CODE_DEFAULT, null, List.of());
+            }
+        };
     }
 
     /**

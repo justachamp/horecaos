@@ -192,6 +192,37 @@ public final class ConfigurationKeys {
                     + "for ADR 0063 share-contact sign-in. Defaults to an Uzbek mobile in E.164.")
             .build();
 
+    /**
+     * ADR 0063: the dual-channel OTP delivery order, the owner's 2026-09-08
+     * direction to "keep both SMS and Telegram Gateway" and let the control
+     * plane — not a hardcoded Java conditional — decide which is tried first.
+     *
+     * <p>Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code customers.api.CustomerConfigurationKeys}
+     * where it is consumed by {@code
+     * integration.camel.sms.CamelVerificationCodeTransport}, for the reason
+     * recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}: this registry is
+     * internal to tenancy, and a reference the other way would make the
+     * modules cyclic.
+     *
+     * <p>The default, {@code TELEGRAM_GATEWAY,SMS}, restates ADR 0063's own
+     * Decision as data: Gateway is cheaper but reaches only a number with a
+     * Telegram account, so it goes first and SMS — which ADR 0063's own
+     * Alternatives table says can "never fully" be dropped — is what catches
+     * everyone else.
+     */
+    public static final ConfigurationKey<String> CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER = ConfigurationKey.of(
+                    "customers.otp_delivery_channel_order", String.class)
+            .defaultValue("TELEGRAM_GATEWAY,SMS")
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Comma-separated order (a permutation of TELEGRAM_GATEWAY,SMS, both required) "
+                    + "in which ADR 0015 verification-code delivery tries its two channels. "
+                    + "Defaults to Telegram Gateway first (cheaper) with SMS as the reachability "
+                    + "fallback; whichever channel is not tried first is still tried when the "
+                    + "first is unconfigured or does not accept the message.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             ORDER_APPROVAL_TIMEOUT_SECONDS,
             CART_EXPIRY_MINUTES,
@@ -205,7 +236,8 @@ public final class ConfigurationKeys {
             TELEMETRY_TRACK_RETENTION_DAYS,
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
-            CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN));
+            CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
+            CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER));
 
     private ConfigurationKeys() {}
 
