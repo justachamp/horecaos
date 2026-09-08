@@ -374,7 +374,8 @@ abstract class MigrationControlPlaneFixture {
         // contract violation is intentional.
         @SuppressWarnings("NullAway")
         CurrentActor noActor = () -> null;
-        return new JdbcAuthorizationService(jdbc, clock, noActor, tenantId -> false);
+        return new JdbcAuthorizationService(
+                jdbc, clock, noActor, tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING);
     }
 
     /** Lets a test move time forward without sleeping. */

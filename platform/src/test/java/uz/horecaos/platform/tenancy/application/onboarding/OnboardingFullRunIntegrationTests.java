@@ -434,7 +434,8 @@ class OnboardingFullRunIntegrationTests {
                 throw new UnsupportedOperationException("no interactive actor in a background workflow");
             }
         };
-        var authorizationService = new JdbcAuthorizationService(jdbc, CLOCK, currentActor, tenantId -> false);
+        var authorizationService = new JdbcAuthorizationService(
+                jdbc, CLOCK, currentActor, tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING);
         var grantManagement =
                 new GrantManagementService(jdbc, authorizationService, authorizationService, event -> {}, CLOCK);
         TenantOwnerAuthorityGrantor authority = new TenantOwnerAuthorityGrantorAdapter(grantManagement);

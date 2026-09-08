@@ -19,6 +19,10 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
+import uz.horecaos.platform.iam.api.TenantAvailability;
+import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Applies the ADR 0025 capability declared by the handler, and refuses the
@@ -55,6 +59,8 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
     private final ResourceScopeVerifier scopes;
     private final CurrentActor currentActor;
     private final MeterRegistry meters;
+    private final TenantSuspensionLookup availability;
+    private final SuspendedTenantReadQuota readQuota;
     private final boolean enforce;
 
     public CapabilityEnforcementInterceptor(
@@ -62,11 +68,15 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
             ResourceScopeVerifier scopes,
             CurrentActor currentActor,
             MeterRegistry meters,
+            TenantSuspensionLookup availability,
+            SuspendedTenantReadQuota readQuota,
             @Value("${horecaos.authorization.enforce:true}") boolean enforce) {
         this.authorization = authorization;
         this.scopes = scopes;
         this.currentActor = currentActor;
         this.meters = meters;
+        this.availability = availability;
+        this.readQuota = readQuota;
         this.enforce = enforce;
     }
 
@@ -107,7 +117,45 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
         ResourceScope scope = scopeOf(request, declaration.scope());
         authorization.require(subject(), declaration.value(), scope);
         requireRealScope(scope);
+        rationReadsOfASuspendedTenant(request, handler, scope);
         return true;
+    }
+
+    /**
+     * Three reads per endpoint per ninety days, for a suspended tenant only
+     * (ADR 0078).
+     *
+     * <p>It runs last, after the capability check and the scope check, and the
+     * order is the same design those two already have. Ahead of them the quota
+     * would be spent by requests that were going to be refused anyway, and worse,
+     * a caller with no grant at all could burn a real tenant's allowance by
+     * guessing its identifier.
+     *
+     * <p>Only reads reach here at all: a suspended tenant's write capabilities
+     * were already dropped by {@code JdbcAuthorizationService}, so
+     * {@code authorization.require} above has thrown for anything else. This
+     * counts what survived, because surviving reads are the export channel the
+     * allowance exists to close.
+     */
+    private void rationReadsOfASuspendedTenant(HttpServletRequest request, Object handler, ResourceScope scope) {
+        UUID tenantId = scope.tenantId();
+        if (tenantId == null || availability.availabilityOf(tenantId) != TenantAvailability.READ_ONLY) {
+            return;
+        }
+        if (!(handler instanceof HandlerMethod method)) {
+            return;
+        }
+        String endpoint =
+                method.getBeanType().getSimpleName() + "#" + method.getMethod().getName();
+        if (!readQuota.consume(tenantId, endpoint, subject())) {
+            throw new ApiException(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "This tenant is suspended and has used its read allowance for this endpoint.",
+                    Map.of(
+                            "endpoint", endpoint,
+                            "allowance", String.valueOf(SuspendedTenantReadQuota.ALLOWANCE),
+                            "windowDays", String.valueOf(SuspendedTenantReadQuota.WINDOW.toDays())));
+        }
     }
 
     @Override

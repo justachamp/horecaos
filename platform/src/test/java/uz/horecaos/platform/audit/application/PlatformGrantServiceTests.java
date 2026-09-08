@@ -89,7 +89,7 @@ class PlatformGrantServiceTests {
                         jdbc,
                         CLOCK,
                         () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
-                        tenantId -> false) {
+                        tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING) {
                     @Override
                     public void evictGrants(String subject, @Nullable UUID tenantId) {
                         // no cache in this fixture

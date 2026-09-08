@@ -22,7 +22,7 @@
 - Date decided: 2026-09-08
 - Deciders: platform owner (directed the work), Claude (architecture)
 - Depends on: 0003, 0025, 0027, 0030, 0033
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: Superseded by 0078
 - Open inputs:
   - Whether an `ARCHIVED` tenant's people keep working — owner. Archival is
     ending the relationship rather than pausing it, and the retention answer
