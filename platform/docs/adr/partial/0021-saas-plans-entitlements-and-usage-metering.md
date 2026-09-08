@@ -13,11 +13,41 @@
   `telegram.digests.enabled` (opt-in `FALSE` default — the first key a plan can
   actually close), `TelegramOperationsEntitlementGate` gates the operations alert
   fan-out, and `BotCallbackAuthorizer` gates bot interactivity, so entitlement
-  resolution now runs on production paths. Still not built: **no product module
-  calls `UsageMeter`** — no usage is metered anywhere,
-  so nothing enforces a quantity limit; no consumer is wired to the ADR 0005 inbox;
-  there is no period close, invoice export, dashboard, alert or runbook; and no
-  onboarding path creates a subscription.
+  resolution now runs on production paths. Wave 90 gave `UsageMeter` its first
+  callers: `brands.max_count` and `locations.max_count` meter from
+  `TenancyUsageMeterTrigger`, `orders.monthly_included` meters from
+  `OrderConfirmedUsageMeterTrigger`, and `media.storage_bytes_included` meters
+  from `MediaUsageMeterTrigger` — all three are `@TransactionalEventListener`s on
+  a fact the owning module already published (`BrandCreated`/`LocationCreated`,
+  `OrderConfirmed`, `MediaAssetAvailable`), not a direct call from the owning
+  module, because `commercial` already depends on `tenancy.api` (its own ADR
+  0030 configuration lookup) and `tenancy` in turn depends on `media.api`
+  (onboarding's readiness check): a direct edge from either `tenancy` or `media`
+  back into `commercial.api` would have closed a cycle
+  `ModularArchitectureTests` catches, so the listener sits in `commercial`
+  instead, which already may depend on both. `catalog.products.max_count` is
+  the exception and this wave's one enforced limit: `commercial` does not
+  depend on `catalog`, so `CatalogAuthoringService#createProduct` calls
+  `EntitlementService#require` directly, before the insert, and refuses with
+  `ErrorCode.ENTITLEMENT_REQUIRED` under `EnforcementMode.HARD` — proved end to
+  end against PostgreSQL by `CatalogAuthoringEntitlementTests`, the same shape
+  `CampaignService#start` already used for a feature gate. Idempotency is the
+  existing `UsageMeter#record` guarantee (unique on tenant, key, source type and
+  source event id) — every new caller supplies the owning aggregate's own id as
+  that key and adds no dedupe of its own; `TenancyUsageMeterTriggerTests`,
+  `OrderConfirmedUsageMeterTriggerTests` and `MediaUsageMeterTriggerTests` each
+  assert a redelivered fact does not double count. Still not metered:
+  `control_plane.users.max_count` — `iam` already sits inside `commercial`'s own
+  dependency closure the same way `tenancy` and `media` do, and unlike them
+  nothing yet establishes whether the count is grants or distinct staff
+  accounts; `pos.installations.max_count` — `ProviderInstallationController`
+  writes installations with inline `JdbcClient` SQL and no application service
+  to add a call to; `notifications.monthly_included` —
+  `NotificationDispatchService#dispatch` is deliberately not `@Transactional`
+  because it calls a provider mid-method, so there is no single commit to meter
+  against yet. No consumer is wired to the ADR 0005 inbox; there is no period
+  close, invoice export, dashboard, alert or runbook; and no onboarding path
+  creates a subscription.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product
@@ -289,10 +319,25 @@ continued export access are ADR 0025 capability decisions; expressing them as
 entitlements would let a plan grant or remove a user's permission, which this
 ADR forbids elsewhere in its own text.
 
-Not built, and deliberately: product enforcement points inside ordering,
-tenancy, catalog and the rest; usage consumers wired to the ADR 0005 inbox;
-period close and invoice export; the published event set; dashboards, alerts and
-support runbooks; and anything at all that moves money.
+Wave 90 wired the first five: `commercial.application.TenancyUsageMeterTrigger`,
+`OrderConfirmedUsageMeterTrigger` (in `ordering.application`, the one caller
+that lives in the owning module rather than in `commercial`, because nothing
+downstream of `tenancy` already depends on `ordering`) and
+`MediaUsageMeterTrigger` meter `brands.max_count`, `locations.max_count`,
+`orders.monthly_included` and `media.storage_bytes_included` from a fact the
+owning module already published; `CatalogAuthoringService#createProduct` both
+meters and — the one enforcement point that exists — refuses
+`catalog.products.max_count` under `HARD`. Still not built, and for varying
+reasons rather than one: `control_plane.users.max_count` (module-cycle blocked
+the same way brands/locations/media were, and unresolved besides — a grant and
+a distinct staff account are not obviously the same count),
+`pos.installations.max_count` (no application service exists to call from; the
+controller writes SQL directly) and `notifications.monthly_included`
+(`NotificationDispatchService#dispatch` is deliberately non-transactional) are
+unmetered; usage consumers wired to the ADR 0005 inbox; period close and
+invoice export; the published event set; dashboards, alerts and support
+runbooks; onboarding creating a subscription; and anything at all that moves
+money.
 
 ## Consequences
 
@@ -327,9 +372,10 @@ support runbooks; and anything at all that moves money.
       unlimited or available, so nothing an engineer invented can refuse a
       paying tenant.
 - [x] Define typed entitlement keys, owners, enforcement points, and safe
-      defaults. Keys, owners and defaults are in `EntitlementKeys`; the
-      enforcement *points* inside product modules are not placed yet, which is
-      the ADR's own named risk and is tracked on the line below.
+      defaults. Keys, owners and defaults are in `EntitlementKeys`; one
+      enforcement point — `catalog.products.max_count` in
+      `CatalogAuthoringService#createProduct` — is placed and tested as of
+      wave 90, and the rest are tracked on the line below.
 - [x] Add plan, subscription, override, usage, aggregate, and adjustment tables.
       `V0033`, with plan immutability, ledger append-only-ness and four eyes
       enforced by triggers and constraints rather than by convention.
@@ -338,10 +384,20 @@ support runbooks; and anything at all that moves money.
       because no cache is: PostgreSQL is read on every resolution.
 - [ ] Implement idempotent usage consumers, rebuild, period close, and export.
       The meter, its idempotency, adjustments and rebuild are built and tested
-      (`UsageMeteringService`, `JdbcUsageStore`). No consumer is wired to the
-      inbox and nothing in any product module records a movement, so the ledger
-      is empty by construction; there is no period close and no invoice export.
-- [ ] Integrate onboarding, tenant lifecycle, and product enforcement points. None of the three is integrated: `ordering`, `catalog`, `notifications` and the rest reference no commercial type, and ADR 0008 onboarding creates no subscription.
+      (`UsageMeteringService`, `JdbcUsageStore`). Five of eight counted keys now
+      record real movements (`brands.max_count`, `locations.max_count`,
+      `catalog.products.max_count`, `orders.monthly_included`,
+      `media.storage_bytes_included`); `control_plane.users.max_count`,
+      `pos.installations.max_count` and `notifications.monthly_included` do not
+      yet. No consumer is wired to the ADR 0005 inbox — every caller above
+      listens to an in-process Spring domain event the owning module already
+      publishes, which is a different and, for same-JVM modules, stronger
+      mechanism, but it leaves the inbox gap itself exactly as open as before.
+      There is no period close and no invoice export.
+- [ ] Integrate onboarding, tenant lifecycle, and product enforcement points.
+      `catalog.products.max_count` is enforced as of wave 90; `ordering`,
+      `notifications` and the rest still reference no commercial type for
+      enforcement, and ADR 0008 onboarding still creates no subscription.
 - [x] Build platform-admin/control-plane APIs with approvals and audit.
 - [ ] Add metering/limit dashboards, alerts, reconciliation, and support
       runbooks. Reconciliation exists as a rebuild that reports divergences; the

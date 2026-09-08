@@ -22,6 +22,7 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -91,10 +92,13 @@ class CatalogTranslationTenantScopeTests {
         insertBrand(BRAND_B, TENANT_B, "B");
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, java.time.Clock.systemUTC());
         authoring = new CatalogAuthoringService(
                 store,
                 new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
                         jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
                 java.time.Clock.systemUTC());
     }
 

@@ -114,6 +114,7 @@ import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.payments.notifications.FiscalCustomerReceiptTrigger;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -213,7 +214,9 @@ class TelegramInteractiveBotIntegrationTest {
         webhookInstallations = new TelegramWebhookInstallationLookup(jdbc);
 
         JdbcCatalogStore catalogStore = new JdbcCatalogStore(jdbc, objectMapper);
-        CatalogAuthoringService catalogAuthoring = new CatalogAuthoringService(catalogStore, audit, clock);
+        CommercialDefaults.Wired catalogCommercial = CommercialDefaults.wire(jdbc, clock);
+        CatalogAuthoringService catalogAuthoring = new CatalogAuthoringService(
+                catalogStore, audit, catalogCommercial.entitlements(), catalogCommercial.usage(), clock);
         StopListPort stopList = new StopListPortAdapter(catalogAuthoring);
         InventoryService inventory = new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, clock, audit);
         stockAvailability = new StockAvailabilityPortAdapter(inventory);
@@ -1245,7 +1248,9 @@ class TelegramInteractiveBotIntegrationTest {
 
     private StockedVariant seedStockedVariant(UUID tenantId, UUID brandId, UUID locationId) {
         JdbcCatalogStore catalogStore = new JdbcCatalogStore(jdbc, objectMapper);
-        CatalogAuthoringService authoring = new CatalogAuthoringService(catalogStore, audit, clock);
+        CommercialDefaults.Wired seedCommercial = CommercialDefaults.wire(jdbc, clock);
+        CatalogAuthoringService authoring = new CatalogAuthoringService(
+                catalogStore, audit, seedCommercial.entitlements(), seedCommercial.usage(), clock);
         InventoryService inventory = new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, clock, audit);
 
         UUID catalogId = authoring.createCatalog(tenantId, brandId, "MAIN", "Main menu", "en");
