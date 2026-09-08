@@ -1,7 +1,7 @@
 # ADR 0027: Audit evidence and the approval model
 
 - Decision status: Accepted
-- Implementation status: Partial — an approval is now single-use and the policy timeline
+- Implementation status: Built — an approval is now single-use and the policy timeline
   can no longer be disarmed by a cancelled change: V0071 adds `CONSUMED` to
   `ck_approval_request_status` with `consumed_at` and `consumed_by`,
   `ApprovalOutcome.Approved` carries an `ApprovalGrant` the caller spends in the
@@ -44,18 +44,48 @@
   `audit.security_retention_days` and `audit.business_retention_days` in `ConfigurationKeys`
   — a value an operator could in principle override per the ADR 0030 control plane, though
   neither key is settable below `PLATFORM` scope, matching that a retention floor is not a
-  per-tenant choice. Still not built, and unaffected by that: archival of closed partitions
-  to protected storage. Nothing reads either retention key yet — the number is stored, not
-  enforced — because there is no sweep to enforce it against.
+  per-tenant choice. Archival of closed partitions to protected storage is now built too, and
+  it is the last item this Implementation status had to flag: `AuditPartitionArchiver` (V0188)
+  reads both retention keys — the longer of the two, with plain SQL against
+  `tenant.configuration_values` rather than `tenancy.api.ConfigurationResolver`, because
+  `tenancy` already depends on `audit.api` for its own configuration-change audit fact and a
+  `ConfigurationResolver` dependency the other way would close a module cycle Spring Modulith
+  refuses to build — `TrackRetentionSweeper.effectiveRetentionDays()` solves the identical
+  problem the identical way — and, once a calendar-year partition's
+  own upper bound has passed (closed, not expired: retention governs how long the archive
+  must stay locked, not when the live partition is moved off primary storage), exports its
+  rows to NDJSON and writes them to S3-compatible protected storage under an Object Lock
+  `GOVERNANCE` retention through that date. It does not consider the archive done because the
+  upload returned without an error: it reads the object back and hashes it again, and asks the
+  store to confirm the retention it actually recorded, throwing `AuditArchivalNotVerifiedException`
+  rather than proceeding if either check comes back short. Only then does it call
+  `audit.drop_archived_partition` (V0188), a `SECURITY DEFINER` function that re-reads
+  `audit.partition_archives` for itself and refuses to drop a year the application has not
+  already recorded as `VERIFIED` — there is no argument that could tell it otherwise, the same
+  discipline V0075/V0080 already hold the fulfillment and reporting partition functions to.
+  Two things this does not settle, both recorded rather than assumed away. First: whether the
+  ADR 0073 production provider's object storage actually supports S3 Object Lock is
+  unconfirmed — the same open question SigV4 presigning was until that record's own probe
+  against the real endpoint, and Object Lock is a bucket-creation-time setting no later call
+  can retrofit, so until a provider probe runs, `S3AuditArchiveStore`'s read-back-and-confirm
+  discipline is what stands between a bucket that silently ignored the lock request and a false
+  sense of protection: it fails loudly rather than reporting an unlocked object as archived.
+  Second, and a product question rather than an engineering one: whether an audit event
+  archived under this ten-year lock is in scope for an ADR 0029 data-subject erasure request at
+  all. Neither this record nor ADR 0029 settled it in writing before this wave, and it still
+  does not — see Open inputs.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
 - Depends on: ADR 0004, ADR 0025
 - Supersedes / Superseded by: — / ADR 0050 for missing-policy behavior and exact approval-policy scope
-- Open inputs: none — retention periods are configurable now, defaulting to ten years for
-  both classes (see Implementation status above); archival to protected storage that would
-  actually enforce a period remains unbuilt and is a separate, still-open engineering item,
-  not a product question
+- Open inputs: whether an ADR 0029 data-subject erasure request reaches an audit event once
+  archived under this record's retention lock, and if so how — `actor_subject` is not
+  uniformly a pseudonymous identifier (a customer's own self-service actions record it as
+  `customer:{accountId}`, see `CustomerSession.actorSubject()`), and ADR 0029's anonymisation
+  scope is `customer`-schema-only and does not name `audit`; nothing this wave built forecloses
+  either answer, since the archive is a per-year NDJSON export addressed by calendar year, not
+  an opaque blob (platform owner, legal)
 
 ## Context
 
@@ -187,8 +217,25 @@ exists so an audited action can never fail for want of a partition, but rows
 landing in it are a symptom rather than a design, and a test asserts it stays
 empty.
 
-Not yet delivered: archival to retention-protected storage, and retention
-periods confirmed by legal and finance.
+Delivered since: archival to retention-protected storage. `AuditPartitionArchiver`
+runs daily, finds calendar-year partitions whose own upper bound has passed,
+exports them, and hands the bytes to `AuditArchiveStore` — a port owned by
+`audit`, deliberately smaller than `media.api.ObjectStorage` because archival
+never presigns and has no ordinary delete. `S3AuditArchiveStore` is the only
+implementation: it requests an S3 Object Lock `GOVERNANCE` retention on every
+write and refuses to call the archive verified unless a read-back of the
+object matches byte-for-byte and the store's own `GetObjectRetention` response
+confirms the lock through the requested date. `audit.drop_archived_partition`
+(V0188) is the one place a partition actually leaves the live table, and it
+checks `audit.partition_archives` for a `VERIFIED` row itself before dropping
+anything — the application's own call order is not the thing that guarantees
+"never drop live evidence before the archive is durable and verified"; the
+database refusing to run the drop without that row is. Retention periods are
+delivered too, per the owner's 2026-09-08 directive recorded above.
+
+Not yet delivered, and now a named Open input rather than an assumption:
+whether an archived audit event must be reachable by an ADR 0029 erasure
+request.
 
 ## Physical model
 
@@ -221,11 +268,23 @@ audit.approval_policies
   id, tenant_id null, action_code, scope_type
   threshold_json, required_approver_capability
   valid_from, valid_until null, version, approved_by
+
+audit.partition_archives
+  year primary key, partition_name, status
+  bucket null, object_key null, sha256_base64 null
+  size_bytes null, row_count null, retain_until null
+  verified_at null, dropped_at null
+  check (status in ('PENDING', 'VERIFIED', 'DROPPED'))
 ```
 
 `actor_type` distinguishes `USER`, `SERVICE`, `SYSTEM_JOB`, and `MIGRATION`, so
 a backfill is never mistaken for a person. Retention is enforced by archival to
-retention-protected storage, not by deletion in place.
+retention-protected storage, not by deletion in place. `audit.partition_archives`
+is process metadata about that archival, not evidence itself, which is why —
+unlike `audit.audit_events` — the application role holds ordinary `UPDATE` on it;
+what actually guards the destructive step is `audit.drop_archived_partition`
+re-reading this table's `status` for itself rather than trusting a row the
+application could in principle have written wrongly.
 
 ## Contract
 
@@ -263,6 +322,13 @@ marked sensitive can reach the audit table in plaintext.
 - A policy change after approval does not alter the snapshotted threshold.
 - Reading audit produces its own audit fact.
 - Sensitive fields never appear in the change document.
+- A closed partition's archive is read back and its retention lock confirmed
+  before the live partition may be dropped; a store that cannot prove either
+  one leaves the live partition untouched, proven by a fake `AuditArchiveStore`
+  that throws `AuditArchivalNotVerifiedException`.
+- `audit.drop_archived_partition` refuses to drop a year with no `VERIFIED`
+  row in `audit.partition_archives`, at the database level, independent of
+  what the calling Java believes.
 
 ## Rollout and rollback
 
@@ -274,7 +340,7 @@ features but never disables audit writing for an action that still executes.
 ## Implementation checklist
 
 - [x] Make retention periods per audit class configurable, defaulting to ten years for both (`ConfigurationKeys.AUDIT_SECURITY_RETENTION_DAYS`/`AUDIT_BUSINESS_RETENTION_DAYS`, ADR 0030).
-- [ ] Build the archival sweep that reads those periods and moves closed partitions to protected storage.
+- [x] Build the archival sweep that reads those periods and moves closed partitions to protected storage (`AuditPartitionArchiver`, `S3AuditArchiveStore`, `audit.drop_archived_partition`, V0188).
 - [x] Add partitioned audit, approval request, and approval policy tables (`V0007`).
 - [x] Restrict the application database role to insert and select on `audit` (`horecaos_application`), proven by a test that connects as that role and fails to update or delete.
 - [x] Implement the transactional recorder and classification-aware serializer (`JdbcAuditRecorder`, `ChangeDocuments`).
@@ -282,15 +348,20 @@ features but never disables audit writing for an action that still executes.
 - [x] Make missing-policy behavior explicit per registered action and expose configured coverage (ADR 0050).
 - [x] Implement the `ApprovalOutcome` pending-side-effect contract (`ApprovalService`). HTTP endpoints remain, and need ADR 0025 capabilities.
 - [x] Add audit query APIs behind the `audit.read` capability, with the read itself audited.
-- [x] Implement partition management (`AuditPartitionManager`). Archival to protected storage remains.
+- [x] Implement partition management (`AuditPartitionManager`) and archival (`AuditPartitionArchiver`).
 - [x] Add immutability, self-approval, expiry, and redaction tests.
+- [ ] Resolve, with the platform owner and legal, whether an ADR 0029 erasure
+      request reaches an audit event once archived — see Open inputs.
 
 ## Exit criteria
 
 Every operator-initiated mutation in the platform produces an immutable audit
 fact in the same transaction, maker-checker is enforced by one shared mechanism
 with a snapshotted policy version, no application path can modify or delete
-audit evidence, and sensitive values are provably absent from the trail.
+audit evidence, and sensitive values are provably absent from the trail. A
+closed partition's evidence survives in retention-protected storage before the
+live table forgets it, and no application path — including this record's own
+archiver — can drop a partition the store has not proven durable and locked.
 
 ## References
 

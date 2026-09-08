@@ -243,6 +243,14 @@ services:
         mc mb --ignore-existing offsite/horecaos-backups
         mc version enable offsite/horecaos-backups
         echo "created horecaos-backups with versioning on both sites"
+        # ADR 0027 archival. --with-lock is Object Lock, which MinIO (like S3)
+        # only accepts at bucket creation and which implies versioning — there
+        # is no later API call that retrofits it onto an existing bucket, which
+        # is exactly why AuditArchiveStorageConfiguration's own doc says
+        # protection is a property of how this bucket was made, not of what a
+        # PutObject call asks for afterwards.
+        mc mb --ignore-existing --with-lock local/horecaos-audit-archive
+        echo "created horecaos-audit-archive with Object Lock enabled"
 
 volumes:
   minio-data:

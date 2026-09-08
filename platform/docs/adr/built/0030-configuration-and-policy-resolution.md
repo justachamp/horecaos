@@ -47,8 +47,9 @@
 
   Two owner-directed keys ride this same registry rather than a parallel mechanism, both
   registered 2026-09-08: `audit.security_retention_days`/`audit.business_retention_days`
-  (ADR 0027, defaulting to ten years, platform-only, registered but not yet read by
-  anything — the archival sweep itself remains unbuilt, see that ADR) and
+  (ADR 0027, defaulting to ten years, platform-only — now read by `AuditPartitionArchiver`,
+  which locks a closed partition's archive object through the longer of the two before
+  dropping it from the live table, see that ADR) and
   `customers.telegram_auth_phone_pattern` (ADR 0063, defaulting to the ADR's own Uzbek
   pattern), which is now the actual gate `TelegramUpdateHandler`'s share-contact sign-in
   checks, replacing what had been a deployment-time `@Value` property with a
@@ -286,5 +287,5 @@ table.
 ## References
 
 - [ADR 0002: SaaS domain model and order acceptance](../partial/0002-saas-domain-model.md)
-- [ADR 0027: Audit evidence and the approval model](../partial/0027-audit-evidence-and-approval-model.md)
+- [ADR 0027: Audit evidence and the approval model](../built/0027-audit-evidence-and-approval-model.md)
 - [ADR 0050: Missing approval policy behavior](../built/0050-missing-approval-policy-behavior.md)

@@ -184,6 +184,22 @@ horecaos:
     # manager and never appear in configuration, an image, or a repository.
     access-key-reference: ${HORECAOS_MEDIA_ACCESS_KEY_REF:horecaos:local:object_storage:platform:media-access-key}
     secret-key-reference: ${HORECAOS_MEDIA_SECRET_KEY_REF:horecaos:local:object_storage:platform:media-secret-key}
+  audit:
+    # ADR 0027 archival of closed audit partitions to protected storage. A
+    # separate bucket from media's on the same provider by default, the way
+    # infra/backup already keeps its own bucket apart — see
+    # AuditArchiveStorageConfiguration for why this is its own client rather
+    # than a second use of media's.
+    archive:
+      enabled: ${HORECAOS_AUDIT_ARCHIVE_ENABLED:true}
+      endpoint: ${HORECAOS_AUDIT_ARCHIVE_ENDPOINT:http://localhost:9000}
+      region: ${HORECAOS_AUDIT_ARCHIVE_REGION:us-east-1}
+      bucket: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:horecaos-audit-archive}
+      # References, not values (ADR 0028), same as media's.
+      access-key-reference: ${HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY_REF:horecaos:local:object_storage:platform:audit-archive-access-key}
+      secret-key-reference: ${HORECAOS_AUDIT_ARCHIVE_SECRET_KEY_REF:horecaos:local:object_storage:platform:audit-archive-secret-key}
+      initial-delay: ${HORECAOS_AUDIT_ARCHIVE_INITIAL_DELAY:PT3M}
+      interval: ${HORECAOS_AUDIT_ARCHIVE_INTERVAL:P1D}
   realtime:
     # ADR 0045. The push half of the operations console. Every live surface has a
     # polling path that must work, so turning this off degrades the refresh
@@ -247,6 +263,11 @@ horecaos:
       platform:
         media-access-key: ${HORECAOS_MEDIA_ACCESS_KEY:horecaos}
         media-secret-key: ${HORECAOS_MEDIA_SECRET_KEY:horecaos-local-secret}
+        # Same MinIO root credentials, different bucket — see the audit.archive
+        # block above and compose.yaml's minio-seed, which creates
+        # horecaos-audit-archive with --with-lock.
+        audit-archive-access-key: ${HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY:horecaos}
+        audit-archive-secret-key: ${HORECAOS_AUDIT_ARCHIVE_SECRET_KEY:horecaos-local-secret}
     data_encryption:
       platform:
         # ADR 0040's handover pepper. A local-only placeholder, like the MinIO
