@@ -3,6 +3,8 @@ package uz.horecaos.platform.ordering.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +48,11 @@ class OrderAcceptancePolicyServiceTests {
     private JdbcClient jdbc;
     private OrderAcceptancePolicyService service;
 
+    /** What {@link JdbcPolicyAuthor} told the ADR 0033 {@code tenant.policy_current} cache to evict. */
+    private record Eviction(String keyCode, ResourceScope scope) {}
+
+    private final List<Eviction> evictions = new ArrayList<>();
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(
@@ -69,14 +76,38 @@ class OrderAcceptancePolicyServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.policies CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+        evictions.clear();
         service = new OrderAcceptancePolicyService(
                 new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                 new JdbcPolicyAuthor(
                         jdbc,
                         JsonMapper.builder().build(),
                         new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
-                        java.time.Clock.systemUTC()));
+                        java.time.Clock.systemUTC(),
+                        (keyCode, scope) -> evictions.add(new Eviction(keyCode, scope))));
         insertHierarchy();
+    }
+
+    /**
+     * ADR 0033's gap: policy authoring existed with no writer evicting {@code
+     * tenant.policy_current}, so a change an operator just published would keep
+     * resolving to the version it replaced for up to the registry's sixty-second
+     * TTL. {@link JdbcPolicyAuthor} must call the cache port on every publish,
+     * for the exact key and scope {@code JdbcPolicyResolver} caches under.
+     */
+    @Test
+    void authoringEvictsTheCachedCurrentPolicyForItsExactKeyAndScope() {
+        var scope = ResourceScope.tenant(TENANT);
+
+        service.author(scope, approval(600), ActorRef.user("owner-1", null), "go-live default");
+
+        assertThat(evictions).hasSize(1);
+        assertThat(evictions.get(0).keyCode()).isEqualTo(OrderAcceptancePolicyService.ACCEPTANCE.code());
+        assertThat(evictions.get(0).scope()).isEqualTo(scope);
+
+        service.author(scope, approval(60), ActorRef.user("owner-1", null), "shorten the window");
+
+        assertThat(evictions).as("every publish evicts, not just the first").hasSize(2);
     }
 
     // ----------------------------------------------------------------- Gap D: authoring

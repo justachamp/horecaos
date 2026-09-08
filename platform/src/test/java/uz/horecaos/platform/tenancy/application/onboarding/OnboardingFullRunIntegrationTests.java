@@ -445,7 +445,8 @@ class OnboardingFullRunIntegrationTests {
                 jdbc,
                 JsonMapper.builder().build(),
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
-                CLOCK);
+                CLOCK,
+                (keyCode, scope) -> {});
 
         var channels = new JdbcSalesChannelStore(jdbc);
         var serviceability = new ServiceabilityService(new JdbcServiceabilityStore(jdbc), CLOCK);

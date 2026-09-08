@@ -3,6 +3,8 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.core.JacksonException;
@@ -12,6 +14,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.tenancy.application.port.PolicyCurrentCache;
 
 /**
  * SQL adapter for ADR 0030 policy resolution.
@@ -20,9 +23,18 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
  * "what applied when this decision was made". The second is the reason policies
  * are versioned at all: without it, editing a policy would silently rewrite the
  * meaning of every historical order, refund, and approval that referenced it.
+ *
+ * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.policy_current}
+ * and implements {@link PolicyCurrentCache} so {@code JdbcPolicyAuthor} can
+ * evict the exact scope it just published, the same shape {@code
+ * JdbcTenantSuspensionLookup}/{@code TenantStatusCache} uses for {@code
+ * tenant.status}. {@link #pinned} is deliberately not cached: it answers what
+ * a past decision actually resolved, by exact policy id and version, and a
+ * diagnostic/history read has no reason to accept even a sixty-second-old
+ * answer when the row it names never changes.
  */
 @Repository
-public class JdbcPolicyResolver implements PolicyResolver {
+public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
 
     private static final String SELECT_ACTIVE_IN_CHAIN = """
             SELECT p.id, p.version, p.scope_type, p.document_hash, p.document::text AS document
@@ -54,6 +66,10 @@ public class JdbcPolicyResolver implements PolicyResolver {
     }
 
     @Override
+    @Cacheable(
+            cacheNames = "tenant.policy_current",
+            key = "#key.code() + '|' + #scope.type() + ':' + #scope.tenantId() "
+                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
     public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
         List<Row> candidates = jdbc.sql(SELECT_ACTIVE_IN_CHAIN)
                 .param("keyCode", key.code())
@@ -114,6 +130,20 @@ public class JdbcPolicyResolver implements PolicyResolver {
                             .formatted(key.code(), key.documentType().getSimpleName()),
                     exception);
         }
+    }
+
+    /**
+     * Called by {@code JdbcPolicyAuthor} right after it moves the {@code
+     * tenant.policy_current} pointer, so the version just published resolves
+     * on the very next call instead of waiting out the registry's TTL.
+     */
+    @Override
+    @CacheEvict(
+            cacheNames = "tenant.policy_current",
+            key = "#keyCode + '|' + #scope.type() + ':' + #scope.tenantId() "
+                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
+    public void evict(String keyCode, ResourceScope scope) {
+        // The annotation is the whole method.
     }
 
     private record Row(UUID id, int version, ScopeType scopeType, String documentHash, String document) {}

@@ -48,6 +48,7 @@ import uz.horecaos.platform.integration.camel.notification.NotificationGateway;
 import uz.horecaos.platform.integration.camel.notification.NotificationProcessor;
 import uz.horecaos.platform.integration.camel.notification.NotificationRouteBuilder;
 import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
+import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
@@ -172,7 +173,7 @@ class NotificationDeliveryTests {
         NotificationGateway providerGateway = new NotificationGateway(
                 java.util.List.of(
                         new SmsGatewayAdapter(new ProviderHttpClient(objectMapper, new ProviderExceptionClassifier()))),
-                new JdbcProviderInstallationLookup(jdbc, clock),
+                new JdbcProviderInstallationLookup(jdbc, clock, new JdbcProviderEnvironmentLookup(jdbc)),
                 secrets);
 
         camel = new DefaultCamelContext();

@@ -43,10 +43,12 @@ public class JdbcProviderInstallationLookup
 
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final JdbcProviderEnvironmentLookup environments;
 
-    public JdbcProviderInstallationLookup(JdbcClient jdbc, Clock clock) {
+    public JdbcProviderInstallationLookup(JdbcClient jdbc, Clock clock, JdbcProviderEnvironmentLookup environments) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.environments = environments;
     }
 
     @Override
@@ -102,27 +104,46 @@ public class JdbcProviderInstallationLookup
                 .optional();
     }
 
+    /**
+     * The per-tenant half is always read fresh — never cached, because {@code
+     * status} and {@code secret_reference} can change at any moment and this
+     * feeds the outbound gateways. Only the environment's {@code base_url} is
+     * looked up through {@link JdbcProviderEnvironmentLookup}, which caches it
+     * under ADR 0033's {@code integration.environments} (see that class's own
+     * Javadoc for why the split matters).
+     */
     @Override
     public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
         return jdbc.sql("""
-                SELECT i.id, i.provider_category, i.provider_type, i.environment_code,
-                       e.base_url, i.status, i.secret_reference, i.adapter_version
-                  FROM integration.installations i
-                  JOIN integration.provider_environments e ON e.code = i.environment_code
-                 WHERE i.tenant_id = :tenantId AND i.id = :installationId
+                SELECT id, provider_category, provider_type, environment_code,
+                       status, secret_reference, adapter_version
+                  FROM integration.installations
+                 WHERE tenant_id = :tenantId AND id = :installationId
                 """)
                 .param("tenantId", tenantId)
                 .param("installationId", installationId)
-                .query((rs, n) -> new InstallationSnapshot(
+                .query((rs, n) -> new InstallationRow(
                         rs.getObject("id", UUID.class),
                         ProviderCategory.valueOf(rs.getString("provider_category")),
                         rs.getString("provider_type"),
                         rs.getString("environment_code"),
-                        rs.getString("base_url"),
                         rs.getString("status"),
                         rs.getString("secret_reference"),
                         rs.getString("adapter_version")))
-                .optional();
+                .optional()
+                .map(row -> new InstallationSnapshot(
+                        row.id(),
+                        row.category(),
+                        row.providerType(),
+                        row.environmentCode(),
+                        environments
+                                .baseUrlOf(row.environmentCode())
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Installation %s references environment %s, which no longer exists"
+                                                .formatted(row.id(), row.environmentCode()))),
+                        row.status(),
+                        row.secretReference(),
+                        row.adapterVersion()));
     }
 
     @Override
@@ -196,4 +217,13 @@ public class JdbcProviderInstallationLookup
     }
 
     private record Candidate(BindingRef ref, boolean primary, int priority) {}
+
+    private record InstallationRow(
+            UUID id,
+            ProviderCategory category,
+            String providerType,
+            String environmentCode,
+            String status,
+            String secretReference,
+            String adapterVersion) {}
 }

@@ -31,11 +31,32 @@ public enum CacheRegistry {
     /** ADR 0030 active policy versions. */
     TENANT_POLICY_CURRENT("tenant.policy_current", Duration.ofSeconds(60), 20_000, "PolicyActivated"),
 
-    /** ADR 0021 entitlement snapshots. */
-    COMMERCIAL_ENTITLEMENTS("commercial.entitlements", Duration.ofSeconds(60), 10_000, "TenantEntitlementsChanged"),
+    /*
+     * There is deliberately no COMMERCIAL_ENTITLEMENTS entry here.
+     *
+     * ADR 0033's own Decision text names "entitlement snapshots" among the
+     * in-process caches it expected, but ADR 0021 -- deciding independently,
+     * and already built -- went the other way and says so in its own
+     * "What was built, and where it departs from the text above": "There
+     * is no entitlement cache and therefore no invalidation event.
+     * Resolution is one indexed read per tenant... until a measured request
+     * path needs it, a plan change that is not yet visible is a support
+     * ticket bought for nothing." EntitlementQueryService reads PostgreSQL on
+     * every call for exactly that reason. Registering a cache neither ADR's
+     * implementation wires is how a registry entry outlives the decision
+     * that justified it; removing it is what keeps this one honest instead
+     * of aspirational.
+     */
 
-    /** ADR 0026 provider environments; reference data that changes on deployment. */
-    INTEGRATION_ENVIRONMENTS("integration.environments", Duration.ofHours(1), 1_000, "deployment"),
+    /*
+     * There is deliberately no INTEGRATION_ENVIRONMENTS entry, for the same
+     * reason there is no COMMERCIAL_ENTITLEMENTS one: it described a cache that
+     * should not exist. Its invalidation source was "deployment", which the
+     * application cannot perform — nothing here can notice a provider's base URL
+     * change and evict — and a base URL held for an hour with no way to drop it
+     * turned a secret rotation into a 422 the first time it was wired. See
+     * JdbcProviderEnvironmentLookup's own doc.
+     */
 
     /**
      * ADR 0025 scope hierarchy: whether a brand belongs to a tenant, and a

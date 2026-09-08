@@ -52,6 +52,7 @@ import uz.horecaos.platform.integration.camel.notification.NotificationRouteBuil
 import uz.horecaos.platform.integration.camel.notification.telegram.FakeTelegramBotApi;
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramChannelAdapter;
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramCircuitBreakers;
+import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
@@ -188,7 +189,9 @@ class SendPulseContactImportIntegrationTest {
                 Duration.ofHours(24),
                 "en");
         NotificationGateway gateway = new NotificationGateway(
-                List.of(adapter), new JdbcProviderInstallationLookup(jdbc, clock), secretResolver());
+                List.of(adapter),
+                new JdbcProviderInstallationLookup(jdbc, clock, new JdbcProviderEnvironmentLookup(jdbc)),
+                secretResolver());
         CamelContext camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();

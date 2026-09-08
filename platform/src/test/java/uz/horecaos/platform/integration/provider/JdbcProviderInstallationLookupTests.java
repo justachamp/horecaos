@@ -66,7 +66,8 @@ class JdbcProviderInstallationLookupTests {
         jdbc.sql("TRUNCATE TABLE integration.provider_environments CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
-        lookup = new JdbcProviderInstallationLookup(jdbc, Clock.fixed(NOW, ZoneOffset.UTC));
+        lookup = new JdbcProviderInstallationLookup(
+                jdbc, Clock.fixed(NOW, ZoneOffset.UTC), new JdbcProviderEnvironmentLookup(jdbc));
         insertHierarchy();
         insertEnvironment("yandex-uz-prod", "DELIVERY", "yandex");
     }
