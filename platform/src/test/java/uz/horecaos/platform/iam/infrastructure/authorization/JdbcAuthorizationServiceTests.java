@@ -22,6 +22,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.TenantAvailability;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -108,11 +109,11 @@ class JdbcAuthorizationServiceTests {
     }
 
     /**
-     * Which tenants are suspended, as {@code JdbcTenantSuspensionLookup} would
-     * answer it. A set rather than a fixed {@code false} so a test can suspend a
-     * tenant mid-test and see the same grants stop applying.
+     * How reachable each tenant is, as {@code JdbcTenantSuspensionLookup} would
+     * answer it. A mutable map rather than a fixed value so a test can suspend or
+     * archive a tenant mid-test and see the same grants stop applying.
      */
-    private java.util.Set<java.util.UUID> suspended;
+    private java.util.Map<java.util.UUID, TenantAvailability> availability;
 
     @BeforeEach
     void setUp() {
@@ -121,59 +122,95 @@ class JdbcAuthorizationServiceTests {
         jdbc.sql("TRUNCATE TABLE iam.grants CASCADE").update();
         clock = new MutableClock(Instant.parse("2026-08-20T10:00:00Z"));
         actor = new SettableActor();
-        suspended = new java.util.HashSet<>();
-        authorization = new JdbcAuthorizationService(jdbc, clock, actor, suspended::contains);
+        availability = new java.util.HashMap<>();
+        authorization = new JdbcAuthorizationService(
+                jdbc, clock, actor, tenantId -> availability.getOrDefault(tenantId, TenantAvailability.OPERATING));
     }
 
     @Test
-    @DisplayName("a suspended tenant's staff keep their grants and lose their access")
-    void suspendingATenantWithdrawsEveryTenantScopedGrantWithinIt() {
+    @DisplayName("a suspended tenant may look and may not touch")
+    void suspensionWithdrawsTheWriteGrantsAndLeavesTheReadOnes() {
         grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
 
         assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
                 .isTrue();
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
-                .isTrue();
 
-        suspended.add(TENANT);
+        availability.put(TENANT, TenantAvailability.READ_ONLY);
 
         // Nothing about the grants changed -- they are still ACTIVE rows on
-        // ACTIVE roles inside their validity window, which is exactly why
-        // SELECT_GRANTS could never see this and why suspending a tenant used to
-        // stop nobody.
+        // ACTIVE roles inside their validity window, which is why SELECT_GRANTS
+        // could never see this and why suspending a tenant used to stop nobody.
         assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
-                .as("the owner of a suspended tenant may not approve an order in it")
+                .as("approving an order is a change, and a suspended tenant makes none")
                 .isFalse();
         assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
-                .as("a location grant is inside the suspended tenant too -- suspension is not a "
-                        + "tenant-scope-only rule, or every location employee would keep working")
+                .as("a location grant is inside the suspended tenant too -- or every location "
+                        + "employee would keep working")
                 .isFalse();
+        assertThat(authorization.has("owner-1", Capability.ORDER_READ, ResourceScope.tenant(TENANT)))
+                .as("the owner's answer of 2026-09-08: a suspended tenant keeps read access, so it "
+                        + "can still see the orders it took before the lights went out")
+                .isTrue();
         assertThatThrownBy(() -> authorization.require("owner-1", Capability.ORDER_APPROVE, locationScope()))
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("suspension is not a one-way door: a platform grant still reaches a suspended tenant")
-    void aPlatformGrantSurvivesTheSuspensionThatWithdrawsEveryOtherGrant() {
-        platformGrant("platform-1");
+    @DisplayName("reading is not the same as taking: a suspended tenant may not unmask a customer")
+    void suspensionWithdrawsTheCapabilitiesThatTakeDataOutEvenThoughTheyOnlyRead() {
         grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
-        suspended.add(TENANT);
+        availability.put(TENANT, TenantAvailability.READ_ONLY);
 
-        assertThat(authorization.has("platform-1", Capability.TENANT_READ, ResourceScope.tenant(TENANT)))
-                .as("whoever lifts a suspension has to be able to read the tenant first; if this is "
-                        + "false the platform has locked itself out of its own customer")
+        assertThat(authorization.has("owner-1", Capability.CUSTOMER_READ, ResourceScope.tenant(TENANT)))
+                .as("the masked projection is a read")
                 .isTrue();
-        assertThat(authorization.has("owner-1", Capability.TENANT_READ, ResourceScope.tenant(TENANT)))
-                .as("the same capability, at the same scope, from inside the suspended tenant")
+        assertThat(authorization.has("owner-1", Capability.COURIER_TRACK_REVEAL, ResourceScope.tenant(TENANT)))
+                .as("revealing a phone number is an export wearing a read's clothes, and the action "
+                        + "segment is 'track.reveal' rather than a '.read' for exactly this reason")
                 .isFalse();
     }
 
     @Test
-    @DisplayName("another tenant is unaffected by a suspension")
+    @DisplayName("an archived tenant keeps nothing, not even a read")
+    void archivingWithdrawsEveryTenantScopedGrantIncludingTheReadOnes() {
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+        availability.put(TENANT, TenantAvailability.CLOSED);
+
+        assertThat(authorization.has("owner-1", Capability.ORDER_READ, ResourceScope.tenant(TENANT)))
+                .as("the owner's answer of 2026-09-08: archived means no read access at all -- this "
+                        + "is the assertion that separates CLOSED from READ_ONLY")
+                .isFalse();
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("neither state is a one-way door: a platform grant still reaches both")
+    void aPlatformGrantSurvivesSuspensionAndArchival() {
+        platformGrant("platform-1");
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+
+        for (TenantAvailability state :
+                new TenantAvailability[] {TenantAvailability.READ_ONLY, TenantAvailability.CLOSED}) {
+            availability.put(TENANT, state);
+            assertThat(authorization.has("platform-1", Capability.TENANT_WRITE, ResourceScope.tenant(TENANT)))
+                    .as(
+                            "whoever lifts a %s has to be able to act on the tenant first; if this is "
+                                    + "false the platform has locked itself out of its own customer",
+                            state)
+                    .isTrue();
+            assertThat(authorization.has("owner-1", Capability.TENANT_WRITE, ResourceScope.tenant(TENANT)))
+                    .as("the same capability, at the same scope, from inside the tenant, under %s", state)
+                    .isFalse();
+        }
+    }
+
+    @Test
+    @DisplayName("another tenant is unaffected")
     void suspendingOneTenantLeavesAnotherAlone() {
         grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
-        suspended.add(java.util.UUID.randomUUID());
+        availability.put(java.util.UUID.randomUUID(), TenantAvailability.READ_ONLY);
 
         assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
                 .as("a suspension must name the tenant it suspends")
@@ -181,17 +218,90 @@ class JdbcAuthorizationServiceTests {
     }
 
     @Test
-    @DisplayName("the capability view stops offering what the tenant may no longer do")
-    void theViewOfASuspendedTenantIsEmptyRatherThanMisleading() {
+    @DisplayName("the capability view offers what the tenant may still do, and no more")
+    void theViewOfASuspendedTenantOffersItsReadsAndNoneOfItsWrites() {
         grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
-        assertThat(authorization.viewFor("owner-1", TENANT).capabilities()).isNotEmpty();
+        assertThat(authorization.viewFor("owner-1", TENANT).capabilities()).contains(Capability.ORDER_APPROVE);
 
-        suspended.add(TENANT);
+        availability.put(TENANT, TenantAvailability.READ_ONLY);
 
+        var offered = authorization.viewFor("owner-1", TENANT).capabilities();
+        assertThat(offered)
+                .as("a frontend that renders a write here offers an action the platform then refuses")
+                .doesNotContain(Capability.ORDER_APPROVE)
+                .contains(Capability.ORDER_READ);
+        assertThat(offered).allMatch(Capability::isRead);
+
+        availability.put(TENANT, TenantAvailability.CLOSED);
         assertThat(authorization.viewFor("owner-1", TENANT).capabilities())
-                .as("a frontend that renders these would offer a menu of actions the platform then "
-                        + "refuses one by one")
+                .as("an archived tenant is offered nothing")
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the read capabilities are pinned, so a new one cannot quietly become readable")
+    void theReadCapabilitiesArePinned() {
+        // The rule in Capability.isRead() is a suffix test, and a suffix test is
+        // exactly how a capability that takes data out ends up classified as a
+        // look. This list is the review gate: adding a capability whose action
+        // ends in read fails here until somebody writes it down on purpose.
+        java.util.Set<Capability> pinned = java.util.EnumSet.of(
+                Capability.TENANT_READ,
+                Capability.BRAND_READ,
+                Capability.LOCATION_READ,
+                Capability.LEGAL_ENTITY_READ,
+                Capability.CHANNEL_READ,
+                Capability.CATALOG_READ,
+                Capability.MEDIA_READ,
+                Capability.INVENTORY_READ,
+                Capability.PRICING_READ,
+                Capability.ORDER_READ,
+                Capability.REVIEW_READ,
+                Capability.PAYMENT_READ,
+                Capability.FISCAL_DOCUMENT_READ,
+                Capability.DELIVERY_PLAN_READ,
+                Capability.DELIVERY_ZONE_READ,
+                Capability.DELIVERY_TARIFF_READ,
+                Capability.DELIVERY_FEE_EVIDENCE_READ,
+                Capability.COURIER_POSITION_READ,
+                Capability.KITCHEN_TICKET_READ,
+                Capability.RESERVATION_READ,
+                Capability.DINEIN_SESSION_READ,
+                Capability.MARKETPLACE_LIVENESS_READ,
+                Capability.CUSTOMER_READ,
+                Capability.POS_SYNC_READ,
+                Capability.POS_EXPORT_READ,
+                Capability.INTEGRATION_FAILURE_READ,
+                Capability.NOTIFICATION_READ,
+                Capability.AUDIENCE_READ,
+                Capability.COMMERCIAL_PLAN_READ,
+                Capability.COMMERCIAL_USAGE_READ,
+                Capability.LOYALTY_READ,
+                Capability.REFERRAL_READ,
+                Capability.REPORTING_READ,
+                Capability.AUDIT_READ,
+                Capability.MIGRATION_READ,
+                Capability.COURIER_SHIFT_READ,
+                Capability.COURIER_READ,
+                Capability.COURIER_RATECARD_READ,
+                Capability.COURIER_LEDGER_READ,
+                Capability.DELIVERY_COST_READ,
+                Capability.COURIER_CASH_READ,
+                Capability.COURIER_SETTLEMENT_READ,
+                Capability.PARTNER_INVOICE_READ,
+                Capability.TERMS_READ,
+                Capability.VOICE_PRESENCE_READ,
+                Capability.VOICE_SCREEN_POP_READ,
+                Capability.VOICE_CALL_LOG_READ);
+
+        java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
+                .filter(Capability::isRead)
+                .collect(java.util.stream.Collectors.toCollection(() -> java.util.EnumSet.noneOf(Capability.class)));
+
+        assertThat(classified)
+                .as("a capability became a read, or stopped being one, without anybody deciding that "
+                        + "a suspended tenant may exercise it")
+                .isEqualTo(pinned);
     }
 
     @Test

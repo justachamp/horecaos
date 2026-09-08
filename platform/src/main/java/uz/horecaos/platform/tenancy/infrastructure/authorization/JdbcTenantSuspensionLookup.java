@@ -5,18 +5,17 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.iam.api.TenantAvailability;
 import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
 import uz.horecaos.platform.tenancy.application.port.TenantStatusCache;
 
 /**
  * Tenancy's answer to {@link TenantSuspensionLookup}.
  *
- * <p>Reads {@code tenant.tenants.status} and says only whether it is
- * {@code SUSPENDED}. It deliberately does not report {@code ARCHIVED} as
- * suspended: an archived tenant is finished rather than paused, and whether its
- * people keep working is a retention question this platform has not answered
- * yet — see the ADR. Answering it here by implication would settle it in the
- * one place nobody would look.
+ * <p>Maps {@code tenant.tenants.status} onto the three states authorization
+ * distinguishes (ADR 0078): {@code PROVISIONING} and {@code ACTIVE} are both
+ * {@code OPERATING} — onboarding has to be able to finish — {@code SUSPENDED} is
+ * {@code READ_ONLY}, and {@code ARCHIVED} is {@code CLOSED}.
  */
 @Component
 public class JdbcTenantSuspensionLookup implements TenantSuspensionLookup, TenantStatusCache {
@@ -31,24 +30,38 @@ public class JdbcTenantSuspensionLookup implements TenantSuspensionLookup, Tenan
     }
 
     /**
-     * A tenant with no row is not suspended.
+     * A tenant with no row is operating.
      *
      * <p>The fail-safe direction is towards allowing, and that is a decision
      * rather than an oversight: this sits on the hot path of every capability
-     * check, and answering "suspended" for a tenant it simply could not find
-     * would turn a bad identifier — or a replica that has not caught up — into
-     * a total outage for a restaurant that is trading. Whether the scope names a
+     * check, and answering "closed" for a tenant it simply could not find would
+     * turn a bad identifier — or a replica that has not caught up — into a total
+     * outage for a restaurant that is trading. Whether the scope names a
      * real tenant at all is {@code ResourceScopeVerifier}'s question, and it
      * already refuses.
      */
     @Override
     @Cacheable(cacheNames = CACHE, key = "#tenantId", sync = true)
-    public boolean isSuspended(UUID tenantId) {
-        return jdbc.sql("SELECT status = 'SUSPENDED' FROM tenant.tenants WHERE id = :tenantId")
+    public TenantAvailability availabilityOf(UUID tenantId) {
+        return jdbc.sql("SELECT status FROM tenant.tenants WHERE id = :tenantId")
                 .param("tenantId", tenantId)
-                .query(Boolean.class)
+                .query(String.class)
                 .optional()
-                .orElse(false);
+                .map(JdbcTenantSuspensionLookup::availabilityOfStatus)
+                .orElse(TenantAvailability.OPERATING);
+    }
+
+    /**
+     * A status this code does not recognise is {@code OPERATING}, for the same
+     * fail-safe reason a missing row is: a status added by a later migration and
+     * not yet mapped here must not silently close every tenant that has it.
+     */
+    private static TenantAvailability availabilityOfStatus(String status) {
+        return switch (status) {
+            case "SUSPENDED" -> TenantAvailability.READ_ONLY;
+            case "ARCHIVED" -> TenantAvailability.CLOSED;
+            default -> TenantAvailability.OPERATING;
+        };
     }
 
     /**

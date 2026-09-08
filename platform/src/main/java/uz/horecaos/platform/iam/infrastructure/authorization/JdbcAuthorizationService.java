@@ -18,6 +18,7 @@ import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.TenantAvailability;
 import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
 
 /**
@@ -139,12 +140,24 @@ public class JdbcAuthorizationService implements AuthorizationService {
      * no request path read, and a suspended tenant's staff kept every capability
      * they held.
      *
-     * <p>What suspension removes is the tenant-scoped grants, and only those. A
-     * {@code PLATFORM} grant survives, which is the whole reason this filter is
-     * here rather than in the SQL: suspension has to be reversible by somebody,
-     * and that somebody reaches the tenant through a platform-scoped grant or
-     * the platform-admin realm role. Both still work on a suspended tenant, so
-     * the platform can read it, audit it, and reactivate it.
+     * <p>Two states remove grants, and they remove different ones (ADR 0078). A
+     * {@code SUSPENDED} tenant keeps its read capabilities and loses everything
+     * else: its people may look at what they have and may not change it, take
+     * it, or unmask it. An {@code ARCHIVED} tenant keeps nothing — it is
+     * finished rather than paused, and whatever access is needed afterwards is a
+     * platform-side act with a platform-side actor on the audit trail.
+     *
+     * <p>A {@code PLATFORM} grant survives both, which is the whole reason this
+     * filter is here rather than in the SQL: suspension has to be reversible by
+     * somebody, and that somebody reaches the tenant through a platform-scoped
+     * grant or the platform-admin realm role. Both still work, so the platform
+     * can read a suspended tenant, audit it, and reactivate it.
+     *
+     * <p>Reads surviving is not the same as reads being unlimited. Left alone,
+     * "you may still read" is an export channel — enough calls to a listing
+     * endpoint and the whole book of customers is out. The quota that stops that
+     * is {@code SuspendedTenantReadQuota}, in the web layer, because it counts
+     * requests and this counts capabilities.
      *
      * <p>It sits outside {@link #grantsFor} deliberately. That method is
      * {@code @Cacheable} on subject and tenant, and a cached value must not
@@ -154,11 +167,17 @@ public class JdbcAuthorizationService implements AuthorizationService {
      */
     private List<GrantRow> applicableGrants(String subject, @Nullable UUID tenantId) {
         List<GrantRow> grants = grantsFor(subject, tenantId);
-        if (tenantId == null || !suspensions.isSuspended(tenantId)) {
+        if (tenantId == null) {
+            return grants;
+        }
+        TenantAvailability availability = suspensions.availabilityOf(tenantId);
+        if (availability == TenantAvailability.OPERATING) {
             return grants;
         }
         return grants.stream()
-                .filter(grant -> grant.scope().type() == ScopeType.PLATFORM)
+                .filter(grant -> grant.scope().type() == ScopeType.PLATFORM
+                        || (availability == TenantAvailability.READ_ONLY
+                                && grant.capability().isRead()))
                 .toList();
     }
 

@@ -1299,6 +1299,26 @@ public enum Capability {
         return code;
     }
 
+    /**
+     * Whether this capability only lets its holder look (ADR 0078).
+     *
+     * <p>The rule is the action segment: exactly {@code read}, or ending in
+     * {@code .read}. Everything else is a write, and so is every action that
+     * takes data out rather than changing it — {@code track.reveal} unmasks a
+     * customer's contact details and {@code upload} moves bytes, and neither is
+     * something a suspended tenant should still be able to do.
+     *
+     * <p>The rule alone is not the guard. {@code theReadCapabilitiesArePinned}
+     * asserts the complete set against a list written out by hand, so a new
+     * capability that this rule happens to classify as a read fails the build
+     * until somebody agrees that it is one. A suffix that quietly widens what a
+     * suspended tenant may take is exactly the shape of bug this codebase keeps
+     * finding.
+     */
+    public boolean isRead() {
+        return "read".equals(action) || action.endsWith(".read");
+    }
+
     public String resourceType() {
         return resourceType;
     }
