@@ -281,13 +281,21 @@ public interface PosAdapter {
          *                          the reason a mapping exists at all
          * @param unitAmountMinor   whole minor units. For UZS a minor unit is a
          *                          whole som
+         * @param packageCode       ADR 0038's classification of this line's
+         *                          variant — {@code catalog.fiscal_classifications
+         *                          .package_code} — or null when the variant has
+         *                          none. Provider-neutral: at least one vendor
+         *                          (Clopos) requires it on the order line and
+         *                          refuses the line rather than invent one when
+         *                          it is null; see {@code CloposAdapter#exportOrder}
          */
         public record Line(
                 String externalProductId,
                 String nameSnapshot,
                 int quantity,
                 long unitAmountMinor,
-                List<String> externalModifierIds) {
+                List<String> externalModifierIds,
+                @Nullable String packageCode) {
 
             public Line {
                 externalModifierIds = List.copyOf(externalModifierIds == null ? List.of() : externalModifierIds);

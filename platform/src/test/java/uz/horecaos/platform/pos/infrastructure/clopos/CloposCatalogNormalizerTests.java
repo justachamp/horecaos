@@ -127,17 +127,20 @@ class CloposCatalogNormalizerTests {
     }
 
     @Test
-    @DisplayName("a fractional price is read exactly rather than through a double")
+    @DisplayName("a fractional price is read exactly rather than through a double, in confirmed UZS")
     void moneyDoesNotPassThroughFloatingPoint() {
         CatalogSnapshot snapshot = normalizer.normalize(
                 List.of(product(11, "Espresso", "DISH", 8.5)), List.of(), List.of(), NOW, false, 1);
 
-        assertThat(snapshot.products())
-                .singleElement()
-                .satisfies(product -> assertThat(product.priceMinor())
-                        .as("for UZS a minor unit is a whole som, and truncating 8.5 would lose "
-                                + "money quietly on every line")
-                        .isEqualTo(9L));
+        assertThat(snapshot.products()).singleElement().satisfies(product -> {
+            assertThat(product.priceMinor())
+                    .as("for UZS a minor unit is a whole som (Q17), and truncating 8.5 would lose "
+                            + "money quietly on every line")
+                    .isEqualTo(9L);
+            assertThat(product.currency())
+                    .as("asserted from installation configuration, never guessed off the wire")
+                    .isEqualTo("UZS");
+        });
     }
 
     @Test
@@ -189,6 +192,22 @@ class CloposCatalogNormalizerTests {
             assertThat(product.active()).isFalse();
             assertThat(product.hidden()).isTrue();
         });
+    }
+
+    @Test
+    @DisplayName("gov_code is staged as the confirmed MXIK/SPIC candidate, not an opaque string")
+    void govCodeIsStagedAsMxikCode() {
+        Map<String, Object> raw = product(12, "Osh", "DISH", 25000);
+        raw.put("gov_code", "07131001001000000");
+
+        CatalogSnapshot snapshot = normalizer.normalize(List.of(raw), List.of(), List.of(), NOW, false, 1);
+
+        assertThat(snapshot.products())
+                .singleElement()
+                .satisfies(product -> assertThat(product.mxikCode())
+                        .as("Q15: Clopos confirmed gov_code is the ИКПУ/MXIK, the code "
+                                + "FiscalReceiptLine.mxikCode sends onward as Click's SPIC and Payme's code")
+                        .isEqualTo("07131001001000000"));
     }
 
     private static Map<String, Object> product(int id, String name, String type, Number price) {

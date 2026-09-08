@@ -61,6 +61,7 @@ class OperationsProviderIntegrationsEndpointTests {
 
     private static final UUID TENANT = UUID.fromString("018f9b20-7000-7000-8000-0000000000f1");
     private static final UUID TELEGRAM_INSTALLATION = UUID.fromString("018f9b20-7000-7000-8000-0000000000f2");
+    private static final UUID CLOPOS_INSTALLATION = UUID.fromString("018f9b20-7000-7000-8000-0000000000f3");
 
     private static final String OWNER = "operations-surface-owner";
     private static final String FINANCE = "operations-surface-finance";
@@ -114,6 +115,7 @@ class OperationsProviderIntegrationsEndpointTests {
 
         seedTenant();
         seedTelegramEnvironmentAndInstallation();
+        seedCloposEnvironmentAndInstallation();
         roleRegistry.synchronize();
         grant(OWNER, PlatformRole.TENANT_OWNER);
         // TENANT_ADMIN holds the same capabilities as the owner here, so
@@ -235,6 +237,48 @@ class OperationsProviderIntegrationsEndpointTests {
                 .doesNotContain("old-path-still-works");
     }
 
+    @Test
+    void aTenantOwnerReadsAndTogglesTheCloposClerkApprovalSettingOnTheOperationsSurface() throws Exception {
+        String path = NEW_INTEGRATIONS + "/" + CLOPOS_INSTALLATION + "/settings";
+
+        MvcResult defaultRead = mvc.perform(get(path).with(tokenFor(OWNER))).andReturn();
+        assertThat(defaultRead.getResponse().getStatus()).isEqualTo(200);
+        assertThat(defaultRead.getResponse().getContentAsString())
+                .as("nothing has been set yet, so the safe posture — the clerk decides — applies")
+                .contains("\"requireClerkApproval\":true");
+
+        MvcResult disabled = mvc.perform(post(path)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "operations-clopos-settings-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requireClerkApproval\":false}"))
+                .andReturn();
+        assertThat(disabled.getResponse().getStatus()).isEqualTo(200);
+        assertThat(disabled.getResponse().getContentAsString()).contains("\"requireClerkApproval\":false");
+
+        String stored = jdbc.sql("""
+                SELECT non_sensitive_config ->> 'clopos.requireClerkApproval' AS value
+                  FROM integration.installations WHERE id = :id
+                """)
+                .param("id", CLOPOS_INSTALLATION)
+                .query(String.class)
+                .single();
+        assertThat(stored)
+                .as("the export path (CloposAdapter#exportOrder) reads exactly this stored key")
+                .isEqualTo("false");
+
+        MvcResult reread = mvc.perform(get(path).with(tokenFor(OWNER))).andReturn();
+        assertThat(reread.getResponse().getContentAsString()).contains("\"requireClerkApproval\":false");
+    }
+
+    @Test
+    void aPrincipalWithoutInstallationManageIsRefusedTheCloposSettingsEndpoint() throws Exception {
+        MvcResult refused = mvc.perform(get(NEW_INTEGRATIONS + "/" + CLOPOS_INSTALLATION + "/settings")
+                        .with(tokenFor(FINANCE)))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static String writeRequest(String category, String providerType, String value) {
@@ -269,6 +313,23 @@ class OperationsProviderIntegrationsEndpointTests {
                 .param("id", TELEGRAM_INSTALLATION)
                 .param("tenantId", TENANT)
                 .update();
+    }
+
+    private void seedCloposEnvironmentAndInstallation() {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments (
+                    code, provider_category, provider_type, base_url, is_production, egress_allowlist)
+                VALUES ('operations-surface-clopos-env', 'POS', 'clopos', 'https://api.clopos.com',
+                        false, 'api.clopos.com')
+                ON CONFLICT DO NOTHING
+                """).update();
+        jdbc.sql("""
+                INSERT INTO integration.installations (
+                    id, tenant_id, provider_category, provider_type, environment_code,
+                    display_name, status, secret_reference)
+                VALUES (:id, :tenantId, 'POS', 'clopos', 'operations-surface-clopos-env',
+                        'Pilot till', 'DRAFT', 'horecaos:local:provider_pos:tenant-original:clopos')
+                """).param("id", CLOPOS_INSTALLATION).param("tenantId", TENANT).update();
     }
 
     private void grant(String subject, PlatformRole role) {

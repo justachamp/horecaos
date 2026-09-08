@@ -7,13 +7,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.PackageCodeLookup;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
@@ -44,12 +47,15 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
  * (ADR 0011).
  *
  * <p>The design of this class is dominated by a single fact about the provider it
- * was written for: <strong>there is no idempotency mechanism of any kind.</strong>
- * No key, no header, no documented repeat semantics, no dedupe window. Its own
- * documentation, in the section about retries, tells integrators to check the
- * server state before re-sending a non-idempotent request. So this service never
- * re-sends an order whose outcome it does not know, and there is no code path
- * that could.
+ * was written for: <strong>there is no idempotency key or header this platform
+ * controls.</strong> Its own documentation, in the section about retries, told
+ * integrators to check the server state before re-sending a non-idempotent
+ * request — and Clopos later confirmed in writing (Q1/Q18,
+ * docs/providers/clopos-api.md) that a repeat <em>is</em> deduplicated when the
+ * payload is byte-identical. That is not a licence to retry: nothing in this
+ * class reconstructs and resends a stored request body, so the guarantee is
+ * recorded rather than relied on. This service still never re-sends an order
+ * whose outcome it does not know, and there is no code path that could.
  *
  * <p>Three places carry that rule, and all three are needed because any one of
  * them alone can be worked around.
@@ -100,6 +106,7 @@ public class PosOrderExportService {
     private final JdbcPosExportStore exports;
     private final JdbcPosCapabilityStore capabilities;
     private final PosOrderSource orders;
+    private final PackageCodeLookup packageCodes;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
@@ -111,6 +118,7 @@ public class PosOrderExportService {
             JdbcPosExportStore exports,
             JdbcPosCapabilityStore capabilities,
             PosOrderSource orders,
+            PackageCodeLookup packageCodes,
             ApplicationEventPublisher events,
             Clock clock) {
         this.adapters = adapters;
@@ -120,6 +128,7 @@ public class PosOrderExportService {
         this.exports = exports;
         this.capabilities = capabilities;
         this.orders = orders;
+        this.packageCodes = packageCodes;
         this.events = events;
         this.clock = clock;
     }
@@ -587,6 +596,17 @@ public class PosOrderExportService {
 
         Map<String, String> config = configuration.resolve(binding).orElse(Map.of());
 
+        // One query for every line's package code rather than one per line: ADR
+        // 0038's catalog.fiscal_classifications.package_code, the value Clopos's
+        // required product_hash field turned out to be (Q12). A line with no
+        // classification is not refused here — that decision belongs to the
+        // adapter that actually requires the value, because a future provider
+        // that does not need a package code must not inherit Clopos's refusal.
+        Set<UUID> variantIds = order.lines().stream()
+                .map(PosOrderSource.ExportableOrder.Line::sourceVariantId)
+                .collect(Collectors.toSet());
+        Map<UUID, String> lineClassifications = packageCodes.packageCodes(tenantId, order.brandId(), variantIds);
+
         List<OrderExport.Line> lines = new ArrayList<>();
         List<LineFingerprint.Line> fingerprintLines = new ArrayList<>();
         for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
@@ -608,7 +628,12 @@ public class PosOrderExportService {
                     .toList();
 
             lines.add(new OrderExport.Line(
-                    externalId, displayName(line), line.quantity(), line.unitAmountMinor(), modifiers));
+                    externalId,
+                    displayName(line),
+                    line.quantity(),
+                    line.unitAmountMinor(),
+                    modifiers,
+                    lineClassifications.get(line.sourceVariantId())));
             fingerprintLines.add(new LineFingerprint.Line(externalId, line.quantity(), line.unitAmountMinor()));
         }
 

@@ -221,9 +221,9 @@ public final class DifferenceEngine {
                     EntityType.PRODUCT,
                     product.externalId(),
                     mapped,
-                    "product.governmentCode",
-                    mapped.fields().get("product.governmentCode"),
-                    product.governmentCode());
+                    "product.mxikCode",
+                    mapped.fields().get("product.mxikCode"),
+                    product.mxikCode());
         }
     }
 

@@ -9,7 +9,17 @@
   not built: the durable scheduler (`integration.pos_sync_schedules` is written
   by nothing and read by nothing), the `PosSyncRequested` command, review-decision
   /apply/resume endpoints, S3 raw snapshots (`raw_object_key` is never written),
-  the separate stop-list cadence, and restart/scale/isolation tests
+  the separate stop-list cadence, and restart/scale/isolation tests. 2026-09-08:
+  `gov_code` is confirmed as an MXIK candidate (Q15,
+  `docs/providers/clopos-api.md` §12) and the staged field is renamed
+  `CatalogSnapshot.Product#mxikCode` accordingly; `FieldAuthorityPolicy` still
+  resolves `product.mxikCode` to `REVIEWED_IMPORT`, unchanged by the answer —
+  a provider confirming what a field means is not this platform deciding to
+  auto-apply its values. `JdbcPosTargetCatalog`'s target-catalog read for that
+  field was also fixed: it had been selecting `catalog.products
+  .tax_category_code`, a column V0028 dropped, and would have thrown against a
+  real database; nothing exercised the query until this wave's
+  `JdbcPosTargetCatalogTests` did.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; staging and difference engine

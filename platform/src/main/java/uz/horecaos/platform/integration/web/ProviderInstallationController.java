@@ -77,6 +77,21 @@ public class ProviderInstallationController {
     /** The one provider type wave 13's rotate-secret verification speaks. */
     private static final String TELEGRAM_BOT_API = "TELEGRAM_BOT_API";
 
+    /**
+     * Matches {@code CloposAdapter.PROVIDER_TYPE}, duplicated rather than
+     * imported: {@code pos.infrastructure.clopos} is outside this module's
+     * named-interface boundary, the same reason {@link #TELEGRAM_BOT_API} is a
+     * local literal above rather than a shared constant.
+     */
+    private static final String CLOPOS_PROVIDER_TYPE = "clopos";
+
+    /**
+     * Matches {@code CloposConfig.REQUIRE_CLERK_APPROVAL}'s key string, for the
+     * same reason {@link #CLOPOS_PROVIDER_TYPE} is a literal rather than an
+     * import.
+     */
+    private static final String CLOPOS_REQUIRE_CLERK_APPROVAL_KEY = "clopos.requireClerkApproval";
+
     private final JdbcClient jdbc;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
@@ -641,6 +656,116 @@ public class ProviderInstallationController {
                 Map.of("changed", suspended == 1, "outcome", suspended == 1 ? "suspended" : "no_change"));
     }
 
+    @GetMapping("/{installationId}/settings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "Provider-specific settings for one installation",
+            description = "Today, Clopos's order-acceptance mode only: whether an exported order still "
+                    + "needs a clerk to accept it at the till (docs/providers/clopos-api.md Q7). Refused for "
+                    + "any other provider type, because the setting has no meaning there.")
+    ResponseEntity<CloposSettingsView> settings(@PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return ResponseEntity.ok(
+                new CloposSettingsView(installationOf(tenantId, installationId).requireClerkApproval()));
+    }
+
+    @PostMapping("/{installationId}/settings")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Set whether Clopos still needs a clerk's acceptance",
+            description = "Per-tenant, on the installation rather than a per-venue binding: the owner's "
+                    + "own framing of the question was per tenant, and one Clopos installation is one "
+                    + "brand. Defaults to true (the clerk decides) until set — an order sitting in "
+                    + "PENDING awaiting a clerk is recoverable and visible, an auto-accepted one is "
+                    + "already food, and CloposAdapter#exportOrder reads exactly this key.")
+    ResponseEntity<CloposSettingsView> updateSettings(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @Valid @RequestBody UpdateCloposSettingsRequest request) {
+
+        InstallationConfigRow row = installationOf(tenantId, installationId);
+
+        int updated = jdbc.sql("""
+                UPDATE integration.installations
+                   SET non_sensitive_config = jsonb_set(
+                           coalesce(non_sensitive_config, '{}'::jsonb),
+                           ARRAY[:key]::text[], to_jsonb(:value), true),
+                       version = version + 1, updated_at = :now
+                 WHERE id = :id AND tenant_id = :tenantId
+                """)
+                .param("key", CLOPOS_REQUIRE_CLERK_APPROVAL_KEY)
+                .param("value", request.requireClerkApproval())
+                .param("id", installationId)
+                .param("tenantId", tenantId)
+                .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                .update();
+
+        if (updated == 0) {
+            // The row this method's own read above just found is gone by the time
+            // of the write — a retirement racing this call. Reported rather than
+            // silently treated as success, the same posture rotateSecret takes on
+            // its own conflicting-write race.
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available");
+        }
+
+        record(
+                tenantId,
+                "integration.installation_settings_updated",
+                installationId,
+                "Clopos order-acceptance setting changed",
+                Map.of(
+                        "requireClerkApproval",
+                        request.requireClerkApproval(),
+                        "previousValue",
+                        row.requireClerkApproval()),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
+
+        return ResponseEntity.ok(new CloposSettingsView(request.requireClerkApproval()));
+    }
+
+    /**
+     * Reads this installation's provider type and its current
+     * {@code requireClerkApproval} setting together, and refuses anything that
+     * is not a Clopos installation — the settings surface only has one field
+     * today and it belongs to no other provider.
+     */
+    private InstallationConfigRow installationOf(UUID tenantId, UUID installationId) {
+        InstallationConfigRow row = jdbc.sql("""
+                SELECT provider_type,
+                       non_sensitive_config ->> :key AS require_clerk_approval
+                  FROM integration.installations
+                 WHERE id = :id AND tenant_id = :tenantId
+                """)
+                .param("key", CLOPOS_REQUIRE_CLERK_APPROVAL_KEY)
+                .param("id", installationId)
+                .param("tenantId", tenantId)
+                .query((row1, number) -> new InstallationConfigRow(
+                        row1.getString("provider_type"), row1.getString("require_clerk_approval")))
+                .optional()
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available"));
+
+        if (!CLOPOS_PROVIDER_TYPE.equals(row.providerType())) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Settings are defined for clopos installations only, not " + row.providerType());
+        }
+        return row;
+    }
+
+    /** @param rawRequireClerkApproval the stored text value, or null when nothing has been set yet */
+    private record InstallationConfigRow(
+            String providerType, @Nullable String rawRequireClerkApproval) {
+
+        /**
+         * Absent means the value {@code CloposAdapter}'s own default falls back
+         * to ({@code CloposConfig.REQUIRE_CLERK_APPROVAL}'s {@code "true"}
+         * default) — the safe, slower posture, never guessed as the convenient
+         * one.
+         */
+        boolean requireClerkApproval() {
+            return rawRequireClerkApproval == null || Boolean.parseBoolean(rawRequireClerkApproval);
+        }
+    }
+
     private void record(
             UUID tenantId,
             String actionCode,
@@ -683,6 +808,11 @@ public class ProviderInstallationController {
             @NotNull List<String> primaryCapabilities) {}
 
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
+
+    /** Whether an exported Clopos order still needs a clerk's acceptance at the till (Q7). */
+    public record CloposSettingsView(boolean requireClerkApproval) {}
+
+    public record UpdateCloposSettingsRequest(@NotNull Boolean requireClerkApproval) {}
 
     /**
      * @param newSecretReference an ADR 0028 reference — never a value. Usually

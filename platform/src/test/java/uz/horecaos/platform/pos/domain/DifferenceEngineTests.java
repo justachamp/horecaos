@@ -63,6 +63,36 @@ class DifferenceEngineTests {
     }
 
     @Test
+    @DisplayName("Q15: a provider's MXIK candidate is reviewed, never auto-applied")
+    void mxikCodeIsAReviewedImportField() {
+        var withMxikCode = new CatalogSnapshot.Product(
+                "41",
+                "Lagman",
+                "1",
+                SourceKind.DISH,
+                true,
+                false,
+                32000L,
+                "UZS",
+                true,
+                false,
+                "07131001001000000",
+                Map.of());
+        var target = new TargetCatalog(
+                Map.of(EntityType.PRODUCT, Map.of("41", new TargetCatalog.Entity(PRODUCT, 1, Map.of()))));
+
+        var result = engine.compare(snapshot(List.of(withMxikCode), List.of(), false), target, AbsenceHistory.empty());
+
+        assertThat(result.differences()).anySatisfy(difference -> {
+            assertThat(difference.fieldPath()).isEqualTo("product.mxikCode");
+            assertThat(difference.recommendedAction())
+                    .as("ADR 0038 classification is never auto-applied from a provider sync, even "
+                            + "though Clopos confirmed gov_code is a real MXIK (Q15)")
+                    .isEqualTo(RecommendedAction.REVIEW);
+        });
+    }
+
+    @Test
     @DisplayName("a first absence on an offset walk is not a removal")
     void oneMissedReadIsInconclusive() {
         var target = new TargetCatalog(

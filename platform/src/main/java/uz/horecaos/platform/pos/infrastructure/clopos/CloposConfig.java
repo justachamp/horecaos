@@ -73,6 +73,13 @@ public final class CloposConfig {
      * recoverable and visible; an order auto-accepted and auto-sent is already
      * food. The safe failure and the convenient configuration point in opposite
      * directions here, and the default takes the safe one.
+     *
+     * <p>The owner's own framing of the question (docs/providers/clopos-api.md
+     * Q7) was per tenant, and this is the answer: an installation-level key on
+     * {@code integration.installations.non_sensitive_config}, matching one
+     * Clopos installation being one brand, exposed to the operations app's
+     * Settings surface at {@code ProviderInstallationController#settings} /
+     * {@code #updateSettings} — the operator-facing side of this key.
      */
     public static final String REQUIRE_CLERK_APPROVAL = "clopos.requireClerkApproval";
 

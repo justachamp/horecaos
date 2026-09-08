@@ -157,6 +157,60 @@ class CloposAdapterTests {
     }
 
     @Test
+    @DisplayName("Q7: a tenant that configures clopos.requireClerkApproval=false gets auto_order_accept")
+    void requireClerkApprovalFalseBypassesTheClerk() {
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "RECEIVED")));
+
+        ExportResult result =
+                adapter.exportOrder(context(Map.of(CloposConfig.REQUIRE_CLERK_APPROVAL, "false")), order());
+
+        Map<String, Object> body = transport.bodies().getLast();
+        assertThat(body)
+                .as("the operations settings surface's write reaches this call exactly through "
+                        + "this configuration key")
+                .containsEntry("auto_order_accept", true)
+                .containsEntry("auto_order_sent_to_station", true);
+        assertThat(result.approvalPending())
+                .as("Clopos is a recipient for this order now, not an authority; nothing is still "
+                        + "awaiting a clerk")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("product_hash carries the line's ADR 0038 package code, not an invented digest")
+    void productHashIsThePackageCode() {
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
+
+        adapter.exportOrder(context(), order());
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> products =
+                (List<Map<String, Object>>) transport.bodies().getLast().get("products");
+        assertThat(products)
+                .singleElement()
+                .satisfies(product -> assertThat(product)
+                        .as("Q12: Clopos confirmed product_hash is the package code for the line's SPIC, "
+                                + "not a digest of anything")
+                        .containsEntry("product_hash", "0712345"));
+    }
+
+    @Test
+    @DisplayName("a line with no package code refuses the export rather than inventing one")
+    void aLineWithNoPackageCodeIsRefused() {
+        OrderExport unclassified = orderWithLine(new OrderExport.Line("41", "Lagman", 2, 32000L, List.of(), null));
+
+        ExportResult result = adapter.exportOrder(context(), unclassified);
+
+        assertThat(result.outcome().status()).isEqualTo(ProviderOutcome.Status.REJECTED);
+        assertThat(result.outcome().errorCode()).isEqualTo("CLOPOS_LINE_UNCLASSIFIED");
+        assertThat(result.externalOrderId()).isNull();
+        assertThat(transport.calls())
+                .as("refused before anything reached the wire — a fabricated product_hash on a "
+                        + "fiscal document is worse than an export that stops and asks")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("the correlation reference is sent even though the schema omits the field")
     void theCorrelationReferenceIsSentAnyway() {
         transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
@@ -315,27 +369,31 @@ class CloposAdapterTests {
     }
 
     private static PosContext context() {
-        return new PosContext(
-                TENANT,
-                INSTALLATION,
-                BINDING,
-                "3",
-                Map.of(
-                        CloposConfig.BRAND, "openapitest",
-                        CloposConfig.CLIENT_ID, "client-1",
-                        CloposConfig.INTEGRATOR_ID, "horecaos-test",
-                        CloposConfig.SALE_TYPE_ID, "2",
-                        CloposConfig.CURRENCY, "UZS"),
-                "correlation-1");
+        return context(Map.of());
+    }
+
+    private static PosContext context(Map<String, String> extraConfig) {
+        Map<String, String> config = new java.util.LinkedHashMap<>(Map.of(
+                CloposConfig.BRAND, "openapitest",
+                CloposConfig.CLIENT_ID, "client-1",
+                CloposConfig.INTEGRATOR_ID, "horecaos-test",
+                CloposConfig.SALE_TYPE_ID, "2",
+                CloposConfig.CURRENCY, "UZS"));
+        config.putAll(extraConfig);
+        return new PosContext(TENANT, INSTALLATION, BINDING, "3", config, "correlation-1");
     }
 
     private static OrderExport order() {
+        return orderWithLine(new OrderExport.Line("41", "Lagman", 2, 32000L, List.of(), "0712345"));
+    }
+
+    private static OrderExport orderWithLine(OrderExport.Line line) {
         return new OrderExport(
                 ORDER,
                 "A-1024",
                 "A-1024",
                 new OrderExport.Customer("55", "Anvar", "+998901234567", "Amir Temur 1"),
-                List.of(new OrderExport.Line("41", "Lagman", 2, 32000L, List.of())),
+                List.of(line),
                 64000L,
                 "UZS",
                 "DELIVERY",

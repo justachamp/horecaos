@@ -58,13 +58,17 @@ public class JdbcPosTargetCatalog {
         Map<String, TargetCatalog.Entity> entities = new LinkedHashMap<>();
         jdbc.sql("""
                 SELECT m.external_entity_id, p.id, p.version, p.status,
-                       t.name AS translated_name, p.tax_category_code
+                       t.name AS translated_name, fc.mxik_code
                   FROM integration.provider_entity_mappings m
                   JOIN catalog.products p
                     ON p.id = m.horecaos_entity_id AND p.tenant_id = m.tenant_id
                   LEFT JOIN catalog.translations t
                          ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id
                         AND t.locale = :locale AND t.tenant_id = p.tenant_id
+                  LEFT JOIN catalog.variants dv
+                         ON dv.product_id = p.id AND dv.tenant_id = p.tenant_id AND dv.is_default
+                  LEFT JOIN catalog.fiscal_classifications fc
+                         ON fc.variant_id = dv.id AND fc.tenant_id = dv.tenant_id
                  WHERE m.tenant_id = :tenantId
                    AND m.binding_id = :bindingId
                    AND m.entity_type = 'VARIANT_PARENT'
@@ -79,7 +83,15 @@ public class JdbcPosTargetCatalog {
                     Map<String, String> fields = new LinkedHashMap<>();
                     putIfPresent(fields, "product.name", row.getString("translated_name"));
                     putIfPresent(fields, "product.status", row.getString("status"));
-                    putIfPresent(fields, "product.governmentCode", row.getString("tax_category_code"));
+                    // ADR 0038 classifies the sellable node, not the product row —
+                    // "a product is not itself priceable" (V0028) — so a Clopos
+                    // product's accepted MXIK lives on its own default variant's
+                    // catalog.fiscal_classifications row, joined through here. Before
+                    // V0028 this compared against catalog.products.tax_category_code,
+                    // a column V0028 dropped for being nullable and unread since
+                    // V0016; that comparison had been silently broken (the column no
+                    // longer exists) until this query was pointed at the real table.
+                    putIfPresent(fields, "product.mxikCode", row.getString("mxik_code"));
                     return Map.entry(
                             row.getString("external_entity_id"),
                             new TargetCatalog.Entity(row.getObject("id", UUID.class), row.getInt("version"), fields));

@@ -35,16 +35,30 @@
   `docs/runbooks/`; `CUSTOMER_UPSERT` is declared `UNSUPPORTED` by `CloposAdapter`
   and not implemented; and `clopos.correlationEchoVerified` has never been set by
   a real experiment. The
-  exit criteria are still not met — see "Blocked on Clopos" below.
+  exit criteria are still not met — see "Blocked on Clopos" below. 2026-09-08:
+  Clopos answered Q1/Q18 (`POST /orders` dedupes a byte-identical repeat) and
+  Q7 (order-acceptance mode is a tenant decision) directly to the owner —
+  `docs/providers/clopos-api.md` §12 records both. Neither reopened this ADR's
+  argument. `ProviderInstallationController#settings` / `#updateSettings` now
+  exposes `clopos.requireClerkApproval` to the operations app's Settings
+  surface, closing the part of Q7 that was actually blocking (a tenant could
+  not change the default without a raw database write); the state machine, the
+  `UNKEYED_CREATE` classification and `PosOrderExportService`'s refusal to
+  reconstruct and resend a stored request are unchanged, because Clopos's own
+  dedupe is keyed on request bytes this platform does not store.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; capability model and export
-  path implemented)
+  path implemented); 2026-09-08 (Q1/Q7/Q18 answered by Clopos via the owner;
+  order-acceptance mode exposed as a tenant setting)
 - Deciders: Ayubkhon Abbosov (platform architecture)
 - Depends on: ADR 0007, ADR 0008, ADR 0026, ADR 0028, ADR 0029, ADR 0033
 - Supersedes / Superseded by: —
-- Open inputs: Clopos answers to Q1, Q2, Q18 and Q19
-  ([`docs/providers/clopos-api.md`](../../providers/clopos-api.md) §12)
+- Open inputs: Clopos answers to Q2 and Q19
+  ([`docs/providers/clopos-api.md`](../../providers/clopos-api.md) §12). Q1
+  and Q18 were answered 2026-09-08 and are recorded there under "Answered —
+  2026-09-08" rather than here, because the answer did not close the gap this
+  input names — see "Blocked on Clopos" below.
 
 ## Context
 
@@ -583,6 +597,22 @@ produce a second kitchen ticket, and this ADR says so rather than pretending
 otherwise.** The pilot may proceed on the strength of the operator queue and the
 clerk-approval default; a second restaurant should not, until Q1 or Q2 has an
 answer.
+
+**Update 2026-09-08.** Q1 and Q18 are now answered — asked directly, Clopos
+confirmed a repeated `POST /orders` is deduplicated when the request body is
+byte-identical. That is a real answer and it does not close this gap. Q1's
+question, read in full, was about a caller-*settable correlation reference*
+(`integration_uuid` / `integration_id`) that the operator queue's automatic
+path could match on; the answer received is about payload-content equality,
+which is a different mechanism with nothing this platform currently produces
+to key on — `PosOrderExportService` does not store or reconstruct a sent
+request's exact bytes, so it has no "identical payload" to retry with even
+if it wanted to. **The operator queue therefore stays exactly as built,** and
+so does the refusal to blind-retry: removing either on the strength of a
+provider's own dedupe would be relying on a guarantee this codebase cannot
+verify it is producing. Q2 is still the open question whose answer would
+actually change the design — see `docs/providers/clopos-api.md` §7.1 and §7.6
+for the fuller reasoning.
 
 Two further questions shape the design without blocking it: **Q6** (is
 `GET /products` sortable, which would make the catalog walk stable and retire the

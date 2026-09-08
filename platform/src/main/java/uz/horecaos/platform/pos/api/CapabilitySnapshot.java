@@ -67,12 +67,16 @@ public record CapabilitySnapshot(
     /**
      * What one capability was found to support, and the evidence behind that finding.
      *
-     * @param idempotency    what the provider guarantees about a repeated command.
-     *                       Carried on the capability rather than on the provider
-     *                       because it differs per operation: on the first real
-     *                       adapter, reads and value-setting writes are idempotent
-     *                       by construction and the order create is not idempotent
-     *                       at all
+     * @param idempotency    what a retry <em>this platform sends</em> may safely
+     *                       assume. Carried on the capability rather than on the
+     *                       provider because it differs per operation: on the
+     *                       first real adapter, reads and value-setting writes are
+     *                       idempotent by construction, and the order create is
+     *                       {@link IdempotencyBehaviour#NONE} — not because Clopos
+     *                       never deduplicates (it confirmed doing so for a
+     *                       byte-identical repeat, Q1/Q18), but because nothing in
+     *                       this platform reconstructs and resends a stored
+     *                       request body, so there is no retry to call safe
      * @param pushSupported  whether the provider tells us, or we have to ask. A
      *                       polled approval arrives one interval late, and callers
      *                       that assume a push will race against their own timer

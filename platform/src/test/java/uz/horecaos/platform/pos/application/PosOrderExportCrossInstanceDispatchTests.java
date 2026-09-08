@@ -395,6 +395,10 @@ class PosOrderExportCrossInstanceDispatchTests {
                 new JdbcPosExportStore(serviceJdbc),
                 new JdbcPosCapabilityStore(serviceJdbc, json),
                 new StubPosOrderSource(),
+                // FakePosAdapter does not require a package code the way Clopos
+                // does, so an empty answer is a real behaviour, not a stand-in for
+                // one — nothing in this class exercises that requirement.
+                (tenantId, brandId, priceableIds) -> Map.of(),
                 event -> {},
                 clock);
     }

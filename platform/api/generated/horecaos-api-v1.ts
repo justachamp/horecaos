@@ -760,6 +760,10 @@ export interface CircleRequest {
   radiusMeters?: number;
 }
 
+export interface CloposSettingsView {
+  requireClerkApproval?: boolean;
+}
+
 export interface CloseRequest {
   endReason: string;
   reason: string;
@@ -4808,6 +4812,10 @@ export interface Unavailable {
   variantId?: string;
 }
 
+export interface UpdateCloposSettingsRequest {
+  requireClerkApproval: boolean;
+}
+
 export interface UploadRequest {
   contentType: string;
   filename?: string;
@@ -5049,6 +5057,8 @@ export interface Operations {
   "reconcileCapabilities_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Reconciliation } };
   "rotateSecret_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretRequest }; responses: { "200": RotateSecretResponse } };
   "rotateSecretByValue_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
+  "settings_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": CloposSettingsView } };
+  "updateSettings_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: UpdateCloposSettingsRequest }; responses: { "200": CloposSettingsView } };
   "list_9": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
   "register_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } }; body: RegisterLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "assignmentHistory": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<LocationFiscalAssignmentView> } };
@@ -5184,6 +5194,8 @@ export interface Operations {
   "reconcileCapabilities": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Reconciliation } };
   "rotateSecret_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretRequest }; responses: { "200": RotateSecretResponse } };
   "rotateSecretByValue": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
+  "settings_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": CloposSettingsView } };
+  "updateSettings": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: UpdateCloposSettingsRequest }; responses: { "200": CloposSettingsView } };
   "liveness": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/liveness"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LivenessResponse> } };
   "search": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/order-references"; request: { parameters: { path: { tenantId: string }; query: { reference: string } } }; responses: { "200": Array<ReferenceMatchResponse> } };
   "bypass": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-bypasses"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: BypassRequest }; responses: { "200": unknown } };

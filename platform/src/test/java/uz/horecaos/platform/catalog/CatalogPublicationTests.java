@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import uz.horecaos.platform.catalog.api.FiscalVatRate;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogFiscalFacts;
+import uz.horecaos.platform.catalog.application.CatalogPackageCodeLookup;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.CatalogSnapshotLoader;
 import uz.horecaos.platform.catalog.application.CatalogValidator;
@@ -1131,6 +1133,40 @@ class CatalogPublicationTests {
         // a payment method, so it must not apply to carts that do not need it.
         assertThat(facts.requiresMarkingCapablePayment(TENANT, BRAND, Set.of(water.defaultVariantId())))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("Q12: package_code reaches a POS export line through catalog.api, never invented")
+    void packageCodeReachesAPosExportLineThroughThePort() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-BURGER", "PIECE", CLASSIFIED, ACTOR);
+        var unclassified = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "MYSTERY",
+                "Noma'lum",
+                null,
+                LOCALE,
+                "SKU-MYSTERY",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+
+        var lookup = new CatalogPackageCodeLookup(store);
+
+        Map<UUID, String> codes =
+                lookup.packageCodes(TENANT, BRAND, Set.of(burger.defaultVariantId(), unclassified.defaultVariantId()));
+
+        assertThat(codes)
+                .as("Clopos confirmed 2026-09-08 (Q12) that its order line's product_hash field is "
+                        + "exactly this classification's package_code, not a digest of anything")
+                .containsEntry(burger.defaultVariantId(), "1512315");
+        assertThat(codes)
+                .as("absent, not a null value standing in for \"unclassified\" — CloposAdapter reads "
+                        + "the map with Map#get, and a stray null entry would NPE rather than refuse cleanly")
+                .doesNotContainKey(unclassified.defaultVariantId());
     }
 
     @Test
