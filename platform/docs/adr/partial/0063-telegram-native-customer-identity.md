@@ -10,9 +10,15 @@
   phone-pattern checks, account convergence with the OTP path through one
   phone-hash resolution, ADR 0051 session claimed by a single conditional
   update, the wave-7 binding created in the same stroke, storefront "Continue
-  with Telegram" polling the code). Not Built because the record's own open
-  inputs stand: no real Gateway token exists (ships configured-off — SMS-only
-  in practice), and the default phone pattern awaits the owner's review.
+  with Telegram" polling the code). The phone-pattern check moved off a
+  deployment-time `@Value` property on 2026-09-08: `TelegramUpdateHandler` now
+  resolves it through ADR 0030 (`customers.api.CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN`,
+  settable down to a brand), so this record's own open input — the owner's
+  directive was "configurable" — is delivered rather than merely defaulted; the
+  shipped default is unchanged, `^\+?998\d{9}$`. Not Built because the record's
+  other open input still stands: no real Gateway token exists, so Gateway OTP
+  ships configured-off and the platform is SMS-only in practice. See this
+  record's Implementation status: the phone pattern is the settled half.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed both features and the phone-regex gate),
@@ -20,8 +26,9 @@
 - Depends on: 0013, 0015, 0020, 0026, 0028, 0029, 0033, 0051, 0058
 - Supersedes / Superseded by: —
 - Open inputs: the Telegram Gateway account and its API token (a separate,
-  separately-billed Telegram product with its own credentials — owner obtains);
-  the allowed-phone pattern's final value (default `^\+?998\d{9}$`).
+  separately-billed Telegram product with its own credentials — owner obtains).
+  The allowed-phone pattern is resolved (see Implementation status above):
+  configurable via ADR 0030, defaulting to `^\+?998\d{9}$`.
 
 ## Context
 
@@ -87,7 +94,8 @@ phone number should arrive through Telegram rather than an SMS bill.
 - [ ] Gateway client + ADR 0028 secret reference + `FakeTelegramGateway`; delivery-policy seam in the challenge send path with SMS fallback; attempt-row cost recording
 - [ ] AUTH-kind pending codes (single-use, expiring); bot `request_contact` exchange with own-contact and pattern checks; account resolve-or-create with `TELEGRAM_CONTACT`-sourced verified phone; ADR 0051 session issuance against the code
 - [ ] Storefront "Continue with Telegram" on the sign-in screen, deep link + status polling, error states (expired, refused, pattern mismatch)
-- [ ] Entitlement/config: allowed-phone pattern configurable; Gateway usable platform-wide once its token exists
+- [x] Config: allowed-phone pattern configurable (ADR 0030, `customers.telegram_auth_phone_pattern`, platform/tenant/brand).
+- [ ] Gateway usable platform-wide once its token exists.
 - [ ] Tests: fake-Gateway delivery + SMS fallback; the whole share-contact story against `FakeTelegramBotApi` including forwarded-contact refusal, pattern refusal, expiry, single-use, and the session landing in the poll
 
 ## Exit criteria

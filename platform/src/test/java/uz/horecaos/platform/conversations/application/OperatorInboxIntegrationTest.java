@@ -67,6 +67,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -194,7 +195,7 @@ class OperatorInboxIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$",
+                new JdbcConfigurationResolver(jdbc),
                 Duration.ofHours(6));
     }
 

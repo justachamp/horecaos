@@ -82,6 +82,7 @@ import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 
 /**
  * ADR 0058, stage 1 rollout, end to end: bind a group through the {@code /link}
@@ -230,7 +231,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$",
+                new JdbcConfigurationResolver(jdbc),
                 Duration.ofHours(6));
 
         JdbcProviderInstallationLookup installationLookup =

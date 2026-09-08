@@ -1,6 +1,7 @@
 package uz.horecaos.platform.integration.provider.telegram;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
@@ -25,6 +26,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.catalog.api.StopListPort;
@@ -34,6 +36,7 @@ import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
 import uz.horecaos.platform.commercial.api.LimitCheck;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
 import uz.horecaos.platform.conversations.api.ConversationInboundPort;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.customers.api.CustomerTelegramSignIn;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactEndpoint;
@@ -73,6 +76,9 @@ import uz.horecaos.platform.notifications.application.NotificationPreferenceServ
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationValueAuthor;
+import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.cache.InProcessRateLimiter;
 
 /**
@@ -217,7 +223,7 @@ class TelegramAuthSignInIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$",
+                new JdbcConfigurationResolver(jdbc),
                 Duration.ofHours(6));
     }
 
@@ -313,6 +319,85 @@ class TelegramAuthSignInIntegrationTest {
         assertThat(bot.messagesSentTo(chatId).getLast())
                 .doesNotContain("15551234567")
                 .doesNotContain("pattern");
+    }
+
+    @Test
+    @DisplayName("a brand-scoped pattern narrows this bot, and cannot widen past PhoneNumber")
+    void aBrandScopedPatternNarrowsThisBotAndCannotWidenPastPhoneNumber() {
+        // Widening first, because it is the one people will try. An operator sets
+        // this brand's bot to admit a US number alongside the Uzbek form.
+        JdbcConfigurationValueAuthor authoring =
+                new JdbcConfigurationValueAuthor(jdbc, audit, clock, new JdbcConfigurationResolver(jdbc));
+        authoring.set(
+                CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN,
+                ResourceScope.brand(tenantId, brandId),
+                "^\\+(?:998\\d{9}|1\\d{10})$",
+                false,
+                null,
+                ActorRef.service("test-operator"),
+                "attempt to pilot a US market on this brand's bot");
+
+        String widened = authLinks.issueCode(tenantId, brandId);
+        long widenedChat = 55011L;
+        deliver(privateStartUpdate("auth_" + widened, widenedChat));
+
+        assertThatThrownBy(() -> deliver(contactUpdate(widenedChat, widenedChat, "+15551234567")))
+                .as("this key narrows and never widens: the number clears the brand pattern and is "
+                        + "then refused by PhoneNumber, which is deliberately Uzbek-only because "
+                        + "every OTP to a destination nobody decided to pay for is money reaching "
+                        + "nobody we serve. Opening a market is a change to PhoneNumber and the "
+                        + "pricing conversation its comment demands, not a regular expression an "
+                        + "operator can set")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Uzbek mobile");
+
+        // Asserted as a throw rather than a polite decline because that is what
+        // it currently is, and the difference is worth seeing: a customer who
+        // shares a foreign contact with a widened bot gets an error rather than
+        // a message telling them why. Handling it kindly is a change to
+        // TelegramUpdateHandler.handleContactShare, not to this rule.
+        assertThat(customerAccountCount()).isZero();
+
+        // Narrowing is what the key is for, and it works: this brand's bot now
+        // accepts one operator prefix rather than every Uzbek mobile. The second
+        // write names the version the first produced -- passing null again would
+        // mean "create", and the author refuses that on a key that already has a
+        // value at this scope, which is the concurrency guard doing its job.
+        long currentVersion = jdbc.sql("""
+                SELECT version FROM tenant.configuration_values
+                 WHERE key_code = :code AND scope_type = 'BRAND' AND brand_id = :brandId
+                """)
+                .param("code", CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN_CODE)
+                .param("brandId", brandId)
+                .query(Long.class)
+                .single();
+
+        authoring.set(
+                CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN,
+                ResourceScope.brand(tenantId, brandId),
+                "^\\+99890\\d{7}$",
+                false,
+                currentVersion,
+                ActorRef.service("test-operator"),
+                "this brand's bot serves one operator's subscribers");
+
+        String offPrefix = authLinks.issueCode(tenantId, brandId);
+        long offPrefixChat = 55012L;
+        deliver(privateStartUpdate("auth_" + offPrefix, offPrefixChat));
+        deliver(contactUpdate(offPrefixChat, offPrefixChat, "+998911234567"));
+        assertThat(customerAccountCount())
+                .as("a valid Uzbek mobile the brand's narrowed pattern excludes is refused, which "
+                        + "is the whole point of making this settable per brand")
+                .isZero();
+
+        String onPrefix = authLinks.issueCode(tenantId, brandId);
+        long onPrefixChat = 55013L;
+        deliver(privateStartUpdate("auth_" + onPrefix, onPrefixChat));
+        deliver(contactUpdate(onPrefixChat, onPrefixChat, "+998901234567"));
+        assertThat(customerAccountCount())
+                .as("and one inside it signs in, so the override reached TelegramUpdateHandler's "
+                        + "resolution rather than the old deployment property")
+                .isEqualTo(1L);
     }
 
     // -------------------------------------------------------------- lifecycle

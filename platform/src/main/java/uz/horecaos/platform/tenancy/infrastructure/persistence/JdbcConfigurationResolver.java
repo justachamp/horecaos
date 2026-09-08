@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
+import uz.horecaos.platform.tenancy.application.port.ConfigurationValueCache;
 import uz.horecaos.platform.tenancy.domain.configuration.ScopeResolution;
 import uz.horecaos.platform.tenancy.domain.configuration.ScopedConfigurationRow;
 
@@ -23,20 +25,17 @@ import uz.horecaos.platform.tenancy.domain.configuration.ScopedConfigurationRow;
  * itself lives in {@link ScopeResolution} so it stays exhaustively testable
  * without a database.
  *
- * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.configuration}.
- * No writer exists yet for {@code tenant.configuration_values} — authoring a
- * scoped override is still an unbuilt tenant-administration act (see {@link
- * uz.horecaos.platform.tenancy.web.ConfigurationController}'s class Javadoc)
- * — so the registry's declared {@code ConfigurationChanged} invalidation has
- * nothing to fire from today; the sixty-second TTL is the only thing bounding
- * staleness, exactly the backstop ADR 0033's Decision describes for a missed
- * invalidation. That is a real gap to close, not a design choice, the day a
- * writer exists: whoever adds one must evict this cache the same way {@link
- * uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor}
- * evicts {@code tenant.policy_current}.
+ * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.configuration}
+ * and implements {@link ConfigurationValueCache} so {@code
+ * JdbcConfigurationValueAuthor} can evict the exact scope it just wrote, the
+ * same shape {@link JdbcPolicyResolver} uses for {@code tenant.policy_current}.
+ * Without that eviction call, a value an operator just set would keep
+ * resolving to whatever was cached before it for up to the registry's
+ * sixty-second TTL — the backstop ADR 0033's Decision describes for a missed
+ * invalidation, not the mechanism itself.
  */
 @Repository
-public class JdbcConfigurationResolver implements ConfigurationResolver {
+public class JdbcConfigurationResolver implements ConfigurationResolver, ConfigurationValueCache {
 
     private static final String SELECT_CHAIN = """
             SELECT scope_type, value_type, boolean_value, integer_value,
@@ -70,6 +69,20 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
     @Override
     public ResolutionTrace explain(ConfigurationKey<?> key, ResourceScope scope) {
         return resolveErased(key, scope).trace();
+    }
+
+    /**
+     * Called by {@code JdbcConfigurationValueAuthor} right after it writes the
+     * row, so the value just set resolves on the very next call instead of
+     * waiting out the registry's TTL.
+     */
+    @Override
+    @CacheEvict(
+            cacheNames = "tenant.configuration",
+            key = "#keyCode + '|' + #scope.type() + ':' + #scope.tenantId() "
+                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
+    public void evict(String keyCode, ResourceScope scope) {
+        // The annotation is the whole method.
     }
 
     private <T> Resolved<T> resolveErased(ConfigurationKey<T> key, ResourceScope scope) {
