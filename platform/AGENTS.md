@@ -112,7 +112,7 @@ re-implement any of them locally.
 - **Events** follow [ADR 0032](docs/adr/built/0032-event-contract-governance-and-topic-policy.md):
   a schema file and a catalogue entry exist before a producer ships.
 - **Caches** are registered accelerators only. No correctness decision reads
-  cache state, per [ADR 0033](docs/adr/partial/0033-caching-rate-limiting-and-shared-runtime-state.md).
+  cache state, per [ADR 0033](docs/adr/built/0033-caching-rate-limiting-and-shared-runtime-state.md).
 
 ## Greenfield launch working rules
 
