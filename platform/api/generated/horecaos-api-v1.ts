@@ -1498,6 +1498,15 @@ export interface DiscountView {
   toTime?: string;
 }
 
+export interface DispatchControllerExceptionResponse {
+  detail?: string;
+  exceptionId?: string;
+  raisedAt?: string;
+  reasonCode?: string;
+  severity?: string;
+  status?: string;
+}
+
 export interface DispatchResponse {
   applied?: boolean;
   planStatus?: string;
@@ -1701,13 +1710,6 @@ export interface ExceptionRequest {
   label: string;
   opensAt?: string;
   reason: string;
-}
-
-export interface ExceptionResponse {
-  closedAllDay?: boolean;
-  closesAt?: string;
-  date?: string;
-  opensAt?: string;
 }
 
 export interface ExchangeRequest {
@@ -2123,6 +2125,13 @@ export interface LocationServiceOperationsControllerBandRequest {
   startsAt: string;
 }
 
+export interface LocationServiceOperationsControllerExceptionResponse {
+  closedAllDay?: boolean;
+  closesAt?: string;
+  date?: string;
+  opensAt?: string;
+}
+
 export interface LocationSetRequest {
   locationIds: Array<string>;
 }
@@ -2337,7 +2346,7 @@ export interface MiniAppLinkRequest {
 
 export interface ModeBindingResponse {
   acceptsScheduledOrders?: boolean;
-  exceptions?: Array<ExceptionResponse>;
+  exceptions?: Array<LocationServiceOperationsControllerExceptionResponse>;
   fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
   rules?: Array<RuleResponse>;
   scheduleId?: string;
@@ -5124,6 +5133,7 @@ export interface Operations {
   "profile_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "setCapacity": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CapacityRequest }; responses: { "200": unknown } };
   "assign": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/assign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: AssignRequest }; responses: { "200": DispatchResponse } };
+  "exceptions": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/exceptions"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } } }; responses: { "200": Array<DispatchControllerExceptionResponse> } };
   "unassign": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/unassign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: UnassignRequest }; responses: { "200": DispatchResponse } };
   "queue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/queue"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PlanQueueResponse> } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };

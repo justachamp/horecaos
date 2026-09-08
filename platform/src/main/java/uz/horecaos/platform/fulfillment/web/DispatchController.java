@@ -18,14 +18,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.fulfillment.application.ManualDispatchService;
 import uz.horecaos.platform.fulfillment.application.ManualDispatchService.DispatchOutcome;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.Shipment;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore.OpenException;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -58,13 +62,21 @@ public class DispatchController {
 
     private final JdbcDeliveryPlanStore plans;
     private final JdbcAssignmentStore assignments;
+    private final JdbcDeliveryExceptionStore exceptions;
     private final ManualDispatchService dispatch;
+    private final CurrentActor currentActor;
 
     public DispatchController(
-            JdbcDeliveryPlanStore plans, JdbcAssignmentStore assignments, ManualDispatchService dispatch) {
+            JdbcDeliveryPlanStore plans,
+            JdbcAssignmentStore assignments,
+            JdbcDeliveryExceptionStore exceptions,
+            ManualDispatchService dispatch,
+            CurrentActor currentActor) {
         this.plans = plans;
         this.assignments = assignments;
+        this.exceptions = exceptions;
         this.dispatch = dispatch;
+        this.currentActor = currentActor;
     }
 
     @GetMapping("/queue")
@@ -98,8 +110,8 @@ public class DispatchController {
             @PathVariable UUID planId,
             @Valid @RequestBody AssignRequest body) {
         try {
-            DispatchOutcome outcome =
-                    dispatch.assign(tenantId, planId, body.courierId(), body.expectedVersion(), body.reasonCode());
+            DispatchOutcome outcome = dispatch.assign(
+                    tenantId, planId, body.courierId(), body.expectedVersion(), body.reasonCode(), actor());
             return ResponseEntity.ok(DispatchResponse.of(outcome));
         } catch (DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
@@ -121,11 +133,33 @@ public class DispatchController {
             @Valid @RequestBody UnassignRequest body) {
         try {
             DispatchOutcome outcome =
-                    dispatch.unassign(tenantId, planId, body.expectedShipmentVersion(), body.reasonCode());
+                    dispatch.unassign(tenantId, planId, body.expectedShipmentVersion(), body.reasonCode(), actor());
             return ResponseEntity.ok(DispatchResponse.of(outcome));
         } catch (DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
+    }
+
+    @GetMapping("/plans/{planId}/exceptions")
+    @RequiresCapability(value = Capability.DELIVERY_PLAN_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Why this plan needs a human",
+            description = "Every open ADR 0014 sourcing exception against this plan -- no provider, "
+                    + "a booking whose outcome is still uncertain, a promise sourcing could not "
+                    + "meet. Empty for a plan sourcing has not flagged, which is the ordinary case.")
+    public ResponseEntity<List<ExceptionResponse>> exceptions(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID planId) {
+
+        return ResponseEntity.ok(exceptions.open(tenantId, planId).stream()
+                .map(ExceptionResponse::of)
+                .toList());
+    }
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
     }
 
     // --------------------------------------------------------------- payloads
@@ -191,6 +225,26 @@ public class DispatchController {
                     shipment.courierId(),
                     shipment.providerBindingId(),
                     shipment.version());
+        }
+    }
+
+    /** One open ADR 0014 sourcing exception. Never a customer name, address or phone (§ class doc). */
+    public record ExceptionResponse(
+            UUID exceptionId,
+            String reasonCode,
+            String severity,
+            String status,
+            @Nullable String detail,
+            Instant raisedAt) {
+
+        static ExceptionResponse of(OpenException exception) {
+            return new ExceptionResponse(
+                    exception.id(),
+                    exception.reasonCode(),
+                    exception.severity(),
+                    exception.status(),
+                    exception.detail(),
+                    exception.raisedAt());
         }
     }
 

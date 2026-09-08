@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -18,6 +20,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -48,12 +53,14 @@ class ManualDispatchServiceTests {
     private static final ZoneId TASHKENT = ZoneId.of("Asia/Tashkent");
     private static final Instant CONFIRMED = Instant.parse("2026-08-25T12:00:00Z");
     private static final UUID COURIER = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final ActorRef OPERATOR = ActorRef.user("operator-1", null);
 
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
     private ManualDispatchService dispatch;
     private JdbcAssignmentStore assignments;
+    private RecordingAudit audit;
     private DeliveryPlanningService planning;
     private UUID branch;
     private UUID channelId;
@@ -96,7 +103,8 @@ class ManualDispatchServiceTests {
         Clock clock = Clock.fixed(CONFIRMED, ZoneOffset.UTC);
         JdbcDeliveryPlanStore planStore = new JdbcDeliveryPlanStore(jdbc);
         assignments = new JdbcAssignmentStore(jdbc);
-        dispatch = new ManualDispatchService(planStore, assignments, clock);
+        audit = new RecordingAudit();
+        dispatch = new ManualDispatchService(planStore, assignments, audit, clock);
 
         seedTenancy();
         seedCourier(COURIER, "K-001");
@@ -115,7 +123,7 @@ class ManualDispatchServiceTests {
         DeliveryPlan plan = openPlan();
 
         ManualDispatchService.DispatchOutcome outcome =
-                dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN");
+                dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
 
         assertThat(outcome.applied()).isTrue();
         assertThat(outcome.planStatus()).isEqualTo(PlanStatus.ASSIGNED);
@@ -124,19 +132,26 @@ class ManualDispatchServiceTests {
         var shipment = assignments.findShipment(TENANT, plan.id()).orElseThrow();
         assertThat(shipment.courierId()).isEqualTo(COURIER);
         assertThat(shipment.status().name()).isEqualTo("ASSIGNED");
+
+        // ADR 0014's own security section: manual assignment is audited. Not a
+        // side detail — an operator override with no trail is the one thing that
+        // section exists to rule out.
+        assertThat(audit.facts).hasSize(1);
+        assertThat(audit.facts.getFirst().actionCode()).isEqualTo("fulfillment.dispatch.assign");
+        assertThat(audit.facts.getFirst().actor()).isEqualTo(OPERATOR);
     }
 
     @Test
     @DisplayName("a second assign on an already-carried plan is a conflict, not a second courier")
     void aSecondAssignDoesNotProduceASecondShipment() {
         DeliveryPlan plan = openPlan();
-        dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN");
+        dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
 
         UUID otherCourier = UUID.fromString("44444444-4444-4444-4444-444444444444");
         seedCourier(otherCourier, "K-002");
 
-        ManualDispatchService.DispatchOutcome second =
-                dispatch.assign(TENANT, plan.id(), otherCourier, plan.version() + 1, "OPERATIONS_MANUAL_ASSIGN");
+        ManualDispatchService.DispatchOutcome second = dispatch.assign(
+                TENANT, plan.id(), otherCourier, plan.version() + 1, "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
 
         assertThat(second.applied()).isFalse();
         assertThat(second.reason()).isEqualTo("ALREADY_ASSIGNED");
@@ -149,7 +164,7 @@ class ManualDispatchServiceTests {
         DeliveryPlan plan = openPlan();
 
         ManualDispatchService.DispatchOutcome outcome =
-                dispatch.assign(TENANT, plan.id(), COURIER, plan.version() + 1, "OPERATIONS_MANUAL_ASSIGN");
+                dispatch.assign(TENANT, plan.id(), COURIER, plan.version() + 1, "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
 
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("STALE_VERSION");
@@ -160,34 +175,42 @@ class ManualDispatchServiceTests {
     @DisplayName("unassigning returns the plan to the sourcing pool and cancels the shipment")
     void unassignReturnsThePlanToSourcing() {
         DeliveryPlan plan = openPlan();
-        var assigned = dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN");
+        var assigned =
+                dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
         var shipment = assignments.findShipment(TENANT, plan.id()).orElseThrow();
 
         ManualDispatchService.DispatchOutcome outcome =
-                dispatch.unassign(TENANT, plan.id(), shipment.version(), "OPERATIONS_UNASSIGN");
+                dispatch.unassign(TENANT, plan.id(), shipment.version(), "OPERATIONS_UNASSIGN", OPERATOR);
 
         assertThat(outcome.applied()).isTrue();
         assertThat(outcome.planStatus()).isEqualTo(PlanStatus.WAITING_TO_SOURCE);
         assertThat(assignments.findShipment(TENANT, plan.id())).isEmpty();
         assertThat(assigned.planStatus()).isEqualTo(PlanStatus.ASSIGNED);
+
+        // One fact for the assign, one for the unassign — both audited, neither silent.
+        assertThat(audit.facts).extracting(AuditFact::actionCode).containsExactly(
+                "fulfillment.dispatch.assign", "fulfillment.dispatch.unassign");
     }
 
     @Test
     @DisplayName("a courier already carrying the order cannot be unassigned out from under them")
     void unassignIsRefusedOncePickedUp() {
         DeliveryPlan plan = openPlan();
-        dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN");
+        dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
         var shipment = assignments.findShipment(TENANT, plan.id()).orElseThrow();
         jdbc.sql("UPDATE fulfillment.shipments SET status = 'PICKED_UP', picked_up_at = now() WHERE id = :id")
                 .param("id", shipment.id())
                 .update();
 
         ManualDispatchService.DispatchOutcome outcome =
-                dispatch.unassign(TENANT, plan.id(), shipment.version(), "OPERATIONS_UNASSIGN");
+                dispatch.unassign(TENANT, plan.id(), shipment.version(), "OPERATIONS_UNASSIGN", OPERATOR);
 
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("CANNOT_UNASSIGN");
         assertThat(assignments.findShipment(TENANT, plan.id())).isPresent();
+
+        // The refused unassign wrote nothing — only the earlier assign is on record.
+        assertThat(audit.facts).extracting(AuditFact::actionCode).containsExactly("fulfillment.dispatch.assign");
     }
 
     // -------------------------------------------------------------- helpers
@@ -358,6 +381,16 @@ class ManualDispatchServiceTests {
                 return Optional.empty();
             }
         };
+    }
+
+    private static final class RecordingAudit implements AuditRecorder {
+
+        private final List<AuditFact> facts = new ArrayList<>();
+
+        @Override
+        public void record(AuditFact fact) {
+            facts.add(fact);
+        }
     }
 
     /** Answers for whichever order id it is asked about — this suite only ever plans one at a time. */

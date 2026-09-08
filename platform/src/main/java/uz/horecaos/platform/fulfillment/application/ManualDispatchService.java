@@ -2,11 +2,16 @@ package uz.horecaos.platform.fulfillment.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -17,6 +22,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmen
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.Shipment;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.WinningAttempt;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
+import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
  * The dispatch board's own assign/unassign (operations §3.1), on top of ADR
@@ -46,11 +52,14 @@ public class ManualDispatchService {
 
     private final JdbcDeliveryPlanStore plans;
     private final JdbcAssignmentStore assignments;
+    private final AuditRecorder audit;
     private final Clock clock;
 
-    public ManualDispatchService(JdbcDeliveryPlanStore plans, JdbcAssignmentStore assignments, Clock clock) {
+    public ManualDispatchService(
+            JdbcDeliveryPlanStore plans, JdbcAssignmentStore assignments, AuditRecorder audit, Clock clock) {
         this.plans = plans;
         this.assignments = assignments;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -65,7 +74,7 @@ public class ManualDispatchService {
      */
     @Transactional
     public DispatchOutcome assign(
-            UUID tenantId, UUID planId, UUID courierId, int expectedPlanVersion, String reasonCode) {
+            UUID tenantId, UUID planId, UUID courierId, int expectedPlanVersion, String reasonCode, ActorRef actor) {
         DeliveryPlan plan = requirePlan(tenantId, planId);
         if (plan.version() != expectedPlanVersion) {
             return DispatchOutcome.conflict(plan.status(), plan.version(), "STALE_VERSION");
@@ -112,6 +121,16 @@ public class ManualDispatchService {
             newPlanVersion = latest.version() + 1;
         }
 
+        audit.record(AuditFact.of("fulfillment.dispatch.assign", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.location(tenantId, plan.brandId(), plan.locationId()))
+                .target("fulfillment.delivery_plan", planId)
+                .because(reasonCode)
+                .changed(Map.of("courierId", courierId, "shipmentId", shipmentId.get()))
+                .correlatedBy(planId.toString())
+                .occurredAt(now)
+                .build());
+
         return DispatchOutcome.applied(PlanStatus.ASSIGNED, newPlanVersion, shipmentId.get());
     }
 
@@ -124,7 +143,8 @@ public class ManualDispatchService {
      * call conditions its write on.
      */
     @Transactional
-    public DispatchOutcome unassign(UUID tenantId, UUID planId, int expectedShipmentVersion, String reasonCode) {
+    public DispatchOutcome unassign(
+            UUID tenantId, UUID planId, int expectedShipmentVersion, String reasonCode, ActorRef actor) {
         DeliveryPlan plan = requirePlan(tenantId, planId);
         Shipment shipment = assignments
                 .findShipment(tenantId, planId)
@@ -139,6 +159,16 @@ public class ManualDispatchService {
             // ASSIGNED/PICKUP_PENDING — couriers.md's "blocked once PICKED_UP".
             return DispatchOutcome.conflict(plan.status(), plan.version(), "CANNOT_UNASSIGN");
         }
+
+        audit.record(AuditFact.of("fulfillment.dispatch.unassign", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.location(tenantId, plan.brandId(), plan.locationId()))
+                .target("fulfillment.delivery_plan", planId)
+                .because(reasonCode)
+                .changed(Map.of("shipmentId", shipment.id()))
+                .correlatedBy(planId.toString())
+                .occurredAt(now)
+                .build());
 
         // Best-effort: a plan not currently ASSIGNED (already MANUAL_ACTION_REQUIRED,
         // say) is left as it is rather than forced backwards. The shipment

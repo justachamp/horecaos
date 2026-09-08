@@ -176,6 +176,7 @@ class DeliverySourcingServiceTests {
                 true,
                 145_000L,
                 "UZS",
+                12_000L,
                 "corr-1");
     }
 
@@ -185,7 +186,8 @@ class DeliverySourcingServiceTests {
 
     private static DeliverySourcingService service(
             InternalFleetPort fleet, ShipmentBookingPort bookings, Instant now, RecordingSourcingJournal journal) {
-        return new DeliverySourcingService(fleet, bookings, journal, unconfigured(), Clock.fixed(now, ZoneOffset.UTC));
+        return new DeliverySourcingService(
+                fleet, bookings, journal, unconfigured(), fact -> {}, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private static InternalFleetPort emptyFleet() {

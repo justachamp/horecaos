@@ -5,12 +5,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
@@ -22,6 +27,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.QuoteOutcome;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryExceptionReason;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring.ScoredPartner;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
@@ -85,10 +91,14 @@ public class DeliverySourcingService {
      */
     private static final int QUOTE_TTL_SECONDS = 120;
 
+    /** Who a {@code DELIVERY_COST_SUBSIDY} audit fact and journal write are recorded as. Never a person; this is a job. */
+    private static final String SYSTEM_JOB = "delivery-sourcing";
+
     private final InternalFleetPort fleet;
     private final ShipmentBookingPort bookings;
     private final SourcingJournal journal;
     private final PolicyResolver policies;
+    private final AuditRecorder audit;
     private final Clock clock;
 
     public DeliverySourcingService(
@@ -96,11 +106,13 @@ public class DeliverySourcingService {
             ShipmentBookingPort bookings,
             SourcingJournal journal,
             PolicyResolver policies,
+            AuditRecorder audit,
             Clock clock) {
         this.fleet = fleet;
         this.bookings = bookings;
         this.journal = journal;
         this.policies = policies;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -222,6 +234,10 @@ public class DeliverySourcingService {
 
         BookingReceipt receipt = bookings.book(command);
         boolean won = journal.settlePartnerAttempt(request.tenantId(), attempt.attemptId(), receipt, now);
+
+        if (won) {
+            recordSubsidyIfAny(request, decision.partner(), quote, now);
+        }
 
         SourcingProgress next = progress.withPartnerAttempt(
                 decision.partner().bindingId(), receipt.status() == BookingStatus.UNCERTAIN);
@@ -473,6 +489,110 @@ public class DeliverySourcingService {
                 scope.type(),
                 "defaults",
                 DeliverySourcingPolicy.DEFAULTS));
+    }
+
+    // ------------------------------------------------------------ the subsidy
+
+    /**
+     * ADR 0014's {@code DELIVERY_COST_SUBSIDY}: recognised once, here, the instant
+     * the winning booking's price is known to cost more than the customer was
+     * charged. Never writes {@code request.customerDeliveryFeeMinor()} — that
+     * figure is snapshotted on {@code fulfillment.delivery_plans} at checkout and
+     * this method only ever reads it.
+     *
+     * <p>Silently a no-op whenever the gap cannot honestly be computed: no quote
+     * was scored (a single configured partner is never quoted, so nothing here
+     * assumes a price it does not have), the quote carries no price, or the
+     * currencies disagree. Money is never estimated by falling back to a
+     * conversion or a default — an unpriced booking is not a zero-cost one, it is
+     * one this method has nothing to say about.
+     */
+    private void recordSubsidyIfAny(
+            SourcingRequest request, PartnerOption partner, @Nullable DeliveryQuote quote, Instant now) {
+
+        if (quote == null || quote.priceMinor() == null || quote.currency() == null) {
+            return;
+        }
+        if (!quote.currency().equals(request.currency())) {
+            // ADR 0038 keeps currency conversion out of this layer entirely. A
+            // mismatch here is a data problem for reconciliation to find, not
+            // something sourcing silently prices by converting.
+            log.warn(
+                    "Plan {} quote currency {} does not match the customer fee currency {}; no "
+                            + "DELIVERY_COST_SUBSIDY can be computed",
+                    request.planId(),
+                    quote.currency(),
+                    request.currency());
+            return;
+        }
+
+        long gapMinor = quote.priceMinor() - request.customerDeliveryFeeMinor();
+        if (gapMinor <= 0) {
+            // The customer's fee already covers what winning this booking cost, or
+            // more. Nothing is absorbed and nothing is written — nobody subsidises
+            // a delivery that came in under the price the customer paid.
+            return;
+        }
+
+        Optional<UUID> shipmentId = journal.assignedShipment(request.tenantId(), request.planId());
+        if (shipmentId.isEmpty()) {
+            // settlePartnerAttempt just reported that this attempt won the plan's
+            // single shipment; an empty re-read here is a narrow crash window this
+            // method chooses not to fight rather than block on. See the class doc
+            // on why every effect here is a best-effort durable write, not a
+            // transaction spanning two stores.
+            log.warn(
+                    "Plan {} won its shipment but it could not be re-read; DELIVERY_COST_SUBSIDY not recorded",
+                    request.planId());
+            return;
+        }
+
+        ResolvedPolicy<DeliverySubsidyPolicy> subsidyPolicy = resolveSubsidyPolicy(request);
+        SourcingJournal.CostSubsidy subsidy = new SourcingJournal.CostSubsidy(
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.planId(),
+                shipmentId.get(),
+                partner.bindingId(),
+                partner.providerType(),
+                request.customerDeliveryFeeMinor(),
+                quote.priceMinor(),
+                gapMinor,
+                request.currency(),
+                subsidyPolicy.document().bearer(),
+                subsidyPolicy.policyId(),
+                subsidyPolicy.policyVersion(),
+                now);
+        journal.recordCostSubsidy(subsidy);
+
+        audit.record(AuditFact.of("fulfillment.delivery.cost-subsidy", AuditClass.BUSINESS)
+                .by(ActorRef.systemJob(SYSTEM_JOB))
+                .at(ResourceScope.location(request.tenantId(), request.brandId(), request.locationId()))
+                .target("fulfillment.shipment", shipmentId.get())
+                .because("Partner " + partner.providerType() + " cost more than the customer's delivery fee")
+                .changed(Map.of(
+                        "customerDeliveryFeeMinor", request.customerDeliveryFeeMinor(),
+                        "providerCostMinor", quote.priceMinor(),
+                        "subsidyAmountMinor", gapMinor,
+                        "currency", request.currency(),
+                        "bearer", subsidyPolicy.document().bearer().name()))
+                .correlatedBy(request.correlationId())
+                .occurredAt(now)
+                .build());
+    }
+
+    private ResolvedPolicy<DeliverySubsidyPolicy> resolveSubsidyPolicy(SourcingRequest request) {
+        ResourceScope scope = ResourceScope.location(request.tenantId(), request.brandId(), request.locationId());
+        Optional<ResolvedPolicy<DeliverySubsidyPolicy>> resolved =
+                policies.resolve(DeliverySourcingPolicies.SUBSIDY, scope);
+        return resolved.orElseGet(() -> new ResolvedPolicy<>(
+                DeliverySourcingPolicies.SUBSIDY.code(),
+                DEFAULTS_ID,
+                1,
+                scope.type(),
+                "defaults",
+                DeliverySubsidyPolicy.DEFAULTS));
     }
 
     /**

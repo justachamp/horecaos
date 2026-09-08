@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyBearer;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingProgress;
 
 /**
@@ -113,6 +114,20 @@ public interface SourcingJournal {
             UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now);
 
     /**
+     * ADR 0014's {@code DELIVERY_COST_SUBSIDY}: the gap between the customer's
+     * snapshotted delivery fee and what winning the booking actually cost,
+     * recognised once against the quote the winning partner was chosen on.
+     * Never a discount and never a mutation of the order — the customer's fee
+     * does not move, and this row is the record of who absorbs the difference
+     * instead.
+     *
+     * <p>Idempotent on the shipment: a plan is booked once, so a second call for
+     * the same shipment is a replay rather than a second overrun and is silently
+     * absorbed rather than doubled.
+     */
+    void recordCostSubsidy(CostSubsidy subsidy);
+
+    /**
      * A partner booking attempt about to be opened.
      *
      * @param idempotencyKey the key the partner sees, derived from the plan, the
@@ -151,6 +166,41 @@ public interface SourcingJournal {
             String idempotencyKey,
             Instant expiresAt,
             String decisionReason,
+            @Nullable UUID policyId,
+            int policyVersion,
+            Instant now) {}
+
+    /**
+     * One recognised {@code DELIVERY_COST_SUBSIDY}.
+     *
+     * @param providerCostMinor      the winning quote's price — an ACCRUED
+     *                               estimate, exactly as {@code
+     *                               fulfillment.delivery_cost_lines} treats a
+     *                               partner's booked price elsewhere in this
+     *                               codebase, and not yet the invoiced or
+     *                               settled figure
+     * @param subsidyAmountMinor     {@code providerCostMinor - customerDeliveryFeeMinor},
+     *                               always positive: this is only ever called once
+     *                               the gap is known to exist
+     * @param policyId               the ADR 0030 {@code DeliverySourcingPolicies.SUBSIDY}
+     *                               policy this bearer resolved under, or null
+     *                               when nothing was configured and {@link
+     *                               uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyPolicy#DEFAULTS}
+     *                               applied
+     */
+    record CostSubsidy(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID planId,
+            UUID shipmentId,
+            UUID providerBindingId,
+            String providerType,
+            long customerDeliveryFeeMinor,
+            long providerCostMinor,
+            long subsidyAmountMinor,
+            String currency,
+            DeliverySubsidyBearer bearer,
             @Nullable UUID policyId,
             int policyVersion,
             Instant now) {}
