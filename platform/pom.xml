@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -39,10 +39,20 @@
         <project.build.outputTimestamp>2026-08-18T00:00:00Z</project.build.outputTimestamp>
         <spring-modulith.version>2.1.0</spring-modulith.version>
         <camel.version>4.22.0</camel.version>
-        <springdoc.version>3.0.3</springdoc.version>
+        <springdoc.version>3.1.1</springdoc.version>
         <json-schema-validator.version>1.5.8</json-schema-validator.version>
         <aws-sdk.version>2.54.1</aws-sdk.version>
         <commons-csv.version>1.12.0</commons-csv.version>
+        <!-- spring-boot-dependencies 4.1.1 manages kafka.version at 4.2.1;
+             overridden here to the latest 4.x patch (4.3.1) per the same
+             child-property mechanism Spring Boot documents for every managed
+             dependency. No CVE forces this specific bump — the 4.2.1 the BOM
+             already carries has no known advisory in the 4.2.x/4.3.x range —
+             but it keeps kafka-clients and the rest of the kafka.version-keyed
+             artifacts (kafka-metadata, kafka-streams, ...) on the same current
+             release train the CLAUDE.md stack line already commits to
+             ("Kafka 4.3"). -->
+        <kafka.version>4.3.1</kafka.version>
     </properties>
 
     <dependencies>
