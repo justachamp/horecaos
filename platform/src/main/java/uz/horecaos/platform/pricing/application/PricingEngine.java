@@ -69,13 +69,6 @@ public class PricingEngine {
     private final PromotionEvaluator promotions = new PromotionEvaluator();
 
     public Result price(QuoteRequest request, PricingInputs inputs, Instant now) {
-        if (inputs.taxMode() != TaxMode.INCLUSIVE) {
-            // EXCLUSIVE exists in the schema for a future jurisdiction. Refusing
-            // is deliberate: a half-implemented mode that produced plausible
-            // wrong totals would be far worse than an error nobody can ignore.
-            throw new UnsupportedTaxModeException(inputs.taxMode());
-        }
-
         String currency = inputs.currency();
         List<Quote.QuoteLine> lines = new ArrayList<>();
         List<Adjustment> adjustments = new ArrayList<>();
@@ -207,10 +200,28 @@ public class PricingEngine {
         long discountTotal = Math.addExact(lineDiscountTotal, orderDiscountTotal);
         grossTotal = Math.subtractExact(grossTotal, discountTotal);
 
-        // Stage 7. Tax is extracted from the gross, not added to a net, because
-        // the prices are what the customer pays. Computed once on the total and
-        // then apportioned, so the line taxes always sum to the total tax.
-        long totalTax = TaxCalculation.extractInclusiveTax(grossTotal, inputs.taxRateBasisPoints());
+        // Stage 7. Rounding happens exactly once here, on the total — apportion()
+        // below only splits an already-rounded figure across lines, it never
+        // rounds a second time, which is what keeps the line taxes summing
+        // exactly to the total tax.
+        //
+        // INCLUSIVE (the only mode a price book is authored under today, ADR
+        // 0018's "Money and tax policy"): the price book amount is what the
+        // customer pays, so tax is extracted from it rather than added — this
+        // method's "gross" throughout means that inclusive amount. EXCLUSIVE
+        // (the schema affordance ADR 0018 reserves for a jurisdiction that
+        // quotes net prices): the price book amount is what the customer pays
+        // *before* tax, so tax is added on top instead — under this mode alone,
+        // grossTotal at this line is a net figure, and stage 8 below accounts
+        // for that. Both directions are one BigDecimal division, HALF_UP to the
+        // nearest whole minor unit (a whole som for UZS, ADR 0038) —
+        // TaxCalculation.extractInclusiveTax and TaxCalculation.addExclusiveTax
+        // are the only two places either rounding happens.
+        long totalTax =
+                switch (inputs.taxMode()) {
+                    case INCLUSIVE -> TaxCalculation.extractInclusiveTax(grossTotal, inputs.taxRateBasisPoints());
+                    case EXCLUSIVE -> TaxCalculation.addExclusiveTax(grossTotal, inputs.taxRateBasisPoints());
+                };
 
         // Weighted by the *final* amount rather than the base one. A discounted
         // line bears less of the tax, which is the whole point of extracting VAT
@@ -244,7 +255,11 @@ public class PricingEngine {
                 inputs.taxProfileId(),
                 inputs.taxProfileVersion(),
                 Money.of(totalTax, currency),
-                "VAT_INCLUSIVE"));
+                // The evidence a quote's own promise depends on: an auditor
+                // reading this adjustment must be able to tell whether the tax
+                // was extracted from the price or added on top of it without
+                // re-deriving the tax profile.
+                inputs.taxMode() == TaxMode.INCLUSIVE ? "VAT_INCLUSIVE" : "VAT_EXCLUSIVE"));
 
         // Stages 5 and 6. Everything from here reads only the resolved charge and
         // the goods subtotal, both of which are values: there is still nothing in
@@ -265,12 +280,19 @@ public class PricingEngine {
                 offers.deliveryBenefitMinor(),
                 offers);
 
-        // Stage 8. The goods total is the gross: tax is inside it, so adding tax
-        // again would charge it twice. Subtotal is the net portion, which is what a
-        // fiscal receipt reports separately. The delivery fee sits outside both, in
-        // its own column, for the reason given in applyDelivery.
-        long subtotal = Math.subtractExact(grossTotal, totalTax);
-        long total = Math.addExact(grossTotal, delivery.feeMinor());
+        // Stage 8. INCLUSIVE: tax is already inside grossTotal, so it is
+        // subtracted to report the net subtotal a fiscal receipt shows
+        // separately, and the customer-facing total adds only the delivery fee.
+        // EXCLUSIVE: grossTotal is already the net subtotal (nothing to
+        // subtract), and the customer-facing total adds both the tax just
+        // computed and the delivery fee. Either way the delivery fee sits
+        // outside both figures, in its own column, for the reason given in
+        // applyDelivery — its tax treatment is a separate, open question, not
+        // this mode switch.
+        long subtotal = inputs.taxMode() == TaxMode.INCLUSIVE ? Math.subtractExact(grossTotal, totalTax) : grossTotal;
+        long total = inputs.taxMode() == TaxMode.INCLUSIVE
+                ? Math.addExact(grossTotal, delivery.feeMinor())
+                : Math.addExact(Math.addExact(grossTotal, totalTax), delivery.feeMinor());
 
         return new Result(
                 Money.of(subtotal, currency),
@@ -750,13 +772,6 @@ public class PricingEngine {
 
         public UUID priceableId() {
             return priceableId;
-        }
-    }
-
-    /** Thrown rather than approximating a tax mode this release does not implement. */
-    public static class UnsupportedTaxModeException extends RuntimeException {
-        public UnsupportedTaxModeException(TaxMode mode) {
-            super("Tax mode " + mode + " is not implemented; prices at HorecaOS are VAT-inclusive");
         }
     }
 }

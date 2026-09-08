@@ -9956,7 +9956,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/variant-prices/{variantId}" : {
       "put" : {
-        "description" : "Integer minor units, and for UZS a minor unit is a whole som: 50000 is 50,000 som. VAT-inclusive — this is what the customer pays, with the tax extracted from inside it rather than added on top.",
+        "description" : "Integer minor units, and for UZS a minor unit is a whole som: 50000 is 50,000 som. Under the brand's default INCLUSIVE tax profile this is what the customer pays, with tax extracted from inside it; under an EXCLUSIVE profile it is what the customer pays before tax, added on top.",
         "operationId" : "setVariantPrice",
         "parameters" : [ {
           "in" : "path",
@@ -10019,7 +10019,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}" : {
       "put" : {
-        "description" : "Basis points: 1200 is 12%. INCLUSIVE only — the engine extracts tax from the menu price, and an exclusive profile would be stored and then fail every quote the brand takes. Without a profile every cart in the brand refuses with NO_TAX_PROFILE.",
+        "description" : "Basis points: 1200 is 12%. INCLUSIVE (the default) means the price set through the variant/modifier endpoints is what the customer pays and tax is extracted from it; EXCLUSIVE means that amount is what the customer pays before tax and tax is added on top. Without a profile every cart in the brand refuses with NO_TAX_PROFILE.",
         "operationId" : "setTaxProfile",
         "parameters" : [ {
           "in" : "path",

@@ -35,6 +35,7 @@ public final class KafkaTopicCatalog {
     public static final String REALTIME_SIGNALS = "realtime.signals";
     public static final String VOICE_EVENTS = "voice.events";
     public static final String INVENTORY_EVENTS = "inventory.events";
+    public static final String PRICING_EVENTS = "pricing.events";
 
     private static final Map<String, TopicSpecification> TOPICS = index(List.of(
             // The production topology has one broker (ADR 0034), so replication
@@ -53,7 +54,13 @@ public final class KafkaTopicCatalog {
             // shares media's partition count rather than ordering's — a stock-out
             // is rare next to an order, and over-partitioning a light topic buys
             // nothing but idle broker bookkeeping.
-            new TopicSpecification(INVENTORY_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION)));
+            new TopicSpecification(INVENTORY_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0018. One event type published so far (a price book going
+            // live), and activating a book is an operator decision made a
+            // handful of times a day at most — the same cardinality tenancy's
+            // control-plane creations have, so this shares tenancy's partition
+            // count rather than a per-order topic's.
+            new TopicSpecification(PRICING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION)));
 
     private KafkaTopicCatalog() {}
 

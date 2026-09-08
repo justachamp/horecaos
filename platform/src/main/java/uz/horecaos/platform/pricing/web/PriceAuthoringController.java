@@ -187,8 +187,9 @@ public class PriceAuthoringController {
     @Operation(
             summary = "Set what a variant costs",
             description = "Integer minor units, and for UZS a minor unit is a whole som: 50000 "
-                    + "is 50,000 som. VAT-inclusive — this is what the customer pays, with the "
-                    + "tax extracted from inside it rather than added on top.")
+                    + "is 50,000 som. Under the brand's default INCLUSIVE tax profile this is what "
+                    + "the customer pays, with tax extracted from inside it; under an EXCLUSIVE "
+                    + "profile it is what the customer pays before tax, added on top.")
     public ResponseEntity<PriceBookResponse> setVariantPrice(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -244,9 +245,10 @@ public class PriceAuthoringController {
     @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Set the brand's VAT rate",
-            description = "Basis points: 1200 is 12%. INCLUSIVE only — the engine extracts tax "
-                    + "from the menu price, and an exclusive profile would be stored and then "
-                    + "fail every quote the brand takes. Without a profile every cart in the "
+            description = "Basis points: 1200 is 12%. INCLUSIVE (the default) means the price set "
+                    + "through the variant/modifier endpoints is what the customer pays and tax is "
+                    + "extracted from it; EXCLUSIVE means that amount is what the customer pays "
+                    + "before tax and tax is added on top. Without a profile every cart in the "
                     + "brand refuses with NO_TAX_PROFILE.")
     public ResponseEntity<TaxProfileResponse> setTaxProfile(
             @PathVariable UUID tenantId,
@@ -254,19 +256,13 @@ public class PriceAuthoringController {
             @PathVariable String jurisdictionCode,
             @Valid @RequestBody TaxProfileRequest request) {
 
-        try {
-            var profile = authoring.setTaxProfile(
-                    tenantId,
-                    brandId,
-                    jurisdictionCode,
-                    request.mode() == null ? PricingEngine.TaxMode.INCLUSIVE : request.mode(),
-                    request.rateBasisPoints());
-            return ResponseEntity.ok(TaxProfileResponse.of(profile));
-        } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            // A client error here, unlike on the quote path where the same
-            // exception means the brand is already misconfigured.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, unsupported.getMessage());
-        }
+        var profile = authoring.setTaxProfile(
+                tenantId,
+                brandId,
+                jurisdictionCode,
+                request.mode() == null ? PricingEngine.TaxMode.INCLUSIVE : request.mode(),
+                request.rateBasisPoints());
+        return ResponseEntity.ok(TaxProfileResponse.of(profile));
     }
 
     /**

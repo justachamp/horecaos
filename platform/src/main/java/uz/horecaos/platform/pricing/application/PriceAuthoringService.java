@@ -3,14 +3,24 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.pricing.api.PriceBookActivated;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -47,13 +57,25 @@ public class PriceAuthoringService {
     private final CatalogPricingContext catalog;
     private final SalesChannelLookup channels;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final ApplicationEventPublisher events;
+    private final CurrentActor currentActor;
 
     public PriceAuthoringService(
-            JdbcPricingStore store, CatalogPricingContext catalog, SalesChannelLookup channels, Clock clock) {
+            JdbcPricingStore store,
+            CatalogPricingContext catalog,
+            SalesChannelLookup channels,
+            Clock clock,
+            AuditRecorder audit,
+            ApplicationEventPublisher events,
+            CurrentActor currentActor) {
         this.store = store;
         this.catalog = catalog;
         this.channels = channels;
         this.clock = clock;
+        this.audit = audit;
+        this.events = events;
+        this.currentActor = currentActor;
     }
 
     /**
@@ -154,8 +176,10 @@ public class PriceAuthoringService {
      * obsolete and both payment providers settle in whole som, so there is no
      * hundredth of anything to divide by.
      *
-     * <p>The price is VAT-inclusive. It is what the customer pays, and stage 7
-     * extracts the tax from inside it rather than adding tax on top.
+     * <p>What the amount means depends on the brand's tax profile ({@link
+     * #setTaxProfile}): under the default INCLUSIVE mode it is what the customer
+     * pays, and stage 7 extracts the tax from inside it; under EXCLUSIVE it is
+     * what the customer pays before tax, and stage 7 adds tax on top.
      */
     @Transactional
     public PriceBook setPrice(
@@ -215,8 +239,43 @@ public class PriceAuthoringService {
             throw new OptimisticLockingFailureException("The price book changed since it was read");
         }
 
+        PriceBook activated = require(tenantId, brandId, priceBookId);
+
+        // ADR 0027: the fact commits in the same transaction as the activation
+        // it describes. An activation that committed without its fact would be
+        // a bug a test can catch — audit is not a log-shipping concern, and
+        // nothing before this line may have a side effect that outlives a
+        // rollback of this write.
+        audit.record(AuditFact.of("pricing.price_book.activated", AuditClass.BUSINESS)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("PriceBook", priceBookId)
+                .targetVersion((long) activated.version())
+                .because("Price book activated")
+                .usingCapability(Capability.PRICING_ACTIVATE.code())
+                .changed(Map.of(
+                        "status", activated.status().name(),
+                        "version", activated.version(),
+                        "priority", activated.priority()))
+                .correlatedBy(priceBookId.toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        // ADR 0032: publishing an ApplicationEvent here only queues it in this
+        // transaction — PricingOutboxEventListener's own BEFORE_COMMIT handler
+        // is what turns it into an outbox row, so the event is never sent to
+        // Kafka from inside this business transaction.
+        events.publishEvent(new PriceBookActivated(
+                UUID.randomUUID(),
+                tenantId,
+                brandId,
+                priceBookId,
+                activated.version(),
+                activated.currency(),
+                clock.instant()));
+
         log.info("Price book {} activated for brand {}", priceBookId, brandId);
-        return require(tenantId, brandId, priceBookId);
+        return activated;
     }
 
     /**
@@ -227,19 +286,19 @@ public class PriceAuthoringService {
      * Without a row here every cart in the brand refuses with
      * {@code NO_TAX_PROFILE}.
      *
-     * <p>{@code EXCLUSIVE} is refused rather than stored. The engine implements
-     * inclusive VAT only, so an exclusive profile would be accepted here and then
-     * fail every quote the brand takes — a configuration that looks saved and
-     * breaks trading. Refusing at the point of authoring puts the error where the
-     * operator can act on it.
+     * <p>{@code INCLUSIVE} is what a price book is authored under today: the
+     * amount set through {@link #setPrice} is what the customer pays, and the
+     * engine extracts tax from it. {@code EXCLUSIVE} is ADR 0018's schema
+     * affordance for a jurisdiction that quotes net prices instead: under it, the
+     * same {@link #setPrice} amount is what the customer pays <em>before</em>
+     * tax, and the engine adds tax on top. Both modes are stored and both are
+     * priced; nothing here decides which a brand should choose — that is a
+     * jurisdiction fact the operator brings, not a platform default.
      */
     @Transactional
     public TaxProfile setTaxProfile(
             UUID tenantId, UUID brandId, String jurisdictionCode, PricingEngine.TaxMode mode, int rateBasisPoints) {
 
-        if (mode != PricingEngine.TaxMode.INCLUSIVE) {
-            throw new PricingEngine.UnsupportedTaxModeException(mode);
-        }
         if (rateBasisPoints < 0 || rateBasisPoints >= 10_000) {
             throw new IllegalArgumentException(
                     "A tax rate is basis points: 1200 is 12%, and 10000 or more is not a rate");

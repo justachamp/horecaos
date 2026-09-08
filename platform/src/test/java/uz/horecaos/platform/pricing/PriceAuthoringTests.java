@@ -23,6 +23,8 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
@@ -109,7 +111,19 @@ class PriceAuthoringTests {
         JdbcSalesChannelStore channelStore = new JdbcSalesChannelStore(jdbc);
         CatalogPricingContext catalog = new JdbcCatalogPricingContext(jdbc, "uz");
 
-        authoring = new PriceAuthoringService(pricingStore, catalog, channelStore, clock);
+        authoring = new PriceAuthoringService(
+                pricingStore,
+                catalog,
+                channelStore,
+                clock,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                // No Spring context here, so nothing is registered to receive
+                // this — PricingOutboxEventListener's own transactional-outbox
+                // test proves the wiring; this suite proves the authoring
+                // behaviour, and a real ApplicationContext would test neither
+                // any better than this constructor already exercises.
+                event -> {},
+                () -> new AuthenticatedActor("price-authoring-test", Set.of(), Map.of()));
         query = new PriceQueryService(pricingStore, channelStore, clock);
 
         // The real resolver, so a cart travels the production path. Never
@@ -398,16 +412,30 @@ class PriceAuthoringTests {
     }
 
     @Test
-    @DisplayName("an exclusive tax profile is refused rather than stored")
-    void anExclusiveTaxProfileIsRefused() {
-        // The engine implements inclusive VAT only. Storing this would look saved
-        // and then fail every quote the brand takes.
-        assertThat(catchThrowable(() -> authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.EXCLUSIVE, 1200)))
-                .isInstanceOf(PricingEngine.UnsupportedTaxModeException.class);
-        assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles")
-                        .query(Long.class)
+    @DisplayName("an exclusive tax profile is stored and adds VAT on top at quote time")
+    void anExclusiveTaxProfileIsStoredAndPricedAccordingly() {
+        var drafted = authoring.create(TENANT, BRAND, newBook("Main menu", 0));
+        authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(0));
+        var priced = authoring.setPrice(TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, 50_000L);
+        var taxProfile = authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.EXCLUSIVE, 1200);
+
+        assertThat(taxProfile.mode()).isEqualTo(TaxMode.EXCLUSIVE);
+        assertThat(jdbc.sql("SELECT mode FROM pricing.tax_profiles WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(String.class)
                         .single())
-                .isZero();
+                .isEqualTo("EXCLUSIVE");
+
+        authoring.activate(TENANT, BRAND, drafted.id(), priced.version());
+        var quote = quotes.quote(cart(Map.of(burgerVariant, 1)));
+
+        // 50,000 som is what the customer pays *before* tax under EXCLUSIVE —
+        // the same amount that would have been the whole price under INCLUSIVE
+        // — so the total is higher, not the same, and the difference is the VAT
+        // just added on top.
+        assertThat(quote.subtotal().minor()).isEqualTo(50_000L);
+        assertThat(quote.tax().minor()).isEqualTo(6_000L);
+        assertThat(quote.total().minor()).isEqualTo(56_000L);
     }
 
     @Test

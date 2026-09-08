@@ -34,10 +34,12 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 /**
  * Pricing a cart and accepting the result (ADR 0018).
  *
- * <p>Prices are VAT-inclusive: the total is what the customer pays. A quote is
- * valid for fifteen minutes and carries a context hash, and checkout accepts it
- * only if that hash still matches — so "the price you were shown is the price you
- * pay" is checkable rather than promised.
+ * <p>Under a brand's default INCLUSIVE tax profile the total is VAT-inclusive:
+ * what the customer pays, tax extracted from inside it. Under an EXCLUSIVE
+ * profile the total adds tax on top of the priced amount instead. Either way, a
+ * quote is valid for fifteen minutes and carries a context hash, and checkout
+ * accepts it only if that hash still matches — so "the price you were shown is
+ * the price you pay" is checkable rather than promised.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/brands/{brandId}/quotes")
@@ -54,9 +56,11 @@ public class QuoteController {
     @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Price a cart",
-            description = "Returns a quote valid for 15 minutes. The total is VAT-inclusive: "
-                    + "tax is inside it, not added at checkout. Repeating the request with the "
-                    + "same Idempotency-Key returns the original quote rather than a second one.")
+            description = "Returns a quote valid for 15 minutes. Under the brand's default "
+                    + "INCLUSIVE tax profile the total is VAT-inclusive: tax is inside it, not "
+                    + "added at checkout; under an EXCLUSIVE profile tax is added on top. "
+                    + "Repeating the request with the same Idempotency-Key returns the original "
+                    + "quote rather than a second one.")
     public ResponseEntity<QuoteResponse> quote(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -88,8 +92,6 @@ public class QuoteController {
                 | QuoteService.NoPriceBookException
                 | QuoteService.NoTaxProfileException misconfigured) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, misconfigured.getMessage());
-        } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            throw new ApiException(ErrorCode.INTERNAL_ERROR, unsupported.getMessage());
         }
     }
 

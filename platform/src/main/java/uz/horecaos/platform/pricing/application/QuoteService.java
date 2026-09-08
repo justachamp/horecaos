@@ -409,11 +409,6 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     "NO_TAX_PROFILE",
                     command.brandId(),
                     Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
-        } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            throw new PricingRefusedException(
-                    "UNSUPPORTED_TAX_MODE",
-                    command.brandId(),
-                    Objects.requireNonNullElse(unsupported.getMessage(), "UNSUPPORTED_TAX_MODE"));
         }
     }
 
