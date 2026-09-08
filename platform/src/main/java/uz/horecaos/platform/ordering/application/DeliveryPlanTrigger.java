@@ -42,9 +42,11 @@ public class DeliveryPlanTrigger {
     private static final Logger log = LoggerFactory.getLogger(DeliveryPlanTrigger.class);
 
     private final DeliveryPlanner planner;
+    private final OrderFulfillmentProcess fulfillmentProcess;
 
-    public DeliveryPlanTrigger(DeliveryPlanner planner) {
+    public DeliveryPlanTrigger(DeliveryPlanner planner, OrderFulfillmentProcess fulfillmentProcess) {
         this.planner = planner;
+        this.fulfillmentProcess = fulfillmentProcess;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -60,7 +62,17 @@ public class DeliveryPlanTrigger {
                         event.orderId(),
                         event.confirmedAt())
                 .ifPresentOrElse(
-                        planId -> log.debug("Opened delivery plan {} for order {}", planId, event.orderId()),
+                        planId -> {
+                            log.debug("Opened delivery plan {} for order {}", planId, event.orderId());
+                            // The fulfillment process manager's row, opened in
+                            // the same transaction as the plan itself (ADR
+                            // 0019) — never a second attempt at planning, only
+                            // the durable state that lets an operator find this
+                            // order on the same stuck list as its payment and
+                            // inventory.
+                            fulfillmentProcess.enqueue(
+                                    event.orderId(), event.tenantId().value(), planId, event.confirmedAt());
+                        },
                         () -> log.debug("Order {} has nothing to deliver; no plan was opened", event.orderId()));
     }
 }

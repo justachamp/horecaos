@@ -80,6 +80,22 @@ public class DeliveryPlanningService implements DeliveryPlanner {
         return open(tenantId, brandId, locationId, orderId, confirmedAt).map(DeliveryPlan::id);
     }
 
+    @Override
+    public Optional<SourcingOutcome> sourcingOutcome(UUID tenantId, UUID orderId) {
+        return plans.findByOrder(tenantId, orderId).map(plan -> switch (plan.status()) {
+            case ASSIGNED, IN_PROGRESS, COMPLETED -> SourcingOutcome.SOURCED;
+            case CANCELLED -> SourcingOutcome.CANCELLED;
+            case MANUAL_ACTION_REQUIRED -> SourcingOutcome.MANUAL_ACTION_REQUIRED;
+            // PLANNED, WAITING_TO_SOURCE, SOURCING, BOOKING, RETRY_PENDING,
+            // SCHEDULED: sourcing's own ladder is still working the job, on its
+            // own considered backoff. ORDER_FULFILLMENT never invents a
+            // competing timeout for that here — it defers entirely to
+            // PlanStatus#MANUAL_ACTION_REQUIRED as the one signal that means
+            // sourcing itself has given up.
+            default -> SourcingOutcome.IN_PROGRESS;
+        });
+    }
+
     /**
      * The plan for a confirmed delivery order, created once.
      *

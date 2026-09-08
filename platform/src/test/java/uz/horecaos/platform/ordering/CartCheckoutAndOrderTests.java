@@ -68,6 +68,7 @@ import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderActionCode;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
+import uz.horecaos.platform.ordering.application.OrderPaymentProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
@@ -169,6 +170,7 @@ class CartCheckoutAndOrderTests {
     private ReorderPlanService reorderPlans;
     private uz.horecaos.platform.ordering.api.CustomerBotOrderingPort botOrdering;
     private OrderInventoryProcess inventoryProcess;
+    private OrderPaymentProcess paymentProcess;
     private InventoryService inventory;
     private QuoteService quotes;
     private JdbcOrderStore orderStore;
@@ -394,10 +396,12 @@ class CartCheckoutAndOrderTests {
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore));
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
+        paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
                 orderStore,
                 serviceability,
                 inventoryProcess,
+                paymentProcess,
                 policies,
                 settlementPlanner,
                 new JdbcAuditRecorder(jdbc, objectMapper),
@@ -483,6 +487,7 @@ class CartCheckoutAndOrderTests {
                 tenantContext,
                 policies,
                 inventoryProcess,
+                paymentProcess,
                 migrationOwnership,
                 port,
                 settlementPlanner,
@@ -1180,6 +1185,11 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-auto", "CLICK")));
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
 
+        // ADR 0019's own ORDER_PAYMENT process manager: a row exists the moment
+        // checkout leaves the order authorizing, not only once something later
+        // decides to look.
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed))).isEqualTo("WAITING");
+
         UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
         capturePayment(orderIdOf(placed), attempt);
 
@@ -1192,6 +1202,10 @@ class CartCheckoutAndOrderTests {
                 .as("the event a consumer expects on this path fires exactly as it would from " + "checkout")
                 .anyMatch(event -> event instanceof OrderConfirmed confirmed
                         && confirmed.orderId().equals(orderIdOf(placed)));
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as("the capture that moved the order out of PAYMENT_AUTHORIZING closes its "
+                        + "payment process row in the same transaction")
+                .isEqualTo("COMPLETED");
     }
 
     @Test
@@ -1278,12 +1292,21 @@ class CartCheckoutAndOrderTests {
                 TENANT, orderIdOf(placed), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
         assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as("a cancellation is a resolution of the payment process too, not only of the "
+                        + "order — the row must not be left WAITING for a capture the order can "
+                        + "no longer act on")
+                .isEqualTo("COMPLETED");
 
         // And then Click's redirect completes anyway: the customer's page was
         // still live. This must not resurrect the order or throw.
         Throwable late = catchThrowable(() -> capturePayment(orderIdOf(placed), attempt));
 
         assertThat(late).as("late money is recorded, never a crash").isNull();
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as("already COMPLETED by the cancellation; the late capture's own settle call is a "
+                        + "no-op rather than reopening it")
+                .isEqualTo("COMPLETED");
         var afterCapture = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(afterCapture.status())
                 .as("a cancelled order stays cancelled; the state machine has no edge back out of "
@@ -2169,6 +2192,47 @@ class CartCheckoutAndOrderTests {
                 .isEqualTo(movementsAfterFirst);
     }
 
+    // --------------------------------------------------- payment process
+
+    @Test
+    @DisplayName("the payment process sweep flags an order stuck authorizing, and never cancels it")
+    void thePaymentProcessSweepFlagsAStaleAuthorization() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-stale-auth", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        clock.advance(Duration.ofMinutes(31));
+        int checked = paymentProcess.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10);
+
+        assertThat(checked).isEqualTo(1);
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed))).isEqualTo("MANUAL_ACTION_REQUIRED");
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
+                .as("flagged for an operator, not decided for one — ADR 0019 leaves cancellation "
+                        + "on a payment timeout as an open product input")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        // The capture that eventually does arrive still closes the row, exactly
+        // as it would have before the flag — MANUAL_ACTION_REQUIRED is not a
+        // second terminal status competing with COMPLETED.
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed))).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("the payment process sweep reschedules a fresh authorization instead of flagging it")
+    void thePaymentProcessSweepReschedulesAFreshAuthorization() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-fresh-auth", "CLICK")));
+
+        int checked = paymentProcess.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10);
+
+        assertThat(checked).isEqualTo(1);
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as("still well inside the staleness threshold")
+                .isEqualTo("WAITING");
+    }
+
     @Test
     @DisplayName("a cancellation before confirmation releases the hold and the kitchen slot")
     void cancellationReleasesEverything() {
@@ -2932,6 +2996,11 @@ class CartCheckoutAndOrderTests {
                         .single())
                 .as("and the durable alarm clock that wakes sourcing")
                 .isEqualTo(1L);
+
+        // The read ORDER_FULFILLMENT polls, against the real plan row: a
+        // freshly opened plan is still working, not resolved and not stuck.
+        assertThat(deliveryPlanning().sourcingOutcome(TENANT, orderIdOf(placed)))
+                .contains(uz.horecaos.platform.fulfillment.api.DeliveryPlanner.SourcingOutcome.IN_PROGRESS);
     }
 
     /**
@@ -4419,6 +4488,13 @@ class CartCheckoutAndOrderTests {
         return jdbc.sql("SELECT count(*) FROM inventory.movements")
                 .query(Long.class)
                 .single();
+    }
+
+    private String orderPaymentProcessStatus(UUID orderId) {
+        return jdbc.sql("""
+                SELECT status FROM ordering.order_process_states
+                WHERE order_id = :order AND process_name = 'ORDER_PAYMENT'
+                """).param("order", orderId).query(String.class).single();
     }
 
     /** Switches the location to RESTAURANT_APPROVAL with a five-minute deadline. */

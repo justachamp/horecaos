@@ -51,6 +51,7 @@ public final class CheckoutServiceTestFactory {
             OrderingTenantContext tenancy,
             OrderAcceptancePolicyService acceptancePolicies,
             OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
             MigrationOwnershipPort migrationOwnership,
             PaymentIntentPort payments,
             OrderSettlementPort settlements,
@@ -84,7 +85,7 @@ public final class CheckoutServiceTestFactory {
                         payments,
                         events),
                 new CheckoutSettlementStep(settlements, payments),
-                new CheckoutProgressionStep(orders, inventoryProcess, events),
+                new CheckoutProgressionStep(orders, inventoryProcess, paymentProcess, events),
                 clock);
     }
 }

@@ -53,6 +53,7 @@ import uz.horecaos.platform.ordering.application.OrderDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
+import uz.horecaos.platform.ordering.application.OrderPaymentProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
@@ -131,6 +132,7 @@ class OrderAmendmentAndOutcomeTests {
     private OrderOutcomeReasonService reasons;
     private RejectReasonQueryService rejectReasons;
     private OrderInventoryProcess inventoryProcess;
+    private OrderPaymentProcess paymentProcess;
     /** Kept as a field so a test can decrypt {@code note_encrypted} back for itself. */
     private FieldProtection protection;
     /** One factory, so a test can substitute the store and change nothing else. */
@@ -280,8 +282,17 @@ class OrderAmendmentAndOutcomeTests {
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore));
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
+        paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(
-                store, serviceability, inventoryProcess, policies, settlementPlanner, auditRecorder, published, clock);
+                store,
+                serviceability,
+                inventoryProcess,
+                paymentProcess,
+                policies,
+                settlementPlanner,
+                auditRecorder,
+                published,
+                clock);
         orderState = orderStateWith.apply(orderStore);
         orderQuery = new OrderQueryService(
                 orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper, auditRecorder, clock);
@@ -317,6 +328,7 @@ class OrderAmendmentAndOutcomeTests {
                 tenantContext,
                 policies,
                 inventoryProcess,
+                paymentProcess,
                 migrationOwnership,
                 UNWIRED_PAYMENTS,
                 settlementPlanner,

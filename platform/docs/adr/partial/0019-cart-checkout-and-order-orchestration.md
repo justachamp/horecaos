@@ -17,17 +17,34 @@
   is now authorised by ownership: every `StorefrontOrderingController` route
   carries `@CustomerOwned` over `PrincipalCustomer` and declares `@Idempotent`
   where it mutates, instead of the ADR 0025 capability no customer could hold.
-  Confirmation also fans out now, though not through `ordering.order_processes`:
-  `PosOrderExportTrigger`, `DeliveryPlanTrigger` and `OrderNotificationTrigger`
-  are transactional listeners on `OrderConfirmed`. The edge out of
-  `PAYMENT_AUTHORIZING` is closed: `PaymentCaptureConfirmationTrigger` listens
-  for payments' `PaymentCaptured` and calls `OrderStateService.paymentCaptured`,
-  which confirms or sends to restaurant approval exactly as checkout would. Not built: the process-manager
-  rows themselves — `ORDER_PAYMENT`, `POS_ORDER_EXPORT`, `ORDER_FULFILLMENT` and
-  `ORDER_NOTIFICATION` are named in `ck_order_process_name` and enqueued by
-  nothing, so only `ORDER_INVENTORY` has durable resumable state; scheduled orders, which is why
-  V0056 leaves the requested-time column out; guest carts; and legacy shadow
-  comparison.
+  Confirmation also fans out now, though not entirely through
+  `ordering.order_process_states`: `PosOrderExportTrigger` and
+  `OrderNotificationTrigger` remain transactional listeners on `OrderConfirmed`,
+  driving their own already-durable, idempotent, replica-safe tables
+  (`integration.pos_order_exports`, `notifications.notifications`) rather than
+  this one. The edge out of `PAYMENT_AUTHORIZING` is closed:
+  `PaymentCaptureConfirmationTrigger` listens for payments' `PaymentCaptured`
+  and calls `OrderStateService.paymentCaptured`, which confirms or sends to
+  restaurant approval exactly as checkout would. **Wave 90 closed two of the
+  four missing process-manager rows.** `ORDER_PAYMENT` — named as "driven by
+  nothing at all" — is now enqueued by `CheckoutProgressionStep.awaitPayment`
+  in the same transaction that holds an order in `PAYMENT_AUTHORIZING`, settled
+  by `OrderStateService` in the same transaction as every transition out of it,
+  and swept by `OrderProcessWorker.sweepStalePayments` onto the stuck list —
+  never cancelling, since checkout payment timing stays an open product input.
+  `ORDER_FULFILLMENT` is enqueued by `DeliveryPlanTrigger` beside the plan it
+  opens and polled by `OrderProcessWorker.runFulfillmentProcess`, which mirrors
+  `DeliveryPlanner#sourcingOutcome` — fulfillment's own signal — rather than
+  inventing a competing timeout. Neither performs a provider effect of its own,
+  so neither retry risks a double one. Still not built: `POS_ORDER_EXPORT` and
+  `ORDER_NOTIFICATION` are still named in `ck_order_process_name` and enqueued
+  by nothing — deliberately deferred rather than rushed, because wiring either
+  in touches the constructor of a class several already-passing suites build by
+  hand (`PosOrderExportTrigger` alone, five files), and the work they stand for
+  is already durable and idempotent in its own module's table; what is missing
+  for those two is the ordering-side attempt ladder and stuck list, not
+  correctness. Also still open: scheduled orders, which is why V0056 leaves the
+  requested-time column out; guest carts; and legacy shadow comparison.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product
@@ -342,20 +359,32 @@ those orders never switch back to a legacy writer mid-lifecycle.
 - [x] Implement transactional checkout across local module ports and outbox.
 - [x] Implement durable approval timeout and first-winner command handling.
 - [ ] Implement separate payment, inventory, POS, fulfillment, and notification managers.
-      Only `ORDER_INVENTORY` is a process manager — `OrderInventoryProcess` is still the
-      sole caller of `JdbcOrderProcessStore.enqueue`, so it alone has a checkpoint, an
-      attempt ladder and a resumable claim. Three of the remaining four concerns are
-      nevertheless driven now, by `BEFORE_COMMIT` transactional listeners on
-      `OrderConfirmed` rather than by rows in `ordering.order_processes`:
-      `PosOrderExportTrigger` (`pos`) opens the export and hands the send to a
-      scheduler after commit, `DeliveryPlanTrigger` (`ordering`) calls ADR 0014's
-      `DeliveryPlanner`, and `OrderNotificationTrigger` (`notifications`) writes an
-      ADR 0020 intent for `OrderConfirmed` and `OrderRejected`. Each keeps its durable
-      state in its own module's table, so `POS_ORDER_EXPORT`, `ORDER_FULFILLMENT` and
-      `ORDER_NOTIFICATION` remain names in `ck_order_process_name` that nothing writes,
-      and the work they stand for has no ordering-side attempt ladder or stuck list.
-      `ORDER_PAYMENT` is driven by nothing at all, which is the same gap as the
-      unhandled edge out of `PAYMENT_AUTHORIZING`.
+      Four of six now have durable state in `ordering.order_process_states`, up from
+      two (`ORDER_INVENTORY`, and `RESTAURANT_APPROVAL` in its own `ordering.order_timers`
+      table). Wave 90 added `OrderPaymentProcess` and `OrderFulfillmentProcess`,
+      both in the exact shape `OrderInventoryProcess` set: enqueued in the same
+      transaction as the fact that starts them, claimed `FOR UPDATE SKIP LOCKED`,
+      settled or rescheduled every time so a claim is never left to busy-loop.
+      Neither drives a provider effect, which is why neither needed
+      `OrderInventoryProcess`'s own retry-the-effect ladder: `OrderPaymentProcess`
+      only ever reflects the order's own state machine (`OrderStateService` settles
+      it synchronously on every exit from `PAYMENT_AUTHORIZING`) and flags —
+      never cancels — a stale one; `OrderFulfillmentProcess` only ever reflects
+      `DeliveryPlanner#sourcingOutcome`, deferring entirely to
+      `fulfillment.domain.sourcing.PlanStatus#MANUAL_ACTION_REQUIRED` as sourcing's
+      own considered "give up" signal rather than inventing a second, less
+      informed one. `POS_ORDER_EXPORT` and `ORDER_NOTIFICATION` remain names in
+      `ck_order_process_name` that nothing writes: `PosOrderExportTrigger` (`pos`)
+      opens the export and hands the send to a scheduler after commit, and
+      `OrderNotificationTrigger` (`notifications`) writes an ADR 0020 intent for
+      `OrderConfirmed` and `OrderRejected` — each keeps its durable, idempotent,
+      replica-safe state in its own module's table, so the work itself is not the
+      gap. Wiring either into this table was deliberately left for later rather
+      than rushed here: `PosOrderExportTrigger`'s constructor alone is built by
+      hand in five test files (`PosOrderExportTriggerTests` several times over),
+      and threading a new collaborator through all of them under this change's
+      own scope was a worse trade than shipping two of four correctly and saying
+      so.
 - [x] Build storefront and Operations APIs, timeline, audit, metrics, and alerts.
       `StorefrontOrderingController`, `OperationsOrderController` and
       `OrderOutcomeReasonController`, with the timeline and audit facts; ADR 0023's
@@ -504,6 +533,24 @@ serviceability for the binding's absence alone.
 The five process managers other than `ORDER_INVENTORY` are named in the
 `ck_order_process_name` constraint and written by nothing. A row for a process
 whose ADR has not landed is refused rather than silently accepted.
+
+**Amended: two of those five now write.** `RESTAURANT_APPROVAL` was always the
+odd one out in this list — it has durable resumable state, just in
+`ordering.order_timers` rather than this table, from the original build. Wave
+90 gave `ORDER_PAYMENT` and `ORDER_FULFILLMENT` real rows here too:
+`OrderPaymentProcess` and `OrderFulfillmentProcess`, described in the
+implementation checklist above. `POS_ORDER_EXPORT` and `ORDER_NOTIFICATION`
+are the two still written by nothing in this table — not because the work they
+name is undone (`PosOrderExportTrigger` and `OrderNotificationTrigger` drive it
+durably and idempotently today, in their own modules' tables), but because
+neither trigger's constructor was touched: both are built by hand across
+several already-passing test suites (`PosOrderExportTrigger`'s alone in five
+files), and adding the collaborator that would write this table's row was a
+wider, riskier change than this wave's scope justified. What those two rows
+would add is exactly what `ORDER_PAYMENT` and `ORDER_FULFILLMENT` just gained
+and did not have before: one place — `JdbcOrderProcessStore#stuck` — that
+answers "why is this order stuck" for every concern at once, instead of an
+operator needing to know which of four screens to check.
 
 `ordering.cart_fulfillment` from the cart model above is **not** created. Nothing
 in this release captures a delivery address — the storefront collects a location
