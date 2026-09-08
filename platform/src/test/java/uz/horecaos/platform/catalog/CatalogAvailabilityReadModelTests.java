@@ -27,6 +27,7 @@ import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -92,10 +93,13 @@ class CatalogAvailabilityReadModelTests {
         insertTenancy(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, "read-model-other-tenant", "OTHER-MAIN");
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
         authoring = new CatalogAuthoringService(
                 store,
                 new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
                         jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
                 Clock.systemUTC());
         inventory = new InventoryService(
                 new JdbcInventoryStore(jdbc),

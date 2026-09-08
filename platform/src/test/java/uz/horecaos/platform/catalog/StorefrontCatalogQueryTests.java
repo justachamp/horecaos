@@ -35,6 +35,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
@@ -101,10 +102,13 @@ class StorefrontCatalogQueryTests {
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
         MediaAvailability alwaysDisplayable = (tenantId, assetIds) -> true;
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
         authoring = new CatalogAuthoringService(
                 store,
                 new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
                         jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
                 Clock.systemUTC());
 
         CatalogSnapshotLoader loader = new CatalogSnapshotLoader(store, alwaysDisplayable, allPriced(), LOCALE);

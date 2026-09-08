@@ -27,6 +27,7 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.application.StockAvailabilityPortAdapter;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
+import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -87,8 +88,13 @@ class InventoryAvailabilityAuditTests {
 
         JdbcCatalogStore catalogStore =
                 new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
         CatalogAuthoringService authoring = new CatalogAuthoringService(
-                catalogStore, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), Clock.systemUTC());
+                catalogStore,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
+                Clock.systemUTC());
 
         JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
         // The three-argument, @Autowired-in-production constructor: this is
