@@ -57,10 +57,13 @@ worth arguing with.
    nullable string that *we* write. This does **not** collide with ADR 0038 — it
    fits it. But the API's silence is not proof about what the till does, and
    there are three loud caveats. See §9.
-4. **There is no idempotency mechanism of any kind.** No key, no header, no
-   semantics, and Clopos's own retry guidance concedes it. A retried export is a
-   second kitchen ticket, with no documented way to detect the first. See §7 —
-   this is the single largest integration risk on the page.
+4. **There is no idempotency key or header this platform controls — but Clopos
+   confirmed 2026-09-08 that a byte-identical repeat is deduplicated.** A
+   retried export whose body differs by a byte is still a second kitchen
+   ticket, and nothing in this adapter reconstructs and resends a stored
+   request, so the confirmation does not license a retry loop. See §7 — this
+   is still the single largest integration risk on the page, now with a
+   documented answer rather than an open one.
 
 ---
 
@@ -637,7 +640,15 @@ rejection wins atomically in ordering." Clopos qualifies — **except for the wo
 
 `auto_accept_terminal` requires a terminal ID that **no endpoint in the API
 returns.** There is a `/stations` endpoint (preparation stations) but nothing that
-lists terminals. Question Q7.
+lists terminals — and the adapter never sends this field, at all, which is
+Q7's answer: the owner decided the switch is a **tenant-wide boolean**, not a
+per-terminal target, so there is no terminal ID to discover in the first
+place. `CloposConfig#REQUIRE_CLERK_APPROVAL`
+(`clopos.requireClerkApproval`, on the installation, default `true`) drives
+`auto_order_accept` and `auto_order_sent_to_station` together, and it is a
+tenant self-service setting on the operations app's Settings surface
+(`POST .../integrations/{installationId}/settings`) rather than a pilot-only
+constant — see §7.6 point 4, which this supersedes.
 
 ### 6.3 Object two: `Receipt`
 
@@ -725,9 +736,12 @@ say so about *latency* and not only about *failure*.
   * `count` is typed **`integer`** in the schema, while `portion_size` is a
     number. A half-kilogram of a `sold_by_weight` product has no obvious
     expression. Question Q10.
-  * **`product_hash` is required and entirely undocumented** — no derivation, no
-    example beyond `"abc123"`, no statement of what it hashes. This is a required
-    field on the single most important call in the integration. Question Q1.
+  * **`product_hash` is required, and it is not a hash.** Clopos confirmed
+    2026-09-08 (Q12) that it is the `package_code` for the line's ИКПУ/MXIK —
+    `catalog.fiscal_classifications.package_code` under ADR 0038. The example
+    `"abc123"` is exactly as misleading as it looks; nothing here is a digest.
+    The adapter refuses a line whose variant carries no package code rather
+    than send an invented one.
   * `status` on a line is a required string, example `"new"`, enumeration not
     given.
 * Money is `number` — **floating point, no currency field anywhere in the API.**
@@ -738,15 +752,27 @@ say so about *latency* and not only about *failure*.
 
 ## 7. Idempotency and retries — the largest risk
 
-### 7.1 There is none
+### 7.1 There was no documented answer — now there is one
 
 Searched the OpenAPI spec and all 32 documentation pages: **the word
 "idempotency" does not appear.** No `Idempotency-Key` header, no `X-Request-Id`,
 no client-supplied unique key on `CreateOrderRequest`, no documented behaviour on
 repeat, no dedupe window, no conflict response.
 
-**A repeated `POST /orders` creates a second order.** Nothing in the docs
-contradicts this and nothing prevents it.
+**Update, 2026-09-08 (Q1/Q18).** Asked directly, Clopos confirmed: a repeated
+`POST /orders` **is deduplicated when the request body is byte-identical** to
+one already accepted. It is not documented anywhere in the API reference, and
+nothing about the mechanism — window, scope, what counts as "identical" beyond
+the obvious reading — was stated beyond that one sentence. So the answer closes
+the yes/no question and opens a narrower one: **this platform still does not
+retry**, because nothing in `PosOrderExportService` reconstructs and resends a
+stored request body byte-for-byte, and "byte-identical" is a much stronger
+claim than "the same order" — a rebuilt request could differ in field order,
+in a catalog value that changed between attempts, or in a timestamp nobody
+intended to vary. Treat the paragraphs below as describing the platform's
+posture *before this line was known to be safe under a condition we do not
+currently produce* — the position in §7.6 is unchanged by the answer, and
+says why.
 
 ### 7.2 What an uncertain outcome looks like
 
@@ -835,11 +861,16 @@ indistinguishable from one order we exported twice.
 
 ### 7.6 Position for the adapter
 
-Until Q1/Q2 are answered:
+**Updated 2026-09-08.** Q1/Q18 are answered (§12); Q2 is not. The position
+below is otherwise unchanged by the answer — see the note at the end of §7.1
+for why confirmed idempotency-for-an-identical-payload does not change what
+this adapter does:
 
 1. **Never blind-retry `POST /orders`.** Any uncertain outcome (`504`, client
    timeout, connection reset) transitions the export to an `UNCERTAIN` state, not
-   a retry queue.
+   a retry queue. This still holds: Clopos's dedupe is keyed on the literal
+   request bytes, and nothing here stores or reconstructs those bytes to
+   resend them.
 2. **Resolve `UNCERTAIN` by reading**, on a bounded schedule, using the heuristic
    above, and **stop rather than guess** when the match is ambiguous — ADR 0012's
    "conflicts stop rather than resolve automatically" principle applied to
@@ -849,13 +880,17 @@ Until Q1/Q2 are answered:
    deterministic; if it is dropped, we have lost nothing. Verify empirically
    against the pilot brand on day one — this is a five-minute test that changes
    the risk profile of the whole integration.
-4. **Prefer `auto_order_accept: false` during the pilot.** An order sitting in
-   `PENDING` awaiting a clerk is recoverable and visible; an order auto-accepted
-   and auto-sent to the station is already food. The safe failure and the
-   convenient configuration point in opposite directions here, and the pilot
-   should take the safe one.
-5. **Ask Clopos before go-live, not after.** ADR 0011's exit criteria are not
-   genuinely met while a retried export can produce a second kitchen ticket.
+4. **`auto_order_accept` is now a tenant self-service setting, not a pilot-only
+   constant.** Q7's answer (§12) made this configurable per tenant at
+   `clopos.requireClerkApproval`, defaulting to `false` for `auto_order_accept`
+   (the clerk decides) — the same safe posture this point used to state as a
+   pilot-only recommendation. An order sitting in `PENDING` awaiting a clerk is
+   recoverable and visible; an order auto-accepted and auto-sent to the station
+   is already food. A tenant may now choose the convenient direction
+   deliberately, through the operations app; nothing defaults to it.
+5. ~~Ask Clopos before go-live, not after.~~ Done — this is that answer. ADR
+   0011's exit criteria still are not met while a retried export can produce a
+   second kitchen ticket, because this platform still does not retry one.
 
 ---
 
@@ -975,17 +1010,21 @@ or cash sale *and* our `fiscal` module fiscalizes the same order via a partner,
 that is the two-receipts-one-sale problem, and it will be discovered by a tax
 inspector rather than by us. Question Q14.
 
-**Caveat 2 — `gov_code` is the only classification field, and it is
-uncharacterised.**
+**Caveat 2 — `gov_code` is the only classification field, and it was
+uncharacterised. It no longer is.**
 ADR 0038 requires ИКПУ/MXIK and a package code on every priceable node.
 `product.gov_code` — "Government/tax code for the product", nullable, no format,
-no example, no validation — is the only candidate source in the API. If it holds
-MXIK, it is a genuine input to ADR 0038's classification (a reviewed import under
-ADR 0012's "provider operational metadata" authority, never an auto-apply). If it
-holds an Azerbaijani code, it is worse than useless because it will *look* right.
-There is also `Package {id, name, equal}` on products, which may or may not relate
-to ADR 0038's package code — the name is suggestive and the schema is silent.
-Questions Q15, Q16.
+no example, no validation — is the only candidate source in the API. **Answered
+2026-09-08 (Q15): it holds the SPIC id, ИКПУ/MXIK, confirmed for an Uzbek
+brand.** It is a genuine input to ADR 0038's classification, staged as
+`CatalogSnapshot.Product#mxikCode` for a reviewed import (ADR 0012's "provider
+operational metadata" authority — the field's *meaning* being confirmed does
+not turn its *values* into an auto-apply; `product.mxikCode` still resolves to
+`FieldAuthority.REVIEWED_IMPORT`). There is also `Package {id, name, equal}` on
+products, which may or may not relate to ADR 0038's package code — the name is
+suggestive and the schema is still silent, and Q12's answer (product_hash is
+the classification's package code, §12) does not say where that code
+originates on the catalog side. Question Q16 remains open.
 
 **Caveat 3 — this product is Azerbaijan-first, and that undermines every fiscal
 assumption.**
@@ -1010,6 +1049,14 @@ is not established. Getting a written answer to Q14 is the single highest-value
 thing anyone can do with this contract, because it is the only open item where
 the downside is legal rather than operational.
 
+**Update 2026-09-08.** Q15's answer is one real data point against pure
+Azerbaijan-only evidence: Clopos, asked directly, confirmed `gov_code` holds
+MXIK "for an Uzbek brand" — a statement about our own pilot brand, not another
+inference from Azerbaijani sample data. It narrows caveat 2. It does not answer
+caveat 1's question: whether a Clopos till fiscalizes a cash or dine-in sale on
+its own in Uzbekistan. Q14 is still open, and the position above still holds
+for it.
+
 ### 9.4 Money has no currency, and it is a float
 
 There is **no currency field anywhere in the API** — not on an order, a product, a
@@ -1023,12 +1070,21 @@ inconsistent between examples and undocumented.
 For UZS this is mostly survivable (whole-soum amounts are exactly representable
 in a double up to 2^53), but "mostly survivable" is not a property to build a
 financial boundary on, and `service_charge` / `discount_value` percentages produce
-fractional intermediates that will not round-trip. Question Q17.
+fractional intermediates that will not round-trip.
+
+**Answered 2026-09-08 (Q17): the currency is UZS.** This confirms rather than
+changes the position below — the adapter already asserted UZS from
+configuration and could not have verified it any other way, since there is
+still no currency field on the wire to check that assertion against.
 
 **Position:** the adapter parses these as `BigDecimal` from the raw JSON text
 (never via a `double`), asserts the brand currency from installation
 configuration rather than from the API, and reconciles every exported total
-against the receipt total on read-back.
+against the receipt total on read-back. `CloposCatalogNormalizer#minor` treats
+a UZS minor unit as a whole som — scale zero, `HALF_UP`, never `* 100` — which
+was already correct and is now confirmed rather than assumed; do not add a
+conversion anywhere in this adapter on the strength of this answer, there is
+nothing to convert.
 
 ---
 
@@ -1166,13 +1222,85 @@ reduce any of these).
 Ordered by how much they change the design. `dev@clopos.com`, quoting our
 `integrator_id`.
 
+### Answered — 2026-09-08
+
+Clopos answered six of these to the platform owner directly, quoting our
+`integrator_id`. Recorded here, out of the numbered lists below — those lists
+are what is still open — and reflected in the adapter, the normalizer, and the
+difference engine where the answer changed what the code assumed.
+
+* **Q1 / Q18 — is `POST /orders` idempotent?** **Yes, for an identical
+  payload.** Clopos deduplicates a repeated `POST /orders` when the request
+  body is byte-for-byte the same as one already accepted. This closes the
+  idempotency question §7 depends on, and it does **not** license a blind
+  retry: "identical payload" means our own retry would have to send the exact
+  same bytes, which is a constraint on the adapter (nothing in this codebase
+  reconstructs and resends a stored request), not a guarantee this codebase
+  currently exploits. `CloposAdapter#exportOrder` is still classified
+  `Effect#UNKEYED_CREATE`, `PosCapability#ORDER_EXPORT`'s
+  `IdempotencyBehaviour` is still `NONE`, and the `ExportStateMachine` still has
+  no edge from `UNCERTAIN` back to `SENT` — none of that was built because the
+  answer was unknown, and none of it is now removed because the answer turned
+  out favourable. What is genuinely ours regardless of Clopos's own dedupe:
+  `integration.pos_order_exports`' `uq_pos_export_per_order (tenant_id,
+  order_id)` is the platform's own idempotency and it stays exactly as it was.
+  See §7.6.
+* **Q7 and the manual-confirmation question — does each exported order need a
+  clerk to accept it, or can it go straight to the kitchen?** **Configurable,
+  per tenant.** This makes Q7 itself moot rather than answered on its own
+  terms: the adapter never sends `auto_accept_terminal` at all (there is no
+  code path that names a terminal), so "how is `auto_accept_terminal`
+  discovered" stops being a blocking question the moment the design does not
+  need it. The tenant-wide switch is `auto_order_accept` /
+  `auto_order_sent_to_station` on `POST /orders`, driven by the
+  `clopos.requireClerkApproval` installation configuration key
+  (`CloposConfig#REQUIRE_CLERK_APPROVAL`, default `true` — the clerk decides),
+  now exposed to the operations app's Settings surface at
+  `POST /api/v1/operations/tenants/{tenantId}/integrations/{installationId}/settings`
+  (`ProviderInstallationController#settings` / `#updateSettings`). It sits on
+  the ADR 0026 installation rather than in a new ADR 0030 policy key or a
+  per-venue binding override: one Clopos installation is one brand, which is
+  exactly the scope the owner's own framing ("per tenant") named, and ADR
+  0026's `non_sensitive_config` already is the generic, reviewed mechanism a
+  provider-specific operational toggle belongs in — a second ADR 0030 config
+  key beside it would be two answers to "what does this tenant's till do",
+  which is the exact failure V0012 already committed once (ordering's own
+  policy table, before ADR 0030 existed). See §6.2, §6.4, §7.6.
+* **Q12. How is `product_hash` derived?** **It is the `package_code` for the
+  line's SPIC**, not a hash of anything. `CloposAdapter#exportOrder` sends
+  `catalog.fiscal_classifications.package_code` (ADR 0038), read through the
+  new `catalog.api.PackageCodeLookup` port rather than reinvented as a second
+  classification field. A line whose variant has no package code **refuses the
+  export** — `ProviderOutcome` `REJECTED`, code `CLOPOS_LINE_UNCLASSIFIED` —
+  rather than sending an invented value on a call that is, per Q1/Q18 above,
+  now known to be safe to retry once the dish is actually classified. The
+  locally-invented `LineFingerprint.of(...)` digest this field used to carry is
+  gone from this call; `LineFingerprint` itself stays, because the recovery
+  read in §7.6 and the customer-phone hash in ADR 0029 both still use it. See
+  §6.5, §7.6.
+* **Q15. What does `gov_code` hold?** **The SPIC id — ИКПУ/MXIK**, confirmed
+  for an Uzbek brand. The doc's own guess in §9.3 was right. `product.gov_code`
+  is staged as `CatalogSnapshot.Product#mxikCode` (renamed from the
+  `governmentCode` this document previously used while the answer was
+  unknown), the field authority policy still marks `product.mxikCode`
+  `REVIEWED_IMPORT` — Clopos confirming the field's *meaning* is not the same
+  as HorecaOS auto-accepting a *value*, and ADR 0038's classification is never
+  applied without a person — and `JdbcPosTargetCatalog`'s comparison, which
+  had been silently reading a column V0028 dropped a wave earlier
+  (`catalog.products.tax_category_code`, unread since V0016), now reads
+  `catalog.fiscal_classifications.mxik_code` through the product's default
+  variant, the node ADR 0038 actually classifies. See §4.8, §9.3.
+* **Q17. What currency are amounts in?** **UZS**, confirmed. This closes an
+  assumption the code already made and could not verify:
+  `CloposCatalogNormalizer#minor` has always treated a UZS minor unit as a
+  whole som (scale 0, `HALF_UP`, never `* 100`), and ADR 0038 already recorded
+  "a bare `* 100` may not appear in any payment or fiscal adapter". No
+  conversion was added — none was needed — and
+  `CloposCatalogNormalizerTests#moneyDoesNotPassThroughFloatingPoint` now pins
+  the currency alongside the scale it already pinned. See §9.4.
+
 **Blocking — the integration is unsafe without these**
 
-* **Q1. How does a caller set `integration_uuid` / `integration_id` on
-  `POST /orders`?** They appear on every order *response* and the description says
-  "if provided", but neither is in `CreateOrderRequest`. If they are settable,
-  are they unique-constrained, and can `GET /orders` filter on them? *This is the
-  idempotency question; everything in §7 depends on it.*
 * **Q2. Is `order_number` a real request field?** The prose documents it (max 20
   chars) and the OpenAPI schema omits it. If real: is it unique per brand or per
   venue, is it enforced, is it filterable, and why does it not appear on the
@@ -1181,8 +1309,6 @@ Ordered by how much they change the design. `dev@clopos.com`, quoting our
   outside this API?** Specifically for a cash sale, a dine-in bill settled at the
   till, and a courier card terminal. *If yes, we have two systems issuing one
   receipt and it is a legal problem — see §9.3.*
-* **Q18. What is the documented behaviour of a repeated `POST /orders` with an
-  identical body?** Two orders, or a dedupe? Is there any dedupe window at all?
 
 **Structural — these change what we can build**
 
@@ -1209,22 +1335,16 @@ Ordered by how much they change the design. `dev@clopos.com`, quoting our
 **Field-level — needed to finish the normalizer**
 
 * **Q5.** How is `unit_id` resolved? There is no units endpoint. (§4.8)
-* **Q7.** How is `auto_accept_terminal` discovered? No endpoint lists terminals.
-  (§6.2)
 * **Q9.** Is there a guest/anonymous order path, or must a Clopos customer exist
   before every export? `OrderCustomer.id` is required. (§6.5)
 * **Q10.** `OrderProduct.count` is typed `integer`. How is a fractional quantity
   expressed for a `sold_by_weight` product? (§6.5)
 * **Q11.** Is `MODIFIER` a real product type? The prose lists it; the OpenAPI enum
   does not. (§4.2)
-* **Q12.** How is `product_hash` derived, and what does it hash? It is required on
-  every order line and undocumented. (§6.5)
-* **Q15.** What does `gov_code` hold, in what format? For an Uzbek brand, is it
-  ИКПУ/MXIK? Is it settable via the API? (§9.3)
 * **Q16.** What is the `Package` object (`{id, name, equal}`) for, and does it
-  relate to a fiscal package code? (§9.3)
-* **Q17.** What currency are amounts in, and how is it discovered? There is no
-  currency field anywhere. What is the money scale and rounding rule? (§9.4)
+  relate to a fiscal package code? Q12's answer names `package_code` as the
+  value `product_hash` carries, but not whether this object is where it comes
+  from on the catalog side. (§9.3)
 
 **Operational**
 
@@ -1248,7 +1368,12 @@ Staff user whose permissions vary (§2.1); `PreparationStatusCapability` is not
 supported and must be unconfigurable for Clopos (§6.3); POS approval is real but
 arrives one poll interval late, so the ADR should address approval *latency*
 alongside approval *failure* (§6.4); and secret rotation is a support ticket, not
-a schedule, which the ADR 0028 dependency needs to reflect (§2.5).
+a schedule, which the ADR 0028 dependency needs to reflect (§2.5). Two updates as
+of 2026-09-08: `POST /orders` **is** idempotent for a byte-identical repeat
+(Q1/Q18), which this platform records rather than exploits (§7.1, §7.6); and
+whether a clerk must accept an exported order is now a tenant self-service
+setting on the operations app's Settings surface, not a fixed pilot posture
+(Q7, §6.2, §7.6).
 
 **ADR 0012** — Clopos's stable identifier is an integer `id` per resource and
 nothing else; names and prices are mutable and there is no SKU, which vindicates
@@ -1256,11 +1381,23 @@ nothing else; names and prices are mutable and there is no SKU, which vindicates
 re-read, which the staged-snapshot design already assumes. Two things to add: the
 offset-pagination race means a single page-through is not an atomic snapshot and a
 `REMOVAL_SIGNAL` should require two agreeing reads (§5.1); and the stop list is a
-separate high-frequency feed, not part of the daily reviewed run (§5.2).
+separate high-frequency feed, not part of the daily reviewed run (§5.2). A third,
+2026-09-08: `product.gov_code` is a confirmed MXIK candidate (Q15) and stages as
+`product.mxikCode`, but field-authority policy still treats it as
+`REVIEWED_IMPORT` — a provider confirming what a field *means* is not the same
+decision as HorecaOS auto-applying its *values*.
 
 **ADR 0038** — Clopos does not appear to fiscalize, and its writable
 `Receipt.fiscal_id` is a useful place to write back the identifier Click or Payme
 issued, closing the loop with the restaurant's own reporting. That is a fit, not a
 collision. But it is unverified for Uzbekistan — this documentation is
 Azerbaijan-first on the evidence of its own examples — and Q14 must be answered in
-writing before the pilot takes a cash order.
+writing before the pilot takes a cash order. `gov_code` is settled (Q15,
+2026-09-08): it is the ИКПУ/MXIK, confirmed for an Uzbek brand, and
+`CloposAdapter#exportOrder`'s `product_hash` field turned out to be the
+classification's own `package_code` (Q12) — so ADR 0038's `catalog
+.fiscal_classifications` row for a variant is now a direct input to the Clopos
+order-export wire format, not only to a Click or Payme receipt line, through
+the new `catalog.api.PackageCodeLookup` port. `Package {id, name, equal}`'s
+relationship to that same package code is still open (Q16). Currency is
+settled too (Q17): UZS, confirming rather than changing §9.4's position.

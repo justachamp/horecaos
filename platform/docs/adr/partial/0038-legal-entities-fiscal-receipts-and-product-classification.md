@@ -55,7 +55,17 @@
   marked goods and age gating; the correction and void commands; the
   `FiscalDocument*` ADR 0032 event contracts; and the `payments.fiscal_documents`
   compatibility view, which `JdbcFiscalDocumentStore` and `PaymeMerchantApi` still
-  read through. See [What is built, and what a reader should not
+  read through. 2026-09-08: this table's `package_code` gained a second real
+  consumer outside a fiscal receipt line — Clopos confirmed
+  (`docs/providers/clopos-api.md` Q12) that its order-export `product_hash`
+  field is that same package code, read through the new
+  `catalog.api.PackageCodeLookup` port by `CloposAdapter#exportOrder`, which
+  now refuses a line whose variant carries none rather than send a fabricated
+  value. `product.gov_code` is also confirmed (Q15) as the ИКПУ/MXIK for an
+  Uzbek brand, closing the "whether this holds one" question the POS staging
+  layer had carried as unopened since ADR 0012 first added the column; nothing
+  about the reviewed-import posture of that field changed. See [What is built,
+  and what a reader should not
   assume](#what-is-built-and-what-a-reader-should-not-assume).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22

@@ -936,6 +936,14 @@
         "required" : [ "originLocationId" ],
         "type" : "object"
       },
+      "CloposSettingsView" : {
+        "properties" : {
+          "requireClerkApproval" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CommercialAdminControllerAdjustmentRequest" : {
         "properties" : {
           "approvedBy" : {
@@ -5702,6 +5710,15 @@
           }
         },
         "required" : [ "entityId", "entityType", "locale", "name" ],
+        "type" : "object"
+      },
+      "UpdateCloposSettingsRequest" : {
+        "properties" : {
+          "requireClerkApproval" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "requireClerkApproval" ],
         "type" : "object"
       },
       "ValidationOutcome" : {
@@ -11112,6 +11129,88 @@
           }
         },
         "summary" : "Rotate an installation's credential through the write-only door",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings" : {
+      "get" : {
+        "description" : "Today, Clopos's order-acceptance mode only: whether an exported order still needs a clerk to accept it at the till (docs/providers/clopos-api.md Q7). Refused for any other provider type, because the setting has no meaning there.",
+        "operationId" : "settings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CloposSettingsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Provider-specific settings for one installation",
+        "tags" : [ "Provider integrations" ]
+      },
+      "post" : {
+        "description" : "Per-tenant, on the installation rather than a per-venue binding: the owner's own framing of the question was per tenant, and one Clopos installation is one brand. Defaults to true (the clerk decides) until set — an order sitting in PENDING awaiting a clerk is recoverable and visible, an auto-accepted one is already food, and CloposAdapter#exportOrder reads exactly this key.",
+        "operationId" : "updateSettings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCloposSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CloposSettingsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set whether Clopos still needs a clerk's acceptance",
         "tags" : [ "Provider integrations" ]
       }
     },

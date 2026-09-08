@@ -187,7 +187,10 @@ public class JdbcPosSyncStore {
             parameters.put("currency", product.priceMinor() == null ? null : product.currency());
             parameters.put("active", product.active());
             parameters.put("hidden", product.hidden());
-            parameters.put("governmentCode", product.governmentCode());
+            // Column stays government_code (unrenamed: no migration touches an
+            // applied one for a cosmetic reason); the Java-side name follows
+            // CatalogSnapshot.Product#mxikCode now that Q15 confirms what it holds.
+            parameters.put("governmentCode", product.mxikCode());
             parameters.put("raw", json(product.raw()));
             products.add(parameters);
         }

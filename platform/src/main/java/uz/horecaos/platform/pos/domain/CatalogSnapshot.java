@@ -90,10 +90,17 @@ public record CatalogSnapshot(
      * @param priceMinor  whole minor units, or null when the provider stated none.
      *                    Parsed from the response's raw decimal text, never
      *                    through a double
-     * @param governmentCode the provider's tax classification string, unparsed.
-     *                    ADR 0038 needs an MXIK; whether this holds one is a
-     *                    question about the provider's market and not about the
-     *                    field's name
+     * @param mxikCode    the provider's {@code gov_code}, unparsed. Clopos confirmed
+     *                    2026-09-08 (docs/providers/clopos-api.md Q15) that this is
+     *                    the ИКПУ/MXIK — the same classification
+     *                    {@code FiscalReceiptLine.mxikCode} sends Click as
+     *                    {@code SPIC} and Payme as {@code code}. It is not itself a
+     *                    classification: ADR 0038 owns that, in
+     *                    {@code catalog.fiscal_classifications} and
+     *                    {@code catalog.mxik_reference}, and this value is staged
+     *                    evidence for a reviewed import into that table
+     *                    ({@code FieldAuthority.REVIEWED_IMPORT}), never written
+     *                    there automatically
      */
     public record Product(
             String externalId,
@@ -106,7 +113,7 @@ public record CatalogSnapshot(
             String currency,
             boolean active,
             boolean hidden,
-            @Nullable String governmentCode,
+            @Nullable String mxikCode,
             Map<String, Object> raw) {}
 
     /**

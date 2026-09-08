@@ -481,6 +481,36 @@ public class JdbcCatalogStore {
                 .list());
     }
 
+    /**
+     * The package code classified for each of these nodes, for a caller building
+     * a provider order line rather than a fiscal receipt (ADR 0038).
+     *
+     * <p>Absent from the map, not present with a null value, for a node with no
+     * classification or a classification with no package code — the caller's own
+     * default (if any) has to be theirs to choose, and a map entry that means
+     * "nothing here" is indistinguishable from an accident.
+     */
+    public Map<UUID, String> packageCodes(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        if (priceableIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> byNode = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT priceable_id, package_code FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND package_code IS NOT NULL
+                  AND priceable_id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", priceableIds.toArray(UUID[]::new))
+                .query((row, number) ->
+                        Map.entry(row.getObject("priceable_id", UUID.class), row.getString("package_code")))
+                .list()
+                .forEach(entry -> byNode.put(entry.getKey(), entry.getValue()));
+        return Map.copyOf(byNode);
+    }
+
     /** A brand's non-catalogue charge lines — today only the delivery fee. */
     public List<Fee> feesForBrand(UUID tenantId, UUID brandId) {
         return jdbc.sql("""

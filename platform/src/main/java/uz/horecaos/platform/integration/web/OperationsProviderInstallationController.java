@@ -26,7 +26,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * app's Settings section was built against that decision. The endpoints behind it, however,
  * shipped in wave 25 under {@code /api/v1/control-plane/tenants/{tenantId}/integrations} — a
  * path named for the platform's admin console, never revisited once the screen moved to
- * operations in wave 26. This class re-publishes the same nine operations under
+ * operations in wave 26. This class re-publishes those operations — nine from wave 25 plus
+ * the {@code settings} pair wave 85 added for Clopos's order-acceptance toggle (Q7) — under
  * {@code /api/v1/operations/tenants/{tenantId}/integrations}, the
  * {@link uz.horecaos.platform.configuration.OpenApiSurface#OPERATIONS} prefix the operations
  * Angular app is a first-party consumer of, so {@code make openapi-baseline}'s
@@ -157,6 +158,31 @@ public class OperationsProviderInstallationController {
             @PathVariable UUID bindingId,
             @Valid @RequestBody ProviderInstallationController.ReasonRequest request) {
         return delegate.activateBinding(tenantId, installationId, bindingId, request);
+    }
+
+    @GetMapping("/{installationId}/settings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "Provider-specific settings for one installation",
+            description = "Identical to the control-plane-prefixed path's own operation; see "
+                    + "ProviderInstallationController.settings. This is the endpoint the operations app's "
+                    + "Settings > Integrations screen calls for the Clopos order-acceptance toggle (Q7).")
+    ResponseEntity<ProviderInstallationController.CloposSettingsView> settings(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return delegate.settings(tenantId, installationId);
+    }
+
+    @PostMapping("/{installationId}/settings")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Set whether Clopos still needs a clerk's acceptance",
+            description = "Identical to the control-plane-prefixed path's own operation; see "
+                    + "ProviderInstallationController.updateSettings.")
+    ResponseEntity<ProviderInstallationController.CloposSettingsView> updateSettings(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @Valid @RequestBody ProviderInstallationController.UpdateCloposSettingsRequest request) {
+        return delegate.updateSettings(tenantId, installationId, request);
     }
 
     @PostMapping("/{installationId}/bindings/{bindingId}/suspend")

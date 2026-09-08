@@ -3,13 +3,16 @@ package uz.horecaos.platform.pos.domain;
 /**
  * Where one order's export has got to (ADR 0011).
  *
- * <p>Nine states for what a provider with an idempotency key would express in
- * four. The five extra ones all exist because the first real POS this platform
- * integrates against has no idempotency mechanism of any kind — no key, no
- * header, no documented repeat semantics — and its own retry guidance concedes
- * it, telling integrators to "check the server state first to avoid duplicates".
- * With an eight-second upstream timeout, a lost response is a weekly event and
- * not an exotic one.
+ * <p>Nine states for what a provider with an idempotency key <em>this platform
+ * controls</em> would express in four. The five extra ones all exist because the
+ * first real POS this platform integrates against offers no such key or header —
+ * its own retry guidance concedes as much, telling integrators to "check the
+ * server state first to avoid duplicates" — even though Clopos later confirmed
+ * (Q1/Q18, docs/providers/clopos-api.md) that it does deduplicate a
+ * byte-identical repeat. Nothing here reconstructs and resends a stored request
+ * body, so that confirmation changes what this class's comments claim, not what
+ * it does. With an eight-second upstream timeout, a lost response is a weekly
+ * event and not an exotic one.
  *
  * <p>So the machine has no edge that sends the same order twice on a machine's
  * decision. {@link #UNCERTAIN} does not lead back to {@link #SENT}. The only

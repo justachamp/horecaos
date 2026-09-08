@@ -121,6 +121,13 @@ public final class CloposCatalogNormalizer {
                     currency,
                     CloposEnvelope.flag(raw, "status", true),
                     CloposEnvelope.flag(raw, "hidden", false),
+                    // Confirmed 2026-09-08 (Q15): this is the ИКПУ/MXIK, the same
+                    // code catalog.mxik_reference holds and FiscalReceiptLine
+                    // sends onward as Click's SPIC / Payme's code. Staged as
+                    // evidence for CatalogSnapshot's own reviewed-import path —
+                    // never written into catalog.fiscal_classifications directly
+                    // from here, which would bypass the operator review ADR 0038
+                    // requires for a classification code.
                     text(raw, "gov_code"),
                     raw));
 
@@ -209,9 +216,13 @@ public final class CloposCatalogNormalizer {
      * Whole minor units from a decimal price.
      *
      * <p>For UZS a minor unit is a whole som, so the scale is zero and this is a
-     * rounding of a value Clopos should already have sent as an integer. HALF_UP
-     * rather than truncation, because truncating a price that arrived as 8.5
-     * loses money quietly in the restaurant's favour on every line.
+     * rounding of a value Clopos should already have sent as an integer. Clopos
+     * confirmed 2026-09-08 (Q17, docs/providers/clopos-api.md) that UZS is in
+     * fact the currency, closing the assumption ADR 0038 already recorded — a
+     * bare {@code * 100} must not appear here or in any payment or fiscal
+     * adapter, and none does: this method never multiplies. HALF_UP rather than
+     * truncation, because truncating a price that arrived as 8.5 loses money
+     * quietly in the restaurant's favour on every line.
      */
     static @Nullable Long minor(@Nullable BigDecimal amount) {
         return amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact();

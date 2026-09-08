@@ -165,7 +165,7 @@ class PosAdapterContractTests {
                 "A-1024",
                 "A-1024",
                 new PosAdapter.OrderExport.Customer("1", "Anvar", "+998901234567", "Amir Temur 1"),
-                List.of(new PosAdapter.OrderExport.Line("f-1", "Fake dish", 1, 10_000L, List.of())),
+                List.of(new PosAdapter.OrderExport.Line("f-1", "Fake dish", 1, 10_000L, List.of(), "PKG-1")),
                 10_000L,
                 "UZS",
                 "DELIVERY",

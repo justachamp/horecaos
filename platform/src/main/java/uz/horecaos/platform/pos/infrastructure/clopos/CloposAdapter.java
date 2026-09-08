@@ -42,11 +42,15 @@ import uz.horecaos.platform.pos.domain.LineFingerprint;
  *       {@code x-venue} header per request. So an installation is a brand and a
  *       binding is a venue, and the header is the single value that decides which
  *       kitchen prints a customer's dinner.</li>
- *   <li><b>There is no idempotency mechanism of any kind.</b> No key, no header,
- *       no documented repeat semantics. {@link #exportOrder} is therefore an
- *       {@link Effect#UNKEYED_CREATE} and an uncertain outcome from it is never
- *       retried — see {@link #findExportedOrder}, and see why that method returns
- *       candidates rather than an answer.</li>
+ *   <li><b>There is no idempotency key or header we control.</b> Clopos confirmed
+ *       2026-09-08 (Q1/Q18, docs/providers/clopos-api.md) that a repeated
+ *       {@code POST /orders} <em>is</em> deduplicated when the payload is
+ *       byte-identical — but nothing here reconstructs and resends a stored
+ *       request body, so that guarantee is not one this adapter exploits.
+ *       {@link #exportOrder} is therefore still an {@link Effect#UNKEYED_CREATE}
+ *       and an uncertain outcome from it is never retried — see
+ *       {@link #findExportedOrder}, and see why that method returns candidates
+ *       rather than an answer.</li>
  *   <li><b>Clopos is an authority for acceptance and a recipient for everything
  *       after it.</b> {@code PENDING} to {@code RECEIVED} is a clerk pressing a
  *       button and we cannot make that transition, but {@code auto_order_accept}
@@ -432,9 +436,36 @@ public class CloposAdapter implements PosAdapter {
      * documents the field with a twenty-character limit and its OpenAPI schema
      * omits it, so it may be silently dropped — but if it is honoured the recovery
      * read becomes deterministic, and if it is not we have lost nothing.
+     *
+     * <p>{@code product_hash} is not a hash. Clopos confirmed 2026-09-08 (Q12,
+     * docs/providers/clopos-api.md) that it is the package code that pairs with
+     * the line's ИКПУ/MXIK — {@code catalog.fiscal_classifications.package_code},
+     * carried here as {@link OrderExport.Line#packageCode()}. A line whose variant
+     * has none is refused rather than sent under an invented value: {@code
+     * product_hash} is required by Clopos's schema, and a fabricated code on a
+     * fiscal document is worse than an export that stops and asks a person to
+     * classify the dish first.
      */
     @Override
     public ExportResult exportOrder(PosContext context, OrderExport order) {
+        // Checked before anything reaches the wire, including the token
+        // request: a missing classification is a fact about this order, not
+        // about the credential, and there is nothing an authenticated call
+        // could do about it.
+        for (OrderExport.Line line : order.lines()) {
+            if (line.packageCode() == null) {
+                return new ExportResult(
+                        ProviderOutcome.rejected(
+                                "CLOPOS_LINE_UNCLASSIFIED",
+                                "Order line %s (variant product %s) has no ADR 0038 package code. "
+                                                .formatted(line.nameSnapshot(), line.externalProductId())
+                                        + "Clopos requires product_hash on every line and this adapter will "
+                                        + "not send a fabricated one; classify the dish before exporting."),
+                        null,
+                        false);
+            }
+        }
+
         CloposSession.Token token = session.token(context);
         String tokenValue = token.value();
         if (tokenValue == null || !token.usable()) {
@@ -474,16 +505,10 @@ public class CloposAdapter implements PosAdapter {
             product.put("count", line.quantity());
             product.put("price", line.unitAmountMinor());
             product.put("status", "new");
-            // Required by the schema, undocumented in every source: no derivation,
-            // no statement of what it hashes, and an example of "abc123" on the
-            // most important call in the integration. A per-line digest of the
-            // fields we do understand at least makes it stable for one line and
-            // different between two, which is the only property anything could
-            // plausibly want from it. Question Q12 to Clopos.
-            product.put(
-                    "product_hash",
-                    LineFingerprint.of(List.of(new LineFingerprint.Line(
-                            line.externalProductId(), line.quantity(), line.unitAmountMinor()))));
+            // The ADR 0038 package code for this line's ИКПУ/MXIK (Q12), never
+            // null here: the loop above already refused the whole export if any
+            // line lacked one, before anything reached the wire.
+            product.put("product_hash", line.packageCode());
             if (!line.externalModifierIds().isEmpty()) {
                 product.put(
                         "modificators",

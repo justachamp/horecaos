@@ -38,8 +38,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * The queue of exports nothing could settle, and the decision that settles them
  * (ADR 0011, ADR 0031).
  *
- * <p>This endpoint exists because the point of sale it was written for has no
- * idempotency mechanism. An export whose response was lost may or may not have
+ * <p>This endpoint exists because the point of sale it was written for offers no
+ * idempotency key or header this platform can act on (Clopos confirmed 2026-09-08
+ * that it deduplicates a byte-identical repeat, Q1/Q18 — but nothing here resends
+ * a stored request, so that fact does not shrink this queue). An export whose
+ * response was lost may or may not have
  * printed a kitchen ticket, and the recovery read can only ever say "orders like
  * this exist at the till" — never "your order exists" — because two identical
  * baskets from one telephone number are a customer who ordered twice and a

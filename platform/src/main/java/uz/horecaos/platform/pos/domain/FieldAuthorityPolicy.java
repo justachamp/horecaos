@@ -61,12 +61,14 @@ public record FieldAuthorityPolicy(int version, Map<String, FieldAuthority> byFi
 
                     // Operational metadata the till genuinely owns: which station cooks
                     // it, what kind of thing the provider thinks it is, its own tax code.
-                    // Reviewed rather than automatic, because ADR 0038 would otherwise
-                    // accept a classification code from a provider whose market is not
-                    // ours and whose format nobody has characterised.
+                    // product.mxikCode is reviewed rather than automatic even though
+                    // Clopos confirmed 2026-09-08 that gov_code is a real MXIK/ИКПУ
+                    // (Q15): ADR 0038 classification is never auto-applied from a
+                    // provider sync, so a person still accepts it into
+                    // catalog.fiscal_classifications.
                     Map.entry("product.sourceKind", FieldAuthority.PROVIDER),
                     Map.entry("product.station", FieldAuthority.PROVIDER),
-                    Map.entry("product.governmentCode", FieldAuthority.REVIEWED_IMPORT),
+                    Map.entry("product.mxikCode", FieldAuthority.REVIEWED_IMPORT),
                     Map.entry("product.categoryMembership", FieldAuthority.REVIEWED_IMPORT),
                     Map.entry("modifierGroup.selectionRange", FieldAuthority.REVIEWED_IMPORT)));
 

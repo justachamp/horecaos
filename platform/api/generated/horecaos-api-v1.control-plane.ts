@@ -309,6 +309,10 @@ export interface CircleRequest {
   radiusMeters?: number;
 }
 
+export interface CloposSettingsView {
+  requireClerkApproval?: boolean;
+}
+
 export interface CommercialAdminControllerAdjustmentRequest {
   approvedBy: string;
   entitlementKey: string;
@@ -1817,6 +1821,10 @@ export interface TranslateRequest {
   name: string;
 }
 
+export interface UpdateCloposSettingsRequest {
+  requireClerkApproval: boolean;
+}
+
 export interface ValidationOutcome {
   allPassed?: boolean;
   checks?: Array<ValidationResult>;
@@ -2001,6 +2009,8 @@ export interface Operations {
   "reconcileCapabilities_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Reconciliation } };
   "rotateSecret": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretRequest }; responses: { "200": RotateSecretResponse } };
   "rotateSecretByValue": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
+  "settings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": CloposSettingsView } };
+  "updateSettings": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: UpdateCloposSettingsRequest }; responses: { "200": CloposSettingsView } };
   "list_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
   "register": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } }; body: RegisterLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "assignmentHistory": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<LocationFiscalAssignmentView> } };

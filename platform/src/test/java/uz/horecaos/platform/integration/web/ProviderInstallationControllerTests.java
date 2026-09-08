@@ -154,6 +154,41 @@ class ProviderInstallationControllerTests {
     }
 
     @Test
+    void theCloposClerkApprovalSettingDefaultsToTrueAndCanBeToggled() {
+        UUID clopos = cloposInstallation("clopos-settings-one");
+
+        assertThat(controller.settings(TENANT, clopos).getBody())
+                .as("nothing has been set yet, so the safe posture — the clerk decides — applies")
+                .isEqualTo(new ProviderInstallationController.CloposSettingsView(true));
+
+        ProviderInstallationController.CloposSettingsView afterDisable = controller
+                .updateSettings(TENANT, clopos, new ProviderInstallationController.UpdateCloposSettingsRequest(false))
+                .getBody();
+        assertThat(afterDisable).isEqualTo(new ProviderInstallationController.CloposSettingsView(false));
+        assertThat(controller.settings(TENANT, clopos).getBody())
+                .as("the write persisted, so a fresh read agrees with it")
+                .isEqualTo(new ProviderInstallationController.CloposSettingsView(false));
+
+        ProviderInstallationController.CloposSettingsView afterReenable = controller
+                .updateSettings(TENANT, clopos, new ProviderInstallationController.UpdateCloposSettingsRequest(true))
+                .getBody();
+        assertThat(afterReenable).isEqualTo(new ProviderInstallationController.CloposSettingsView(true));
+    }
+
+    @Test
+    void theCloposSettingsEndpointRefusesAnInstallationOfAnotherProviderType() {
+        UUID sms = installation("clopos-settings-two");
+
+        assertThatThrownBy(() -> controller.settings(TENANT, sms))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("clopos installations only");
+        assertThatThrownBy(() -> controller.updateSettings(
+                        TENANT, sms, new ProviderInstallationController.UpdateCloposSettingsRequest(false)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("clopos installations only");
+    }
+
+    @Test
     void aBindingCannotBeActivatedThroughAnotherInstallationPath() {
         UUID first = installation("sms-one");
         UUID second = installation("sms-two");
@@ -181,6 +216,28 @@ class ProviderInstallationControllerTests {
                      display_name, status, secret_reference)
                 VALUES (:id, :tenantId, 'NOTIFICATION', 'GENERIC_SMS', :environment,
                         'Test SMS', 'DRAFT', 'horecaos:test:provider_notification:tenant:sms')
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("environment", code)
+                .update();
+        return id;
+    }
+
+    /** A POS installation of provider type {@code clopos}, config-empty, the way {@code install()} leaves one. */
+    private UUID cloposInstallation(String code) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments
+                    (code, provider_category, provider_type, base_url, is_production, egress_allowlist)
+                VALUES (:code, 'POS', 'clopos', 'https://api.clopos.com', false, 'api.clopos.com')
+                """).param("code", code).update();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.installations
+                    (id, tenant_id, provider_category, provider_type, environment_code,
+                     display_name, status, secret_reference)
+                VALUES (:id, :tenantId, 'POS', 'clopos', :environment,
+                        'Test Clopos', 'DRAFT', 'horecaos:test:provider_pos:tenant:clopos')
                 """)
                 .param("id", id)
                 .param("tenantId", TENANT)
