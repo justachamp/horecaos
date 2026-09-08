@@ -36,8 +36,11 @@ service-time work. It belongs behind the dispatch board, not beside it.
 
 ## 1. What exists today, precisely
 
-This matters because half of this section is buildable now against real tables and half
-is a decision away, and a spec that blurs the two produces screens that cannot ship.
+This mattered when the schema was empty and half of this section was a decision away. It
+still matters, for the opposite reason: nearly all of it is buildable now against real
+tables, and a spec that keeps describing built things as pending sends people to write
+tables that already exist. The table below was last true in August; it is corrected here
+against the migrations and the code, not against the ADRs' prose.
 
 | Thing | State | Where |
 |---|---|---|
@@ -50,17 +53,34 @@ is a decision away, and a spec that blurs the two produces screens that cannot s
 | Orders, lines, totals, state history, timers | **Built** | `ordering.orders`, `ordering.order_state_history`, `ordering.order_timers` |
 | Policy and configuration resolution | **Built** | `tenant.policies`, `tenant.policy_current`, `tenant.configuration_values` |
 | Approvals and audit | **Built** | `audit.approval_policies`, `audit.approval_requests`, `audit.audit_events` |
-| `fulfillment` schema | **Created and empty** | `V0001__create_module_schemas.sql` line 8 — the schema exists, it has zero tables |
-| Any courier identity, shift, assignment, ledger or position | **Not built** | see §16 |
+| `fulfillment` schema | **Built — 43 tables** | `V0025`, `V0032`, `V0040`, `V0041`, `V0054`, `V0186`; the schema was empty when this section was first written and has not been since `V0025` |
+| Delivery plan, shipment, quote, assignment attempt, sourcing job, exception | **Built** | `fulfillment.delivery_plans`, `shipments`, `delivery_quotes`, `assignment_attempts`, `delivery_sourcing_jobs`, `delivery_exceptions` (`V0054`) |
+| Courier identity, engagement, type | **Built** | `fulfillment.couriers`, `courier_engagements`, `courier_types` (`V0040`) |
+| Shift, break, duty session | **Built** | `fulfillment.courier_shifts`, `courier_shift_breaks` (`V0040`), `courier_duty_sessions` (`V0041`) |
+| Live position and track history | **Built** | `fulfillment.courier_positions_live`, `courier_location_tracks` (partitioned), `courier_track_summaries` (`V0041`) |
+| Rate card, ledger, settlement, payout, cash handover | **Built** | `fulfillment.courier_rate_cards`, `courier_rate_components`, `courier_ledger_entries`, `courier_settlement_periods`, `courier_settlement_statements`, `courier_payouts`, `courier_cash_handovers` (`V0040`) |
+| Zones, tariffs, fee resolution | **Built** | `fulfillment.service_zones`, `delivery_tariffs`, `delivery_fee_resolutions` (`V0025`, `V0032`); `ServiceZoneController`, `DeliveryTariffController`, `DeliveryFeeController` |
+| Dispatch board API | **Built** | `fulfillment/web/DispatchController.java` — queue, manual assign/unassign (ADR 0027 audited), exceptions read |
+| Courier-facing shift API, operations courier API | **Built** | `courier/web/CourierShiftController.java`, `courier/web/OperationsCourierController.java` |
+| Delivery cost lines, partner invoices, cost subsidy | **Built** | `fulfillment.delivery_cost_lines`, `partner_delivery_invoices`, `partner_delivery_invoice_lines` (`V0040`), `delivery_cost_subsidies` (`V0186`) |
+| An in-house delivery that actually accrues an earning | **Not built** | `CourierAccrualService.recordDelivery` has no production caller — only a test reaches it (ADR 0042) |
+| Compliance expiry and confirmation-point retention actually running | **Not built** | `RegistrationComplianceSweeper` and `ConfirmationPointRetentionJob` carry no `@Scheduled`, so nothing runs them unattended (ADR 0042) |
+| Partner tracking callbacks | **Not built** | `VERIFY_DELIVERY_WEBHOOK` is declared and no receiver exists (ADR 0014) |
+| `fulfillment.courier_restrictions` | **Not built** | no such table; §2's derived `RESTRICTED` state has nothing to read yet |
 
-`ordering.orders` has **no courier column and no shipment reference**. Today the
-platform cannot answer "who is carrying order 1042". Every screen below that names a
-courier against an order is blocked on ADR 0014's `fulfillment.shipments` and
-`fulfillment.assignment_attempts` landing.
+`ordering.orders` still has **no courier column and no shipment reference**, and that
+part has not changed. What has changed is what follows from it: the link is held from
+the other side. `fulfillment.shipments` carries both `order_id` and `courier_id`, so
+"who is carrying order 1042" is a join away rather than unanswerable, and a screen that
+names a courier against an order reads it there.
 
-The honest consequence: **§3 (dispatch board) and §4 (live map) cannot ship before ADR
-0014's fulfillment schema.** The Delever-parity gap is not the UI; it is that the
-platform does not yet record a delivery as a physical object.
+The honest consequence, restated: **§3 (dispatch board) and §4 (live map) are no longer
+blocked on the schema.** `V0054` landed the delivery plan, the shipment and the
+assignment attempt; `V0041` landed live positions and tracks; `DispatchController`
+already serves a queue and an audited manual assign. The platform records a delivery as
+a physical object. What §3 and §4 still want is not tables but the two gaps at the foot
+of the table above — an in-house delivery that accrues an earning, and the sweeps that
+nothing schedules — plus whatever this section's own UX asks for beyond them.
 
 ---
 
@@ -72,7 +92,7 @@ right.
 
 | Axis | Field | Values | Who changes it |
 |---|---|---|---|
-| **Account lifecycle** | `fulfillment.courier_profiles.status` (ADR 0014) | `PENDING_ACTIVATION`, `ACTIVE`, `SUSPENDED`, `ARCHIVED` | manager, deliberately, with a reason |
+| **Account lifecycle** | `fulfillment.courier_engagements.status` (ADR 0042) | `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED_COMPLIANCE`, `SUSPENDED_OPERATIONAL` | manager, deliberately, with a reason — except `SUSPENDED_COMPLIANCE`, which `RegistrationComplianceSweeper` is meant to set on its own once something schedules it |
 | **Live work state** | derived, see below | `OFF_SHIFT`, `IDLE`, `OFFERED`, `CARRYING`, `AT_BRANCH`, `RESTRICTED`, `STALE` | the courier's own actions and the clock |
 
 The live work state is **derived, never stored as a fourth copy of the truth**:
@@ -127,7 +147,7 @@ sorted `assignable first`.
 
 | Field | Type | Source |
 |---|---|---|
-| Name | text | `fulfillment.courier_profiles` → `iam` principal display name (ADR 0014) |
+| Name | text | `fulfillment.couriers.protected_full_name` (ADR 0029 protected), or `display_reference` for the short handle; `principal_subject` is the `iam` link (ADR 0042) |
 | Work-state chip + live line | derived enum + text | §2 |
 | Courier type | text | `fulfillment.courier_types.name` (ADR 0042) |
 | Load | `n / max` + three squares | count of active shipments / `courier_types.max_concurrent_assignments` |
@@ -135,7 +155,7 @@ sorted `assignable first`.
 | Delivered today | integer | count of `courier_assignment_earnings` rows for the business date |
 | Battery | percent + charging glyph | `fulfillment.courier_positions_live.battery_percent`, `device_charging` (ADR 0045) |
 | Position age | duration, shown only when > 2 min | `now − courier_positions_live.captured_at` |
-| Phone | mono, `tel:` link | `courier_profiles.protected_identity_reference` → ADR 0029 reveal, capability-gated |
+| Phone | mono, `tel:` link | **no source yet** — the courier tables carry no phone column. `courier_engagements.protected_registration_ref` is the registration document, not a contact number. A reveal-and-call needs a field somebody has to add |
 | Cash on hand | UZS, shown only when > 0 | running sum of the open shift's `CASH_COLLECTED` less `CASH_HANDED_OVER` from `fulfillment.courier_ledger_entries` |
 
 *Cash on hand belongs on the dispatch card, not only at shift close.* A courier carrying
@@ -391,9 +411,9 @@ deserves its own route so a manager can link a colleague to a courier's ledger.
 
 | Column | Type | Source |
 |---|---|---|
-| Name | text, emphasis | `courier_profiles` → principal display name |
+| Name | text, emphasis | `fulfillment.couriers.protected_full_name`, `display_reference` |
 | Work state | chip + live line | §2 |
-| Account status | chip: Active / Suspended / Pending / Archived | `courier_profiles.status` |
+| Account status | chip: Pending verification / Active / Suspended (compliance) / Suspended (operational) | `fulfillment.courier_engagements.status` |
 | Type | text | `courier_types.name` (vehicle class) |
 | Branches | chips, `+2` overflow | `dispatch_pool_locations` via `dispatch_pool_couriers` (ADR 0014) |
 | Phone | mono, revealed per capability | ADR 0029 protected value |
@@ -482,7 +502,7 @@ Fields, with the legacy dashboard's set preserved because staff already fill it 
 | Address | structured address | no | uses the V0021 address schema |
 | Referral | text | no | legacy required it; make it optional — it blocks onboarding for nothing |
 | Notes | repeatable text | no | legacy `notes: string[]`, protected free text |
-| Account status | select | yes | `courier_profiles.status` |
+| Account status | select | yes | `fulfillment.courier_engagements.status` |
 | App account | read-only state + `Send invite` / `Reset access` | — | Keycloak courier client (IA 2.6) |
 
 **Layout:** three columns on desktop, as the legacy form had, because that form is muscle
@@ -1142,28 +1162,47 @@ transmits a credential. IA §3.3 already names this; it is worth naming twice.
 
 ## 19. Data the backend does not have yet
 
-Nothing in the `fulfillment` schema exists. The schema is created and empty
-(`V0001__create_module_schemas.sql`, line 8). Everything below is named exactly as its
-ADR names it.
+This section was written when the `fulfillment` schema was empty, and most of what it
+lists has since been built. It is kept, corrected, because the part that is still
+missing is worth naming precisely and because which ADR names each table is still the
+useful index.
 
-### ADR 0014 — Proposed, implementation in progress (adapters only)
+**Built since**: every table listed under ADR 0014, ADR 0042, ADR 0045 and ADR 0037
+below now exists, with four exceptions called out inline — `courier_availability`,
+`dispatch_pools` and its three companions, `courier_restrictions`, and
+`courier_roster_entries`. The schema carries 43 tables (`V0025`, `V0032`, `V0040`,
+`V0041`, `V0054`, `V0186`).
+
+**Still missing, and these are the ones that block work**: an in-house delivery that
+accrues an earning (`CourierAccrualService.recordDelivery` has no production caller),
+the two sweeps that carry no `@Scheduled` (`RegistrationComplianceSweeper`,
+`ConfirmationPointRetentionJob`), partner tracking callbacks, and the roster that would
+let a fleet be enumerated under `ADVISORY` or `OFF` shift enforcement rather than from
+open shifts alone. The open inputs below stand where marked.
+
+### ADR 0014 — Accepted, Partial (see that record's own status)
 ```
 fulfillment.delivery_plans            fulfillment.shipments
 fulfillment.delivery_quotes           fulfillment.assignment_attempts
 fulfillment.delivery_sourcing_jobs
-fulfillment.courier_profiles          fulfillment.courier_availability
-fulfillment.dispatch_pools            fulfillment.dispatch_pool_couriers
-fulfillment.dispatch_pool_locations   fulfillment.dispatch_pool_zones
-fulfillment.courier_restrictions      fulfillment.courier_location_observations
+fulfillment.delivery_exceptions       fulfillment.delivery_cost_subsidies
+                                      -- built as fulfillment.couriers +
+fulfillment.courier_profiles          -- courier_engagements, not one table
+fulfillment.courier_availability      -- NOT BUILT
+fulfillment.dispatch_pools            -- NOT BUILT, and its three companions
+fulfillment.courier_restrictions      -- NOT BUILT (§2's RESTRICTED state)
+fulfillment.courier_location_observations -- built as courier_location_tracks
 ```
-Blocks: §3 entirely, §4 entirely, §5 and §6 entirely, the *Carried by* column, and any
-statement that an order has a courier. `ordering.orders` has no courier or shipment
-column today.
+Blocks: nothing structural any more. `ordering.orders` still has no courier or shipment
+column, but `fulfillment.shipments` carries `order_id` and `courier_id`, so the *Carried
+by* column is a join rather than a blocker. `DispatchController` serves the §3 queue and
+an audited manual assign today.
 Open inputs on the ADR: internal-courier scope, courier PII and location retention.
 
-### ADR 0042 — Proposed, not started
+### ADR 0042 — Accepted, Partial
 ```
-fulfillment.courier_shifts            fulfillment.courier_roster_entries
+fulfillment.courier_shifts            fulfillment.courier_shift_breaks
+fulfillment.courier_roster_entries    -- NOT BUILT
 fulfillment.courier_assignment_earnings
 fulfillment.courier_ledger_entries    (INSERT/SELECT grant only)
 fulfillment.courier_settlement_periods
@@ -1171,14 +1210,16 @@ fulfillment.courier_cash_handovers    fulfillment.courier_payouts
 fulfillment.courier_types             fulfillment.courier_rate_cards
 fulfillment.courier_rate_components
 ```
-Blocks: §7, §8, §9, §10, §11, §12, §13, §14, and the balance and on-time columns
-everywhere else.
+Blocks: no longer the tables, which exist. What still blocks a real balance is that
+nothing in production calls `CourierAccrualService.recordDelivery`, so an in-house
+delivery can be offered and accepted and accrues no earning outside a test — the ledger
+is real and empty for the wrong reason.
 Structural open input: **courier employment classification and withholding treatment**
 (legal, finance). Until it is answered, §14's statement carries a net figure only; if
 couriers are employees, gross / withholding / net become three lines and HorecaOS becomes a
 payroll system of record.
 
-### ADR 0045 — Proposed, not started
+### ADR 0045 — Accepted, Partial
 ```
 fulfillment.courier_duty_sessions     fulfillment.courier_positions_live
 fulfillment.courier_location_tracks   fulfillment.courier_track_summaries
@@ -1196,7 +1237,7 @@ assignment*. They share a name and answer different questions, and **no accrual,
 statement or report may read the telemetry one**. A courier earning must be byte-identical
 whether the telemetry for that trip is complete, partial or absent.
 
-### ADR 0037 — Proposed, not started
+### ADR 0037 — Accepted, Partial
 ```
 fulfillment.service_zones             fulfillment.service_zone_versions
 fulfillment.zone_location_bindings    fulfillment.regions
@@ -1273,14 +1314,17 @@ Courier-directed messages and statement delivery. Blocks `Message courier` in §
 
 ## 21. Suggested build order
 
-1. **§5 Courier list and §6 record.** No dispatch dependency beyond `courier_profiles`;
-   it is what unblocks migrating the legacy courier table, and staff can start using it
-   the day it lands.
+1. **§5 Courier list and §6 record.** No dispatch dependency beyond
+   `fulfillment.couriers` and `courier_engagements`, both of which exist; it is what
+   unblocks migrating the legacy courier table, and staff can start using it the day it
+   lands.
 2. **§7 Shift board** with enforcement in `ADVISORY`. Rosters, opens, closes, hours — no
    money yet.
-3. **§3 Dispatch board** once `delivery_plans`, `shipments` and `assignment_attempts`
-   exist. Internal assignment first, partner sourcing second, both in the same queue from
-   the first commit so the single-surface property is never retrofitted.
+3. **§3 Dispatch board.** `delivery_plans`, `shipments` and `assignment_attempts` exist
+   (`V0054`) and `DispatchController` already serves the queue and an audited manual
+   assign, so this step is now UI against a live API rather than a wait. Internal
+   assignment first, partner sourcing second, both in the same queue from the first
+   commit so the single-surface property is never retrofitted.
 4. **§8 Cash reconciliation.** It is the operationally hardest step and needs the longest
    run-in with real branches.
 5. **§9–§11 configuration**, then **§12–§14 settlement in shadow mode** for one location
