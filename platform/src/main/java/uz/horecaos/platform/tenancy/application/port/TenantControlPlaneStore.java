@@ -67,6 +67,15 @@ public interface TenantControlPlaneStore {
 
     void linkKeycloakOrganization(Tenant tenant);
 
+    /**
+     * Persists the tenant's current status (suspend/reactivate).
+     *
+     * <p>Brands and locations have had this since the control plane shipped;
+     * tenants did not, which is why {@code Tenant.suspend()} existed with no way
+     * to reach it from production and no way to store its result.
+     */
+    void updateTenantStatus(Tenant tenant);
+
     void insertCustomerIdentityPolicy(CustomerIdentityPolicy policy);
 
     /**

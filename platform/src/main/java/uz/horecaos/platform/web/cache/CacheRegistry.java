@@ -46,7 +46,16 @@ public enum CacheRegistry {
      * hierarchy that does not exist, which is either a bug or an attempt, and
      * neither should be able to fill this map.
      */
-    TENANT_HIERARCHY("tenant.hierarchy", Duration.ofMinutes(10), 50_000, "BrandCreated, LocationCreated");
+    TENANT_HIERARCHY("tenant.hierarchy", Duration.ofMinutes(10), 50_000, "BrandCreated, LocationCreated"),
+
+    /**
+     * Whether a tenant is suspended, consulted on every capability check
+     * alongside {@link #IAM_GRANTS} and given the same thirty seconds for the
+     * same reason: a suspension that is recorded but not yet in force is a
+     * window in which whatever prompted it is still going on. The writer evicts,
+     * so the TTL is the backstop rather than the mechanism.
+     */
+    TENANT_STATUS("tenant.status", Duration.ofSeconds(30), 10_000, "TenantSuspended, TenantReactivated");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

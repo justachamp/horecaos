@@ -122,6 +122,7 @@ class OnboardingServiceTests {
         controlPlane = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(systemActor, deniesEverything(), false),
+                tenantId -> {},
                 clock,
                 published,
                 recorder,

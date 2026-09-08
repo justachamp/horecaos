@@ -86,7 +86,10 @@ class PlatformGrantServiceTests {
         // one under test keeps that check false, exactly as the old `() -> null` did.
         JdbcAuthorizationService authorization =
                 new JdbcAuthorizationService(
-                        jdbc, CLOCK, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
+                        jdbc,
+                        CLOCK,
+                        () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
+                        tenantId -> false) {
                     @Override
                     public void evictGrants(String subject, @Nullable UUID tenantId) {
                         // no cache in this fixture

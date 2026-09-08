@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
@@ -30,8 +31,99 @@ import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
 import uz.horecaos.platform.tenancy.domain.Slug;
 import uz.horecaos.platform.tenancy.domain.Tenant;
+import uz.horecaos.platform.tenancy.domain.TenantStatus;
 
 class TenantControlPlaneServiceTests {
+
+    @Test
+    @DisplayName("a platform administrator can suspend a tenant and lift it again")
+    void suspendingAndReactivatingATenantIsReachableAndAudited() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        List<uz.horecaos.platform.audit.api.AuditFact> auditFacts = new ArrayList<>();
+        List<java.util.UUID> evicted = new ArrayList<>();
+        TenantControlPlaneService service = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                evicted::add,
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                auditFacts::add,
+                () -> platformAdmin);
+
+        var created = service.createTenant(new CreateTenantCommand(
+                "food-group",
+                "Food Group LLC",
+                "Food Group",
+                "UZS",
+                "Asia/Tashkent",
+                CustomerIdentityMode.TENANT_SHARED));
+        TenantId tenantId = new TenantId(created.id());
+        takeLive(store, tenantId);
+
+        var suspended = service.suspendTenant(tenantId, "non-payment");
+
+        assertThat(suspended.status()).isEqualTo(TenantStatus.SUSPENDED);
+        assertThat(store.findTenant(tenantId).orElseThrow().status())
+                .as("the status has to be persisted, not just returned -- until this existed "
+                        + "Tenant.suspend() had no store method to write through")
+                .isEqualTo(TenantStatus.SUSPENDED);
+        assertThat(evicted)
+                .as("a suspension that waits out a cache TTL is a suspension that is not yet in force")
+                .contains(tenantId.value());
+        assertThat(auditFacts).extracting(fact -> fact.actionCode()).contains("tenant.suspended");
+
+        // The other half of the rule: whoever suspends must still be able to
+        // undo it. A platform administrator's authority is the realm role, which
+        // suspension does not touch, so this call must succeed against a
+        // suspended tenant.
+        var reactivated = service.reactivateTenant(tenantId, "paid");
+
+        assertThat(reactivated.status()).isEqualTo(TenantStatus.ACTIVE);
+        assertThat(store.findTenant(tenantId).orElseThrow().status()).isEqualTo(TenantStatus.ACTIVE);
+        assertThat(auditFacts).extracting(fact -> fact.actionCode()).contains("tenant.reactivated");
+    }
+
+    @Test
+    @DisplayName("a tenant may not lift its own suspension")
+    void suspendingIsPlatformAdminOnly() {
+        InMemoryStore store = new InMemoryStore();
+        AuthenticatedActor platformAdmin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+        TenantControlPlaneService asPlatform = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> platformAdmin);
+        var created = asPlatform.createTenant(new CreateTenantCommand(
+                "food-group",
+                "Food Group LLC",
+                "Food Group",
+                "UZS",
+                "Asia/Tashkent",
+                CustomerIdentityMode.TENANT_SHARED));
+        TenantId tenantId = new TenantId(created.id());
+        takeLive(store, tenantId);
+
+        // No global roles: requirePlatformAdministrator asks for exactly one, and
+        // an actor without it is what every non-platform caller looks like.
+        AuthenticatedActor owner = new AuthenticatedActor("tenant-owner", Set.of(), Map.of());
+        TenantControlPlaneService asOwner = new TenantControlPlaneService(
+                store,
+                new TenantAccessPolicy(() -> owner, denyAll(), false),
+                tenantId2 -> {},
+                Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                event -> {},
+                fact -> {},
+                () -> owner);
+
+        assertThatThrownBy(() -> asOwner.suspendTenant(tenantId, "trying it on"))
+                .as("the reasons a tenant is suspended are the platform's side of the relationship")
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(store.findTenant(tenantId).orElseThrow().status()).isEqualTo(TenantStatus.ACTIVE);
+    }
 
     @Test
     void createsATenantWithMultipleBrandsAndSingleBrandLocations() {
@@ -42,6 +134,7 @@ class TenantControlPlaneServiceTests {
         TenantControlPlaneService service = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 events::add,
                 auditFacts::add,
@@ -117,6 +210,7 @@ class TenantControlPlaneServiceTests {
         TenantControlPlaneService service = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
@@ -140,6 +234,7 @@ class TenantControlPlaneServiceTests {
         TenantControlPlaneService service = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
@@ -169,6 +264,7 @@ class TenantControlPlaneServiceTests {
         TenantControlPlaneService asOwner = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> tenantOwner, denyAll(), false),
+                tenantId -> {},
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
@@ -186,6 +282,7 @@ class TenantControlPlaneServiceTests {
         TenantControlPlaneService service = new TenantControlPlaneService(
                 store,
                 new TenantAccessPolicy(() -> platformAdmin, denyAll(), false),
+                tenantId -> {},
                 Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
                 event -> {},
                 fact -> {},
@@ -225,6 +322,22 @@ class TenantControlPlaneServiceTests {
                 .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
     }
 
+    /**
+     * Moves a freshly created tenant from {@code PROVISIONING} to
+     * {@code ACTIVE}, which is what makes it suspendable.
+     *
+     * <p>Production does this in {@code OnboardingService}, at the end of a run,
+     * with a direct {@code UPDATE}. This goes through the domain transition and
+     * the store method instead — the same state change by the supported route —
+     * so that a test about suspension does not depend on the whole onboarding
+     * workflow to reach the only status a tenant can be suspended from.
+     */
+    private static void takeLive(InMemoryStore store, TenantId tenantId) {
+        Tenant tenant = store.findTenant(tenantId).orElseThrow();
+        tenant.activate();
+        store.updateTenantStatus(tenant);
+    }
+
     private static final class InMemoryStore implements TenantControlPlaneStore {
 
         private final Map<TenantId, Tenant> tenants = new LinkedHashMap<>();
@@ -245,6 +358,18 @@ class TenantControlPlaneServiceTests {
         @Override
         public Optional<Tenant> findTenant(TenantId tenantId) {
             return Optional.ofNullable(tenants.get(tenantId));
+        }
+
+        @Override
+        public void updateTenantStatus(Tenant tenant) {
+            // The aggregate is the same instance the service transitioned, so
+            // there is nothing to copy -- but it must be present, because a
+            // status write for a tenant this store never saw is the bug the
+            // JDBC implementation's row-count guard exists to catch.
+            if (!tenants.containsKey(tenant.id())) {
+                throw new IllegalStateException("No such tenant: " + tenant.id());
+            }
+            tenants.put(tenant.id(), tenant);
         }
 
         @Override

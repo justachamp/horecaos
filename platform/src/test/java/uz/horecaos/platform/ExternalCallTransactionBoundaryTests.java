@@ -404,7 +404,8 @@ class ExternalCallTransactionBoundaryTests {
                 ApplicationEventPublisher events,
                 AuditRecorder recorder,
                 CurrentActor currentActor) {
-            return new TenantControlPlaneService(store, accessPolicy, clock, events, recorder, currentActor);
+            return new TenantControlPlaneService(
+                    store, accessPolicy, tenantId -> {}, clock, events, recorder, currentActor);
         }
 
         @Bean

@@ -374,7 +374,8 @@ class OnboardingOutboxIntegrationTests {
                 ApplicationEventPublisher events,
                 AuditRecorder recorder,
                 CurrentActor currentActor) {
-            return new TenantControlPlaneService(store, accessPolicy, clock, events, recorder, currentActor);
+            return new TenantControlPlaneService(
+                    store, accessPolicy, tenantId -> {}, clock, events, recorder, currentActor);
         }
 
         /** Stands in for Keycloak; ADR 0009's own adapter is tested against a real one. */

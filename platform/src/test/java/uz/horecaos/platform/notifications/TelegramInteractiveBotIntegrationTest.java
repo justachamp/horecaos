@@ -194,9 +194,13 @@ class TelegramInteractiveBotIntegrationTest {
         objectMapper = JsonMapper.builder().build();
         clock = Clock.fixed(Instant.parse("2026-08-31T09:00:00Z"), ZoneOffset.UTC);
         audit = new JdbcAuditRecorder(jdbc, objectMapper);
-        authorization = new JdbcAuthorizationService(jdbc, clock, () -> {
-            throw new UnsupportedOperationException("not exercised by this suite");
-        });
+        authorization = new JdbcAuthorizationService(
+                jdbc,
+                clock,
+                () -> {
+                    throw new UnsupportedOperationException("not exercised by this suite");
+                },
+                tenantId -> false);
         staffLinks = new TelegramStaffLinkService(jdbc, clock, Duration.ofMinutes(15));
         bindingSync = new CustomerProviderBindingSyncService(
                 new JdbcNotificationStore(jdbc),

@@ -178,9 +178,13 @@ class TelegramOperationsNotificationIntegrationTest {
         // Telegram path checks; unreachable here is the correct behaviour if
         // it were ever called, not a gap this stub papers over.
         uz.horecaos.platform.iam.api.AuthorizationService authorization =
-                new uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService(jdbc, clock, () -> {
-                    throw new UnsupportedOperationException("not exercised by this suite");
-                });
+                new uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService(
+                        jdbc,
+                        clock,
+                        () -> {
+                            throw new UnsupportedOperationException("not exercised by this suite");
+                        },
+                        tenantId -> false);
         BotCallbackAuthorizer callbackAuthorizer = new BotCallbackAuthorizer(
                 actionTokens,
                 staffLinks,

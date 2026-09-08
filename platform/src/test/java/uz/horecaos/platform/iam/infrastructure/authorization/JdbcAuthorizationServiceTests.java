@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -106,6 +107,13 @@ class JdbcAuthorizationServiceTests {
         }
     }
 
+    /**
+     * Which tenants are suspended, as {@code JdbcTenantSuspensionLookup} would
+     * answer it. A set rather than a fixed {@code false} so a test can suspend a
+     * tenant mid-test and see the same grants stop applying.
+     */
+    private java.util.Set<java.util.UUID> suspended;
+
     @BeforeEach
     void setUp() {
         // Only what a test can change. Grants are what every test writes; the role
@@ -113,7 +121,77 @@ class JdbcAuthorizationServiceTests {
         jdbc.sql("TRUNCATE TABLE iam.grants CASCADE").update();
         clock = new MutableClock(Instant.parse("2026-08-20T10:00:00Z"));
         actor = new SettableActor();
-        authorization = new JdbcAuthorizationService(jdbc, clock, actor);
+        suspended = new java.util.HashSet<>();
+        authorization = new JdbcAuthorizationService(jdbc, clock, actor, suspended::contains);
+    }
+
+    @Test
+    @DisplayName("a suspended tenant's staff keep their grants and lose their access")
+    void suspendingATenantWithdrawsEveryTenantScopedGrantWithinIt() {
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+        grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
+
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
+                .isTrue();
+        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
+                .isTrue();
+
+        suspended.add(TENANT);
+
+        // Nothing about the grants changed -- they are still ACTIVE rows on
+        // ACTIVE roles inside their validity window, which is exactly why
+        // SELECT_GRANTS could never see this and why suspending a tenant used to
+        // stop nobody.
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
+                .as("the owner of a suspended tenant may not approve an order in it")
+                .isFalse();
+        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
+                .as("a location grant is inside the suspended tenant too -- suspension is not a "
+                        + "tenant-scope-only rule, or every location employee would keep working")
+                .isFalse();
+        assertThatThrownBy(() -> authorization.require("owner-1", Capability.ORDER_APPROVE, locationScope()))
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("suspension is not a one-way door: a platform grant still reaches a suspended tenant")
+    void aPlatformGrantSurvivesTheSuspensionThatWithdrawsEveryOtherGrant() {
+        platformGrant("platform-1");
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+        suspended.add(TENANT);
+
+        assertThat(authorization.has("platform-1", Capability.TENANT_READ, ResourceScope.tenant(TENANT)))
+                .as("whoever lifts a suspension has to be able to read the tenant first; if this is "
+                        + "false the platform has locked itself out of its own customer")
+                .isTrue();
+        assertThat(authorization.has("owner-1", Capability.TENANT_READ, ResourceScope.tenant(TENANT)))
+                .as("the same capability, at the same scope, from inside the suspended tenant")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("another tenant is unaffected by a suspension")
+    void suspendingOneTenantLeavesAnotherAlone() {
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+        suspended.add(java.util.UUID.randomUUID());
+
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
+                .as("a suspension must name the tenant it suspends")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("the capability view stops offering what the tenant may no longer do")
+    void theViewOfASuspendedTenantIsEmptyRatherThanMisleading() {
+        grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
+        assertThat(authorization.viewFor("owner-1", TENANT).capabilities()).isNotEmpty();
+
+        suspended.add(TENANT);
+
+        assertThat(authorization.viewFor("owner-1", TENANT).capabilities())
+                .as("a frontend that renders these would offer a menu of actions the platform then "
+                        + "refuses one by one")
+                .isEmpty();
     }
 
     @Test
@@ -368,6 +446,27 @@ class JdbcAuthorizationServiceTests {
 
     private ResourceScope brandScope() {
         return ResourceScope.brand(TENANT, BRAND);
+    }
+
+    /**
+     * A PLATFORM-scoped grant, which the shared helper cannot express: a
+     * platform grant carries no tenant and no scope id, and
+     * {@code aPlatformScopedGrantCannotCarryATenant} is the constraint that
+     * says so.
+     */
+    private void platformGrant(String subject) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
+                        'ACTIVE', 'test', 'test grant', :validFrom)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
+                .param("validFrom", clock.instant().minusSeconds(60).atOffset(java.time.ZoneOffset.UTC))
+                .update();
     }
 
     private UUID grant(String subject, PlatformRole role, String scopeType, UUID scopeId, UUID tenantId) {

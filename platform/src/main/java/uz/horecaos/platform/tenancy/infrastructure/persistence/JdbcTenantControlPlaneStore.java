@@ -241,6 +241,21 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     }
 
     @Override
+    public void updateTenantStatus(Tenant tenant) {
+        int updated = jdbc.sql("""
+                        UPDATE tenant.tenants
+                        SET status = :status, updated_at = now(), version = version + 1
+                        WHERE id = :id
+                        """)
+                .param("id", tenant.id().value())
+                .param("status", tenant.status().name())
+                .update();
+        if (updated != 1) {
+            throw new OptimisticLockingFailureException("Tenant status changed concurrently");
+        }
+    }
+
+    @Override
     public void updateBrandStatus(Brand brand) {
         jdbc.sql("""
                         UPDATE tenant.brands
