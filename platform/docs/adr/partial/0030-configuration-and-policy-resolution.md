@@ -1,38 +1,58 @@
 # ADR 0030: Configuration and policy resolution
 
 - Decision status: Accepted
-- Implementation status: Partial — the read half is built and is the platform's only
-  resolution chain. V0005 creates `tenant.configuration_values`, `tenant.policies` and
-  `tenant.policy_current` with ancestry constraints; `ConfigurationKeys` plus the module
-  key registries (`CommercialConfigurationKeys`, `TelemetryConfigurationKeys`) are
-  validated at startup by `ConfigurationKeyStartupValidator`; `JdbcConfigurationResolver`
+- Implementation status: Built — an operator can set both a configuration value and a
+  policy from the control plane today, and both resolve correctly on the very next call.
+  V0005 creates `tenant.configuration_values`, `tenant.policies` and `tenant.policy_current`
+  with ancestry constraints; `ConfigurationKeys` plus the module key registries
+  (`CommercialConfigurationKeys`, `TelemetryConfigurationKeys`, `CustomerConfigurationKeys`)
+  are validated at startup by `ConfigurationKeyStartupValidator`; `JdbcConfigurationResolver`
   and `JdbcPolicyResolver` implement precedence, explicit-null semantics, the resolution
-  trace and pinned re-resolution. The two have very different reach:
-  `ConfigurationResolver` has two consumers, `EnforcementCeiling` and
-  `TelemetryIngestService`, while `PolicyResolver` has twelve across courier, fiscal,
-  ordering and — as of V0054 — fulfillment, where `DeliveryPlanningService` and
-  `DeliverySourcingService` resolve the sourcing policy. ADR 0050 gives approval actions
-  a code-owned typed register and `JdbcApprovalService` uses `ResourceScope.chain()` for
-  the canonical precedence rule, but approval-policy rows remain an audit-owned
-  snapshotting exception rather than a `PolicyResolver` consumer; their V0082 scope shape
-  now matches the shared model exactly. V0012 moved order acceptance off its specialised
-  table. Not built: **configuration-value** authoring, and only that.
-  This line claimed until 2026-09-08 that neither half could be authored, and the
-  policy half of that was false from 2026-08-31: `tenancy.api.PolicyAuthor` and
-  `JdbcPolicyAuthor` are the versioned writer — never mutating a version in
-  place, moving only the `tenant.policy_current` pointer so a pinned resolution
-  stays stable for an order already accepted — and
-  `ordering.web.OrderAcceptancePolicyController` exposes it, so an operator can
-  activate an order-acceptance policy version today. What remains genuinely
-  unbuilt is the other table: nothing in production inserts or updates
-  `tenant.configuration_values`, and there is no control-plane API for one, so a
-  configuration value can still only be set by hand in SQL. Caching is registered in `CacheRegistry` as `tenant.configuration` and
-  `tenant.policy_current` but no resolver is `@Cacheable` and no outbox-driven eviction
-  exists.
-  Authoring now exists for exactly one consumer as of 2026-08-31:
-  `ordering.acceptance`, via `PolicyAuthor`/`JdbcPolicyAuthor` and a control-plane
-  endpoint — versioned, never mutated in place, order pinning unaffected. The
-  other policy consumers and all of `ConfigurationResolver` remain read-only.
+  trace and pinned re-resolution, and both are `@Cacheable` under ADR 0033's
+  `tenant.configuration` and `tenant.policy_current`. `ConfigurationResolver` has three
+  consumers as of 2026-09-08 (`EnforcementCeiling`, `TelemetryIngestService`, and
+  `TelegramUpdateHandler`'s ADR 0063 phone-pattern gate); `PolicyResolver` has twelve across
+  courier, fiscal, ordering and — as of V0054 — fulfillment. ADR 0050 gives approval actions
+  a code-owned typed register and `JdbcApprovalService` uses `ResourceScope.chain()` for the
+  canonical precedence rule, but approval-policy rows remain an audit-owned snapshotting
+  exception rather than a `PolicyResolver` consumer. V0012 moved order acceptance off its
+  specialised table.
+
+  Both halves are authored, not only resolved. `tenancy.api.PolicyAuthor`/`JdbcPolicyAuthor`
+  (built 2026-08-31) publish a policy as a new, immutable version and move the
+  `tenant.policy_current` pointer, never mutating an old version in place, so a pinned
+  resolution stays stable for a decision already made; `ordering.web.OrderAcceptancePolicyController`
+  exposes that for the order-acceptance key. `tenancy.api.ConfigurationValueAuthor`/
+  `JdbcConfigurationValueAuthor`, built 2026-09-08, close the gap this line named until then:
+  `tenant.configuration_values` now has a writer, exposed at
+  `POST /api/v1/control-plane/configuration/keys/{code}/values`, behind
+  `Capability.PLATFORM_ADMIN`, refusing an unregistered key, a scope the key does not declare
+  settable, or a value whose shape does not match the key's declared type, with an ADR 0031
+  expected-version conflict (`STALE_VERSION`) and an ADR 0027 audit fact recording the actor,
+  reason, and before/after value on every write. Unlike a policy, a value is mutated in place
+  under its own `version` column rather than append-only versioned — this ADR's own Decision
+  draws that line ("only policies are snapshotted onto business facts") — so it uses ordinary
+  optimistic locking rather than `PolicyAuthor`'s never-touch-an-old-version discipline.
+
+  Both writers evict their resolver's cache synchronously, in the same call that moves the
+  row: `JdbcConfigurationValueAuthor` implements a new `ConfigurationValueCache` port that
+  `JdbcConfigurationResolver` also implements, the same shape `JdbcPolicyAuthor`/
+  `JdbcPolicyResolver`/`PolicyCurrentCache` already used, so a value or policy an operator
+  just changed resolves correctly on the very next call rather than waiting out the
+  sixty-second TTL — `CacheEvictionIntegrationTests` proves both against a real
+  Spring-managed cache. That eviction is direct and in-process, not the outbox-driven,
+  cross-instance invalidation the Implementation checklist below still names as unbuilt: on
+  a single or few-instance deployment the TTL already bounds the gap to seconds, and
+  outbox-driven invalidation stays open for when replica count makes that gap worth closing.
+
+  Two owner-directed keys ride this same registry rather than a parallel mechanism, both
+  registered 2026-09-08: `audit.security_retention_days`/`audit.business_retention_days`
+  (ADR 0027, defaulting to ten years, platform-only, registered but not yet read by
+  anything — the archival sweep itself remains unbuilt, see that ADR) and
+  `customers.telegram_auth_phone_pattern` (ADR 0063, defaulting to the ADR's own Uzbek
+  pattern), which is now the actual gate `TelegramUpdateHandler`'s share-contact sign-in
+  checks, replacing what had been a deployment-time `@Value` property with a
+  platform/tenant/brand-overridable one.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
@@ -221,9 +241,12 @@ audit evidence are retained.
 
 ## Implementation notes
 
-Delivered so far: the scope model, the typed key registry with startup
-validation, precedence resolution with explicit-null semantics and a trace, the
-policy tables, and pinned policy re-resolution.
+Delivered: the scope model, the typed key registry with startup validation,
+precedence resolution with explicit-null semantics and a trace, the policy
+tables, pinned policy re-resolution, and — as of 2026-09-08, see this record's
+Implementation status above — both writers: `PolicyAuthor`/`JdbcPolicyAuthor`
+for policies and `ConfigurationValueAuthor`/`JdbcConfigurationValueAuthor` for
+values, each evicting its own resolver's cache in the same call that writes.
 
 `ordering.order_acceptance_policies` has been migrated into `tenant.policies`
 under key `ordering.acceptance` and the specialised table dropped, so the
@@ -233,22 +256,24 @@ carries them — a second copy was precisely how the two mechanisms could have
 disagreed about which version applied. `ordering.PolicyScope` is gone too,
 superseded by `ResourceScope`.
 
-Deliberately not yet delivered, and tracked in the checklist below: policy
-authoring and activation commands, caching (ADR 0033), and control-plane read
-and write APIs. Precedence lives in `ScopeResolution` as a
-pure function of key, scope, and fetched rows, so it is tested exhaustively
-without a database.
+Not yet delivered, and tracked in the checklist below: outbox-driven,
+cross-instance cache invalidation. Today's eviction is direct and in-process —
+correct for a single or few-instance deployment, backstopped by the TTL, but
+not what would keep every replica's local cache coherent (see Implementation
+status above). Precedence lives in `ScopeResolution` as a pure function of key,
+scope, and fetched rows, so it is tested exhaustively without a database.
 
 ## Implementation checklist
 
 - [x] Add configuration value, policy, and current-policy tables with ancestry constraints (`V0005`).
 - [x] Implement the typed key registry and startup validation (`ConfigurationKeys`, `ConfigurationKeyStartupValidator`).
 - [x] Implement resolution, explicit-null semantics, and the resolution trace (`ScopeResolution`, `JdbcConfigurationResolver`).
-- [x] Implement pinned re-resolution and scope precedence (`JdbcPolicyResolver`). Authoring and activation commands remain.
+- [x] Implement pinned re-resolution and scope precedence (`JdbcPolicyResolver`).
 - [x] Migrate `ordering.order_acceptance_policies` into the shared mechanism and drop the specialised table (`V0012`).
-- [ ] Implement caching with outbox-driven invalidation.
-- [ ] Add control-plane read and write APIs with ADR 0025 capabilities and ADR 0027 audit.
-- [x] Add precedence, pinning, and isolation tests (`ScopeResolutionTests`, `ResourceScopeTests`, `JdbcConfigurationResolverTests`, `JdbcPolicyResolverTests`).
+- [x] Implement policy and configuration-value authoring, each evicting its resolver's cache (`JdbcPolicyAuthor`, `JdbcConfigurationValueAuthor`).
+- [ ] Implement outbox-driven, cross-instance cache invalidation — today's eviction is direct and in-process (see Implementation status above).
+- [x] Add control-plane read and write APIs with ADR 0025 capabilities and ADR 0027 audit (`ConfigurationController`, `OrderAcceptancePolicyController`).
+- [x] Add precedence, pinning, and isolation tests (`ScopeResolutionTests`, `ResourceScopeTests`, `JdbcConfigurationResolverTests`, `JdbcPolicyResolverTests`, `JdbcConfigurationValueAuthorTests`).
 
 ## Exit criteria
 

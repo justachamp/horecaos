@@ -68,6 +68,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 
 /**
  * ADR 0059 stage 1's proving suite: the welcome series, end to end, through
@@ -188,7 +189,7 @@ class WelcomeFlowIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$",
+                new JdbcConfigurationResolver(jdbc),
                 Duration.ofHours(6));
     }
 

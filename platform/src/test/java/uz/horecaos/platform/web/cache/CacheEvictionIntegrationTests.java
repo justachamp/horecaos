@@ -24,6 +24,7 @@ import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
 
 /**
  * ADR 0033, against real Spring-managed beans rather than hand-constructed
@@ -67,6 +68,9 @@ class CacheEvictionIntegrationTests {
     private ConfigurationResolver configurationResolver;
 
     @Autowired
+    private ConfigurationValueAuthor configurationValues;
+
+    @Autowired
     private OrderAcceptancePolicyService orderAcceptancePolicy;
 
     @Autowired
@@ -89,10 +93,13 @@ class CacheEvictionIntegrationTests {
     }
 
     /**
-     * {@code tenant.configuration} has no writer to evict it (see this ADR's
-     * Implementation notes), so the TTL is the only thing bounding staleness —
-     * which means the cache genuinely being active, not merely annotated, is
-     * the whole of what makes it safe rather than silently wrong forever.
+     * A direct SQL change, the way an operator's one-off fix or a migration
+     * would write this table, bypasses the cache exactly like it always did —
+     * {@code JdbcConfigurationValueAuthor} (below) is the only writer that
+     * evicts, because it is the only writer that knows which scope it just
+     * changed. Proves the cache is genuinely active, not merely annotated,
+     * which is the whole of what makes the sixty-second TTL a real backstop
+     * rather than a comment nobody is testing.
      */
     @Test
     void aResolvedConfigurationValueStaysCachedAcrossADirectDatabaseChange() {
@@ -116,6 +123,38 @@ class CacheEvictionIntegrationTests {
                 .as("a real Cacheable proxy keeps answering the cached value; only removing "
                         + "@Cacheable from JdbcConfigurationResolver#resolve would turn this 111 into 222")
                 .isEqualTo(111);
+    }
+
+    /**
+     * The scenario this wave closes: before {@code JdbcConfigurationValueAuthor}
+     * existed, {@code tenant.configuration_values} had no writer at all, so
+     * nothing could evict {@code tenant.configuration} and the sixty-second TTL
+     * was the only thing bounding staleness. Every step below runs through real
+     * Spring-managed {@code JdbcConfigurationResolver}/{@code
+     * JdbcConfigurationValueAuthor} beans, so the eviction call actually reaches
+     * the same Caffeine cache the read is served from — the same shape {@code
+     * authoringASecondPolicyVersionIsVisibleOnTheVeryNextResolutionThroughTheRealCache}
+     * proves for policies, below.
+     */
+    @Test
+    void aValueSetThroughTheAuthorIsVisibleOnTheVeryNextResolutionThroughTheRealCache() {
+        ConfigurationKey<Integer> key = ConfigurationKey.of("ordering.approval_timeout_seconds", Integer.class)
+                .defaultValue(600)
+                .build();
+        ResourceScope scope = ResourceScope.tenant(TENANT);
+
+        configurationValues.set(key, scope, 111, false, null, ActorRef.user("owner-1", null), "initial");
+        assertThat(configurationResolver.resolve(key, scope).value())
+                .as("first resolution populates the real cache")
+                .isEqualTo(111);
+
+        configurationValues.set(key, scope, 222, false, 0L, ActorRef.user("owner-1", null), "shorten the window");
+
+        assertThat(configurationResolver.resolve(key, scope).value())
+                .as("a missing @CacheEvict on JdbcConfigurationResolver#evict, or a missing call "
+                        + "to it from JdbcConfigurationValueAuthor#set, would leave this reading "
+                        + "the sixty-second-old 111")
+                .isEqualTo(222);
     }
 
     /**

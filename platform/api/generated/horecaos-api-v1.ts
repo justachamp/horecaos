@@ -921,12 +921,22 @@ export interface ConfigurationKeyResponse {
 
 export interface ConfigurationResolutionResponse {
   cameFromDefault?: boolean;
+  currentVersionAtScope?: number;
   describe?: string;
   inspectedLevels?: Array<TraceLevel>;
   keyCode?: string;
   source?: string;
   value?: unknown;
   winningScope?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
+export interface ConfigurationValueResponse {
+  explicitNull?: boolean;
+  id?: string;
+  keyCode?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  value?: unknown;
+  version?: number;
 }
 
 export interface ConfirmAmendmentRequest {
@@ -4221,6 +4231,20 @@ export interface SessionResponse {
   version?: number;
 }
 
+export interface SetConfigurationValueRequest {
+  booleanValue?: boolean;
+  brandId?: string;
+  decimalValue?: number;
+  expectedVersion?: number;
+  explicitNull?: boolean;
+  integerValue?: number;
+  locationId?: string;
+  reason: string;
+  scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  stringValue?: string;
+  tenantId?: string;
+}
+
 export interface SetOfferingRequest {
   fulfillmentModes: Array<string>;
   status: "AVAILABLE" | "UNAVAILABLE" | "HIDDEN";
@@ -4956,6 +4980,7 @@ export interface Operations {
   "list_24": { method: "GET"; path: "/api/v1/control-plane/capabilities"; request: { parameters: Record<string, never> }; responses: { "200": Array<CapabilityDescriptor> } };
   "keys": { method: "GET"; path: "/api/v1/control-plane/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<ConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
+  "setValue": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
   "list_23": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
   "search_2": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik"; request: { parameters: { query: { limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
   "status_1": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/status"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceStatus } };

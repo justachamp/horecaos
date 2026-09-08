@@ -134,6 +134,64 @@ public final class ConfigurationKeys {
                     + "a value below that floor.")
             .build();
 
+    /**
+     * ADR 0027: how long a {@code SECURITY}-class audit event is retained
+     * before archival, in days.
+     *
+     * <p>The owner's answer of 2026-09-08 to that ADR's own open input
+     * ("retention periods per audit class") is "configurable, defaulting to
+     * ten years for both classes" — this key and {@link
+     * #AUDIT_BUSINESS_RETENTION_DAYS} are that answer. 3,653 days is ten
+     * Gregorian years counted from a non-leap 1 January, matching how a legal
+     * retention period is normally quoted. Registering the period is not the
+     * same as enforcing it: nothing in this build reads either key yet, and
+     * {@code AuditPartitionManager} still only rolls partitions forward, never
+     * drops or archives one — see ADR 0027's own Implementation notes.
+     */
+    public static final ConfigurationKey<Integer> AUDIT_SECURITY_RETENTION_DAYS = ConfigurationKey.of(
+                    "audit.security_retention_days", Integer.class)
+            .defaultValue(3653)
+            .ownedBy("audit")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days a SECURITY-class audit event is retained before archival. "
+                    + "Defaults to ten years. Registered but not yet enforced: no sweep reads it.")
+            .build();
+
+    /**
+     * ADR 0027: the same question for {@code BUSINESS}-class events.
+     *
+     * <p>{@code audit.api.AuditClass} names exactly these two classes, and the
+     * owner's directive treats them identically: both default to ten years,
+     * and both are platform-only, because a retention floor set by legal or
+     * finance is not a per-tenant choice.
+     */
+    public static final ConfigurationKey<Integer> AUDIT_BUSINESS_RETENTION_DAYS = ConfigurationKey.of(
+                    "audit.business_retention_days", Integer.class)
+            .defaultValue(3653)
+            .ownedBy("audit")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days a BUSINESS-class audit event is retained before archival. "
+                    + "Defaults to ten years. Registered but not yet enforced: no sweep reads it.")
+            .build();
+
+    /**
+     * ADR 0063: the phone-shape gate for Telegram share-contact sign-in.
+     *
+     * <p>Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code customers.api.CustomerConfigurationKeys}
+     * where it is consumed, for the reason recorded on {@link
+     * #COMMERCIAL_ENFORCEMENT_CEILING}: this registry is internal to tenancy,
+     * and a reference the other way would make the modules cyclic.
+     */
+    public static final ConfigurationKey<String> CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN = ConfigurationKey.of(
+                    "customers.telegram_auth_phone_pattern", String.class)
+            .defaultValue("^\\+?998\\d{9}$")
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Regular expression a Telegram-shared contact's phone number must match "
+                    + "for ADR 0063 share-contact sign-in. Defaults to an Uzbek mobile in E.164.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             ORDER_APPROVAL_TIMEOUT_SECONDS,
             CART_EXPIRY_MINUTES,
@@ -144,7 +202,10 @@ public final class ConfigurationKeys {
             NOTIFICATION_QUIET_HOURS_START,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,
-            TELEMETRY_TRACK_RETENTION_DAYS));
+            TELEMETRY_TRACK_RETENTION_DAYS,
+            AUDIT_SECURITY_RETENTION_DAYS,
+            AUDIT_BUSINESS_RETENTION_DAYS,
+            CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN));
 
     private ConfigurationKeys() {}
 

@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ import uz.horecaos.platform.conversations.api.ChannelKind;
 import uz.horecaos.platform.conversations.api.ConversationCallbackToken;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
 import uz.horecaos.platform.conversations.api.ConversationInboundPort;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.customers.api.CustomerTelegramSignIn;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -46,6 +48,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstall
 import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.RejectReasonDirectory;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
@@ -88,6 +91,9 @@ public class TelegramUpdateHandler {
     private static final String AUTH_CODE_PREFIX = "auth_";
 
     private static final String AUTH_CONTACT_OPERATION = "integration.telegram.auth.contact";
+
+    /** Fail closed: a malformed configured pattern refuses every phone rather than matching all of them. */
+    private static final Pattern NEVER_MATCHES = Pattern.compile("(?!)");
 
     /** ADR 0033: bounds one chat repeatedly sharing/re-sharing a contact against the same or different codes. */
     private static final RateLimiter.Policy AUTH_CONTACT_PER_CHAT = RateLimiter.Policy.strictPerMinute(5);
@@ -134,7 +140,7 @@ public class TelegramUpdateHandler {
     private final TelegramInstallationBrandLookup installationBrands;
     private final TelegramUpdateDedupStore dedup;
     private final RateLimiter rateLimiter;
-    private final Pattern authAllowedPhonePattern;
+    private final ConfigurationResolver configuration;
     private final Duration rejectReasonTokenTtl;
 
     public TelegramUpdateHandler(
@@ -164,9 +170,7 @@ public class TelegramUpdateHandler {
             TelegramInstallationBrandLookup installationBrands,
             TelegramUpdateDedupStore dedup,
             RateLimiter rateLimiter,
-            // ADR 0063's own open input: the owner's final allowed-phone pattern.
-            // Defaults to the ADR's own default, an Uzbek mobile in E.164.
-            @Value("${horecaos.customers.telegram-auth.phone-pattern:^\\+?998\\d{9}$}") String authAllowedPhonePattern,
+            ConfigurationResolver configuration,
             // Same property and default TelegramChannelAdapter's own order-decision
             // keyboard uses (wave 24): a reason-picker button is a second decision
             // token for the same order, and there is no reason for the two halves
@@ -198,7 +202,7 @@ public class TelegramUpdateHandler {
         this.installationBrands = installationBrands;
         this.dedup = dedup;
         this.rateLimiter = rateLimiter;
-        this.authAllowedPhonePattern = Pattern.compile(authAllowedPhonePattern);
+        this.configuration = configuration;
         this.rejectReasonTokenTtl = rejectReasonTokenTtl;
     }
 
@@ -1320,7 +1324,16 @@ public class TelegramUpdateHandler {
         // "\+?" is what makes a plus optional, the same spelling tolerance
         // PhoneNumber.requireDeliverableMobile (called inside resolveAccount
         // below) already gives every other number this platform accepts.
-        if (!authAllowedPhonePattern.matcher(phone).matches()) {
+        //
+        // Resolved at BRAND scope through ADR 0030 rather than a deployment
+        // property (CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN):
+        // an operator can now widen or narrow which numbers a specific
+        // brand's bot accepts without a deploy. Cached for up to sixty
+        // seconds (ADR 0033), so a just-changed pattern is not necessarily
+        // in force on the very next message.
+        if (!allowedPhonePattern(installation.tenantId(), link.brandId())
+                .matcher(phone)
+                .matches()) {
             // ADR 0063: "a non-matching phone gets a polite refusal naming
             // nothing" — no mention of the pattern, the number, or why.
             bots.sendMessage(
@@ -1370,6 +1383,40 @@ public class TelegramUpdateHandler {
                 "Signed in customer account {} in tenant {} via Telegram share-contact",
                 resolved.accountId(),
                 link.tenantId());
+    }
+
+    /**
+     * Resolves ADR 0063's allowed-phone pattern at brand scope through ADR
+     * 0030 ({@link CustomerConfigurationKeys#TELEGRAM_AUTH_PHONE_PATTERN}).
+     *
+     * <p>Compiled fresh from the resolved string rather than cached across
+     * calls: the resolution itself is already cached (ADR 0033's {@code
+     * tenant.configuration}, sixty-second TTL), so this only recompiles when
+     * the resolved string actually changes or the cache entry expires, and a
+     * bot's contact-share volume is nowhere near where {@code Pattern.compile}
+     * would matter.
+     *
+     * <p>An operator-supplied pattern that fails to compile is refused the same
+     * phone every valid pattern would refuse a mismatch, rather than thrown as
+     * an unhandled exception into the middle of a webhook delivery: a malformed
+     * regex is exactly the kind of mistake an operator can make once and should
+     * not be able to turn into every sign-in failing loudly instead of politely.
+     */
+    private Pattern allowedPhonePattern(UUID tenantId, UUID brandId) {
+        String configured = configuration
+                .resolve(CustomerConfigurationKeys.TELEGRAM_AUTH_PHONE_PATTERN, ResourceScope.brand(tenantId, brandId))
+                .value();
+        try {
+            return Pattern.compile(Objects.requireNonNull(configured));
+        } catch (PatternSyntaxException malformed) {
+            log.error(
+                    "Configured Telegram auth phone pattern for tenant {} brand {} does not compile; refusing every "
+                            + "sign-in until it is fixed",
+                    tenantId,
+                    brandId,
+                    malformed);
+            return NEVER_MATCHES;
+        }
     }
 
     // -------------------------------------------------------------- group link

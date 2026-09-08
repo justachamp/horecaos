@@ -38,14 +38,24 @@
   `ApprovalAction` names every live operation and gives it a deliberate permissive or
   fail-closed absent-policy mode; the coverage surface exposes that state; and V0082
   makes new brand/location policies name their actual resources while preserving old
-  ambiguous rows as visibly marked legacy fallbacks. Also not built: archival of closed
-  partitions to protected storage, and the retention periods the Open input names.
+  ambiguous rows as visibly marked legacy fallbacks. Retention periods are no longer an
+  unresolved number this Implementation status must flag: the owner's 2026-09-08 directive
+  sets both classes to a configurable default of ten years, registered as ADR 0030 keys
+  `audit.security_retention_days` and `audit.business_retention_days` in `ConfigurationKeys`
+  — a value an operator could in principle override per the ADR 0030 control plane, though
+  neither key is settable below `PLATFORM` scope, matching that a retention floor is not a
+  per-tenant choice. Still not built, and unaffected by that: archival of closed partitions
+  to protected storage. Nothing reads either retention key yet — the number is stored, not
+  enforced — because there is no sweep to enforce it against.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
 - Depends on: ADR 0004, ADR 0025
 - Supersedes / Superseded by: — / ADR 0050 for missing-policy behavior and exact approval-policy scope
-- Open inputs: Retention periods per audit class (legal, finance)
+- Open inputs: none — retention periods are configurable now, defaulting to ten years for
+  both classes (see Implementation status above); archival to protected storage that would
+  actually enforce a period remains unbuilt and is a separate, still-open engineering item,
+  not a product question
 
 ## Context
 
@@ -263,7 +273,8 @@ features but never disables audit writing for an action that still executes.
 
 ## Implementation checklist
 
-- [ ] Approve retention periods and archival destinations per audit class (legal, finance).
+- [x] Make retention periods per audit class configurable, defaulting to ten years for both (`ConfigurationKeys.AUDIT_SECURITY_RETENTION_DAYS`/`AUDIT_BUSINESS_RETENTION_DAYS`, ADR 0030).
+- [ ] Build the archival sweep that reads those periods and moves closed partitions to protected storage.
 - [x] Add partitioned audit, approval request, and approval policy tables (`V0007`).
 - [x] Restrict the application database role to insert and select on `audit` (`horecaos_application`), proven by a test that connects as that role and fails to update or delete.
 - [x] Implement the transactional recorder and classification-aware serializer (`JdbcAuditRecorder`, `ChangeDocuments`).

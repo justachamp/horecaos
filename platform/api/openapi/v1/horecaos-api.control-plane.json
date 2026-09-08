@@ -1184,6 +1184,10 @@
           "cameFromDefault" : {
             "type" : "boolean"
           },
+          "currentVersionAtScope" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "describe" : {
             "type" : "string"
           },
@@ -1203,6 +1207,30 @@
           "winningScope" : {
             "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ConfigurationValueResponse" : {
+        "properties" : {
+          "explicitNull" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "keyCode" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          },
+          "value" : { },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -5135,6 +5163,53 @@
         },
         "type" : "object"
       },
+      "SetConfigurationValueRequest" : {
+        "properties" : {
+          "booleanValue" : {
+            "type" : "boolean"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decimalValue" : {
+            "type" : "number"
+          },
+          "expectedVersion" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "explicitNull" : {
+            "type" : "boolean"
+          },
+          "integerValue" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          },
+          "stringValue" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "scopeType" ],
+        "type" : "object"
+      },
       "SetOfferingRequest" : {
         "properties" : {
           "fulfillmentModes" : {
@@ -6195,6 +6270,44 @@
           }
         },
         "summary" : "Resolve one key at one scope, and explain why",
+        "tags" : [ "Configuration" ]
+      }
+    },
+    "/api/v1/control-plane/configuration/keys/{code}/values" : {
+      "post" : {
+        "description" : "Refused for an unregistered key, a scope the key does not declare settable, or a value whose shape does not match the key's declared type — never coerced. expectedVersion null means \"nothing is set here yet\"; otherwise it must be the version currentVersionAtScope on a prior GET .../resolution last reported, or the write is refused with STALE_VERSION.",
+        "operationId" : "setValue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetConfigurationValueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConfigurationValueResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the value stored at exactly one key and scope",
         "tags" : [ "Configuration" ]
       }
     },

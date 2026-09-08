@@ -117,6 +117,7 @@ import uz.horecaos.platform.payments.notifications.FiscalCustomerReceiptTrigger;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 
 /**
  * ADR 0060's bot, end to end: link a staff account, watch the order
@@ -261,7 +262,7 @@ class TelegramInteractiveBotIntegrationTest {
                 new TelegramInstallationBrandLookup(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
-                "^\\+?998\\d{9}$",
+                new JdbcConfigurationResolver(jdbc),
                 Duration.ofHours(6));
     }
 

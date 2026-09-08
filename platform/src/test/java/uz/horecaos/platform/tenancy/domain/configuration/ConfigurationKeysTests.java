@@ -67,4 +67,21 @@ class ConfigurationKeysTests {
         assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.BRAND))
                 .isTrue();
     }
+
+    /**
+     * ADR 0027's owner directive of 2026-09-08: both audit classes default to
+     * ten years, configurable, and platform-only — a retention floor is not a
+     * per-tenant choice.
+     */
+    @Test
+    void bothAuditRetentionKeysDefaultToTenYearsAndArePlatformOnly() {
+        assertThat(ConfigurationKeys.AUDIT_SECURITY_RETENTION_DAYS.defaultValue())
+                .isEqualTo(3653);
+        assertThat(ConfigurationKeys.AUDIT_BUSINESS_RETENTION_DAYS.defaultValue())
+                .isEqualTo(3653);
+        assertThat(ConfigurationKeys.AUDIT_SECURITY_RETENTION_DAYS.settableScopes())
+                .containsExactly(ScopeType.PLATFORM);
+        assertThat(ConfigurationKeys.AUDIT_BUSINESS_RETENTION_DAYS.settableScopes())
+                .containsExactly(ScopeType.PLATFORM);
+    }
 }
