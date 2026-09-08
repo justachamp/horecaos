@@ -200,7 +200,7 @@ class TelegramInteractiveBotIntegrationTest {
                 () -> {
                     throw new UnsupportedOperationException("not exercised by this suite");
                 },
-                tenantId -> false);
+                tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING);
         staffLinks = new TelegramStaffLinkService(jdbc, clock, Duration.ofMinutes(15));
         bindingSync = new CustomerProviderBindingSyncService(
                 new JdbcNotificationStore(jdbc),

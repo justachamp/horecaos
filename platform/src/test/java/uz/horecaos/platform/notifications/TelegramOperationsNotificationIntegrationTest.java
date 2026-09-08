@@ -184,7 +184,7 @@ class TelegramOperationsNotificationIntegrationTest {
                         () -> {
                             throw new UnsupportedOperationException("not exercised by this suite");
                         },
-                        tenantId -> false);
+                        tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING);
         BotCallbackAuthorizer callbackAuthorizer = new BotCallbackAuthorizer(
                 actionTokens,
                 staffLinks,

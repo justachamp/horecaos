@@ -3,7 +3,7 @@ package uz.horecaos.platform.iam.api;
 import java.util.UUID;
 
 /**
- * Whether a tenant is suspended, asked by authorization and answered by
+ * How much of a tenant is reachable, asked by authorization and answered by
  * tenancy.
  *
  * <p>Declared here and implemented there for the reason {@link ResourceScope}'s
@@ -16,16 +16,16 @@ import java.util.UUID;
  * implementation caches it (ADR 0033, {@code tenant.status}) and the writer
  * evicts. PostgreSQL stays the authority: a miss or a cache outage degrades to
  * a read, and the fail-safe direction is deliberate — an unknown tenant is
- * <em>not</em> suspended, because a lookup failure must not lock an operating
+ * {@code OPERATING}, because a lookup failure must not lock an operating
  * restaurant out of its own tills.
  */
 public interface TenantSuspensionLookup {
 
     /**
      * @param tenantId the tenant a request is scoped to
-     * @return whether that tenant is currently suspended; false for a tenant
-     *         that does not exist, which is a question the scope verifier
-     *         answers and this one deliberately does not
+     * @return how much of it is reachable; {@link TenantAvailability#OPERATING}
+     *         for a tenant that does not exist, which is a question the scope
+     *         verifier answers and this one deliberately does not
      */
-    boolean isSuspended(UUID tenantId);
+    TenantAvailability availabilityOf(UUID tenantId);
 }
