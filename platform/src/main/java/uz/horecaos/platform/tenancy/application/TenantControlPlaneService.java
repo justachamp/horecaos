@@ -29,6 +29,7 @@ import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
+import uz.horecaos.platform.tenancy.application.port.TenantStatusCache;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
@@ -45,6 +46,7 @@ public class TenantControlPlaneService {
 
     private final TenantControlPlaneStore store;
     private final TenantAccessPolicy accessPolicy;
+    private final TenantStatusCache suspensions;
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final AuditRecorder audit;
@@ -58,12 +60,14 @@ public class TenantControlPlaneService {
     public TenantControlPlaneService(
             TenantControlPlaneStore store,
             TenantAccessPolicy accessPolicy,
+            TenantStatusCache suspensions,
             Clock clock,
             ApplicationEventPublisher events,
             AuditRecorder audit,
             CurrentActor currentActor) {
         this.store = store;
         this.accessPolicy = accessPolicy;
+        this.suspensions = suspensions;
         this.clock = clock;
         this.events = events;
         this.audit = audit;
@@ -223,6 +227,76 @@ public class TenantControlPlaneService {
                 tenantId.value(),
                 "Keycloak organization reconciliation",
                 Map.of("keycloakOrganizationId", organizationId));
+        CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
+                .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
+        return toView(tenant, identityMode);
+    }
+
+    /**
+     * Stops a tenant trading, and makes that mean something.
+     *
+     * <p>Platform-admin only, and deliberately not a tenant capability: a tenant
+     * cannot be trusted to lift its own suspension, and the reasons for
+     * suspending (non-payment, abuse, a legal instruction) are the platform's
+     * side of the relationship, not the restaurant's.
+     *
+     * <p>The status write is only half of it. Until wave 79 the other half did
+     * not exist anywhere: {@code Tenant.suspend()} set a column that no request
+     * path read, so a suspended tenant's staff kept signing in and kept every
+     * capability they held. {@code JdbcAuthorizationService} now drops
+     * tenant-scoped grants for a suspended tenant, and this evicts the cache
+     * that answer is read from, so the refusal starts at the next request rather
+     * than at the end of a TTL.
+     */
+    @Transactional
+    public TenantView suspendTenant(TenantId tenantId, String reason) {
+        return changeTenantStatus(tenantId, reason, Tenant::suspend, "tenant.suspended");
+    }
+
+    /**
+     * Lets a tenant trade again.
+     *
+     * <p>Reachable while the tenant is suspended because the caller is a
+     * platform administrator, whose authority is the Keycloak realm role and a
+     * platform-scoped grant — neither of which suspension touches. If
+     * suspension could lock out the person who lifts it, it would be a one-way
+     * door, and this is the test that says it is not.
+     */
+    @Transactional
+    public TenantView reactivateTenant(TenantId tenantId, String reason) {
+        return changeTenantStatus(
+                tenantId,
+                reason,
+                tenant -> {
+                    // Tenant.activate() also accepts PROVISIONING, because it is
+                    // the same transition onboarding uses to take a tenant live.
+                    // Reactivation is not that: lifting a suspension on a tenant
+                    // that never finished onboarding would put it into service
+                    // without the steps onboarding exists to run.
+                    if (tenant.status() != TenantStatus.SUSPENDED) {
+                        throw new IllegalStateException(
+                                "Only a suspended tenant can be reactivated; this one is " + tenant.status());
+                    }
+                    tenant.activate();
+                },
+                "tenant.reactivated");
+    }
+
+    private TenantView changeTenantStatus(
+            TenantId tenantId, String reason, java.util.function.Consumer<Tenant> transition, String actionCode) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requirePlatformAdministrator();
+        TenantStatus before = tenant.status();
+        transition.accept(tenant);
+        store.updateTenantStatus(tenant);
+        suspensions.evict(tenantId.value());
+        recordAudit(
+                actionCode,
+                ResourceScope.tenant(tenantId.value()),
+                "Tenant",
+                tenantId.value(),
+                reason,
+                Map.of("from", before.name(), "to", tenant.status().name()));
         CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
                 .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
         return toView(tenant, identityMode);

@@ -189,7 +189,8 @@ class TenantOutboxTransactionIntegrationTests {
                 ApplicationEventPublisher events,
                 uz.horecaos.platform.audit.api.AuditRecorder auditRecorder,
                 CurrentActor currentActor) {
-            return new TenantControlPlaneService(store, accessPolicy, clock, events, auditRecorder, currentActor);
+            return new TenantControlPlaneService(
+                    store, accessPolicy, tenantId -> {}, clock, events, auditRecorder, currentActor);
         }
     }
 

@@ -18,6 +18,7 @@ import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
 
 /**
  * Resolves capability grants (ADR 0025).
@@ -56,11 +57,14 @@ public class JdbcAuthorizationService implements AuthorizationService {
     private final JdbcClient jdbc;
     private final Clock clock;
     private final CurrentActor currentActor;
+    private final TenantSuspensionLookup suspensions;
 
-    public JdbcAuthorizationService(JdbcClient jdbc, Clock clock, CurrentActor currentActor) {
+    public JdbcAuthorizationService(
+            JdbcClient jdbc, Clock clock, CurrentActor currentActor, TenantSuspensionLookup suspensions) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.currentActor = currentActor;
+        this.suspensions = suspensions;
     }
 
     /**
@@ -119,9 +123,43 @@ public class JdbcAuthorizationService implements AuthorizationService {
     }
 
     private boolean hasGrant(String subject, Capability capability, ResourceScope scope) {
-        return grantsFor(subject, scope.tenantId()).stream()
+        return applicableGrants(subject, scope.tenantId()).stream()
                 .filter(grant -> grant.capability() == capability)
                 .anyMatch(grant -> grant.scope().covers(scope));
+    }
+
+    /**
+     * The grants that apply right now, which is not the same set as the grants
+     * that exist.
+     *
+     * <p>A suspended tenant's grants are all still {@code ACTIVE} rows with live
+     * validity windows — suspension is a fact about the tenant, not about any
+     * grant — so nothing in {@link #SELECT_GRANTS} can see it, and until this
+     * existed nothing anywhere did: {@code Tenant.suspend()} set a column that
+     * no request path read, and a suspended tenant's staff kept every capability
+     * they held.
+     *
+     * <p>What suspension removes is the tenant-scoped grants, and only those. A
+     * {@code PLATFORM} grant survives, which is the whole reason this filter is
+     * here rather than in the SQL: suspension has to be reversible by somebody,
+     * and that somebody reaches the tenant through a platform-scoped grant or
+     * the platform-admin realm role. Both still work on a suspended tenant, so
+     * the platform can read it, audit it, and reactivate it.
+     *
+     * <p>It sits outside {@link #grantsFor} deliberately. That method is
+     * {@code @Cacheable} on subject and tenant, and a cached value must not
+     * depend on anything absent from its key — caching "these grants apply"
+     * would keep a suspension from taking effect until the entry expired, and
+     * would keep a reactivation from taking effect just as long.
+     */
+    private List<GrantRow> applicableGrants(String subject, @Nullable UUID tenantId) {
+        List<GrantRow> grants = grantsFor(subject, tenantId);
+        if (tenantId == null || !suspensions.isSuspended(tenantId)) {
+            return grants;
+        }
+        return grants.stream()
+                .filter(grant -> grant.scope().type() == ScopeType.PLATFORM)
+                .toList();
     }
 
     @Override
@@ -133,7 +171,11 @@ public class JdbcAuthorizationService implements AuthorizationService {
 
     @Override
     public CapabilityView viewFor(String subject, UUID tenantId) {
-        List<GrantRow> grants = grantsFor(subject, tenantId);
+        // The view renders what a frontend may offer. Showing a suspended
+        // tenant's staff the capabilities they hold would render a menu of
+        // actions every one of which is then refused, so it answers with what
+        // applies rather than with what exists.
+        List<GrantRow> grants = applicableGrants(subject, tenantId);
 
         Set<Capability> all = EnumSet.noneOf(Capability.class);
         grants.forEach(grant -> all.add(grant.capability()));

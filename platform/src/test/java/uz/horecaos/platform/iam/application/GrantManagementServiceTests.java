@@ -113,7 +113,10 @@ class GrantManagementServiceTests {
         // visible, turning a rule failure into a flake.
         authorization =
                 new JdbcAuthorizationService(
-                        jdbc, clock, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
+                        jdbc,
+                        clock,
+                        () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
+                        tenantId -> false) {
                     @Override
                     public void evictGrants(String subject, @Nullable UUID tenantId) {
                         // no cache in this fixture

@@ -162,6 +162,7 @@ class OnboardingFullRunIntegrationTests {
         controlPlane = new TenantControlPlaneService(
                 new JdbcTenantControlPlaneStore(jdbc),
                 new TenantAccessPolicy(systemActor, deniesEverything(), false),
+                tenantId -> {},
                 CLOCK,
                 event -> {},
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
@@ -433,7 +434,7 @@ class OnboardingFullRunIntegrationTests {
                 throw new UnsupportedOperationException("no interactive actor in a background workflow");
             }
         };
-        var authorizationService = new JdbcAuthorizationService(jdbc, CLOCK, currentActor);
+        var authorizationService = new JdbcAuthorizationService(jdbc, CLOCK, currentActor, tenantId -> false);
         var grantManagement =
                 new GrantManagementService(jdbc, authorizationService, authorizationService, event -> {}, CLOCK);
         TenantOwnerAuthorityGrantor authority = new TenantOwnerAuthorityGrantorAdapter(grantManagement);
