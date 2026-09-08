@@ -1,7 +1,7 @@
 # ADR 0006: Message retry, dead-letter, and replay operations
 
 - Decision status: Accepted
-- Implementation status: Partial — `V0010` adds the `RESOLVED` terminal state
+- Implementation status: Built — `V0010` adds the `RESOLVED` terminal state
   and its evidence columns to both `integration.outbox_events` and
   `integration.inbox_messages` with lifecycle check constraints;
   `FailureCategory` is the shared classification; `FailureOperationsService`
@@ -56,8 +56,15 @@
   `FailureClassifier` existed. `last_error` itself remains the one projected
   field ADR 0029 does not actually guarantee: the exception class plus its
   message, bounded and stack-trace-free, but free text rather than a
-  classification. Not built: the dashboard, which ADR 0023 owns and
-  deliberately replaced with a probe.
+  classification. Nothing this record specifies is unbuilt: every checklist item
+  below is done, and the one item earlier revisions carried as missing — the
+  dashboard — was never this record's to build. ADR 0023 owns it, deliberately
+  answered it with `infra/observability/horecaos-probe.sh` rather than a page,
+  and wave 57 then provisioned a real Grafana dashboard in
+  `infra/observability/compose.observability.yaml` anyway. An operator can list,
+  retry and resolve a failed message today, with maker-checker on an uncertain
+  external outcome and the backlog on a gauge, which is the whole of what this
+  record promised.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), operations
