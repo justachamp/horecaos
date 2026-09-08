@@ -1873,6 +1873,85 @@
         "required" : [ "locationId" ],
         "type" : "object"
       },
+      "DeliveryTariffControllerDraftTariffVersionRequest" : {
+        "properties" : {
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "discounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DiscountRequest"
+            },
+            "type" : "array"
+          },
+          "distanceAccrual" : {
+            "enum" : [ "STARTED_KILOMETRE", "PRORATED_METRE" ],
+            "type" : "string"
+          },
+          "distanceMode" : {
+            "enum" : [ "RADIUS", "ROAD" ],
+            "type" : "string"
+          },
+          "feeRoundingRule" : {
+            "enum" : [ "HALF_UP", "HALF_EVEN" ],
+            "type" : "string"
+          },
+          "feeRoundingStepMinor" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeSource" : {
+            "enum" : [ "TARIFF", "PROVIDER_QUOTE" ],
+            "type" : "string"
+          },
+          "maxDistanceMeters" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "minFeeMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "minimum" : 10000,
+            "type" : "integer"
+          },
+          "routingProviderInstallationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "timeRules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeRuleRequest"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
+        "type" : "object"
+      },
       "DeliveryTariffControllerVersionView" : {
         "properties" : {
           "status" : {
@@ -2062,85 +2141,6 @@
             "type" : "integer"
           }
         },
-        "type" : "object"
-      },
-      "DraftTariffVersionRequest" : {
-        "properties" : {
-          "actorId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "bands" : {
-            "items" : {
-              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
-            },
-            "minItems" : 1,
-            "type" : "array"
-          },
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "discounts" : {
-            "items" : {
-              "$ref" : "#/components/schemas/DiscountRequest"
-            },
-            "type" : "array"
-          },
-          "distanceAccrual" : {
-            "enum" : [ "STARTED_KILOMETRE", "PRORATED_METRE" ],
-            "type" : "string"
-          },
-          "distanceMode" : {
-            "enum" : [ "RADIUS", "ROAD" ],
-            "type" : "string"
-          },
-          "feeRoundingRule" : {
-            "enum" : [ "HALF_UP", "HALF_EVEN" ],
-            "type" : "string"
-          },
-          "feeRoundingStepMinor" : {
-            "exclusiveMinimum" : 0,
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "feeSource" : {
-            "enum" : [ "TARIFF", "PROVIDER_QUOTE" ],
-            "type" : "string"
-          },
-          "maxDistanceMeters" : {
-            "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "maxFeeMinor" : {
-            "format" : "int64",
-            "minimum" : 0,
-            "type" : "integer"
-          },
-          "minFeeMinor" : {
-            "format" : "int64",
-            "minimum" : 0,
-            "type" : "integer"
-          },
-          "roadFactorBasisPoints" : {
-            "format" : "int32",
-            "minimum" : 10000,
-            "type" : "integer"
-          },
-          "routingProviderInstallationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "timeRules" : {
-            "items" : {
-              "$ref" : "#/components/schemas/TimeRuleRequest"
-            },
-            "type" : "array"
-          }
-        },
-        "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
         "type" : "object"
       },
       "EndPolicyRequest" : {
@@ -9224,7 +9224,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DraftTariffVersionRequest"
+                "$ref" : "#/components/schemas/DeliveryTariffControllerDraftTariffVersionRequest"
               }
             }
           },

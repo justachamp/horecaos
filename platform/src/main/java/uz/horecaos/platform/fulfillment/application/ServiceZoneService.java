@@ -11,10 +11,16 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
  * Authoring zones and moving their versions through the lifecycle (ADR 0037).
@@ -49,18 +55,38 @@ public class ServiceZoneService {
     private final JdbcServiceZoneStore store;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public ServiceZoneService(JdbcServiceZoneStore store, ObjectMapper objectMapper, Clock clock) {
+    public ServiceZoneService(
+            JdbcServiceZoneStore store,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor) {
         this.store = store;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     @Transactional
     public UUID createZone(
             UUID tenantId, UUID brandId, ZoneRole role, String code, String nameRu, String nameUz, String nameEn) {
         UUID zoneId = UUID.randomUUID();
-        store.insertZone(zoneId, tenantId, brandId, role, code, nameRu, nameUz, nameEn, clock.instant());
+        Instant now = clock.instant();
+        store.insertZone(zoneId, tenantId, brandId, role, code, nameRu, nameUz, nameEn, now);
+
+        audit.record(AuditFact.of("delivery.zone.registered", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ServiceZone", zoneId)
+                .because("Registered a %s zone lineage '%s'".formatted(role, code))
+                .changed(Map.of("role", role.name(), "code", code))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return zoneId;
     }
 
@@ -106,6 +132,7 @@ public class ServiceZoneService {
                 origin.point(),
                 radiusMeters,
                 objectMapper.writeValueAsString(shape));
+        auditVersionDrafted(request, version, "CIRCLE", now);
         return new DraftedVersion(id, request.zoneId(), version);
     }
 
@@ -122,7 +149,24 @@ public class ServiceZoneService {
 
         store.insertPolygonVersion(
                 draft(request, id, version, null, now), geoJson, objectMapper.writeValueAsString(shape));
+        auditVersionDrafted(request, version, "POLYGON", now);
         return new DraftedVersion(id, request.zoneId(), version);
+    }
+
+    private void auditVersionDrafted(NewVersion request, int version, String shapeKind, Instant now) {
+        audit.record(AuditFact.of("delivery.zone.version.drafted", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(request.tenantId(), request.brandId()))
+                .target("ServiceZone", request.zoneId())
+                .targetVersion((long) version)
+                .because("Drafted %s version %d of zone %s".formatted(shapeKind, version, request.zoneId()))
+                .changed(Map.of(
+                        "shape", shapeKind,
+                        "priority", request.priority(),
+                        "currency", request.currency()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     /**
@@ -171,12 +215,24 @@ public class ServiceZoneService {
             throw new ZoneActivationRefusedException(problems);
         }
 
-        if (store.activateVersion(tenantId, zoneId, version, actorId, clock.instant()) != 1) {
+        Instant now = clock.instant();
+        if (store.activateVersion(tenantId, zoneId, version, actorId, now) != 1) {
             // Lost a race with another activation of the same zone. A conflict and
             // not a fault: the caller re-reads and decides.
             throw new ZoneActivationRefusedException(
                     List.of("This version was activated or withdrawn by someone else"));
         }
+
+        audit.record(AuditFact.of("delivery.zone.version.activated", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ServiceZone", zoneId)
+                .targetVersion((long) version)
+                .because("Activated version %d of zone %s".formatted(version, zoneId))
+                .changed(Map.of("version", version))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     /**
@@ -194,7 +250,18 @@ public class ServiceZoneService {
 
     @Transactional
     public void bindLocation(UUID tenantId, UUID brandId, UUID zoneId, UUID locationId) {
-        store.bindLocation(tenantId, brandId, zoneId, locationId, clock.instant());
+        Instant now = clock.instant();
+        store.bindLocation(tenantId, brandId, zoneId, locationId, now);
+
+        audit.record(AuditFact.of("delivery.zone.location.bound", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ServiceZone", zoneId)
+                .because("Bound location %s to zone %s".formatted(locationId, zoneId))
+                .changed(Map.of("locationId", locationId.toString()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     /** Every zone this brand has registered (operations §3.6 Delivery zones). */
@@ -213,6 +280,17 @@ public class ServiceZoneService {
     }
 
     public record ZoneDetail(JdbcServiceZoneStore.ZoneSummaryRow zone, List<UUID> boundLocationIds) {}
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    private static String correlationId() {
+        String correlationId = org.slf4j.MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
+    }
 
     private JdbcServiceZoneStore.DraftVersion draft(
             NewVersion request, UUID id, int version, @Nullable UUID originLocationId, Instant now) {

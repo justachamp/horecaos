@@ -1,7 +1,18 @@
 # ADR 0038: Legal entities, fiscal receipts, and fiscal product classification
 
 - Decision status: Accepted
-- Implementation status: Partial — built: `catalog.fiscal_classifications`, the
+- Implementation status: Partial — 2026-09-09: the registry's HTTP surface is now
+  also reachable from a tenant's own operations app —
+  `OperationsLegalEntityController` at
+  `/api/v1/operations/tenants/{tenantId}/legal-entities` exposes exactly what
+  `LegalEntityController` exposes below (register, list, get, activate, assign, a
+  location's assignment history — `suspend`/`archive` still have no HTTP surface
+  on either), under the same owner-only `legal-entity.manage` capability; no wider
+  capability was introduced for this. `LegalEntityService` now writes an ADR 0027
+  audit fact — `legal-entity.registered`/`.activated`/`.suspended`/`.archived`/
+  `.assigned` — on every mutation on both surfaces, which this record had not
+  previously done despite `AssignLocationCommand.approvedBy` existing as the
+  evidence field since V0053. Built: `catalog.fiscal_classifications`, the
   ИКПУ reference `catalog.mxik_reference`, the delivery-fee node, the
   whole-percent `ck_tax_rate_whole_percent` constraint on
   `pricing.tax_profiles.rate_basis_points`, and the validator's coverage
@@ -1098,6 +1109,12 @@ orders.
 ## Implementation checklist
 
 - [x] Add `tenant.legal_entities` and `tenant.location_fiscal_assignments` with the overlap exclusion constraint. (V0053, which also adds the two foreign keys from `payments.merchant_bindings.legal_entity_id` and `fiscal.fiscal_documents.legal_entity_id`, so neither is an unconstrained uuid any longer. A control-plane surface now writes both tables through `LegalEntityController` — register, list, get and activate an entity, and read/write a location's fiscal assignment, gated by the `legal-entity.read`/`legal-entity.manage` capabilities.)
+- [x] Mirror the same read and owner-gated mutations onto the operations
+      surface (`OperationsLegalEntityController`), unchanged in capability —
+      `suspend`/`archive` stay off both HTTP surfaces, and no maker-checker
+      gate was added on top of the existing owner-only `legal-entity.manage` —
+      and add the ADR 0027 audit fact `LegalEntityService` had not been
+      writing on register/activate/suspend/archive/assign.
 - [ ] Extend ADR 0018 tax profile resolution and the quote context hash with the legal entity, and constrain `rate_basis_points` to multiples of 100.
 - [x] Add `catalog.fiscal_classifications` with `unit_code` and `fiscal_name`, and `catalog.mxik_reference`; migrate V0021's interim columns into it and drop them, along with `catalog.products.tax_category_code` and the two unclassified indexes. (V0028; the four completeness fields are nullable and asserted by the validator, so stage 3 can be enabled per brand.)
 - [ ] Add the three `CatalogValidator` rules, bulk assignment, and the coverage report. (V0028 reports coverage; the rules are still warnings.)

@@ -12,8 +12,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
@@ -46,6 +49,8 @@ import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
@@ -73,6 +78,17 @@ class DeliveryFeeResolutionTests {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID ACTOR = UUID.randomUUID();
+
+    /**
+     * {@link ServiceZoneService} and {@link DeliveryTariffService} now write an
+     * ADR 0027 audit fact on every mutation; this suite is about the fee
+     * resolver, not the audit trail, so both dependencies are no-op/fixed
+     * stubs rather than a second thing every test has to set up.
+     */
+    private static final AuditRecorder NO_OP_AUDIT = fact -> {};
+
+    private static final CurrentActor TEST_ACTOR =
+            () -> new AuthenticatedActor("delivery-fee-resolution-test", Set.of(), Map.of());
 
     /** Amir Temur square. The branch every zone here is drawn around. */
     private static final GeoPoint BRANCH_POINT = new GeoPoint(41.311081, 69.240562);
@@ -149,8 +165,8 @@ class DeliveryFeeResolutionTests {
         zoneStore = new JdbcServiceZoneStore(jdbc);
         tariffStore = new JdbcDeliveryTariffStore(jdbc);
         resolutionStore = new JdbcDeliveryFeeResolutionStore(jdbc, mapper);
-        zones = new ServiceZoneService(zoneStore, mapper, clock);
-        tariffs = new DeliveryTariffService(tariffStore, clock);
+        zones = new ServiceZoneService(zoneStore, mapper, clock, NO_OP_AUDIT, TEST_ACTOR);
+        tariffs = new DeliveryTariffService(tariffStore, clock, NO_OP_AUDIT, TEST_ACTOR);
         resolver = new DeliveryFeeResolver(
                 zoneStore, tariffStore, resolutionStore, unboundRouting(), new SimpleMeterRegistry());
         var promoCodeStore = new JdbcPromoCodeStore(jdbc, mapper);

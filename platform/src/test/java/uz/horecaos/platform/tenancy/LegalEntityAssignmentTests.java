@@ -7,7 +7,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -19,6 +21,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.application.LegalEntityService;
@@ -59,6 +64,12 @@ class LegalEntityAssignmentTests {
 
     private static final Instant NOW = Instant.parse("2026-08-24T09:00:00Z");
 
+    /** This suite is about the registry and the assignment window, not the ADR 0027 audit trail. */
+    private static final AuditRecorder NO_OP_AUDIT = fact -> {};
+
+    private static final CurrentActor TEST_ACTOR =
+            () -> new AuthenticatedActor("legal-entity-assignment-test", Set.of(), Map.of());
+
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
@@ -89,7 +100,7 @@ class LegalEntityAssignmentTests {
         seedTenancy();
 
         store = new JdbcLegalEntityStore(jdbc);
-        service = new LegalEntityService(store, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new LegalEntityService(store, Clock.fixed(NOW, ZoneOffset.UTC), NO_OP_AUDIT, TEST_ACTOR);
     }
 
     // ----------------------------------------------------------- registration
