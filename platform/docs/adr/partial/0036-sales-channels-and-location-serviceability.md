@@ -25,17 +25,20 @@
   respectively; and gives `catalog.channel_offering_exclusions` its first reader,
   `JdbcCatalogStore.channelExcludedVariantIds`, wired into
   `StorefrontCatalogQuery.menuFor`. Not built: the travel component of the promise
-  (ADR 0037's routing port answers empty on every call). Found while wiring the
-  payment-method foreign key and deliberately not fixed in this pass:
-  `CheckoutService` never consults the channel's payment-method matrix.
-  `CartPaymentOptions.forCart` (ADR 0075) correctly refuses to offer a method
-  the matrix does not enable, but `CheckoutEligibilityGuard` accepts any code
-  `PaymentIntentPort.canAcceptPayment` allows, which is unconditional for CASH
-  regardless of the matrix — so a cart can check out with a method the matrix
-  never enabled, on a channel whose matrix is empty. The fix is a few lines in
-  `CheckoutEligibilityGuard`, but nearly every checkout in
-  `CartCheckoutAndOrderTests` relies on today's laxity to pay with CASH on a
-  channel with no matrix configured, so this is reported rather than changed
+  (ADR 0037's routing port answers empty on every call). Closed: the gap found
+  while wiring the payment-method foreign key, where `CheckoutEligibilityGuard`
+  accepted any code `PaymentIntentPort.canAcceptPayment` allowed — unconditional
+  for CASH — regardless of what the channel's own matrix enabled.
+  `CheckoutEligibilityGuard.check` now reads `SalesChannelLookup
+  .enabledPaymentMethodCodes` before it asks `canAcceptPayment`, refusing with
+  the same `PAYMENT_METHOD_UNAVAILABLE` code `CartPaymentOptions.forCart`
+  (ADR 0075) already used to keep the method off the offered list, so a
+  checkout that names a code directly — bypassing the offered list entirely —
+  meets the identical refusal. `CartCheckoutAndOrderTests` and
+  `OrderAmendmentAndOutcomeTests` seed CASH (and, in the former, CLICK and
+  PAYME) on the storefront channel's matrix in `seedTenancyAndCatalog` so their
+  checkouts keep testing what they were written to test rather than the matrix
+  gap that used to let them pass without it.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product (channel and serviceability semantics), finance (channel price planes)
@@ -471,10 +474,14 @@ snapshotted by code.
       wired into `StorefrontCatalogQuery.menuFor` — the sparse-exclusion read path
       sits with the storefront menu query rather than with the channel registry,
       as this section originally said it should.
-
-Not built in this pass, and deliberately: `CheckoutService` consulting the
-channel's payment-method matrix at all. See the implementation status line
-above for the gap and why it is reported rather than closed here.
+- [x] Have `CheckoutEligibilityGuard` consult the channel's payment-method
+      matrix, not just `CartPaymentOptions.forCart`. Found while wiring the
+      payment-method foreign key and reported rather than fixed at the time;
+      closed now: `check` calls `SalesChannelLookup.enabledPaymentMethodCodes`
+      before `PaymentIntentPort.canAcceptPayment` and refuses an unenabled
+      code with `PAYMENT_METHOD_UNAVAILABLE`, the same rejection code
+      `CartPaymentOptions` already implied by leaving the method off the
+      offered list.
 
 ## Exit criteria
 
