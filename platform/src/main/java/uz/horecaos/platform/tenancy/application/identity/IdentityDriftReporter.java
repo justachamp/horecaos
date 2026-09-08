@@ -53,11 +53,15 @@ import uz.horecaos.platform.tenancy.application.port.TenantOrganizationLinkStore
  * and the Keycloak adapter behind it.
  *
  * <p>Half of ADR 0009's comparison is here and half is blocked: the tenant's
- * organization is checked, and per-member drift is not, because
- * {@code iam.tenant_membership_links} has no migration yet. The linked subject
- * survives only in an onboarding step's result, which cannot be queried across
- * tenants. {@link DriftCode#MEMBERSHIP_UNVERIFIED} is not emitted for that
- * reason rather than because memberships are known to be correct.
+ * organization is checked, and per-member drift is not. The reason changed and
+ * this comment did not, until 2026-09-08: {@code iam.tenant_membership_links}
+ * and {@code iam.principals} have had a migration since {@code V0057}. What
+ * they do not have is a writer — nothing in the platform inserts or updates
+ * either table, so they are empty and comparing against them would report every
+ * member as drifted. The linked subject still survives only in an onboarding
+ * step's result, which cannot be queried across tenants.
+ * {@link DriftCode#MEMBERSHIP_UNVERIFIED} is not emitted for that reason rather
+ * than because memberships are known to be correct.
  */
 @Component
 @ConditionalOnProperty(name = "horecaos.iam.drift-report.enabled", havingValue = "true", matchIfMissing = true)
