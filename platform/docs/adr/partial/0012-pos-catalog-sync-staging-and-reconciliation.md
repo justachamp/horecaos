@@ -6,9 +6,16 @@
   `PosCatalogSyncService.run` walks fetch → stage → absence quorum →
   `DifferenceEngine` under `FieldAuthorityPolicy.INITIAL`, and
   `PosSyncRunController` exposes the manual dry run, the difference report,
-  review decisions, apply, and resume; still not built: the separate stop-list
-  cadence (`pos_live_availability`, V0190, has a table and no poller) and S3
-  raw-snapshot retention. 2026-09-08: `gov_code` is confirmed as an MXIK
+  review decisions, apply, and resume. The durable scheduler now fires:
+  `PosSyncScheduler` claims due `pos_sync_schedules` rows with `FOR UPDATE SKIP
+  LOCKED`, computes the next fire in the branch's own zone, and emits
+  `PosSyncRequested` through the outbox. Raw provider snapshots are written —
+  `PosCatalogSyncService` calls `PosRawSnapshotWriter` off the critical path and
+  `raw_object_key` is populated, so a bad import can be read back from the
+  provider's own bytes. Still not built: the separate stop-list cadence
+  (`pos_live_availability`, V0190, has a table and no poller writing it, so the
+  fast feed is still unserved) and any retention or expiry policy over the
+  written snapshots. 2026-09-08: `gov_code` is confirmed as an MXIK
   candidate (Q15, `docs/providers/clopos-api.md` §12) and the staged field is
   renamed `CatalogSnapshot.Product#mxikCode` accordingly; `FieldAuthorityPolicy`
   still resolves `product.mxikCode` to `REVIEWED_IMPORT`, unchanged by the
