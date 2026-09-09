@@ -68,6 +68,10 @@
         <dd class="q-body-sm">{{ trace.source }}</dd>
         <dt class="q-caption">{{ i18n.t('configurationPolicy.result.winningScope') }}</dt>
         <dd class="q-body-sm">{{ trace.winningScope ?? '—' }}</dd>
+        <dt class="q-caption">{{ i18n.t('configurationPolicy.result.storedVersion') }}</dt>
+        <dd class="q-body-sm q-tnum">
+          {{ trace.currentVersionAtScope === null ? i18n.t('configurationPolicy.result.storedVersion.none') : trace.currentVersionAtScope }}
+        </dd>
       </dl>
 
       <h3 class="q-emphasis levelsTitle">{{ i18n.t('configurationPolicy.result.levels') }}</h3>
@@ -87,6 +91,115 @@
           }
         </tbody>
       </table>
+    </section>
+
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('configurationPolicy.write.title') }}</h2>
+
+      @if (!scopeMatchesResolution()) {
+        <p class="q-body-sm state">{{ i18n.t('configurationPolicy.write.stale') }}</p>
+      } @else if (!isWritable()) {
+        <p class="q-body-sm state">{{ i18n.t('configurationPolicy.write.notConsumed') }}</p>
+      } @else if (!settableAtCurrentScope()) {
+        <p class="q-body-sm state">
+          {{ i18n.t('configurationPolicy.write.notSettableAtScope', { scopes: settableScopesLabel() }) }}
+        </p>
+      } @else {
+        <p class="scopeBanner">
+          {{ i18n.t('configurationPolicy.write.scopeBanner', { code: keyCode(), scope: currentScopeDescription() }) }}
+        </p>
+
+        @if (startupNoteKey(); as note) {
+          <p class="q-body-sm startupNote">{{ i18n.t(note) }}</p>
+        }
+
+        <form class="writeForm" (submit)="save($event)">
+          <label class="field checkboxField">
+            <input
+              type="checkbox"
+              [checked]="explicitNull()"
+              (change)="explicitNull.set($any($event.target).checked)"
+            />
+            <span class="q-body-sm">{{ i18n.t('configurationPolicy.write.explicitNull') }}</span>
+          </label>
+
+          @if (!explicitNull()) {
+            @switch (selectedKey()?.valueType) {
+              @case ('Boolean') {
+                <label class="field checkboxField">
+                  <input
+                    type="checkbox"
+                    [checked]="boolValue()"
+                    (change)="boolValue.set($any($event.target).checked)"
+                  />
+                  <span class="q-body-sm">{{ i18n.t('configurationPolicy.write.value') }}</span>
+                </label>
+              }
+              @case ('BigDecimal') {
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('configurationPolicy.write.value') }}</span>
+                  <input
+                    class="q-body-sm"
+                    type="text"
+                    inputmode="decimal"
+                    [value]="decValue()"
+                    (input)="decValue.set($any($event.target).value)"
+                  />
+                </label>
+              }
+              @case ('String') {
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('configurationPolicy.write.value') }}</span>
+                  <input
+                    class="q-body-sm"
+                    type="text"
+                    [value]="strValue()"
+                    (input)="strValue.set($any($event.target).value)"
+                  />
+                </label>
+              }
+              @default {
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('configurationPolicy.write.value') }}</span>
+                  <input
+                    class="q-body-sm"
+                    type="text"
+                    inputmode="numeric"
+                    [value]="intValue()"
+                    (input)="intValue.set($any($event.target).value)"
+                  />
+                </label>
+              }
+            }
+            @if (!valueValid()) {
+              <p class="q-body-sm error">{{ i18n.t('configurationPolicy.write.invalidValue') }}</p>
+            }
+          }
+
+          <label class="field reasonField">
+            <span class="q-caption">{{ i18n.t('configurationPolicy.write.reason') }}</span>
+            <input
+              class="q-body-sm"
+              type="text"
+              maxlength="1000"
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+              [placeholder]="i18n.t('configurationPolicy.write.reasonPlaceholder')"
+            />
+          </label>
+
+          <button type="submit" class="primary" [disabled]="!canSave()">
+            {{ saving() ? i18n.t('configurationPolicy.write.saving') : i18n.t('configurationPolicy.write.save') }}
+          </button>
+        </form>
+
+        @if (saveError(); as message) {
+          <p class="q-body-sm error">{{ message }}</p>
+        }
+        @if (saveSuccess()) {
+          <p class="q-body-sm success">{{ i18n.t('configurationPolicy.write.success') }}</p>
+        }
+      }
     </section>
   }
 }

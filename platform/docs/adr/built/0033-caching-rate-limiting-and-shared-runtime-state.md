@@ -354,4 +354,4 @@ actually deployed.
 ## References
 
 - [ADR 0023: Production operating model, observability, security, and recovery](../partial/0023-production-operating-model-observability-security-and-recovery.md)
-- [ADR 0030: Configuration and policy resolution](../partial/0030-configuration-and-policy-resolution.md)
+- [ADR 0030: Configuration and policy resolution](../built/0030-configuration-and-policy-resolution.md)

@@ -479,6 +479,29 @@ export const en = {
   'configurationPolicy.result.levels': 'Levels inspected',
   'configurationPolicy.result.column.scope': 'Scope',
   'configurationPolicy.result.column.outcome': 'Outcome',
+  'configurationPolicy.result.storedVersion': 'Stored version at this scope',
+  'configurationPolicy.result.storedVersion.none': 'Not set here',
+
+  'configurationPolicy.write.title': 'Set this value',
+  'configurationPolicy.write.stale': 'Resolve again to edit at this exact scope.',
+  'configurationPolicy.write.notConsumed':
+    'This key is registered but nothing in this build reads its stored value yet. Writing here would be recorded and audited, but would not change any running behaviour, so this screen shows it read-only.',
+  'configurationPolicy.write.notSettableAtScope':
+    'This key cannot be set at this scope. It is settable at: {scopes}.',
+  'configurationPolicy.write.scopeBanner': 'You are about to set {code} at {scope}.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'A production start refuses to boot if any stored value for this key breaches the ADR 0045 floor (settlement period plus dispute window). This write takes effect immediately; only a future start is at risk.',
+  'configurationPolicy.write.note.auditRetention':
+    'This is one of the two platform-only audit retention defaults ADR 0027 and ADR 0029 mark provisional pending legal sign-off. Lowering it shortens how long AuditPartitionArchiver protects evidence before archival.',
+  'configurationPolicy.write.explicitNull': 'Explicit null (deliberately unset here)',
+  'configurationPolicy.write.value': 'Value',
+  'configurationPolicy.write.invalidValue': "Enter a value matching this key's type.",
+  'configurationPolicy.write.reason': 'Reason',
+  'configurationPolicy.write.reasonPlaceholder': 'Why are you changing this?',
+  'configurationPolicy.write.save': 'Save',
+  'configurationPolicy.write.saving': 'Saving…',
+  'configurationPolicy.write.success':
+    'Saved. The result above now shows what the platform resolves after this write.',
 
   'contractsVersions.title': 'Contracts & versions',
   'contractsVersions.lead': 'The ADR 0032 event/schema contract registry: every event this build may publish.',
