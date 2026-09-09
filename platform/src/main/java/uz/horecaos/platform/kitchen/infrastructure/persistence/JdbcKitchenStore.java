@@ -160,6 +160,80 @@ public class JdbcKitchenStore {
         return Boolean.TRUE.equals(exists);
     }
 
+    /**
+     * The branch's own IANA zone, so a throughput ceiling's weekday and local
+     * time window are read against the clock the kitchen actually runs on.
+     *
+     * <p>{@code tenant.locations.timezone} rather than a platform default: ADR
+     * 0041's capacity screen already stores the ceiling as local wall-clock
+     * ({@code weekday}, {@code window_start}, {@code window_end} in V0144), and
+     * evaluating it in UTC would drift the window an hour twice a year on any
+     * zone that observes daylight time, exactly as {@code ScheduleCadence}
+     * documents for the POS scheduler.
+     */
+    public Optional<String> locationTimezone(UUID tenantId, UUID locationId) {
+        return jdbc.sql("SELECT timezone FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", locationId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
+     * The ceiling covering one station at one local weekday and time, if the
+     * branch set one.
+     *
+     * <p>Half-open on the closing edge to match {@code overlapsExisting} and
+     * {@code TariffTimeRule}'s own convention, so a window ending at 14:00 and
+     * one starting at 14:00 never both claim the same instant.
+     */
+    public Optional<StationCapacityRow> capacityWindowCovering(
+            UUID tenantId, UUID stationId, int weekday, LocalTime localTime) {
+        return jdbc.sql(SELECT_STATION_CAPACITY + """
+                 WHERE tenant_id = :tenantId AND station_id = :stationId AND weekday = :weekday
+                   AND window_start <= :localTime AND window_end > :localTime
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("stationId", stationId)
+                .param("weekday", weekday)
+                .param("localTime", localTime)
+                .query(JdbcKitchenStore::mapStationCapacity)
+                .optional();
+    }
+
+    /**
+     * Portions already promised to this station inside one occurrence of a
+     * ceiling window, across every ticket that is not {@code VOIDED}.
+     *
+     * <p>{@code target_ready_at} rather than {@code release_at} anchors the
+     * window: it is when the station's work on the ticket is actually due, and
+     * every ticket that will pass through this station in that window — held,
+     * fired, or already handed over — has one. {@code release_at} exists on far
+     * fewer tickets and answers a different question (when the buffer lets it
+     * go), not how much the station has been asked to produce in this slot.
+     */
+    public long committedPortions(UUID tenantId, UUID stationId, Instant windowStart, Instant windowEnd) {
+        Long total = jdbc.sql("""
+                SELECT COALESCE(SUM(ti.quantity), 0)
+                FROM kitchen.ticket_items ti
+                JOIN kitchen.tickets t ON t.tenant_id = ti.tenant_id AND t.id = ti.ticket_id
+                WHERE ti.tenant_id = :tenantId
+                  AND ti.station_id = :stationId
+                  AND ti.status <> 'CANCELLED'
+                  AND t.status <> 'VOIDED'
+                  AND t.target_ready_at >= :windowStart
+                  AND t.target_ready_at < :windowEnd
+                """)
+                .param("tenantId", tenantId)
+                .param("stationId", stationId)
+                .param("windowStart", utc(windowStart))
+                .param("windowEnd", utc(windowEnd))
+                .query(Long.class)
+                .single();
+        return total == null ? 0 : total;
+    }
+
     // ------------------------------------------------------------ routing rules
 
     /**

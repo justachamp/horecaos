@@ -2,8 +2,8 @@
 
 - Decision status: Accepted
 - Implementation status: Partial — rollout steps 1 to 3, with the ADR 0019
-  proposal now reaching ordering, and throughput ceilings configurable but not
-  yet consumed by release scheduling.
+  proposal now reaching ordering, and throughput ceilings now shifting release
+  scheduling rather than sitting configured and unread.
   V0030 creates schema `kitchen` with `stations`, `brand_routing_rules`,
   `location_routing_rules`, `tickets`, `ticket_items` and `ticket_events`;
   `JdbcKitchenStore.resolveStation` implements all five routing levels in one
@@ -28,9 +28,24 @@
   `kitchen.station_capacity` and `KitchenStationController`'s
   `GET`/`POST .../kitchen/station-capacity`, plus `frontend/operations`'
   `CapacityPage` (IA §2.6) over it — create and list only, no edit or delete,
-  the same discipline routing rules already keep. `release_at` still computes
-  with no queue offset; a ceiling is read today only by a manager comparing it
-  against the board by eye, not by the scheduler this ADR sketched.
+  the same discipline routing rules already keep. *Implementation status:*
+  wave 44 adds V0191 and `KitchenTicketService.capacityOffsetSeconds`.
+  Opening a ticket now sums `ticket_items.quantity` already committed to each
+  of its stations inside the matching local weekday-and-time-window
+  occurrence of `kitchen.station_capacity` — local through
+  `tenant.locations.timezone`, the same zone-aware `ZonedDateTime`
+  construction `pos.domain.ScheduleCadence` uses for the POS scheduler — and
+  pulls `release_at` earlier, never later, when a station's ceiling would
+  otherwise be overrun. The shift is bounded so it never crosses
+  `target_ready_at - prep_estimate`; when the offset it wants no longer fits
+  before "now", the ticket fires anyway and a `CAPACITY_CEILING_REACHED`
+  ticket event (V0191) records that it went out without the buffer the
+  ceiling asked for — ADR 0041's own words, quoted exactly: a ceiling shifts
+  `release_at` and never quietly holds a ticket past its promise to protect
+  its own number. Nothing customer-facing changed: `target_ready_at` is still
+  the stored promise's own component, decided once at ticket creation and
+  never recomputed; only a kitchen-internal instant inside the room that
+  promise already allows moves.
   **A kitchen display device can now enrol, be revoked, read the board, and
   mark a line ready** — ADR 0079 (2026-09-09) built the device principal this
   section's own "Displays and devices" sketch left open, as a real ADR 0025
@@ -452,7 +467,9 @@ evidence for whatever went wrong.
       creating schema `kitchen`. No handover table, as decided. **No device or
       suspension table** — see "What was not built" below. `station_capacity`
       followed in **V0144** (wave 43), once it had a real reader — see the same
-      section.
+      section. **V0191** (wave 44) extends `ticket_events`'
+      `ck_ticket_event_trigger` with `CAPACITY_CEILING_REACHED` and adds
+      `ix_tickets_capacity_window`, for the committed-load query below.
 - [x] The routing resolver, all five levels, in one statement
       (`JdbcKitchenStore.resolveStation`), with the fallback station and a
       per-line `ROUTING_UNRESOLVED` event.
@@ -464,6 +481,10 @@ evidence for whatever went wrong.
 - [x] Release modes and the release scheduler (`KitchenReleaseWorker`), polling
       with `FOR UPDATE SKIP LOCKED` like ADR 0019's timers. Not a shared leasing
       abstraction: see the note under "Decisions taken here".
+- [x] Throughput ceilings shift `release_at` (`KitchenTicketService`
+      `.capacityOffsetSeconds`, wave 44 / **V0191**). See "Decisions taken
+      here" for the formula and the bound, and "What was not built" for what
+      this deliberately leaves alone.
 - [ ] Extend ADR 0017 with modifier-option stock items and expiring stops. **Not
       done.** It is ADR 0017's schema and its module, and this ADR has no claim on
       either.
@@ -577,6 +598,49 @@ ADR 0016.
   all yet (see "What was not built" below) — when it is, it is kitchen-owned
   metadata on the grant's own scope or on a kitchen-side row keyed by the
   device's `iam` identity, never a second identity table.
+- **`station_queue_offset` is portions, not tickets or lines, and it is a
+  heuristic lead-time formula, not a queueing simulation.** *Implementation
+  status: wave 44.* The ADR sketches the term in `release_at`'s formula and
+  gives it no definition. `KitchenTicketService.capacityOffsetSeconds` counts
+  load as `SUM(ticket_items.quantity)` per station — a ticket carrying five
+  plates of one dish is five plates off the grill, and a ceiling stated in
+  "plates an hour" is a ceiling on plates, not on how many orders asked for
+  them. For each station a ticket's lines resolved onto, it sums every
+  non-`VOIDED` ticket's committed portions inside the same occurrence of that
+  station's ceiling window — matched by the ticket's own local weekday and
+  time-of-day, through `tenant.locations.timezone`, never UTC, the same
+  zone-aware construction ADR 0012's `ScheduleCadence` uses for the POS
+  scheduler — and, where the projected total would exceed the window's
+  capacity, computes the extra lead time as the overage divided by the
+  station's own rate (`overage / (portionsPerHour / 3600)`). A ticket touching
+  several stations takes the largest of their offsets, because the ticket
+  releases as one unit and the slowest station is the one that decides when it
+  must go out. This is a considered heuristic, not a discrete-event simulation
+  of one pass: a full queueing model is disproportionate machinery for a
+  number a manager already sets by eye on the same capacity screen, and the
+  property that matters — more overage asks for more lead time, monotonically,
+  and no overage asks for none — holds under it.
+- **The offset only ever pulls `release_at` earlier than `target_ready_at -
+  prep_estimate`; it is never used to delay a release to smooth load.** The
+  alternative — pacing bursts by holding some tickets back past their own
+  ready-in-time instant — was considered and rejected outright: it is
+  precisely the "kitchen that quietly holds a ticket to protect its own
+  throughput number" ADR 0041 already names as the failure this section
+  exists to prevent, and the manual-reschedule bound
+  (`kitchen.ticket.release.override`) two bullets above enforces the same
+  rule for a human's hand on the fire time. When the offset a ceiling wants
+  would need more lead than is left before "now", the ticket does not wait
+  for an instant that has already gone — it fires anyway, at once, and a new
+  `CAPACITY_CEILING_REACHED` ticket event (V0191) is the operational
+  exception ADR 0041's own sentence asks for, recorded on the ticket the
+  branch reads rather than only in a log line nobody at the branch can see.
+- **Nothing customer-facing changes.** `target_ready_at` and `prep_estimate`
+  are unchanged inputs — the stored promise's own components, decided once at
+  ticket creation and never recomputed, exactly as the first two bullets in
+  this section already establish. The offset only ever moves a
+  kitchen-internal instant earlier inside the room `target_ready_at -
+  prep_estimate` already allows; it never touches the promise itself, and a
+  customer is never told a different time because a station was busy.
 
 ### What was not built, and why it is absent rather than partial
 
@@ -589,15 +653,19 @@ ADR 0016.
   therefore **not added**: the kitchen device calls the existing serviceability
   endpoint under the capability that already exists. The table above should be
   amended.
-- **Throughput shifting.** `release_at` is still computed from the promise and
-  the prep estimate with no queue offset — the scheduler this ADR sketched is
-  not built. `kitchen.station_capacity` itself no longer belongs on this list:
-  wave 43 built it, once it had a real reader that was not "configuration no
-  code reads" — a manager comparing the ceiling against the board by eye, on
-  `frontend/operations`' `CapacityPage` (IA §2.6). "Cook headcount output," the
-  other half of that IA row, stays unbuilt and is named there as a product-
-  policy gap (a demand forecast and a portions-per-cook ratio), not a schema
-  one.
+- **Throughput shifting** no longer belongs on this list. *Implementation
+  status: wave 44 builds it.* `KitchenTicketService.capacityOffsetSeconds`
+  reads `kitchen.station_capacity` at ticket-creation time and pulls
+  `release_at` earlier when a station's ceiling for the ticket's own local
+  weekday and time window would otherwise be overrun — see "Decisions taken
+  here" for the formula and the bound. "Cook headcount output," the other
+  half of IA §2.6's capacity row, stays unbuilt and stays a product-policy gap
+  rather than a schema one: it needs a demand forecast and a
+  portions-per-cook ratio, and neither exists anywhere in this platform. It is
+  a different question from throughput shifting — one asks how many cooks a
+  branch needs for a forecast service, the other asks when to release a ticket
+  already placed — and building the offset above answers neither of those,
+  on purpose.
 - **The VDU projection and station-filtered device reads.** A device today reads
   its whole branch's board through the ordinary `kitchen.ticket.read` grant
   ADR 0079 gives it, not one station's fired tickets the way this section's
