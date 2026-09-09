@@ -492,6 +492,17 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "ApproveRequest" : {
+        "properties" : {
+          "displayName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName" ],
+        "type" : "object"
+      },
       "AssetResponse" : {
         "properties" : {
           "assetId" : {
@@ -2934,6 +2945,45 @@
           "weekday" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DeviceResponse" : {
+        "properties" : {
+          "deviceClass" : {
+            "type" : "string"
+          },
+          "deviceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "enrolledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "enrolledBy" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revokedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "revokedBy" : {
+            "type" : "string"
+          },
+          "revokedReason" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -7767,6 +7817,25 @@
         },
         "type" : "object"
       },
+      "RevokeRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "RevokeResponse" : {
+        "properties" : {
+          "changed" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "RosterEntryResponse" : {
         "properties" : {
           "activeAssignments" : {
@@ -10271,7 +10340,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -10339,7 +10408,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12588,7 +12657,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17483,6 +17552,179 @@
         },
         "summary" : "Mark a dish available or sold out",
         "tags" : [ "Inventory" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
+      "get" : {
+        "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
+        "operationId" : "list_12",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/DeviceResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The branch's kitchen devices",
+        "tags" : [ "Kitchen devices" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}/approve" : {
+      "post" : {
+        "description" : "The userCode is read off the new device's own screen. Approval grants exactly kitchen.ticket.read and kitchen.ticket.advance at this branch — never more — and writes an ADR 0027 audit fact naming this manager, the device, and this branch.",
+        "operationId" : "approve_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "userCode",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApproveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeviceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve a pending enrolment",
+        "tags" : [ "Kitchen devices" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/revoke" : {
+      "post" : {
+        "description" : "Not a courtesy call to the device: its grant is revoked first, which is cache-evicted immediately, so the device is refused on its very next request regardless of its access token's remaining validity. A second press on an already-revoked device is not an error.",
+        "operationId" : "revoke",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "deviceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RevokeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revoke a device",
+        "tags" : [ "Kitchen devices" ]
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules" : {
@@ -23771,6 +24013,9 @@
   }, {
     "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
     "name" : "Referral program"
+  }, {
+    "description" : "ADR 0079: enrolling and revoking a branch's kitchen display devices",
+    "name" : "Kitchen devices"
   }, {
     "description" : "Delivery evidence for one message, and the manual retry",
     "name" : "Operations notifications"

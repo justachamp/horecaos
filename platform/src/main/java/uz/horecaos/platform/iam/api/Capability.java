@@ -390,16 +390,29 @@ public enum Capability {
 
     /**
      * ADR 0041: configuring a branch's production stations and the rules that
-     * route dishes onto them.
+     * route dishes onto them. ADR 0079: also enrolling and revoking a
+     * branch's kitchen display devices.
      *
-     * <p>Not named by ADR 0041, which puts station and device creation on a
-     * control-plane path without saying what guards it. It is separate from
+     * <p>Originally not named by ADR 0041, which put station and device
+     * creation on a control-plane path without saying what guards either —
+     * ADR 0079 closes that half of the gap by extending this capability
+     * rather than minting {@code kitchen.device.manage} beside it. The two
+     * are the same class of decision, made by the same person, at the same
+     * scope: physical configuration of one kitchen. A new capability earns
+     * its place only when a different person should hold it, and nothing
+     * distinguishes who should approve a device from who should lay out a
+     * station.
+     *
+     * <p>It is separate from
      * {@link #LOCATION_WRITE} because the two powers belong to different people:
      * the station layout is the head chef's knowledge of their own kitchen, while
      * {@code location.write} opens and closes branches. It is separate from
      * {@link #KITCHEN_TICKET_ADVANCE} for a sharper reason — a routing rule
      * decides where every future order of that dish appears, so a line cook
-     * editing one mid-service moves dishes off other people's screens.
+     * editing one mid-service moves dishes off other people's screens, and
+     * device enrolment carries the identical weight: an enrolled device is
+     * handed a real, if narrow, capability grant, which is exactly the kind
+     * of act a line cook must not be able to perform on themselves.
      */
     KITCHEN_STATION_MANAGE("kitchen.station.manage", "kitchen", "station.manage"),
 

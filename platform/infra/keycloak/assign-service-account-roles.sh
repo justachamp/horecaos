@@ -18,6 +18,14 @@ ADMIN_PASSWORD="${HORECAOS_KEYCLOAK_ADMIN_PASSWORD:-admin}"
 PROVISIONING_ROLES="manage-organizations,manage-users,view-users,query-users"
 READER_ROLES="view-organizations,query-organizations,view-users,query-users"
 
+# ADR 0079: its own credential, holding manage-clients alone -- never added to
+# PROVISIONING_ROLES above, which is the whole reason horecaos-provisioning
+# excludes it. A credential that could both administer users and mint
+# arbitrary confidential clients could hand itself a service account with any
+# role this script assigns, which is realm compromise wearing a device
+# principal's name.
+DEVICE_PROVISIONING_ROLES="manage-clients"
+
 # The placeholder the realm file falls back to when the environment does not
 # supply a secret. Anything starting with this is a value that is in the
 # repository, and `horecaos-provisioning` holds manage-users — so a repository
@@ -145,6 +153,9 @@ print(json.dumps([{'id': available[n]['id'], 'name': n} for n in sorted(wanted)]
 echo "==> Assigning ADR 0009 service-account roles in realm ${REALM}"
 assign horecaos-provisioning "${PROVISIONING_ROLES}"
 assign horecaos-identity-reader "${READER_ROLES}"
+
+echo "==> Assigning ADR 0079 service-account roles in realm ${REALM}"
+assign horecaos-device-provisioning "${DEVICE_PROVISIONING_ROLES}"
 
 if [ "${unrotated}" -eq 1 ]; then
   if [ "${REQUIRE_ROTATED}" = "1" ]; then

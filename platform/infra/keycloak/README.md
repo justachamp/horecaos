@@ -1,18 +1,25 @@
 # Keycloak realm
 
-## Service accounts (ADR 0009)
+## Service accounts (ADR 0009, ADR 0079)
 
-Two confidential clients, deliberately separated. The drift report runs
+Three confidential clients, deliberately separated. The drift report runs
 unattended on a timer, and that is exactly when write capability should not be
-sitting idle in a scheduled job.
+sitting idle in a scheduled job; the device-provisioning credential holds
+`manage-clients` alone, so it is the only one of the three that could mint a
+new confidential client, and neither of the other two may.
 
 | Client | Purpose | realm-management roles |
 |---|---|---|
 | `horecaos-provisioning` | Create organizations, create and link owners, assign organization-scoped roles | `manage-organizations`, `manage-users`, `view-users`, `query-users` |
 | `horecaos-identity-reader` | Scheduled drift report | `view-organizations`, `query-organizations`, `view-users`, `query-users` |
+| `horecaos-device-provisioning` | ADR 0079: create, regenerate the secret of, and disable a kitchen display device's own confidential client | `manage-clients` |
 
-Neither holds `manage-realm`, `realm-admin`, `manage-clients`, or
-`impersonation`.
+None of the three holds `manage-realm`, `realm-admin`, or `impersonation`, and
+only the device-provisioning credential holds `manage-clients` — deliberately
+not added to `horecaos-provisioning`, which already holds `manage-users`. A
+single credential holding both could mint a service account client and grant
+it any role this script assigns, which is realm compromise from one leaked
+secret rather than two.
 
 ## Staff sign-in (ADR 0062)
 
@@ -81,17 +88,21 @@ see below.
 
 ## Secrets
 
-**The two secrets in `realm/horecaos-realm.json` are not secrets.** They are
-`${HORECAOS_KEYCLOAK_PROVISIONING_SECRET:development-only-not-a-secret-provisioning}`
-and the reader equivalent: an environment placeholder with a fallback that is
-spelled so that it cannot be mistaken for a credential in an admin console, a
-log line, or a diff. Keycloak substitutes the environment variable at import when
-one is set, and falls back to the visible placeholder when one is not — which is
-what makes `docker compose up` work on a laptop with nothing configured.
+**The three secrets in `realm/horecaos-realm.json` are not secrets.** They are
+`${HORECAOS_KEYCLOAK_PROVISIONING_SECRET:development-only-not-a-secret-provisioning}`,
+the reader equivalent, and (ADR 0079)
+`${HORECAOS_KEYCLOAK_DEVICE_PROVISIONING_SECRET:development-only-not-a-secret-device-provisioning}`:
+an environment placeholder with a fallback that is spelled so that it cannot be
+mistaken for a credential in an admin console, a log line, or a diff. Keycloak
+substitutes the environment variable at import when one is set, and falls back
+to the visible placeholder when one is not — which is what makes
+`docker compose up` work on a laptop with nothing configured.
 
 The fallback must never survive anywhere else, and `horecaos-provisioning` is why:
 it holds `manage-users`, so that value is realm-wide user administration for
-anybody with a checkout of this repository.
+anybody with a checkout of this repository. `horecaos-device-provisioning` is
+the same argument over `manage-clients`: the fallback value in a checkout
+could mint an arbitrary confidential client and grant it any role.
 
 Two things enforce that rather than asking for it:
 
@@ -101,7 +112,8 @@ Two things enforce that rather than asking for it:
   types, or sees a value.
 - `assign-service-account-roles.sh` reads each client's current secret afterwards
   and, with `HORECAOS_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1`, exits non-zero while
-  either is still the value from the import file. The bootstrap runs it that way.
+  any of the three is still the value from the import file. The bootstrap runs
+  it that way.
 
 Rotation changes the value behind the reference and never the reference, so
 nothing in this repository changes when it happens again.

@@ -415,6 +415,20 @@
       }
     },
     {
+      "clientId": "horecaos-device-provisioning",
+      "description": "ADR 0079: creates, regenerates the secret of, and disables the confidential service-account client behind one kitchen display device principal. Deliberately its own credential rather than a widening of horecaos-provisioning, which assign-service-account-roles.sh already excludes manage-clients from -- see that script's own comment. The secret in the import file is a DEVELOPMENT PLACEHOLDER — rotate it after import (docs/runbooks/deploy.md).",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "${HORECAOS_KEYCLOAK_DEVICE_PROVISIONING_SECRET:development-only-not-a-secret-device-provisioning}",
+      "attributes": {
+        "access.token.lifespan": "300"
+      }
+    },
+    {
       "clientId": "horecaos-staff-login",
       "name": "horecaos-staff-login",
       "description": "ADR 0062: the confidential client the platform backend alone uses to exchange staff credentials with Keycloak over the OAuth2 direct grant. Neither staff SPA ever talks to Keycloak or holds this secret; the backend POSTs username+password to /realms/horecaos/protocol/openid-connect/token on this client and hands the resulting tokens to the browser. Replaces the two public redirect clients this realm used to carry for frontend/operations and frontend/control-plane (ADR 0003, ADR 0035) -- their Authorization Code + PKCE flow is retired along with them. The secret in the import file is a DEVELOPMENT PLACEHOLDER -- rotate it after import (docs/runbooks/deploy.md), the same as horecaos-provisioning and horecaos-identity-reader above.",

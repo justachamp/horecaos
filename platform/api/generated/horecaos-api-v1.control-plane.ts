@@ -217,6 +217,18 @@ export interface BandView {
   toMeters?: number;
 }
 
+export interface BeginRequest {
+  deviceClass: "KITCHEN_KDS";
+  label?: string;
+}
+
+export interface BeginResponse {
+  deviceCode?: string;
+  expiresAt?: string;
+  pollIntervalSeconds?: number;
+  userCode?: string;
+}
+
 export interface BindRequest {
   brandId?: string;
   capabilities: Array<string>;
@@ -542,6 +554,12 @@ export interface CreateZoneRequest {
   displayNameRu: string;
   displayNameUz: string;
   role: "DELIVERY" | "CATCHMENT";
+}
+
+export interface CredentialResponse {
+  clientId?: string;
+  clientSecret?: string;
+  tokenEndpoint?: string;
 }
 
 export interface CutoverDecisionRequest {
@@ -1289,6 +1307,11 @@ export interface PolicyResponse {
   version?: number;
 }
 
+export interface PollResponse {
+  credential?: CredentialResponse;
+  status?: string;
+}
+
 export interface PosOrderExportControllerResolutionRequest {
   decision: "LANDED" | "ABSENT" | "ABANDON";
   externalOrderId?: string;
@@ -1930,6 +1953,8 @@ export interface Operations {
   "keys": { method: "GET"; path: "/api/v1/control-plane/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<ConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
+  "begin": { method: "POST"; path: "/api/v1/control-plane/device-enrolments"; request: { parameters: Record<string, never>; body: BeginRequest }; responses: { "200": BeginResponse } };
+  "poll": { method: "POST"; path: "/api/v1/control-plane/device-enrolments/{deviceCode}/poll"; request: { parameters: { path: { deviceCode: string } } }; responses: { "200": PollResponse } };
   "list_11": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
   "search_1": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik"; request: { parameters: { query: { limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
   "status": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/status"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceStatus } };

@@ -600,14 +600,16 @@ change to anyone.
 ### Rotate the service-account secrets
 
 **Do this before anything else touches the realm.** The import file gives
-`horecaos-provisioning` and `horecaos-identity-reader` a secret only so that a laptop
-works out of the box; the fallback value is in git, and `horecaos-provisioning`
-holds `manage-users`. Until this step is done, a checkout of this repository is
-realm-wide user administration.
+`horecaos-provisioning`, `horecaos-identity-reader`, and (ADR 0079)
+`horecaos-device-provisioning` a secret only so that a laptop works out of the
+box; the fallback value is in git, `horecaos-provisioning` holds
+`manage-users`, and `horecaos-device-provisioning` holds `manage-clients`.
+Until this step is done, a checkout of this repository is realm-wide user
+administration and the power to mint an arbitrary confidential client.
 
 Keycloak generates the replacements with its own CSPRNG, so nobody invents a
-value and nobody has to be trusted to choose a good one. Neither secret is ever
-typed, echoed, or written to this host.
+value and nobody has to be trusted to choose a good one. None of the three
+secrets is ever typed, echoed, or written to this host.
 
 ```bash
 qc up -d keycloak
@@ -631,7 +633,7 @@ token="$(printf 'client_id=admin-cli&grant_type=password&username=admin&password
 auth="$(mktemp)"; trap 'rm -f "${auth}"' EXIT
 printf 'X-Vault-Token: %s\n' "${BAO_WRITE_TOKEN}" > "${auth}"
 
-for pair in horecaos-provisioning:provisioning-secret horecaos-identity-reader:reader-secret; do
+for pair in horecaos-provisioning:provisioning-secret horecaos-identity-reader:reader-secret horecaos-device-provisioning:device-provisioning-secret; do
     client="${pair%%:*}"; slot="${pair##*:}"
 
     id="$(curl -sf -H "Authorization: Bearer ${token}" \
@@ -656,10 +658,11 @@ unset KC_ADMIN_PASSWORD BAO_WRITE_TOKEN
 It runs in the `ops` container because that is where `curl` and `jq` already are;
 the host needs neither.
 
-**Check:** apply the ADR 0009 roles with the rotation gate on. The script reads
-each client's current secret and refuses to report success while either is still
-the value from the import file. Keycloak has no published port here, so it runs
-from a container on the compose network rather than from this host:
+**Check:** apply the ADR 0009 and ADR 0079 roles with the rotation gate on. The
+script reads each client's current secret and refuses to report success while
+any of the three is still the value from the import file. Keycloak has no
+published port here, so it runs from a container on the compose network
+rather than from this host:
 
 ```bash
 read -rsp 'Keycloak bootstrap admin password: ' HORECAOS_KEYCLOAK_ADMIN_PASSWORD; echo

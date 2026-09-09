@@ -261,6 +261,24 @@ public class SecurityConfiguration {
                                 "/api/v1/control-plane/auth/sessions/current",
                                 "/api/v1/operations/auth/sessions/current")
                         .permitAll()
+                        // ADR 0079: a kitchen display device with no credential of its
+                        // own asking for one. Unauthenticated for the same reason the
+                        // storefront's pre-account identity endpoints above are: there
+                        // is nothing to authenticate a device with until enrolment
+                        // hands it one. What authorises approval — the step that
+                        // actually confers a capability — is not either of these two;
+                        // it is kitchen.station.manage on
+                        // KitchenDeviceController's own endpoint, reached only from an
+                        // already-authenticated console session. Both paths are
+                        // rate-limited per caller through ADR 0033
+                        // (DeviceEnrolmentService), and the poll path spends its
+                        // one-shot credential atomically so a second caller of the
+                        // same code never receives one.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/device-enrolments",
+                                "/api/v1/control-plane/device-enrolments/*/poll")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .oauth2ResourceServer(resourceServer ->
