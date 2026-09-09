@@ -169,11 +169,20 @@ public class SchedulingConfiguration {
      * as one closed year's rows take to export and a protected-storage round
      * trip takes to verify, which on the daily cadence this job runs at is the
      * same shape as every other partition sweeper on this pool, not a reason to
-     * exempt it. Anything adding a {@code @Scheduled} method here should expect
-     * the same off-by-one wave 73/77 hit, and trust {@code
-     * SchedulerPoolSizeTests}, which counts them, over the number written here.
+     * exempt it. Wave 94 added the last one so far: {@code
+     * PosSyncScheduler.pollDueSchedules}, ADR 0012's own named gap — {@code
+     * integration.pos_sync_schedules} existed since V0037 with a {@code
+     * next_run_at} column and nothing that ever read it, so a durable daily
+     * catalog schedule could be armed and would simply never fire. It holds no
+     * connection across the one external call its tick can cause: the claim,
+     * the advance, and the outbox append are one short local transaction, and
+     * the provider read they enqueue happens later, in the inbox handler that
+     * consumes the command it produced. Anything adding a {@code @Scheduled}
+     * method here should expect the same off-by-one wave 73/77 hit, and trust
+     * {@code SchedulerPoolSizeTests}, which counts them, over the number
+     * written here.
      */
-    static final int DEFAULT_POOL_SIZE = 50;
+    static final int DEFAULT_POOL_SIZE = 51;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

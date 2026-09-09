@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/pos.commands/PosSyncRequested.v1.schema.json",
+  "title": "PosSyncRequested v1 payload",
+  "description": "ADR 0012. A durable PostgreSQL schedule came due, or an operator asked to resume a run that failed before REVIEW_REQUIRED. The consumer starts (or restarts) a catalog import for the named binding. Identifiers only: no provider credential, no menu content, no customer data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId", "tenantId", "bindingId", "triggerType", "requestedAt"],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identifies this one request, not the run it produces -- the run gets its own id when PosCatalogSyncService opens it. Carried so the same claimed schedule occurrence is traceable end to end through the outbox and the inbox."
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Also the envelope tenant. The handler uses the envelope's tenant as verified context and never a value read back out of this field."
+    },
+    "bindingId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The ADR 0026 binding to synchronize. Also the partition key and the outbox aggregate id, so at most one PosSyncRequested for a binding is ever in flight -- a dead-lettered command blocks a new one for the same binding rather than piling up behind it."
+    },
+    "scheduleId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "The integration.pos_sync_schedules row that claimed this occurrence. Null for an operator-triggered resume, which has no schedule of its own."
+    },
+    "resumedRunId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Set only when triggerType is RESUMED: the prior run that failed before REVIEW_REQUIRED and could not be picked up mid-fetch (the first provider offers no incremental read to resume with), so this request opens a fresh run that records where it resumed from."
+    },
+    "triggerType": {
+      "type": "string",
+      "enum": ["SCHEDULED", "RESUMED"],
+      "description": "SCHEDULED: the durable timer decided this was due. RESUMED: an operator asked to retry a run that failed before staging completed a review. A manual dry run never reaches this topic -- it runs synchronously from the control-plane request."
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the schedule was claimed or the resume was requested, not when the command is eventually handled."
+    }
+  }
+}

@@ -3954,6 +3954,12 @@ export interface RevealedWindow {
   windowStart?: string;
 }
 
+export interface ReviewDecisionRequest {
+  differenceId: string;
+  note?: string;
+  outcome: "APPROVED" | "REJECTED" | "DEFERRED";
+}
+
 export interface RevisionResponse {
   amendmentId?: string;
   createdAt?: string;
@@ -5147,7 +5153,10 @@ export interface Operations {
   "resolve_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/resolution"; request: { parameters: { path: { exportId: string; tenantId: string } }; body: PosOrderExportControllerResolutionRequest }; responses: { "200": {  } } };
   "start_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: PosSyncRunControllerStartRequest }; responses: { "200": {  } } };
   "reconcileCapabilities_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/capability-reconciliation"; request: { parameters: { path: { tenantId: string } }; body: ReconcileRequest }; responses: { "200": {  } } };
+  "applyRun": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/apply"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": {  } } };
   "differences": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/differences"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": PageDifferenceView } };
+  "resumeRun": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/resume"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": {  } } };
+  "recordReviewDecision": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/review-decisions"; request: { parameters: { path: { runId: string; tenantId: string } }; body: ReviewDecisionRequest }; responses: { "200": {  } } };
   "reactivateTenant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/reactivate"; request: { parameters: { path: { tenantId: string } }; body: TenantStatusChangeRequest }; responses: { "200": TenantView } };
   "roles": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/roles"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RoleDescriptor> } };
   "list_10": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };

@@ -97,6 +97,13 @@ public final class EventCatalog {
      */
     public static final String PRICING_EVENTS_TOPIC = KafkaTopicCatalog.PRICING_EVENTS;
 
+    /**
+     * ADR 0012's durable scheduler. A command, not a fact: {@code PosSyncRequested}
+     * says "start a catalog import now", and the durable timer that decided it was
+     * due lives in {@code integration.pos_sync_schedules}, never in Kafka.
+     */
+    public static final String POS_COMMANDS_TOPIC = KafkaTopicCatalog.POS_COMMANDS;
+
     private static final Map<String, EventContract> CONTRACTS = index(List.of(
             new EventContract(
                     "TenantCreated",
@@ -413,7 +420,27 @@ public final class EventCatalog {
                     "A price book was put in front of customers, superseding whatever "
                             + "previously served its scope. Carries the book's new version, never "
                             + "an amount — a consumer resolves current prices through the "
-                            + "authorized price-query API.")));
+                            + "authorized price-query API."),
+            // ADR 0012's durable scheduler command. The claim that decided this
+            // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
+            // LOCKED, in the same transaction that advanced the schedule's
+            // next_run_at past "due" -- so at most one of these is ever enqueued
+            // per due occurrence, however many replicas are polling. Kafka only
+            // has to survive a restart between here and the inbox handler that
+            // starts the run; the inbox's own (consumer_name, event_id) key is
+            // what makes a redelivered command safe to receive twice.
+            new EventContract(
+                    "PosSyncRequested",
+                    1,
+                    "pos",
+                    POS_COMMANDS_TOPIC,
+                    "bindingId",
+                    "events/pos.commands/PosSyncRequested.v1.schema.json",
+                    Retention.COMMAND,
+                    Classification.INTERNAL,
+                    "A durable schedule came due (or an operator asked to resume a run interrupted "
+                            + "before REVIEW_REQUIRED). Identifiers only: no provider credential, no "
+                            + "menu content, no customer data -- starting a sync needs nothing else.")));
 
     private EventCatalog() {}
 
