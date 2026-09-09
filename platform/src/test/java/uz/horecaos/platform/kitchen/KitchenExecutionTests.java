@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -30,6 +31,12 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CapabilityView;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.kitchen.application.KitchenStationService;
@@ -46,6 +53,7 @@ import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
+import uz.horecaos.platform.kitchen.web.KitchenBoardController;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
@@ -733,6 +741,62 @@ class KitchenExecutionTests {
                 .as("the composite key binds a ticket item's station to its ticket's branch, so "
                         + "no application bug can put one branch's dish on another's screen")
                 .isNotNull();
+    }
+
+    @Test
+    @DisplayName("a station action naming a sibling branch moves nothing before it is refused")
+    void aStationActionCannotReachASiblingBranchesLine() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-052", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+        TicketItemStatus before = item.status();
+
+        KitchenBoardController board = new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything());
+
+        Throwable refusal = catchThrowable(() -> board.start(TENANT, BRAND, siblingBranch, item.id()));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
+        assertThat(store.itemsOf(TENANT, ticket.id()).getFirst().status())
+                .as("the branch check has to run before the transition, not on the ticket the "
+                        + "transition returns: these are the only endpoints keyed by a line rather "
+                        + "than a ticket, each service method commits on its own, and the "
+                        + "controller around it is not transactional — so checking afterwards left "
+                        + "another branch's line advanced and handed the caller a 404 for it")
+                .isEqualTo(before);
+
+        board.start(TENANT, BRAND, branch, item.id());
+        assertThat(store.itemsOf(TENANT, ticket.id()).getFirst().status())
+                .as("and the refusal above is about the branch, not about start being broken")
+                .isEqualTo(TicketItemStatus.STARTED);
+    }
+
+    private CurrentActor cookAtSiblingBranch() {
+        return () -> new AuthenticatedActor(UUID.randomUUID().toString(), Set.of(), Map.of());
+    }
+
+    /**
+     * The station actions never consult it — only {@code reschedule}'s ceiling
+     * override does — so a stand-in that grants nothing proves they do not start
+     * quietly depending on one.
+     */
+    private AuthorizationService refusesEverything() {
+        return new AuthorizationService() {
+            @Override
+            public boolean has(String subject, Capability capability, ResourceScope scope) {
+                return false;
+            }
+
+            @Override
+            public void require(String subject, Capability capability, ResourceScope scope) {
+                throw new AuthorizationService.AccessDeniedException(capability, scope);
+            }
+
+            @Override
+            public CapabilityView viewFor(String subject, UUID tenantId) {
+                throw new UnsupportedOperationException("not part of this test");
+            }
+        };
     }
 
     @Test
