@@ -177,12 +177,24 @@ public class SchedulingConfiguration {
      * connection across the one external call its tick can cause: the claim,
      * the advance, and the outbox append are one short local transaction, and
      * the provider read they enqueue happens later, in the inbox handler that
-     * consumes the command it produced. Anything adding a {@code @Scheduled}
-     * method here should expect the same off-by-one wave 73/77 hit, and trust
-     * {@code SchedulerPoolSizeTests}, which counts them, over the number
-     * written here.
+     * consumes the command it produced. Wave 95 added the last one so far:
+     * {@code PosAvailabilityPoll.pollDueBindings}, ADR 0012's other named gap —
+     * {@code integration.pos_live_availability} existed since V0190 with nothing
+     * writing it, so the fast stop-list feed the ADR argues for by name was
+     * unserved even though the daily catalog scheduler wave 94 built could fire
+     * on its own. Every replica polls every eligible binding on every tick —
+     * there is no due occurrence to claim under {@code FOR UPDATE SKIP LOCKED}
+     * the way the catalog scheduler has — but two replicas racing the same
+     * binding's read-modify-write still need mutual exclusion, which {@code
+     * JdbcPosLiveAvailabilityStore#replace} takes as a {@code
+     * pg_advisory_xact_lock} on the binding rather than a row claim; see that
+     * class's own doc for the race its two-replica test caught before the lock
+     * existed. Anything adding a {@code
+     * @Scheduled} method here should expect the same off-by-one wave 73/77 hit,
+     * and trust {@code SchedulerPoolSizeTests}, which counts them, over the
+     * number written here.
      */
-    static final int DEFAULT_POOL_SIZE = 51;
+    static final int DEFAULT_POOL_SIZE = 52;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

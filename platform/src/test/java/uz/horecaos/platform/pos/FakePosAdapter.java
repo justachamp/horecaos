@@ -60,6 +60,11 @@ public final class FakePosAdapter implements PosAdapter {
     /** Whether an export reports that the till still owes a clerk's decision. */
     private boolean exportsPendApproval;
 
+    /** What {@link #readAvailability} answers, until {@link #scriptAvailability} changes it. */
+    private List<CatalogSnapshot.Availability> nextAvailabilityEntries = List.of();
+
+    private @Nullable ProviderOutcome nextAvailabilityOutcome;
+
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {
         return sideEffects.get();
@@ -93,6 +98,18 @@ public final class FakePosAdapter implements PosAdapter {
 
     public FakePosAdapter failNextApprovalReadWith(ProviderOutcome outcome) {
         this.nextApprovalOutcome = outcome;
+        return this;
+    }
+
+    /** From the next {@link #readAvailability} call onward, this is the stop list. */
+    public FakePosAdapter scriptAvailability(List<CatalogSnapshot.Availability> entries) {
+        this.nextAvailabilityEntries = List.copyOf(entries);
+        return this;
+    }
+
+    /** Makes the next {@link #readAvailability} call fail the way a real one does. */
+    public FakePosAdapter failNextAvailabilityReadWith(ProviderOutcome outcome) {
+        this.nextAvailabilityOutcome = outcome;
         return this;
     }
 
@@ -160,7 +177,12 @@ public final class FakePosAdapter implements PosAdapter {
 
     @Override
     public AvailabilityRead readAvailability(PosContext context) {
-        return new AvailabilityRead(ProviderOutcome.success(Map.of(), null), List.of());
+        if (nextAvailabilityOutcome != null) {
+            ProviderOutcome scripted = nextAvailabilityOutcome;
+            nextAvailabilityOutcome = null;
+            return new AvailabilityRead(scripted, List.of());
+        }
+        return new AvailabilityRead(ProviderOutcome.success(Map.of(), null), nextAvailabilityEntries);
     }
 
     @Override

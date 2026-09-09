@@ -12,10 +12,9 @@
   `PosSyncRequested` through the outbox. Raw provider snapshots are written —
   `PosCatalogSyncService` calls `PosRawSnapshotWriter` off the critical path and
   `raw_object_key` is populated, so a bad import can be read back from the
-  provider's own bytes. Still not built: the separate stop-list cadence
-  (`pos_live_availability`, V0190, has a table and no poller writing it, so the
-  fast feed is still unserved) and any retention or expiry policy over the
-  written snapshots. 2026-09-08: `gov_code` is confirmed as an MXIK
+  provider's own bytes. The separate stop-list cadence is now built too — see
+  the 2026-09-09 entry below. Still not built: any retention or expiry policy
+  over the written snapshots. 2026-09-08: `gov_code` is confirmed as an MXIK
   candidate (Q15, `docs/providers/clopos-api.md` §12) and the staged field is
   renamed `CatalogSnapshot.Product#mxikCode` accordingly; `FieldAuthorityPolicy`
   still resolves `product.mxikCode` to `REVIEWED_IMPORT`, unchanged by the
@@ -59,7 +58,52 @@
   directly. Tenant-isolation tests for the new endpoints are not written beyond
   the tenant-scoped `WHERE` clauses every store method already carries — see
   restart/scale, which is proven, versus isolation, which is asserted only by
-  construction here.
+  construction here. 2026-09-09: the stop-list poller is built —
+  `integration.pos_live_availability` (V0190) had a table and nothing writing
+  it; `PosAvailabilityPoll` is the poller, on its own `@Scheduled` tick
+  (`horecaos.pos.availability.poll.interval`, default `PT45S`, inside this
+  ADR's own thirty-to-sixty-second window and never hardcoded) separate from
+  `PosSyncScheduler`'s daily one. Every active binding with `AVAILABILITY_READ`
+  enabled is read every tick, across every tenant — there is no per-binding due
+  time here, on purpose: V0190's own comment already refused a schedule row for
+  this feed ("no run_id, no history"), and building one now would reopen a
+  closed decision. `JdbcPosLiveAvailabilityStore#replace` deletes whatever the
+  poll no longer reports and upserts whatever it does, in one local
+  transaction, which is "absence means unconstrained" made real rather than
+  merely stated in a comment — `JdbcPosLiveAvailabilityStoreTests
+  .absenceDeletesTheStaleRowRatherThanLeavingItConstrained` fails if that
+  inversion ever comes back. Two replicas: not `FOR UPDATE SKIP LOCKED`, because
+  unlike the daily scheduler there is no due occurrence for a loser to skip —
+  every replica polls every binding every tick. The delete-then-upsert is still
+  two statements, though, and the first version of this class assumed that
+  needed no coordination; it was wrong, and `JdbcPosLiveAvailabilityStoreTests
+  .twoReplicasRacingTheSameBindingConvergeToOneReplicasWholeReadingNeverAMix`
+  reproduces the race directly — a second replica's `DELETE` can run against a
+  snapshot that has not yet seen the first replica's still-uncommitted
+  `INSERT`s, and the two replicas' readings survive together, mixed, which
+  nobody actually reported. The fix is `pg_advisory_xact_lock` on the binding
+  id, taken as the first statement inside the transaction and released
+  automatically at commit or rollback — a lock on the binding rather than on a
+  row, held only across the short local write and never across the provider
+  HTTP call, which by that point has already returned. A failed poll
+  (`ProviderOutcome.Status` other than `SUCCESS`) leaves `pos_live_availability`
+  exactly where it was: never truncated, never partially applied, logged with
+  the binding and the classification, and counted — stale-but-served, because
+  the alternative (clearing the binding's rows) would read as "everything is
+  unconstrained" and silently un-86 every product this binding had marked out
+  of stock, which is worse than staleness, not safer. And the reading reaches a
+  customer: every entity that crosses the out-of-stock line is propagated to
+  `inventory` through `StockAvailabilityPort#toggle` — the identical seam ADR
+  0060's bot `/86` command uses — for whichever of it has both an ADR 0011
+  mapping to a product's default variant and is `BINARY`-tracked at the
+  binding's location; `PosAvailabilityPollTests
+  .aStopListReadingReachesInventoryInBothDirections` proves a mapped variant is
+  86'd and un-86'd by two successive polls, and `.aFailedPollLeavesTheLastReadingInPlace`
+  proves a provider timeout changes nothing. What is not built: a control-plane
+  endpoint to enable `AVAILABILITY_READ` on a binding (today, as with
+  `pos_sync_schedules`, it is enabled directly), and propagation to a
+  `QUANTITY`-tracked stock item, which `StockAvailabilityPort` has no operation
+  for at all yet.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; staging and difference engine
@@ -432,7 +476,8 @@ Written (`DifferenceEngineTests`, `CloposCatalogNormalizerTests`):
   (Q11), and guessing would hide the discrepancy.
 
 Written since (`ScheduleCadenceTests`, `PosSyncSchedulingServiceTests`,
-`PosApplyServiceResumeTests`, `PosSyncOutboxTests`):
+`PosApplyServiceResumeTests`, `PosSyncOutboxTests`, `JdbcPosLiveAvailabilityStoreTests`,
+`PosAvailabilityPollTests`):
 
 - The next occurrence keeps the branch's own wall-clock time across a
   spring-forward and a fall-back — the UTC gap is twenty-three or twenty-five
@@ -448,6 +493,17 @@ Written since (`ScheduleCadenceTests`, `PosSyncSchedulingServiceTests`,
 - `PosSyncRequested` is appended in the caller's own transaction, on the
   binding's own partition key, and rolls back with a rolled-back business
   transaction — never a bare publish.
+- An entity a stop-list poll no longer reports is deleted from
+  `pos_live_availability`, not left as still-constrained — a fixture that
+  reverts this to "leave it in place" fails immediately.
+- Two replicas racing the same binding's stop-list write converge to one
+  replica's whole reading; a fixture that removes the binding-scoped advisory
+  lock reliably produces a mixed reading from both replicas' entries and fails.
+- A mapped, `BINARY`-tracked variant is marked unavailable when the stop list
+  reports it at a zero limit, and available again once the provider stops
+  reporting it at all.
+- A provider timeout on the stop-list poll leaves the last reading — and the
+  inventory fact derived from it — exactly where it was.
 
 Still to write: large-run pagination performance, target optimistic-version
 staleness under a genuine concurrent edit (the apply path exists now, but
@@ -536,9 +592,14 @@ safe undo for a menu that was live and wrong during a lunch rush.
       `raw_object_key` through `media`'s `ObjectStorage` port, best-effort.
       Retention by classification is **not** built — nothing expires or
       reclassifies these objects, and that is still open.
-- [ ] Add the separate stop-list availability feed on its own cadence.
-      `integration.pos_live_availability` exists (V0190) with nothing that
-      writes to it — the table is built, the poller is not.
+- [x] Add the separate stop-list availability feed on its own cadence.
+      `PosAvailabilityPoll` polls every active `AVAILABILITY_READ` binding on
+      its own configurable interval (default `PT45S`) and
+      `JdbcPosLiveAvailabilityStore#replace` writes `integration
+      .pos_live_availability` (V0190) wholesale, propagating every crossed
+      out-of-stock line to `inventory` through the same `StockAvailabilityPort`
+      ADR 0060's bot toggle uses. See the 2026-09-09 entry above for the
+      two-replica and failure-handling detail.
 - [x] Add restart and scale tests. `PosSyncSchedulingServiceTests` proves two
       replicas racing one due schedule claim it at most once;
       `PosApplyServiceResumeTests` proves a run interrupted mid-apply resumes
