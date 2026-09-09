@@ -528,6 +528,24 @@ The UI therefore needs a **result panel**, not a toast: `197 назначено 
 проблемные** re-running under the same bulk key so successes replay their stored
 responses instead of executing twice.
 
+**Built today**: `POST .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions`
+(`OrderBulkActionService`, capability `Capability.ORDER_BULK_ACTION` at
+`LOCATION` scope, held by `location-manager` only — not `location-staff`,
+which holds neither `order.cancel` nor this — because applying a hundred
+cancellations under one click is a different act from applying one). Two of
+the five rows above are backed by it: **Отменить** as `CANCEL`, through the
+same reason registry and the same `OrderOutcomeService.cancel` a single
+cancellation uses, and a second action this table does not list —
+**advancing** `PREPARING`/`READY`/`FULFILLING`, the routine kitchen-path move
+a single `state-actions` call already makes. **Назначить курьера** waits on
+courier assignment reaching the ordering module at all (ADR 0014's own
+scope); **Печать в POS** and **Фискализировать** wait on their single-order
+capabilities existing first; **Экспорт CSV** is a read/export concern, not an
+order mutation, and does not belong on this endpoint regardless. The result
+panel and **Повторить проблемные** described above are frontend work this
+change does not include — the backend a re-run needs (find every prior item
+row and change nothing) is built and tested, but nothing renders it yet.
+
 ### 2.11 States
 
 | State | Rendering |
@@ -1368,6 +1386,7 @@ Read from `legacy-archive/qoida-dashboard/src`.
 | `order.advance` | The kitchen path |
 | `order.cancel` | Cancellation — **built**, `Capability.ORDER_CANCEL` |
 | `order.amend` | Amendment (§4.4) — **built**, `Capability.ORDER_AMEND`, for the three non-financial commands |
+| `order.bulk-action` | Bulk actions (§2.10) — **built**, `Capability.ORDER_BULK_ACTION`, held only by `location-manager`; `ADVANCE` and `CANCEL` only |
 | `order.state.override` | Compensating transitions — **not yet declared by the state machine**, §0.2 |
 | `customer.pii.reveal` | Phone, address and note reveal, with a stated purpose |
 | `customer.read` | The customer panel and the lookup |
@@ -1400,7 +1419,7 @@ reads **built, not read by ordering** below, distinct from genuinely
 | Operator-assisted order **creation** — `POST /api/v1/operations/orders` and the phone-lookup endpoint beside it (`POST /api/v1/operations/customer-lookups`); no `ORDER_PLACE` capability is declared either | ADR 0039 | The entire New order screen; §5. An operator cannot take an order by phone today — every other action in this document presumes an order that already exists |
 | Мои заказы filter (`created_by_actor_id = me` on the order-list query) and operator leaderboards (`reporting.fact_order` has no operator column) | ADR 0039 + 0043 | §2.4, §3.12. (`orders.created_by_actor_type/id`, `accepted_by_actor_type/id` and `accepted_at` are themselves **built** — V0029 — written by `JdbcOrderStore`.) |
 | Требуется звонок filter on the order-list query | ADR 0039 | §2.4. (The column, `SET_CALLBACK_REQUESTED` and its resolution are **built** — V0029.) |
-| `bulk_operations`, `bulk_operation_items` | ADR 0039 | Bulk result panel and safe re-run; §2.10 |
+| The §2.10 result panel and **Повторить проблемные** | ADR 0039 | `bulk_operations`/`bulk_operation_items` and the endpoint that writes them are **built** — V0193, `OrderBulkActionService` — for `ADVANCE` and `CANCEL`; nothing renders the outcome list yet. `Назначить курьера`, `Печать в POS` and `Фискализировать` as bulk actions remain not built |
 | `customer_accounts.origin`, `created_by_actor_id` | ADR 0039 (extends 0015) | Operator-created customers and their marketing suppression; §5.3 |
 | Payment method on the order, transactions, refunds, invoice re-issue, reaching an **operations** screen | ADR 0013 is now Partial (Click/Payme adapters, the attempt state machine and the storefront checkout session are built — `POST /api/v1/storefront/.../payment-sessions`), but that is the customer-facing checkout path, not an operations panel; refunds are [ADR 0048](../adr/partial/0048-refunds-as-bookkeeping-and-the-order-remedy-model.md)'s scope now, itself Partial | The Оплата panel beyond the projection; §3.9, §4.9 |
 | `fiscal.fiscal_documents`, `_lines`, `_unit_marks` | ADR 0038 | The Фискализация panel, the fiscal chip, manual retry; §3.9, §4.10 |

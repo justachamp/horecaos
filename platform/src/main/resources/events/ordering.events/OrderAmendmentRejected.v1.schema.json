@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderAmendmentRejected.v1.schema.json",
+  "title": "OrderAmendmentRejected v1 payload",
+  "description": "An amendment ended without applying (ADR 0039) -- withdrawn by the operator or expired against the ADR 0018 quote TTL at apply time. reasonCode is a stable code such as WITHDRAWN_BY_OPERATOR or EXPIRED, never operator free text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "amendmentId", "baseRevision"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "amendmentId": { "type": "string", "format": "uuid" },
+    "baseRevision": { "type": "integer", "minimum": 1 },
+    "reasonCode": { "type": ["string", "null"], "maxLength": 64 }
+  }
+}

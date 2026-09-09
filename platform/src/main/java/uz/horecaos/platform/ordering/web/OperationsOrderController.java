@@ -38,6 +38,7 @@ import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
@@ -45,6 +46,8 @@ import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
+import uz.horecaos.platform.ordering.domain.BulkActionType;
+import uz.horecaos.platform.ordering.domain.BulkItemStatus;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -87,6 +90,7 @@ public class OperationsOrderController {
     private final OrderCallProvenanceService callProvenance;
     private final OperatorOrderingService operatorOrdering;
     private final OperatorCustomerLookupService customerLookup;
+    private final OrderBulkActionService bulkActions;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
@@ -99,7 +103,8 @@ public class OperationsOrderController {
             CurrentActor currentActor,
             OrderCallProvenanceService callProvenance,
             OperatorOrderingService operatorOrdering,
-            OperatorCustomerLookupService customerLookup) {
+            OperatorCustomerLookupService customerLookup,
+            OrderBulkActionService bulkActions) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -110,6 +115,7 @@ public class OperationsOrderController {
         this.callProvenance = callProvenance;
         this.operatorOrdering = operatorOrdering;
         this.customerLookup = customerLookup;
+        this.bulkActions = bulkActions;
     }
 
     @GetMapping
@@ -723,6 +729,115 @@ public class OperationsOrderController {
                                 .map(command -> command.commandType().name())
                                 .toList()))
                 .toList());
+    }
+
+    // ---------------------------------------------------------- bulk actions
+
+    @PostMapping("/bulk-actions")
+    @RequiresCapability(value = Capability.ORDER_BULK_ACTION, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Apply ADVANCE or CANCEL to an operator's own order selection",
+            description = "ADR 0039. N independent commands under one bulk operation id, never one "
+                    + "all-or-nothing transaction: each order is applied through the same "
+                    + "single-order service a lone request would use, in its own transaction, so "
+                    + "one already-settled order cannot fail the other hundred and ninety-nine. "
+                    + "Always 202 with a per-item outcome list, capped at 200 orders. ADVANCE "
+                    + "targets PREPARING, READY or FULFILLING only; CANCEL names a reason from "
+                    + "GET .../reject-reasons' sibling, the tenant's outcome-reason registry, "
+                    + "exactly like a single cancellation. A resubmission carrying the same "
+                    + "Idempotency-Key changes nothing and returns the outcome already recorded, "
+                    + "applied or failed alike — a re-run does not retry the failures.")
+    public ResponseEntity<BulkActionResponse> bulkAction(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody BulkActionRequest body,
+            HttpServletRequest request) {
+
+        String idempotencyKey = request.getHeader("Idempotency-Key");
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new ApiException(
+                    ErrorCode.IDEMPOTENCY_KEY_REQUIRED, "A bulk action carries an Idempotency-Key (ADR 0031)");
+        }
+
+        try {
+            var result = bulkActions.apply(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    new OrderBulkActionService.BulkActionCommand(
+                            body.actionType(),
+                            body.orders().stream()
+                                    .map(ref -> new OrderBulkActionService.BulkOrderRef(
+                                            ref.orderId(), ref.expectedVersion()))
+                                    .toList(),
+                            body.targetStatus(),
+                            body.reasonCode(),
+                            body.cancelReasonId(),
+                            body.cancelNote(),
+                            idempotencyKey,
+                            "USER",
+                            currentActor.get().subject()));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(BulkActionResponse.of(result));
+        } catch (IllegalArgumentException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        }
+    }
+
+    /**
+     * @param targetStatus   required for {@code ADVANCE}: {@code PREPARING}, {@code READY} or
+     *                       {@code FULFILLING}
+     * @param reasonCode     required for {@code ADVANCE}, exactly like a single state action
+     * @param cancelReasonId required for {@code CANCEL}, from the tenant's outcome-reason registry
+     */
+    public record BulkActionRequest(
+            @NotNull BulkActionType actionType,
+            @NotEmpty @Size(max = 200) List<BulkOrderRefRequest> orders,
+            @Nullable OrderStatus targetStatus,
+            @Nullable String reasonCode,
+            @Nullable UUID cancelReasonId,
+            @Nullable String cancelNote) {}
+
+    public record BulkOrderRefRequest(
+            @NotNull UUID orderId, @NotNull Integer expectedVersion) {}
+
+    public record BulkActionResponse(
+            UUID bulkOperationId,
+            String actionType,
+            int requestedCount,
+            int appliedCount,
+            int failedCount,
+            boolean replayed,
+            List<BulkActionItemResponse> items) {
+
+        static BulkActionResponse of(OrderBulkActionService.BulkActionResult result) {
+            int applied = (int) result.items().stream()
+                    .filter(item -> item.itemStatus() == BulkItemStatus.APPLIED)
+                    .count();
+            return new BulkActionResponse(
+                    result.bulkOperationId(),
+                    result.actionType().name(),
+                    result.requestedCount(),
+                    applied,
+                    result.items().size() - applied,
+                    result.replayed(),
+                    result.items().stream().map(BulkActionItemResponse::of).toList());
+        }
+    }
+
+    public record BulkActionItemResponse(
+            UUID orderId,
+            String itemStatus,
+            @Nullable String itemProblemCode,
+            @Nullable Integer resultingOrderVersion) {
+
+        static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
+            return new BulkActionItemResponse(
+                    outcome.orderId(),
+                    outcome.itemStatus().name(),
+                    outcome.itemProblemCode(),
+                    outcome.resultingOrderVersion());
+        }
     }
 
     @GetMapping("/{orderId}/lines/{lineId}/note")

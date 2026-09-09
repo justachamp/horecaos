@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderCallbackRequested.v1.schema.json",
+  "title": "OrderCallbackRequested v1 payload",
+  "description": "A customer needs a callback (ADR 0039). A bare signal -- no reason, no note, and never the caller's own contact value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "amendmentId", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "amendmentId": { "type": "string", "format": "uuid" },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

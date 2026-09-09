@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -21,6 +22,12 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.api.OrderAmendmentApplied;
+import uz.horecaos.platform.ordering.api.OrderAmendmentProposed;
+import uz.horecaos.platform.ordering.api.OrderAmendmentRejected;
+import uz.horecaos.platform.ordering.api.OrderCallbackRequested;
+import uz.horecaos.platform.ordering.api.OrderCallbackResolved;
+import uz.horecaos.platform.ordering.api.OrderRevisionCreated;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
@@ -29,6 +36,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderFieldPatch;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
+import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
  * Amending an order without editing it (ADR 0039).
@@ -67,20 +75,24 @@ public class OrderAmendmentService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final PosExportStatus posExports;
+    private final ApplicationEventPublisher events;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
             JdbcOrderStore orders,
             JdbcOrderAmendmentStore amendments,
             AuditRecorder audit,
             ObjectMapper objectMapper,
             Clock clock,
-            PosExportStatus posExports) {
+            PosExportStatus posExports,
+            ApplicationEventPublisher events) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.posExports = posExports;
+        this.events = events;
     }
 
     /**
@@ -175,6 +187,20 @@ public class OrderAmendmentService {
                 now);
 
         AmendmentRow proposed = amendments.find(tenantId, amendmentId).orElseThrow();
+
+        events.publishEvent(new OrderAmendmentProposed(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                orderId,
+                now,
+                order.brandId(),
+                order.locationId(),
+                amendmentId,
+                order.currentRevision(),
+                command.commands().stream().map(c -> c.type().name()).toList(),
+                proposed.status().name(),
+                order.version()));
+
         if (!command.applyOnPrice()) {
             return new AmendmentResult(proposed, order.version(), List.of(), false);
         }
@@ -296,6 +322,60 @@ public class OrderAmendmentService {
 
         List<String> warnings = warningsFor(order, patch);
 
+        events.publishEvent(new OrderAmendmentApplied(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                orderId,
+                now,
+                order.brandId(),
+                order.locationId(),
+                amendmentId,
+                newRevision,
+                commands.stream().map(c -> c.commandType().name()).toList(),
+                amendment.deltaTotalMinor(),
+                orderVersion));
+
+        events.publishEvent(new OrderRevisionCreated(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                orderId,
+                now,
+                order.brandId(),
+                order.locationId(),
+                newRevision,
+                amendmentId,
+                previous.currency(),
+                previous.totalMinor(),
+                amendment.deltaTotalMinor(),
+                orderVersion));
+
+        // ADR 0039: SET_CALLBACK_REQUESTED both raises and clears the flag, so the
+        // one field on the patch tells the two facts apart rather than needing an
+        // eleventh command.
+        if (patch.callbackRequested() != null) {
+            if (patch.callbackRequested()) {
+                events.publishEvent(new OrderCallbackRequested(
+                        UUID.randomUUID(),
+                        new TenantId(tenantId),
+                        orderId,
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        amendmentId,
+                        orderVersion));
+            } else {
+                events.publishEvent(new OrderCallbackResolved(
+                        UUID.randomUUID(),
+                        new TenantId(tenantId),
+                        orderId,
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        amendmentId,
+                        orderVersion));
+            }
+        }
+
         recordAudit(
                 order,
                 "ordering.order.amendment-applied",
@@ -338,9 +418,28 @@ public class OrderAmendmentService {
     /** Withdraws an open amendment. The row stays: it is evidence of what was tried. */
     @Transactional
     public void withdraw(UUID tenantId, UUID amendmentId, String reasonCode) {
-        if (!amendments.markRejected(tenantId, amendmentId, reasonCode, clock.instant())) {
+        AmendmentRow amendment =
+                amendments.find(tenantId, amendmentId).orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
+        Instant now = clock.instant();
+        if (!amendments.markRejected(tenantId, amendmentId, reasonCode, now)) {
             throw new AmendmentNotFoundException(amendmentId);
         }
+
+        // The amendment's own foreign key guarantees the order it names still
+        // exists, so this is the same orElseThrow every other method here uses
+        // rather than a defensive null.
+        OrderRow order = orders.find(tenantId, amendment.orderId())
+                .orElseThrow(() -> new OrderStateService.OrderNotFoundException(amendment.orderId()));
+        events.publishEvent(new OrderAmendmentRejected(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                amendment.orderId(),
+                now,
+                order.brandId(),
+                order.locationId(),
+                amendmentId,
+                amendment.baseRevision(),
+                reasonCode));
     }
 
     /** Scheduled, not on the request path. */

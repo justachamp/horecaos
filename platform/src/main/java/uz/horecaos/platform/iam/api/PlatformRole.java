@@ -545,6 +545,10 @@ public enum PlatformRole {
                     ORDER_PLACE,
                     ORDER_AMEND,
                     ORDER_CANCEL,
+                    // ADR 0039: bulk-applying ORDER_ADVANCE or ORDER_CANCEL to a
+                    // selection is a location manager's own power, not the floor's
+                    // — see Capability.ORDER_BULK_ACTION's own doc for why.
+                    ORDER_BULK_ACTION,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
                     // ADR 0041: the pass and the office. Recall, release and the late

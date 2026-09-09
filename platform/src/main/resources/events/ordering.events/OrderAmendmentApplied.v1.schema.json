@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderAmendmentApplied.v1.schema.json",
+  "title": "OrderAmendmentApplied v1 payload",
+  "description": "An amendment committed and appended a new order revision (ADR 0039). appliedRevision names the revision OrderRevisionCreated also carries; the two are published together rather than one implying the other.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "amendmentId", "appliedRevision", "commandTypes", "deltaTotalMinor", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "amendmentId": { "type": "string", "format": "uuid" },
+    "appliedRevision": { "type": "integer", "minimum": 1 },
+    "commandTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "ADD_LINES", "CHANGE_LINE_QUANTITY", "REMOVE_LINES", "CHANGE_PAYMENT_METHOD",
+          "CHANGE_DELIVERY_ADDRESS", "CHANGE_FULFILLMENT_TIME", "CHANGE_CONTACT",
+          "SET_KITCHEN_NOTE", "SET_CALLBACK_REQUESTED", "SET_CASH_TENDERED"
+        ]
+      }
+    },
+    "deltaTotalMinor": { "type": "integer" },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}
