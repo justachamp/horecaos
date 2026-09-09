@@ -29,7 +29,8 @@ class PosRawSnapshotWriterTests {
     @Test
     void writesEveryEntitysRawPayloadUnderAnImmutableTenantScopedKey() {
         RecordingStorage storage = new RecordingStorage();
-        PosRawSnapshotWriter writer = new PosRawSnapshotWriter(storage, JsonMapper.builder().build(), "horecaos-media");
+        PosRawSnapshotWriter writer =
+                new PosRawSnapshotWriter(storage, JsonMapper.builder().build(), "horecaos-media");
 
         CatalogSnapshot snapshot = new CatalogSnapshot(
                 Instant.parse("2026-08-24T04:00:00Z"),
@@ -75,13 +76,15 @@ class PosRawSnapshotWriterTests {
                 throw new IllegalStateException("MinIO is unreachable");
             }
         };
-        PosRawSnapshotWriter writer = new PosRawSnapshotWriter(failing, JsonMapper.builder().build(), "horecaos-media");
+        PosRawSnapshotWriter writer =
+                new PosRawSnapshotWriter(failing, JsonMapper.builder().build(), "horecaos-media");
 
         Optional<String> key = writer.writeSnapshot(
                 TENANT,
                 BINDING,
                 RUN,
-                new CatalogSnapshot(Instant.EPOCH, true, 0, List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
+                new CatalogSnapshot(
+                        Instant.EPOCH, true, 0, List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
 
         assertThat(key)
                 .as("a diagnostic write failing must never look like a run failure to the caller")

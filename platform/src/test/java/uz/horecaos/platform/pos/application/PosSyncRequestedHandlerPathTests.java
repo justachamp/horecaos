@@ -164,8 +164,8 @@ class PosSyncRequestedHandlerPathTests {
                  "occurredAt":"%s",
                  "payload":{"requestId":"%s","tenantId":"%s","bindingId":"%s",
                             "scheduleId":"%s","resumedRunId":null,"triggerType":"SCHEDULED",
-                            "requestedAt":"%s"}}"""
-                .formatted(requestId, TENANT, BINDING, occurredAt, requestId, TENANT, BINDING, scheduleId, occurredAt);
+                            "requestedAt":"%s"}}""".formatted(
+                        requestId, TENANT, BINDING, occurredAt, requestId, TENANT, BINDING, scheduleId, occurredAt);
     }
 
     private String resumedBody(UUID requestId, UUID resumedRunId, String occurredAt) {
@@ -176,7 +176,7 @@ class PosSyncRequestedHandlerPathTests {
                  "occurredAt":"%s",
                  "payload":{"requestId":"%s","tenantId":"%s","bindingId":"%s",
                             "scheduleId":null,"resumedRunId":"%s","triggerType":"RESUMED",
-                            "requestedAt":"%s"}}"""
-                .formatted(requestId, TENANT, BINDING, occurredAt, requestId, TENANT, BINDING, resumedRunId, occurredAt);
+                            "requestedAt":"%s"}}""".formatted(
+                        requestId, TENANT, BINDING, occurredAt, requestId, TENANT, BINDING, resumedRunId, occurredAt);
     }
 }
