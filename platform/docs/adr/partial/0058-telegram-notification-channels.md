@@ -251,16 +251,16 @@ Rollback per audience is unsubscribing bindings; the pipeline beneath is unchang
 
 ## Implementation checklist
 
-- [ ] Telegram provider kind: installation, secret references (token + webhook secret), binding + `/link` handshake with rights verification
-- [ ] Channel migration: `TELEGRAM` across the four preference/template/notification/attempt constraints; binding-shaped endpoint reference
-- [ ] Adapter on the Camel notification route: per-chat FIFO with durable claims, error taxonomy, `migrate_to_chat_id`, edit-window lifecycle, platform-wide breaker with non-Telegram alerting
-- [ ] Webhook ingress with `secret_token` verification; long-polling profile for local dev
+- [x] Telegram provider kind: installation, secret references (token + webhook secret), binding + `/link` handshake with rights verification
+- [x] Channel migration: `TELEGRAM` across the four preference/template/notification/attempt constraints; binding-shaped endpoint reference
+- [x] Adapter on the Camel notification route: per-chat FIFO with durable claims, error taxonomy, `migrate_to_chat_id`, edit-window lifecycle, platform-wide breaker with non-Telegram alerting
+- [x] Webhook ingress with `secret_token` verification; long-polling profile for local dev
 - [ ] Trigger listeners per event class outside ordering (payments, fulfillment, fiscal, inventory, integration, onboarding, bands) — each a named small build in its owning module
 - [ ] Operations event subscriptions and group/topic routing
-- [ ] Customer 1:1 linking via Mini App / deep-link code + pending-link table; consent sync on 403
-- [ ] Digest scheduler over ADR 0043 facts (15m / half-day / day-close; platform half-day / day)
+- [x] Customer 1:1 linking via Mini App / deep-link code + pending-link table; consent sync on 403
+- [x] Digest scheduler over ADR 0043 facts (15m / half-day / day-close; platform half-day / day) — `DigestScheduler` runs on a timer and no longer waits on ADR 0043, which now has a production caller too.
 - [ ] Control-plane subscriptions (onboarding, approvals, drift, bands, subscriptions)
-- [ ] `FakeTelegramBotApi` harness; PII lint covers Telegram payloads (ADR 0032/0029)
+- [x] `FakeTelegramBotApi` harness; PII lint covers Telegram payloads (ADR 0032/0029)
 - [ ] Consent and preference surfaces per ADR 0020 for the customer audience
 
 ## Exit criteria

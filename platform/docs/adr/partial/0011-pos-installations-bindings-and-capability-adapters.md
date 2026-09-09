@@ -23,26 +23,34 @@
   it commit together, then dispatches `send` from a `@Scheduled` loop rather than
   the confirming thread, so a slow till is not a checkout outage. A confirmed
   order therefore reaches a till and the operator queue can receive a row in
-  production. One durability weakness remains and the class states it: the
-  dispatch hint is an in-process `ConcurrentLinkedQueue`, so an export whose
-  process dies between commit and the next tick stays `PENDING` with no sweep
-  over `PENDING` rows to find it. Also not built: the
+  production. `PosOrderExportTrigger.sweepStale` (wired `@Scheduled`, added
+  2026-09-05) is the durable backstop behind that in-process hint: every
+  replica ticks it, `JdbcPosExportStore.findStalePending` reads the database
+  rather than the confirming replica's own memory, so an export whose process
+  died between commit and the next tick is not stranded — a previous revision
+  of this line called that sweep unbuilt. Also not built: the
   session token cache is an in-process `ConcurrentHashMap` in `CloposSession`
   rather than ADR 0033 shared state; there is no ADR 0030 polling-cadence policy
   and no `RateLimit-Remaining` back-off; the only POS meter is the route counter
   `horecaos.pos.route` in `PosProcessor` — there is no export or operator-queue
   metric, no POS health check and no `AWAITING_OPERATOR` runbook in
-  `docs/runbooks/`; `CUSTOMER_UPSERT` is declared `UNSUPPORTED` by `CloposAdapter`
-  and not implemented; and `clopos.correlationEchoVerified` has never been set by
-  a real experiment. The
+  `docs/runbooks/`; and `clopos.correlationEchoVerified` has never been set by
+  a real experiment. `CUSTOMER_UPSERT` is declared by `CloposAdapter`
+  (its `declaredCapabilities()` includes it, matching this record's own
+  capability table and the `PARTIAL` ceiling `V0036` seeds) but not enabled —
+  there is no upsert method on `PosAdapter` and no ADR 0029 consent basis to
+  call one against, so declaring it opens nothing by itself. The
   exit criteria are still not met — see "Blocked on Clopos" below. 2026-09-08:
   Clopos answered Q1/Q18 (`POST /orders` dedupes a byte-identical repeat) and
   Q7 (order-acceptance mode is a tenant decision) directly to the owner —
   `docs/providers/clopos-api.md` §12 records both. Neither reopened this ADR's
   argument. `ProviderInstallationController#settings` / `#updateSettings` now
-  exposes `clopos.requireClerkApproval` to the operations app's Settings
-  surface, closing the part of Q7 that was actually blocking (a tenant could
-  not change the default without a raw database write); the state machine, the
+  exposes `clopos.requireClerkApproval` as an HTTP setting on the ADR 0026
+  installation, closing the part of Q7 that was actually blocking (a tenant
+  could not change the default without a raw database write) — but only the
+  generated client picked it up; no screen in `frontend/operations` calls
+  either endpoint yet, so a tenant still cannot change the default without a
+  direct HTTP call. The state machine, the
   `UNKEYED_CREATE` classification and `PosOrderExportService`'s refusal to
   reconstruct and resend a stored request are unchanged, because Clopos's own
   dedupe is keyed on request bytes this platform does not store.

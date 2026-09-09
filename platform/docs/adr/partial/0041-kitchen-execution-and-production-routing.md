@@ -26,7 +26,7 @@
   `@ConditionalOnMissingBean` for a context without the adapter — a slice test,
   or the rollback this ADR describes. Wave 43 adds V0144's
   `kitchen.station_capacity` and `KitchenStationController`'s
-  `GET`/`POST .../kitchen/station-capacity`, plus `apps/operations`'
+  `GET`/`POST .../kitchen/station-capacity`, plus `frontend/operations`'
   `CapacityPage` (IA §2.6) over it — create and list only, no edit or delete,
   the same discipline routing rules already keep. `release_at` still computes
   with no queue offset; a ceiling is read today only by a manager comparing it
@@ -563,7 +563,7 @@ ADR 0016.
   not built. `kitchen.station_capacity` itself no longer belongs on this list:
   wave 43 built it, once it had a real reader that was not "configuration no
   code reads" — a manager comparing the ceiling against the board by eye, on
-  `apps/operations`' `CapacityPage` (IA §2.6). "Cook headcount output," the
+  `frontend/operations`' `CapacityPage` (IA §2.6). "Cook headcount output," the
   other half of that IA row, stays unbuilt and is named there as a product-
   policy gap (a demand forecast and a portions-per-cook ratio), not a schema
   one.

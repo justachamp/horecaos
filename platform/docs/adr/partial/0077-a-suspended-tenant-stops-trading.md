@@ -2,7 +2,7 @@
 
 - Decision status: Accepted
 - Implementation status: Partial — the rule is enforced and the transition is
-  reachable from production, but nothing exposes it over HTTP yet. Wave 79 adds
+  reachable from production. Wave 79 adds
   `iam.api.TenantSuspensionLookup`, answered by
   `tenancy.infrastructure.authorization.JdbcTenantSuspensionLookup` over
   `tenant.tenants.status` and cached for thirty seconds (ADR 0033,
@@ -14,10 +14,16 @@
   gains platform-admin-only `suspendTenant`/`reactivateTenant`, audited under
   ADR 0027 as `tenant.suspended`/`tenant.reactivated`, writing through the new
   `TenantControlPlaneStore.updateTenantStatus` and evicting the cache so the
-  refusal starts at the next request. Not built: no controller calls either
-  method, so today a suspension is issued from a service and not from an
-  operator's screen; no ADR 0032 event is published; and `ARCHIVED` is
-  deliberately not treated as suspended (see Open inputs).
+  refusal starts at the next request. 2026-09-08 put both methods behind
+  `TenantControlPlaneController` (`POST .../tenants/{tenantId}/suspend` and
+  `.../reactivate`, platform-admin `TENANT_WRITE` at `PLATFORM` scope), so a
+  controller calls them now. Not built: no screen in `frontend/control-plane`
+  calls either endpoint — `tenants-api.ts` only types `SUSPENDED`/`ARCHIVED`
+  as display states, nothing invokes the action — so an operator still cannot
+  suspend or reactivate a tenant except by a direct HTTP call; no ADR 0032
+  event is published; and this record's own grant filter still enforces
+  `SUSPENDED` only — `ARCHIVED` was given its own three-state answer by
+  ADR 0078, which supersedes this record (see Open inputs).
 - Date proposed: 2026-09-08
 - Date decided: 2026-09-08
 - Deciders: platform owner (directed the work), Claude (architecture)

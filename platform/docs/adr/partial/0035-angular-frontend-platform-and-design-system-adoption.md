@@ -1,41 +1,44 @@
 # ADR 0035: Frontend platform, repository split, and design system adoption
 
 - Decision status: Accepted
-- Implementation status: Partial — the four repositories exist as standalone git working
-  trees under `frontend/` (`control-plane`, `operations`, `storefront`, `mobile`), each
-  with its own `.gitignore`, and none is staged in the platform repository, which tracks
-  only `frontend/README.md` and `frontend/prototypes/`. Two are past their initial commit:
-  the storefront has three and the mobile application several. `tokens.css` is vendored
-  into all three Angular applications (`storefront/src`, `operations/src`,
-  `control-plane/src/design-system`) and `frontend/mobile/design-tokens/tokens.css` with
-  the generated-not-authored header, the storefront additionally carrying a JizBiz brand
-  sheet at `src/brands/jizbiz/tokens.css`, and the Flutter side has `QoidaTokens` plus a
-  `token_drift_test.dart`. The storefront
-  implements `MiniAppHost` with `telegram-host.ts`, a declared-and-unimplemented
-  `click-host.ts`, `standalone-host.ts`, `host-detection.ts` and `create-host.ts`. Flutter
-  is installed and its 33 test files run. Not built: three of the four repositories still
-  have no remote — the storefront has one, `qoida-one/qoida-storefront-jizbiz` — so
-  `.gitmodules` and the four gitlinks are absent and `git clone --recursive` gets nothing;
-  no `sync-tokens` script and no Angular-side drift check, so the four vendored
-  copies are unpoliced, and the storefront carries no ESLint configuration, so the lint
-  rule forbidding `window.Telegram` outside the Telegram host does not exist either; the
-  eleven primitives were never ported — no shared component library exists in any Angular
-  app (`control-plane/src/design-system` holds `tokens.css` and nothing else), across 184
-  TypeScript files; server-side Telegram `initData` verification does not exist anywhere in
-  `src/main/java`, so the storefront's session exchange has no counterpart; and there is
-  no OpenAPI release artifact and no consumer manifests or nightly smoke suite —
-  though generated TypeScript clients now exist and are checked in at
-  `api/generated/` (the full v1 client plus one per ADR 0057 surface group), no
-  frontend imports any of them yet, so every API layer is still hand-written — and no nightly
-  smoke suite. The screens are no longer uniformly stubs. The storefront routes a whole
-  customer journey — unauthenticated browse, search and product, then cart, a
-  session-guarded checkout, orders, profile and addresses — across 109 of those
-  TypeScript files. Operations mounts `today` and `orders` (with `new` and `:orderId`
-  children) plus eleven placeholders derived from its navigation model; the control plane
-  mounts an overview and a capability-guarded tenants list plus two state screens; and the
-  Flutter router still mounts `_UnbuiltRoute` for
-  both of its shell routes even though catalogue, cart, checkout, orders and profile are
-  written under `lib/src/features/`.
+- Implementation status: Partial — this record's repository-split half was
+  never built, and the code took ADR 0052's monorepo shape instead: the four
+  applications this record named, plus a fifth it never mentions
+  (`frontend/storefront-milliy`, a second storefront scaffolded over the
+  same contract), are ordinary tracked directories in this one repository,
+  not standalone git working trees with `.gitmodules` and gitlinks —
+  `frontend/control-plane` (182 files), `frontend/operations` (507),
+  `frontend/storefront` (368) and `frontend/storefront-milliy` (254) each
+  carry a real `package.json`, `angular.json` and `src/app` tree, which
+  supersedes this line's older claim that "none is staged in the platform
+  repository." `frontend/mobile` does not exist; the Flutter application
+  lives at this repository's own top-level `mobile/` (275 files) instead —
+  a path change, not a missing app: `_UnbuiltRoute` still covers both of its
+  shell routes even though catalogue, cart, checkout, orders and profile are
+  written under `lib/src/features/`, so "on hold" (ADR 0055) is still an
+  accurate read of it. Design tokens are still vendored, not distributed:
+  `tokens.css` sits under each Angular app's own tree and
+  `mobile/design-tokens/tokens.css` under Flutter's, with no `sync-tokens`
+  script or drift check policing the copies, and neither Angular app carries
+  an ESLint configuration. No shared Angular component library exists in any
+  app — `control-plane/src/design-system` still holds only `tokens.css`.
+  Server-side Telegram `initData` verification is built —
+  `TelegramMiniAppInitDataVerifier` (ADR 0063), consumed by a real, tested,
+  capability-scoped `StorefrontTelegramLinkController` — but the specific
+  `MiniAppHost`/`telegram-host.ts`/`click-host.ts`/`standalone-host.ts`
+  architecture this record originally specified was never built; the
+  storefront's actual Telegram integration (bot deep-link sign-in plus
+  `initData` linking) shipped a different, working shape under ADR 0063 and
+  ADR 0065 instead. The per-app screen and file counts this line used to
+  carry are stale by roughly an order of magnitude and are no longer
+  restated here — `control-plane` alone now routes 49 paths, not "an
+  overview, a tenants list, and two state screens"; each capability ADR's
+  own status line is the current source for what a given app screens. Not
+  built: generated TypeScript API clients exist and are checked in at
+  `api/generated/` (the full v1 client plus one per ADR 0057 surface group),
+  but no frontend file imports any of them, so every app's API layer is
+  still hand-written; and there is no OpenAPI release artifact, no consumer
+  manifests, and no nightly smoke suite.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22 (amended; the 2026-08-21 decision stands except where restated below)
 - Deciders: Ayubkhon Abbosov (platform architecture, product owner)

@@ -14,9 +14,14 @@
   and the shared `MigrationControlPlaneFixture`. Not built: any import port beyond the one
   reference port `LegacyBrandImportPort` (legacy `companies` to brands), so no wave can
   actually be migrated; the security, media, catalog and golden-cart reconciliation
-  suites; wave dashboards — the Angular control-plane app routes only to an overview and a
-  tenants list, and has no migration section at all; and every rehearsal, cutover and
-  retirement step, all of which are operational acts rather than code.
+  suites; and every rehearsal, cutover and retirement step, all of which are operational
+  acts rather than code. Wave dashboards are built and operator-reachable:
+  `frontend/control-plane` routes `migration/runs`, `migration/id-mapping`,
+  `migration/dual-run-comparison` and `migration/cutover-checklist` to
+  `MigrationRuns`, `IdMappingExplorer`, `DualRunComparison` and `CutoverChecklist`,
+  all reading real data through `migration-api.ts` against the five platform-admin
+  controllers above — added wave 28 (2026-09-02), three days after this line was
+  last written and never reconciled with it until now.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance
@@ -401,7 +406,7 @@ deletion.
       was, and every CRITICAL rule is zero-tolerance by constraint. Still open: the security
       suite, the media and catalog structural probes, and the business probes that render
       production-shaped menus and price golden carts in both systems.
-- [ ] Build wave dashboards, pause/resume, quarantine resolution, and approval workflows. Pause/resume (`MigrationScopeController`'s `/{scopeId}/suspensions` and `/{scopeId}/resumptions`), quarantine resolution (`MigrationQuarantineController`'s `/quarantine-items/{itemId}/resolution`), and the cutover decision endpoint (`/{scopeId}/cutover`) are built; wave dashboards are not — the Angular control-plane app has no migration section.
+- [x] Build wave dashboards, pause/resume, quarantine resolution, and approval workflows. Pause/resume (`MigrationScopeController`'s `/{scopeId}/suspensions` and `/{scopeId}/resumptions`), quarantine resolution (`MigrationQuarantineController`'s `/quarantine-items/{itemId}/resolution`), and the cutover decision endpoint (`/{scopeId}/cutover`) are built; wave dashboards are too, as of wave 28 — `frontend/control-plane`'s `migration` section (see Implementation status).
 - [ ] Rehearse every wave, canary, provider uncertainty path, and rollback twice.
 - [ ] Execute tenant/brand/location journey cutovers with soak and support signoff.
 - [ ] Freeze/archive legacy, revoke all access/integrations, and complete retirement review.
