@@ -155,13 +155,6 @@ export interface DeliveryFeeView {
   reasonCode?: string;
 }
 
-export interface DestinationRequest {
-  addressId: string;
-  deliveryNote?: string;
-  recipientName: string;
-  recipientPhone: string;
-}
-
 export interface DestinationResponse {
   addressId?: string;
   cartId?: string;
@@ -515,6 +508,13 @@ export interface StorefrontOrderingControllerCancelRequest {
   reasonCode: string;
 }
 
+export interface StorefrontOrderingControllerDestinationRequest {
+  addressId: string;
+  deliveryNote?: string;
+  recipientName: string;
+  recipientPhone: string;
+}
+
 export interface StorefrontOrderingControllerOrderSummaryResponse {
   currency?: string;
   fulfillmentMode?: string;
@@ -578,7 +578,7 @@ export interface Operations {
   "createCart": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCartRequest }; responses: { "200": CartResponse } };
   "readCart": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "readDestination": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": DestinationResponse } };
-  "setDestination": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: DestinationRequest }; responses: { "200": CartResponse } };
+  "setDestination": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: StorefrontOrderingControllerDestinationRequest }; responses: { "200": CartResponse } };
   "removeLine": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "putLine": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } }; body: PutLineRequest }; responses: { "200": CartResponse } };
   "moveLocation": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: MoveLocationRequest }; responses: { "200": CartResponse } };

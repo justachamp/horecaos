@@ -195,6 +195,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
+                    ORDER_PLACE,
                     ORDER_AMEND,
                     ORDER_CANCEL,
                     ORDER_STATE_OVERRIDE,
@@ -335,6 +336,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
+                    ORDER_PLACE,
                     ORDER_AMEND,
                     ORDER_CANCEL,
                     ORDER_STATE_OVERRIDE,
@@ -540,6 +542,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
+                    ORDER_PLACE,
                     ORDER_AMEND,
                     ORDER_CANCEL,
                     REFUND_REQUEST,
@@ -605,6 +608,14 @@ public enum PlatformRole {
                     ORDER_READ,
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
+                    ORDER_PLACE,
+                    // ADR 0039: taking a phone order starts with finding the caller.
+                    // The New order screen's customer pane looks a returning customer
+                    // up by phone before ORDER_PLACE ever creates anything, so the same
+                    // bundle needs both. Read only — CUSTOMER_MANAGE and
+                    // CUSTOMER_PII_REVEAL stay off this bundle, so a phone-order operator
+                    // sees a masked lookup card and never a raw contact value.
+                    CUSTOMER_READ,
                     // ADR 0041: the line cook's screen. Reading the board and starting
                     // and readying a line is the whole of it — a recall undoes a
                     // readiness the pass may have acted on, and a release decides when
