@@ -46,10 +46,55 @@
   creation* is not built either — an operator sets those after the order
   exists, through the ordinary `POST .../amendments` endpoint's
   `SET_CASH_TENDERED`/`SET_KITCHEN_NOTE`/`SET_CALLBACK_REQUESTED` commands,
-  already built above. Still not built: bulk actions
-  (`POST /api/v1/operations/order-bulk-actions`); and the
-  `OrderAmendment*`, `OrderRevisionCreated` and `OrderCallback*` event contracts,
-  which exist nowhere in `ordering.api`.
+  already built above. Bulk actions are now built (wave 97):
+  `POST .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions`
+  (`OrderBulkActionService`, capability `ORDER_BULK_ACTION` at `LOCATION`
+  scope, held only by `location-manager` — `location-staff` holds neither
+  `ORDER_CANCEL` nor this, because applying a hundred cancellations under one
+  click is a different act from applying one) applies exactly two of the
+  ADR's actions in bulk: `ADVANCE`, to `PREPARING`, `READY` or `FULFILLING`
+  only, and `CANCEL`, through the same `OrderOutcomeService.cancel` and the
+  same tenant reason registry a single cancellation uses. `COMPLETE`,
+  `REJECT` and `AMEND` stay single-order only — see `BulkActionType`'s own
+  doc for why each is refused rather than half-supported. N independent calls
+  into the existing single-order services, never one shared transaction, each
+  recorded in `ordering.bulk_operations`/`bulk_operation_items` (V0193); a
+  resubmission under the same `Idempotency-Key` replays the outcome already
+  recorded rather than re-executing — including the failures, which a re-run
+  does not retry — and a bulk of two hundred with some failures still names
+  every failed order and its `item_problem_code` rather than collapsing into
+  one fact (ADR 0027). Bulk courier assignment, the action V0029's own
+  migration comment named as ADR 0039's first supported bulk action, is not
+  this and stays deferred behind courier assignment reaching the ordering
+  module at all. Covered by `OrderAmendmentAndOutcomeTests`.
+
+  The `OrderAmendment*`, `OrderRevisionCreated` and `OrderCallback*` event
+  contracts are also now built, published from `OrderAmendmentService`'s
+  existing propose/apply/withdraw paths through the ADR 0032 outbox, keyed on
+  the order id: `OrderAmendmentProposed` from `propose`, `OrderAmendmentApplied`
+  from a successful `apply`, `OrderAmendmentRejected` from `withdraw` only.
+  `apply`'s own TTL-expiry branch (`amendments.markRejected(..., "EXPIRED",
+  ...)` followed by throwing `AmendmentExpiredException`) publishes nothing —
+  that throw runs inside `apply`'s own `@Transactional` boundary, marks the
+  physical transaction rollback-only under Spring's default policy, and rolls
+  the `markRejected` UPDATE back with it; wiring an event there without first
+  fixing that pre-existing behaviour would announce a rejection the database
+  does not actually record. Flagged, not fixed, by this wave.
+  `OrderRevisionCreated` publishes only for a
+  revision an amendment appends — never for the checkout-time revision 1,
+  which `OrderReceived` already announces, the same restraint that keeps
+  `PREPARING`/`READY`/`FULFILLING` off this topic. `OrderCallbackRequested`
+  and `OrderCallbackResolved` both come from one `SET_CALLBACK_REQUESTED`
+  command, told apart by whether it raises or clears the flag. All six carry
+  command types and stable codes, never a command's own payload — no kitchen
+  note text, no phone number, no operator subject id. The scheduled amendment
+  TTL sweep (`OrderAmendmentService#expireOverdue`) is still unwired to any
+  scheduler — a pre-existing gap this wave found and did not take on — so it
+  publishes no `OrderAmendmentRejected` of its own. An amendment an operator
+  actually settles by hand — applying it or withdrawing it — always publishes;
+  one that merely lapses past its TTL, whether inside `apply`'s own check or
+  the dormant sweep, publishes nothing today. Covered by
+  `OrderAmendmentAndOutcomeTests`.
   V0119 (wave 24) adds a platform-curated, code-owned reject-reason reference
   table (`ordering.order_reject_reasons`/`_texts`) — deliberately not
   `order_outcome_reasons`'s tenant-authored shape, since a rejection's

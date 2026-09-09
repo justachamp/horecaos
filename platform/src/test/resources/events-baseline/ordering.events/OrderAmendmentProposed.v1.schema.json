@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderAmendmentProposed.v1.schema.json",
+  "title": "OrderAmendmentProposed v1 payload",
+  "description": "An operator staged a change to a live order (ADR 0039). commandTypes names the closed AmendmentCommandType set issued, never a command's own payload -- SET_KITCHEN_NOTE's free text and CHANGE_CONTACT's phone number stay behind the authorized amendment API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "amendmentId", "baseRevision", "commandTypes", "amendmentStatus", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "amendmentId": { "type": "string", "format": "uuid" },
+    "baseRevision": { "type": "integer", "minimum": 1 },
+    "commandTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "ADD_LINES", "CHANGE_LINE_QUANTITY", "REMOVE_LINES", "CHANGE_PAYMENT_METHOD",
+          "CHANGE_DELIVERY_ADDRESS", "CHANGE_FULFILLMENT_TIME", "CHANGE_CONTACT",
+          "SET_KITCHEN_NOTE", "SET_CALLBACK_REQUESTED", "SET_CASH_TENDERED"
+        ]
+      }
+    },
+    "amendmentStatus": {
+      "type": "string",
+      "enum": [
+        "DRAFT", "PRICED", "AWAITING_CUSTOMER_CONFIRMATION", "AWAITING_PAYMENT",
+        "APPLIED", "REJECTED", "EXPIRED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -126,6 +126,25 @@ public enum Capability {
     ORDER_AMEND("order.amend", "order", "amend"),
 
     /**
+     * ADR 0039: applying {@link #ORDER_ADVANCE} or {@link #ORDER_CANCEL} to an
+     * operator's own selection of orders in one call, through {@code POST
+     * .../orders/bulk-actions}.
+     *
+     * <p>Its own capability rather than "holding {@code ORDER_ADVANCE} or
+     * {@code ORDER_CANCEL} is enough to bulk-apply either". Doing a thing a
+     * hundred times under one click is a different act from doing it once —
+     * one mistake becomes a hundred cancellations or a hundred kitchen tickets
+     * moved to the wrong state, in the same instant, with no chance to notice
+     * between the first and the last. Held only where the single-order powers
+     * it amplifies are already both held, and not by {@link
+     * uz.horecaos.platform.iam.api.PlatformRole#LOCATION_STAFF}: a line cook
+     * who may advance one order at a time does not thereby get to advance two
+     * hundred, and {@code location-staff} does not hold {@link #ORDER_CANCEL}
+     * at all.
+     */
+    ORDER_BULK_ACTION("order.bulk-action", "order", "bulk-action"),
+
+    /**
      * ADR 0039: authoring the tenant's cancellation and completion reasons.
      *
      * <p>Held by an administrator, never by the operator who picks from the list.

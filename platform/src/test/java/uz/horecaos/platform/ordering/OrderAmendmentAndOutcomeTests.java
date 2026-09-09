@@ -41,14 +41,21 @@ import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.migration.application.MigrationOwnershipService;
 import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationScopeStore;
+import uz.horecaos.platform.ordering.api.OrderAmendmentApplied;
+import uz.horecaos.platform.ordering.api.OrderAmendmentProposed;
+import uz.horecaos.platform.ordering.api.OrderAmendmentRejected;
+import uz.horecaos.platform.ordering.api.OrderCallbackRequested;
+import uz.horecaos.platform.ordering.api.OrderCallbackResolved;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
+import uz.horecaos.platform.ordering.api.OrderRevisionCreated;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
@@ -59,6 +66,8 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.RejectReasonQueryService;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
+import uz.horecaos.platform.ordering.domain.BulkActionType;
+import uz.horecaos.platform.ordering.domain.BulkItemStatus;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
@@ -67,6 +76,7 @@ import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 import uz.horecaos.platform.ordering.domain.OutcomeSystemCategory;
 import uz.horecaos.platform.ordering.domain.StockDisposition;
 import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBulkOperationStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
@@ -128,6 +138,7 @@ class OrderAmendmentAndOutcomeTests {
     private uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner settlementPlanner;
     private OrderQueryService orderQuery;
     private OrderAmendmentService amendments;
+    private OrderBulkActionService bulkActions;
     private OrderOutcomeService outcomes;
     private OrderOutcomeReasonService reasons;
     private RejectReasonQueryService rejectReasons;
@@ -175,7 +186,8 @@ class OrderAmendmentAndOutcomeTests {
                     ordering.order_process_states, ordering.order_timers,
                     ordering.approval_decisions, ordering.order_state_history,
                     ordering.order_customer_snapshots, ordering.order_adjustments,
-                    ordering.order_line_modifiers, ordering.order_lines, ordering.orders,
+                    ordering.order_line_modifiers, ordering.order_lines,
+                    ordering.bulk_operation_items, ordering.bulk_operations, ordering.orders,
                     ordering.order_number_counters, ordering.checkout_attempts,
                     ordering.cart_lines, ordering.carts CASCADE
                 """).update();
@@ -303,7 +315,15 @@ class OrderAmendmentAndOutcomeTests {
         // meaningful if it reads the table the export actually writes, and a stub
         // here would reproduce exactly the failure this port was built to end.
         amendments = new OrderAmendmentService(
-                orderStore, amendmentStore, auditRecorder, objectMapper, clock, new JdbcPosExportStatus(jdbc));
+                orderStore,
+                amendmentStore,
+                auditRecorder,
+                objectMapper,
+                clock,
+                new JdbcPosExportStatus(jdbc),
+                published);
+        bulkActions = new OrderBulkActionService(
+                orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
         var migrationOwnership = new MigrationOwnershipService(
                 new JdbcMigrationScopeStore(jdbc, objectMapper), new SimpleMeterRegistry());
@@ -466,6 +486,358 @@ class OrderAmendmentAndOutcomeTests {
                 .isInstanceOf(OrderStateService.StaleOrderException.class);
 
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("proposing an amendment publishes OrderAmendmentProposed, naming the command "
+            + "types and never their payload")
+    void proposingAnAmendmentPublishesTheProposedFact() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(OrderAmendmentService.AmendmentCommand.kitchenNote("Острее, пожалуйста")),
+                        false,
+                        "k-proposed-1",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+
+        OrderAmendmentProposed event = published.events.stream()
+                .filter(OrderAmendmentProposed.class::isInstance)
+                .map(OrderAmendmentProposed.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+
+        assertThat(event.orderId()).isEqualTo(orderId);
+        assertThat(event.commandTypes()).containsExactly("SET_KITCHEN_NOTE");
+        assertThat(event.amendmentStatus()).isEqualTo("PRICED");
+        // ADR 0029: the note text is what the operator typed, and it never rides
+        // on the topic even serialized inside the event's own payload.
+        assertThat(event.payload().toString()).doesNotContain("Острее");
+    }
+
+    @Test
+    @DisplayName("applying an amendment publishes OrderAmendmentApplied and OrderRevisionCreated "
+            + "for the revision it appended")
+    void applyingAnAmendmentPublishesAppliedAndRevisionCreated() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        amend("k-applied-1", OrderAmendmentService.AmendmentCommand.kitchenNote("Без лука"));
+
+        OrderAmendmentApplied applied = published.events.stream()
+                .filter(OrderAmendmentApplied.class::isInstance)
+                .map(OrderAmendmentApplied.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(applied.orderId()).isEqualTo(orderId);
+        assertThat(applied.appliedRevision()).isEqualTo(2);
+        assertThat(applied.commandTypes()).containsExactly("SET_KITCHEN_NOTE");
+        assertThat(applied.deltaTotalMinor()).isZero();
+
+        OrderRevisionCreated revision = published.events.stream()
+                .filter(OrderRevisionCreated.class::isInstance)
+                .map(OrderRevisionCreated.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(revision.orderId()).isEqualTo(orderId);
+        assertThat(revision.revision()).isEqualTo(2);
+        assertThat(revision.amendmentId()).isEqualTo(applied.amendmentId());
+        assertThat(revision.payload().toString()).doesNotContain("Без лука");
+    }
+
+    @Test
+    @DisplayName("SET_CALLBACK_REQUESTED publishes OrderCallbackRequested when raised and "
+            + "OrderCallbackResolved when cleared, and neither names who")
+    void theCallbackCommandPublishesRequestedThenResolved() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        amend("k-callback-1", OrderAmendmentService.AmendmentCommand.callback(true));
+
+        OrderCallbackRequested requested = published.events.stream()
+                .filter(OrderCallbackRequested.class::isInstance)
+                .map(OrderCallbackRequested.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(requested.orderId()).isEqualTo(orderId);
+
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                propose("k-callback-2", version, OrderAmendmentService.AmendmentCommand.callback(false))));
+
+        OrderCallbackResolved resolved = published.events.stream()
+                .filter(OrderCallbackResolved.class::isInstance)
+                .map(OrderCallbackResolved.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(resolved.orderId()).isEqualTo(orderId);
+        assertThat(published.events.stream().anyMatch(OrderCallbackRequested.class::isInstance))
+                .as("the first callback raise is still on the list; a second amendment does not erase it")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("withdrawing an open amendment publishes OrderAmendmentRejected with the withdrawal reason")
+    void withdrawingAnAmendmentPublishesTheRejectedFact() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(OrderAmendmentService.AmendmentCommand.kitchenNote("Погромче стучите")),
+                        false,
+                        "k-withdraw-1",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+
+        tx(() -> amendments.withdraw(TENANT, proposed.amendment().id(), "WITHDRAWN_BY_OPERATOR"));
+
+        OrderAmendmentRejected rejected = published.events.stream()
+                .filter(OrderAmendmentRejected.class::isInstance)
+                .map(OrderAmendmentRejected.class::cast)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(rejected.orderId()).isEqualTo(orderId);
+        assertThat(rejected.amendmentId()).isEqualTo(proposed.amendment().id());
+        assertThat(rejected.reasonCode()).isEqualTo("WITHDRAWN_BY_OPERATOR");
+    }
+
+    // ---------------------------------------------------------- bulk actions
+
+    @Test
+    @DisplayName("a bulk ADVANCE moves every order and records one audit fact per order plus a summary")
+    void bulkAdvanceMovesEveryOrderAndAuditsEachOne() {
+        UUID orderA = orderIdOf(placeOrder("bulk-a"));
+        UUID orderB = orderIdOf(placeOrder("bulk-b"));
+        int versionA = orderStore.find(TENANT, orderA).orElseThrow().version();
+        int versionB = orderStore.find(TENANT, orderB).orElseThrow().version();
+
+        var result = bulkActions.apply(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new OrderBulkActionService.BulkActionCommand(
+                        BulkActionType.ADVANCE,
+                        List.of(
+                                new OrderBulkActionService.BulkOrderRef(orderA, versionA),
+                                new OrderBulkActionService.BulkOrderRef(orderB, versionB)),
+                        OrderStatus.PREPARING,
+                        "KITCHEN_BULK",
+                        null,
+                        null,
+                        "bulk-advance-1",
+                        "USER",
+                        "sharif"));
+
+        assertThat(result.replayed()).isFalse();
+        assertThat(result.items()).hasSize(2);
+        assertThat(result.items())
+                .allSatisfy(item -> assertThat(item.itemStatus()).isEqualTo(BulkItemStatus.APPLIED));
+        assertThat(orderStore.find(TENANT, orderA).orElseThrow().status()).isEqualTo(OrderStatus.PREPARING);
+        assertThat(orderStore.find(TENANT, orderB).orElseThrow().status()).isEqualTo(OrderStatus.PREPARING);
+
+        assertThat(auditActionCount("ordering.order.bulk-action-item.advance", result.bulkOperationId()))
+                .as("one fact per order — a bulk action must not collapse into one fact "
+                        + "that loses which orders were touched (ADR 0027)")
+                .isEqualTo(2);
+        assertThat(auditActionCount("ordering.order.bulk-action.advance", result.bulkOperationId()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a stale version in a bulk ADVANCE fails only that order, never the batch")
+    void aStaleVersionInABulkAdvanceFailsOnlyThatOrder() {
+        UUID orderA = orderIdOf(placeOrder("bulk-c"));
+        UUID orderB = orderIdOf(placeOrder("bulk-d"));
+        int versionA = orderStore.find(TENANT, orderA).orElseThrow().version();
+
+        var result = bulkActions.apply(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new OrderBulkActionService.BulkActionCommand(
+                        BulkActionType.ADVANCE,
+                        List.of(
+                                new OrderBulkActionService.BulkOrderRef(orderA, versionA),
+                                // Deliberately wrong: this order's real version is not 999.
+                                new OrderBulkActionService.BulkOrderRef(orderB, 999)),
+                        OrderStatus.PREPARING,
+                        "KITCHEN_BULK",
+                        null,
+                        null,
+                        "bulk-advance-2",
+                        "USER",
+                        "sharif"));
+
+        assertThat(result.items()).hasSize(2);
+        assertThat(orderStore.find(TENANT, orderA).orElseThrow().status())
+                .as("the good order in the batch is unaffected by the bad one")
+                .isEqualTo(OrderStatus.PREPARING);
+        assertThat(orderStore.find(TENANT, orderB).orElseThrow().status())
+                .as("the stale order never moved")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        var failedItem = result.items().stream()
+                .filter(item -> item.orderId().equals(orderB))
+                .findFirst()
+                .orElseThrow();
+        assertThat(failedItem.itemStatus()).isEqualTo(BulkItemStatus.FAILED);
+        assertThat(failedItem.itemProblemCode()).isEqualTo("STALE_VERSION");
+    }
+
+    @Test
+    @DisplayName("a bulk CANCEL goes through the same reason registry as a single cancellation")
+    void bulkCancelUsesTheReasonRegistry() {
+        UUID writeOff = writeOffReason();
+        UUID orderA = orderIdOf(placeOrder("bulk-e"));
+        UUID orderB = orderIdOf(placeOrder("bulk-f"));
+        int versionA = orderStore.find(TENANT, orderA).orElseThrow().version();
+        int versionB = orderStore.find(TENANT, orderB).orElseThrow().version();
+
+        var result = bulkActions.apply(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new OrderBulkActionService.BulkActionCommand(
+                        BulkActionType.CANCEL,
+                        List.of(
+                                new OrderBulkActionService.BulkOrderRef(orderA, versionA),
+                                new OrderBulkActionService.BulkOrderRef(orderB, versionB)),
+                        null,
+                        null,
+                        writeOff,
+                        null,
+                        "bulk-cancel-1",
+                        "USER",
+                        "sharif"));
+
+        assertThat(result.items())
+                .allSatisfy(item -> assertThat(item.itemStatus()).isEqualTo(BulkItemStatus.APPLIED));
+        assertThat(orderQuery.outcome(TENANT, orderA).orElseThrow().stockDisposition())
+                .isEqualTo("WRITE_OFF");
+        assertThat(orderQuery.outcome(TENANT, orderB).orElseThrow().stockDisposition())
+                .isEqualTo("WRITE_OFF");
+    }
+
+    @Test
+    @DisplayName("resubmitting a bulk action under the same Idempotency-Key changes nothing, "
+            + "even with a different order list")
+    void aBulkResubmissionUnderTheSameKeyChangesNothing() {
+        UUID orderA = orderIdOf(placeOrder("bulk-g"));
+        int versionA = orderStore.find(TENANT, orderA).orElseThrow().version();
+
+        var first = bulkActions.apply(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new OrderBulkActionService.BulkActionCommand(
+                        BulkActionType.ADVANCE,
+                        List.of(new OrderBulkActionService.BulkOrderRef(orderA, versionA)),
+                        OrderStatus.PREPARING,
+                        "KITCHEN_BULK",
+                        null,
+                        null,
+                        "bulk-replay-1",
+                        "USER",
+                        "sharif"));
+        assertThat(first.replayed()).isFalse();
+
+        long factsAfterFirst = auditActionCount("ordering.order.bulk-action-item.advance", first.bulkOperationId());
+
+        // A different order entirely, under the same key. If this executed, it
+        // would either fail (order not found) or apply -- either way the
+        // recorded outcome would change. It must not.
+        var second = bulkActions.apply(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new OrderBulkActionService.BulkActionCommand(
+                        BulkActionType.ADVANCE,
+                        List.of(new OrderBulkActionService.BulkOrderRef(UUID.randomUUID(), 1)),
+                        OrderStatus.READY,
+                        "KITCHEN_BULK",
+                        null,
+                        null,
+                        "bulk-replay-1",
+                        "USER",
+                        "sharif"));
+
+        assertThat(second.replayed()).isTrue();
+        assertThat(second.bulkOperationId()).isEqualTo(first.bulkOperationId());
+        assertThat(second.items()).isEqualTo(first.items());
+        assertThat(orderStore.find(TENANT, orderA).orElseThrow().status())
+                .as("still PREPARING from the first call, never advanced again to READY")
+                .isEqualTo(OrderStatus.PREPARING);
+        assertThat(auditActionCount("ordering.order.bulk-action-item.advance", first.bulkOperationId()))
+                .as("a re-run under the same bulk key writes no new audit facts")
+                .isEqualTo(factsAfterFirst);
+    }
+
+    @Test
+    @DisplayName("ADVANCE refuses a terminal target status before touching any order")
+    void advanceRefusesATerminalTarget() {
+        assertThatThrownBy(() -> bulkActions.apply(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        new OrderBulkActionService.BulkActionCommand(
+                                BulkActionType.ADVANCE,
+                                List.of(new OrderBulkActionService.BulkOrderRef(UUID.randomUUID(), 1)),
+                                OrderStatus.COMPLETED,
+                                "KITCHEN_BULK",
+                                null,
+                                null,
+                                "bulk-refused-1",
+                                "USER",
+                                "sharif")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("a bulk action names at most 200 orders, refused before any lookup")
+    void aBulkActionIsCappedAtTwoHundredOrders() {
+        List<OrderBulkActionService.BulkOrderRef> tooMany = java.util.stream.IntStream.range(0, 201)
+                .mapToObj(i -> new OrderBulkActionService.BulkOrderRef(UUID.randomUUID(), 1))
+                .toList();
+
+        assertThatThrownBy(() -> bulkActions.apply(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        new OrderBulkActionService.BulkActionCommand(
+                                BulkActionType.ADVANCE,
+                                tooMany,
+                                OrderStatus.PREPARING,
+                                "KITCHEN_BULK",
+                                null,
+                                null,
+                                "bulk-refused-2",
+                                "USER",
+                                "sharif")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private long auditActionCount(String actionCode, UUID bulkOperationId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                WHERE action_code = :actionCode AND correlation_id = :correlationId
+                """)
+                .param("actionCode", actionCode)
+                .param("correlationId", bulkOperationId.toString())
+                .query(Long.class)
+                .single();
     }
 
     /**

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderRevisionCreated.v1.schema.json",
+  "title": "OrderRevisionCreated v1 payload",
+  "description": "A new immutable order revision was appended by an applied amendment (ADR 0039). Never published for revision 1 -- OrderReceived already announces that one. totalMinor is this revision's own total, not a delta.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "revision", "source", "currency", "totalMinor", "deltaTotalMinor", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "revision": { "type": "integer", "minimum": 2 },
+    "amendmentId": { "type": ["string", "null"], "format": "uuid" },
+    "source": { "type": "string", "enum": ["AMENDMENT"] },
+    "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+    "totalMinor": { "type": "integer", "minimum": 0 },
+    "deltaTotalMinor": { "type": "integer" },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

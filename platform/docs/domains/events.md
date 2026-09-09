@@ -125,6 +125,12 @@ holds organization and subject identifiers and applied configuration.
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
 | `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
+| `OrderAmendmentProposed` | 1 | `orderId` | [`OrderAmendmentProposed.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentProposed.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, command types, amendment status, order version |
+| `OrderAmendmentApplied` | 1 | `orderId` | [`OrderAmendmentApplied.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentApplied.v1.schema.json) | `orderId`, brand/location, `amendmentId`, applied revision, command types, delta total, order version |
+| `OrderAmendmentRejected` | 1 | `orderId` | [`OrderAmendmentRejected.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentRejected.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, reason code |
+| `OrderRevisionCreated` | 1 | `orderId` | [`OrderRevisionCreated.v1`](../../src/main/resources/events/ordering.events/OrderRevisionCreated.v1.schema.json) | `orderId`, brand/location, revision, `amendmentId`, source, currency, total, delta total, order version |
+| `OrderCallbackRequested` | 1 | `orderId` | [`OrderCallbackRequested.v1`](../../src/main/resources/events/ordering.events/OrderCallbackRequested.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
+| `OrderCallbackResolved` | 1 | `orderId` | [`OrderCallbackResolved.v1`](../../src/main/resources/events/ordering.events/OrderCallbackResolved.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
 
 These payloads deliberately omit the order lines, the customer, the address, the
 contact details, and every customer note. ADR 0019 says events carry order and
@@ -156,6 +162,30 @@ So `OrderCompleted` is published and the other three are not, which is the same
 rule applied rather than an exception to it. It carries no customer — who
 ordered is resolved through an authorized call, because ADR 0029 keeps personal
 data off every topic and a prompt needs only the order id to find the chat.
+
+`OrderAmendmentProposed`, `OrderAmendmentApplied`, `OrderAmendmentRejected`,
+`OrderRevisionCreated`, `OrderCallbackRequested` and `OrderCallbackResolved`
+are ADR 0039's amendment facts, published from `OrderAmendmentService`'s
+propose, apply and withdraw paths. `commandTypes` on the first two names the
+closed `AmendmentCommandType` set an operator issued — an enum member, never a
+command's own payload, so `SET_KITCHEN_NOTE`'s free text and the phone number
+`CHANGE_CONTACT` would carry both stay off the topic exactly as ADR 0029
+requires; a consumer needing a command's content calls the amendment API with
+the amendment id. `OrderRevisionCreated` is published only for a revision an
+amendment appends, never for revision 1 — `OrderReceived` already announces
+the order a second event would tell nobody anything new about, the same
+restraint that keeps `PREPARING`/`READY`/`FULFILLING` off this topic above.
+`OrderCallbackRequested` and `OrderCallbackResolved` both come from the same
+`SET_CALLBACK_REQUESTED` command — ADR 0039 makes clearing the flag the same
+command with `requested = false` rather than an eleventh one — and neither
+names who raised or resolved it.
+
+The database also carries a scheduled TTL sweep for amendments
+(`OrderAmendmentService#expireOverdue`) that nothing currently invokes; when it
+is wired to a scheduler, it will need its own path to
+`OrderAmendmentRejected`, since today's producer only covers the two
+synchronous paths (an operator's own withdrawal, and the TTL check inside
+`apply`).
 
 ## `media.events`
 

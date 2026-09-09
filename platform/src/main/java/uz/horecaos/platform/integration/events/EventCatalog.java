@@ -333,6 +333,73 @@ public final class EventCatalog {
                     Retention.BUSINESS_FACT,
                     Classification.INTERNAL,
                     "The order was cancelled before confirmation."),
+            // ADR 0039's amendment and revision facts. All five key on the order
+            // id, exactly like the state-machine facts above: an amendment applies
+            // to one order and its ordering must hold against every other fact
+            // about the same order, never against another order's amendments.
+            new EventContract(
+                    "OrderAmendmentProposed",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderAmendmentProposed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An operator staged a change to a live order. Command types only, "
+                            + "never a command's own payload."),
+            new EventContract(
+                    "OrderAmendmentApplied",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderAmendmentApplied.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An amendment committed and appended a new order revision."),
+            new EventContract(
+                    "OrderAmendmentRejected",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderAmendmentRejected.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An amendment ended without applying — withdrawn by the operator or "
+                            + "expired against the ADR 0018 quote TTL. A stable reason code only."),
+            new EventContract(
+                    "OrderRevisionCreated",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderRevisionCreated.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A new immutable order revision was appended by an applied amendment. "
+                            + "Never published for revision 1 — OrderReceived already announces it."),
+            new EventContract(
+                    "OrderCallbackRequested",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderCallbackRequested.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A customer needs a callback. A bare signal — no reason, no note."),
+            new EventContract(
+                    "OrderCallbackResolved",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderCallbackResolved.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A raised callback was cleared."),
             // ADR 0007's reconciliation command and its settled answer. Both key
             // on the delivery operation whose outcome is unknown, not on the
             // reconciliation: two reconciliations for one operation must not
