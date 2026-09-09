@@ -113,5 +113,5 @@ location policy cannot govern an unrelated resource. `make verify` and `make lin
 
 - [Intent and approved spec](../../../intent/0001-an-unconfigured-approval-policy/spec.md)
 - [ADR 0027: Audit evidence and approval model](../built/0027-audit-evidence-and-approval-model.md)
-- [ADR 0030: Configuration and policy resolution](../partial/0030-configuration-and-policy-resolution.md)
+- [ADR 0030: Configuration and policy resolution](../built/0030-configuration-and-policy-resolution.md)
 - [ADR 0031: HTTP API conventions](../built/0031-http-api-conventions.md)

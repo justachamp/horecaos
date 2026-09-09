@@ -470,6 +470,29 @@ export const uzLatn: Messages = {
   'configurationPolicy.result.levels': 'Tekshirilgan darajalar',
   'configurationPolicy.result.column.scope': 'Daraja',
   'configurationPolicy.result.column.outcome': 'Natija',
+  'configurationPolicy.result.storedVersion': 'Shu darajadagi saqlangan versiya',
+  'configurationPolicy.result.storedVersion.none': 'Bu yerda belgilanmagan',
+
+  'configurationPolicy.write.title': 'Qiymatni belgilash',
+  'configurationPolicy.write.stale': 'Aynan shu darajada tahrirlash uchun qayta hisoblang.',
+  'configurationPolicy.write.notConsumed':
+    'Bu kalit ro‘yxatga olingan, ammo ushbu build hali uning saqlangan qiymatini hech qayerda o‘qimaydi. Bu yerda yozish qayd etiladi va audit qilinadi, lekin ishlayotgan xatti-harakatni o‘zgartirmaydi, shuning uchun bu ekran uni faqat o‘qish uchun ko‘rsatadi.',
+  'configurationPolicy.write.notSettableAtScope':
+    'Bu kalitni shu darajada belgilab bo‘lmaydi. Belgilash mumkin bo‘lgan darajalar: {scopes}.',
+  'configurationPolicy.write.scopeBanner': 'Siz {code} kalitini {scope} darajasida belgilamoqchisiz.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'Agar bu kalitning saqlangan qiymati ADR 0045 chegarasini (hisob-kitob davri va munozara oynasi yig‘indisini) buzsa, production start yuklanishdan bosh tortadi. Bu yozuv darhol kuchga kiradi; faqat kelajakdagi ishga tushirish xavf ostida.',
+  'configurationPolicy.write.note.auditRetention':
+    'Bu ADR 0027 va ADR 0029 huquqiy tasdiqlanguncha vaqtinchalik deb belgilagan ikkita platforma darajasidagi audit saqlash muddatlaridan biri. Uni kamaytirish AuditPartitionArchiver dalillarni arxivlashdan oldin qancha vaqt himoya qilishini qisqartiradi.',
+  'configurationPolicy.write.explicitNull': 'Aniq null (shu yerda ataylab belgilanmagan)',
+  'configurationPolicy.write.value': 'Qiymat',
+  'configurationPolicy.write.invalidValue': 'Ushbu kalit turiga mos qiymat kiriting.',
+  'configurationPolicy.write.reason': 'Sabab',
+  'configurationPolicy.write.reasonPlaceholder': 'Nega buni o‘zgartiryapsiz?',
+  'configurationPolicy.write.save': 'Saqlash',
+  'configurationPolicy.write.saving': 'Saqlanmoqda…',
+  'configurationPolicy.write.success':
+    'Saqlandi. Yuqoridagi natija endi platforma ushbu yozuvdan keyin nimani hisoblashini ko‘rsatadi.',
 
   'contractsVersions.title': 'Shartnomalar va versiyalar',
   'contractsVersions.lead': 'ADR 0032 hodisa/sxema shartnomalari reyestri: ushbu build e’lon qilishi mumkin bo‘lgan barcha hodisalar.',

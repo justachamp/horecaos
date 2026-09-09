@@ -470,6 +470,29 @@ export const ru: Messages = {
   'configurationPolicy.result.levels': 'Проверенные уровни',
   'configurationPolicy.result.column.scope': 'Уровень',
   'configurationPolicy.result.column.outcome': 'Результат',
+  'configurationPolicy.result.storedVersion': 'Сохранённая версия на этом уровне',
+  'configurationPolicy.result.storedVersion.none': 'Не задано здесь',
+
+  'configurationPolicy.write.title': 'Задать значение',
+  'configurationPolicy.write.stale': 'Рассчитайте заново, чтобы редактировать именно на этом уровне.',
+  'configurationPolicy.write.notConsumed':
+    'Этот ключ зарегистрирован, но в этой сборке ничего не читает его сохранённое значение. Запись здесь будет зафиксирована и подтверждена аудитом, но не изменит поведение системы, поэтому экран показывает его только для чтения.',
+  'configurationPolicy.write.notSettableAtScope':
+    'Этот ключ нельзя задать на этом уровне. Доступные уровни: {scopes}.',
+  'configurationPolicy.write.scopeBanner': 'Вы собираетесь задать {code} на уровне {scope}.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'Запуск в production откажется стартовать, если сохранённое значение этого ключа нарушает порог ADR 0045 (период расчёта плюс окно оспаривания). Эта запись вступает в силу немедленно; под угрозой только будущий запуск.',
+  'configurationPolicy.write.note.auditRetention':
+    'Это один из двух платформенных сроков хранения аудита, которые ADR 0027 и ADR 0029 помечают как предварительные до согласования с юристами. Уменьшение срока сократит время, в течение которого AuditPartitionArchiver защищает свидетельства перед архивированием.',
+  'configurationPolicy.write.explicitNull': 'Явный null (намеренно не задано здесь)',
+  'configurationPolicy.write.value': 'Значение',
+  'configurationPolicy.write.invalidValue': 'Введите значение, соответствующее типу этого ключа.',
+  'configurationPolicy.write.reason': 'Причина',
+  'configurationPolicy.write.reasonPlaceholder': 'Почему вы это меняете?',
+  'configurationPolicy.write.save': 'Сохранить',
+  'configurationPolicy.write.saving': 'Сохранение…',
+  'configurationPolicy.write.success':
+    'Сохранено. Результат выше теперь показывает, что рассчитает платформа после этой записи.',
 
   'contractsVersions.title': 'Контракты и версии',
   'contractsVersions.lead': 'Реестр контрактов событий/схем ADR 0032: все события, которые может публиковать эта сборка.',

@@ -1,10 +1,10 @@
 # ADR 0030: Configuration and policy resolution
 
 - Decision status: Accepted
-- Implementation status: Partial — an operator can set a policy from the control plane
-  today (Operations' Settings > Order Policy screen), and it resolves correctly on the
-  very next call; a configuration value has a real writer with nothing operator-facing
-  in front of it yet (see "Not built" below).
+- Implementation status: Built — an operator can set both a policy (Operations' Settings >
+  Order Policy screen) and, as of 2026-09-09, a configuration value (control-plane's
+  Configuration & policy screen) from the control plane today, end to end, click to
+  resolved effect, and each resolves correctly on the very next call.
   V0005 creates `tenant.configuration_values`, `tenant.policies` and `tenant.policy_current`
   with ancestry constraints; `ConfigurationKeys` plus the module key registries
   (`CommercialConfigurationKeys`, `TelemetryConfigurationKeys`, `CustomerConfigurationKeys`)
@@ -31,12 +31,36 @@
   `Capability.PLATFORM_ADMIN`, refusing an unregistered key, a scope the key does not declare
   settable, or a value whose shape does not match the key's declared type, with an ADR 0031
   expected-version conflict (`STALE_VERSION`) and an ADR 0027 audit fact recording the actor,
-  reason, and before/after value on every write. Not built: nothing calls that endpoint from
-  a screen — `control-plane`'s `ConfigurationApi` (`frontend/control-plane/src/app/features/
-  platform-config/configuration-api.ts`) implements only `listKeys` (`GET .../keys`) and
-  `resolve` (`GET .../keys/{code}/resolution`), and no other frontend app references the path
-  either, so today an operator can read a configuration value's resolution but can only set
-  one with a raw HTTP call, never a click; the policy half has no such gap.
+  reason, and before/after value on every write. Built 2026-09-09: `control-plane`'s
+  `ConfigurationApi` (`frontend/control-plane/src/app/features/platform-config/
+  configuration-api.ts`) now implements `setValue` over the same endpoint, and IA 2.7's
+  `ConfigurationPolicy` screen (`frontend/control-plane/src/app/features/tenants/
+  configuration-policy.ts`) puts a Save control behind it — the same `PLATFORM_ADMIN` route
+  guard `app.routes.ts` already put on this route for reading, not a second capability
+  mechanism. The write form only ever appears under a resolution this screen itself just
+  fetched: changing any picker field throws the form away (`scopeMatchesResolution`) rather
+  than let a write drift from the scope the operator last looked at, and the scope it is
+  about to write is spelled out in full — key code, scope level, and every id — in a bordered
+  banner immediately above the fields, per this ADR's own "make the level unmistakable"
+  requirement. The value field's shape follows the key's declared type (a checkbox for
+  `Boolean`, a numeric-only field for `Integer`/`Long`, a decimal-only field for
+  `BigDecimal`), validated client-side before the request is built and rejected server-side
+  regardless (`ConfigurationController.extractTypedValue`); `expectedVersion` is always the
+  `currentVersionAtScope` the same screen's own `resolve` call last read, so a concurrent
+  writer is caught as `STALE_VERSION` rather than silently overwritten; and a successful
+  write re-resolves rather than trusting its own echo, so the operator sees what the platform
+  will actually hand back next, not just the row just written. Not every registered key gets
+  a Save control: a repository-wide search found a live `ConfigurationResolver` (or
+  documented direct-SQL) consumer for exactly seven of the fourteen keys
+  (`commercial.enforcement_ceiling`, `telemetry.courier_collection_gate`,
+  `telemetry.track_retention_days`, `audit.security_retention_days`,
+  `audit.business_retention_days`, `customers.telegram_auth_phone_pattern`,
+  `customers.otp_delivery_channel_order`); the other seven (the ordering, pricing, inventory,
+  platform-locale and notifications keys) pass startup validation and resolve correctly but
+  are read by nothing on any request path today, so the screen shows them read-only rather
+  than offer a Save button that would write an audited row the running process never
+  re-reads — `ConfigurationPolicy`'s own `WRITABLE_KEY_CODES` names this explicitly and asks
+  the next module that wires a consumer to move its code into that set in the same change.
   Unlike a policy, a value is mutated in place
   under its own `version` column rather than append-only versioned — this ADR's own Decision
   draws that line ("only policies are snapshotted onto business facts") — so it uses ordinary
@@ -256,6 +280,11 @@ tables, pinned policy re-resolution, and — as of 2026-09-08, see this record's
 Implementation status above — both writers: `PolicyAuthor`/`JdbcPolicyAuthor`
 for policies and `ConfigurationValueAuthor`/`JdbcConfigurationValueAuthor` for
 values, each evicting its own resolver's cache in the same call that writes.
+As of 2026-09-09, the last operator-facing gap is closed too: `frontend/
+control-plane`'s `ConfigurationPolicy` screen calls the value writer, not only
+the resolver, so setting a configuration value is a click behind `PLATFORM_ADMIN`
+rather than a raw HTTP call — see Implementation status above for how it keeps
+scope, type, and version honest.
 
 `ordering.order_acceptance_policies` has been migrated into `tenant.policies`
 under key `ordering.acceptance` and the specialised table dropped, so the
@@ -282,6 +311,7 @@ scope, and fetched rows, so it is tested exhaustively without a database.
 - [x] Implement policy and configuration-value authoring, each evicting its resolver's cache (`JdbcPolicyAuthor`, `JdbcConfigurationValueAuthor`).
 - [ ] Implement outbox-driven, cross-instance cache invalidation — today's eviction is direct and in-process (see Implementation status above).
 - [x] Add control-plane read and write APIs with ADR 0025 capabilities and ADR 0027 audit (`ConfigurationController`, `OrderAcceptancePolicyController`).
+- [x] Wire a control-plane screen to the configuration-value writer end to end, scope-safe and typed (`ConfigurationPolicy`, `ConfigurationApi.setValue`, `frontend/control-plane`).
 - [x] Add precedence, pinning, and isolation tests (`ScopeResolutionTests`, `ResourceScopeTests`, `JdbcConfigurationResolverTests`, `JdbcPolicyResolverTests`, `JdbcConfigurationValueAuthorTests`).
 
 ## Exit criteria

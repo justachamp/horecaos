@@ -104,3 +104,49 @@ button.primary:disabled {
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+.state {
+  margin-top: 0;
+}
+
+/*
+ * The unmistakable statement of where a write lands (judgement point 1):
+ * bordered and coloured like this app's other warning treatments
+ * (tenant-legal-entities.css's DRAFT pill, provider-registry.css), not a
+ * plain paragraph a busy operator's eye slides past.
+ */
+.scopeBanner {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--q-warning);
+  color: var(--q-warning-text);
+  font-weight: 600;
+}
+
+.startupNote {
+  margin: 8px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.writeForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
+.checkboxField {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.reasonField input {
+  min-width: 320px;
+}
+
+.success {
+  color: var(--q-success-text);
+  margin-top: 8px;
+}
