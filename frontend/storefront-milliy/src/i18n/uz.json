@@ -298,7 +298,8 @@
     "errors": {
       "avatarUnavailable": "Profil rasmi hozircha mavjud emas.",
       "avatarFailed": "Rasm saqlanmadi. Boshqasini tanlang."
-    }
+    },
+    "referral": "Do'stlarni taklif qilish"
   },
   "product": {
     "variants": "Variantlar",
@@ -365,5 +366,36 @@
     "loadError": "Taomni yuklab bo‘lmadi",
     "increase": "Ko‘paytirish",
     "decrease": "Kamaytirish"
+  },
+  "referral": {
+    "title": "Referal",
+    "loadError": "Referal kodingiz yuklanmadi",
+    "yourCode": "Sizning kodingiz",
+    "shareHint": "Bu kodni do'stingiz bilan ulashing. U ro'yxatdan o'tgach kiritadi.",
+    "shareAction": "Kodni ulashish",
+    "copied": "Nusxalandi",
+    "redeemedTitle": "Ishlatilgan kodingiz",
+    "status": {
+      "pending": "Kutilmoqda",
+      "rewarded": "Mukofotlandi",
+      "expired": "Muddati tugagan",
+      "voided": "Bekor qilingan"
+    },
+    "redeemedAt": "{{date}} sanasida ishlatilgan",
+    "rewardedAt": "{{date}} sanasida mukofotlangan",
+    "pendingHint": "Mukofot bu yerda birinchi buyurtmangizni yakunlaganingizdan so'ng beriladi.",
+    "expiredHint": "Mos buyurtma kelmasdan oldin muddati tugadi.",
+    "redeemThanks": "Kod ishlatildi. Mukofot olish uchun bu yerda birinchi buyurtmangizni yakunlang.",
+    "redeemTitle": "Do'stingizning kodi bormi?",
+    "redeemSubtitle": "Uni bir marta kiriting — bu har bir hisob uchun faqat bir marta bajarilishi mumkin.",
+    "redeemPlaceholder": "Kodni kiriting",
+    "redeemAction": "Ishlatish",
+    "redeeming": "Yuborilmoqda…",
+    "codeNotFound": "Bunday referal kod topilmadi.",
+    "alreadyRedeemed": "Siz allaqachon referal kod ishlatgansiz.",
+    "noActiveProgram": "Bu brend hozircha referal dasturini o'tkazmayapti.",
+    "notEligible": "Bu kodni ushbu hisobda ishlatib bo'lmaydi.",
+    "noFriendCountNotice": "Hozircha kodingizdan nechta do'stingiz foydalanganini ko'rsatmaymiz — keyinroq qayta tekshiring.",
+    "shareMessage": "Ro'yxatdan o'tayotganda mening {{code}} referal kodimdan foydalaning."
   }
 }

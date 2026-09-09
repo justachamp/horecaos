@@ -10,13 +10,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -78,18 +81,25 @@ public class KitchenTicketService {
     private final OrderProgressPort orderProgress;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final TransactionTemplate independently;
 
     public KitchenTicketService(
             JdbcKitchenStore kitchen,
             KitchenOrderSource orders,
             OrderProgressPort orderProgress,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            TransactionTemplate unitOfWork) {
         this.kitchen = kitchen;
         this.orders = orders;
         this.orderProgress = orderProgress;
         this.audit = audit;
         this.clock = clock;
+        // For the one pair of writes that has to outlive the exception they
+        // accompany -- see recall's refusal of a handed-over ticket.
+        this.independently = new TransactionTemplate(Objects.requireNonNull(
+                unitOfWork.getTransactionManager(), "unitOfWork must already carry a transaction manager"));
+        this.independently.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     // ------------------------------------------------------------ ticket creation
@@ -734,27 +744,34 @@ public class KitchenTicketService {
 
         if (ticket.status() == TicketStatus.HANDED_OVER) {
             Instant now = clock.instant();
-            kitchen.recordEvent(
-                    tenantId,
-                    ticket.id(),
-                    itemId,
-                    ticket.status().name(),
-                    ticket.status().name(),
-                    "STATION_ACTION",
-                    "USER",
-                    actorId,
-                    "KITCHEN_RECALL_AFTER_READY",
-                    correlationId,
-                    now);
-            recordAudit(
-                    ticket,
-                    "kitchen.ticket.recall",
-                    actorId,
-                    reasonCode,
-                    Map.of("ticketItemId", itemId.toString(), "refused", "AFTER_HANDOVER"),
-                    AuditFact.Outcome.REJECTED,
-                    correlationId,
-                    now);
+            // In its own transaction. ADR 0041 wants this attempt kept -- "somebody
+            // tried to recall food that had already left, and that is exactly the
+            // fact an operational exception is about" -- but the refusal below is
+            // thrown from inside this @Transactional method, so recording it here
+            // and throwing there rolled the record back and kept nothing at all.
+            independently.executeWithoutResult(ignored -> {
+                kitchen.recordEvent(
+                        tenantId,
+                        ticket.id(),
+                        itemId,
+                        ticket.status().name(),
+                        ticket.status().name(),
+                        "STATION_ACTION",
+                        "USER",
+                        actorId,
+                        "KITCHEN_RECALL_AFTER_READY",
+                        correlationId,
+                        now);
+                recordAudit(
+                        ticket,
+                        "kitchen.ticket.recall",
+                        actorId,
+                        reasonCode,
+                        Map.of("ticketItemId", itemId.toString(), "refused", "AFTER_HANDOVER"),
+                        AuditFact.Outcome.REJECTED,
+                        correlationId,
+                        now);
+            });
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT,
                     "This ticket was handed over. The food has left the pass, so recalling it "

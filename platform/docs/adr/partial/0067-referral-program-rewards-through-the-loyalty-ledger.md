@@ -38,12 +38,32 @@
   still governs *when* a reward fires; what changed is that *who* may ever
   hold a `PENDING` row is now checked against real order history at the one
   moment that matters, before any row exists, rather than assumed from
-  the row's own state after the fact. Not built: no customer channel calls
-  `ReferralStorefrontController` — no storefront (`frontend/storefront`,
-  `frontend/storefront-milliy`) or Telegram bot screen lets a customer see
-  their own code or redeem a friend's, so the customer half of this
-  record's own Exit Criteria is not yet reachable even though the endpoint
-  is built and tested.
+  the row's own state after the fact. **A customer channel now calls
+  `ReferralStorefrontController`.** `frontend/storefront-milliy`'s
+  `ReferralService`/`ReferralComponent`, reached from a real row on the
+  profile screen rather than a promised one, call exactly the two things the
+  controller exposes to a customer principal: `GET .../referrals/me` mints
+  and shows the caller's own code, and `POST .../referrals/redemptions`
+  redeems a friend's, with `RESOURCE_NOT_FOUND`/`RESOURCE_CONFLICT`/
+  `UNPROCESSABLE_STATE`/`VALIDATION_FAILED` each surfaced as its own
+  translated message rather than one generic failure. The code discloses
+  nothing to check under ADR 0029: `ReferralCodeService.generate` is eight
+  `SecureRandom` Crockford base32 characters, not derived from the account
+  id, phone, or signup time, so the screen shares the bare code (Web Share
+  API, clipboard fallback) rather than minting a link — a link would need
+  either the account id in the URL or a redirect service this platform does
+  not have. **Still not built:** `frontend/storefront` and the ADR 0075
+  Telegram customer bot call none of this, so the customer half of this
+  record's own Exit Criteria is reachable from one of the platform's three
+  customer channels, not all three. And two reads this wave deliberately did
+  not invent rather than build without a caller: `ReferralStorefrontController`
+  never returns a reward amount, only status and dates, and there is no
+  customer-facing read of "who has redeemed my code" —
+  `ReferralQueryService` resolves a redemption only by referee, and the read
+  by referrer stays marketer-only behind `REFERRAL_READ` — so the storefront
+  screen shows a code, a share action, and, once redeemed, a status, and
+  says plainly that it does not yet show a friend count rather than
+  inventing one.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture; tenant-configurable

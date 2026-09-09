@@ -15,7 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -76,6 +78,7 @@ public class OrderAmendmentService {
     private final Clock clock;
     private final PosExportStatus posExports;
     private final ApplicationEventPublisher events;
+    private final TransactionTemplate independently;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -85,7 +88,8 @@ public class OrderAmendmentService {
             ObjectMapper objectMapper,
             Clock clock,
             PosExportStatus posExports,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            TransactionTemplate unitOfWork) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -93,6 +97,14 @@ public class OrderAmendmentService {
         this.clock = clock;
         this.posExports = posExports;
         this.events = events;
+        // A second template for the one write that has to outlive the exception it
+        // accompanies, exactly as PaymentAttemptService needs for the same reason:
+        // apply() settles an expired amendment and then refuses the application, and
+        // both of those happen inside apply()'s own transaction, so the settlement
+        // rolled back with the refusal and the amendment stayed proposed forever.
+        this.independently = new TransactionTemplate(Objects.requireNonNull(
+                unitOfWork.getTransactionManager(), "unitOfWork must already carry a transaction manager"));
+        this.independently.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -252,7 +264,18 @@ public class OrderAmendmentService {
                     true);
         }
         if (!amendment.expiresAt().isAfter(now)) {
-            amendments.markRejected(tenantId, amendmentId, "EXPIRED", now);
+            // In its own transaction, because the refusal below rolls this one's
+            // back. Settling the amendment and then throwing from inside the same
+            // @Transactional method undid the settlement every time: the amendment
+            // stayed open, its one-per-order index stayed held, and the next apply
+            // repeated the cycle. The event is published in here for the same
+            // reason — BEFORE_COMMIT fires on this inner transaction, so a consumer
+            // is told about a rejection the database has actually kept.
+            independently.executeWithoutResult(ignored -> {
+                if (amendments.markRejected(tenantId, amendmentId, "EXPIRED", now)) {
+                    publishRejected(tenantId, amendment, "EXPIRED", now);
+                }
+            });
             throw new AmendmentExpiredException(amendment.expiresAt());
         }
         // Enforced in the database as well, on the applied row. Stated twice on
@@ -425,9 +448,18 @@ public class OrderAmendmentService {
             throw new AmendmentNotFoundException(amendmentId);
         }
 
-        // The amendment's own foreign key guarantees the order it names still
-        // exists, so this is the same orElseThrow every other method here uses
-        // rather than a defensive null.
+        publishRejected(tenantId, amendment, reasonCode, now);
+    }
+
+    /**
+     * One rejection fact for both paths that produce one — an operator withdrawing
+     * an amendment, and {@code apply} finding it past its TTL.
+     *
+     * <p>The amendment's own foreign key guarantees the order it names still
+     * exists, so this is the same orElseThrow every other method here uses rather
+     * than a defensive null.
+     */
+    private void publishRejected(UUID tenantId, AmendmentRow amendment, String reasonCode, Instant now) {
         OrderRow order = orders.find(tenantId, amendment.orderId())
                 .orElseThrow(() -> new OrderStateService.OrderNotFoundException(amendment.orderId()));
         events.publishEvent(new OrderAmendmentRejected(
@@ -437,7 +469,7 @@ public class OrderAmendmentService {
                 now,
                 order.brandId(),
                 order.locationId(),
-                amendmentId,
+                amendment.id(),
                 amendment.baseRevision(),
                 reasonCode));
     }

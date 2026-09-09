@@ -61,6 +61,12 @@
       </div>
     </section>
 
+    <button type="button" class="nav-row" (click)="openReferral()">
+      <app-icon name="share" [size]="20" />
+      <span class="nav-row__label">{{ 'profile.referral' | t }}</span>
+      <span class="nav-row__chevron">›</span>
+    </button>
+
     @if (ratableOrder(); as order) {
       @if (!ratingSubmitted()) {
         <section class="rate-card">
