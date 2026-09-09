@@ -3,7 +3,11 @@ package uz.horecaos.platform.kitchen.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,10 +30,13 @@ import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLin
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
+import uz.horecaos.platform.kitchen.domain.StationCapacityShift;
+import uz.horecaos.platform.kitchen.domain.StationCapacityShift.WindowOccurrence;
 import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.ResolvedStation;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
 import uz.horecaos.platform.web.api.ApiException;
@@ -124,7 +131,16 @@ public class KitchenTicketService {
         Instant now = clock.instant();
         Integer prepSeconds = prepEstimateSeconds(order);
         Instant targetReadyAt = targetReadyAt(order);
-        Release release = decideRelease(requestedMode, targetReadyAt, prepSeconds, now);
+
+        // Resolved before the ticket is inserted, and not yet written: the
+        // capacity shift below needs to know which stations and how many
+        // portions this ticket asks of each one, and that has to be known before
+        // release_at is decided, which has to be known before the ticket row —
+        // carrying release_at — can be inserted at all.
+        List<RoutedLine> routedLines = resolveLines(order, fallbackStation);
+        long capacityOffsetSeconds =
+                capacityOffsetSeconds(order, routedLines, requestedMode, targetReadyAt, prepSeconds);
+        Release release = decideRelease(requestedMode, targetReadyAt, prepSeconds, capacityOffsetSeconds, now);
 
         UUID ticketId = UUID.randomUUID();
         TicketRow ticket = new TicketRow(
@@ -150,7 +166,7 @@ public class KitchenTicketService {
                 now);
         kitchen.insertTicket(ticket);
 
-        List<String> unresolved = routeLines(order, ticketId, fallbackStation, now);
+        List<String> unresolved = insertRoutedItems(order.tenantId(), order.locationId(), ticketId, routedLines, now);
 
         kitchen.recordEvent(
                 tenantId,
@@ -191,11 +207,113 @@ public class KitchenTicketService {
                     order.locationId());
         }
 
+        if (release.ceilingExceeded()) {
+            // ADR 0041: a ceiling shifts release_at and never holds a ticket past
+            // the promise to protect its own number. This is that boundary hit —
+            // the offset the ceiling wanted could not fit before "now" caught up
+            // with it, so the ticket fires without the buffer rather than waiting
+            // for an instant that has already gone. Recorded on the ticket the
+            // branch reads, not only logged: the food is going out at risk of the
+            // exact queue delay the ceiling exists to warn about, and the person
+            // who has to plan around that is at the branch.
+            kitchen.recordEvent(
+                    tenantId,
+                    ticketId,
+                    null,
+                    TicketStatus.HELD.name(),
+                    TicketStatus.HELD.name(),
+                    "CAPACITY_CEILING_REACHED",
+                    "SERVICE",
+                    "kitchen",
+                    "KITCHEN_CAPACITY_CEILING_REACHED",
+                    orderId.toString(),
+                    now);
+            log.warn(
+                    "Ticket {} at location {} reached a station's throughput ceiling; it is "
+                            + "releasing without the full queue buffer rather than being held past "
+                            + "its promise (ADR 0041)",
+                    ticketId,
+                    order.locationId());
+        }
+
         if (release.fireNow()) {
             return fire(tenantId, ticketId, "ORDER_CONFIRMED", "SERVICE", "kitchen", null, orderId.toString(), now)
                     .orElse(ticket);
         }
         return ticket;
+    }
+
+    /**
+     * How much earlier this ticket must release for its stations' throughput
+     * ceilings, or zero when none apply.
+     *
+     * <p>Skipped entirely — no timezone lookup, no capacity query — whenever
+     * there is nothing for a ceiling to shift: an explicit hold ignores release
+     * timing altogether, and a ticket with no promise or no estimate has no
+     * {@code target_ready_at - prep_estimate} baseline to shift in the first
+     * place.
+     *
+     * <p>A ticket routes to more than one station whenever its lines do, and
+     * each station's ceiling is independent. The ticket fires as one unit — ADR
+     * 0041 has no per-item release — so the binding constraint is whichever
+     * station asks for the most lead time; the rest get more buffer than they
+     * strictly needed, which costs nothing.
+     */
+    private long capacityOffsetSeconds(
+            OrderForKitchen order,
+            List<RoutedLine> routedLines,
+            ReleaseMode requestedMode,
+            @Nullable Instant targetReadyAt,
+            @Nullable Integer prepSeconds) {
+
+        if (requestedMode == ReleaseMode.MANUAL_HOLD || targetReadyAt == null || prepSeconds == null) {
+            return 0;
+        }
+
+        Map<UUID, Long> portionsByStation = new HashMap<>();
+        for (RoutedLine line : routedLines) {
+            portionsByStation.merge(line.stationId(), (long) line.quantity(), Long::sum);
+        }
+        if (portionsByStation.isEmpty()) {
+            return 0;
+        }
+
+        // ADR 0041 / ScheduleCadence: local wall-clock through the branch's own
+        // IANA zone, never UTC. target_ready_at anchors which service period the
+        // ticket belongs to — a plov due at 13:00 is lunch-rush demand whether
+        // the order that produced it was confirmed at 09:00 or at 12:55.
+        Optional<String> timezone = kitchen.locationTimezone(order.tenantId(), order.locationId());
+        if (timezone.isEmpty()) {
+            return 0;
+        }
+        ZoneId zone = ZoneId.of(timezone.get());
+        ZonedDateTime targetLocal = targetReadyAt.atZone(zone);
+        int weekday = targetLocal.getDayOfWeek().getValue();
+        LocalTime localTime = targetLocal.toLocalTime();
+
+        long maxOffsetSeconds = 0;
+        for (Map.Entry<UUID, Long> entry : portionsByStation.entrySet()) {
+            UUID stationId = entry.getKey();
+            long thisTicketPortions = entry.getValue();
+
+            Optional<StationCapacityRow> ceiling =
+                    kitchen.capacityWindowCovering(order.tenantId(), stationId, weekday, localTime);
+            if (ceiling.isEmpty()) {
+                // No ceiling configured for this station at this hour: the same
+                // "unbounded" answer V0144 gives a station with no capacity rows
+                // at all.
+                continue;
+            }
+            StationCapacityRow window = ceiling.get();
+            WindowOccurrence occurrence =
+                    StationCapacityShift.occurrence(targetReadyAt, zone, window.windowStart(), window.windowEnd());
+            long committed =
+                    kitchen.committedPortions(order.tenantId(), stationId, occurrence.start(), occurrence.end());
+            long offsetSeconds = StationCapacityShift.offsetSeconds(
+                    window.portionsPerHour(), occurrence.duration(), committed, thisTicketPortions);
+            maxOffsetSeconds = Math.max(maxOffsetSeconds, offsetSeconds);
+        }
+        return maxOffsetSeconds;
     }
 
     /**
@@ -245,46 +363,69 @@ public class KitchenTicketService {
      * immediately in every other case. Firing is the safe default — a ticket held
      * by accident is food nobody cooks, while a ticket fired early is food cooked
      * early, and only one of those has a customer waiting at the end of it.
+     *
+     * <p>{@code capacityOffsetSeconds} only ever pulls the schedulable instant
+     * earlier than the plain {@code target_ready_at - prep_estimate} baseline —
+     * see {@link StationCapacityShift}'s class doc for why that direction is the
+     * whole of ADR 0041's rule here. When even the baseline has already passed
+     * by the time the offset is applied, {@code ceilingExceeded} says so: the
+     * ticket still fires now rather than waiting for an instant that no longer
+     * exists, but the caller records why.
      */
     private static Release decideRelease(
-            ReleaseMode requested, @Nullable Instant targetReadyAt, @Nullable Integer prepSeconds, Instant now) {
+            ReleaseMode requested,
+            @Nullable Instant targetReadyAt,
+            @Nullable Integer prepSeconds,
+            long capacityOffsetSeconds,
+            Instant now) {
 
         if (requested == ReleaseMode.MANUAL_HOLD) {
-            return new Release(ReleaseMode.MANUAL_HOLD, null, false);
+            return new Release(ReleaseMode.MANUAL_HOLD, null, false, false);
         }
         if (targetReadyAt == null || prepSeconds == null) {
-            return new Release(ReleaseMode.AUTO_ON_CONFIRM, null, true);
+            return new Release(ReleaseMode.AUTO_ON_CONFIRM, null, true, false);
         }
-        Instant releaseAt = targetReadyAt.minusSeconds(prepSeconds);
+        Instant honestReleaseAt = targetReadyAt.minusSeconds(prepSeconds);
+        Instant releaseAt = honestReleaseAt.minusSeconds(capacityOffsetSeconds);
         if (!releaseAt.isAfter(now)) {
-            return new Release(ReleaseMode.AUTO_ON_CONFIRM, null, true);
+            boolean ceilingExceeded = capacityOffsetSeconds > 0 && honestReleaseAt.isAfter(now);
+            return new Release(ReleaseMode.AUTO_ON_CONFIRM, null, true, ceilingExceeded);
         }
-        return new Release(ReleaseMode.SCHEDULED, releaseAt, false);
+        return new Release(ReleaseMode.SCHEDULED, releaseAt, false, false);
     }
 
-    /** Resolves every line onto a station, and returns the ones nothing matched. */
-    private List<String> routeLines(OrderForKitchen order, UUID ticketId, UUID fallbackStation, Instant now) {
-
-        List<String> unresolved = new ArrayList<>();
+    /** Resolves every line onto a station, without writing anything yet. */
+    private List<RoutedLine> resolveLines(OrderForKitchen order, UUID fallbackStation) {
+        List<RoutedLine> resolved = new ArrayList<>();
         for (OrderLineForKitchen line : order.lines()) {
-            Optional<ResolvedStation> resolved = kitchen.resolveStation(
+            Optional<ResolvedStation> match = kitchen.resolveStation(
                     order.tenantId(), order.brandId(), order.locationId(), line.variantId(), line.productId());
 
-            UUID stationId = resolved.map(ResolvedStation::stationId).orElse(fallbackStation);
-            RoutingLevel level = resolved.map(ResolvedStation::level).orElse(RoutingLevel.FALLBACK);
-            if (level.unresolved()) {
+            UUID stationId = match.map(ResolvedStation::stationId).orElse(fallbackStation);
+            RoutingLevel level = match.map(ResolvedStation::level).orElse(RoutingLevel.FALLBACK);
+            resolved.add(new RoutedLine(line.orderLineId(), stationId, level, line.quantity()));
+        }
+        return resolved;
+    }
+
+    /** Writes every resolved line as a ticket item, and returns the ones nothing matched. */
+    private List<String> insertRoutedItems(
+            UUID tenantId, UUID locationId, UUID ticketId, List<RoutedLine> lines, Instant now) {
+
+        List<String> unresolved = new ArrayList<>();
+        for (RoutedLine line : lines) {
+            if (line.level().unresolved()) {
                 unresolved.add(line.orderLineId().toString());
             }
-
             kitchen.insertItem(new TicketItemRow(
                     UUID.randomUUID(),
-                    order.tenantId(),
+                    tenantId,
                     ticketId,
-                    order.locationId(),
+                    locationId,
                     line.orderLineId(),
-                    stationId,
+                    line.stationId(),
                     line.quantity(),
-                    level,
+                    line.level(),
                     TicketItemStatus.QUEUED,
                     null,
                     null,
@@ -882,5 +1023,15 @@ public class KitchenTicketService {
      */
     public record ItemOutcome(boolean applied, TicketItemRow item, TicketRow ticket) {}
 
-    private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow) {}
+    /**
+     * @param ceilingExceeded whether a station's throughput ceiling asked for
+     *                        more lead time than there was left before {@code
+     *                        now}, so the ticket is firing without the buffer
+     *                        the ceiling wanted (ADR 0041's operational
+     *                        exception)
+     */
+    private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow, boolean ceilingExceeded) {}
+
+    /** One order line, resolved onto a station but not yet written as a ticket item. */
+    private record RoutedLine(UUID orderLineId, UUID stationId, RoutingLevel level, int quantity) {}
 }
