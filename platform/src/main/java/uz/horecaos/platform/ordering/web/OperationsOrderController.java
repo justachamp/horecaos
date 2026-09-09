@@ -4,21 +4,26 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +31,10 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.application.CartService;
+import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
+import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
@@ -43,10 +52,13 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
+import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.idempotency.Idempotent;
 
 /**
  * The restaurant's side of ordering (ADR 0002, ADR 0019).
@@ -73,7 +85,10 @@ public class OperationsOrderController {
     private final JdbcCartStore carts;
     private final CurrentActor currentActor;
     private final OrderCallProvenanceService callProvenance;
+    private final OperatorOrderingService operatorOrdering;
+    private final OperatorCustomerLookupService customerLookup;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
             OrderQueryService orderQuery,
             OrderStateService orderState,
@@ -82,7 +97,9 @@ public class OperationsOrderController {
             RejectReasonQueryService rejectReasons,
             JdbcCartStore carts,
             CurrentActor currentActor,
-            OrderCallProvenanceService callProvenance) {
+            OrderCallProvenanceService callProvenance,
+            OperatorOrderingService operatorOrdering,
+            OperatorCustomerLookupService customerLookup) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -91,6 +108,8 @@ public class OperationsOrderController {
         this.carts = carts;
         this.currentActor = currentActor;
         this.callProvenance = callProvenance;
+        this.operatorOrdering = operatorOrdering;
+        this.customerLookup = customerLookup;
     }
 
     @GetMapping
@@ -113,6 +132,110 @@ public class OperationsOrderController {
         return ResponseEntity.ok(orderQuery.forLocation(tenantId, brandId, locationId, statuses, limit).stream()
                 .map(OrderSummaryResponse::of)
                 .toList());
+    }
+
+    // ------------------------------------------------------- operator order intake (ADR 0039)
+
+    @PostMapping
+    @RequiresCapability(value = Capability.ORDER_PLACE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Take an order by phone",
+            description = "orders.md §5: the New order screen's Создать. Reuses the ordinary "
+                    + "checkout path end to end — the same cart, quote and payment rules a "
+                    + "customer's own checkout takes — so this is never a second order-creation "
+                    + "path to keep in step with pricing, inventory or payment. What differs is "
+                    + "attribution alone: `customerAccountId` is the resolved or freshly created "
+                    + "customer (`POST /customers` and `POST .../customer-lookups` beside this "
+                    + "endpoint resolve it), and the order records the operator as its "
+                    + "created_by_actor (V0029) rather than the customer. Cash only in this "
+                    + "release — a card link sent to the customer is a bigger piece of work this "
+                    + "wave does not build, and `paymentMethodCode` is refused for anything else. "
+                    + "On success, route straight to GET .../orders/{orderId}: the operator is "
+                    + "still on the phone and needs to read the number back.")
+    public ResponseEntity<PlaceOrderResponse> place(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @Valid @RequestBody PlaceOrderRequest body) {
+        try {
+            var result = operatorOrdering.place(new OperatorOrderingService.PlaceOrderCommand(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    body.customerAccountId(),
+                    body.channelCode(),
+                    body.fulfillmentMode(),
+                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
+                    body.destination() == null ? null : body.destination().toDestination(),
+                    body.paymentMethodCode(),
+                    idempotencyKey,
+                    currentActor.get().subject(),
+                    null));
+
+            if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
+                String rejectionCode =
+                        Objects.requireNonNull(result.rejectionCode(), "a rejection always names a code");
+                throw new ApiException(
+                        StorefrontOrderingController.errorCodeFor(rejectionCode),
+                        result.rejectionDetail() == null ? rejectionCode : result.rejectionDetail(),
+                        Map.of(
+                                "reason", rejectionCode,
+                                "unavailableItems", result.unavailableItems(),
+                                "warnings", result.warnings()));
+            }
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new PlaceOrderResponse(
+                            Objects.requireNonNull(result.orderId()),
+                            Objects.requireNonNull(result.publicOrderNumber()),
+                            Objects.requireNonNull(result.status()).name(),
+                            result.orderVersion(),
+                            result.outcome().name(),
+                            result.warnings()));
+        } catch (CartService.CartRefusedException refused) {
+            throw StorefrontOrderingController.refusal(refused);
+        } catch (CartService.StaleCartException impossible) {
+            // Every version this handler passes to CartService is one it just
+            // read back from the previous step in the same transaction, so a
+            // concurrent editor is not a case this endpoint can reach.
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, impossible.getMessage());
+        } catch (CartPricingPort.PricingRefusedException unpriced) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    unpriced.getMessage(),
+                    Map.of("reason", unpriced.code(), "subjectId", String.valueOf(unpriced.subjectId())));
+        }
+    }
+
+    @PostMapping("/customer-lookups")
+    @RequiresCapability(value = Capability.CUSTOMER_READ, scope = ScopeType.LOCATION)
+    @Idempotent
+    @Operation(
+            summary = "Find a returning customer by phone, for the New order screen",
+            description = "orders.md §5.3. A POST with the number in the body, never a query "
+                    + "string, resolving through the ADR 0015 keyed hash — never a LIKE over "
+                    + "plaintext. Zero, one or several results are all ordinary: the hash index "
+                    + "is deliberately not unique, because a household shares a phone and a "
+                    + "recycled number changes owner. Picking a result is a selection, never a "
+                    + "merge. Every call is a SECURITY-class ADR 0027 audit fact, matched or not, "
+                    + "because this screen is a PII surface pointed at the tenant's entire "
+                    + "customer base. No match: create the account with "
+                    + "POST .../tenants/{tenantId}/customers, then place the order for it.")
+    public ResponseEntity<CustomerLookupResponse> customerLookup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody CustomerLookupRequest body) {
+
+        var candidates = customerLookup.lookupByPhone(
+                tenantId,
+                brandId,
+                locationId,
+                body.phone(),
+                ActorRef.user(currentActor.get().subject(), null),
+                Capability.CUSTOMER_READ.code());
+        return ResponseEntity.ok(new CustomerLookupResponse(
+                candidates.stream().map(CustomerLookupCandidateResponse::of).toList()));
     }
 
     @GetMapping("/counts")
@@ -747,6 +870,124 @@ public class OperationsOrderController {
      * @param reasonId omitted records the completion the fulfilment mode implies
      */
     public record CompleteRequest(@Nullable UUID reasonId) {}
+
+    // -------------------------------------------------- operator order intake (ADR 0039)
+
+    /**
+     * Take an order by phone (orders.md §5).
+     *
+     * @param customerAccountId the resolved or freshly created customer this
+     *                          order is for — never taken from anywhere else.
+     *                          {@code POST .../customer-lookups} finds a
+     *                          returning customer and
+     *                          {@code POST .../tenants/{tenantId}/customers}
+     *                          creates one when there is no match
+     * @param channelCode       the tenant's own operator channel (ADR 0036,
+     *                          {@code system_type = CALL_CENTRE}), resolved by
+     *                          the caller the same way it resolves any other
+     *                          channel code — this endpoint does not invent a
+     *                          channel-selection rule of its own
+     * @param paymentMethodCode <strong>{@code CASH} only, this release.</strong>
+     *                          A card link sent to the customer is a bigger
+     *                          piece of work this wave does not build, and
+     *                          this endpoint refuses anything else before it
+     *                          writes a row rather than half-building a
+     *                          payment path it cannot test end to end
+     */
+    public record PlaceOrderRequest(
+            @NotNull UUID customerAccountId,
+            @NotBlank @Size(max = 32) String channelCode,
+            @NotNull FulfillmentMode fulfillmentMode,
+            @NotEmpty @Size(max = 50) List<OrderLineRequest> lines,
+            @Nullable DestinationRequest destination,
+            @NotBlank @Size(max = 32) String paymentMethodCode) {}
+
+    /** One line the operator entered into the basket, same shape as a storefront cart line. */
+    public record OrderLineRequest(
+            @NotNull UUID variantId,
+            @Positive @Max(999) int quantity,
+            @Size(max = 20) List<UUID> modifierOptionIds,
+            @Size(max = 500) @Nullable String customerNote) {
+
+        OperatorOrderingService.OrderLine toLine() {
+            return new OperatorOrderingService.OrderLine(
+                    variantId, quantity, modifierOptionIds == null ? List.of() : modifierOptionIds, customerNote);
+        }
+    }
+
+    /**
+     * Where a delivery order goes — one of the resolved customer's own saved
+     * addresses, named by id, never typed ad hoc: {@code CartService
+     * #setDestination}'s own doc explains why. Required exactly when {@code
+     * fulfillmentMode} is {@code DELIVERY}, refused otherwise.
+     */
+    public record DestinationRequest(
+            @NotNull UUID customerAddressId,
+            @NotBlank @Size(max = 120) String recipientName,
+            @NotBlank @Size(max = 32) String recipientPhone,
+            @Size(max = 500) @Nullable String deliveryNote) {
+
+        OperatorOrderingService.Destination toDestination() {
+            return new OperatorOrderingService.Destination(
+                    customerAddressId, recipientName, recipientPhone, deliveryNote);
+        }
+
+        /** Never prints the recipient's name or phone — see {@code DestinationRequest} elsewhere for the same rule. */
+        @Override
+        public String toString() {
+            return "DestinationRequest[address=%s]".formatted(customerAddressId);
+        }
+    }
+
+    /**
+     * The placed order, exactly what the storefront's own checkout answers
+     * with — the operations app routes straight to {@code GET .../{orderId}}
+     * on the strength of {@code orderId} alone, because the operator is still
+     * on the phone and needs to read the number back.
+     *
+     * @param warnings platform gaps that apply to this order, such as an unwired payments port
+     */
+    public record PlaceOrderResponse(
+            UUID orderId,
+            String publicOrderNumber,
+            String status,
+            int version,
+            String outcome,
+            List<String> warnings) {}
+
+    /** A phone number to search, in the body — never a query string (orders.md §5.3). */
+    public record CustomerLookupRequest(
+            @NotBlank @Size(max = 32) String phone) {
+
+        /** Never prints the number being searched for. */
+        @Override
+        public String toString() {
+            return "CustomerLookupRequest[phone=<redacted>]";
+        }
+    }
+
+    public record CustomerLookupResponse(List<CustomerLookupCandidateResponse> candidates) {}
+
+    /**
+     * One phone-lookup result. {@code maskedDisplayName} is enough to
+     * recognise a name and not enough to read it whole — this screen is a
+     * search over the tenant's entire customer base and the operator has not
+     * yet picked which account the order belongs to.
+     */
+    public record CustomerLookupCandidateResponse(
+            UUID accountId,
+            @Nullable String maskedDisplayName,
+            @Nullable Instant lastOrderAt,
+            int recentOrderCount) {
+
+        static CustomerLookupCandidateResponse of(OperatorCustomerLookupService.PhoneLookupCandidate candidate) {
+            return new CustomerLookupCandidateResponse(
+                    candidate.accountId(),
+                    candidate.maskedDisplayName(),
+                    candidate.lastOrderAt(),
+                    candidate.recentOrderCount());
+        }
+    }
 
     /**
      * A request to amend a live order.

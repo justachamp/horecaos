@@ -153,6 +153,27 @@ public enum Capability {
     ORDER_ACCEPTANCE_POLICY_MANAGE("order.acceptance-policy.manage", "order", "acceptance-policy.manage"),
 
     /**
+     * ADR 0039: an operator entering an order on a customer's behalf — a
+     * phone call taken at the counter or on a call-centre line.
+     *
+     * <p>Distinct from {@link #MARKETPLACE_ORDER_CREATE_MANUAL}, which looks
+     * similar — staff typing an order in by hand — but is a different
+     * principal entirely: that capability keys in a total the platform
+     * cannot verify, on an aggregator's word, at {@code pricing_authority =
+     * EXTERNAL}. This one is the ordinary storefront checkout path ({@code
+     * CheckoutService}, unchanged) taken by a different hand; the price, the
+     * inventory hold and the payment rules are exactly a customer's own. A
+     * floor operator relaying what a caller ordered is not exercising the
+     * same authority as a marketplace integration recovering a failed sync,
+     * so the two never share a capability even though both end in an order
+     * row. Held by the same bundles that hold {@link #ORDER_ADVANCE} — the
+     * floor's own work over a different verb — because a location manager
+     * or line staff who may move an order along the kitchen path is exactly
+     * who answers the phone for one.
+     */
+    ORDER_PLACE("order.place", "order", "place"),
+
+    /**
      * ADR 0064: attaching the voice call id an order originated from. A narrow
      * capability of its own rather than folded into {@link #ORDER_ADVANCE} or
      * {@link #ORDER_AMEND} — recording where an order came from changes

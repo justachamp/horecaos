@@ -604,7 +604,18 @@ public class StorefrontOrderingController {
                         ErrorCode.RESOURCE_NOT_FOUND, "This principal has no customer account for this brand"));
     }
 
-    private static ApiException refusal(CartService.CartRefusedException refused) {
+    /**
+     * Maps a {@link CartService} refusal to a Problem Details error code.
+     *
+     * <p>Package-visible so {@code OperationsOrderController}'s operator
+     * order-intake endpoint (ADR 0039) answers a cart refused mid-checkout
+     * with the identical Problem Details a customer's own checkout would —
+     * the whole point of reusing {@link CartService} and {@link
+     * CheckoutService} rather than a second order-creation path is that a
+     * refusal means the same thing and is rendered the same way from either
+     * caller.
+     */
+    static ApiException refusal(CartService.CartRefusedException refused) {
         ErrorCode code =
                 switch (refused.code()) {
                     case "CART_NOT_FOUND", "LINE_NOT_FOUND", "TENANT_NOT_FOUND", "CHANNEL_NOT_REGISTERED" ->
@@ -632,7 +643,8 @@ public class StorefrontOrderingController {
         return new ApiException(code, refused.getMessage(), java.util.Map.of("reason", refused.code()));
     }
 
-    private static ErrorCode errorCodeFor(String rejectionCode) {
+    /** Package-visible for the same reason {@link #refusal} is — see its own doc. */
+    static ErrorCode errorCodeFor(String rejectionCode) {
         return switch (rejectionCode) {
             case "PRICE_CHANGED" -> ErrorCode.PRICE_CHANGED;
             case "IDEMPOTENCY_KEY_REUSED" -> ErrorCode.IDEMPOTENCY_KEY_REUSED;
