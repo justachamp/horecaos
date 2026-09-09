@@ -986,6 +986,25 @@ public class KitchenTicketService {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such ticket"));
     }
 
+    /**
+     * The ticket one line belongs to, so a caller holding a line's id can check
+     * which branch it is at <em>before</em> asking for a transition on it.
+     *
+     * <p>The station actions are keyed by item id, not ticket id, so unlike
+     * {@code release} or {@code hand-over} the controller cannot resolve the
+     * branch from the URL alone. Without this it could only look afterwards, at
+     * the ticket the transition returned — and every one of those transitions
+     * commits in its own {@code @Transactional} method while the controller
+     * around it is not transactional, so "look afterwards" meant the write had
+     * already landed on another branch's ticket and the caller merely received
+     * a 404 for it.
+     */
+    public TicketRow ticketOfItem(UUID tenantId, UUID itemId) {
+        TicketItemRow item = kitchen.findItem(tenantId, itemId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such item"));
+        return require(tenantId, item.ticketId());
+    }
+
     private static void requireVersion(TicketRow ticket, int expectedVersion) {
         if (ticket.version() != expectedVersion) {
             throw ApiException.staleVersion(expectedVersion, ticket.version());

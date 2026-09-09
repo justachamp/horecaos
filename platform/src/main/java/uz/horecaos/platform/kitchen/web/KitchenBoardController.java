@@ -210,8 +210,8 @@ public class KitchenBoardController {
             @PathVariable UUID locationId,
             @PathVariable UUID itemId) {
 
+        itemAtLocation(tenantId, itemId, locationId);
         var outcome = tickets.start(tenantId, itemId, currentActor.get().subject(), null);
-        requireLocation(outcome.ticket(), locationId);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -227,8 +227,8 @@ public class KitchenBoardController {
             @PathVariable UUID locationId,
             @PathVariable UUID itemId) {
 
+        itemAtLocation(tenantId, itemId, locationId);
         var outcome = tickets.ready(tenantId, itemId, currentActor.get().subject(), null);
-        requireLocation(outcome.ticket(), locationId);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -246,9 +246,9 @@ public class KitchenBoardController {
             @PathVariable UUID itemId,
             @Valid @RequestBody RecallRequest body) {
 
+        itemAtLocation(tenantId, itemId, locationId);
         var outcome = tickets.recall(
                 tenantId, itemId, body.reasonCode(), currentActor.get().subject(), null);
-        requireLocation(outcome.ticket(), locationId);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -259,6 +259,24 @@ public class KitchenBoardController {
      * The alternative confirms that a ticket of that id exists somewhere, which is
      * information the caller was not entitled to.
      */
+    /**
+     * The same isolation rule for the endpoints keyed by a line rather than a
+     * ticket, and it has to run <em>before</em> the transition, not after it.
+     *
+     * <p>{@code start}, {@code ready} and {@code recall} used to call the
+     * transition first and check the ticket it returned. Each of those service
+     * methods is {@code @Transactional} and this controller is not, so the write
+     * committed on its own and the check then threw against an already-durable
+     * change: a cook scoped to one branch could advance a sibling branch's line
+     * and get a 404 describing a mutation that had happened. Resolving the line's
+     * ticket first costs one read and closes that. A ticket never moves branch,
+     * so there is no window between this check and the transition for the answer
+     * to change.
+     */
+    private void itemAtLocation(UUID tenantId, UUID itemId, UUID locationId) {
+        requireLocation(tickets.ticketOfItem(tenantId, itemId), locationId);
+    }
+
     private TicketRow atLocation(UUID tenantId, UUID ticketId, UUID locationId) {
         TicketRow ticket = tickets.require(tenantId, ticketId);
         requireLocation(ticket, locationId);
