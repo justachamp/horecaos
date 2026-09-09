@@ -655,6 +655,40 @@
         },
         "type" : "object"
       },
+      "BeginRequest" : {
+        "properties" : {
+          "deviceClass" : {
+            "enum" : [ "KITCHEN_KDS" ],
+            "type" : "string"
+          },
+          "label" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "deviceClass" ],
+        "type" : "object"
+      },
+      "BeginResponse" : {
+        "properties" : {
+          "deviceCode" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pollIntervalSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "userCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -1704,6 +1738,20 @@
           }
         },
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
+        "type" : "object"
+      },
+      "CredentialResponse" : {
+        "properties" : {
+          "clientId" : {
+            "type" : "string"
+          },
+          "clientSecret" : {
+            "type" : "string"
+          },
+          "tokenEndpoint" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "CutoverDecisionRequest" : {
@@ -4069,6 +4117,17 @@
         },
         "type" : "object"
       },
+      "PollResponse" : {
+        "properties" : {
+          "credential" : {
+            "$ref" : "#/components/schemas/CredentialResponse"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PosOrderExportControllerResolutionRequest" : {
         "properties" : {
           "decision" : {
@@ -6326,6 +6385,64 @@
         },
         "summary" : "Set the value stored at exactly one key and scope",
         "tags" : [ "Configuration" ]
+      }
+    },
+    "/api/v1/control-plane/device-enrolments" : {
+      "post" : {
+        "description" : "Called by the device itself, before it holds any credential. Returns a deviceCode for the device to poll with and a short userCode for a person to read off the screen and approve from the operations console.",
+        "operationId" : "begin",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BeginRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BeginResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Begin enrolling a device",
+        "tags" : [ "Device enrolment" ]
+      }
+    },
+    "/api/v1/control-plane/device-enrolments/{deviceCode}/poll" : {
+      "post" : {
+        "description" : "The first poll to observe approved receives the device's Keycloak client credential; every later poll of the same code, including a retry of the winning one, receives none. The device stores the credential and authenticates directly against tokenEndpoint from then on.",
+        "operationId" : "poll",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "deviceCode",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PollResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Poll for approval",
+        "tags" : [ "Device enrolment" ]
       }
     },
     "/api/v1/control-plane/event-contracts" : {
@@ -14538,6 +14655,9 @@
   }, {
     "description" : "Entity-mapping crosswalk and reconciliation results (ADR 0024)",
     "name" : "Migration evidence"
+  }, {
+    "description" : "ADR 0079: how an unenrolled device gets a Keycloak identity",
+    "name" : "Device enrolment"
   }, {
     "description" : "Versioned distance bands and peak-hour rules",
     "name" : "Delivery tariffs"

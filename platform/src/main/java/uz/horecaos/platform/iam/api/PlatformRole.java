@@ -641,6 +641,23 @@ public enum PlatformRole {
                     VOICE_CALL_LOG_READ,
                     ORDER_PROVENANCE_RECORD)),
 
+    /**
+     * ADR 0079: the whole of what a kitchen display device may do — reading
+     * its branch's board and starting or readying its own lines. Not a
+     * person's bundle: no staff member is ever granted this role, and no
+     * device is ever granted any other. A strict subset of {@link
+     * #LOCATION_STAFF}'s own two kitchen capabilities, which is deliberate —
+     * a device holds nothing {@code location-staff} does not already hold,
+     * and holds far less of it. Every other kitchen power ({@code
+     * kitchen.ticket.recall}, {@code kitchen.ticket.release}, {@code
+     * kitchen.ticket.handover}, {@code kitchen.station.manage}) and every
+     * power outside the kitchen entirely (dispatch, suspension, grant
+     * management) stays off this bundle on purpose: a device principal that
+     * could do what a manager can do is the exact failure ADR 0079 exists to
+     * end, wearing a different name.
+     */
+    KITCHEN_DEVICE("kitchen-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_TICKET_ADVANCE)),
+
     COURIER_DISPATCHER(
             "courier-dispatcher",
             ScopeType.BRAND,

@@ -22,6 +22,14 @@ import java.util.stream.Collectors;
  * this is the "never listed" half, held at the one place that would otherwise
  * have to remember it on every caller's behalf.
  *
+ * <p>{@link PlatformRole#KITCHEN_DEVICE} joins the exclusion for a different
+ * reason (ADR 0079): this catalogue answers "what job could I hand a
+ * colleague", and a device is not a colleague. The bundle is real and is
+ * granted through the ordinary {@code iam.grants} path like any other, but
+ * only ever by {@code DeviceEnrolmentService} as the fixed, non-negotiable
+ * consequence of an approved enrolment — never chosen from a picker the way
+ * the eight bundles below are.
+ *
  * <p>Tenant-defined roles ({@code iam.roles} rows with a non-null
  * {@code tenant_id}) are deliberately absent — ADR 0025 defers them
  * ("Tenants may later define custom roles from the same capability
@@ -38,7 +46,9 @@ public final class TenantRoleCatalog {
     /** The eight tenant-visible bundles, in {@link PlatformRole} declaration order. */
     public static List<RoleDescriptor> tenantVisible() {
         return Arrays.stream(PlatformRole.values())
-                .filter(role -> role != PlatformRole.PLATFORM_ADMIN && role != PlatformRole.PLATFORM_SUPPORT)
+                .filter(role -> role != PlatformRole.PLATFORM_ADMIN
+                        && role != PlatformRole.PLATFORM_SUPPORT
+                        && role != PlatformRole.KITCHEN_DEVICE)
                 .map(RoleDescriptor::of)
                 .toList();
     }

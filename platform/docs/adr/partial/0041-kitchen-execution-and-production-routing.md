@@ -45,9 +45,18 @@
   its own number. Nothing customer-facing changed: `target_ready_at` is still
   the stored promise's own component, decided once at ticket creation and
   never recomputed; only a kitchen-internal instant inside the room that
-  promise already allows moves. Not
-  built: devices and enrolment, expo and handover — so nothing yet proposes
-  the pickup `COMPLETED` that the port and the adapter both support — branch
+  promise already allows moves.
+  **A kitchen display device can now enrol, be revoked, read the board, and
+  mark a line ready** — ADR 0079 (2026-09-09) built the device principal this
+  section's own "Displays and devices" sketch left open, as a real ADR 0025
+  principal held in `iam.device_principals` rather than the
+  `kitchen.devices` row this ADR proposed; see that record for why the
+  identity lives in `iam` and the reasoning in "Decisions taken here that
+  the ADR left open" below for what that changes about this section's own
+  physical model. Still not built: station-filtered device reads and the
+  VDU projection — a device today sees its whole branch's board, not one
+  station's — and expo and handover, so nothing yet proposes the pickup
+  `COMPLETED` that the port and the adapter both support — branch
   suspension, the ADR 0017 modifier-option stock and expiring stops, the
   external event contracts, and — a genuine product-policy gap, not a schema
   one — "cook headcount output": it needs a demand forecast and a
@@ -479,7 +488,11 @@ evidence for whatever went wrong.
 - [ ] Extend ADR 0017 with modifier-option stock items and expiring stops. **Not
       done.** It is ADR 0017's schema and its module, and this ADR has no claim on
       either.
-- [ ] Device enrolment, revocation, station-filtered reads, and expo handover.
+- [x] Device enrolment and revocation — ADR 0079, decided and built
+      2026-09-09. A `KITCHEN_KDS` device enrols through a pairing code,
+      reads its whole branch's board, marks its own lines started and
+      ready, and is revoked in one action.
+- [ ] Station-filtered device reads, the VDU projection, and expo handover.
       **Not done** — rollout step 4.
 - [x] Concurrency, replay, routing, capability-shape and isolation tests, in
       `src/test/java/uz/horecaos/platform/kitchen/KitchenExecutionTests.java`.
@@ -567,6 +580,24 @@ ADR 0016.
   extracting the shared shape from one example fixes an API against a single case,
   and the extraction is worth doing once ADR 0017's expiry timer exists to extract
   it alongside.
+- **The device principal lives in `iam.device_principals`, not a `kitchen.devices`
+  row.** This section sketches "a `kitchen.devices` row carries a device class,
+  a station filter, its own principal with a `LOCATION`-scoped grant, an
+  enrolment record, and a `revoked_at`" — one row holding both the kitchen-specific
+  facts (class, station filter) and the identity facts (principal, enrolment,
+  revocation) together. ADR 0079 splits them: the identity half is a generic ADR
+  0025 model change with no kitchen knowledge in it at all, so it belongs in
+  `iam` beside every other principal shape, the same reasoning that already
+  keeps `AuthorizationService` and `ResourceScope` in `iam.api` rather than
+  duplicated per module. `kitchen.station.manage` gates the kitchen-side approve
+  and revoke actions, and `kitchen.web.KitchenDeviceController` calls
+  `iam.api.devices.DeviceEnrolmentPort` for the identity half — the dependency
+  runs the direction `kitchen` already depends in, never the reverse, so this
+  is not the module cycle a device principal touching both `iam` and `kitchen`
+  could otherwise become. The station filter this section names is not built at
+  all yet (see "What was not built" below) — when it is, it is kitchen-owned
+  metadata on the grant's own scope or on a kitchen-side row keyed by the
+  device's `iam` identity, never a second identity table.
 - **`station_queue_offset` is portions, not tickets or lines, and it is a
   heuristic lead-time formula, not a queueing simulation.** *Implementation
   status: wave 44.* The ADR sketches the term in `release_at`'s formula and
@@ -635,9 +666,14 @@ ADR 0016.
   branch needs for a forecast service, the other asks when to release a ticket
   already placed — and building the offset above answers neither of those,
   on purpose.
-- **`kitchen.devices`, the VDU projection, and station-filtered device reads.** A
-  device row with no principal behind it grants nothing and revokes nothing, which
-  is exactly the shared-manager-login problem the row exists to solve.
+- **The VDU projection and station-filtered device reads.** A device today reads
+  its whole branch's board through the ordinary `kitchen.ticket.read` grant
+  ADR 0079 gives it, not one station's fired tickets the way this section's
+  read-model table sketches for `KDS`, and there is no `VDU` or `EXPO` device
+  class, no station filter, and no TV-legible no-controls projection. The
+  identity half of this bullet — "a device row with no principal behind it
+  grants nothing and revokes nothing" — is resolved: see "Decisions taken
+  here" below for where the principal actually lives.
 - **Expo, handover, and `kitchen.handover.complete`.** Rollout step 4. Nothing
   records `handed_over_at` today except the state machine that forbids a recall
   after it.

@@ -83,7 +83,8 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
-                    || isPreAccountTelegramSignInEndpoint(handler)) {
+                    || isPreAccountTelegramSignInEndpoint(handler)
+                    || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -132,7 +133,8 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
-                    || isPreAccountTelegramSignInEndpoint(handler)) {
+                    || isPreAccountTelegramSignInEndpoint(handler)
+                    || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -353,6 +355,33 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPreAccountTelegramSignInEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes");
+    }
+
+    /**
+     * ADR 0079: the two calls an unenrolled kitchen display makes before it
+     * holds any credential — begin and poll. The identical reasoning as
+     * {@link #isPreAccountIdentityEndpoint}, applied to a device rather than
+     * a customer: asking for an enrolment code is what happens before there
+     * is a principal, so requiring one would mean requiring a credential in
+     * order to obtain a credential. Neither is exempted from idempotency by
+     * oversight either — {@code IdempotencyInterceptor} scopes a key by the
+     * calling subject, of which there is none here, the same blocker that
+     * keeps {@code @Idempotent} off the pre-account identity trio. What
+     * authorises the flow is not either path: it is {@code
+     * kitchen.station.manage} on {@code KitchenDeviceController}'s own
+     * approve endpoint, reached only from an already-authenticated console
+     * session, and both paths here are rate-limited per caller through ADR
+     * 0033 instead.
+     *
+     * <p>Matched on exact paths rather than a prefix, the same discipline
+     * every other exemption on this list keeps: the next endpoint added
+     * under {@code /device-enrolments} is not quietly exempted along with
+     * these two.
+     */
+    private static boolean isDeviceEnrolmentBootstrapEndpoint(Method handler) {
+        String path = pathOf(handler);
+        return path.equals("/api/v1/control-plane/device-enrolments")
+                || path.equals("/api/v1/control-plane/device-enrolments/{deviceCode}/poll");
     }
 
     /**

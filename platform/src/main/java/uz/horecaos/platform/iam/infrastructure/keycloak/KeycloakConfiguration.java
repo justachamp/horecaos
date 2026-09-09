@@ -17,6 +17,7 @@ import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
+import uz.horecaos.platform.iam.application.devices.DeviceClientProvisioner;
 
 /**
  * Wires the ADR 0009 Keycloak adapter.
@@ -77,6 +78,32 @@ public class KeycloakConfiguration {
 
         return new KeycloakOrganizationDirectory(
                 authenticatedClient(secrets, clock, baseUrl, realm, clientId, "reader-secret", environment), realm);
+    }
+
+    /**
+     * ADR 0079's device-provisioning credential.
+     *
+     * <p>{@code horecaos-device-provisioning}, not {@code horecaos-provisioning}.
+     * {@code assign-service-account-roles.sh}'s own comment already records
+     * that the provisioning credential "deliberately excludes... manage-clients",
+     * a least-privilege decision made before this device principal existed to
+     * need it. Widening that credential now would put realm-wide client
+     * administration on the same account that already holds
+     * {@code manage-users}, which is a strictly worse trade than a third
+     * narrowly-scoped credential holding {@code manage-clients} alone.
+     */
+    @Bean
+    DeviceClientProvisioner deviceClientProvisioner(
+            SecretResolver secrets,
+            Clock clock,
+            @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
+            @Value("${horecaos.keycloak.realm:horecaos}") String realm,
+            @Value("${horecaos.keycloak.device-provisioning-client-id:horecaos-device-provisioning}") String clientId,
+            @Value("${horecaos.environment:local}") String environment) {
+
+        RestClient client = authenticatedClient(
+                secrets, clock, baseUrl, realm, clientId, "device-provisioning-secret", environment);
+        return new KeycloakDeviceClientProvisioner(client, realm, baseUrl);
     }
 
     private static RestClient authenticatedClient(

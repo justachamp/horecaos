@@ -29,11 +29,20 @@
   `PlatformGrantController` grants/revokes it over HTTP under ADR 0027
   maker-checker — the highest-authority action in the system, gated accordingly;
   `create-platform-admin.sh` no longer touches SQL.
+  ADR 0079 (2026-09-09) adds the platform's first non-human principal that
+  actually holds `iam.grants` rows rather than being authorized by a typed
+  relationship the way ADR 0049's three are: a kitchen display device,
+  provisioned as its own confidential Keycloak service-account client and
+  granted `PlatformRole.KITCHEN_DEVICE` through the unmodified `iam.grants`
+  path — `AuthorizationService`, `ResourceScopeVerifier`, and the ADR 0033
+  cache all run the identical check they already run for a person, so the
+  model itself is unchanged; only where a `principal_subject` can come from
+  widened.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
 - Depends on: ADR 0002, ADR 0003
-- Supersedes / Superseded by: — / ADR 0049 for non-staff relationship authorization
+- Supersedes / Superseded by: — / ADR 0049 for non-staff relationship authorization; ADR 0079 for the device principal type
 - Open inputs: none
 - Closed inputs: Capability catalogue and role bundles approved 2026-08-20 (granular role set; tenant executes refunds under ADR 0027 maker-checker; tenant owner and admin manage integrations; no tenant-defined roles in v1)
 
@@ -285,3 +294,4 @@ enforcement, and no authorization decision depends on a role name string.
 - [ADR 0021: SaaS plans, entitlements, and usage metering](../partial/0021-saas-plans-entitlements-and-usage-metering.md)
 - [ADR 0027: Audit evidence and approval model](../built/0027-audit-evidence-and-approval-model.md)
 - [ADR 0049: Non-staff principal authorization](../built/0049-non-staff-principal-authorization.md)
+- [ADR 0079: Kitchen display device principal and enrolment](../partial/0079-kitchen-display-device-principal-and-enrolment.md)
