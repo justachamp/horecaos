@@ -15,8 +15,9 @@ import { TranslateService } from '../../services/translate.service';
 type LoadState = 'loading' | 'ready' | 'error';
 
 /**
- * Profil: the customer's name, the language switch, sign-out, and rating an
- * order that has been completed and never rated.
+ * Profil: the customer's name, the language switch, a link to their referral
+ * code (ADR 0067), sign-out, and rating an order that has been completed and
+ * never rated.
  *
  * <h2>What the design shows that this screen does not build</h2>
  *
@@ -25,10 +26,12 @@ type LoadState = 'loading' | 'ready' | 'error';
  * see its own class comment. There is no call this client can make that gets
  * the digits back, so the identity block shows the name only.
  *
- * **The settings list** (addresses, payment methods, an order-history
- * shortcut, notifications, support). None of these were in this wave's scope
- * and none has a screen behind it yet; showing the row without one would be
- * exactly the "control that does nothing" this storefront exists to avoid.
+ * **The rest of the settings list** (addresses, payment methods, an
+ * order-history shortcut, notifications, support). None of these were in
+ * this wave's scope and none has a screen behind it yet; showing the row
+ * without one would be exactly the "control that does nothing" this
+ * storefront exists to avoid -- which is why `openReferral` below links to a
+ * real screen (`ReferralComponent`) rather than joining this list.
  *
  * **The three-way food/service/delivery star breakdown.** `SubmitReviewRequest`
  * carries one `rating` (1-5) and one `comment` -- there is no per-category
@@ -112,6 +115,10 @@ export class ProfileComponent implements OnInit {
 
   protected setLang(id: string): void {
     this.translate.setLang(id);
+  }
+
+  protected async openReferral(): Promise<void> {
+    await this.router.navigate(['/referral']);
   }
 
   protected startEdit(): void {

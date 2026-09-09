@@ -298,7 +298,8 @@
     "errors": {
       "avatarUnavailable": "Profile photos are not available yet.",
       "avatarFailed": "That image could not be saved. Please try another."
-    }
+    },
+    "referral": "Invite friends"
   },
   "product": {
     "variants": "Variants",
@@ -365,5 +366,36 @@
     "loadError": "The dish could not be loaded",
     "increase": "Increase",
     "decrease": "Decrease"
+  },
+  "referral": {
+    "title": "Referral",
+    "loadError": "Your referral code could not be loaded",
+    "yourCode": "Your code",
+    "shareHint": "Share this code with a friend. They enter it after signing up.",
+    "shareAction": "Share your code",
+    "copied": "Copied",
+    "redeemedTitle": "Your redeemed code",
+    "status": {
+      "pending": "Pending",
+      "rewarded": "Rewarded",
+      "expired": "Expired",
+      "voided": "Voided"
+    },
+    "redeemedAt": "Redeemed on {{date}}",
+    "rewardedAt": "Rewarded on {{date}}",
+    "pendingHint": "This pays out once you complete your first order here.",
+    "expiredHint": "This closed before a qualifying order arrived.",
+    "redeemThanks": "Code redeemed. Complete your first order here to trigger the reward.",
+    "redeemTitle": "Have a friend's code?",
+    "redeemSubtitle": "Enter it once — this can only be done a single time per account.",
+    "redeemPlaceholder": "Enter the code",
+    "redeemAction": "Redeem",
+    "redeeming": "Redeeming…",
+    "codeNotFound": "That referral code could not be found.",
+    "alreadyRedeemed": "You have already redeemed a referral code.",
+    "noActiveProgram": "This brand is not running a referral program right now.",
+    "notEligible": "This code cannot be redeemed on this account.",
+    "noFriendCountNotice": "We don't yet show how many friends have used your code — check back here after they order.",
+    "shareMessage": "Use my referral code {{code}} when you sign up."
   }
 }
