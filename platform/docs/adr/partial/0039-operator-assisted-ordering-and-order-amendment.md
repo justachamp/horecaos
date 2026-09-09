@@ -13,10 +13,41 @@
   `OrderAmendmentAndOutcomeTests`. Three of the ten amendment commands are
   implemented — `SET_KITCHEN_NOTE`, `SET_CALLBACK_REQUESTED` and
   `SET_CASH_TENDERED`, the three `AmendmentCommandType` marks `built`; the other
-  seven, every financial one among them, are declared and refused by name. Not
-  built: operator-assisted order *creation* (`POST /api/v1/operations/orders`) and
-  the customer lookup beside it, so an operator cannot take an order by phone;
-  bulk actions (`POST /api/v1/operations/order-bulk-actions`); and the
+  seven, every financial one among them, are declared and refused by name.
+  Operator-assisted order *creation* and the customer lookup beside it are now
+  built (wave 94): `POST .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders`
+  (`OperationsOrderController.place`, capability `ORDER_PLACE` at `LOCATION`
+  scope) reuses `CartService` and `CheckoutService` end to end — the identical
+  path the storefront's own checkout takes — through a new
+  `OperatorOrderingService`, so an operator-placed order differs from a
+  customer's own only in attribution (`created_by_actor_type = 'USER'`).
+  Payment is cash only this wave — the endpoint refuses any other
+  `paymentMethodCode` before writing a row, since a card link sent to the
+  customer is a bigger piece this wave does not build and does not test end to
+  end. `POST .../orders/customer-lookups` (capability `CUSTOMER_READ` at
+  `LOCATION` scope) resolves a phone number through the existing ADR 0015
+  hashed-lookup port (`CustomerPhoneLookup`, the same one ADR 0064's
+  screen-pop already uses), returning a masked name, last-order date and
+  order count per match, never a decrypted contact value; every call writes a
+  `SECURITY`-class ADR 0027 audit fact, matched or not. `LOCATION_STAFF` and
+  `LOCATION_MANAGER` gained both capabilities (mirroring `ORDER_ADVANCE`'s own
+  distribution for `ORDER_PLACE`; `CUSTOMER_READ`, read-only, newly on
+  `LOCATION_STAFF` alone, so a phone-order operator can find a returning
+  customer without holding `CUSTOMER_MANAGE` or `CUSTOMER_PII_REVEAL`).
+  A brand-new customer with no match still goes through the existing
+  `POST .../tenants/{tenantId}/customers` (`CustomerIdentityService
+  #createAccountWithoutPrincipal`, capability `CUSTOMER_MANAGE`, `TENANT`
+  scope, unchanged by this wave) rather than a second creation path; ADR
+  0015's `origin`/`created_by_actor_id` columns this ADR sketched for that
+  account remain not built; today's account is already non-contactable for
+  marketing on the same "absence of a decision is not consent" argument
+  `ConsentService` already relies on. Capturing change-due
+  (`cash_tendered_expected_minor`), a kitchen note or the callback flag *at
+  creation* is not built either — an operator sets those after the order
+  exists, through the ordinary `POST .../amendments` endpoint's
+  `SET_CASH_TENDERED`/`SET_KITCHEN_NOTE`/`SET_CALLBACK_REQUESTED` commands,
+  already built above. Still not built: bulk actions
+  (`POST /api/v1/operations/order-bulk-actions`); and the
   `OrderAmendment*`, `OrderRevisionCreated` and `OrderCallback*` event contracts,
   which exist nowhere in `ordering.api`.
   V0119 (wave 24) adds a platform-curated, code-owned reject-reason reference

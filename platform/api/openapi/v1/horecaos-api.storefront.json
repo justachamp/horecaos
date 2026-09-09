@@ -441,31 +441,6 @@
         },
         "type" : "object"
       },
-      "DestinationRequest" : {
-        "properties" : {
-          "addressId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "deliveryNote" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "recipientName" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "recipientPhone" : {
-            "maxLength" : 32,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "addressId", "recipientName", "recipientPhone" ],
-        "type" : "object"
-      },
       "DestinationResponse" : {
         "properties" : {
           "addressId" : {
@@ -1567,6 +1542,31 @@
         "required" : [ "reasonCode" ],
         "type" : "object"
       },
+      "StorefrontOrderingControllerDestinationRequest" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deliveryNote" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "recipientName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "recipientPhone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "addressId", "recipientName", "recipientPhone" ],
+        "type" : "object"
+      },
       "StorefrontOrderingControllerOrderSummaryResponse" : {
         "properties" : {
           "currency" : {
@@ -2135,7 +2135,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DestinationRequest"
+                "$ref" : "#/components/schemas/StorefrontOrderingControllerDestinationRequest"
               }
             }
           },

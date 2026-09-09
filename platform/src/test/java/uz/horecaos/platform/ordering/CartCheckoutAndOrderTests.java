@@ -126,6 +126,8 @@ import uz.horecaos.platform.tenancy.application.ServiceabilityService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Stage four of the cutover: an order can be taken and approved (ADR 0019).
@@ -169,6 +171,7 @@ class CartCheckoutAndOrderTests {
     private OrderQueryService orderQuery;
     private ReorderPlanService reorderPlans;
     private uz.horecaos.platform.ordering.api.CustomerBotOrderingPort botOrdering;
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService operatorOrdering;
     private OrderInventoryProcess inventoryProcess;
     private OrderPaymentProcess paymentProcess;
     private InventoryService inventory;
@@ -516,6 +519,13 @@ class CartCheckoutAndOrderTests {
         deliveryOrders =
                 new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(jdbc, protection, objectMapper);
 
+        // ADR 0039: the operator order-intake orchestrator over the same real
+        // CartService and CheckoutService every other test in this suite
+        // exercises. The phone lookup beside it (OperatorCustomerLookupService)
+        // has its own, separate collaborators and its own suite,
+        // OperatorOrderingLookupTests, since `place` never reaches them.
+        operatorOrdering = new uz.horecaos.platform.ordering.application.OperatorOrderingService(carts, checkout);
+
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
         seedPublishedModifierRules();
@@ -579,6 +589,129 @@ class CartCheckoutAndOrderTests {
 
         assertThat(moved).isNotNull();
         assertThat(moved.getMessage()).contains("rebuild and reprice");
+    }
+
+    // --------------------------------------------------- operator order intake (ADR 0039)
+
+    /**
+     * "An operator-placed order is the same order, taken by a different hand."
+     * The one property that is genuinely new here, everything else being
+     * {@code CheckoutService} and {@code CartService}'s own already-proven
+     * behaviour: the order records who took the call rather than who it was
+     * for.
+     */
+    @Test
+    @DisplayName("an operator-placed order attributes created_by to the operator, not the customer")
+    void anOperatorPlacedOrderAttributesToTheOperator() {
+        var result = tx(() -> operatorOrdering.place(
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        CUSTOMER,
+                        "STOREFRONT",
+                        FulfillmentMode.PICKUP,
+                        List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                                burgerVariant, 2, List.of(), null)),
+                        null,
+                        "CASH",
+                        "idem-operator-place",
+                        "operator-subject-9",
+                        null)));
+
+        assertThat(result.created()).isTrue();
+        UUID orderId = Objects.requireNonNull(result.orderId());
+
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.createdByActorType()).isEqualTo("USER");
+        assertThat(order.createdByActorId()).isEqualTo("operator-subject-9");
+        // The order still belongs to the customer it was placed for — this is
+        // an attribution difference, never a second order-creation path with
+        // its own idea of whose basket this is.
+        assertThat(order.customerAccountId()).isEqualTo(CUSTOMER);
+    }
+
+    /**
+     * ADR 0039's payment decision for this wave, enforced before a single row
+     * is written: a card link sent to the customer is a bigger piece of work
+     * this wave does not build, so nothing but {@code CASH} is accepted.
+     */
+    @Test
+    @DisplayName("an operator-placed order refuses anything but cash, this release")
+    void anOperatorPlacedOrderRefusesNonCashPayment() {
+        var command = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 1, List.of(), null)),
+                null,
+                "CLICK",
+                "idem-operator-cash-only",
+                "operator-subject-9",
+                null);
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(command)))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+
+        assertThat(cartCount()).as("refused before a cart was ever opened").isZero();
+    }
+
+    /**
+     * A delivery order with no destination, and a non-delivery order that
+     * names one anyway, are both malformed requests rather than states {@link
+     * CartService} should be asked to referee.
+     */
+    @Test
+    @DisplayName("a delivery order needs a destination and a non-delivery order refuses one")
+    void anOperatorPlacedOrderValidatesDestinationAgainstFulfillmentMode() {
+        var missingDestination =
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        CUSTOMER,
+                        "STOREFRONT",
+                        FulfillmentMode.DELIVERY,
+                        List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                                burgerVariant, 1, List.of(), null)),
+                        null,
+                        "CASH",
+                        "idem-operator-no-destination",
+                        "operator-subject-9",
+                        null);
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(missingDestination)))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+
+        var pickupWithDestination =
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        CUSTOMER,
+                        "STOREFRONT",
+                        FulfillmentMode.PICKUP,
+                        List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                                burgerVariant, 1, List.of(), null)),
+                        new uz.horecaos.platform.ordering.application.OperatorOrderingService.Destination(
+                                UUID.randomUUID(), "A Customer", "+998901234567", null),
+                        "CASH",
+                        "idem-operator-unwanted-destination",
+                        "operator-subject-9",
+                        null);
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(pickupWithDestination)))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
     }
 
     // ---------------------------------------------------------------- drafts
