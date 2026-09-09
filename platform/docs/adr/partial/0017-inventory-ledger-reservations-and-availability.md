@@ -335,7 +335,7 @@ released by a runbook rather than deleted.
 - [ ] Build storefront availability and Operations inspection projections. `GET .../inventory/availability` is the Operations read; the storefront menu does not carry availability and there is no ledger-inspection projection.
 - [ ] Publish outbox events and add metrics, alerts, audit, and runbooks. The module references no outbox, records no audit fact and registers no metric.
 - [ ] Build position-versus-ledger reconciliation tooling. Nothing recomputes a position from `inventory.movements`.
-- [ ] Add race, failure, replay, isolation, and production-shaped load tests. There is no test class under `src/test/java/uz/horecaos/platform/inventory` at all.
+- [ ] Add concurrency, failure/replay, and production-shaped load tests. `InventoryReservationAndAvailabilityTests` (470 lines, 7 `@Test` methods) now covers the hold lifecycle — commit, release, TTL-based sweep with a mutable clock — and cross-tenant isolation, closing the "no test class at all" gap this line used to name; a race/concurrency suite and load tests remain unwritten.
 
 ## Exit criteria
 

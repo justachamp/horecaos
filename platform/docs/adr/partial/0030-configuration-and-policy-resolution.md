@@ -1,8 +1,10 @@
 # ADR 0030: Configuration and policy resolution
 
 - Decision status: Accepted
-- Implementation status: Built — an operator can set both a configuration value and a
-  policy from the control plane today, and both resolve correctly on the very next call.
+- Implementation status: Partial — an operator can set a policy from the control plane
+  today (Operations' Settings > Order Policy screen), and it resolves correctly on the
+  very next call; a configuration value has a real writer with nothing operator-facing
+  in front of it yet (see "Not built" below).
   V0005 creates `tenant.configuration_values`, `tenant.policies` and `tenant.policy_current`
   with ancestry constraints; `ConfigurationKeys` plus the module key registries
   (`CommercialConfigurationKeys`, `TelemetryConfigurationKeys`, `CustomerConfigurationKeys`)
@@ -29,7 +31,13 @@
   `Capability.PLATFORM_ADMIN`, refusing an unregistered key, a scope the key does not declare
   settable, or a value whose shape does not match the key's declared type, with an ADR 0031
   expected-version conflict (`STALE_VERSION`) and an ADR 0027 audit fact recording the actor,
-  reason, and before/after value on every write. Unlike a policy, a value is mutated in place
+  reason, and before/after value on every write. Not built: nothing calls that endpoint from
+  a screen — `control-plane`'s `ConfigurationApi` (`frontend/control-plane/src/app/features/
+  platform-config/configuration-api.ts`) implements only `listKeys` (`GET .../keys`) and
+  `resolve` (`GET .../keys/{code}/resolution`), and no other frontend app references the path
+  either, so today an operator can read a configuration value's resolution but can only set
+  one with a raw HTTP call, never a click; the policy half has no such gap.
+  Unlike a policy, a value is mutated in place
   under its own `version` column rather than append-only versioned — this ADR's own Decision
   draws that line ("only policies are snapshotted onto business facts") — so it uses ordinary
   optimistic locking rather than `PolicyAuthor`'s never-touch-an-old-version discipline.

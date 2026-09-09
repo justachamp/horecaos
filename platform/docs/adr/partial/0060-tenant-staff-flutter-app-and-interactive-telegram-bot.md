@@ -207,11 +207,11 @@ remains the constant.
 
 ## Implementation checklist
 
-- [ ] Staff Telegram identity link (one-time-code handshake, per-tenant links, revocation follows the grant)
-- [ ] `BotCallbackAuthorizer`: token indirection (≤64-byte opaque callback data → server-side action record), live-grant `require`, ADR 0027 audit with bot actor
-- [ ] Inline-action flow: immediate ack, edit-on-outcome, keyboard stripped on first decision, lost-race answer with settling actor
-- [ ] Stop-list toggle and stats query commands in the bot (tenant disambiguation for multi-link principals)
-- [ ] Audit the stop-list toggle on every channel (wire catalog authoring into the audit recorder — pre-existing gap, closed here)
+- [x] Staff Telegram identity link (one-time-code handshake, per-tenant links, revocation follows the grant)
+- [x] `BotCallbackAuthorizer`: token indirection (≤64-byte opaque callback data → server-side action record), live-grant `require`, ADR 0027 audit with bot actor
+- [x] Inline-action flow: immediate ack, edit-on-outcome, keyboard stripped on first decision, lost-race answer with settling actor
+- [x] Stop-list toggle and stats query commands in the bot (tenant disambiguation for multi-link principals)
+- [x] Audit the stop-list toggle on every channel (wire catalog authoring into the audit recorder — pre-existing gap, closed here)
 - [ ] Staff Flutter app shell + auth + the acceptance/fulfilment loop
 - [ ] Kitchen ticket views (to ADR 0041's built depth)
 - [ ] Stop-list screen; stats screens (gated on ADR 0043's day-close caller)

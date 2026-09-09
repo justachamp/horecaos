@@ -17,12 +17,15 @@
   single-order lookups rather than enumerations, which is why this ships anyway
   and says so; no sweeper trims `suspended_read_log` beyond the window; and
   nothing yet tells a suspended tenant's user *why* an action vanished (see
-  Consequences). Closed 2026-09-08: the transition this whole record narrows
-  access around is now itself reachable from an operator's screen rather than
-  only from code — `POST /api/v1/control-plane/tenants/{tenantId}/suspend` and
+  Consequences). Partly closed 2026-09-08: the transition this whole record
+  narrows access around is now reachable over HTTP rather than only from
+  code — `POST /api/v1/control-plane/tenants/{tenantId}/suspend` and
   `.../reactivate` exist on `TenantControlPlaneController`, platform-admin
   `TENANT_WRITE` at `PLATFORM` scope with the same `Idempotency-Key` replay
-  protection every mutating sibling on that controller carries. Suspension also
+  protection every mutating sibling on that controller carries — but not yet
+  from an operator's screen: nothing under `frontend/control-plane/src` calls
+  either endpoint, so a platform admin still has to suspend or reactivate a
+  tenant with a direct HTTP call, not a click. Suspension also
   now reconciles the tenant's Keycloak organization to disabled (ADR 0009's own
   gap, closed the same day) — a status flag an operator reading Keycloak can
   read, never this record's enforcement, which stays exactly where the table

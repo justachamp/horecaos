@@ -67,11 +67,11 @@ record, not a quiet re-enable.
 
 ## Implementation checklist
 
-- [ ] Confidential direct-grant client in the realm (file + live), secret via ADR 0028 reference
-- [ ] `POST /api/v1/auth/staff/sessions` + refresh + logout, Problem Details errors, ADR 0033 rate limits, uniform failure wording
-- [ ] Control-plane and operations login pages, session bootstrap replacing the redirect handling, token refresh wiring
-- [ ] Retire the public redirect clients from the realm; remove callback code paths
-- [ ] Tests: happy path against the realm, wrong password (uniform), locked account, required-action surfacing, rate-limit refusal; frontend suites for both apps
+- [x] Confidential direct-grant client in the realm (file + live), secret via ADR 0028 reference
+- [x] `POST /api/v1/auth/staff/sessions` + refresh + logout, Problem Details errors, ADR 0033 rate limits, uniform failure wording
+- [x] Control-plane and operations login pages, session bootstrap replacing the redirect handling, token refresh wiring
+- [x] Retire the public redirect clients from the realm; remove callback code paths
+- [x] Tests: happy path against the realm, wrong password (uniform), locked account, required-action surfacing, rate-limit refusal; frontend suites for both apps
 
 ## Exit criteria
 

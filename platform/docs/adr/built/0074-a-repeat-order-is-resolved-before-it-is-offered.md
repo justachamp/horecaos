@@ -1,7 +1,17 @@
 # ADR 0074: A repeat order is resolved against the live menu before the button is offered
 
 - Decision status: Accepted
-- Implementation status: Partial
+- Implementation status: Built — `ReorderPlanService` resolves a repeat
+  against the live menu (`GET .../orders/{orderId}/reorder`) and every
+  customer-facing channel now offers it from that plan: both first-party
+  storefronts (`frontend/storefront-milliy`'s original wiring, and
+  `frontend/storefront`'s `order-detail.component.ts`, whose `canRepeat`/
+  `repeat()` gate on the plan's verdict), and ADR 0075's Telegram customer
+  bot, whose `CustomerBotOrderingAdapter` calls the same
+  `ReorderPlanService` behind its own `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED`
+  entitlement gate. Not built, out of this record's own scope:
+  `StorefrontCatalogQuery.menuFor` does not yet consult the 86 list for
+  ordinary menu browsing — a separate future change, not a repeat-order gap.
 - Date proposed: 2026-09-06
 - Date decided: 2026-09-06
 - Deciders: Ayubkhon Abbosov (platform owner)
@@ -256,8 +266,8 @@ the button, which is the safe direction.
 - [x] `productId`, `variantId`, `modifierOptionIds` on `OrderLineResponse`
 - [x] OpenAPI baselines regenerated, new path in the `storefront` group
 - [x] `frontend/storefront-milliy` repeats from the plan and gates the button
-- [ ] `frontend/storefront` repeats from the plan (it has no repeat today)
-- [ ] Telegram bot inline repeat — waits on the bot ADR's round-trip decision
+- [x] `frontend/storefront` repeats from the plan too, via `order-detail.component.ts`'s `reorderPlan`/`canRepeat`/`repeat()`
+- [x] Telegram bot inline repeat — `CustomerBotOrderingAdapter` calls `ReorderPlanService`, gated behind `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED`
 - [ ] `StorefrontCatalogQuery.menuFor` reads the 86 list too. Out of scope
       here — this record makes the repeat button correct, and leaves the menu
       itself showing a sold-out dish as orderable until checkout refuses it.

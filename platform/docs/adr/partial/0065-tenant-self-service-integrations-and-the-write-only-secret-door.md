@@ -14,13 +14,20 @@
   the adapter's declaration; the **operations** app's Settings > Integrations section (wave 26 moved these screens out of control-plane, as this record's own Decision section directs; the control-plane copy is gone) lists,
   connects, and rotates with masked display and last-rotated (V0120);
   `docs/runbooks/connect-click-payme-sandbox.md` walks the screens
-  end to end. Not built: brand/legal-entity/installation picker UI (manual id
-  entry today), an installation archive action (the status enum's RETIRED has
-  no transition anywhere), a binding step inside the connect drawer. Not
-  proven: the real Click/Payme sandbox round trip — the runbook is written
-  and marked never-executed, awaiting the owner's credentials. A recorded
-  tension: the merchant-bindings API sits on the operations OpenAPI surface
-  while its screen lives in control-plane (flagged in code, not resolved).
+  end to end. Wave 66 closed three gaps this line used to name: the picker
+  UI (`register-merchant-binding-panel.ts`'s three cascading brand/
+  legal-entity/installation selects, replacing manual id entry), a bind step
+  inside the connect drawer (`connect-provider-panel.ts`), and the recorded
+  tension itself — `OperationsProviderInstallationController` now
+  re-publishes every wave-25 endpoint under the `operations` surface, so the
+  screen and its API agree. Not built: an installation archive action (the
+  status enum's `RETIRED` has no transition anywhere); a general
+  tenant-facing installation-config write path — `POST
+  .../{installationId}/settings` writes one Clopos-specific key
+  (`clopos.requireClerkApproval`, ADR 0011) but nothing else, and has no
+  `frontend/operations` caller of its own yet either. Not proven: the real
+  Click/Payme sandbox round trip — the runbook is written and marked
+  never-executed, awaiting the owner's credentials.
 - Date proposed: 2026-09-02
 - Date decided: 2026-09-02
 - Deciders: platform owner (directed tenant self-service for integrations and

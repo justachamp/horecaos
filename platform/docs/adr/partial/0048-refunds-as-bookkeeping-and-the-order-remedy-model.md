@@ -17,11 +17,17 @@
   `OperationsRemedyController` exposes four mutations and three reads at
   `/api/v1/operations/tenants/{tenantId}/…` under `refund.request`,
   `refund.execute` and `payment.read`; and `RefundAndRemedyTests` covers the
-  invariants in twenty-two tests against PostgreSQL. **Four things stand between
-  this and an operator.** `OrderSettlementService.plan` still has no production
-  caller, so `payments.order_settlements` is never written and every money remedy
-  fails at `require` with "The order has no settlement" — the refund endpoint
-  cannot succeed against a real order today. No `DeliveryFeeBasisPort`
+  invariants in twenty-two tests against PostgreSQL. **The blocker this line
+  used to name is closed**: `payments.settlement.CheckoutSettlementPlanner
+  implements OrderSettlementPort`, and its `planSettlement` calls
+  `OrderSettlementService.plan` from step 8 of production checkout
+  (`CheckoutSettlementStep`, the same wiring ADR 0046 relies on) — so
+  `payments.order_settlements` is written for every real order and a refund
+  can be recorded against one, proven end to end by
+  `CartCheckoutAndOrderTests.anOrderPlacedTheRealWayCanBeRefunded`, which
+  places an order through real checkout and asserts the refund reaches
+  `TenderStatus.REVERSED`. **Three things still stand between this and an
+  operator.** No `DeliveryFeeBasisPort`
   implementation is wired, so `DeliveryFeeBasisConfiguration` supplies the
   stand-in that answers empty and every reimbursement records a null
   `delivery_fee_basis_minor`. Nothing calls `RemedyEntitlementPort` outside
@@ -465,7 +471,7 @@ settlement import calls the existing `recordVerification`.
 - [x] Expose the three remedies, the manual verification, the unverified worklist and the totals report under `refund.request`, `refund.execute` and `payment.read` (`OperationsRemedyController`).
 - [x] Raise ADR 0027 facts for every record, grant and verification, with no PII in the change map.
 - [x] Cover the invariants against PostgreSQL (`RefundAndRemedyTests`, twenty-two tests).
-- [ ] Give `OrderSettlementService.plan` a production caller, so an order has a settlement and a refund can be recorded against a real order at all. **This is the blocker**: today every money remedy fails at `require` with "The order has no settlement".
+- [x] Give `OrderSettlementService.plan` a production caller, so an order has a settlement and a refund can be recorded against a real order at all. Closed by `CheckoutSettlementPlanner.planSettlement`, step 8 of checkout — see Implementation status.
 - [ ] Wire a real `DeliveryFeeBasisPort` from ordering, so a reimbursement is bounded by the fee actually charged and stops recording a null basis.
 - [ ] Call `RemedyEntitlementPort` from ADR 0018 pricing — `available` at quote, `redeem` at placement — so a granted future discount can be spent.
 - [ ] Schedule `RemedyEntitlementService.expireLapsed`, so `status` stops drifting past `expires_at`.

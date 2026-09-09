@@ -1,10 +1,17 @@
 # ADR 0072: Promo codes as a coupon-gated pricing input
 
 - Decision status: Accepted
-- Implementation status: Partial — the model, the pricing integration, the
-  storefront apply/remove endpoints, the atomic redemption, and Operations
-  authoring exist. See the implementation checklist for what each covers and
-  what remains.
+- Implementation status: Built — the model, the pricing integration, the
+  atomic redemption, and Operations authoring (Marketing > Promo codes) all
+  exist, and a customer can apply and remove a code end to end today:
+  `frontend/storefront-milliy`'s `CartService.applyPromoCode`/
+  `removePromoCode` call `POST`/`DELETE .../carts/{cartId}/promo-code`, and
+  its checkout screen shows per-error-code messages (`CODE_NOT_FOUND`,
+  `CODE_EXPIRED`, `REDEMPTION_LIMIT_REACHED`, ...). `frontend/storefront` —
+  the original app, whose `ui-cart.service.ts` comment motivated this
+  record — still hardcodes `promo_code: null` and has no promo-code UI of
+  its own. See the implementation checklist for what each covers and what
+  remains (all deliberately out of this record's scope, per Open inputs).
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance
@@ -521,7 +528,8 @@ quote acceptance changes shape if promo codes are switched off.
 - [x] `PromoCodeRedemptionPort` / `JdbcPromoCodeRedemptionAdapter`: the atomic
       reserve, wired into `CheckoutReservationStep` beside the inventory hold.
 - [x] Storefront `POST`/`DELETE .../carts/{cartId}/promo-code`,
-      `CartService.applyPromoCode`/`removePromoCode`.
+      `CartService.applyPromoCode`/`removePromoCode` — `frontend/storefront-milliy`
+      only; the original `frontend/storefront` has no promo-code UI yet.
 - [x] Concurrency test proving exactly one winner for the last redemption of
       a single-use code under two concurrent checkouts.
 - [x] Operations authoring screen (Marketing → Promo codes), i18n, component

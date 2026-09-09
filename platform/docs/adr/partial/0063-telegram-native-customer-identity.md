@@ -105,7 +105,7 @@ phone number should arrive through Telegram rather than an SMS bill.
 
 - [x] Gateway client + ADR 0028 secret reference + `FakeTelegramGateway`; delivery-policy seam in the challenge send path with SMS fallback; attempt-row cost recording. The seam's order is now an ADR 0030 value (`customers.otp_delivery_channel_order`) rather than hardcoded.
 - [x] AUTH-kind pending codes (single-use, expiring); bot `request_contact` exchange with own-contact and pattern checks; account resolve-or-create with `TELEGRAM_CONTACT`-sourced verified phone; ADR 0051 session issuance against the code — `TelegramAuthSignInIntegrationTest`, 7/7 green in this same `mvn verify` run
-- [ ] Storefront "Continue with Telegram" on the sign-in screen, deep link + status polling, error states (expired, refused, pattern mismatch)
+- [x] Storefront "Continue with Telegram" on the sign-in screen, deep link + status polling, error states (expired, refused, pattern mismatch) — `auth-login.component.ts`'s `continueWithTelegram()`, built the same wave as this record and never reconciled with this box until now
 - [x] Config: allowed-phone pattern configurable (ADR 0030, `customers.telegram_auth_phone_pattern`, platform/tenant/brand).
 - [x] Gateway usable platform-wide once its token exists: `isConfigured()` is the only gate, is read fresh on every send, and nothing else in the delivery-policy seam or its ADR 0030 channel-order key needs to change when the owner supplies the real ADR 0028 reference.
 - [x] Tests: fake-Gateway delivery + SMS fallback, now including the ADR 0030 channel-order override (SMS-first, and a malformed value falling back to the platform default) in `TelegramGatewayVerificationDeliveryTests`

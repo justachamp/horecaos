@@ -2,18 +2,18 @@
 
 - Decision status: Accepted
 - Implementation status: Built — governance is enforced at build time. `EventCatalog`
-  and `EventContract` refuse a publish without a catalogue entry, and its eighteen
-  contracts are matched one-for-one by eighteen JSON schemas under
-  `src/main/resources/events/`: eight for `tenancy.events` — the five onboarding and
-  lifecycle events (`TenantOnboardingStarted`, `TenantOnboardingStepCompleted`,
-  `TenantOnboardingFailed`, `TenantActivated`, `TenantReady`) joined the original three
-  today — six for `ordering.events`, two for `fulfillment.events`, one for
-  `media.events`, and one for `realtime.signals`. They are held against
-  frozen copies in `src/test/resources/events-baseline`
+  and `EventContract` refuse a publish without a catalogue entry, and its thirty
+  contracts are matched one-for-one by thirty JSON schemas under
+  `src/main/resources/events/` — the counts below undercounted for a while as new
+  domains added their own governed events without this line being refreshed:
+  fifteen for `tenancy.events`, seven for `ordering.events`, one each for
+  `fulfillment.events`, `media.events`, `realtime.signals`, `fulfillment.commands`,
+  `inventory.events`, `pos.commands`, `pricing.events` and `voice.events`. They are
+  held against frozen copies in `src/test/resources/events-baseline`
   by `EventSchemaCompatibilityTests`, with `EventCatalogCompletenessTests`,
   `EventSchemaValidationTests` and `EventPayloadClassificationTests` (which consumes ADR
   0029's `ClassificationScanner` rather than the interim name heuristic alone).
-  `KafkaTopicCatalog` and `KafkaTopicConfiguration` declare and provision the six current
+  `KafkaTopicCatalog` and `KafkaTopicConfiguration` declare and provision the ten current
   topics with explicit partitions, replication factor, retention and `delete` cleanup;
   `KafkaTopicCatalogTests` ensures no published topic escapes that list, and
   `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"` is set in `compose.production.yaml`.

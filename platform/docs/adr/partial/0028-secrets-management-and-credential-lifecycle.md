@@ -8,11 +8,19 @@
   environment resolver outside local. `SecretCategory` names the eight categories.
   OpenBao runs in both `compose.yaml` (dev mode, seeded) and `compose.production.yaml`
   (sealed, raft, agent-delivered AppRole token), with least-privilege policies in
-  `infra/openbao/policies/horecaos-platform.hcl` and `horecaos-deploy.hcl`. Not built: creation,
-  rotation and revocation APIs — nothing writes a secret, so every rotation is a manual
-  `bao kv put`; no audit device is enabled and no raft-snapshot backup job exists on the
-  colocated host, only a note in `docs/runbooks/restore.md`; rotation periods and expiry
-  alerting are undefined; and there are no per-category rotation or compromise runbooks.
+  `infra/openbao/policies/horecaos-platform.hcl` and `horecaos-deploy.hcl`. Provider and
+  merchant-binding secret creation and rotation are built and operator-reachable:
+  `SecretIngressController` (ADR 0065's write-only door, mirrored tenant-side as
+  `OperationsSecretIngressController`) and `MerchantBindingController`'s
+  `POST .../{bindingId}/secret-rotations` are both called from `frontend/operations`'s
+  Settings > Integrations screen — the connect flow and `RotateSecretDialog` in
+  `integrations-page.ts` — not only from a generated client nobody imports. Not built:
+  revocation of any secret — no such endpoint exists on either controller; every secret
+  outside a provider installation or merchant binding (the database, Keycloak admin, and
+  the rest of core platform config) is still a manual `bao kv put`; no audit device is
+  enabled and no raft-snapshot backup job exists on the colocated host, only a note in
+  `docs/runbooks/restore.md`; rotation periods and expiry alerting are undefined; and
+  there are no per-category rotation or compromise runbooks.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
