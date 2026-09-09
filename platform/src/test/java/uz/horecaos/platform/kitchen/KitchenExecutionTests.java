@@ -530,6 +530,90 @@ class KitchenExecutionTests {
     }
 
     @Test
+    @DisplayName("a station over its ceiling pulls release_at earlier, never later")
+    void aStationOverItsCeilingPullsReleaseEarlier() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        // The grill's ceiling for the hour the promise falls in: five plates.
+        // The window covers 20:00-21:00 Tuesday, and the promise below is
+        // 21:00 minus a twenty-minute travel component, landing its target at
+        // 20:40 — inside the window.
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT,
+                BRAND,
+                branch,
+                grillStation,
+                java.time.DayOfWeek.TUESDAY.getValue(),
+                LocalTime.of(20, 0),
+                LocalTime.of(21, 0),
+                5));
+
+        Instant promisedAt = NOON.plus(Duration.ofHours(9));
+
+        // Three plates already committed to the window by a first ticket. Its
+        // own release needed no shift: nothing was committed yet when it was
+        // opened, so three portions against a ceiling of five left room.
+        UUID first = seedConfirmedOrder("A-046", promisedAt, 25, 20, burger, burger, burger);
+        TicketRow firstTicket = tickets.open(TENANT, first, ReleaseMode.AUTO_ON_CONFIRM);
+        assertThat(firstTicket.releaseAt()).isEqualTo(promisedAt.minus(Duration.ofMinutes(45)));
+
+        // A second ticket for three more plates at the same station and the
+        // same window. 3 + 3 = 6 against a ceiling of 5 is one plate of
+        // overage; at five plates an hour (one every 720 seconds) that is
+        // exactly twelve minutes of extra lead, pulled off the plain
+        // target_ready_at - prep_estimate baseline this ADR already computes.
+        UUID second = seedConfirmedOrder("A-047", promisedAt, 25, 20, burger, burger, burger);
+        TicketRow secondTicket = tickets.open(TENANT, second, ReleaseMode.AUTO_ON_CONFIRM);
+
+        assertThat(secondTicket.releaseMode()).isEqualTo(ReleaseMode.SCHEDULED);
+        assertThat(secondTicket.releaseAt())
+                .as("target_ready_at - prep_estimate (45 minutes before the promise) minus the "
+                        + "ceiling's own twelve-minute shift")
+                .isEqualTo(promisedAt.minus(Duration.ofMinutes(57)));
+        assertThat(store.eventsOf(TENANT, secondTicket.id()))
+                .as("the shift stayed inside what the promise allows, so nothing exceptional happened")
+                .noneMatch(event -> "CAPACITY_CEILING_REACHED".equals(event.trigger()));
+    }
+
+    @Test
+    @DisplayName("a ceiling that cannot be honoured before the promise fires the ticket anyway " + "and records why")
+    void aCeilingThatCannotBeHonouredFiresAnywayAndRecordsWhy() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        // One plate an hour, in the one-hour window the promise below falls
+        // into. Two plates ordered against a ceiling of one is one plate of
+        // overage, which at this rate needs a full hour of extra lead — far
+        // more than the fifty-five minutes standing between "now" (noon) and
+        // this ticket's own target_ready_at - prep_estimate.
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT,
+                BRAND,
+                branch,
+                grillStation,
+                java.time.DayOfWeek.TUESDAY.getValue(),
+                LocalTime.of(12, 30),
+                LocalTime.of(13, 30),
+                1));
+
+        // Promised in an hour, five minutes to cook, no travel: due at the
+        // pass at 13:00, schedulable — with no ceiling at all — as late as
+        // 12:55.
+        Instant promisedAt = NOON.plus(Duration.ofHours(1));
+        UUID orderId = seedConfirmedOrder("A-048", promisedAt, 5, 0, burger, burger);
+
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        assertThat(ticket.status())
+                .as("a ceiling never rejects and never quietly holds a ticket past its promise "
+                        + "to protect its own number (ADR 0041) — it fires")
+                .isEqualTo(TicketStatus.FIRED);
+        assertThat(ticket.releaseMode()).isEqualTo(ReleaseMode.AUTO_ON_CONFIRM);
+        assertThat(store.eventsOf(TENANT, ticket.id()))
+                .as("the ticket went out without the lead time the ceiling wanted, and that is "
+                        + "recorded on the ticket the branch reads")
+                .anyMatch(event -> "CAPACITY_CEILING_REACHED".equals(event.trigger())
+                        && "KITCHEN_CAPACITY_CEILING_REACHED".equals(event.reasonCode()));
+    }
+
+    @Test
     @DisplayName("the scheduler fires a ticket whose instant has passed, once")
     void theSchedulerFiresDueTickets() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
