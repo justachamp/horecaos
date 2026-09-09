@@ -321,7 +321,8 @@ class OrderAmendmentAndOutcomeTests {
                 objectMapper,
                 clock,
                 new JdbcPosExportStatus(jdbc),
-                published);
+                published,
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
@@ -962,6 +963,22 @@ class OrderAmendmentAndOutcomeTests {
                 .hasSize(1);
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().cashTenderedExpectedMinor())
                 .isNull();
+
+        // The assertions above hold whether or not the expiry was ever recorded --
+        // they are about the order, and an expired amendment touches it either way.
+        // These two are about the amendment itself, which is what apply() settles
+        // and then refuses; settling it inside apply()'s own transaction and
+        // throwing from there undid the settlement every time.
+        assertThat(amendmentStore
+                        .find(TENANT, proposed.amendment().id())
+                        .orElseThrow()
+                        .status())
+                .as("the expiry apply() recorded has to outlive the refusal it accompanies")
+                .isEqualTo(AmendmentStatus.REJECTED);
+        assertThat(amendmentStore.findOpen(TENANT, orderId))
+                .as("and the one-open-amendment index has to be released, or no operator can "
+                        + "propose another change to this order ever again")
+                .isEmpty();
     }
 
     @Test

@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -145,6 +147,9 @@ class KitchenExecutionTests {
     @BeforeEach
     void setUp() {
         DataSource dataSource = db.dataSource();
+        // recall's refusal records through its own REQUIRES_NEW transaction, so the
+        // service needs a real manager here rather than a stand-in.
+        TransactionTemplate unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("TRUNCATE TABLE kitchen.ticket_events, kitchen.ticket_items, kitchen.tickets, "
@@ -166,7 +171,8 @@ class KitchenExecutionTests {
         proposals = new RecordingOrderProgressPort();
         audit = new RecordingAuditRecorder();
         stationService = new KitchenStationService(store, clock);
-        tickets = new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock);
+        tickets =
+                new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock, unitOfWork);
 
         ObjectMapper objectMapper = JsonMapper.builder().build();
         orderStore = new JdbcOrderStore(jdbc);
@@ -191,7 +197,12 @@ class KitchenExecutionTests {
                 event -> {},
                 clock);
         wiredTickets = new KitchenTicketService(
-                store, new JdbcKitchenOrderSource(jdbc), new OrderProgressAdapter(orderState), audit, clock);
+                store,
+                new JdbcKitchenOrderSource(jdbc),
+                new OrderProgressAdapter(orderState),
+                audit,
+                clock,
+                unitOfWork);
 
         seedTenancy();
         seedCatalogue();
@@ -635,7 +646,8 @@ class KitchenExecutionTests {
                 audit,
                 // This order was seeded with a promise, so the ticket has a computed
                 // release time.
-                Clock.fixed(Objects.requireNonNull(ticket.releaseAt()).plusSeconds(1), ZoneOffset.UTC));
+                Clock.fixed(Objects.requireNonNull(ticket.releaseAt()).plusSeconds(1), ZoneOffset.UTC),
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())));
 
         assertThat(later.releaseDue(50)).isEqualTo(1);
         assertThat(later.releaseDue(50))
@@ -741,6 +753,41 @@ class KitchenExecutionTests {
                 .as("the composite key binds a ticket item's station to its ticket's branch, so "
                         + "no application bug can put one branch's dish on another's screen")
                 .isNotNull();
+    }
+
+    @Test
+    @DisplayName("a recall after hand-over keeps the attempt even though it is refused")
+    void aRefusedRecallAfterHandoverIsStillRecorded() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-053", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+        tickets.start(TENANT, item.id(), "cook", null);
+        tickets.ready(TENANT, item.id(), "cook", null);
+        assertThat(tickets.handOver(TENANT, ticket.id(), "expo", null)).isPresent();
+
+        // Held by the caller, exactly as Spring's proxy holds it in production. The
+        // service's own @Transactional is inert in this hand-wired fixture, so
+        // calling recall bare would commit the record either way and prove nothing
+        // about the rollback this test exists for.
+        TransactionTemplate caller = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        Throwable refusal = catchThrowable(() ->
+                caller.executeWithoutResult(ignored -> tickets.recall(TENANT, item.id(), "WRONG_DISH", "cook", null)));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM kitchen.ticket_events
+                        WHERE tenant_id = :tenant AND ticket_item_id = :item
+                          AND reason_code = 'KITCHEN_RECALL_AFTER_READY'
+                        """)
+                        .param("tenant", TENANT)
+                        .param("item", item.id())
+                        .query(Long.class)
+                        .single())
+                .as("ADR 0041 wants this attempt kept -- somebody tried to recall food that had "
+                        + "already left. Recording it and then throwing from inside the same "
+                        + "transaction rolled the record back and kept nothing")
+                .isEqualTo(1L);
     }
 
     @Test
