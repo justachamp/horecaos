@@ -37,6 +37,9 @@ public final class KafkaTopicCatalog {
     public static final String INVENTORY_EVENTS = "inventory.events";
     public static final String PRICING_EVENTS = "pricing.events";
 
+    /** ADR 0012's durable scheduler command. Durable state lives in PostgreSQL; Kafka only has to survive a restart. */
+    public static final String POS_COMMANDS = "pos.commands";
+
     private static final Map<String, TopicSpecification> TOPICS = index(List.of(
             // The production topology has one broker (ADR 0034), so replication
             // factor one is explicit rather than an accidental broker default.
@@ -60,7 +63,12 @@ public final class KafkaTopicCatalog {
             // handful of times a day at most — the same cardinality tenancy's
             // control-plane creations have, so this shares tenancy's partition
             // count rather than a per-order topic's.
-            new TopicSpecification(PRICING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION)));
+            new TopicSpecification(PRICING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0012. One schedule row per binding and a pilot's binding count
+            // is small, so this shares fulfillment.commands' shape rather than
+            // ordering's: a command topic, not a fact topic, and durable state
+            // lives in pos_sync_schedules/pos_sync_runs, not here.
+            new TopicSpecification(POS_COMMANDS, 3, (short) 1, COMMAND_RETENTION)));
 
     private KafkaTopicCatalog() {}
 

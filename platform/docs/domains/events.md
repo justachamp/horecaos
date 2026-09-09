@@ -48,6 +48,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
+| `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
 Business-fact retention is the seven-day operational replay window. Commands
 are durable in PostgreSQL and need only outlive a consumer restart. Realtime
@@ -349,6 +350,41 @@ quote creation/acceptance are high-volume per-request facts whose payload
 shape and retention deserve their own decision rather than riding along with
 a once-a-day control-plane activation — the same restraint `inventory.events`
 states for its own six unpublished siblings.
+
+## `pos.commands`
+
+- Producing module: `pos`
+- Retention class: **command** — short lived, because PostgreSQL and not Kafka is
+  the durable timer (ADR 0012 is explicit: "Kafka carries the resulting command;
+  a topic is not a clock, and a retained message is not a schedule")
+- Classification: `INTERNAL` — identifiers only, never a provider credential,
+  menu content, or customer data
+- Key: `bindingId`, so at most one `PosSyncRequested` for a binding is ever in
+  flight — the ADR 0004 outbox refuses a new candidate on a partition key that
+  already has an earlier `PENDING`/`PUBLISHING`/`DEAD_LETTER` row, which means a
+  dead-lettered sync command blocks a second one for the same binding rather
+  than piling up behind it
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `PosSyncRequested` | 1 | `bindingId` | [`PosSyncRequested.v1`](../../src/main/resources/events/pos.commands/PosSyncRequested.v1.schema.json) | `requestId`, `tenantId`, `bindingId`, `scheduleId`, `resumedRunId`, `triggerType`, `requestedAt` |
+
+The durable scheduler (`PosSyncScheduler`) polls `integration.pos_sync_schedules`
+under `FOR UPDATE SKIP LOCKED`. Claiming a due row and advancing its
+`next_run_at` past "due" happen in the same PostgreSQL transaction as appending
+this command to the outbox, so two replicas polling at once can claim the same
+row only one at a time, and whichever loses simply finds nothing due. The inbox
+handler (`pos`'s `PosSyncRequestedHandler`) then calls
+`PosCatalogSyncService.run` — the ADR 0005 inbox's `(consumer_name, event_id)`
+key is what makes a Kafka redelivery of the same command safe, on top of the
+scheduler's own at-most-once claim.
+
+`triggerType RESUMED` is the other producer: `POST .../pos-sync-runs/{runId}/resume`
+publishes the same command when a run failed before `REVIEW_REQUIRED`, carrying
+`resumedRunId` so the new run's evidence says what it continues. The first POS
+provider offers no incremental read, so this is a fresh full fetch rather than a
+resume from a mid-page checkpoint — an honest limitation of the provider, not of
+this design; see ADR 0012's own note on `source_cursor`.
 
 ## Delivery and ordering guarantees
 

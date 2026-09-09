@@ -28,6 +28,7 @@ import uz.horecaos.platform.pos.domain.SyncDifference.EntityType;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosSyncStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosTargetCatalog;
+import uz.horecaos.platform.pos.infrastructure.storage.PosRawSnapshotWriter;
 
 /**
  * Runs one catalog import, from provider read to reviewable report (ADR 0012).
@@ -62,6 +63,7 @@ public class PosCatalogSyncService {
     private final JdbcPosBindingConfiguration configuration;
     private final JdbcPosSyncStore runs;
     private final JdbcPosTargetCatalog targets;
+    private final PosRawSnapshotWriter rawSnapshots;
     private final FieldAuthorityPolicy policy;
     private final Clock clock;
 
@@ -71,12 +73,14 @@ public class PosCatalogSyncService {
             JdbcPosBindingConfiguration configuration,
             JdbcPosSyncStore runs,
             JdbcPosTargetCatalog targets,
+            PosRawSnapshotWriter rawSnapshots,
             Clock clock) {
         this.adapters = adapters;
         this.installations = installations;
         this.configuration = configuration;
         this.runs = runs;
         this.targets = targets;
+        this.rawSnapshots = rawSnapshots;
         // ADR 0012 requires the policy to be versioned per tenant and snapshotted
         // on each run. The shipped default is the whole policy today; when the
         // control plane can author one, this becomes a lookup and the run already
@@ -134,6 +138,13 @@ public class PosCatalogSyncService {
 
         runs.markStatus(tenantId, runId, "STAGED", "fetched_at", clock.instant());
         runs.stage(tenantId, runId, snapshot);
+        // Best-effort, off the critical path: see PosRawSnapshotWriter's own
+        // doc on why a storage outage costs future diagnosability and not this
+        // run. Written after staging succeeds so the object and the staged
+        // rows agree on what this run actually read.
+        rawSnapshots
+                .writeSnapshot(tenantId, bindingId, runId, snapshot)
+                .ifPresent(key -> runs.recordRawObjectKey(tenantId, runId, key));
         runs.markStatus(tenantId, runId, "COMPARING", "normalized_at", clock.instant());
 
         TargetCatalog target = targets.read(

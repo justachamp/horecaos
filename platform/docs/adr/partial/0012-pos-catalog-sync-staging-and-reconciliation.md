@@ -5,21 +5,54 @@
   stages a Clopos read (`CloposAdapter`, `CloposCatalogNormalizer`),
   `PosCatalogSyncService.run` walks fetch → stage → absence quorum →
   `DifferenceEngine` under `FieldAuthorityPolicy.INITIAL`, and
-  `PosSyncRunController` exposes the manual dry run and the difference report;
-  not built: the durable scheduler (`integration.pos_sync_schedules` is written
-  by nothing and read by nothing), the `PosSyncRequested` command, review-decision
-  /apply/resume endpoints, S3 raw snapshots (`raw_object_key` is never written),
-  the separate stop-list cadence, and restart/scale/isolation tests. 2026-09-08:
-  `gov_code` is confirmed as an MXIK candidate (Q15,
-  `docs/providers/clopos-api.md` §12) and the staged field is renamed
-  `CatalogSnapshot.Product#mxikCode` accordingly; `FieldAuthorityPolicy` still
-  resolves `product.mxikCode` to `REVIEWED_IMPORT`, unchanged by the answer —
-  a provider confirming what a field means is not this platform deciding to
-  auto-apply its values. `JdbcPosTargetCatalog`'s target-catalog read for that
-  field was also fixed: it had been selecting `catalog.products
+  `PosSyncRunController` exposes the manual dry run, the difference report,
+  review decisions, apply, and resume; still not built: the separate stop-list
+  cadence (`pos_live_availability`, V0190, has a table and no poller) and S3
+  raw-snapshot retention. 2026-09-08: `gov_code` is confirmed as an MXIK
+  candidate (Q15, `docs/providers/clopos-api.md` §12) and the staged field is
+  renamed `CatalogSnapshot.Product#mxikCode` accordingly; `FieldAuthorityPolicy`
+  still resolves `product.mxikCode` to `REVIEWED_IMPORT`, unchanged by the
+  answer — a provider confirming what a field means is not this platform
+  deciding to auto-apply its values. `JdbcPosTargetCatalog`'s target-catalog
+  read for that field was also fixed: it had been selecting `catalog.products
   .tax_category_code`, a column V0028 dropped, and would have thrown against a
   real database; nothing exercised the query until this wave's
-  `JdbcPosTargetCatalogTests` did.
+  `JdbcPosTargetCatalogTests` did. 2026-09-09: the durable scheduler is built —
+  `PosSyncScheduler` polls `integration.pos_sync_schedules` every thirty
+  seconds; `PosSyncSchedulingService.claimAndDispatch` claims one due row under
+  `FOR UPDATE SKIP LOCKED`, advances `next_run_at` (computed in the branch's own
+  IANA zone by the pure `ScheduleCadence.nextOccurrenceAfter`, which is correct
+  across a daylight-saving transition — see its own tests), and appends
+  `PosSyncRequested` to the outbox, all in one transaction, so two replicas
+  racing the same due row settle to one claiming it and one finding nothing due
+  — `PosSyncSchedulingServiceTests` proves this with two threads racing a real
+  row. The inbox handler, `PosSyncRequestedHandler`, now implements
+  `ExternalWorkInboxHandler` rather than the plain form the first draft used: the
+  plain form runs inside the transaction that marks the inbox row processed, and
+  a provider fetch in there would have held a pooled connection for the whole of
+  the catalog read — exactly the failure mode `ExternalCallTransactionBoundaryTests`
+  exists to catch elsewhere in the platform. Review-decision, apply, and resume
+  are wired on `PosSyncRunController`, gated by `POS_SYNC_APPLY` as the ADR
+  always specified; the "apply endpoint is not implemented" rollout position
+  below is superseded by this — see the Rollout section for what replaces it.
+  Resuming a run interrupted mid-apply now genuinely resumes: it executes only
+  the apply items still `PLANNED` and never re-touches one already `APPLIED` —
+  `PosApplyServiceResumeTests` seeds exactly that half-finished state and
+  proves it. Resuming a run interrupted before `REVIEW_REQUIRED` still cannot
+  resume mid-fetch, unchanged from before — see the Exit criteria section.
+  `raw_object_key` is now written: `PosRawSnapshotWriter` bundles every staged
+  entity's own raw payload into one document and stores it through `media`'s
+  already-proven `ObjectStorage` port (the same S3-compatible store, a POS-
+  scoped key prefix, no new client or credential), best-effort — a storage
+  failure is logged and does not fail the run, because the object is diagnostic
+  evidence and not itself part of what makes an import correct. Retention by
+  classification is not built: nothing expires or reclassifies these objects
+  yet. No endpoint creates or edits a schedule row; `JdbcPosScheduleStore
+  .upsert` is the seam a future one would call, and today a schedule is seeded
+  directly. Tenant-isolation tests for the new endpoints are not written beyond
+  the tenant-scoped `WHERE` clauses every store method already carries — see
+  restart/scale, which is proven, versus isolation, which is asserted only by
+  construction here.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; staging and difference engine
@@ -391,11 +424,31 @@ Written (`DifferenceEngineTests`, `CloposCatalogNormalizerTests`):
   guessed — `MODIFIER` appears in the prose field reference and not in the schema
   (Q11), and guessing would hide the discrepancy.
 
-Still to write: interrupted-run resume from each checkpoint, large-run pagination
-performance, daily schedule across a timezone change, and target
-optimistic-version staleness (which needs the apply path to exist first). Golden
-fixtures exist for one provider; "all three" is not a claim this ADR can make
-until a second adapter exists.
+Written since (`ScheduleCadenceTests`, `PosSyncSchedulingServiceTests`,
+`PosApplyServiceResumeTests`, `PosSyncOutboxTests`):
+
+- The next occurrence keeps the branch's own wall-clock time across a
+  spring-forward and a fall-back — the UTC gap is twenty-three or twenty-five
+  hours, never a naive twenty-four, and a `LocalTime` inside a spring-forward
+  gap resolves forward rather than being silently unreachable.
+- Two replicas racing the one due schedule row claim it exactly once; the
+  loser's attempt claims nothing and produces no second command.
+- A schedule that is not yet due is never claimed, by either replica.
+- A run interrupted mid-apply resumes exactly the items still `PLANNED` and
+  never re-touches — same status, same `applied_at` — the one already
+  `APPLIED`; resuming an already-completed run refuses rather than re-running
+  anything.
+- `PosSyncRequested` is appended in the caller's own transaction, on the
+  binding's own partition key, and rolls back with a rolled-back business
+  transaction — never a bare publish.
+
+Still to write: large-run pagination performance, target optimistic-version
+staleness under a genuine concurrent edit (the apply path exists now, but
+nothing yet drives two writers at the target row the way
+`PosSyncSchedulingServiceTests` drives two replicas at a schedule), and an
+explicit cross-tenant negative case for the review-decision/apply/resume
+endpoints. Golden fixtures exist for one provider; "all three" is not a claim
+this ADR can make until a second adapter exists.
 
 ## Rollout and rollback
 
@@ -404,14 +457,23 @@ Enable mapping/draft creation, then reviewed operational fields. Do not enable
 automatic authoritative price/content/availability changes. Rollback disables
 schedules/apply while retaining runs, snapshots, mappings, and evidence.
 
-**The apply endpoint is not implemented, and that is the rollout rather than an
-omission.** `POS_SYNC_APPLY` exists as a capability and nothing consumes it. This
-ADR's own rollout says the first months deliver reports rather than automation,
-and an apply endpoint that exists is an apply endpoint somebody will call.
+**2026-09-09: the apply endpoint now exists, on the same capability separation
+this section always argued for.** Until this wave, `POS_SYNC_APPLY` was a
+capability nothing consumed, deliberately, because the first months were meant
+to deliver reports rather than automation. `PosSyncRunController` now exposes
+`POST .../review-decisions`, `POST .../apply`, and `POST .../resume`, each
+gated by `POS_SYNC_APPLY` — a different capability from the `POS_SYNC_EXECUTE`
+that starts a run — so the person who triggered the import is still never, by
+itself, the person authorized to accept what it found. What has not changed is
+the *production* rollout posture this section describes: nothing in this wave
+grants `POS_SYNC_APPLY` to anyone, enables a schedule, or turns on auto-apply
+for a live tenant. The gate that matters — who actually holds the capability —
+is an operational decision for the pilot, not a code change, and rollback is
+unchanged: revoke the grant (or disable the schedule) and every run, snapshot,
+mapping, and piece of evidence already produced stays exactly where it is.
 Running a comparison (`POS_SYNC_EXECUTE`) and accepting what it says
-(`POS_SYNC_APPLY`) are separate capabilities for the same reason: there is no
-safe undo for a menu that was live and wrong during a lunch rush, so the person
-who triggered the import should not be the only person who read the report.
+(`POS_SYNC_APPLY`) remain separate capabilities for the same reason: there is no
+safe undo for a menu that was live and wrong during a lunch rush.
 
 ## Consequences
 
@@ -454,14 +516,30 @@ who triggered the import should not be the only person who read the report.
 - [ ] Approve the versioned field-authority policy and review roles. The shipped
       `FieldAuthorityPolicy.INITIAL` is version 1 and is code; the run already
       records which version it used, so authoring becomes a lookup.
-- [ ] Implement the durable scheduler and the `PosSyncRequested` command. The
-      schedule table exists and nothing reads it yet.
-- [ ] Implement review-decision, apply, and resume APIs. Apply is deliberately
-      last — see the rollout.
-- [ ] Add S3 raw snapshot handling and retention. `raw_object_key` exists and is
-      unwritten; raw payloads currently live in the staging rows' JSONB.
+- [x] Implement the durable scheduler and the `PosSyncRequested` command.
+      `PosSyncScheduler`/`PosSyncSchedulingService` claim a due
+      `pos_sync_schedules` row under `FOR UPDATE SKIP LOCKED`, compute the next
+      occurrence in the branch's own IANA zone (`ScheduleCadence`, correct
+      across a DST transition), and append the command to the outbox, all in
+      one transaction. No management endpoint creates a schedule yet —
+      `JdbcPosScheduleStore.upsert` is the seam, unused by any controller today.
+- [x] Implement review-decision, apply, and resume APIs. No longer deliberately
+      last — see the rollout section for what changed and what did not.
+- [x] Add S3 raw snapshot handling. `PosRawSnapshotWriter` writes
+      `raw_object_key` through `media`'s `ObjectStorage` port, best-effort.
+      Retention by classification is **not** built — nothing expires or
+      reclassifies these objects, and that is still open.
 - [ ] Add the separate stop-list availability feed on its own cadence.
-- [ ] Add restart, scale, and isolation tests.
+      `integration.pos_live_availability` exists (V0190) with nothing that
+      writes to it — the table is built, the poller is not.
+- [x] Add restart and scale tests. `PosSyncSchedulingServiceTests` proves two
+      replicas racing one due schedule claim it at most once;
+      `PosApplyServiceResumeTests` proves a run interrupted mid-apply resumes
+      the unfinished items without re-touching the finished ones. Isolation
+      tests (an explicit cross-tenant negative case for the new endpoints) are
+      still not written — every store method scopes its `WHERE` clause by
+      `tenant_id`, but nothing exercises a second tenant failing to reach the
+      first's run the way, say, `RowLevelSecurityBackstopTests` does elsewhere.
 
 ## Exit criteria
 
@@ -469,11 +547,22 @@ A daily or manual dry run imports one location's POS catalog, produces a
 deterministic reviewed difference report, resumes after failure, and cannot
 silently overwrite Qoida-authoritative content, prices, or availability.
 
-**Three of the four are met.** A manual dry run imports the catalog, the report
-is deterministic, and nothing in the implemented path can write to
-`catalog.*` — not because it declines to, but because no such code exists. Resume
-after failure is not: the run records a checkpoint and a source cursor and
-nothing yet reads them, and a failed run is re-run from the start.
+**Three of the four are fully met, and the fourth is half true.** A manual dry
+run imports the catalog, the report is deterministic, and nothing in the
+implemented path can write to `catalog.*` — not because it declines to, but
+because no such code exists. "Resumes after failure" depends on which failure:
+a run interrupted before `REVIEW_REQUIRED` still cannot resume mid-fetch — the
+run records a checkpoint and a source cursor and nothing reads them, because
+the first provider offers no incremental read to resume with, so
+`PosApplyService.resume` asks for a fresh `PosSyncRequested(RESUMED)` run
+instead of pretending to continue one (see its own class doc for why these are
+two different things). A run interrupted mid-`APPLYING`, by contrast, now
+genuinely resumes: every apply item has a stable idempotency key, so resume
+executes exactly the ones still `PLANNED` and never re-touches one already
+`APPLIED` — `PosApplyServiceResumeTests` proves it. So resume is real for half
+of the run lifecycle and, for the other half, is honestly still "start over,"
+which is safe because a fresh full fetch is what this provider always required
+anyway.
 
 ### Open, and what each one would change
 

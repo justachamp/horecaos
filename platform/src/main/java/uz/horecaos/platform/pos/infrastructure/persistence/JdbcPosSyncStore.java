@@ -138,6 +138,19 @@ public class JdbcPosSyncStore {
                 """).params(parameters).update();
     }
 
+    /** Where {@link uz.horecaos.platform.pos.infrastructure.storage.PosRawSnapshotWriter} put this run's raw evidence, if it could. */
+    public void recordRawObjectKey(UUID tenantId, UUID runId, String rawObjectKey) {
+        jdbc.sql("""
+                UPDATE integration.pos_sync_runs
+                   SET raw_object_key = :rawObjectKey, version = version + 1
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("rawObjectKey", rawObjectKey)
+                .param("tenantId", tenantId)
+                .param("id", runId)
+                .update();
+    }
+
     /**
      * Stages the whole snapshot.
      *

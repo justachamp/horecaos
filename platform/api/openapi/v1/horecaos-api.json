@@ -12698,6 +12698,23 @@
         },
         "type" : "object"
       },
+      "ReviewDecisionRequest" : {
+        "properties" : {
+          "differenceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "enum" : [ "APPROVED", "REJECTED", "DEFERRED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "differenceId", "outcome" ],
+        "type" : "object"
+      },
       "RevisionResponse" : {
         "properties" : {
           "amendmentId" : {
@@ -22342,6 +22359,44 @@
         "tags" : [ "POS catalog synchronization" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/apply" : {
+      "post" : {
+        "description" : "Refused for a dry run and for a run that is not REVIEW_REQUIRED. Plans every auto-applicable and approved difference, then executes what this build can — see PosApplyService for what that is today. An interrupted apply is picked up with resume, not by calling this again.",
+        "operationId" : "applyRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Execute every eligible item an approved run produces",
+        "tags" : [ "POS catalog synchronization" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/differences" : {
       "get" : {
         "description" : "Deterministic: re-running the comparison over the same snapshot produces this list again, in this order.",
@@ -22393,6 +22448,92 @@
           }
         },
         "summary" : "The difference report",
+        "tags" : [ "POS catalog synchronization" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/resume" : {
+      "post" : {
+        "description" : "A run interrupted before REVIEW_REQUIRED cannot resume mid-fetch -- the first provider offers no incremental read -- so this asks for a fresh PosSyncRequested run instead. A run interrupted mid-apply resumes exactly that: executing whatever apply item is still PLANNED, never re-applying one already APPLIED.",
+        "operationId" : "resumeRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Continue whatever this run's own interruption points left behind",
+        "tags" : [ "POS catalog synchronization" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/review-decisions" : {
+      "post" : {
+        "description" : "Only a difference the engine recommended REVIEW accepts a decision. APPROVED means the provider's version becomes HorecaOS's, subject to what apply can actually execute; REJECTED and DEFERRED never do.",
+        "operationId" : "recordReviewDecision",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Decide one difference recommended for review",
         "tags" : [ "POS catalog synchronization" ]
       }
     },

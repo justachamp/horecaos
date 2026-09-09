@@ -112,6 +112,14 @@ class IdempotentResponseClassificationTests {
             "PosOrderExportController#resolve",
             "PosSyncRunController#reconcileCapabilities",
             "PosSyncRunController#start",
+            // Same reasoning, wave 94's three additions: a run id, a difference
+            // id, and per-status item counts, all assembled from identifiers and
+            // enum names the handler already holds. review-decisions' note field
+            // is free text an operator wrote about a menu item, never echoed back
+            // in the response -- the request carries it, the response does not.
+            "PosSyncRunController#recordReviewDecision",
+            "PosSyncRunController#applyRun",
+            "PosSyncRunController#resumeRun",
             // ADR 0058: the short-lived /link handshake code itself. Not
             // customer data — this is what ADR 0029 classifies, and there is no
             // data subject here — but it is a single-use, fifteen-minute
