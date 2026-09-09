@@ -1,0 +1,72 @@
+<header class="head">
+  <h1 class="head__title">{{ 'referral.title' | t }}</h1>
+</header>
+
+@switch (state()) {
+  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('error') {
+    <div class="state">
+      <p>{{ 'referral.loadError' | t }}</p>
+      <button type="button" class="btn" (click)="load()">{{ 'common.retry' | t }}</button>
+    </div>
+  }
+  @case ('ready') {
+    <section class="code-card">
+      <p class="code-card__label">{{ 'referral.yourCode' | t }}</p>
+      <p class="code-card__value">{{ code() }}</p>
+      <p class="code-card__hint">{{ 'referral.shareHint' | t }}</p>
+      <button type="button" class="btn btn--block" (click)="share()">
+        <app-icon name="share" [size]="18" />
+        {{ (shareCopied() ? 'referral.copied' : 'referral.shareAction') | t }}
+      </button>
+    </section>
+
+    @if (redeemedAs(); as redemption) {
+      <section class="status-card">
+        <h2 class="status-card__title">{{ 'referral.redeemedTitle' | t }}</h2>
+        <p class="status-card__status" [class]="'status-card__status--' + redemption.status.toLowerCase()">
+          {{ ('referral.status.' + redemption.status.toLowerCase()) | t }}
+        </p>
+        <p class="status-card__sub">{{ 'referral.redeemedAt' | t: { date: dateLabel(redemption.redeemedAt) } }}</p>
+        @if (redemption.status === 'REWARDED' && redemption.rewardedAt) {
+          <p class="status-card__sub">{{ 'referral.rewardedAt' | t: { date: dateLabel(redemption.rewardedAt) } }}</p>
+        }
+        @if (redemption.status === 'PENDING') {
+          <p class="status-card__sub">{{ 'referral.pendingHint' | t }}</p>
+        }
+        @if (redemption.status === 'EXPIRED') {
+          <p class="status-card__sub">{{ 'referral.expiredHint' | t }}</p>
+        }
+        @if (justRedeemed()) {
+          <p class="thanks">{{ 'referral.redeemThanks' | t }}</p>
+        }
+      </section>
+    } @else {
+      <section class="redeem-card">
+        <h2 class="redeem-card__title">{{ 'referral.redeemTitle' | t }}</h2>
+        <p class="redeem-card__sub">{{ 'referral.redeemSubtitle' | t }}</p>
+        <div class="redeem-form">
+          <input
+            class="field field--grow"
+            [value]="redeemInput()"
+            (input)="redeemInput.set($any($event.target).value)"
+            [placeholder]="'referral.redeemPlaceholder' | t"
+          />
+          <button
+            type="button"
+            class="btn btn--compact"
+            [disabled]="!redeemInput().trim() || redeeming()"
+            (click)="submitRedeem()"
+          >
+            {{ (redeeming() ? 'referral.redeeming' : 'referral.redeemAction') | t }}
+          </button>
+        </div>
+        @if (redeemErrorKey(); as errorKey) {
+          <p class="hint hint--error" role="alert">{{ errorKey | t }}</p>
+        }
+      </section>
+    }
+
+    <p class="not-a-count">{{ 'referral.noFriendCountNotice' | t }}</p>
+  }
+}

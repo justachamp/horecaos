@@ -105,7 +105,10 @@ async function setUp(
   TestBed.configureTestingModule({
     imports: [ProfileComponent],
     providers: [
-      provideRouter([{ path: 'home', component: TestTargetComponent }]),
+      provideRouter([
+        { path: 'home', component: TestTargetComponent },
+        { path: 'referral', component: TestTargetComponent },
+      ]),
       { provide: CustomerProfileService, useValue: profileService },
       { provide: CustomerOtp, useValue: customerOtp },
       { provide: LangService, useValue: { langId: signal('uz') } },
@@ -187,6 +190,18 @@ describe('ProfileComponent -- sign-out and language', () => {
     ru.click();
 
     expect(translate.setLang).toHaveBeenCalledWith('ru');
+  });
+});
+
+describe('ProfileComponent -- referral (ADR 0067)', () => {
+  it('the referral row leads to a real screen, not a promise with nothing behind it', async () => {
+    const { fixture, router } = await setUp();
+    const navigateSpy = vi.spyOn(router, 'navigate');
+
+    (fixture.nativeElement.querySelector('.nav-row') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/referral']);
   });
 });
 
