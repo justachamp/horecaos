@@ -391,7 +391,7 @@ makes rollback cheap and it is worth protecting.
 - [ ] Implement asynchronous export with quotas, audit, and presigned delivery.
 - [ ] Implement ABC, XYZ, and RFM runs, the forecast model, the holiday calendar, and error write-back. (7.8's `demand-history` historical average, wave 48, is a deliberate substitute for the model, not a step toward it — see "What was built".)
 - [ ] Confirm behavioural retention with legal before production.
-- [ ] Schedule the close and the recut. `DayCloseService` is invoked by its caller today; nothing runs it on a timer, so no facts exist in an unattended deployment.
+- [x] Schedule the close and the recut. `DayCloseScheduler` closes each active tenant's business day on a five-minute heartbeat and recuts settled days every fifteen minutes, behind a durable cross-replica claim (`reporting.day_close_claims`, V0102) — see Implementation status.
 
 ## What was built, and the decisions this ADR left open
 
@@ -495,7 +495,8 @@ author as a broken projection.
   `NO_EFFECT`.
 - **`aggregator_commission_som`** is null until ADR 0040. Null is not zero, and
   `revenue.net.v1` does not subtract it.
-- **A schedule.** The close and the recut are services with no timer.
+- ~~**A schedule.** The close and the recut are services with no timer.~~ Closed:
+  `DayCloseScheduler` runs both on a timer — see Implementation status.
 
 ## Exit criteria
 

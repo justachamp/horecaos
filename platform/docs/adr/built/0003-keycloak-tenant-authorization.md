@@ -5,10 +5,15 @@
   `tenant.tenants.keycloak_organization_id`; `JwtCurrentActor` reads the signed
   `organization` claim, keys roles by the immutable organization `id` and
   ignores an entry without one, so an alias can never match a tenant;
-  `TenantAccessPolicy` matches the URL tenant to that claim, treats membership
-  as tenant read context and requires `tenant-owner`/`tenant-admin` from the
-  matching organization's nested roles for writes, never a top-level role;
-  `platform-admin` is the single global `horecaos-api` client role.
+  `TenantAccessPolicy` matches the URL tenant to that claim and treats
+  membership as tenant read context; `platform-admin` is the single global
+  `horecaos-api` client role. A tenant write no longer checks a nested
+  Keycloak organization role at all — commit 87193e5 (2026-08-31, ADR 0025)
+  deleted that check along with the `TENANT_MANAGEMENT_ROLES` constant it
+  read, because Keycloak's Organizations Admin API has no such
+  role sub-resource to check; `TenantAccessPolicy.requireTenantManagement`
+  now resolves purely through `AuthorizationService.require` against the
+  specific ADR 0025 capability the calling controller declares.
   `SecurityConfiguration` validates the JWT against `issuer-uri` and
   `audiences: horecaos-api` from `application.yml`.
   `infra/keycloak/realm/horecaos-realm.json` has `organizationsEnabled` with the

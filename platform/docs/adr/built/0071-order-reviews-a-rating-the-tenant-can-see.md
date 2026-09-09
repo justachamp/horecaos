@@ -1,7 +1,7 @@
 # ADR 0071: Order reviews — a rating attached to the order, read by the tenant, deferred everywhere else
 
 - Decision status: Accepted
-- Implementation status: Partial — V0168 creates `reviews.order_reviews` with
+- Implementation status: Built — V0168 creates `reviews.order_reviews` with
   every constraint this record specifies (the tenant/brand/location foreign
   keys matched to their own unique keys, `UNIQUE (tenant_id, order_id)`, the
   1–5 rating CHECK, no `UPDATE`/`DELETE` grant); `Capability.REVIEW_READ`
@@ -30,15 +30,19 @@
   summary header, and links from each row to its order and its customer. §5.5
   Feedback settings stays the honest not-built stub it already was, now
   pointing at this ADR's own moderation decision instead of a missing entity.
-  **Not built**, all by this ADR's own decision rather than by omission: the
-  storefront submission/read endpoints have no consuming UI — a second
-  storefront application is being scaffolded in a concurrent, separate effort
-  and will consume this contract, per this wave's own instructions, so
-  `CartOrderStatusComponent`'s "no rating backend" comment is now half true —
-  the backend exists and the UI does not yet call it; editing or withdrawing a
-  submitted review; any moderation, hide, or flag action; an ADR 0043 fact or
-  metric entry; and any wiring into §5.2 Customer Detail's own "reviews left"
-  row beyond a corrected doc comment naming where the same data now lives.
+  A customer with a `COMPLETED` order can now rate it end to end:
+  `frontend/storefront-milliy`'s `ReviewsService`/`ProfileComponent` render
+  the 1–5 star picker and comment field, filter to completed-and-unreviewed
+  orders, and call `submit()` against `StorefrontReviewController` — built
+  after the storefront-scaffolding effort this line used to wait on landed,
+  so `CartOrderStatusComponent`'s "no rating backend" comment in the
+  *original* `frontend/storefront` is the part that is still true: that app
+  has no reviews UI of its own yet, only `storefront-milliy` does.
+  **Not built**, all by this ADR's own decision rather than by omission:
+  editing or withdrawing a submitted review; any moderation, hide, or flag
+  action; an ADR 0043 fact or metric entry; and any wiring into §5.2
+  Customer Detail's own "reviews left" row beyond a corrected doc comment
+  naming where the same data now lives.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: platform owner (directed that reviews be built; owns every open

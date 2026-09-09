@@ -38,7 +38,12 @@
   still governs *when* a reward fires; what changed is that *who* may ever
   hold a `PENDING` row is now checked against real order history at the one
   moment that matters, before any row exists, rather than assumed from
-  the row's own state after the fact.
+  the row's own state after the fact. Not built: no customer channel calls
+  `ReferralStorefrontController` — no storefront (`frontend/storefront`,
+  `frontend/storefront-milliy`) or Telegram bot screen lets a customer see
+  their own code or redeem a friend's, so the customer half of this
+  record's own Exit Criteria is not yet reachable even though the endpoint
+  is built and tested.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture; tenant-configurable

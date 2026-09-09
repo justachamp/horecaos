@@ -6,11 +6,17 @@
   `com.fasterxml.uuid:java-uuid-generator` and both tested against every
   property this record's Testing section names.
   `customer.customer_accounts` is wired to the undisclosed-timestamp
-  generator, at both creation paths in `CustomerIdentityService`. Nothing
-  else has moved: `ordering`, `audit`, `integration`, and every other
-  `UUID.randomUUID()` row-identity site named in the Rollout below is
-  unchanged, each remaining its own future change with its own gate, as the
-  Rollout requires. `V0077`'s `DEFAULT gen_random_uuid()` is unchanged —
+  generator, at both creation paths in `CustomerIdentityService`. No
+  module-by-module migration sweep has run, but new code written since has
+  organically adopted `Ids.newId()` for new row identity outside
+  `customer.customer_accounts` too: `integration.outbox.PosSyncOutbox`,
+  three classes in `pos` (`PosApplyService`, `PosSyncSchedulingService`,
+  `JdbcPosScheduleStore`/`JdbcPosApplyStore`), and
+  `tenancy.infrastructure.persistence.JdbcConfigurationValueAuthor` all mint
+  new ids with it. That is organic adoption in new code, not the rollout
+  itself: every `UUID.randomUUID()` row-identity site named in the Rollout
+  below is still unmigrated, each remaining its own future change with its
+  own gate, as the Rollout requires. `V0077`'s `DEFAULT gen_random_uuid()` is unchanged —
   nothing in the application reads that default, and this wave's scope was
   the generator and the PII open input, not the module-by-module rollout.
 - Date proposed: 2026-09-07

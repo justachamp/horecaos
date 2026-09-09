@@ -66,11 +66,15 @@
   payment-session routes in `ordering` and `payments` — those paths no longer
   declare a staff capability. `CustomerVerificationTests`,
   `VerificationChallengeSqlTests` and `CustomerIdentityTests` cover it.
-  **No code can actually be delivered yet**: nothing in the committed tree
-  implements `customers.spi.VerificationCodeTransport`, deliberately rather
-  than by oversight, so `CustomerVerificationService` answers that verification
-  is unavailable and `VerificationTransportGuard` refuses to start any
-  non-local profile until an SMS adapter exists. Also not built:
+  **A code can now actually be delivered**, closing what this line used to
+  call a deliberate gap: `integration.camel.sms.CamelVerificationCodeTransport`
+  is a real, unconditionally-registered `@Component` implementing
+  `customers.spi.VerificationCodeTransport` (built for ADR 0063, delivering via
+  Telegram Gateway with SMS fallback), so `VerificationTransportGuard` no
+  longer refuses to start. The storefront's register/sign-in flow is real and
+  customer-reachable end to end: `customer-otp.ts`'s request/submit/sign-in
+  calls `StorefrontCustomerIdentityController`'s verification-challenge,
+  attempt and session endpoints. Also not built:
   `CustomerController`
   remains entirely staff-scoped (`customer.manage`, `customer.pii.reveal`,
   `customer.read`) and is unchanged by the customer surface above; there is no

@@ -3,7 +3,7 @@
 - **Originator:** surfaced while scoping the storefront against the legacy client, 2026-08-28; the decision is the platform owner's
 - **Date:** 2026-08-28
 - **Status:** Delivered (the cafe half only — see below)
-- **Delivered by:** [ADR 0071](../../docs/adr/partial/0071-order-reviews-a-rating-the-tenant-can-see.md)
+- **Delivered by:** [ADR 0071](../../docs/adr/built/0071-order-reviews-a-rating-the-tenant-can-see.md)
 
 ## The problem
 

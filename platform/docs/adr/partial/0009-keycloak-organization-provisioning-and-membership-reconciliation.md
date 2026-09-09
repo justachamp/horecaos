@@ -129,7 +129,8 @@
   /api/v1/control-plane/tenants/{tenantId}/suspend` and `.../reactivate` also
   now exist on `TenantControlPlaneController` (platform-admin `TENANT_WRITE` at
   `PLATFORM` scope, `Idempotency-Key` required), so a suspension is reachable
-  from an operator's screen and not only from code —
+  over HTTP and not only from code — but not yet from an operator's screen:
+  nothing under `frontend/control-plane/src` calls either endpoint.
   `ControlPlaneWiringIntegrationTests` proves the full round trip live over
   HTTP with no local Keycloak running, specifically because that is the
   condition under which the reconciliation call is expected to fail and the

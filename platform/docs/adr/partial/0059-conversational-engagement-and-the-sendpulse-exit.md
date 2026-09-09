@@ -228,13 +228,13 @@ ADR 0044 with paced delivery and block-rate monitoring.
 
 ## Implementation checklist
 
-- [ ] Conversation/contact-link model and history under the stated PII posture (fields, 12-month default retention) — with ADR 0029's retention/erasure gap and volume sizing named as pre-work
-- [ ] Flow YAML schema (workflow, states, six block types), versioning, and engine
-- [ ] The observed welcome series reproduced as the first flow document
-- [ ] Operator inbox in the operations app, capability-gated per location, ADR 0027-audited
-- [ ] SendPulse contact export → `customers` with consent flags; mid-flow-state caveat in the cutover runbook
+- [x] Conversation/contact-link model and history under the stated PII posture (fields, 12-month default retention) — with ADR 0029's retention/erasure gap and volume sizing named as pre-work
+- [x] Flow YAML schema (workflow, states, six block types), versioning, and engine
+- [x] The observed welcome series reproduced as the first flow document
+- [x] Operator inbox in the operations app, capability-gated per location, ADR 0027-audited
+- [x] SendPulse contact export → `customers` with consent flags; mid-flow-state caveat in the cutover runbook
 - [ ] Webhook cutover runbook (per bot, reversible) ending in BotFather token rotation + secret-reference update
-- [ ] Broadcast path through ADR 0044 + ADR 0020 consent, paced within per-bot throughput, block-rate monitored
+- [x] Broadcast path through ADR 0044 + ADR 0020 consent, paced within per-bot throughput, block-rate monitored
 
 ## Exit criteria
 

@@ -2,10 +2,13 @@
 
 - Decision status: Accepted
 - Implementation status: Partial — the HorecaOS monorepo exists and holds the imported
-  platform tree, the three Angular applications, the Flutter application, and a canonical
-  design-token file; root CI now exists, path-filtered on `platform/**` versus
-  `frontend/**`/`mobile/**` (`.github/workflows/ci.yml`), but the frontend workspace
-  toolchain decision and per-application history preservation do not exist yet.
+  platform tree, four Angular applications (a fourth, `frontend/storefront-milliy`, was
+  scaffolded after this line was last written — a second storefront over the same
+  contract), the Flutter application, and a canonical design-token file; root CI now
+  exists, path-filtered on `platform/**` versus `frontend/**`/`mobile/**`
+  (`.github/workflows/ci.yml`), but the frontend workspace toolchain decision and
+  per-application history preservation do not exist yet — no root `package.json` or
+  workspace config exists anywhere in the repository.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (proposed the monorepo), Claude (assessment and layout)

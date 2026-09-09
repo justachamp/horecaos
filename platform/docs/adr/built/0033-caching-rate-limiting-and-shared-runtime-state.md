@@ -35,11 +35,15 @@
   reads PostgreSQL on every entitlement resolution by design, and says so in its own "What
   was built" section — caching it would contradict a decision already shipped, so the entry
   naming a cache that must not exist is removed rather than left unfulfilled.
-  `InProcessRateLimiter` implements the `RateLimiter` port and has five call sites: QR
-  entry, the partner order API, telemetry ingest, the operations stream, and — as of V0055
-  — `CustomerVerificationService`, which carries the per-caller half of the one-time code
-  limit (six issues and fifteen attempts a minute) while the per-number half is a condition
-  on `customer.verification_challenges`. Edge rate limits are configured: both
+  `InProcessRateLimiter` implements the `RateLimiter` port. It had five call sites when
+  this line was last counted; ADR 0062 (staff sign-in) and ADR 0063 (Telegram sign-in)
+  each added their own since, and it now has ten: QR entry, the partner order API,
+  telemetry ingest, the operations stream, `CustomerVerificationService` (the per-caller
+  half of the one-time code limit — six issues and fifteen attempts a minute — while the
+  per-number half is a condition on `customer.verification_challenges`),
+  `SecretIngressController`, `StorefrontTelegramSignInController`,
+  `CustomerBotActionAuthorizer`, `TelegramUpdateHandler` and `StaffAuthService`.
+  Edge rate limits are configured: both
   `deploy/infra/caddy/Caddyfile` and `platform/infra/production/caddy/Caddyfile` carry
   `rate_limit` zones for the Payme and Click provider callbacks, the storefront browse
   surface, dine-in guest endpoints, the three identity/OTP steps, Telegram sign-in, and
@@ -350,4 +354,4 @@ actually deployed.
 ## References
 
 - [ADR 0023: Production operating model, observability, security, and recovery](../partial/0023-production-operating-model-observability-security-and-recovery.md)
-- [ADR 0030: Configuration and policy resolution](../built/0030-configuration-and-policy-resolution.md)
+- [ADR 0030: Configuration and policy resolution](../partial/0030-configuration-and-policy-resolution.md)
