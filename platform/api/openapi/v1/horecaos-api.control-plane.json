@@ -944,6 +944,42 @@
         },
         "type" : "object"
       },
+      "BusinessTypeRequest" : {
+        "properties" : {
+          "businessType" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "businessType", "reason" ],
+        "type" : "object"
+      },
+      "BusinessTypeView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "handovers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "kitchenDisplay" : {
+            "type" : "boolean"
+          },
+          "tenants" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CandidateView" : {
         "properties" : {
           "correlationEchoed" : {
@@ -1598,6 +1634,34 @@
             "type" : "string"
           },
           "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CountryChangeRequest" : {
+        "properties" : {
+          "countryCode" : {
+            "minLength" : 1,
+            "pattern" : "[A-Z]{2}",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "countryCode", "reason" ],
+        "type" : "object"
+      },
+      "CountryChangeView" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           }
         },
@@ -3093,6 +3157,78 @@
         },
         "type" : "object"
       },
+      "Holiday" : {
+        "properties" : {
+          "countryCode" : {
+            "type" : "string"
+          },
+          "date" : {
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "month" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HolidayAdded" : {
+        "properties" : {
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HolidayRequest" : {
+        "properties" : {
+          "countryCode" : {
+            "minLength" : 1,
+            "pattern" : "[A-Z]{2}",
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "month" : {
+            "format" : "int32",
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "countryCode", "name", "reason" ],
+        "type" : "object"
+      },
       "ImportRequest" : {
         "properties" : {
           "content" : {
@@ -3609,6 +3745,23 @@
             "type" : "string"
           },
           "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MarketView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "defaultCurrency" : {
+            "type" : "string"
+          },
+          "defaultTimezone" : {
+            "type" : "string"
+          },
+          "name" : {
             "type" : "string"
           }
         },
@@ -4812,6 +4965,18 @@
         },
         "type" : "object"
       },
+      "PlatformPendingApprovalResponse" : {
+        "properties" : {
+          "request" : {
+            "$ref" : "#/components/schemas/PendingApprovalResponse"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PolicyCoverageResponse" : {
         "properties" : {
           "actionCode" : {
@@ -5496,6 +5661,12 @@
             },
             "type" : "array"
           },
+          "holidays" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Holiday"
+            },
+            "type" : "array"
+          },
           "locales" : {
             "items" : {
               "$ref" : "#/components/schemas/Locale"
@@ -5564,6 +5735,37 @@
           }
         },
         "required" : [ "code", "legalName", "tin" ],
+        "type" : "object"
+      },
+      "RemoveHolidayRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ResidencyView" : {
+        "properties" : {
+          "hostingCountry" : {
+            "type" : "string"
+          },
+          "markets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MarketView"
+            },
+            "type" : "array"
+          },
+          "tenants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenantProfileView"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "ResolveQuarantineRequest" : {
@@ -6244,6 +6446,37 @@
         },
         "type" : "object"
       },
+      "SlaBucketControllerBucket" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "fromMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "toMinutesExclusive" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SlaBuckets" : {
+        "properties" : {
+          "buckets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SlaBucketControllerBucket"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "SortOrderRequest" : {
         "properties" : {
           "sortOrder" : {
@@ -6750,6 +6983,27 @@
         },
         "type" : "object"
       },
+      "TenantHealth" : {
+        "properties" : {
+          "blockedReceipts" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deadLetters" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "posOrdersAwaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TenantModuleAdded" : {
         "properties" : {
           "tenantModuleId" : {
@@ -6806,6 +7060,55 @@
         },
         "type" : "object"
       },
+      "TenantPlan" : {
+        "properties" : {
+          "planCode" : {
+            "type" : "string"
+          },
+          "planVersionNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TenantProfileView" : {
+        "properties" : {
+          "businessType" : {
+            "type" : "string"
+          },
+          "countryCode" : {
+            "type" : "string"
+          },
+          "defaultCurrency" : {
+            "type" : "string"
+          },
+          "defaultTimezone" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TenantSetting" : {
         "properties" : {
           "tenantId" : {
@@ -6838,6 +7141,12 @@
       },
       "TenantSummaryView" : {
         "properties" : {
+          "businessType" : {
+            "type" : "string"
+          },
+          "countryCode" : {
+            "type" : "string"
+          },
           "createdAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -7396,6 +7705,38 @@
         "tags" : [ "SaaS control plane" ]
       }
     },
+    "/api/v1/control-plane/approval-requests" : {
+      "get" : {
+        "description" : "A change of a tenant's country and a tenant's activation, oldest first. Each is decided through its tenant's own decision route. The maker's reason is not returned, for the same reason as the tenant queue.",
+        "operationId" : "platformPending",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlatformPendingApprovalResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Platform decisions waiting for a second signature, in every tenant",
+        "tags" : [ "Approval requests" ]
+      }
+    },
     "/api/v1/control-plane/arrears" : {
       "get" : {
         "description" : "Past-due and suspended subscriptions with how long each has been there and the last statement issued, beside what each stage restricts. Moving a tenant between stages is the subscription transition, with its reason.",
@@ -7497,6 +7838,29 @@
         },
         "summary" : "Refresh a control-plane session",
         "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/control-plane/business-types" : {
+      "get" : {
+        "description" : "Each type's usual handovers and whether it runs a kitchen display. The type is recorded and shown; it does not enable or disable anything by itself.",
+        "operationId" : "businessTypes",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BusinessTypeView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The kinds of business the platform serves, and how many tenants are each",
+        "tags" : [ "Tenant residency and business type" ]
       }
     },
     "/api/v1/control-plane/capabilities" : {
@@ -8636,7 +9000,7 @@
     "/api/v1/control-plane/platform-health" : {
       "get" : {
         "description" : "Exact counts at the moment of asking: tenants by status, orders placed in the last hour and day and those still in progress, fiscal receipts of the last day by outcome and every blocked one, and each queue's backlog with the age of its oldest waiting message.",
-        "operationId" : "health",
+        "operationId" : "health_1",
         "responses" : {
           "200" : {
             "content" : {
@@ -8724,7 +9088,7 @@
     },
     "/api/v1/control-plane/reference-data" : {
       "get" : {
-        "description" : "Countries this platform markets to (ADR 0034) with their default currency and timezone, and the locales the staff consoles ship. Holiday seeds and SLA bucket defaults are not modeled and are not returned.",
+        "description" : "Countries this platform trades in with their default currency and timezone, the locales the staff consoles ship, and each country's public holidays.",
         "operationId" : "get_5",
         "responses" : {
           "200" : {
@@ -8740,6 +9104,107 @@
         },
         "summary" : "The platform's supported reference values",
         "tags" : [ "Reference data" ]
+      }
+    },
+    "/api/v1/control-plane/reference-data/holidays" : {
+      "post" : {
+        "description" : "A month and day for one that recurs every year, or a date for one that moves with the lunar calendar.",
+        "operationId" : "addHoliday",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/HolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HolidayAdded"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a public holiday",
+        "tags" : [ "Reference data" ]
+      }
+    },
+    "/api/v1/control-plane/reference-data/holidays/{holidayId}" : {
+      "delete" : {
+        "operationId" : "removeHoliday",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "holidayId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RemoveHolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a public holiday",
+        "tags" : [ "Reference data" ]
+      }
+    },
+    "/api/v1/control-plane/reference-data/sla-buckets" : {
+      "get" : {
+        "description" : "Half-open intervals in minutes, exhaustive and fixed per version.",
+        "operationId" : "buckets",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SlaBuckets"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The elapsed-time buckets orders are reported in",
+        "tags" : [ "Reference data" ]
+      }
+    },
+    "/api/v1/control-plane/residency" : {
+      "get" : {
+        "description" : "All tenant data is hosted in one country, whatever market the tenant trades in; each tenant's market decides the currency and timezone it starts from.",
+        "operationId" : "residency",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResidencyView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where every tenant trades, and where its data is hosted",
+        "tags" : [ "Tenant residency and business type" ]
       }
     },
     "/api/v1/control-plane/support-sessions/mine" : {
@@ -8764,9 +9229,55 @@
         "tags" : [ "Support sessions" ]
       }
     },
+    "/api/v1/control-plane/tenant-health" : {
+      "get" : {
+        "description" : "Events that could not be published, fiscal receipts that could not be issued, and POS orders awaiting a decision, per tenant. Only tenants with at least one are listed.",
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantHealth"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open problems per tenant",
+        "tags" : [ "Platform health" ]
+      }
+    },
+    "/api/v1/control-plane/tenant-plans" : {
+      "get" : {
+        "description" : "A tenant with no live subscription is not listed.",
+        "operationId" : "plans_1",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantPlan"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every tenant's live subscription, by plan",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants" : {
       "get" : {
-        "description" : "Platform-admin only. No plan, business type, country, or health score is returned because none of those exist in the schema yet.",
+        "description" : "Platform-admin only. Each tenant's country and business type; its plan and open problems are read from the tenant-plans and tenant-health endpoints.",
         "operationId" : "listTenants",
         "parameters" : [ {
           "description" : "The nextCursor of the previous page",
@@ -12527,6 +13038,76 @@
         },
         "summary" : "Make a zone version live",
         "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/business-type" : {
+      "put" : {
+        "operationId" : "setBusinessType",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BusinessTypeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record what kind of business a tenant is",
+        "tags" : [ "Tenant residency and business type" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/country-change" : {
+      "post" : {
+        "description" : "Needs a second signature. The first call raises the approval and answers AWAITING_APPROVAL; the same call after approval makes the change. The tenant's currency and timezone are not changed.",
+        "operationId" : "changeCountry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CountryChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CountryChangeView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move a tenant to another market",
+        "tags" : [ "Tenant residency and business type" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/entitlements" : {
@@ -17219,6 +17800,9 @@
     "description" : "ADR 0059 stage 3: the SendPulse exit's contact export",
     "name" : "SendPulse contact import"
   }, {
+    "description" : "Where each tenant trades, and what kind of business it is",
+    "name" : "Tenant residency and business type"
+  }, {
     "description" : "Capability grants and session context",
     "name" : "Authorization"
   }, {
@@ -17249,6 +17833,9 @@
     "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
     "name" : "Order acceptance policy"
   }, {
+    "description" : "The platform's own supported countries, locales and public holidays",
+    "name" : "Reference data"
+  }, {
     "description" : "Draft menu authoring; never visible to customers",
     "name" : "Catalog authoring"
   }, {
@@ -17272,9 +17859,6 @@
   }, {
     "description" : "Plans, subscriptions, entitlements, and metered usage",
     "name" : "Commercial"
-  }, {
-    "description" : "The platform's own supported countries, currencies, locales, timezones",
-    "name" : "Reference data"
   }, {
     "description" : "Immutable security and business evidence",
     "name" : "Audit"

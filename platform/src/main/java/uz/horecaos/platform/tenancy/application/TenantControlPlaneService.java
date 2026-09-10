@@ -218,7 +218,9 @@ public class TenantControlPlaneService {
                 row.defaultCurrency(),
                 row.defaultTimezone(),
                 row.status(),
-                row.createdAt());
+                row.createdAt(),
+                row.countryCode(),
+                row.businessType());
     }
 
     /**
@@ -1039,7 +1041,9 @@ public class TenantControlPlaneService {
             String defaultCurrency,
             String defaultTimezone,
             TenantStatus status,
-            java.time.Instant createdAt) {}
+            java.time.Instant createdAt,
+            String countryCode,
+            String businessType) {}
 
     /** @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031) */
     public record BrandView(

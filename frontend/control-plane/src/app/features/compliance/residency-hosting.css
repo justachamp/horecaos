@@ -1,0 +1,112 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.hosting {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.markets {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.market {
+  background: var(--q-canvas);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  margin-top: 16px;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.changeForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.changeForm input {
+  min-width: 260px;
+}
+
+button {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.confirmChange {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gapNote {
+  margin-top: 16px;
+  max-width: 680px;
+}
+
+.table button + button {
+  margin-left: 6px;
+}

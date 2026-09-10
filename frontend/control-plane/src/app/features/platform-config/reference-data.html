@@ -1,9 +1,9 @@
 <h1 class="q-title">{{ i18n.t('referenceData.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('referenceData.lead') }}</p>
 
-<div class="notice">
-  <p class="q-caption">{{ i18n.t('referenceData.gap') }}</p>
-</div>
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
 
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
@@ -40,4 +40,76 @@
       }
     </ul>
   </section>
+
+  <section class="panel holidays">
+    <header class="panelHead">
+      <h2 class="q-subhead">{{ i18n.t('referenceData.holidays') }}</h2>
+      @if (session.has('PLATFORM_ADMIN')) {
+        <button type="button" class="addToggle" (click)="adding.set(!adding())">{{ i18n.t(adding() ? 'planCatalog.register.cancel' : 'referenceData.holiday.add') }}</button>
+      }
+    </header>
+    <p class="q-caption muted">{{ i18n.t('referenceData.holidaysNote') }}</p>
+    @if (adding()) {
+      <form class="holidayForm" (submit)="add($event)">
+        <select class="q-body-sm" name="holidayCountry" (change)="holidayCountry.set($any($event.target).value)">
+          @for (country of d.countries; track country.code) {
+            <option [value]="country.code" [selected]="country.code === holidayCountry()">{{ country.name }}</option>
+          }
+        </select>
+        <input class="q-body-sm" name="holidayName" [placeholder]="i18n.t('referenceData.holiday.name')" [value]="holidayName()" (input)="holidayName.set($any($event.target).value)" />
+        <label class="q-caption check">
+          <input type="checkbox" name="recurring" [checked]="recurring()" (change)="recurring.set($any($event.target).checked)" />
+          {{ i18n.t('referenceData.holiday.everyYear') }}
+        </label>
+        @if (recurring()) {
+          <input class="q-body-sm short" name="holidayMonthDay" placeholder="21.03" [value]="holidayMonthDay()" (input)="holidayMonthDay.set($any($event.target).value)" />
+        } @else {
+          <input type="date" class="q-body-sm" name="holidayDate" [value]="holidayDate()" (change)="holidayDate.set($any($event.target).value)" />
+        }
+        <input class="q-body-sm" name="holidayReason" [placeholder]="i18n.t('common.reason')" [value]="holidayReason()" (input)="holidayReason.set($any($event.target).value)" />
+        <button type="submit" [disabled]="!canAdd()">{{ i18n.t('referenceData.holiday.save') }}</button>
+      </form>
+    }
+    @for (group of holidaysByCountry(); track group[0]) {
+      <h3 class="q-caption groupHead">{{ countryName(group[0]) }}</h3>
+      <ul class="holidayList">
+        @for (holiday of group[1]; track holiday.holidayId) {
+          <li class="q-body-sm" [attr.data-holiday]="holiday.name">
+            <span class="q-tnum when">{{ when(holiday) }}</span>
+            <span>{{ holiday.name }}</span>
+            @if (holiday.date === null) {
+              <span class="q-caption muted">{{ i18n.t('referenceData.holiday.everyYear') }}</span>
+            }
+            @if (session.has('PLATFORM_ADMIN')) {
+              <button type="button" class="removeToggle" (click)="removing.set(removing() === holiday.holidayId ? null : holiday.holidayId); removeReason.set('')">{{ i18n.t('referenceData.holiday.remove') }}</button>
+              @if (removing() === holiday.holidayId) {
+                <span class="holidayForm">
+                  <input class="q-body-sm" name="removeReason" [placeholder]="i18n.t('common.reason')" [value]="removeReason()" (input)="removeReason.set($any($event.target).value)" />
+                  <button type="button" class="confirmRemove" [disabled]="busy() || removeReason().trim().length === 0" (click)="remove(holiday)">{{ i18n.t('referenceData.holiday.remove') }}</button>
+                </span>
+              }
+            }
+          </li>
+        }
+      </ul>
+    } @empty {
+      <p class="q-body-sm muted">{{ i18n.t('referenceData.holiday.none') }}</p>
+    }
+  </section>
+
+  @if (sla(); as set) {
+    <section class="panel sla">
+      <h2 class="q-subhead">{{ i18n.t('referenceData.sla') }}</h2>
+      <p class="q-caption muted">{{ i18n.t('referenceData.slaNote', { version: set.version }) }}</p>
+      <ol class="buckets">
+        @for (bucket of set.buckets; track bucket.code) {
+          <li class="q-body-sm q-tnum" [attr.data-bucket]="bucket.code">
+            {{ bucket.toMinutesExclusive === null
+              ? i18n.t('referenceData.bucket.over', { from: bucket.fromMinutes })
+              : i18n.t('referenceData.bucket.range', { from: bucket.fromMinutes, to: bucket.toMinutesExclusive }) }}
+          </li>
+        }
+      </ol>
+    </section>
+  }
 }

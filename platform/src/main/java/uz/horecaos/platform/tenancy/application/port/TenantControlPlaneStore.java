@@ -51,7 +51,9 @@ public interface TenantControlPlaneStore {
             String defaultCurrency,
             String defaultTimezone,
             uz.horecaos.platform.tenancy.domain.TenantStatus status,
-            Instant createdAt) {}
+            Instant createdAt,
+            String countryCode,
+            String businessType) {}
 
     /**
      * The tenant holding this slug, if any.

@@ -51,6 +51,8 @@ const TENANT: TenantSummaryView = {
   defaultTimezone: 'Asia/Tashkent',
   status: 'ACTIVE',
   createdAt: '2026-09-01T00:00:00Z',
+  countryCode: 'UZ',
+  businessType: 'RESTAURANT',
 };
 
 const BRAND: BrandView = {

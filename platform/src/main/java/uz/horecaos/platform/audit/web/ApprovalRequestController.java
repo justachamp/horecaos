@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService.PendingApproval;
@@ -96,6 +97,27 @@ public class ApprovalRequestController {
             @RequestParam(required = false) Integer limit) {
         return pendingResponse(tenantId, actionCode, limit);
     }
+
+    /** The actions HorecaOS staff decide across tenants (ADR 0090). */
+    static final List<String> PLATFORM_ACTIONS =
+            List.of(ApprovalAction.TENANT_COUNTRY_CHANGE.code(), ApprovalAction.TENANT_ACTIVATE.code());
+
+    @GetMapping("/api/v1/control-plane/approval-requests")
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Platform decisions waiting for a second signature, in every tenant",
+            description = "A change of a tenant's country and a tenant's activation, oldest first. "
+                    + "Each is decided through its tenant's own decision route. The maker's reason "
+                    + "is not returned, for the same reason as the tenant queue.")
+    List<PlatformPendingApprovalResponse> platformPending(@RequestParam(required = false) Integer limit) {
+        return decisions.pendingAcrossTenants(PLATFORM_ACTIONS, Page.limitOrDefault(limit), subject()).stream()
+                .map(waiting -> new PlatformPendingApprovalResponse(
+                        waiting.tenantId(), PendingApprovalResponse.of(waiting.approval())))
+                .toList();
+    }
+
+    /** One platform decision waiting, with the tenant it waits in. */
+    public record PlatformPendingApprovalResponse(UUID tenantId, PendingApprovalResponse request) {}
 
     @PostMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests/{requestId}/decision")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT, mutating = true)

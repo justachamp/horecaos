@@ -3,6 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem';
+import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { Page } from '../../core/api/page';
 import { TenantDirectory } from './tenant-directory';
@@ -22,11 +23,19 @@ const TENANT_A: TenantSummaryView = {
   defaultTimezone: 'Asia/Tashkent',
   status: 'ACTIVE',
   createdAt: '2026-08-01T00:00:00Z',
+  countryCode: 'UZ',
+  businessType: 'RESTAURANT',
 };
 
 class FakeTenantsApi {
   readonly listTenants = vi.fn<() => Promise<Page<TenantSummaryView>>>();
   readonly createTenant = vi.fn<() => Promise<TenantView>>();
+  readonly tenantPlans = vi.fn().mockResolvedValue([
+    { tenantId: 'tenant-a', planCode: 'BASIC', planVersionNumber: 2, status: 'ACTIVE' },
+  ]);
+  readonly tenantHealth = vi.fn().mockResolvedValue([
+    { tenantId: 'tenant-a', deadLetters: 1, blockedReceipts: 2, posOrdersAwaiting: 0 },
+  ]);
 }
 
 describe('TenantDirectory', () => {
@@ -44,6 +53,7 @@ describe('TenantDirectory', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: TenantsApi, useValue: api },
+        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
       ],
     }).compileComponents();
 
@@ -63,6 +73,36 @@ describe('TenantDirectory', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('Tenant A');
     expect(rows[0].textContent).toContain('tenant-a');
+  });
+
+  it('shows where each tenant trades, what it is, its plan and its open problems', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
+    expect(row.textContent).toContain('UZ');
+    expect(row.textContent).toContain('Ресторан');
+    expect(row.querySelector('.plan')?.textContent).toContain('BASIC v2');
+    expect(row.querySelector('.health')?.getAttribute('data-problems')).toBe('3');
+  });
+
+  it('leaves a dash where a platform-wide read fails, not an error across the page', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.tenantPlans.mockRejectedValue(new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }));
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.plan')?.textContent).toContain('—');
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(1);
   });
 
   it('shows the empty state when there are no tenants', async () => {
