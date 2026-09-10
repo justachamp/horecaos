@@ -17624,7 +17624,7 @@
     },
     "/api/v1/control-plane/incidents/{incidentId}/acknowledgement" : {
       "post" : {
-        "description" : "Only an open incident; a repeat changes nothing.",
+        "description" : "Only an open incident; a repeat changes nothing. Answers with no body: the note is free text and a stored idempotent response has no tenant to encrypt it under, so the caller reads the incident back instead.",
         "operationId" : "acknowledge_1",
         "parameters" : [ {
           "in" : "path",
@@ -17646,13 +17646,6 @@
         },
         "responses" : {
           "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/IncidentView"
-                }
-              }
-            },
             "description" : "OK"
           }
         },
@@ -17662,7 +17655,7 @@
     },
     "/api/v1/control-plane/incidents/{incidentId}/resolution" : {
       "post" : {
-        "description" : "A resolved incident stays as it is.",
+        "description" : "A resolved incident stays as it is. Answers with no body, for the same reason as acknowledging.",
         "operationId" : "resolve_3",
         "parameters" : [ {
           "in" : "path",
@@ -17685,13 +17678,6 @@
         },
         "responses" : {
           "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/IncidentView"
-                }
-              }
-            },
             "description" : "OK"
           }
         },

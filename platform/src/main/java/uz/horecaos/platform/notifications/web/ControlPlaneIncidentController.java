@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -79,29 +80,34 @@ public class ControlPlaneIncidentController {
     @RequiresCapability(value = Capability.CONTROL_PLANE_ALERT_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(
             summary = "Say someone has this incident",
-            description = "Only an open incident; a repeat changes nothing.")
+            description = "Only an open incident; a repeat changes nothing. Answers with no body: "
+                    + "the note is free text and a stored idempotent response has no tenant to "
+                    + "encrypt it under, so the caller reads the incident back instead.")
     @Transactional
-    IncidentView acknowledge(
+    ResponseEntity<Void> acknowledge(
             @PathVariable UUID incidentId, @Valid @RequestBody(required = false) @Nullable NoteRequest body) {
         StoredAlert alert = require(incidentId);
         Instant now = clock.instant();
         if (alerts.acknowledge(incidentId, subject(), now)) {
             record("notifications.incident.acknowledged", alert, body == null ? "Acknowledged" : body.note(), now);
         }
-        return IncidentView.of(require(incidentId));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/api/v1/control-plane/incidents/{incidentId}/resolution")
     @RequiresCapability(value = Capability.CONTROL_PLANE_ALERT_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Close an incident with what was done", description = "A resolved incident stays as it is.")
+    @Operation(
+            summary = "Close an incident with what was done",
+            description = "A resolved incident stays as it is. Answers with no body, for the same "
+                    + "reason as acknowledging.")
     @Transactional
-    IncidentView resolve(@PathVariable UUID incidentId, @Valid @RequestBody ResolveRequest body) {
+    ResponseEntity<Void> resolve(@PathVariable UUID incidentId, @Valid @RequestBody ResolveRequest body) {
         StoredAlert alert = require(incidentId);
         Instant now = clock.instant();
         if (alerts.resolve(incidentId, subject(), body.note(), now)) {
             record("notifications.incident.resolved", alert, body.note(), now);
         }
-        return IncidentView.of(require(incidentId));
+        return ResponseEntity.noContent().build();
     }
 
     private StoredAlert require(UUID incidentId) {

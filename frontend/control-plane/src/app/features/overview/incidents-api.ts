@@ -31,11 +31,12 @@ export class IncidentsApi {
     );
   }
 
-  async acknowledge(id: string, note: string): Promise<IncidentView> {
-    return firstValueFrom(this.api.post<IncidentView>(`/api/v1/control-plane/incidents/${id}/acknowledgement`, { note }));
+  /** Answers with no body; the caller reads the incident back. */
+  async acknowledge(id: string, note: string): Promise<void> {
+    await firstValueFrom(this.api.post<void>(`/api/v1/control-plane/incidents/${id}/acknowledgement`, { note }));
   }
 
-  async resolve(id: string, note: string): Promise<IncidentView> {
-    return firstValueFrom(this.api.post<IncidentView>(`/api/v1/control-plane/incidents/${id}/resolution`, { note }));
+  async resolve(id: string, note: string): Promise<void> {
+    await firstValueFrom(this.api.post<void>(`/api/v1/control-plane/incidents/${id}/resolution`, { note }));
   }
 }

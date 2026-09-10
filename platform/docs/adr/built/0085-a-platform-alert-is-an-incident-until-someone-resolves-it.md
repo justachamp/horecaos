@@ -66,8 +66,10 @@ Every control-plane alert is kept as an incident until a person resolves it.
 
 - `GET /control-plane/incidents?includeResolved&limit` (`control-plane-alert.read`).
 - `POST /control-plane/incidents/{id}/acknowledgement` and `/resolution`
-  with `{ note }` (`control-plane-alert.manage`); a step the incident has
-  already passed is answered with the incident as it stands.
+  with `{ note }` (`control-plane-alert.manage`), answering `204` with no
+  body: the note is free text, and a stored idempotent response at platform
+  scope has no tenant key to encrypt it under. A step the incident has
+  already passed changes nothing.
 - V0199: `notifications.control_plane_alerts`, `ux_control_plane_alert_live`
   on `(event_class, subject_type, subject_id) WHERE status <> 'RESOLVED'`.
 

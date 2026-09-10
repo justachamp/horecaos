@@ -23,8 +23,8 @@ describe('AlertsIncidents', () => {
   async function create(canManage = true, incidents: IncidentView[] = [OPEN, UNKNOWN_CLASS]): Promise<void> {
     api = {
       list: vi.fn().mockResolvedValue(incidents),
-      acknowledge: vi.fn().mockResolvedValue({ ...OPEN, status: 'ACKNOWLEDGED' }),
-      resolve: vi.fn().mockResolvedValue({ ...OPEN, status: 'RESOLVED' }),
+      acknowledge: vi.fn().mockResolvedValue(undefined),
+      resolve: vi.fn().mockResolvedValue(undefined),
     };
     localStorage.clear();
     sessionStorage.clear();
