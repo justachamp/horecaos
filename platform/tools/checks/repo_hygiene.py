@@ -396,7 +396,77 @@ def check_tenant_scoped_references() -> None:
            "must reference a unique constraint on exactly its own columns.")
 
 
+def _caddy_blocks(text: str) -> dict[str, str]:
+    """Top-level Caddyfile blocks keyed by their opening line.
+
+    Braces inside placeholders -- {$HORECAOS_TLS_MODE}, {client_ip} -- are not
+    structure, so they are blanked before counting; a naive count would close a
+    site block at the first placeholder it met.
+    """
+    structural = re.sub(r"\{[^\s{}]+\}", lambda m: " " * len(m.group(0)), text)
+    blocks, depth, start, head = {}, 0, None, None
+    for i, ch in enumerate(structural):
+        if ch == "{":
+            if depth == 0:
+                line_start = structural.rfind("\n", 0, i) + 1
+                head, start = text[line_start:i].strip(), i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and head is not None:
+                blocks[head] = text[start:i]
+                head = None
+    return blocks
+
+
+def check_storefront_api_routing() -> None:
+    """Edge: the storefront origin reaches its own API, and only its own API.
+
+    The storefront calls /api/v1 on its own origin; the API origin refuses
+    cross-origin calls from it. Until 2026-09-10 the storefront's site block
+    was a bare proxy to its nginx, which answers any unknown path with
+    index.html -- so every API call got a 200 carrying HTML, the storefront
+    could never load a menu, and nothing at the HTTP layer looked wrong.
+    """
+    caddyfile = ROOT.parent / "deploy" / "infra" / "caddy" / "Caddyfile"
+    problems = []
+    if not caddyfile.exists():
+        result("edge: storefront origin routes its API", [f"{caddyfile} not found"])
+        return
+    blocks = _caddy_blocks(caddyfile.read_text())
+    storefront = blocks.get("{$HORECAOS_STOREFRONT_ORIGIN}")
+    snippet = blocks.get("(storefront_api)")
+    api = blocks.get("{$HORECAOS_API_ORIGIN}")
+
+    if storefront is None:
+        problems.append("no {$HORECAOS_STOREFRONT_ORIGIN} site block")
+    else:
+        if "import storefront_api" not in storefront:
+            problems.append("the storefront origin does not import storefront_api, so its "
+                            "/api/v1 calls fall through to the SPA and come back as index.html")
+        if not re.search(r"@\w+\s+path\s+/api/\*", storefront) or "respond 404" not in storefront:
+            problems.append("the storefront origin does not refuse other /api/* paths -- "
+                            "control-plane, operations and provider callbacks would be reachable through it, "
+                            "or would come back as the SPA's HTML")
+        if re.search(r"reverse_proxy\s+platform-app", storefront):
+            problems.append("the storefront origin proxies to platform-app directly, bypassing "
+                            "storefront_api's rate limits")
+    if snippet is None:
+        problems.append("no (storefront_api) snippet: the two origins' storefront routes can drift apart")
+    else:
+        if "rate_limit" not in snippet:
+            problems.append("(storefront_api) carries no rate_limit -- the per-IP limits were lost in a move")
+        if "/api/v1/storefront/*" not in snippet:
+            problems.append("(storefront_api) has no catch-all for the rest of /api/v1/storefront/*")
+    if api is not None and "import storefront_api" not in api:
+        problems.append("the API origin no longer imports storefront_api; the storefront's "
+                        "API would lose its limits there")
+    result("edge: storefront origin routes its API, and only its API", problems,
+           "See the comments on (storefront_api) in deploy/infra/caddy/Caddyfile.")
+
+
 CHECKS = [
+    check_storefront_api_routing,
     check_unique_versions,
     check_grants,
     check_timestamptz,
