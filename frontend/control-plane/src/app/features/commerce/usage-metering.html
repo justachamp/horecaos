@@ -3,35 +3,133 @@
 
 <app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
 
-@if (loading()) {
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading() && periods().length === 0) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 } @else if (loadError(); as message) {
   <p class="q-body-sm state error">{{ message }}</p>
 } @else if (searched()) {
+  @if (session.has('COMMERCIAL_USAGE_ADJUST')) {
+    <div class="toolbar">
+      <button type="button" class="rebuild" [disabled]="busy()" (click)="rebuild()">
+        {{ i18n.t('usageMetering.rebuild.action') }}
+      </button>
+      <span class="q-caption muted">{{ i18n.t('usageMetering.rebuild.hint') }}</span>
+    </div>
+    @if (divergences(); as found) {
+      @if (found.length === 0) {
+        <p class="q-body-sm state ok rebuildResult">{{ i18n.t('usageMetering.rebuild.clean') }}</p>
+      } @else {
+        <div class="rebuildResult warning">
+          <p class="q-body-sm">{{ i18n.t('usageMetering.rebuild.diverged', { count: found.length }) }}</p>
+          <ul>
+            @for (item of found; track item.entitlementKey + item.periodKey) {
+              <li class="q-body-sm q-tnum">
+                {{ item.entitlementKey }} · {{ item.periodKey }}: {{ item.stored ?? '—' }} → {{ item.recomputed }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    }
+  }
+
   @if (periods().length === 0) {
     <p class="q-body-sm state">{{ i18n.t('usageMetering.empty') }}</p>
   } @else {
-    <table class="table">
-      <thead>
-        <tr>
-          <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
-          <th class="q-caption">{{ i18n.t('usageMetering.column.period') }}</th>
-          <th class="q-caption">{{ i18n.t('usageMetering.column.measured') }}</th>
-          <th class="q-caption">{{ i18n.t('usageMetering.column.adjusted') }}</th>
-          <th class="q-caption">{{ i18n.t('usageMetering.column.consumed') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (period of periods(); track period.entitlementKey + period.periodKey) {
+    <div class="scroll">
+      <table class="table">
+        <thead>
           <tr>
-            <td class="q-body-sm q-tnum">{{ period.entitlementKey }}</td>
-            <td class="q-body-sm q-tnum">{{ period.periodKey }}</td>
-            <td class="q-body-sm q-tnum">{{ period.measuredQuantity }}</td>
-            <td class="q-body-sm q-tnum">{{ period.adjustedQuantity }}</td>
-            <td class="q-body-sm q-tnum">{{ period.consumedQuantity }}</td>
+            <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
+            <th class="q-caption">{{ i18n.t('usageMetering.column.period') }}</th>
+            <th class="q-caption num">{{ i18n.t('usageMetering.column.measured') }}</th>
+            <th class="q-caption num">{{ i18n.t('usageMetering.column.adjusted') }}</th>
+            <th class="q-caption num">{{ i18n.t('usageMetering.column.consumed') }}</th>
+            @if (session.has('COMMERCIAL_USAGE_ADJUST')) {
+              <th class="q-caption"></th>
+            }
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (period of periods(); track key(period)) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ period.entitlementKey }}</td>
+              <td class="q-body-sm q-tnum">{{ period.periodKey }}</td>
+              <td class="q-body-sm q-tnum num">{{ period.measuredQuantity }}</td>
+              <td class="q-body-sm q-tnum num">{{ period.adjustedQuantity }}</td>
+              <td class="q-body-sm q-tnum num">{{ period.consumedQuantity }}</td>
+              @if (session.has('COMMERCIAL_USAGE_ADJUST')) {
+                <td class="q-body-sm">
+                  <button type="button" class="secondary" (click)="openAdjust(period)">
+                    {{ adjusting() === key(period) ? i18n.t('common.cancel') : i18n.t('usageMetering.adjust.open') }}
+                  </button>
+                </td>
+              }
+            </tr>
+            @if (adjusting() === key(period)) {
+              <tr class="adjustRow">
+                <td colspan="6">
+                  <form class="adjustForm" (submit)="adjust(period, $event)">
+                    <p class="q-caption muted">{{ i18n.t('usageMetering.adjust.lead') }}</p>
+                    <div class="fields">
+                      <label class="field">
+                        <span class="q-caption">{{ i18n.t('usageMetering.adjust.delta') }}</span>
+                        <input
+                          class="q-body-sm q-tnum"
+                          name="delta"
+                          inputmode="numeric"
+                          placeholder="-3"
+                          [value]="delta()"
+                          (input)="delta.set($any($event.target).value)"
+                        />
+                      </label>
+                      <label class="field">
+                        <span class="q-caption">{{ i18n.t('entitlements.override.approvedBy') }}</span>
+                        @if (approvers().length > 0) {
+                          <select class="q-body-sm" name="approvedBy" (change)="approvedBy.set($any($event.target).value)">
+                            <option value="" [selected]="approvedBy() === ''">{{ i18n.t('common.chooseColleague') }}</option>
+                            @for (subject of approvers(); track subject) {
+                              <option [value]="subject" [selected]="subject === approvedBy()">{{ subject }}</option>
+                            }
+                          </select>
+                        } @else {
+                          <input class="q-body-sm" name="approvedBy" [value]="approvedBy()" (input)="approvedBy.set($any($event.target).value)" />
+                        }
+                      </label>
+                      <label class="field">
+                        <span class="q-caption">{{ i18n.t('usageMetering.adjust.source') }}</span>
+                        <input
+                          class="q-body-sm"
+                          name="sourceReference"
+                          [value]="sourceReference()"
+                          (input)="sourceReference.set($any($event.target).value)"
+                        />
+                      </label>
+                    </div>
+                    <div class="inlineForm">
+                      <input
+                        class="q-body-sm"
+                        name="adjustReason"
+                        [placeholder]="i18n.t('common.reason')"
+                        [value]="reason()"
+                        (input)="reason.set($any($event.target).value)"
+                      />
+                      <button type="submit" [disabled]="!canAdjust()">{{ i18n.t('usageMetering.adjust.submit') }}</button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
   }
 }

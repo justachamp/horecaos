@@ -171,6 +171,33 @@ public class JdbcPlanStore {
                 """).query(JdbcPlanStore::mapVersion).list();
     }
 
+    /**
+     * Every version of every plan, drafts included, newest first within a plan.
+     *
+     * <p>The authoring read. {@link #listActiveVersions} stays the price list;
+     * this one exists so a draft waiting for its second signature can be found
+     * by the person expected to give it.
+     */
+    public List<PlanVersion> listAllVersions() {
+        return jdbc.sql(SELECT_VERSION + """
+                 ORDER BY p.code, v.version_number DESC
+                """).query(JdbcPlanStore::mapVersion).list();
+    }
+
+    /** Every plan, including one that has never had a version activated. */
+    public List<StoredPlan> listPlans() {
+        return jdbc.sql("SELECT id, code, name, status FROM commercial.plans ORDER BY code")
+                .query((row, number) -> new StoredPlan(
+                        row.getObject("id", UUID.class),
+                        row.getString("code"),
+                        row.getString("name"),
+                        row.getString("status")))
+                .list();
+    }
+
+    /** A plan row as stored: its versions are read separately. */
+    public record StoredPlan(UUID id, String code, String name, String status) {}
+
     public Map<String, PlanEntitlement> entitlementsOf(UUID planVersionId) {
         List<PlanEntitlement> rows = jdbc.sql("""
                 SELECT entitlement_key, value_type, boolean_value, integer_value,

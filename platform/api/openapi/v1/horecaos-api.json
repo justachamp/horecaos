@@ -2777,6 +2777,12 @@
       },
       "CommercialControlPlaneControllerSubscriptionResponse" : {
         "properties" : {
+          "allowedNext" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "currentPeriodEnd" : {
             "type" : "string"
           },
@@ -5457,6 +5463,26 @@
             "type" : "string"
           },
           "warningState" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EntitlementKeyResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "counted" : {
+            "type" : "boolean"
+          },
+          "defaultMode" : {
+            "type" : "string"
+          },
+          "resetPeriod" : {
+            "type" : "string"
+          },
+          "unit" : {
             "type" : "string"
           }
         },
@@ -10369,6 +10395,70 @@
             "type" : "string"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PlanResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "planId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "versions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlanVersionDetail"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlanVersionDetail" : {
+        "properties" : {
+          "activatedAt" : {
+            "type" : "string"
+          },
+          "approvedBy" : {
+            "type" : "string"
+          },
+          "billingPeriod" : {
+            "type" : "string"
+          },
+          "createdBy" : {
+            "type" : "string"
+          },
+          "entitlements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EntitlementLine"
+            },
+            "type" : "array"
+          },
+          "planVersionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "price" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "termsReference" : {
+            "type" : "string"
+          },
+          "versionNumber" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -30329,6 +30419,29 @@
         "tags" : [ "Partner API" ]
       }
     },
+    "/api/v1/platform-admin/commercial/entitlement-keys" : {
+      "get" : {
+        "description" : "A counted key takes a limit and a feature takes on or off; a key not listed here is refused.",
+        "operationId" : "entitlementKeys",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EntitlementKeyResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The entitlement keys a plan version or override may name",
+        "tags" : [ "Commercial administration" ]
+      }
+    },
     "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation" : {
       "post" : {
         "description" : "Irreversible: the version and its entitlements become immutable at the database. Refused when the approver is the version's author.",
@@ -30362,6 +30475,27 @@
       }
     },
     "/api/v1/platform-admin/commercial/plans" : {
+      "get" : {
+        "description" : "The authoring view. Each draft names its author, because the person who activates it must be somebody else. The price list tenants read stays live versions only.",
+        "operationId" : "plans",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlanResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every plan with every version, drafts included",
+        "tags" : [ "Commercial administration" ]
+      },
       "post" : {
         "operationId" : "createPlan",
         "requestBody" : {

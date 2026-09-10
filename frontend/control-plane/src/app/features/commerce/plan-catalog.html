@@ -2,6 +2,51 @@
 <p class="q-body-sm lead">{{ i18n.t('planCatalog.lead') }}</p>
 <p class="q-caption notice">{{ i18n.t('planCatalog.gap') }}</p>
 
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (session.has('COMMERCIAL_PLAN_MANAGE')) {
+  <div class="toolbar">
+    <button type="button" class="registerToggle" (click)="openRegister()">
+      {{ registering() ? i18n.t('planCatalog.register.cancel') : i18n.t('planCatalog.register.open') }}
+    </button>
+  </div>
+  @if (registering()) {
+    <form class="panel registerForm" (submit)="register($event)">
+      <h2 class="q-subhead">{{ i18n.t('planCatalog.register.title') }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('planCatalog.register.code') }}</span>
+        <input
+          class="q-body-sm"
+          name="planCode"
+          autocomplete="off"
+          [value]="newCode()"
+          (input)="newCode.set($any($event.target).value.toUpperCase())"
+        />
+        <span class="q-caption muted">{{ i18n.t('planCatalog.register.codeHint') }}</span>
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('planCatalog.register.name') }}</span>
+        <input class="q-body-sm" name="planName" [value]="newName()" (input)="newName.set($any($event.target).value)" />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('common.reason') }}</span>
+        <input
+          class="q-body-sm"
+          name="planReason"
+          [value]="newReason()"
+          (input)="newReason.set($any($event.target).value)"
+        />
+      </label>
+      <button type="submit" [disabled]="!canRegister()">{{ i18n.t('planCatalog.register.submit') }}</button>
+    </form>
+  }
+}
+
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 } @else if (loadError(); as message) {
@@ -9,56 +54,280 @@
 } @else if (plans().length === 0) {
   <p class="q-body-sm state">{{ i18n.t('planCatalog.empty') }}</p>
 } @else {
-  <table class="table">
-    <thead>
-      <tr>
-        <th class="q-caption">{{ i18n.t('planCatalog.column.plan') }}</th>
-        <th class="q-caption">{{ i18n.t('planCatalog.column.price') }}</th>
-        <th class="q-caption">{{ i18n.t('planCatalog.column.billingPeriod') }}</th>
-        <th class="q-caption"></th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (plan of plans(); track plan.planVersionId) {
-        <tr>
-          <td class="q-body-sm">{{ plan.planCode }} <span class="muted q-tnum">v{{ plan.versionNumber }}</span></td>
-          <td class="q-body-sm q-tnum">{{ i18n.money(plan.price) }}</td>
-          <td class="q-body-sm">{{ plan.billingPeriod }}</td>
-          <td class="q-body-sm">
-            <button type="button" (click)="toggle(plan.planVersionId)">
-              {{ expanded() === plan.planVersionId ? i18n.t('planCatalog.hideEntitlements') : i18n.t('planCatalog.showEntitlements') }}
-            </button>
-          </td>
-        </tr>
-        @if (expanded() === plan.planVersionId) {
-          <tr>
-            <td class="q-body-sm" colspan="4">
-              @if (plan.entitlements.length === 0) {
-                <p class="q-body-sm muted">{{ i18n.t('planCatalog.noEntitlements') }}</p>
-              } @else {
-                <table class="innerTable">
+  @for (plan of plans(); track plan.planId) {
+    <section class="panel plan" [attr.data-plan]="plan.code">
+      <header class="planHeader">
+        <h2 class="q-subhead">
+          {{ plan.name }} <span class="muted q-tnum">{{ plan.code }}</span>
+        </h2>
+        <span class="chip q-caption" [class.live]="plan.status === 'ACTIVE'">{{ i18n.t(statusKey(plan.status)) }}</span>
+      </header>
+
+      @if (plan.versions.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('planCatalog.noVersions') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.version') }}</th>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.price') }}</th>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.billingPeriod') }}</th>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.status') }}</th>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.draftedBy') }}</th>
+                <th class="q-caption">{{ i18n.t('planCatalog.column.activated') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (version of plan.versions; track version.planVersionId) {
+                <tr [class.draftRow]="version.status === 'DRAFT'">
+                  <td class="q-body-sm q-tnum">v{{ version.versionNumber }}</td>
+                  <td class="q-body-sm q-tnum">{{ i18n.money(version.price) }}</td>
+                  <td class="q-body-sm">{{ i18n.t(billingKey(version.billingPeriod)) }}</td>
+                  <td class="q-body-sm">
+                    <span class="chip q-caption" [class.live]="version.status === 'ACTIVE'">{{ i18n.t(statusKey(version.status)) }}</span>
+                  </td>
+                  <td class="q-body-sm">{{ who(version.createdBy) }}</td>
+                  <td class="q-body-sm">
+                    @if (version.activatedAt; as at) {
+                      {{ i18n.day(asDate(at)) }} · {{ who(version.approvedBy) }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td class="q-body-sm actions">
+                    <button type="button" (click)="toggle(version.planVersionId)">
+                      {{ expanded() === version.planVersionId ? i18n.t('planCatalog.hideEntitlements') : i18n.t('planCatalog.showEntitlements') }}
+                    </button>
+                    @if (version.status === 'DRAFT' && session.has('COMMERCIAL_PLAN_ACTIVATE')) {
+                      <button type="button" class="activateToggle" (click)="openActivation(version)">
+                        {{ i18n.t('planCatalog.activate.open') }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+                @if (expanded() === version.planVersionId) {
+                  <tr>
+                    <td class="q-body-sm" colspan="7">
+                      @if (version.termsReference; as terms) {
+                        <p class="q-caption muted">{{ i18n.t('planCatalog.terms') }}: {{ terms }}</p>
+                      }
+                      @if (version.entitlements.length === 0) {
+                        <p class="q-body-sm muted">{{ i18n.t('planCatalog.noEntitlements') }}</p>
+                      } @else {
+                        <table class="innerTable">
+                          <thead>
+                            <tr>
+                              <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
+                              <th class="q-caption">{{ i18n.t('entitlements.column.limit') }}</th>
+                              <th class="q-caption">{{ i18n.t('entitlements.column.mode') }}</th>
+                              <th class="q-caption">{{ i18n.t('planCatalog.column.resetPeriod') }}</th>
+                              <th class="q-caption">{{ i18n.t('planCatalog.column.overage') }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (line of version.entitlements; track line.entitlementKey) {
+                              <tr>
+                                <td class="q-body-sm q-tnum">{{ line.entitlementKey }}</td>
+                                <td class="q-body-sm q-tnum">{{ value(line) }}</td>
+                                <td class="q-body-sm">{{ i18n.t(modeKey(line.enforcementMode)) }}</td>
+                                <td class="q-body-sm">{{ i18n.t(resetKey(line.resetPeriod)) }}</td>
+                                <td class="q-body-sm q-tnum">{{ line.overageUnitPrice ? i18n.money(line.overageUnitPrice) : '—' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+                    </td>
+                  </tr>
+                }
+                @if (activating() === version.planVersionId) {
+                  <tr class="activation">
+                    <td class="q-body-sm" colspan="7">
+                      @if (draftedByMe(version)) {
+                        <p class="q-body-sm notice">{{ i18n.t('planCatalog.activate.ownDraft') }}</p>
+                      } @else {
+                        <p class="q-body-sm warning">{{ i18n.t('planCatalog.activate.warning') }}</p>
+                        <div class="inlineForm">
+                          <input
+                            class="q-body-sm"
+                            name="activationReason"
+                            [placeholder]="i18n.t('common.reason')"
+                            [value]="activationReason()"
+                            (input)="activationReason.set($any($event.target).value)"
+                          />
+                          <button
+                            type="button"
+                            class="activateConfirm"
+                            [disabled]="busy() || activationReason().trim().length === 0"
+                            (click)="activate(plan, version)"
+                          >
+                            {{ i18n.t('planCatalog.activate.confirm', { version: version.versionNumber }) }}
+                          </button>
+                        </div>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (session.has('COMMERCIAL_PLAN_MANAGE')) {
+        <button type="button" class="draftToggle" (click)="openDraft(plan)">
+          {{ draftFor() === plan.planId ? i18n.t('planCatalog.draft.cancel') : i18n.t('planCatalog.draft.open') }}
+        </button>
+        @if (draftFor() === plan.planId) {
+          @if (keysError(); as message) {
+            <p class="q-body-sm state error">{{ message }}</p>
+          } @else {
+            <form class="draftForm" (submit)="draft(plan, $event)">
+              <p class="q-caption muted">
+                {{ plan.versions.length > 0 ? i18n.t('planCatalog.draft.prefilled', { version: plan.versions[0].versionNumber }) : i18n.t('planCatalog.draft.first') }}
+              </p>
+              <div class="terms">
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('planCatalog.column.price') }}</span>
+                  <input
+                    class="q-body-sm q-tnum"
+                    name="price"
+                    inputmode="decimal"
+                    [value]="price()"
+                    (input)="price.set($any($event.target).value)"
+                  />
+                </label>
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('planCatalog.draft.currency') }}</span>
+                  <select class="q-body-sm" name="currency" [value]="currency()" (change)="currency.set($any($event.target).value)">
+                    @for (code of currencies; track code) {
+                      <option [value]="code" [selected]="code === currency()">{{ code }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('planCatalog.column.billingPeriod') }}</span>
+                  <select
+                    class="q-body-sm"
+                    name="billingPeriod"
+                    [value]="billingPeriod()"
+                    (change)="billingPeriod.set($any($event.target).value)"
+                  >
+                    @for (period of billingPeriods; track period) {
+                      <option [value]="period" [selected]="period === billingPeriod()">{{ i18n.t(billingKey(period)) }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="q-caption">{{ i18n.t('planCatalog.terms') }}</span>
+                  <input
+                    class="q-body-sm"
+                    name="termsReference"
+                    [value]="termsReference()"
+                    (input)="termsReference.set($any($event.target).value)"
+                  />
+                </label>
+              </div>
+              @if (price().trim().length > 0 && priceMinor() === null) {
+                <p class="q-caption error">{{ i18n.t('planCatalog.draft.priceInvalid') }}</p>
+              }
+
+              <div class="scroll">
+                <table class="innerTable lines">
                   <thead>
                     <tr>
+                      <th class="q-caption">{{ i18n.t('planCatalog.draft.include') }}</th>
                       <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
                       <th class="q-caption">{{ i18n.t('entitlements.column.limit') }}</th>
-                      <th class="q-caption">{{ i18n.t('planCatalog.column.resetPeriod') }}</th>
+                      <th class="q-caption">{{ i18n.t('entitlements.column.mode') }}</th>
+                      <th class="q-caption">{{ i18n.t('planCatalog.column.overage') }}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    @for (line of plan.entitlements; track line.entitlementKey) {
-                      <tr>
-                        <td class="q-body-sm q-tnum">{{ line.entitlementKey }}</td>
-                        <td class="q-body-sm q-tnum">{{ line.limit ?? '—' }}</td>
-                        <td class="q-body-sm">{{ line.resetPeriod }}</td>
+                    @for (line of lines(); track line.key.code; let index = $index) {
+                      <tr [class.excluded]="!line.included">
+                        <td>
+                          <input
+                            type="checkbox"
+                            [attr.name]="'include-' + line.key.code"
+                            [checked]="line.included"
+                            (change)="updateLine(index, { included: $any($event.target).checked })"
+                          />
+                        </td>
+                        <td class="q-body-sm q-tnum">
+                          {{ line.key.code }}
+                          <span class="q-caption muted">{{ line.key.counted ? line.key.unit + ' · ' + i18n.t(resetKey(line.key.resetPeriod)) : i18n.t('planCatalog.draft.feature') }}</span>
+                        </td>
+                        <td>
+                          @if (line.key.counted) {
+                            <input
+                              class="q-body-sm q-tnum narrow"
+                              [attr.name]="'limit-' + line.key.code"
+                              inputmode="numeric"
+                              [disabled]="!line.included"
+                              [value]="line.limit"
+                              (input)="updateLine(index, { limit: $any($event.target).value })"
+                            />
+                          } @else {
+                            <select
+                              class="q-body-sm"
+                              [attr.name]="'enabled-' + line.key.code"
+                              [disabled]="!line.included"
+                              (change)="updateLine(index, { enabled: $any($event.target).value === 'on' })"
+                            >
+                              <option value="on" [selected]="line.enabled">{{ i18n.t('commerce.on') }}</option>
+                              <option value="off" [selected]="!line.enabled">{{ i18n.t('commerce.off') }}</option>
+                            </select>
+                          }
+                        </td>
+                        <td>
+                          <select
+                            class="q-body-sm"
+                            [attr.name]="'mode-' + line.key.code"
+                            [disabled]="!line.included"
+                            (change)="updateLine(index, { mode: $any($event.target).value })"
+                          >
+                            @for (mode of modes; track mode) {
+                              <option [value]="mode" [selected]="mode === line.mode">{{ i18n.t(modeKey(mode)) }}</option>
+                            }
+                          </select>
+                        </td>
+                        <td>
+                          @if (line.key.counted) {
+                            <input
+                              class="q-body-sm q-tnum narrow"
+                              [attr.name]="'overage-' + line.key.code"
+                              inputmode="decimal"
+                              [disabled]="!line.included"
+                              [placeholder]="i18n.t('planCatalog.draft.noOverage')"
+                              [value]="line.overage"
+                              (input)="updateLine(index, { overage: $any($event.target).value })"
+                            />
+                          }
+                        </td>
                       </tr>
                     }
                   </tbody>
                 </table>
-              }
-            </td>
-          </tr>
+              </div>
+              <p class="q-caption muted">{{ i18n.t('planCatalog.draft.linesHint') }}</p>
+
+              <div class="inlineForm">
+                <input
+                  class="q-body-sm"
+                  name="draftReason"
+                  [placeholder]="i18n.t('common.reason')"
+                  [value]="draftReason()"
+                  (input)="draftReason.set($any($event.target).value)"
+                />
+                <button type="submit" [disabled]="!canDraft()">{{ i18n.t('planCatalog.draft.submit') }}</button>
+              </div>
+            </form>
+          }
         }
       }
-    </tbody>
-  </table>
+    </section>
+  }
 }

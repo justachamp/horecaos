@@ -4,37 +4,6 @@
   max-width: 640px;
 }
 
-.picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.picker input {
-  border: 1px solid var(--q-hairline);
-  padding: 8px;
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  min-width: 280px;
-}
-
-.picker button,
-.inlineForm button {
-  border: none;
-  background: var(--q-primary);
-  color: var(--q-inverse-ink);
-  padding: 8px 16px;
-  cursor: pointer;
-}
-
-.picker button:disabled,
-.inlineForm button:disabled {
-  background: var(--q-hairline);
-  color: var(--q-ink-subtle);
-  cursor: default;
-}
-
 .state {
   margin-top: 24px;
   color: var(--q-ink-muted);
@@ -44,8 +13,17 @@
   color: var(--q-error-text);
 }
 
+.state.ok {
+  color: var(--q-success-text);
+}
+
 .muted {
   color: var(--q-ink-muted);
+}
+
+.strong {
+  font-weight: 600;
+  margin: 0;
 }
 
 .panel {
@@ -54,10 +32,87 @@
   border: 1px solid var(--q-hairline);
   padding: 16px 24px;
   max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 24px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--q-ink-subtle);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.chip {
+  padding: 2px 8px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.chip[data-status='ACTIVE'],
+.chip[data-status='TRIALING'] {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.chip[data-status='PAST_DUE'],
+.chip[data-status='SUSPENDED'],
+.chip[data-status='CANCELLATION_SCHEDULED'] {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.chip[data-status='EXPIRED'],
+.chip[data-status='TERMINATED'] {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--q-hairline);
+  padding-top: 12px;
+}
+
+.overrideForm {
+  border-top: none;
+  padding-top: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.narrow {
+  width: 140px;
+}
+
+.warning {
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.scroll {
+  overflow-x: auto;
 }
 
 .table {
-  margin-top: 12px;
   width: 100%;
   border-collapse: collapse;
   background: var(--q-hairline);
@@ -81,32 +136,34 @@
   font-weight: 400;
 }
 
-.usageList {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.usageList li {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--q-hairline);
-  padding-bottom: 4px;
-}
-
 .inlineForm {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
   flex-wrap: wrap;
 }
 
 .inlineForm input {
+  flex: 1 1 280px;
+}
+
+input,
+select {
   border: 1px solid var(--q-hairline);
   padding: 8px;
   background: var(--q-canvas);
   color: var(--q-ink);
+}
+
+button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
 }

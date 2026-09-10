@@ -65,3 +65,133 @@
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.toolbar {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button[type='submit'],
+.activateConfirm {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel {
+  margin-top: 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.planHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chip {
+  padding: 2px 8px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  white-space: nowrap;
+}
+
+.chip.live {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.panel .table {
+  margin-top: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.warning {
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineForm input {
+  flex: 1 1 280px;
+}
+
+.registerForm,
+.draftForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.draftToggle {
+  align-self: flex-start;
+}
+
+.lines td {
+  vertical-align: middle;
+}
+
+.lines .excluded td {
+  color: var(--q-ink-subtle);
+}
+
+.narrow {
+  width: 120px;
+}

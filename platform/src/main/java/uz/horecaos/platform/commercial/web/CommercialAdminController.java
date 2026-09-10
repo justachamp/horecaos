@@ -7,11 +7,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,16 +30,20 @@ import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ApiMoney;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
- * The commercial acts only HorecaOS staff perform (ADR 0021).
+ * The commercial acts only HorecaOS staff perform (ADR 0021), and the two
+ * reads that authoring them needs: every plan with its drafts, and the
+ * entitlement keys a plan may name.
  *
  * <p>Every declaration is {@link ScopeType#PLATFORM}, including the paths that
  * name a tenant. Assigning a subscription, granting an override and adjusting a
@@ -66,6 +74,32 @@ public class CommercialAdminController {
         this.subscriptions = subscriptions;
         this.metering = metering;
         this.currentActor = currentActor;
+    }
+
+    @GetMapping("/plans")
+    @RequiresCapability(value = Capability.COMMERCIAL_PLAN_READ, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Every plan with every version, drafts included",
+            description = "The authoring view. Each draft names its author, because the person "
+                    + "who activates it must be somebody else. The price list tenants read stays "
+                    + "live versions only.")
+    public ResponseEntity<List<PlanResponse>> plans() {
+        return ResponseEntity.ok(plans.catalogueWithDrafts().stream()
+                .map(plan -> PlanResponse.of(plan, plans::entitlementsOf))
+                .toList());
+    }
+
+    @GetMapping("/entitlement-keys")
+    @RequiresCapability(value = Capability.COMMERCIAL_PLAN_READ, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "The entitlement keys a plan version or override may name",
+            description =
+                    "A counted key takes a limit and a feature takes on or off; a key not " + "listed here is refused.")
+    public ResponseEntity<List<EntitlementKeyResponse>> entitlementKeys() {
+        return ResponseEntity.ok(EntitlementKeys.all().stream()
+                .map(EntitlementKeyResponse::of)
+                .sorted(Comparator.comparing(EntitlementKeyResponse::code))
+                .toList());
     }
 
     @PostMapping("/plans")
@@ -280,6 +314,67 @@ public class CommercialAdminController {
     }
 
     // ----------------------------------------------------------- wire records
+
+    /** A plan and all its versions, newest first. */
+    public record PlanResponse(UUID planId, String code, String name, String status, List<PlanVersionDetail> versions) {
+
+        static PlanResponse of(
+                PlanCatalogService.PlanHistory plan, Function<UUID, Map<String, PlanEntitlement>> entitlementsOf) {
+            return new PlanResponse(
+                    plan.planId(),
+                    plan.code(),
+                    plan.name(),
+                    plan.status(),
+                    plan.versions().stream()
+                            .map(version -> PlanVersionDetail.of(version, entitlementsOf.apply(version.id())))
+                            .toList());
+        }
+    }
+
+    /** One version with who drafted it and, once live, who approved it. */
+    public record PlanVersionDetail(
+            UUID planVersionId,
+            int versionNumber,
+            ApiMoney price,
+            String billingPeriod,
+            String status,
+            @Nullable String termsReference,
+            String createdBy,
+            @Nullable String approvedBy,
+            @Nullable String activatedAt,
+            List<CommercialControlPlaneController.EntitlementLine> entitlements) {
+
+        static PlanVersionDetail of(PlanVersion version, Map<String, PlanEntitlement> entitlements) {
+            Instant activatedAt = version.activatedAt();
+            return new PlanVersionDetail(
+                    version.id(),
+                    version.versionNumber(),
+                    ApiMoney.of(version.priceMinor(), version.currency()),
+                    version.billingPeriod(),
+                    version.status(),
+                    version.termsReference(),
+                    version.createdBy(),
+                    version.approvedBy(),
+                    activatedAt == null ? null : activatedAt.toString(),
+                    entitlements.values().stream()
+                            .map(line -> CommercialControlPlaneController.EntitlementLine.of(line, version.currency()))
+                            .toList());
+        }
+    }
+
+    /** An entitlement key: whether it counts or switches, and what it counts. */
+    public record EntitlementKeyResponse(
+            String code, boolean counted, String unit, String defaultMode, String resetPeriod) {
+
+        static EntitlementKeyResponse of(EntitlementKey<?> key) {
+            return new EntitlementKeyResponse(
+                    key.code(),
+                    key.isCounted(),
+                    key.unit(),
+                    key.defaultMode().name(),
+                    key.resetPeriod().name());
+        }
+    }
 
     /** Every mutation carries why it happened; ADR 0027 refuses a user action without one. */
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}

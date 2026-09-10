@@ -378,6 +378,7 @@ export interface CommercialControlPlaneControllerResolvedEntitlement {
 }
 
 export interface CommercialControlPlaneControllerSubscriptionResponse {
+  allowedNext?: Array<string>;
   currentPeriodEnd?: string;
   currentPeriodStart?: string;
   planVersionId?: string;
@@ -700,6 +701,14 @@ export interface Divergence {
 export interface EndPolicyRequest {
   effectiveAt?: string;
   reason: string;
+}
+
+export interface EntitlementKeyResponse {
+  code?: string;
+  counted?: boolean;
+  defaultMode?: string;
+  resetPeriod?: string;
+  unit?: string;
 }
 
 export interface EntitlementLine {
@@ -1259,6 +1268,27 @@ export interface PendingApprovalResponse {
   scopeId?: string;
   scopeType?: string;
   thresholdDescription?: string;
+}
+
+export interface PlanResponse {
+  code?: string;
+  name?: string;
+  planId?: string;
+  status?: string;
+  versions?: Array<PlanVersionDetail>;
+}
+
+export interface PlanVersionDetail {
+  activatedAt?: string;
+  approvedBy?: string;
+  billingPeriod?: string;
+  createdBy?: string;
+  entitlements?: Array<EntitlementLine>;
+  planVersionId?: string;
+  price?: ApiMoney;
+  status?: string;
+  termsReference?: string;
+  versionNumber?: number;
 }
 
 export interface PlanVersionResponse {
@@ -2158,7 +2188,9 @@ export interface Operations {
   "subscription": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/subscription"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerSubscriptionResponse } };
   "suspendTenant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/suspend"; request: { parameters: { path: { tenantId: string } }; body: TenantStatusChangeRequest }; responses: { "200": TenantView } };
   "usage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialControlPlaneControllerUsageResponse> } };
+  "entitlementKeys": { method: "GET"; path: "/api/v1/platform-admin/commercial/entitlement-keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<EntitlementKeyResponse> } };
   "activate": { method: "POST"; path: "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation"; request: { parameters: { path: { planVersionId: string } }; body: CommercialAdminControllerReasonRequest }; responses: { "200": unknown } };
+  "plans": { method: "GET"; path: "/api/v1/platform-admin/commercial/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanResponse> } };
   "createPlan": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans"; request: { parameters: Record<string, never>; body: CreatePlanRequest }; responses: { "200": {  } } };
   "draftVersion": { method: "POST"; path: "/api/v1/platform-admin/commercial/plans/{planId}/versions"; request: { parameters: { path: { planId: string } }; body: CommercialAdminControllerDraftVersionRequest }; responses: { "200": {  } } };
   "override": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/entitlement-overrides"; request: { parameters: { path: { tenantId: string } }; body: OverrideRequest }; responses: { "200": {  } } };

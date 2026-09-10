@@ -104,7 +104,11 @@
           @for (entitlement of snapshot.entitlements; track entitlement.entitlementKey) {
             <li class="q-body-sm">
               <span class="q-tnum">{{ entitlement.entitlementKey }}</span>
-              <span class="muted">{{ entitlement.enabled ? i18n.t('tenantDetail.entitlements.enabled') : i18n.t('tenantDetail.entitlements.disabled') }}</span>
+              @if (entitlement.enabled === null) {
+                <span class="muted q-tnum">{{ entitlement.limit ?? i18n.t('commerce.unlimited') }}</span>
+              } @else {
+                <span class="muted">{{ entitlement.enabled ? i18n.t('tenantDetail.entitlements.enabled') : i18n.t('tenantDetail.entitlements.disabled') }}</span>
+              }
             </li>
           }
         </ul>

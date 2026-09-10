@@ -2,7 +2,9 @@ package uz.horecaos.platform.commercial.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -180,6 +182,31 @@ public class PlanCatalogService {
     public List<PlanVersion> activeVersions() {
         return plans.listActiveVersions();
     }
+
+    /**
+     * Every plan with every version, drafts included.
+     *
+     * <p>For the people who author and approve plans. A plan registered but
+     * never drafted appears with no versions, which is the state it is in.
+     */
+    public List<PlanHistory> catalogueWithDrafts() {
+        Map<UUID, List<PlanVersion>> versionsByPlan = new LinkedHashMap<>();
+        plans.listAllVersions()
+                .forEach(version -> versionsByPlan
+                        .computeIfAbsent(version.planId(), ignored -> new ArrayList<>())
+                        .add(version));
+        return plans.listPlans().stream()
+                .map(plan -> new PlanHistory(
+                        plan.id(),
+                        plan.code(),
+                        plan.name(),
+                        plan.status(),
+                        List.copyOf(versionsByPlan.getOrDefault(plan.id(), List.of()))))
+                .toList();
+    }
+
+    /** A plan and all of its versions, newest first. */
+    public record PlanHistory(UUID planId, String code, String name, String status, List<PlanVersion> versions) {}
 
     /**
      * One plan version by id, whatever its activation state.
