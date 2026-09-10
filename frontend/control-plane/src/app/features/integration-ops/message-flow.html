@@ -1,48 +1,76 @@
-<h1 class="q-title">{{ i18n.t('messageFlow.title') }}</h1>
-<p class="q-body-sm lead">{{ i18n.t('messageFlow.lead') }}</p>
+<header class="head">
+  <div>
+    <h1 class="q-title">{{ i18n.t('messageFlow.title') }}</h1>
+    <p class="q-body-sm lead">{{ i18n.t('messageFlow.lead') }}</p>
+  </div>
+  <button type="button" class="refresh q-body-sm" [disabled]="loading()" (click)="load()">{{ i18n.t('overview.refresh') }}</button>
+</header>
 
-<div class="notice">
-  <p class="q-caption">{{ i18n.t('messageFlow.gap') }}</p>
-</div>
-
-@if (loading()) {
-  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
-} @else if (loadError(); as message) {
+@if (loadError(); as message) {
   <p class="q-body-sm state error">{{ message }}</p>
-} @else {
+} @else if (health(); as h) {
+  <p class="q-caption muted">{{ i18n.t('overview.measuredAt', { time: i18n.dateTime(asDate(h.measuredAt)) }) }}</p>
   <div class="grid">
     <section class="panel">
-      <h2 class="q-subhead">{{ i18n.t('messageFlow.pending.title') }}</h2>
-      <p class="q-caption muted">{{ i18n.t('messageFlow.pending.note') }}</p>
-      @if (pending().length === 0) {
-        <p class="q-body-sm muted">{{ i18n.t('messageFlow.pending.empty') }}</p>
+      <h2 class="q-subhead">{{ i18n.t('messageFlow.outbox.title') }}</h2>
+      <p class="q-caption muted">{{ i18n.t('messageFlow.outbox.note') }}</p>
+      @if (h.queues.outbox.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('messageFlow.empty') }}</p>
       } @else {
-        <ul class="list">
-          @for (event of pending(); track event.id) {
-            <li class="q-body-sm">
-              <span class="q-tnum">{{ event.id }}</span>
-              <span class="muted">{{ event.eventType }}</span>
-            </li>
-          }
-        </ul>
+        <table class="table outbox">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ i18n.t('messageFlow.column.topic') }}</th>
+              <th class="q-caption num">{{ i18n.t('messageFlow.column.waiting') }}</th>
+              <th class="q-caption num">{{ i18n.t('messageFlow.column.oldest') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (queue of h.queues.outbox; track queue.name) {
+              <tr [class.stale]="stale(queue.oldestAgeSeconds)">
+                <td class="q-body-sm q-tnum">{{ queue.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ queue.pending }}</td>
+                <td class="q-body-sm q-tnum num">{{ wait(queue.oldestAgeSeconds) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
       }
     </section>
 
     <section class="panel">
-      <h2 class="q-subhead">{{ i18n.t('messageFlow.deadLetter.title') }}</h2>
-      <p class="q-caption muted">{{ i18n.t('messageFlow.deadLetter.note') }}</p>
-      @if (deadLettered().length === 0) {
-        <p class="q-body-sm muted">{{ i18n.t('messageFlow.deadLetter.empty') }}</p>
+      <h2 class="q-subhead">{{ i18n.t('messageFlow.inbox.title') }}</h2>
+      <p class="q-caption muted">{{ i18n.t('messageFlow.inbox.note') }}</p>
+      @if (h.queues.inbox.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('messageFlow.empty') }}</p>
       } @else {
-        <ul class="list">
-          @for (event of deadLettered(); track event.id) {
-            <li class="q-body-sm">
-              <span class="q-tnum">{{ event.id }}</span>
-              <span class="muted">{{ event.errorCode }}</span>
-            </li>
-          }
-        </ul>
+        <table class="table inbox">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ i18n.t('messageFlow.column.consumer') }}</th>
+              <th class="q-caption num">{{ i18n.t('messageFlow.column.waiting') }}</th>
+              <th class="q-caption num">{{ i18n.t('messageFlow.column.oldest') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (queue of h.queues.inbox; track queue.name) {
+              <tr [class.stale]="stale(queue.oldestAgeSeconds)">
+                <td class="q-body-sm q-tnum">{{ queue.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ queue.pending }}</td>
+                <td class="q-body-sm q-tnum num">{{ wait(queue.oldestAgeSeconds) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
       }
     </section>
   </div>
+
+  <p class="q-body-sm deadLetters">
+    {{ i18n.t('messageFlow.deadLetters', { outbox: h.queues.outboxDeadLetters, inbox: h.queues.inboxDeadLetters }) }}
+    <a routerLink="/integration-ops/dead-letters">{{ i18n.t('messageFlow.deadLetters.open') }}</a>
+  </p>
+  <p class="q-caption muted">{{ i18n.t('messageFlow.gap') }}</p>
+} @else {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 }

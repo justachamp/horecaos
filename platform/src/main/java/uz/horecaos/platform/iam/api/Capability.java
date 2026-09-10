@@ -972,6 +972,22 @@ public enum Capability {
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
 
     /**
+     * ADR 0081: opening a support session into one tenant — a time-boxed
+     * grant of a support-only role, with a stated reason, that the tenant can
+     * see. Platform-scoped: it is HorecaOS staff entering a restaurant, never
+     * a restaurant's own act.
+     */
+    SUPPORT_SESSION_START("support.session.start", "support", "session.start"),
+
+    /**
+     * ADR 0081: reading who from HorecaOS entered a tenant, when, why and for
+     * how long. A tenant's owner and administrators hold it for their own
+     * account; the support roles hold it so the person inside can see their
+     * own session's deadline.
+     */
+    SUPPORT_SESSION_READ("support.session.read", "support", "session.read"),
+
+    /**
      * ADR 0043 names this capability {@code report.read}. It is the one already
      * registered here: reading a report and reading a metric definition are the
      * same power, and a second code for it would let a role hold one name and not

@@ -13,4 +13,5 @@
 window.horecaosControlPlaneConfig = {
   apiBaseUrl: '',
   displayTimeZone: 'Asia/Tashkent',
+  operationsAppUrl: 'http://localhost:4200',
 };

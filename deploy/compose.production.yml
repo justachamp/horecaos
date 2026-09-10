@@ -255,6 +255,7 @@ services:
       APP_ISSUER_URL: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
       APP_CLIENT_ID: horecaos-control-plane
       APP_DISPLAY_TIME_ZONE: Asia/Tashkent
+      APP_OPERATIONS_URL: ${HORECAOS_OPERATIONS_ORIGIN}
       TZ: Asia/Tashkent
     networks:
       - public

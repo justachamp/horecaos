@@ -1,0 +1,118 @@
+<a class="q-body-sm back" [routerLink]="['/tenants', tenantId]">← {{ directory.nameOf(tenantId) }}</a>
+<h1 class="q-title">{{ i18n.t('support.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('support.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (mine(); as current) {
+  <section class="panel current">
+    <h2 class="q-subhead">{{ i18n.t('support.current.title') }}</h2>
+    <p class="q-body-sm">
+      <strong>{{ i18n.t(current.access === 'ASSIST' ? 'support.access.ASSIST' : 'support.access.VIEW') }}</strong>
+      · {{ i18n.t('support.state.open', { time: i18n.dateTime(asDate(current.expiresAt)) }) }}
+    </p>
+    <p class="q-body-sm muted">{{ current.reason }}</p>
+    @if (operationsLink(); as link) {
+      <a class="q-body-sm openOps" [href]="link" target="_blank" rel="noopener">{{ i18n.t('support.openOperations') }}</a>
+    } @else {
+      <p class="q-caption muted">{{ i18n.t('support.noOperationsUrl', { tenantId }) }}</p>
+    }
+    <div class="inlineForm">
+      <input
+        class="q-body-sm"
+        name="endReason"
+        [placeholder]="i18n.t('common.reason')"
+        [value]="endReason()"
+        (input)="endReason.set($any($event.target).value)"
+      />
+      <button type="button" class="endMine" [disabled]="busy() || endReason().trim().length === 0" (click)="end(current)">
+        {{ i18n.t('support.end') }}
+      </button>
+    </div>
+  </section>
+} @else if (session.has('SUPPORT_SESSION_START')) {
+  <form class="panel openForm" (submit)="open($event)">
+    <h2 class="q-subhead">{{ i18n.t('support.open.title') }}</h2>
+    <fieldset class="choices">
+      <legend class="q-caption">{{ i18n.t('support.open.access') }}</legend>
+      @for (level of ['VIEW', 'ASSIST']; track level) {
+        <label class="choice q-body-sm">
+          <input type="radio" name="access" [value]="level" [checked]="access() === level" (change)="access.set($any(level))" />
+          <span>
+            <strong>{{ i18n.t(level === 'ASSIST' ? 'support.access.ASSIST' : 'support.access.VIEW') }}</strong>
+            <span class="muted"> — {{ i18n.t(level === 'ASSIST' ? 'support.access.ASSIST.hint' : 'support.access.VIEW.hint') }}</span>
+          </span>
+        </label>
+      }
+    </fieldset>
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('support.open.length') }}</span>
+      <select class="q-body-sm" name="minutes" (change)="minutes.set(+$any($event.target).value)">
+        @for (length of lengths; track length) {
+          <option [value]="length" [selected]="length === minutes()">{{ i18n.t('support.open.minutes', { minutes: length }) }}</option>
+        }
+      </select>
+    </label>
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('support.open.reason') }}</span>
+      <input class="q-body-sm" name="reason" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+    </label>
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('support.open.ticket') }}</span>
+      <input class="q-body-sm" name="ticket" [value]="ticket()" (input)="ticket.set($any($event.target).value)" />
+    </label>
+    <p class="q-caption muted">{{ i18n.t('support.open.hint') }}</p>
+    <button type="submit" [disabled]="!canOpen()">{{ i18n.t('support.open.submit') }}</button>
+  </form>
+}
+
+<section class="panel">
+  <h2 class="q-subhead">{{ i18n.t('support.history.title') }}</h2>
+  @if (loading()) {
+    <p class="q-body-sm muted">{{ i18n.t('tenants.loading') }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error">{{ message }}</p>
+  } @else if (sessions().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('support.history.empty') }}</p>
+  } @else {
+    <div class="scroll">
+      <table class="table history">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('support.history.who') }}</th>
+            <th class="q-caption">{{ i18n.t('support.open.access') }}</th>
+            <th class="q-caption">{{ i18n.t('support.history.started') }}</th>
+            <th class="q-caption">{{ i18n.t('support.open.reason') }}</th>
+            <th class="q-caption">{{ i18n.t('support.history.outcome') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of sessions(); track row.id) {
+            <tr>
+              <td class="q-body-sm">{{ who(row.principalSubject) }}</td>
+              <td class="q-body-sm">{{ i18n.t(row.access === 'ASSIST' ? 'support.access.ASSIST' : 'support.access.VIEW') }}</td>
+              <td class="q-body-sm">{{ i18n.dateTime(asDate(row.startedAt)) }}</td>
+              <td class="q-body-sm">
+                {{ row.reason }}
+                @if (row.ticketReference) {
+                  <span class="muted q-tnum">· {{ row.ticketReference }}</span>
+                }
+              </td>
+              <td class="q-body-sm">
+                <span class="chip q-caption" [class.live]="row.open">{{ outcome(row) }}</span>
+                @if (row.endReason) {
+                  <span class="muted"> — {{ row.endReason }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

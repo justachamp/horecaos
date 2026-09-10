@@ -3,7 +3,7 @@
 
 <div class="notice q-body-sm">{{ 'settings.home.readinessNotBuilt' | t }}</div>
 
-@for (group of groups; track group.label) {
+@for (group of groups(); track group.label) {
   <section class="group">
     <h2 class="q-subhead">{{ group.label | t }}</h2>
     <div class="group__items">

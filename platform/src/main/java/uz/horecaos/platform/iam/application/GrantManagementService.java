@@ -217,6 +217,77 @@ public class GrantManagementService {
     }
 
     /**
+     * Confers a support-session role for the length of one session (ADR 0081).
+     *
+     * <p>Not {@link #grant}: the person opening a session holds a platform
+     * capability to do so rather than {@code IAM_GRANT_MANAGE} inside the
+     * tenant, and the role is one nobody grants by hand. Not {@link
+     * #grantSystemInitiated} either, which hands back an existing active grant
+     * as it is — and a session whose window has closed leaves exactly such a
+     * row behind, still {@code ACTIVE} with a {@code valid_until} in the past.
+     * Reusing it would open a new session on a grant that had already expired,
+     * so a lapsed one is retired here first, with its own reason, and the
+     * one-active-grant rule ({@code uq_grant_active}) keeps meaning one open
+     * session per person per tenant per role.
+     *
+     * @throws ApiException {@code RESOURCE_CONFLICT} when the same person
+     *                      already has an unexpired session of this kind here
+     */
+    @Transactional
+    public UUID grantForSupportSession(GrantCommand command, String staffSubject) {
+        if (command.validUntil() == null) {
+            throw new IllegalArgumentException("A support session always ends");
+        }
+        PlatformRole platformRole = PlatformRole.find(command.roleCode())
+                .filter(PlatformRole::supportSessionOnly)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "A support session confers a support-session role and nothing else"));
+        ResolvedRole role = resolveRole(platformRole.code(), command.scope().tenantId());
+        Instant now = clock.instant();
+
+        jdbc.sql("""
+                UPDATE iam.grants
+                   SET status = 'REVOKED', version = version + 1, updated_at = :now,
+                       revoked_at = :now, revoked_by = :revokedBy,
+                       revoked_reason = 'The support session it was opened for had ended'
+                 WHERE principal_subject = :subject AND role_id = :roleId
+                   AND scope_type = :scopeType AND scope_id IS NOT DISTINCT FROM :scopeId
+                   AND status = 'ACTIVE' AND valid_until IS NOT NULL AND valid_until <= :now
+                """)
+                .param("now", at(now))
+                .param("revokedBy", staffSubject)
+                .param("subject", command.principalSubject())
+                .param("roleId", role.id())
+                .param("scopeType", command.scope().type().name())
+                .param("scopeId", command.scope().scopeId())
+                .update();
+
+        if (existingActiveGrant(command.principalSubject(), role.id(), command.scope())
+                .isPresent()) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "A support session of this kind is already open for this tenant");
+        }
+
+        UUID grantId = insertGrantRow(command, role, staffSubject, now);
+        evictAndPublish(new GrantChanged(
+                grantId,
+                GrantChanged.Change.GRANTED,
+                command.principalSubject(),
+                command.scope(),
+                staffSubject,
+                command.reason(),
+                Map.of(
+                        "role",
+                        role.code(),
+                        "scope",
+                        command.scope().type().name(),
+                        "validUntil",
+                        String.valueOf(command.validUntil())),
+                now));
+        return grantId;
+    }
+
+    /**
      * Matches {@code uq_grant_active} exactly: one active grant per
      * (subject, role, scope-type, scope-id-or-the-platform-sentinel).
      */
@@ -390,6 +461,12 @@ public class GrantManagementService {
         if (role.capabilities().contains(Capability.PLATFORM_ADMIN)) {
             throw new IllegalArgumentException(
                     "platform.admin is issued by Keycloak and is never granted through this API");
+        }
+        // ADR 0081: a support-session role comes with a session — a reason, a
+        // deadline and a record the tenant can read — or not at all.
+        if (PlatformRole.find(role.code()).map(PlatformRole::supportSessionOnly).orElse(false)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "This role is conferred only by opening a support session");
         }
 
         for (Capability capability : role.capabilities()) {

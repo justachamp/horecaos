@@ -21,6 +21,12 @@ export interface AppConfig {
    * Bukhara and one in Tashkent must read the same timestamp on the same row.
    */
   readonly displayTimeZone: string;
+
+  /**
+   * Origin of the operations app, no trailing slash. A support session opens
+   * it for one tenant (ADR 0081); empty hides the link.
+   */
+  readonly operationsAppUrl?: string;
 }
 
 export const APP_CONFIG = new InjectionToken<AppConfig>('HorecaOS control-plane configuration');
@@ -38,6 +44,7 @@ interface ConfiguredWindow {
 const DEVELOPMENT_DEFAULTS: AppConfig = {
   apiBaseUrl: 'http://localhost:8080',
   displayTimeZone: 'Asia/Tashkent',
+  operationsAppUrl: 'http://localhost:4200',
 };
 
 export function resolveAppConfig(
@@ -48,5 +55,9 @@ export function resolveAppConfig(
 
   // A trailing slash produces `//api/v1/...` once a path is appended, which
   // some gateways route and others reject. Normalise rather than debug it.
-  return { ...resolved, apiBaseUrl: resolved.apiBaseUrl.replace(/\/+$/, '') };
+  return {
+    ...resolved,
+    apiBaseUrl: resolved.apiBaseUrl.replace(/\/+$/, ''),
+    operationsAppUrl: (resolved.operationsAppUrl ?? '').replace(/\/+$/, ''),
+  };
 }

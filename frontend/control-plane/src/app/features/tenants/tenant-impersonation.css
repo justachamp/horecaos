@@ -1,0 +1,149 @@
+.back {
+  color: var(--q-ink-muted);
+  text-decoration: none;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.state {
+  margin-top: 16px;
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.state.error,
+.error {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.panel {
+  margin-top: 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 960px;
+}
+
+.panel h2,
+.panel p {
+  margin: 0;
+}
+
+.current {
+  border-color: var(--q-warning);
+  background: var(--q-warning-tint);
+}
+
+.openOps {
+  color: var(--q-primary);
+  font-weight: 600;
+}
+
+.choices {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineForm input {
+  flex: 1 1 260px;
+}
+
+input:not([type='radio']),
+select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+button {
+  align-self: flex-start;
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.table thead tr,
+.table tbody tr {
+  background: var(--q-canvas);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.chip {
+  padding: 2px 8px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+  white-space: nowrap;
+}
+
+.chip.live {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}

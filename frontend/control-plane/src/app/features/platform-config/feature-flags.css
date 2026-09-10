@@ -1,0 +1,135 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.state {
+  margin-top: 16px;
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.strong {
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
+.panel {
+  margin-top: 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 900px;
+}
+
+.panel h2,
+.panel p {
+  margin: 0;
+}
+
+.flagHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.chip {
+  padding: 2px 8px;
+  background: var(--q-hairline);
+  color: var(--q-ink-muted);
+  white-space: nowrap;
+}
+
+.chip.on {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tenants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tenants li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.name {
+  min-width: 180px;
+}
+
+.confirm,
+.add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.confirm input {
+  flex: 1 1 260px;
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.choice {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+  padding: 4px 10px;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.addToggle {
+  align-self: flex-start;
+}

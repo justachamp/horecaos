@@ -1,7 +1,31 @@
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 1000px;
+}
+
 .lead {
   color: var(--q-ink-muted);
   margin-top: 4px;
   max-width: 640px;
+}
+
+.refresh {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.measured {
+  margin-top: 12px;
 }
 
 .state {
@@ -19,13 +43,20 @@
   gap: 1px;
   background: var(--q-hairline);
   border: 1px solid var(--q-hairline);
-  margin-top: 24px;
-  max-width: 760px;
+  margin-top: 12px;
+  max-width: 1000px;
 }
 
 .tile {
   background: var(--q-canvas);
   padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tileAlert {
+  box-shadow: inset 3px 0 0 var(--q-error);
 }
 
 .label {
@@ -39,28 +70,14 @@
 
 .sub {
   color: var(--q-ink-muted);
-  margin-top: 4px;
+  margin: 0;
 }
 
-.truncated {
-  color: var(--q-warning-text);
-  margin-top: 4px;
+.alert {
+  color: var(--q-error-text);
 }
 
-.gaps {
-  margin-top: 24px;
-  background: var(--q-canvas);
-  border: 1px solid var(--q-hairline);
-  padding: 16px 24px;
+.gap {
+  margin-top: 16px;
   max-width: 760px;
-}
-
-.gapsList {
-  list-style: disc;
-  margin: 8px 0 0;
-  padding-left: 20px;
-  color: var(--q-ink-muted);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }

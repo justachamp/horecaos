@@ -84,6 +84,24 @@ export interface ConfigurationValueView {
  * debugger and IA 8.5's platform-default reference, which read the same
  * code-owned key registry for two different audiences.
  */
+/** A tenant set apart from the platform for one flag; `value` null means it has been handed back. */
+export interface FeatureFlagTenantSetting {
+  readonly tenantId: string;
+  readonly tenantName: string | null;
+  readonly value: boolean | null;
+  readonly version: number;
+}
+
+/** One feature flag and where it is on. */
+export interface FeatureFlagView {
+  readonly code: string;
+  readonly description: string;
+  readonly defaultValue: boolean;
+  readonly platformValue: boolean | null;
+  readonly platformVersion: number | null;
+  readonly tenants: readonly FeatureFlagTenantSetting[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ConfigurationApi {
   private readonly api = inject(ApiClient);
@@ -122,5 +140,10 @@ export class ConfigurationApi {
         request,
       ),
     );
+  }
+
+  /** Every feature flag with its platform value and the tenants set apart from it. */
+  async featureFlags(): Promise<FeatureFlagView[]> {
+    return firstValueFrom(this.api.get<FeatureFlagView[]>('/api/v1/control-plane/feature-flags'));
   }
 }

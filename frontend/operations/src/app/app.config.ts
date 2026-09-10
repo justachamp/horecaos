@@ -11,6 +11,7 @@ import { routes } from './app.routes';
 import { bearerTokenInterceptor } from './core/api/bearer-token.interceptor';
 import { correlationIdInterceptor } from './core/api/correlation-id.interceptor';
 import { sessionRefreshInterceptor } from './core/api/session-refresh.interceptor';
+import { captureSupportTenant, supportTenantInterceptor } from './core/auth/support-tenant';
 import { Auth } from './core/auth/auth';
 import { I18n } from './core/i18n/i18n';
 
@@ -38,6 +39,8 @@ export const appConfig: ApplicationConfig = {
         // interceptor again and picks up a freshly refreshed token, not the
         // stale one the first attempt carried.
         correlationIdInterceptor,
+        // ADR 0081: a support tab names its tenant on the session-context read.
+        supportTenantInterceptor,
         sessionRefreshInterceptor,
         bearerTokenInterceptor,
       ]),
@@ -56,6 +59,8 @@ export const appConfig: ApplicationConfig = {
      */
     provideAppInitializer(() => {
       const auth = inject(Auth);
+      // Before sign-in, so a support link that bounces through /login keeps its tenant.
+      captureSupportTenant();
       return (async () => {
         await auth.initialise();
       })();

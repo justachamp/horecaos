@@ -1,0 +1,71 @@
+<h1 class="q-title">{{ 'settings.nav.supportVisits' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.supportVisits.lead' | t }}</p>
+
+@if (actionText(); as text) {
+  <p class="q-body-sm note" role="status">{{ text }}</p>
+}
+
+@switch (state()) {
+  @case ('loading') {
+    <p class="q-body-sm muted">{{ 'settings.supportVisits.loading' | t }}</p>
+  }
+  @case ('denied') {
+    <p class="q-body-sm muted">{{ 'settings.supportVisits.denied' | t }}</p>
+  }
+  @case ('error') {
+    <p class="q-body-sm error">{{ loadErrorText() }}</p>
+  }
+  @default {
+    @if (visits().length === 0) {
+      <p class="q-body-sm muted">{{ 'settings.supportVisits.empty' | t }}</p>
+    } @else {
+      <ul class="visits">
+        @for (visit of visits(); track visit.id) {
+          <li class="visit" [class.visit--open]="visit.open">
+            <div class="visit__head q-body-sm">
+              <strong>{{ (visit.access === 'ASSIST' ? 'support.banner.assist' : 'support.banner.view') | t }}</strong>
+              <span class="muted">{{ when(visit.startedAt) }}</span>
+            </div>
+            <p class="q-body-sm">{{ visit.reason }}</p>
+            <p class="q-caption muted">
+              @if (visit.open) {
+                {{ 'settings.supportVisits.openUntil' | t: { time: when(visit.expiresAt) } }}
+              } @else if (visit.endedAt) {
+                {{ 'settings.supportVisits.endedAt' | t: { time: when(visit.endedAt) } }}
+                @if (visit.endReason) {
+                  — {{ visit.endReason }}
+                }
+              } @else {
+                {{ 'settings.supportVisits.lapsedAt' | t: { time: when(visit.expiresAt) } }}
+              }
+            </p>
+            @if (visit.open) {
+              <button type="button" class="q-body-sm endToggle" (click)="openEnd(visit)">
+                {{ 'settings.supportVisits.end' | t }}
+              </button>
+              @if (ending() === visit.id) {
+                <div class="end">
+                  <input
+                    class="q-body-sm"
+                    name="endReason"
+                    [placeholder]="'settings.supportVisits.reason' | t"
+                    [value]="reason()"
+                    (input)="reason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="q-body-sm confirmEnd"
+                    [disabled]="busy() || reason().trim().length === 0"
+                    (click)="end(visit)"
+                  >
+                    {{ 'settings.supportVisits.confirmEnd' | t }}
+                  </button>
+                </div>
+              }
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+}

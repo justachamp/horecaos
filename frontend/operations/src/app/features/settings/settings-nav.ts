@@ -14,6 +14,8 @@ export interface SettingsNavItem {
   readonly description: MessageKey;
   /** Rendered by the not-built route when this screen has no component yet. */
   readonly builtRoute: boolean;
+  /** Shown only while this feature flag is on for the tenant (ADR 0082). */
+  readonly featureFlag?: string;
 }
 
 export interface SettingsNavGroup {
@@ -122,6 +124,13 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         builtRoute: true,
       },
       {
+        path: 'support-visits',
+        label: 'settings.nav.supportVisits',
+        description: 'settings.home.description.supportVisits',
+        builtRoute: true,
+        featureFlag: 'feature.support_visits',
+      },
+      {
         path: 'terms',
         label: 'settings.nav.terms',
         description: 'settings.home.description.terms',
@@ -134,3 +143,11 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
 export const SETTINGS_NAV_ITEMS: readonly SettingsNavItem[] = SETTINGS_NAVIGATION.flatMap(
   (group) => group.items,
 );
+
+/** The navigation with every flagged item whose flag is off taken out, and any group left empty. */
+export function visibleSettings(isOn: (flag: string) => boolean): readonly SettingsNavGroup[] {
+  return SETTINGS_NAVIGATION.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.featureFlag === undefined || isOn(item.featureFlag)),
+  })).filter((group) => group.items.length > 0);
+}

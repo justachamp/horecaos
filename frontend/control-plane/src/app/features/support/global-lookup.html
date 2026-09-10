@@ -1,28 +1,58 @@
 <h1 class="q-title">{{ i18n.t('globalLookup.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('globalLookup.lead') }}</p>
 
-<div class="notice">
-  <p class="q-caption">{{ i18n.t('globalLookup.gap') }}</p>
-</div>
-
 <form class="picker" (submit)="search($event)">
-  <label class="q-caption">{{ i18n.t('globalLookup.slug') }}</label>
-  <input class="q-body-sm" type="text" [value]="slug()" (input)="slug.set($any($event.target).value)" />
-  <button type="submit" [disabled]="slug().trim().length === 0">{{ i18n.t('globalLookup.search') }}</button>
+  <input
+    class="q-body-sm"
+    type="search"
+    name="q"
+    autocomplete="off"
+    [placeholder]="i18n.t('globalLookup.placeholder')"
+    [value]="query()"
+    (input)="query.set($any($event.target).value)"
+  />
+  <button type="submit" [disabled]="query().trim().length === 0 || searching()">{{ i18n.t('globalLookup.search') }}</button>
 </form>
+<p class="q-caption muted hint">{{ i18n.t('globalLookup.hint') }}</p>
 
 @if (searching()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 } @else if (error(); as message) {
   <p class="q-body-sm state error">{{ message }}</p>
 } @else if (searched()) {
-  @if (notFound()) {
+  @if (hits().length === 0) {
     <p class="q-body-sm state">{{ i18n.t('globalLookup.notFound') }}</p>
-  } @else if (result(); as tenant) {
-    <section class="panel">
-      <h2 class="q-subhead">{{ tenant.displayName }}</h2>
-      <p class="q-body-sm muted">{{ tenant.legalName }} &middot; {{ tenant.slug }} &middot; {{ tenant.status }}</p>
-      <a class="q-body-sm" [routerLink]="['/tenants', tenant.id]">{{ i18n.t('globalLookup.open') }} →</a>
-    </section>
+  } @else {
+    <div class="scroll">
+      <table class="table hits">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('globalLookup.column.what') }}</th>
+            <th class="q-caption">{{ i18n.t('globalLookup.column.details') }}</th>
+            <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+            <th class="q-caption">{{ i18n.t('globalLookup.column.matched') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (hit of hits(); track hit.type + hit.id + hit.matchedOn) {
+            <tr>
+              <td class="q-body-sm"><span class="chip q-caption">{{ i18n.t(typeKey(hit.type)) }}</span></td>
+              <td class="q-body-sm">
+                {{ hit.label }}
+                <div class="q-caption muted q-tnum">{{ hit.id }}</div>
+              </td>
+              <td class="q-body-sm">
+                @if (link(hit); as target) {
+                  <a [routerLink]="target">{{ hit.tenantName ?? '—' }}</a>
+                } @else {
+                  {{ hit.tenantName ?? '—' }}
+                }
+              </td>
+              <td class="q-body-sm muted">{{ i18n.t(matchedKey(hit.matchedOn)) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 }

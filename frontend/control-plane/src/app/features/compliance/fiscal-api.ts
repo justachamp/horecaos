@@ -22,6 +22,13 @@ export interface BlockedDocumentResponse {
   readonly blockedAt: string | null;
 }
 
+/** A blocked receipt with the tenant it belongs to, from the cross-tenant list. */
+export interface PlatformBlockedDocument {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly document: BlockedDocumentResponse;
+}
+
 export interface BlockedWorklistResponse {
   readonly count: number;
   readonly documents: readonly BlockedDocumentResponse[];
@@ -49,6 +56,13 @@ export class FiscalApi {
       this.api.get<BlockedWorklistResponse>(`/api/v1/tenants/${tenantId}/fiscal/documents/blocked`, {
         query: { reasonCode },
       }),
+    );
+  }
+
+  /** Every tenant's blocked receipts, longest-waiting first. */
+  async blockedAcrossTenants(limit = 200): Promise<PlatformBlockedDocument[]> {
+    return firstValueFrom(
+      this.api.get<PlatformBlockedDocument[]>('/api/v1/control-plane/fiscal-documents/blocked', { query: { limit } }),
     );
   }
 

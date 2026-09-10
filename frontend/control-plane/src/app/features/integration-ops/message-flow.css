@@ -53,3 +53,48 @@
   border-bottom: 1px solid var(--q-hairline);
   padding-bottom: 6px;
 }
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.refresh {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.table .num {
+  text-align: right;
+}
+
+.stale td {
+  color: var(--q-error-text);
+}
+
+.deadLetters {
+  margin-top: 16px;
+}

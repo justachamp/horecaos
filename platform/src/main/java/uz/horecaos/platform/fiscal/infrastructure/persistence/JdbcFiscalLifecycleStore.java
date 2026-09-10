@@ -532,6 +532,28 @@ public class JdbcFiscalLifecycleStore {
                 .list();
     }
 
+    /**
+     * ADR 0084: every tenant's blocked receipts, longest-waiting first, with the
+     * tenant's name — the cross-tenant worklist the control plane had to build
+     * one tenant at a time.
+     */
+    public List<BlockedAcrossTenants> blockedAcrossTenants(int limit) {
+        return jdbc.sql("SELECT " + DOCUMENT_COLUMNS + """
+                 , (SELECT t.display_name FROM tenant.tenants t WHERE t.id = fiscal_documents.tenant_id) AS tenant_name
+                 FROM fiscal.fiscal_documents
+                 WHERE status = 'BLOCKED'
+                 ORDER BY blocked_at
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((row, number) ->
+                        new BlockedAcrossTenants(mapDocument(row, number), row.getString("tenant_name")))
+                .list();
+    }
+
+    /** A blocked receipt and the name of the tenant it belongs to. */
+    public record BlockedAcrossTenants(FiscalDocumentRow document, String tenantName) {}
+
     /** Every document for an order, oldest first. Plural, and never anything else. */
     public List<FiscalDocumentRow> forOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql("SELECT " + DOCUMENT_COLUMNS + """
