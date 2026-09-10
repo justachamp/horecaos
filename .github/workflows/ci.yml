@@ -126,16 +126,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [control-plane, operations, storefront]
+        # Every app under frontend/ that carries a package.json. storefront-milliy
+        # was missing from this list while three customer features shipped into
+        # it -- reviews, promo codes and referrals -- so none of them was ever
+        # built or tested by CI.
+        app: [control-plane, operations, storefront, storefront-milliy]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install and build
+      - name: Install, test and build
         working-directory: frontend/${{ matrix.app }}
         run: |
           npm ci
+          npm test
           npm run build --if-present
 
   # ADR 0061: CI's job ends here — building and publishing pinned images.
