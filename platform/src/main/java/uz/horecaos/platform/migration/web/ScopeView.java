@@ -1,12 +1,14 @@
 package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
 import uz.horecaos.platform.migration.domain.ReadMode;
 import uz.horecaos.platform.migration.domain.ScopeState;
+import uz.horecaos.platform.migration.domain.ScopeStateMachine;
 import uz.horecaos.platform.migration.domain.WriteMode;
 
 /**
@@ -31,6 +33,12 @@ import uz.horecaos.platform.migration.domain.WriteMode;
  * @param locationId     null for a scope covering the whole brand
  * @param version        the optimistic-concurrency token, echoed in the {@code
  *                       ETag} and required back on every transition
+ * @param nextStates     where the scope may move from here, read from the
+ *                       canonical machine so a console never keeps its own copy.
+ *                       Each target has one entry point: a holding state is a
+ *                       suspension, ROLLING_BACK a rollback, TARGET_OWNED a
+ *                       cutover, the rest a transition. Empty for a held scope,
+ *                       which leaves by resuming, and for a retired one
  */
 public record ScopeView(
         UUID id,
@@ -45,7 +53,8 @@ public record ScopeView(
         ReadMode readMode,
         ScopeState state,
         Instant stateEnteredAt,
-        int version) {
+        int version,
+        List<ScopeState> nextStates) {
 
     static ScopeView of(ScopeRow row) {
         return new ScopeView(
@@ -61,6 +70,7 @@ public record ScopeView(
                 row.modes().readMode(),
                 row.state(),
                 row.stateEnteredAt(),
-                row.version());
+                row.version(),
+                ScopeStateMachine.nextFrom(row.state()).stream().sorted().toList());
     }
 }

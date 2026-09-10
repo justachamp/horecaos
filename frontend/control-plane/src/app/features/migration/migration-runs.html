@@ -1,75 +1,457 @@
 <h1 class="q-title">{{ i18n.t('migrationRuns.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('migrationRuns.lead') }}</p>
 
-@if (loadError(); as message) {
-  <p class="q-body-sm error">{{ message }}</p>
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
 }
 
 <section class="panel">
-  <h2 class="q-subhead">{{ i18n.t('migrationRuns.program.title') }}</h2>
-  <p class="q-body-sm muted">{{ i18n.t('migrationRuns.program.lead') }}</p>
-  <form class="inlineForm" (submit)="findOrCreateProgram($event)">
-    <input class="q-body-sm" type="text" [placeholder]="i18n.t('migrationRuns.program.name')" [value]="name()" (input)="name.set($any($event.target).value)" />
-    <input class="q-body-sm" type="text" [placeholder]="i18n.t('migrationRuns.program.source')" [value]="sourceEnvironment()" (input)="sourceEnvironment.set($any($event.target).value)" />
-    <input class="q-body-sm" type="text" [placeholder]="i18n.t('migrationRuns.program.target')" [value]="targetEnvironment()" (input)="targetEnvironment.set($any($event.target).value)" />
-    <input class="q-body-sm" type="number" min="1" [placeholder]="i18n.t('migrationRuns.program.policyVersion')" [value]="policyVersion()" (input)="policyVersion.set($any($event.target).value)" />
-    <input class="q-body-sm" type="text" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
-    <button type="submit" [disabled]="!canSubmitProgram()">
-      {{ submitting() ? i18n.t('onboarding.start.submitting') : i18n.t('migrationRuns.program.submit') }}
-    </button>
-  </form>
-</section>
+  <header class="panelHead">
+    <h2 class="q-subhead">{{ i18n.t('migrationRuns.programs.title') }}</h2>
+    @if (session.has('MIGRATION_SCOPE_MANAGE')) {
+      <button type="button" class="secondary" (click)="registering.set(!registering())">
+        {{ registering() ? i18n.t('common.cancel') : i18n.t('migrationRuns.program.register') }}
+      </button>
+    }
+  </header>
 
-@if (program(); as p) {
-  <section class="panel">
-    <h2 class="q-subhead">{{ p.name }} <span class="pill">{{ p.status }}</span></h2>
-    <p class="q-body-sm muted">
-      {{ p.sourceEnvironment }} → {{ p.targetEnvironment }} &middot; {{ i18n.t('migrationRuns.program.policyVersion') }} {{ p.policyVersion }}
-    </p>
-  </section>
+  @if (registering()) {
+    <form class="grid registerForm" (submit)="register($event)">
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('migrationRuns.program.name') }}</span>
+        <input class="q-body-sm" name="programName" [value]="name()" (input)="name.set($any($event.target).value)" />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('migrationRuns.program.source') }}</span>
+        <input
+          class="q-body-sm"
+          name="sourceEnvironment"
+          placeholder="delever-production"
+          [value]="sourceEnvironment()"
+          (input)="sourceEnvironment.set($any($event.target).value)"
+        />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('migrationRuns.program.target') }}</span>
+        <input
+          class="q-body-sm"
+          name="targetEnvironment"
+          [value]="targetEnvironment()"
+          (input)="targetEnvironment.set($any($event.target).value)"
+        />
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('migrationRuns.program.policyVersion') }}</span>
+        <input
+          class="q-body-sm narrow"
+          name="policyVersion"
+          inputmode="numeric"
+          [value]="policyVersion()"
+          (input)="policyVersion.set($any($event.target).value)"
+        />
+      </label>
+      <label class="field wide">
+        <span class="q-caption">{{ i18n.t('common.reason') }}</span>
+        <input class="q-body-sm" name="programReason" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+      </label>
+      <div class="actions">
+        <button type="submit" [disabled]="!canRegister()">{{ i18n.t('migrationRuns.program.submit') }}</button>
+      </div>
+    </form>
+  }
 
-  <section class="panel">
-    <h2 class="q-subhead">{{ i18n.t('migrationRuns.scopes.title') }}</h2>
-    @if (scopes().length === 0) {
-      <p class="q-body-sm muted">{{ i18n.t('migrationRuns.scopes.empty') }}</p>
-    } @else {
-      <table class="table">
+  @if (loading()) {
+    <p class="q-body-sm muted">{{ i18n.t('tenants.loading') }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error">{{ message }}</p>
+  } @else if (programs().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('migrationRuns.programs.empty') }}</p>
+  } @else {
+    <div class="scroll">
+      <table class="table programs">
         <thead>
           <tr>
-            <th class="q-caption">{{ i18n.t('migrationRuns.column.tenant') }}</th>
-            <th class="q-caption">{{ i18n.t('migrationRuns.column.capability') }}</th>
-            <th class="q-caption">{{ i18n.t('migrationRuns.column.owners') }}</th>
-            <th class="q-caption">{{ i18n.t('migrationRuns.column.state') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.program.name') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.column.environments') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.program.policyVersion') }}</th>
+            <th class="q-caption">{{ i18n.t('migrationRuns.column.status') }}</th>
           </tr>
         </thead>
         <tbody>
-          @for (scope of scopes(); track scope.id) {
-            <tr>
-              <td class="q-body-sm q-tnum">{{ scope.tenantId }}</td>
-              <td class="q-body-sm">{{ scope.capability }}</td>
-              <td class="q-body-sm muted">{{ scope.sourceOwner }} → {{ scope.targetOwner }}</td>
-              <td class="q-body-sm">{{ scope.state }}</td>
+          @for (p of programs(); track p.id) {
+            <tr class="selectable" [class.selected]="p.id === programId()" (click)="chooseProgram(p.id)">
+              <td class="q-body-sm">
+                <button type="button" class="link" [attr.aria-pressed]="p.id === programId()">{{ p.name }}</button>
+              </td>
+              <td class="q-body-sm muted">{{ p.sourceEnvironment }} → {{ p.targetEnvironment }}</td>
+              <td class="q-body-sm q-tnum">{{ p.policyVersion }}</td>
+              <td class="q-body-sm"><span class="chip q-caption" [attr.data-status]="p.status">{{ i18n.t(programStatusKey(p.status)) }}</span></td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
+  }
+</section>
+
+@if (program(); as p) {
+  @if (session.has('MIGRATION_SCOPE_MANAGE') && programMoves(p).length > 0) {
+    <section class="panel programMoves">
+      <h2 class="q-subhead">{{ p.name }}</h2>
+      <form class="inlineForm" (submit)="$event.preventDefault(); moveProgram(p)">
+        <select class="q-body-sm" name="programMove" (change)="programMove.set($any($event.target).value || null)">
+          <option value="" [selected]="programMove() === null">{{ i18n.t('migrationRuns.program.chooseMove') }}</option>
+          @for (status of programMoves(p); track status) {
+            <option [value]="status" [selected]="status === programMove()">{{ i18n.t(programStatusKey(status)) }}</option>
+          }
+        </select>
+        <input
+          class="q-body-sm"
+          name="programMoveReason"
+          [placeholder]="i18n.t('common.reason')"
+          [value]="programReason()"
+          (input)="programReason.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="busy() || programMove() === null || programReason().trim().length === 0">
+          {{ i18n.t('migrationRuns.program.move') }}
+        </button>
+      </form>
+      @if (programMove() === 'COMPLETED') {
+        <p class="q-caption muted">{{ i18n.t('migrationRuns.program.completeHint') }}</p>
+      }
+    </section>
+  }
+
+  <section class="panel">
+    <header class="panelHead">
+      <h2 class="q-subhead">{{ i18n.t('migrationRuns.scopes.title') }}</h2>
+      @if (session.has('MIGRATION_SCOPE_MANAGE')) {
+        <button type="button" class="secondary" (click)="openingScope.set(!openingScope())">
+          {{ openingScope() ? i18n.t('common.cancel') : i18n.t('migrationRuns.scope.open') }}
+        </button>
+      }
+    </header>
+
+    @if (openingScope()) {
+      <form class="grid openScopeForm" (submit)="openScope($event)">
+        <div class="field wide">
+          <app-tenant-picker [value]="scopeTenantId()" (tenantChange)="chooseScopeTenant($event)" />
+        </div>
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('migrationRuns.scope.brand') }}</span>
+          <select class="q-body-sm" name="scopeBrand" [disabled]="brands().length === 0" (change)="chooseScopeBrand($any($event.target).value)">
+            <option value="">{{ i18n.t('migrationRuns.scope.wholeTenant') }}</option>
+            @for (brand of brands(); track brand.id) {
+              <option [value]="brand.id" [selected]="brand.id === scopeBrandId()">{{ brand.displayName }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('migrationRuns.scope.location') }}</span>
+          <select
+            class="q-body-sm"
+            name="scopeLocation"
+            [disabled]="locations().length === 0"
+            (change)="scopeLocationId.set($any($event.target).value)"
+          >
+            <option value="">{{ i18n.t('migrationRuns.scope.wholeBrand') }}</option>
+            @for (location of locations(); track location.id) {
+              <option [value]="location.id" [selected]="location.id === scopeLocationId()">{{ location.displayName }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('migrationRuns.column.capability') }}</span>
+          <select class="q-body-sm" name="scopeCapability" (change)="scopeCapability.set($any($event.target).value)">
+            @for (capability of capabilities; track capability) {
+              <option [value]="capability" [selected]="capability === scopeCapability()">{{ i18n.t(capabilityKey(capability)) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('migrationRuns.scope.sourceOwner') }}</span>
+          <input
+            class="q-body-sm"
+            name="sourceOwner"
+            placeholder="DELEVER"
+            [value]="scopeSourceOwner()"
+            (input)="scopeSourceOwner.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('migrationRuns.scope.targetOwner') }}</span>
+          <input
+            class="q-body-sm"
+            name="targetOwner"
+            placeholder="HORECAOS_ORDERING"
+            [value]="scopeTargetOwner()"
+            (input)="scopeTargetOwner.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field wide">
+          <span class="q-caption">{{ i18n.t('common.reason') }}</span>
+          <input class="q-body-sm" name="scopeReason" [value]="scopeReason()" (input)="scopeReason.set($any($event.target).value)" />
+        </label>
+        <div class="actions">
+          <button type="submit" [disabled]="!canOpenScope()">{{ i18n.t('migrationRuns.scope.open') }}</button>
+        </div>
+      </form>
     }
 
-    <h3 class="q-body-sm openScopeHeading">{{ i18n.t('migrationRuns.scope.open') }}</h3>
-    <form class="inlineForm" (submit)="openScope($event)">
-      <app-tenant-picker [value]="scopeTenantId()" (tenantChange)="scopeTenantId.set($event)" />
-      <select class="q-body-sm" [value]="scopeCapability()" (change)="scopeCapability.set($any($event.target).value)">
-        <option value="CATALOG">CATALOG</option>
-        <option value="CUSTOMERS">CUSTOMERS</option>
-        <option value="ORDERS">ORDERS</option>
-        <option value="INVENTORY">INVENTORY</option>
-      </select>
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('migrationRuns.scope.sourceOwner')" [value]="scopeSourceOwner()" (input)="scopeSourceOwner.set($any($event.target).value)" />
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('migrationRuns.scope.targetOwner')" [value]="scopeTargetOwner()" (input)="scopeTargetOwner.set($any($event.target).value)" />
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="scopeReason()" (input)="scopeReason.set($any($event.target).value)" />
-      <button type="submit" [disabled]="!canSubmitScope()">
-        {{ openingScope() ? i18n.t('onboarding.start.submitting') : i18n.t('migrationRuns.scope.open') }}
-      </button>
-    </form>
+    @if (scopes().length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('migrationRuns.scopes.empty') }}</p>
+    } @else {
+      <div class="scroll">
+        <table class="table scopes">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ i18n.t('migrationRuns.column.tenant') }}</th>
+              <th class="q-caption">{{ i18n.t('migrationRuns.column.place') }}</th>
+              <th class="q-caption">{{ i18n.t('migrationRuns.column.capability') }}</th>
+              <th class="q-caption">{{ i18n.t('migrationRuns.column.owners') }}</th>
+              <th class="q-caption">{{ i18n.t('migrationRuns.column.state') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of scopes(); track s.id) {
+              <tr class="selectable" [class.selected]="s.id === scopeId()" (click)="selectScope(s.id)">
+                <td class="q-body-sm">
+                  <button type="button" class="link" [attr.aria-expanded]="s.id === scopeId()">{{ directory.nameOf(s.tenantId) }}</button>
+                </td>
+                <td class="q-body-sm muted">{{ placeOf(s) }}</td>
+                <td class="q-body-sm">{{ i18n.t(capabilityKey(s.capability)) }}</td>
+                <td class="q-body-sm muted">{{ s.sourceOwner }} → {{ s.targetOwner }}</td>
+                <td class="q-body-sm"><span class="chip q-caption" [attr.data-state]="s.state">{{ i18n.t(stateKey(s.state)) }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   </section>
+
+  @if (scope(); as s) {
+    <section class="panel scopeDetail">
+      <h2 class="q-subhead">
+        {{ directory.nameOf(s.tenantId) }} · {{ i18n.t(capabilityKey(s.capability)) }}
+      </h2>
+      <dl class="facts">
+        <dt class="q-caption">{{ i18n.t('migrationRuns.column.state') }}</dt>
+        <dd class="q-body-sm">{{ i18n.t(stateKey(s.state)) }} · {{ i18n.t('migrationRuns.scope.since', { when: i18n.dateTime(asDate(s.stateEnteredAt)) }) }}</dd>
+        <dt class="q-caption">{{ i18n.t('migrationRuns.scope.writes') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ s.writeMode }}</dd>
+        <dt class="q-caption">{{ i18n.t('migrationRuns.scope.reads') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ s.readMode }}</dd>
+      </dl>
+
+      @if (isHeld(s)) {
+        @if (session.has('MIGRATION_SCOPE_MANAGE')) {
+          <form class="inlineForm" (submit)="$event.preventDefault(); resume(s)">
+            <input
+              class="q-body-sm"
+              name="moveReason"
+              [placeholder]="i18n.t('common.reason')"
+              [value]="moveReason()"
+              (input)="moveReason.set($any($event.target).value)"
+            />
+            <button type="submit" class="resume" [disabled]="busy() || moveReason().trim().length === 0">{{ i18n.t('migrationRuns.move.resume') }}</button>
+          </form>
+        }
+      } @else if (moves(s).length > 0) {
+        <form class="inlineForm moveForm" (submit)="move(s, $event)">
+          <select class="q-body-sm" name="moveTarget" (change)="moveTarget.set($any($event.target).value)">
+            <option value="" [selected]="moveTarget() === ''">{{ i18n.t('migrationRuns.move.choose') }}</option>
+            @for (target of moves(s); track target) {
+              <option [value]="target" [selected]="target === moveTarget()">{{ i18n.t(stateKey(target)) }}</option>
+            }
+          </select>
+          <input
+            class="q-body-sm"
+            name="moveReason"
+            [placeholder]="i18n.t('common.reason')"
+            [value]="moveReason()"
+            (input)="moveReason.set($any($event.target).value)"
+          />
+          <button type="submit" [disabled]="busy() || moveTarget() === '' || moveReason().trim().length === 0">
+            {{ i18n.t('migrationRuns.move.submit') }}
+          </button>
+        </form>
+        @if (moveTarget() === 'ROLLING_BACK') {
+          <p class="q-body-sm warning">{{ i18n.t('migrationRuns.move.rollbackWarning') }}</p>
+        }
+      }
+      @if (awaitsCutover(s)) {
+        <p class="q-body-sm">
+          <a [routerLink]="['/migration/cutover-checklist']">{{ i18n.t('migrationRuns.move.toCutover') }}</a>
+        </p>
+      }
+
+      <h3 class="q-body-sm strong">{{ i18n.t('migrationRuns.runs.title') }}</h3>
+      @if (runs().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('migrationRuns.runs.empty') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table runs">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('migrationRuns.run.type') }}</th>
+                <th class="q-caption">{{ i18n.t('migrationRuns.column.status') }}</th>
+                <th class="q-caption num">{{ i18n.t('migrationRuns.run.scanned') }}</th>
+                <th class="q-caption num">{{ i18n.t('migrationRuns.run.written') }}</th>
+                <th class="q-caption num">{{ i18n.t('migrationRuns.run.quarantined') }}</th>
+                <th class="q-caption">{{ i18n.t('migrationRuns.run.started') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (run of runs(); track run.id) {
+                <tr>
+                  <td class="q-body-sm">{{ i18n.t(runTypeKey(run.runType)) }} <span class="muted q-tnum">v{{ run.transformationVersion }}</span></td>
+                  <td class="q-body-sm"><span class="chip q-caption" [attr.data-run]="run.status">{{ i18n.t(runStatusKey(run.status)) }}</span></td>
+                  <td class="q-body-sm q-tnum num">{{ run.counters.scanned }}</td>
+                  <td class="q-body-sm q-tnum num">{{ run.counters.created + run.counters.updated }}</td>
+                  <td class="q-body-sm q-tnum num">{{ run.counters.quarantined }}</td>
+                  <td class="q-body-sm">{{ i18n.dateTime(asDate(run.startedAt)) }} · {{ run.startedBy }}</td>
+                  <td class="q-body-sm">
+                    @if (run.status === 'RUNNING' && session.has('MIGRATION_RUN_EXECUTE')) {
+                      <button type="button" class="secondary finishToggle" (click)="openFinish(run)">
+                        {{ finishing() === run.id ? i18n.t('common.cancel') : i18n.t('migrationRuns.run.finish') }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+                @if (finishing() === run.id) {
+                  <tr>
+                    <td colspan="7">
+                      <form class="inlineForm finishForm" (submit)="finish(s, run, $event)">
+                        <select class="q-body-sm" name="finishStatus" (change)="finishStatus.set($any($event.target).value)">
+                          @for (status of finishStatuses; track status) {
+                            <option [value]="status" [selected]="status === finishStatus()">{{ i18n.t(runStatusKey(status)) }}</option>
+                          }
+                        </select>
+                        @if (finishStatus() === 'COMPLETED') {
+                          <input
+                            class="q-body-sm q-tnum"
+                            name="checksum"
+                            [placeholder]="i18n.t('migrationRuns.run.checksum')"
+                            [value]="checksum()"
+                            (input)="checksum.set($any($event.target).value)"
+                          />
+                        }
+                        <input
+                          class="q-body-sm"
+                          name="finishReason"
+                          [placeholder]="i18n.t('common.reason')"
+                          [value]="finishReason()"
+                          (input)="finishReason.set($any($event.target).value)"
+                        />
+                        <button type="submit" [disabled]="!canFinish()">{{ i18n.t('migrationRuns.run.finishSubmit') }}</button>
+                      </form>
+                      <p class="q-caption muted">{{ i18n.t('migrationRuns.run.finishHint') }}</p>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (session.has('MIGRATION_RUN_EXECUTE')) {
+        <form class="grid startRunForm" (submit)="startRun(s, $event)">
+          <label class="field">
+            <span class="q-caption">{{ i18n.t('migrationRuns.run.type') }}</span>
+            <select class="q-body-sm" name="runType" (change)="runType.set($any($event.target).value)">
+              @for (type of runTypes; track type) {
+                <option [value]="type" [selected]="type === runType()">{{ i18n.t(runTypeKey(type)) }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ i18n.t('migrationRuns.run.transformationVersion') }}</span>
+            <input
+              class="q-body-sm narrow"
+              name="transformationVersion"
+              inputmode="numeric"
+              [value]="transformationVersion()"
+              (input)="transformationVersion.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ i18n.t('migrationRuns.run.startedBy') }}</span>
+            <input class="q-body-sm" name="startedBy" [value]="startedBy()" (input)="startedBy.set($any($event.target).value)" />
+          </label>
+          <label class="field wide">
+            <span class="q-caption">{{ i18n.t('common.reason') }}</span>
+            <input class="q-body-sm" name="runReason" [value]="runReason()" (input)="runReason.set($any($event.target).value)" />
+          </label>
+          <div class="actions">
+            <button type="submit" [disabled]="!canStartRun()">{{ i18n.t('migrationRuns.run.start') }}</button>
+          </div>
+        </form>
+      }
+
+      <h3 class="q-body-sm strong">{{ i18n.t('migrationRuns.quarantine.title') }}</h3>
+      @if (quarantine().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('migrationRuns.quarantine.empty') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table quarantine">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('migrationRuns.quarantine.entity') }}</th>
+                <th class="q-caption">{{ i18n.t('idMappingExplorer.column.legacyId') }}</th>
+                <th class="q-caption">{{ i18n.t('migrationRuns.quarantine.reason') }}</th>
+                <th class="q-caption">{{ i18n.t('migrationRuns.quarantine.evidence') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of quarantine(); track item.id) {
+                <tr>
+                  <td class="q-body-sm">{{ item.entityType }}</td>
+                  <td class="q-body-sm q-tnum">{{ item.legacyId }}</td>
+                  <td class="q-body-sm q-tnum">{{ item.reasonCode }}</td>
+                  <td class="q-body-sm q-tnum muted">{{ item.sanitizedEvidenceReference ?? '—' }}</td>
+                  <td class="q-body-sm">
+                    @if (session.has('MIGRATION_QUARANTINE_RESOLVE')) {
+                      <button type="button" class="secondary settleToggle" (click)="openSettle(item)">
+                        {{ settling() === item.id ? i18n.t('common.cancel') : i18n.t('migrationRuns.quarantine.settle') }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+                @if (settling() === item.id) {
+                  <tr>
+                    <td colspan="5">
+                      <form class="inlineForm settleForm" (submit)="$event.preventDefault(); settle(s, item)">
+                        <select class="q-body-sm" name="resolutionCode" (change)="resolutionCode.set($any($event.target).value)">
+                          @for (code of resolutionCodes; track code) {
+                            <option [value]="code" [selected]="code === resolutionCode()">{{ i18n.t(resolutionKey(code)) }}</option>
+                          }
+                        </select>
+                        <input
+                          class="q-body-sm"
+                          name="settleReason"
+                          [placeholder]="i18n.t('common.reason')"
+                          [value]="settleReason()"
+                          (input)="settleReason.set($any($event.target).value)"
+                        />
+                        <button type="submit" [disabled]="busy() || settleReason().trim().length === 0">
+                          {{ i18n.t('migrationRuns.quarantine.settleSubmit') }}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
 }

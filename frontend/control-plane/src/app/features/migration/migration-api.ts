@@ -34,7 +34,70 @@ export interface ScopeView {
   readonly state: string;
   readonly stateEnteredAt: string;
   readonly version: number;
+  /** Where the scope may move next; each target has its own action (see ScopeActions). */
+  readonly nextStates: readonly string[];
 }
+
+/** One run over a scope, with the counters it alone produced. */
+export interface RunView {
+  readonly id: string;
+  readonly scopeId: string;
+  readonly runType: RunType;
+  readonly status: RunStatus;
+  readonly sourceWatermark: string | null;
+  readonly targetWatermark: string | null;
+  readonly transformationVersion: number;
+  readonly counters: {
+    readonly scanned: number;
+    readonly created: number;
+    readonly updated: number;
+    readonly skipped: number;
+    readonly quarantined: number;
+  };
+  readonly checksum: string | null;
+  readonly startedBy: string;
+  readonly version: number;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+}
+
+export type RunType = 'BACKFILL' | 'CATCH_UP' | 'REMEDIATION' | 'RECONCILIATION';
+export type RunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export const RUN_TYPES: readonly RunType[] = ['BACKFILL', 'CATCH_UP', 'REMEDIATION', 'RECONCILIATION'];
+
+/** A legacy row that could not be migrated: its legacy id, a reason code, and a pointer to sanitized evidence. */
+export interface QuarantineItemView {
+  readonly id: string;
+  readonly runId: string;
+  readonly entityType: string;
+  readonly legacyId: string;
+  readonly reasonCode: string;
+  readonly sanitizedEvidenceReference: string | null;
+  readonly status: string;
+  readonly resolutionCode: string | null;
+  readonly resolvedBy: string | null;
+  readonly resolvedAt: string | null;
+}
+
+/** How a quarantined row is settled; the server takes any upper-snake code, these are the three it names. */
+export const RESOLUTION_CODES = ['REIMPORTED_AFTER_SOURCE_FIX', 'MAPPED_BY_HAND', 'ACCEPTED_NOT_MIGRATABLE'] as const;
+
+/** Everything a scope may cover, in the platform's own order. */
+export const MIGRATION_CAPABILITIES = [
+  'TENANCY',
+  'IDENTITY',
+  'CUSTOMERS',
+  'MEDIA',
+  'CATALOG',
+  'INVENTORY',
+  'PRICING',
+  'ORDERS',
+  'PAYMENTS',
+  'FULFILLMENT',
+] as const;
+
+/** Holding states: entered by suspending, left by resuming. */
+export const HOLDING_STATES: readonly string[] = ['PAUSED', 'BLOCKED_RECONCILIATION'];
 
 /** MigrationEvidenceController.EntityMappingResponse (IA 9.2 ID mapping explorer). */
 export interface EntityMappingView {
@@ -65,18 +128,9 @@ export interface ReconciliationResultView {
 }
 
 /**
- * IA 9.1 Migration runs -- `MigrationProgramController` (ADR 0024), now
- * reachable from control-plane after ADR 0066 moved `/api/v1/platform-admin/**`
- * into this app's own OpenAPI surface.
- *
- * A program has no list-all endpoint (`POST` is idempotent by `name`, its own
- * javadoc says so: "a retry asking for the same program in the same words
- * gets the program it already created"), so this screen finds a program by
- * re-submitting its name rather than browsing a directory that does not
- * exist. Individual runs within a scope (`MigrationRunController`) are not
- * drilled into here -- programs and their scopes are the core "per-tenant
- * import, resumability" concept this row needs, and a further drill-down
- * into run history is a reasonable follow-up, not this wave's scope.
+ * Migration programs, their scopes, runs, quarantine and cutover decisions.
+ * Every mutation carries a reason; scope moves also carry the version read,
+ * so two operators deciding at once settle at one outcome.
  */
 @Injectable({ providedIn: 'root' })
 export class MigrationApi {
@@ -95,6 +149,23 @@ export class MigrationApi {
         sourceEnvironment,
         targetEnvironment,
         policyVersion,
+        reason,
+      }),
+    );
+  }
+
+  /** Every program, by name. */
+  async listPrograms(cursor: string | null = null, limit = 200): Promise<Page<ProgramView>> {
+    return firstValueFrom(
+      this.api.getPage<ProgramView>('/api/v1/platform-admin/migration/programs', { cursor, limit }),
+    );
+  }
+
+  async changeProgramStatus(programId: string, status: ProgramStatus, expectedVersion: number, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/platform-admin/migration/programs/${programId}/status`, {
+        status,
+        expectedVersion,
         reason,
       }),
     );
@@ -171,6 +242,122 @@ export class MigrationApi {
       this.api.post<ScopeView>(
         `/api/v1/platform-admin/migration/programs/${programId}/scopes`,
         request,
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ scope moves
+
+  private scopePath(scopeId: string, action: string): string {
+    return `/api/v1/platform-admin/migration/scopes/${scopeId}/${action}`;
+  }
+
+  async advanceScope(scope: ScopeView, targetState: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        this.scopePath(scope.id, 'transitions'),
+        { targetState, expectedVersion: scope.version, reason },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  async suspendScope(scope: ScopeView, holdingState: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        this.scopePath(scope.id, 'suspensions'),
+        { holdingState, expectedVersion: scope.version, reason },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  async resumeScope(scope: ScopeView, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        this.scopePath(scope.id, 'resumptions'),
+        { expectedVersion: scope.version, reason },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  async rollBackScope(scope: ScopeView, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        this.scopePath(scope.id, 'rollbacks'),
+        { expectedVersion: scope.version, reason },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  /** Approves (or refuses) taking target ownership; the gates are re-checked by the server at that moment. */
+  async decideCutover(
+    scope: ScopeView,
+    decision: 'approve' | 'refuse',
+    request: { readonly requestedBy: string; readonly evidence: Readonly<Record<string, string>>; readonly reason: string },
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        this.scopePath(scope.id, decision === 'approve' ? 'cutover' : 'cutover-refusals'),
+        { targetState: 'TARGET_OWNED', expectedVersion: scope.version, ...request },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ runs
+
+  async listRuns(scope: ScopeView, limit = 50): Promise<Page<RunView>> {
+    return firstValueFrom(
+      this.api.getPage<RunView>(this.scopePath(scope.id, 'runs'), { limit }, { query: { tenantId: scope.tenantId } }),
+    );
+  }
+
+  async startRun(
+    scope: ScopeView,
+    request: { readonly runType: RunType; readonly transformationVersion: number; readonly startedBy: string; readonly reason: string },
+  ): Promise<RunView> {
+    return firstValueFrom(
+      this.api.post<RunView>(this.scopePath(scope.id, 'runs'), request, { query: { tenantId: scope.tenantId } }),
+    );
+  }
+
+  async finishRun(
+    tenantId: string,
+    run: RunView,
+    status: Exclude<RunStatus, 'RUNNING'>,
+    reason: string,
+    checksum?: string,
+  ): Promise<RunView> {
+    return firstValueFrom(
+      this.api.post<RunView>(
+        `/api/v1/platform-admin/migration/runs/${run.id}/outcome`,
+        { status, expectedVersion: run.version, reason, checksum },
+        { query: { tenantId } },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ quarantine
+
+  async openQuarantine(scope: ScopeView, limit = 50): Promise<Page<QuarantineItemView>> {
+    return firstValueFrom(
+      this.api.getPage<QuarantineItemView>(
+        this.scopePath(scope.id, 'quarantine-items'),
+        { limit },
+        { query: { tenantId: scope.tenantId } },
+      ),
+    );
+  }
+
+  async resolveQuarantine(tenantId: string, itemId: string, resolutionCode: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        `/api/v1/platform-admin/migration/quarantine-items/${itemId}/resolution`,
+        { resolutionCode, reason },
+        { query: { tenantId } },
       ),
     );
   }

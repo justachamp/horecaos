@@ -83,3 +83,102 @@
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.decision {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.decision p {
+  margin: 0;
+}
+
+.innerTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.innerTable th,
+.innerTable td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.innerTable th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.innerTable .ours td {
+  background: var(--q-success-tint);
+}
+
+.choices {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 320px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineForm input {
+  flex: 1 1 260px;
+}
+
+.decisionRow input:not([type='radio']) {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.panel button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.panel button.secondary {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+  padding: 6px 12px;
+}
+
+.panel button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

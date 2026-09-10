@@ -3835,6 +3835,20 @@
         },
         "type" : "object"
       },
+      "PageMigrationRunView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MigrationRunView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageMxikReferenceRow" : {
         "properties" : {
           "items" : {
@@ -3896,6 +3910,34 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/ProductSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageProgramView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProgramView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageQuarantineItemView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/QuarantineItemView"
             },
             "type" : "array"
           },
@@ -5312,6 +5354,13 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "nextStates" : {
+            "items" : {
+              "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "programId" : {
             "format" : "uuid",
             "type" : "string"
@@ -6474,7 +6523,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "responses" : {
           "200" : {
             "content" : {
@@ -6676,7 +6725,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_11",
+        "operationId" : "list_12",
         "responses" : {
           "200" : {
             "content" : {
@@ -6753,7 +6802,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "responses" : {
           "200" : {
             "content" : {
@@ -7274,7 +7323,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_11",
         "responses" : {
           "200" : {
             "content" : {
@@ -7558,7 +7607,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -9404,7 +9453,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -9498,7 +9547,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -10903,7 +10952,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11228,7 +11277,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11392,7 +11441,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11939,7 +11988,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12550,7 +12599,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_1",
+        "operationId" : "list_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -13248,7 +13297,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it.",
-        "operationId" : "list",
+        "operationId" : "list_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14130,6 +14179,41 @@
       }
     },
     "/api/v1/platform-admin/migration/programs" : {
+      "get" : {
+        "operationId" : "list",
+        "parameters" : [ {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageProgramView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List migration programs, by name",
+        "tags" : [ "Migration programs" ]
+      },
       "post" : {
         "description" : "The program pins the approved mapping and quarantine policy version it executes, so a later revision cannot retroactively change what an already-running migration was allowed to do.",
         "operationId" : "create",
@@ -14761,6 +14845,50 @@
         "tags" : [ "Migration quarantine" ]
       }
     },
+    "/api/v1/platform-admin/migration/scopes/{scopeId}/quarantine-items" : {
+      "get" : {
+        "operationId" : "openItems",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "scopeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageQuarantineItemView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A scope's open quarantine items, oldest first",
+        "tags" : [ "Migration quarantine" ]
+      }
+    },
     "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions" : {
       "post" : {
         "operationId" : "resume",
@@ -14869,6 +14997,48 @@
       }
     },
     "/api/v1/platform-admin/migration/scopes/{scopeId}/runs" : {
+      "get" : {
+        "operationId" : "listForScope",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "scopeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageMigrationRunView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a scope's runs, newest first",
+        "tags" : [ "Migration runs" ]
+      },
       "post" : {
         "description" : "A new run of a type that already has a live one is refused rather than queued, and the refusal names the run that is already going.",
         "operationId" : "start",

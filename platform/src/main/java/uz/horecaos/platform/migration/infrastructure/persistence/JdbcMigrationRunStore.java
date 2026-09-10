@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,6 +71,21 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                 .param("key", idempotencyKey)
                 .query(this::mapRun)
                 .optional();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<RunRow> listForScope(UUID tenantId, UUID scopeId, int limit) {
+        return jdbc.sql(SELECT_RUN + """
+                 WHERE tenant_id = :tenantId AND scope_id = :scopeId
+                 ORDER BY started_at DESC, id DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
+                .param("limit", limit)
+                .query(this::mapRun)
+                .list();
     }
 
     /** The live run of one type over one scope, which the schema allows at most one of. */

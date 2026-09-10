@@ -559,6 +559,61 @@ class MigrationControlPlaneTests extends MigrationControlPlaneFixture {
         assertThat(startRun(scopeId, RunType.RECONCILIATION, "recon-1")).isNotNull();
     }
 
+    @Test
+    @DisplayName("programs, a scope's runs and its open quarantine items can be listed without registering anything")
+    void theConsoleCanFindWhatItActsOn() {
+        UUID rehearsal = programs.create(new MigrationProgramService.CreateProgramCommand(
+                        "Alpha rehearsal", "delever-staging", "horecaos-staging", 3, "a rehearsal"))
+                .id();
+        assertThat(programs.listPrograms(null, 50))
+                .as("by name, so the operator finds the program they mean instead of registering it again")
+                .extracting(MigrationProgramStore.ProgramRow::id)
+                .containsExactly(rehearsal, programId);
+        assertThat(programs.listPrograms("Alpha rehearsal", 50))
+                .extracting(MigrationProgramStore.ProgramRow::id)
+                .containsExactly(programId);
+
+        UUID scopeId = openTenantWideScope(MigrationCapability.ORDERS);
+        UUID otherScope = openTenantWideScope(MigrationCapability.CATALOG);
+        advanceThrough(scopeId, ScopeState.MAPPING_APPROVED, ScopeState.BACKFILLING);
+        advanceThrough(otherScope, ScopeState.MAPPING_APPROVED, ScopeState.BACKFILLING);
+        UUID backfill = startRun(scopeId, RunType.BACKFILL, "backfill-1");
+        clock.advance(java.time.Duration.ofMinutes(1));
+        UUID reconciliation = startRun(scopeId, RunType.RECONCILIATION, "recon-1");
+        UUID elsewhere = startRun(otherScope, RunType.BACKFILL, "backfill-other");
+
+        assertThat(runService.listForScope(TENANT, scopeId, 50))
+                .as("newest first, and only this scope's")
+                .extracting(RunRow::id)
+                .containsExactly(reconciliation, backfill);
+
+        var open = quarantineService.quarantine(
+                TENANT,
+                backfill,
+                new QuarantineService.QuarantineCommand("ORDER", "delever-1", "TENANT_NOT_PROVABLE", null));
+        clock.advance(java.time.Duration.ofMinutes(1));
+        var settled = quarantineService.quarantine(
+                TENANT,
+                backfill,
+                new QuarantineService.QuarantineCommand("ORDER", "delever-2", "TENANT_NOT_PROVABLE", null));
+        quarantineService.resolve(
+                TENANT,
+                settled.id(),
+                new QuarantineService.ResolveCommand("ACCEPTED_NOT_MIGRATABLE", "a test order nobody paid"));
+        quarantineService.quarantine(
+                TENANT,
+                elsewhere,
+                new QuarantineService.QuarantineCommand("PRODUCT", "delever-9", "TENANT_NOT_PROVABLE", null));
+
+        assertThat(quarantineService.listOpen(TENANT, scopeId, 50))
+                .as("the worklist is what still owes a decision, for this scope only")
+                .extracting(MigrationQuarantineStore.QuarantineItemRow::id)
+                .containsExactly(open.id());
+        assertThat(quarantineService.listOpen(OTHER_TENANT, scopeId, 50))
+                .as("another tenant's id never reaches this scope's items")
+                .isEmpty();
+    }
+
     /**
      * The second half of guarantee 6. The crosswalk's upsert key is what makes a
      * restarted backfill idempotent: the second import of a legacy row finds its

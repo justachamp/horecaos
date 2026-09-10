@@ -1,6 +1,7 @@
 package uz.horecaos.platform.migration.application;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -79,6 +80,14 @@ public interface MigrationQuarantineStore {
      * should not materialise them to establish that.
      */
     int openCount(UUID tenantId, UUID scopeId);
+
+    /**
+     * The oldest open items of this scope, capped at {@code limit}.
+     *
+     * <p>A worklist to settle from, not the gate's answer: {@link #openCount}
+     * stays the number the retirement gate compares against zero.
+     */
+    List<QuarantineItemRow> listOpen(UUID tenantId, UUID scopeId, int limit);
 
     /**
      * A legacy row that could not be migrated, held as a reference and a reason.

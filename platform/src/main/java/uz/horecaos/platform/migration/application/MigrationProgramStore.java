@@ -1,6 +1,7 @@
 package uz.horecaos.platform.migration.application;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -28,6 +29,14 @@ public interface MigrationProgramStore {
     Optional<ProgramRow> findByName(String name);
 
     void insert(ProgramRow program, Instant now);
+
+    /**
+     * A page of every program, in name order, after the given name.
+     *
+     * <p>Keyed on the name because {@code uq_program_name} makes it unique and it
+     * is what an operator looks for; a null {@code afterName} is the first page.
+     */
+    List<ProgramRow> list(@Nullable String afterName, int limit);
 
     /**
      * Moves the program's status if it is still at {@code expectedVersion}.

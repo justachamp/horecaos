@@ -3,24 +3,18 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { TenantDirectory } from '../../shared/tenant-directory';
-import { TenantPicker } from '../../shared/tenant-picker';
-import { EntityMappingView, MigrationApi } from './migration-api';
+import { EntityMappingView, MigrationApi, ScopeView } from './migration-api';
+import { ScopePicker } from './scope-picker';
 
 /**
- * IA 9.2 ID mapping explorer -- legacy <-> HorecaOS identity resolution
- * across entities (ADR 0024).
- *
- * `migration.entity_mappings` is the crosswalk `ImportService` has written
- * since the module shipped; nothing served the read until now. Scope-picker,
- * the same shape 9.1's own program lookup already uses: there is no
- * "browse every scope" index, so a scope id (from 9.1 or 9.4) plus its
- * tenant and the entity type being traced are what this screen asks for.
+ * IA 9.2 ID mapping explorer -- which HorecaOS record each legacy id became,
+ * for one scope and entity type. Rows that could not be mapped are listed
+ * too: a failed mapping is still evidence the legacy row was seen.
  */
 @Component({
   selector: 'app-id-mapping-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TenantPicker],
+  imports: [ScopePicker],
   templateUrl: './id-mapping-explorer.html',
   styleUrl: './id-mapping-explorer.css',
 })
@@ -29,10 +23,9 @@ export class IdMappingExplorer {
   protected readonly asDate = asDate;
   private readonly api = inject(MigrationApi);
 
-  protected readonly scopeId = signal('');
-  private readonly directory = inject(TenantDirectory);
-  protected readonly tenantId = signal(this.directory.selected());
+  protected readonly scope = signal<ScopeView | null>(null);
   protected readonly entityType = signal('');
+  protected readonly entityTypes = ['ORDER', 'CUSTOMER', 'PRODUCT', 'CATEGORY', 'BRAND', 'LOCATION'];
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -40,28 +33,26 @@ export class IdMappingExplorer {
   protected readonly mappings = signal<readonly EntityMappingView[]>([]);
 
   protected canSearch(): boolean {
-    return (
-      !this.loading() &&
-      this.scopeId().trim().length > 0 &&
-      this.tenantId().trim().length > 0 &&
-      this.entityType().trim().length > 0
-    );
+    return !this.loading() && this.scope() !== null && this.entityType().trim().length > 0;
+  }
+
+  protected chooseScope(scope: ScopeView | null): void {
+    this.scope.set(scope);
+    this.searched.set(false);
+    this.mappings.set([]);
   }
 
   protected async search(event: Event): Promise<void> {
     event.preventDefault();
-    if (!this.canSearch()) {
+    const scope = this.scope();
+    if (!this.canSearch() || scope === null) {
       return;
     }
     this.loading.set(true);
     this.loadError.set(null);
     this.searched.set(true);
     try {
-      const page = await this.api.listEntityMappings(
-        this.scopeId().trim(),
-        this.tenantId().trim(),
-        this.entityType().trim(),
-      );
+      const page = await this.api.listEntityMappings(scope.id, scope.tenantId, this.entityType().trim().toUpperCase());
       this.mappings.set(page.items);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));

@@ -8,9 +8,29 @@
   color: var(--q-ink-muted);
 }
 
+.state {
+  margin-top: 16px;
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.state.error,
 .error {
-  margin-top: 12px;
   color: var(--q-error-text);
+}
+
+.programPick {
+  margin-top: 16px;
+  max-width: 360px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
 }
 
 .panel {
@@ -18,38 +38,34 @@
   background: var(--q-canvas);
   border: 1px solid var(--q-hairline);
   padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.programForm {
+.panelHead {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
-.programForm input {
-  border: 1px solid var(--q-hairline);
-  padding: 8px;
-  background: var(--q-canvas);
-  color: var(--q-ink);
+.panelHead h2,
+.tally {
+  margin: 0;
 }
 
-.programForm button {
-  border: none;
-  background: var(--q-primary);
-  color: var(--q-inverse-ink);
-  padding: 8px 16px;
-  cursor: pointer;
+.tally {
+  display: flex;
+  gap: 8px;
 }
 
-.programForm button:disabled {
-  background: var(--q-hairline);
-  color: var(--q-ink-subtle);
-  cursor: default;
+.scroll {
+  overflow-x: auto;
 }
 
 .table {
-  margin-top: 12px;
   width: 100%;
   border-collapse: collapse;
   background: var(--q-hairline);
@@ -73,10 +89,17 @@
   font-weight: 400;
 }
 
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .pill {
   display: inline-block;
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
+  white-space: nowrap;
 }
 
 .pill-go {
@@ -92,4 +115,76 @@
 .pill-pending {
   color: var(--q-warning-text);
   border-color: var(--q-warning);
+}
+
+.decision {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.decision p {
+  margin: 0;
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidenceLine {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(200px, 2fr) auto;
+  gap: 6px;
+}
+
+.addEvidence {
+  align-self: flex-start;
+}
+
+.warning {
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+  padding: 8px 12px;
+  margin: 0 0 8px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineForm input {
+  flex: 1 1 240px;
+}
+
+input,
+select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+  padding: 6px 12px;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
 }

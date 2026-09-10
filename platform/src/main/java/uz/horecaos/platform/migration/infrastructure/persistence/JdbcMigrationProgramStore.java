@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +51,22 @@ public class JdbcMigrationProgramStore implements MigrationProgramStore {
                 .param("id", programId)
                 .query(JdbcMigrationProgramStore::mapProgram)
                 .optional();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<ProgramRow> list(@Nullable String afterName, int limit) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("afterName", afterName);
+        params.put("limit", limit);
+        return jdbc.sql(SELECT_PROGRAM + """
+                 WHERE (CAST(:afterName AS varchar) IS NULL OR name > CAST(:afterName AS varchar))
+                 ORDER BY name
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query(JdbcMigrationProgramStore::mapProgram)
+                .list();
     }
 
     @Override

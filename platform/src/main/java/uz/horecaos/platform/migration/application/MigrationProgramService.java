@@ -371,6 +371,13 @@ public class MigrationProgramService {
         return requireProgram(programId);
     }
 
+    /** A page of every program in name order, keyed on the last name of the previous page. */
+    @Transactional(readOnly = true)
+    public List<MigrationProgramStore.ProgramRow> listPrograms(@Nullable String afterName, int limit) {
+        access.requireOperator();
+        return programs.list(afterName, Math.clamp(limit, 1, MAX_PAGE));
+    }
+
     /**
      * A page of the program's scopes, keyed on the last scope of the previous
      * page (ADR 0031).

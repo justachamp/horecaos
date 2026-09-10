@@ -6,6 +6,7 @@ import static uz.horecaos.platform.migration.infrastructure.persistence.Migratio
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -191,6 +192,28 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
                         .param("now", utc(resolvedAt))
                         .update()
                 == 1;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<QuarantineItemRow> listOpen(UUID tenantId, UUID scopeId, int limit) {
+        return jdbc.sql("""
+                SELECT item.id, item.tenant_id, item.run_id, item.entity_type, item.legacy_id,
+                       item.reason_code, item.sanitized_evidence_reference, item.status,
+                       item.resolution_code, item.resolved_by, item.resolved_at
+                FROM migration.quarantine_items AS item
+                JOIN migration.runs AS run
+                  ON run.tenant_id = item.tenant_id AND run.id = item.run_id
+                WHERE item.tenant_id = :tenantId AND run.scope_id = :scopeId
+                  AND item.status = 'OPEN'
+                ORDER BY item.created_at, item.id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
+                .param("limit", limit)
+                .query(JdbcQuarantineStore::mapItem)
+                .list();
     }
 
     /**

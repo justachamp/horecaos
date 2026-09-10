@@ -19,6 +19,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
 import uz.horecaos.platform.migration.application.QuarantineService;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -53,15 +54,29 @@ public class MigrationQuarantineController {
      *
      * <p>A count and not a list, because the count is what the retirement gate
      * compares against zero and a scope that quarantined a hundred thousand rows
-     * should not be materialised to establish that. Reading the items themselves
-     * is a query the control plane does not yet answer; see the note in
-     * {@code MigrationQuarantineStore}, which offers no listing method.
+     * should not be materialised to establish that. The items themselves are
+     * read from the worklist below.
      */
     @GetMapping("/scopes/{scopeId}/quarantine")
     @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
     @Operation(summary = "How many quarantine items of this scope are still open")
     QuarantineBacklogView backlog(@PathVariable UUID scopeId, @RequestParam UUID tenantId) {
         return new QuarantineBacklogView(scopeId, quarantine.openCount(tenantId, scopeId));
+    }
+
+    /**
+     * The oldest open items of a scope, capped at {@code limit}: the worklist an
+     * operator settles from. Settled items drop off it; the audit log keeps how
+     * each was settled.
+     */
+    @GetMapping("/scopes/{scopeId}/quarantine-items")
+    @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
+    @Operation(summary = "A scope's open quarantine items, oldest first")
+    Page<QuarantineItemView> openItems(
+            @PathVariable UUID scopeId, @RequestParam UUID tenantId, @RequestParam(required = false) Integer limit) {
+        return Page.last(quarantine.listOpen(tenantId, scopeId, Page.limitOrDefault(limit)).stream()
+                .map(QuarantineItemView::of)
+                .toList());
     }
 
     /**
