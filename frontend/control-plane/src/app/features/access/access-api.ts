@@ -31,6 +31,13 @@ export interface TenantGrantView {
   readonly grantedBy: string;
 }
 
+/** TenantRoleCatalog.RoleDescriptor: a job and the scope it is granted at. */
+export interface TenantRoleDescriptor {
+  readonly code: string;
+  readonly scopeType: 'TENANT' | 'BRAND' | 'LOCATION' | (string & {});
+  readonly capabilities: readonly string[];
+}
+
 /** ApprovalRequestController.PendingApprovalResponse. */
 export interface PendingApprovalResponse {
   readonly id: string;
@@ -148,6 +155,20 @@ export class AccessApi {
   async listTenantGrants(tenantId: string): Promise<TenantGrantView[]> {
     return firstValueFrom(
       this.api.get<TenantGrantView[]>(`/api/v1/control-plane/tenants/${tenantId}/grants`),
+    );
+  }
+
+  /** Takes effect at once: the cached grant is evicted rather than left to expire. */
+  async revokeTenantGrant(tenantId: string, grantId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.delete<unknown>(`/api/v1/control-plane/tenants/${tenantId}/grants/${grantId}`, { reason }),
+    );
+  }
+
+  /** The platform-defined jobs a tenant's people can be given; never platform-admin or support. */
+  async listTenantRoles(tenantId: string): Promise<TenantRoleDescriptor[]> {
+    return firstValueFrom(
+      this.api.get<TenantRoleDescriptor[]>(`/api/v1/control-plane/tenants/${tenantId}/roles`),
     );
   }
 

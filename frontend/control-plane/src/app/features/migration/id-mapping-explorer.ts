@@ -3,6 +3,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import { EntityMappingView, MigrationApi } from './migration-api';
 
 /**
@@ -18,6 +20,7 @@ import { EntityMappingView, MigrationApi } from './migration-api';
 @Component({
   selector: 'app-id-mapping-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TenantPicker],
   templateUrl: './id-mapping-explorer.html',
   styleUrl: './id-mapping-explorer.css',
 })
@@ -27,7 +30,8 @@ export class IdMappingExplorer {
   private readonly api = inject(MigrationApi);
 
   protected readonly scopeId = signal('');
-  protected readonly tenantId = signal('');
+  private readonly directory = inject(TenantDirectory);
+  protected readonly tenantId = signal(this.directory.selected());
   protected readonly entityType = signal('');
 
   protected readonly loading = signal(false);

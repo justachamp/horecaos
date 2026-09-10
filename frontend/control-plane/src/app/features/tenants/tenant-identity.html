@@ -17,7 +17,29 @@
     @if (t.keycloakOrganizationId === null) {
       <p class="q-body-sm muted">{{ i18n.t('tenantIdentity.notLinked') }}</p>
     }
+    @if (linked()) {
+      <p class="q-body-sm muted">{{ i18n.t('tenantIdentity.link.done') }}</p>
+    }
   </section>
+
+  @if (t.keycloakOrganizationId === null && session.has('PLATFORM_ADMIN')) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('tenantIdentity.link.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('tenantIdentity.link.lead') }}</p>
+      <form class="linkForm" (submit)="link($event)">
+        <label class="field">
+          <span class="q-caption">{{ i18n.t('tenantIdentity.link.organizationId') }}</span>
+          <input class="q-body-sm q-tnum" type="text" name="organizationId" [value]="organizationId()" (input)="organizationId.set($any($event.target).value)" required />
+        </label>
+        @if (linkError(); as message) {
+          <p class="q-body-sm error">{{ message }}</p>
+        }
+        <button type="submit" class="q-body-sm" [disabled]="linking() || organizationId().trim().length === 0">
+          {{ linking() ? i18n.t('tenantIdentity.link.submitting') : i18n.t('tenantIdentity.link.submit') }}
+        </button>
+      </form>
+    </section>
+  }
 
   <p class="q-caption notice">{{ i18n.t('tenantIdentity.gap') }}</p>
 }

@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import { MigrationApi, ReconciliationResultView } from './migration-api';
 
 /**
@@ -21,6 +23,7 @@ import { MigrationApi, ReconciliationResultView } from './migration-api';
 @Component({
   selector: 'app-dual-run-comparison',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TenantPicker],
   templateUrl: './dual-run-comparison.html',
   styleUrl: './dual-run-comparison.css',
 })
@@ -29,7 +32,8 @@ export class DualRunComparison {
   private readonly api = inject(MigrationApi);
 
   protected readonly runId = signal('');
-  protected readonly tenantId = signal('');
+  private readonly directory = inject(TenantDirectory);
+  protected readonly tenantId = signal(this.directory.selected());
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);

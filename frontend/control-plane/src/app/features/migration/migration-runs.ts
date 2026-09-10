@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import { MigrationApi, ProgramView, ScopeView } from './migration-api';
 
 @Component({
   selector: 'app-migration-runs',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TenantPicker],
   templateUrl: './migration-runs.html',
   styleUrl: './migration-runs.css',
 })
@@ -26,7 +29,8 @@ export class MigrationRuns {
   protected readonly scopes = signal<readonly ScopeView[]>([]);
   protected readonly nextCursor = signal<string | null>(null);
 
-  protected readonly scopeTenantId = signal('');
+  private readonly directory = inject(TenantDirectory);
+  protected readonly scopeTenantId = signal(this.directory.selected());
   protected readonly scopeCapability = signal('CATALOG');
   protected readonly scopeSourceOwner = signal('');
   protected readonly scopeTargetOwner = signal('');

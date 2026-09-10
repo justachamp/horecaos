@@ -57,7 +57,7 @@
 
     <h3 class="q-body-sm openScopeHeading">{{ i18n.t('migrationRuns.scope.open') }}</h3>
     <form class="inlineForm" (submit)="openScope($event)">
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('entitlements.tenantId')" [value]="scopeTenantId()" (input)="scopeTenantId.set($any($event.target).value)" />
+      <app-tenant-picker [value]="scopeTenantId()" (tenantChange)="scopeTenantId.set($event)" />
       <select class="q-body-sm" [value]="scopeCapability()" (change)="scopeCapability.set($any($event.target).value)">
         <option value="CATALOG">CATALOG</option>
         <option value="CUSTOMERS">CUSTOMERS</option>

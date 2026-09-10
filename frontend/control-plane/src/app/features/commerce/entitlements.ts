@@ -6,6 +6,8 @@ import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import {
   CommerceApi,
   EntitlementSnapshot,
@@ -26,7 +28,7 @@ import {
 @Component({
   selector: 'app-entitlements',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [KeyValuePipe],
+  imports: [TenantPicker, KeyValuePipe],
   templateUrl: './entitlements.html',
   styleUrl: './entitlements.css',
 })
@@ -37,7 +39,11 @@ export class Entitlements {
   private readonly route = inject(ActivatedRoute);
   protected readonly session = inject(SessionContextService);
 
-  protected readonly tenantId = signal(this.route.snapshot.queryParamMap.get('tenantId') ?? '');
+  private readonly directory = inject(TenantDirectory);
+  /** From a `?tenantId=` link first, else the tenant chosen last on any screen. */
+  protected readonly tenantId = signal(
+    this.route.snapshot.queryParamMap.get('tenantId') ?? this.directory.selected(),
+  );
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -54,6 +60,14 @@ export class Entitlements {
 
   constructor() {
     if (this.tenantId().length > 0) {
+      void this.load();
+    }
+  }
+
+  /** A tenant chosen in the picker: shown at once, nothing to press. */
+  protected chooseTenant(tenantId: string): void {
+    this.tenantId.set(tenantId);
+    if (tenantId.length > 0) {
       void this.load();
     }
   }

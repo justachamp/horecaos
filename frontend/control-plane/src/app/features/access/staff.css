@@ -101,3 +101,59 @@
   background: var(--q-canvas);
   color: var(--q-ink);
 }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+  margin-top: 12px;
+}
+
+.field select,
+.grantForm select,
+.grantForm input,
+.actionsCell input {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.subTitle {
+  margin: 20px 0 8px;
+  font-weight: 600;
+}
+
+.grantForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.grantForm button,
+.actionsCell button {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.grantForm button:disabled,
+.actionsCell button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.actionsCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}

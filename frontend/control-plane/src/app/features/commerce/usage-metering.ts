@@ -3,6 +3,8 @@ import { ActivatedRoute } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import { CommerceApi, UsagePeriodView } from './commerce-api';
 
 /**
@@ -20,6 +22,7 @@ import { CommerceApi, UsagePeriodView } from './commerce-api';
 @Component({
   selector: 'app-usage-metering',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TenantPicker],
   templateUrl: './usage-metering.html',
   styleUrl: './usage-metering.css',
 })
@@ -28,7 +31,11 @@ export class UsageMetering {
   private readonly api = inject(CommerceApi);
   private readonly route = inject(ActivatedRoute);
 
-  protected readonly tenantId = signal(this.route.snapshot.queryParamMap.get('tenantId') ?? '');
+  private readonly directory = inject(TenantDirectory);
+  /** From a `?tenantId=` link first, else the tenant chosen last on any screen. */
+  protected readonly tenantId = signal(
+    this.route.snapshot.queryParamMap.get('tenantId') ?? this.directory.selected(),
+  );
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -37,6 +44,14 @@ export class UsageMetering {
 
   constructor() {
     if (this.tenantId().length > 0) {
+      void this.load();
+    }
+  }
+
+  /** A tenant chosen in the picker: shown at once, nothing to press. */
+  protected chooseTenant(tenantId: string): void {
+    this.tenantId.set(tenantId);
+    if (tenantId.length > 0) {
       void this.load();
     }
   }

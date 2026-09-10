@@ -2,11 +2,7 @@
 <p class="q-body-sm lead">{{ i18n.t('tenantIssueQueue.lead') }}</p>
 <p class="q-caption notice">{{ i18n.t('tenantIssueQueue.gap') }}</p>
 
-<form class="picker" (submit)="search($event)">
-  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
-  <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
-  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
-</form>
+<app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
 
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>

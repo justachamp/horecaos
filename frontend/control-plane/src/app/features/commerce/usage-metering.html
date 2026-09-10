@@ -1,16 +1,7 @@
 <h1 class="q-title">{{ i18n.t('usageMetering.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('usageMetering.lead') }}</p>
 
-<form class="picker" (submit)="load($event)">
-  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
-  <input
-    class="q-body-sm"
-    type="text"
-    [value]="tenantId()"
-    (input)="tenantId.set($any($event.target).value)"
-  />
-  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
-</form>
+<app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
 
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>

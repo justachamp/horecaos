@@ -6,10 +6,7 @@
     <span class="q-caption">{{ i18n.t('dualRunComparison.runId') }}</span>
     <input class="q-body-sm" type="text" [value]="runId()" (input)="runId.set($any($event.target).value)" required />
   </label>
-  <label class="field">
-    <span class="q-caption">{{ i18n.t('entitlements.tenantId') }}</span>
-    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" required />
-  </label>
+  <app-tenant-picker [value]="tenantId()" (tenantChange)="tenantId.set($event)" />
   <button type="submit" class="primary" [disabled]="!canSearch()">
     {{ loading() ? i18n.t('tenants.loading') : i18n.t('dualRunComparison.search') }}
   </button>

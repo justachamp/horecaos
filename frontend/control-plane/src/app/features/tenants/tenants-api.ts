@@ -237,6 +237,15 @@ export class TenantsApi {
     return firstValueFrom(this.api.get<TenantView>(`/api/v1/control-plane/tenants/${tenantId}`));
   }
 
+  /** Platform admins only. A tenant's link is permanent: a different organization is refused. */
+  async linkKeycloakOrganization(tenantId: string, organizationId: string): Promise<TenantView> {
+    return firstValueFrom(
+      this.api.put<TenantView>(`/api/v1/control-plane/tenants/${tenantId}/identity/keycloak-organization`, {
+        organizationId,
+      }),
+    );
+  }
+
   /**
    * Platform admins only. Narrows everyone at the tenant to read-only access
    * and disables its sign-in organization; the reason goes to the audit log.
