@@ -148,8 +148,27 @@ bao_run() {
         | compose exec -T openbao sh -c 'BAO_TOKEN="$(cat)"; export BAO_TOKEN; "$@"' _ "$@"
 }
 
-policies="$(bao_run bao token lookup -field=policies 2>/dev/null)" \
-    || die "OpenBao rejected that token."
+# `token lookup` has no -field flag in OpenBao 2.4 -- unlike kv get, read,
+# write and token create, which all do -- so the policies row is taken from the
+# table. That table also carries an `id` row, which for a root token IS the root
+# token, so the output is parsed and discarded here and never printed.
+#
+# And a failure is reported as what it is. This line used to discard stderr and
+# call every failure a rejected token; its first real run died on
+# "flag provided but not defined: -field" and told the operator their correct
+# root token had been rejected.
+if ! lookup="$(bao_run bao token lookup -format=table 2>&1)"; then
+    case "${lookup}" in
+        *"permission denied"*|*"bad token"*|*"invalid token"*)
+            die "OpenBao rejected that token." ;;
+        *)
+            die "Could not look the token up, which is not the same as rejecting it. OpenBao said:
+$(printf '%s\n' "${lookup}" | head -5 | sed 's/^/      /')" ;;
+    esac
+fi
+policies="$(printf '%s\n' "${lookup}" | awk '$1 == "policies" { $1 = ""; sub(/^ +/, ""); print }')"
+unset lookup
+[ -n "${policies}" ] || die "OpenBao answered, but with no policies row to read."
 
 MINTED=false
 case "${policies}" in
@@ -241,7 +260,8 @@ wait_healthy() {
 say "Starting dependencies"
 compose up -d "${DEPENDENCIES[@]}" >/dev/null
 wait_healthy "dependencies" 300 "${DEPENDENCIES[@]}" \
-    || die "Stopping here. openbao-agent unhealthy usually means the AppRole credential did not work."
+    || die "Stopping here: the services listed above are not healthy. docker compose logs <service> says why.
+    If openbao-agent is among them, the AppRole credential is the first suspect."
 
 say "Starting Keycloak, the platform, the frontends and the edge"
 compose up -d "${SERVICES[@]}" >/dev/null
