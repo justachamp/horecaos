@@ -34,6 +34,29 @@
               {{ i18n.t('tenantBrands.activateBrand') }}
             </button>
           }
+          <button type="button" class="q-body-sm" (click)="openEditBrand(row.brand)">
+            {{ i18n.t('tenantBrands.edit.action') }}
+          </button>
+          @if (row.brand.status === 'DRAFT') {
+            @if (confirmingDelete() === row.brand.id) {
+              <button type="button" class="q-body-sm danger" [disabled]="deleting()" (click)="deleteBrand(row.brand)">
+                {{ i18n.t('tenantBrands.delete.confirm') }}
+              </button>
+              <button type="button" class="q-body-sm" (click)="cancelDelete()">
+                {{ i18n.t('tenantBrands.delete.cancel') }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="q-body-sm"
+                [disabled]="row.locations.length > 0"
+                [title]="row.locations.length > 0 ? i18n.t('tenantBrands.delete.hasLocationsHint') : ''"
+                (click)="askDelete(row.brand.id)"
+              >
+                {{ i18n.t('tenantBrands.delete.action') }}
+              </button>
+            }
+          }
           <button type="button" class="q-body-sm" (click)="openCreateLocation(row.brand.id)">
             {{ i18n.t('tenantBrands.createLocation.action') }}
           </button>
@@ -60,11 +83,28 @@
                 <td class="q-body-sm">
                   <span class="pill" [class]="'pill-' + location.status">{{ location.status }}</span>
                 </td>
-                <td class="q-body-sm">
+                <td class="q-body-sm rowActions">
                   @if (location.status === 'DRAFT') {
                     <button type="button" class="q-body-sm" (click)="activateLocation(row.brand.id, location.id)">
                       {{ i18n.t('tenantBrands.activateLocation') }}
                     </button>
+                  }
+                  <button type="button" class="q-body-sm" (click)="openEditLocation(location)">
+                    {{ i18n.t('tenantBrands.edit.action') }}
+                  </button>
+                  @if (location.status === 'DRAFT') {
+                    @if (confirmingDelete() === location.id) {
+                      <button type="button" class="q-body-sm danger" [disabled]="deleting()" (click)="deleteLocation(location)">
+                        {{ i18n.t('tenantBrands.delete.confirm') }}
+                      </button>
+                      <button type="button" class="q-body-sm" (click)="cancelDelete()">
+                        {{ i18n.t('tenantBrands.delete.cancel') }}
+                      </button>
+                    } @else {
+                      <button type="button" class="q-body-sm" (click)="askDelete(location.id)">
+                        {{ i18n.t('tenantBrands.delete.action') }}
+                      </button>
+                    }
                   }
                 </td>
               </tr>
@@ -125,6 +165,75 @@
       <button type="button" class="q-body-sm" (click)="closeCreateLocation()">{{ i18n.t('tenants.create.cancel') }}</button>
       <button type="submit" class="q-body-sm primary" [disabled]="!canSubmitLocation()">
         {{ locationSubmitting() ? i18n.t('tenants.create.submitting') : i18n.t('tenants.create.submit') }}
+      </button>
+    </div>
+  </form>
+}
+
+@if (editing(); as unit) {
+  <div class="scrim" (click)="closeEdit()"></div>
+  <form class="drawer" (submit)="submitEdit($event)">
+    <h2 class="q-subhead">
+      {{ unit.kind === 'brand' ? i18n.t('tenantBrands.edit.brandTitle') : i18n.t('tenantBrands.edit.locationTitle') }}
+    </h2>
+    @if (identityLocked()) {
+      <p class="q-body-sm muted">
+        {{ unit.kind === 'brand' ? i18n.t('tenantBrands.edit.brandLocked') : i18n.t('tenantBrands.edit.locationLocked') }}
+      </p>
+    }
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenantBrands.createBrand.code') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        name="code"
+        [value]="editCode()"
+        [disabled]="identityLocked()"
+        (input)="editCode.set($any($event.target).value)"
+        required
+      />
+    </label>
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenantBrands.createBrand.slug') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        name="slug"
+        [value]="editSlug()"
+        [disabled]="identityLocked()"
+        (input)="editSlug.set($any($event.target).value)"
+        required
+      />
+    </label>
+    <label class="field">
+      <span class="q-caption">{{ i18n.t('tenantBrands.createBrand.name') }}</span>
+      <input
+        class="q-body-sm"
+        type="text"
+        name="displayName"
+        [value]="editName()"
+        (input)="editName.set($any($event.target).value)"
+        required
+      />
+    </label>
+    @if (unit.kind === 'location') {
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('tenantBrands.createLocation.timezone') }}</span>
+        <input
+          class="q-body-sm"
+          type="text"
+          name="timezone"
+          [value]="editTimezone()"
+          [disabled]="identityLocked()"
+          (input)="editTimezone.set($any($event.target).value)"
+          required
+        />
+      </label>
+    }
+    <div class="actions">
+      <button type="button" class="q-body-sm" (click)="closeEdit()">{{ i18n.t('tenants.create.cancel') }}</button>
+      <button type="submit" class="q-body-sm primary" [disabled]="!canSubmitEdit()">
+        {{ editSubmitting() ? i18n.t('tenantBrands.edit.saving') : i18n.t('tenantBrands.edit.save') }}
       </button>
     </div>
   </form>

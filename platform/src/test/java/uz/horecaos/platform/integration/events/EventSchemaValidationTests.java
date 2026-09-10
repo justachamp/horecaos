@@ -25,9 +25,13 @@ import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.ordering.api.OrderReceived;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
+import uz.horecaos.platform.tenancy.api.BrandDeleted;
 import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.BrandRevised;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
+import uz.horecaos.platform.tenancy.api.LocationDeleted;
 import uz.horecaos.platform.tenancy.api.LocationId;
+import uz.horecaos.platform.tenancy.api.LocationRevised;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -181,7 +185,40 @@ class EventSchemaValidationTests {
                         "tashkent-01",
                         "Chilonzor",
                         "Asia/Tashkent",
-                        "ACTIVE"));
+                        "ACTIVE"),
+                new BrandRevised(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
+                        Instant.parse("2026-08-20T10:00:03Z"),
+                        "ACME_BURGERS",
+                        "acme-burgers",
+                        "Acme Burgers & Co",
+                        "DRAFT"),
+                new BrandDeleted(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
+                        Instant.parse("2026-08-20T10:00:04Z"),
+                        "ACME_BURGERS"),
+                new LocationRevised(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
+                        new LocationId(LOCATION),
+                        Instant.parse("2026-08-20T10:00:05Z"),
+                        "TASHKENT_01",
+                        "tashkent-01",
+                        "Chilonzor 2",
+                        "Asia/Tashkent",
+                        "DRAFT"),
+                new LocationDeleted(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
+                        new LocationId(LOCATION),
+                        Instant.parse("2026-08-20T10:00:06Z"),
+                        "TASHKENT_01"));
     }
 
     @ParameterizedTest(name = "{0} payload validates against its schema")

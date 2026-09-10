@@ -389,6 +389,7 @@ export interface BrandView {
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   tenantId?: string;
+  version?: number;
 }
 
 export interface BucketResponse {
@@ -1368,6 +1369,7 @@ export interface LocationView {
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   tenantId?: string;
   timezone?: string;
+  version?: number;
 }
 
 export interface LoyaltyOperationsControllerAdjustmentRequest {

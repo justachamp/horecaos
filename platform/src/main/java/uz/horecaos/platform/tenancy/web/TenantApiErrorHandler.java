@@ -1,10 +1,14 @@
 package uz.horecaos.platform.tenancy.web;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException;
 import uz.horecaos.platform.tenancy.application.TenantResourceConflictException;
 import uz.horecaos.platform.tenancy.application.TenantResourceNotFoundException;
+import uz.horecaos.platform.tenancy.application.TenantResourceStaleException;
 import uz.horecaos.platform.web.api.ApiProblem;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -34,6 +38,30 @@ public class TenantApiErrorHandler {
     @ExceptionHandler(TenantResourceConflictException.class)
     ProblemDetail conflict(TenantResourceConflictException exception) {
         return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, detailOf(exception));
+    }
+
+    /**
+     * A refused delete, with its reason as a property a screen can branch on —
+     * ADR 0031 clients never read {@code detail}. See
+     * {@link OperatingUnitNotDeletableException}.
+     */
+    @ExceptionHandler(OperatingUnitNotDeletableException.class)
+    ProblemDetail notDeletable(OperatingUnitNotDeletableException exception) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("reason", exception.reason().name());
+        if (exception.referencedBy() != null) {
+            properties.put("referencedBy", exception.referencedBy());
+        }
+        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, detailOf(exception), properties);
+    }
+
+    /** ADR 0031: a stale {@code If-Match} reports both versions, as {@code ApiException.staleVersion} does. */
+    @ExceptionHandler(TenantResourceStaleException.class)
+    ProblemDetail stale(TenantResourceStaleException exception) {
+        return ApiProblem.withProperties(
+                ErrorCode.STALE_VERSION,
+                detailOf(exception),
+                Map.of("expectedVersion", exception.expected(), "currentVersion", exception.actual()));
     }
 
     /**

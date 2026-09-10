@@ -8,7 +8,9 @@ import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.UsageMeter;
 import uz.horecaos.platform.commercial.api.UsageMovement;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
+import uz.horecaos.platform.tenancy.api.BrandDeleted;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
+import uz.horecaos.platform.tenancy.api.LocationDeleted;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
 
 /**
@@ -75,6 +77,26 @@ public class TenancyUsageMeterTrigger {
                     created.locationId().value().toString(),
                     created.occurredAt(),
                     Map.of("brand_id", created.brandId().value().toString())));
+        } else if (event instanceof BrandDeleted deleted) {
+            // A draft deleted during setup gives its slot back. Without this a
+            // tenant that created a brand twice by mistake and deleted one would
+            // be metered for two, and could meet its plan's limit a brand early.
+            usage.record(UsageMovement.of(
+                    deleted.tenantId().value(),
+                    EntitlementKeys.BRANDS_MAX_COUNT,
+                    -1,
+                    "tenancy.BrandDeleted",
+                    deleted.brandId().value().toString(),
+                    deleted.occurredAt()));
+        } else if (event instanceof LocationDeleted deleted) {
+            usage.record(new UsageMovement(
+                    deleted.tenantId().value(),
+                    EntitlementKeys.LOCATIONS_MAX_COUNT,
+                    -1,
+                    "tenancy.LocationDeleted",
+                    deleted.locationId().value().toString(),
+                    deleted.occurredAt(),
+                    Map.of("brand_id", deleted.brandId().value().toString())));
         }
     }
 }

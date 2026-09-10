@@ -385,7 +385,8 @@ class OnboardingOutboxIntegrationTests {
                     recorder,
                     currentActor,
                     transactions,
-                    organizationProvisioner);
+                    organizationProvisioner,
+                    scope -> 0);
         }
 
         /** Stands in for Keycloak; ADR 0009's own adapter is tested against a real one. */

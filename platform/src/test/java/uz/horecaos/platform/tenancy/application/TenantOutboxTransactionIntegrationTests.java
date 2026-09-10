@@ -234,7 +234,8 @@ class TenantOutboxTransactionIntegrationTests {
                     auditRecorder,
                     currentActor,
                     transactions,
-                    organizationProvisioner);
+                    organizationProvisioner,
+                    scope -> 0);
         }
     }
 

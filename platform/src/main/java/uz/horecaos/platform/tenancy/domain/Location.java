@@ -11,12 +11,13 @@ public final class Location {
     private final LocationId id;
     private final TenantId tenantId;
     private final BrandId brandId;
-    private final String code;
-    private final Slug slug;
-    private final ZoneId timezone;
+    private String code;
+    private Slug slug;
+    private ZoneId timezone;
     private String displayName;
     private OperatingUnitStatus status;
     private LocationPlace place;
+    private final long version;
 
     private Location(
             LocationId id,
@@ -27,7 +28,8 @@ public final class Location {
             String displayName,
             ZoneId timezone,
             OperatingUnitStatus status,
-            LocationPlace place) {
+            LocationPlace place,
+            long version) {
         this.id = Objects.requireNonNull(id, "Location ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
         this.brandId = Objects.requireNonNull(brandId, "Brand ID is required");
@@ -37,6 +39,7 @@ public final class Location {
         this.timezone = Objects.requireNonNull(timezone, "Location timezone is required");
         this.status = Objects.requireNonNull(status, "Location status is required");
         this.place = Objects.requireNonNull(place, "Location place is required");
+        this.version = version;
     }
 
     public static Location draft(
@@ -59,9 +62,11 @@ public final class Location {
                 // A branch is registered before anyone has stood outside it. The
                 // address arrives during onboarding, and until it does the gap is
                 // stated rather than implied by a scatter of nulls.
-                LocationPlace.unknown());
+                LocationPlace.unknown(),
+                0);
     }
 
+    /** @param version the row's stored version, which an {@code If-Match} is compared against (ADR 0031) */
     public static Location reconstitute(
             LocationId id,
             TenantId tenantId,
@@ -71,8 +76,40 @@ public final class Location {
             String displayName,
             ZoneId timezone,
             OperatingUnitStatus status,
-            LocationPlace place) {
-        return new Location(id, tenantId, brandId, code, slug, displayName, timezone, status, place);
+            LocationPlace place,
+            long version) {
+        return new Location(id, tenantId, brandId, code, slug, displayName, timezone, status, place, version);
+    }
+
+    /**
+     * Corrects the branch's name at any time, and its code, slug and timezone
+     * while it is still a draft.
+     *
+     * <p>{@link Brand#revise} gives the reason for the code and slug. The
+     * timezone joins them because schedules, business days and order numbering
+     * are all computed in it: moving a live branch to another zone would shift
+     * every opening hour it has by the difference, and re-date its history.
+     */
+    public void revise(String newCode, Slug newSlug, String newDisplayName, ZoneId newTimezone) {
+        String revisedCode = Brand.normalizedCode(newCode);
+        Slug revisedSlug = Objects.requireNonNull(newSlug, "Location slug is required");
+        String revisedName = Brand.normalizedName(newDisplayName);
+        ZoneId revisedTimezone = Objects.requireNonNull(newTimezone, "Location timezone is required");
+        if (status != OperatingUnitStatus.DRAFT
+                && (!revisedCode.equals(code) || !revisedSlug.equals(slug) || !revisedTimezone.equals(timezone))) {
+            throw new IllegalStateException(
+                    "A location's code, slug and timezone can only change while it is DRAFT, and this one is "
+                            + status);
+        }
+        code = revisedCode;
+        slug = revisedSlug;
+        displayName = revisedName;
+        timezone = revisedTimezone;
+    }
+
+    /** Whether the branch has never left {@code DRAFT}; {@link Brand#deletable} says why that is the rule. */
+    public boolean deletable() {
+        return status == OperatingUnitStatus.DRAFT;
     }
 
     /**
@@ -135,6 +172,11 @@ public final class Location {
 
     public LocationPlace place() {
         return place;
+    }
+
+    /** The version this branch was read at; a write that persists it moves the stored one on. */
+    public long version() {
+        return version;
     }
 
     private void requireStatus(OperatingUnitStatus... allowed) {

@@ -23,14 +23,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
+import uz.horecaos.platform.tenancy.api.BrandDeleted;
 import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.BrandRevised;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
+import uz.horecaos.platform.tenancy.api.LocationDeleted;
 import uz.horecaos.platform.tenancy.api.LocationId;
+import uz.horecaos.platform.tenancy.api.LocationRevised;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateBrandCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateTenantCommand;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseBrandCommand;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseLocationCommand;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
@@ -59,7 +65,8 @@ class TenantControlPlaneServiceTests {
                 auditFacts::add,
                 () -> platformAdmin,
                 noTransactions(),
-                provisioner);
+                provisioner,
+                scope -> 0);
 
         var created = service.createTenant(new CreateTenantCommand(
                 "food-group",
@@ -126,7 +133,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> platformAdmin,
                 noTransactions(),
-                provisioner);
+                provisioner,
+                scope -> 0);
 
         var created = service.createTenant(new CreateTenantCommand(
                 "food-group-2",
@@ -169,7 +177,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> platformAdmin,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
         var created = asPlatform.createTenant(new CreateTenantCommand(
                 "food-group",
                 "Food Group LLC",
@@ -192,7 +201,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> owner,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
 
         assertThatThrownBy(() -> asOwner.suspendTenant(tenantId, "trying it on"))
                 .as("the reasons a tenant is suspended are the platform's side of the relationship")
@@ -215,7 +225,8 @@ class TenantControlPlaneServiceTests {
                 auditFacts::add,
                 () -> platformAdmin,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "food-group",
@@ -293,7 +304,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> platformAdmin,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "horecaos", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
@@ -319,7 +331,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> platformAdmin,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
 
         var first = service.createTenant(new CreateTenantCommand(
                 "directory-a",
@@ -351,7 +364,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> tenantOwner,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
         assertThatThrownBy(() -> asOwner.listTenants(null, 50))
                 .as("the directory is a cross-tenant read; organization membership in one tenant "
                         + "must never substitute for platform scope")
@@ -371,7 +385,8 @@ class TenantControlPlaneServiceTests {
                 fact -> {},
                 () -> platformAdmin,
                 noTransactions(),
-                new RecordingOrganizationProvisioner());
+                new RecordingOrganizationProvisioner(),
+                scope -> 0);
 
         var tenant = service.createTenant(new CreateTenantCommand(
                 "horecaos-2", "HorecaOS LLC", "HorecaOS", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED));
@@ -405,6 +420,250 @@ class TenantControlPlaneServiceTests {
                                 new TenantId(tenant.id()), new BrandId(brand.id()), new LocationId(location.id()))
                         .status())
                 .isEqualTo(uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+    }
+
+    // ------------------------------------------------ correcting and deleting units
+
+    /** A platform administrator's view of one tenant, with every effect the service has kept. */
+    private static final class Harness {
+        final InMemoryStore store = new InMemoryStore();
+        final List<Object> published = new ArrayList<>();
+        final List<uz.horecaos.platform.audit.api.AuditFact> audited = new ArrayList<>();
+        int grantsOnAnyScope;
+        final TenantControlPlaneService service;
+        final TenantId tenantId;
+
+        Harness() {
+            AuthenticatedActor admin = new AuthenticatedActor("platform-user", Set.of("platform-admin"), Map.of());
+            service = new TenantControlPlaneService(
+                    store,
+                    new TenantAccessPolicy(() -> admin, denyAll(), false),
+                    evicted -> {},
+                    Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC),
+                    published::add,
+                    audited::add,
+                    () -> admin,
+                    noTransactions(),
+                    new RecordingOrganizationProvisioner(),
+                    scope -> grantsOnAnyScope);
+            tenantId = new TenantId(service.createTenant(new CreateTenantCommand(
+                            "units", "Units LLC", "Units", "UZS", "Asia/Tashkent", CustomerIdentityMode.TENANT_SHARED))
+                    .id());
+        }
+
+        BrandId brand(String code, String slug) {
+            return new BrandId(service.createBrand(tenantId, new CreateBrandCommand(code, slug, code + " name"))
+                    .id());
+        }
+
+        LocationId location(BrandId brandId, String code) {
+            return new LocationId(service.createLocation(
+                            tenantId,
+                            brandId,
+                            new CreateLocationCommand(
+                                    code, code.toLowerCase(java.util.Locale.ROOT), code, "Asia/Tashkent"))
+                    .id());
+        }
+
+        List<String> actions() {
+            return audited.stream().map(fact -> fact.actionCode()).toList();
+        }
+    }
+
+    @Test
+    @DisplayName("a draft brand's whole identity can be corrected, and the correction is published and audited")
+    void aDraftBrandIsCorrected() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("OSHXONA", "oshxona");
+
+        var revised = h.service.reviseBrand(
+                h.tenantId, brandId, 0, new ReviseBrandCommand("OSHXONA_1", "oshxona-1", "Oshxona No.1"));
+
+        assertThat(revised.code()).isEqualTo("OSHXONA_1");
+        assertThat(revised.slug()).isEqualTo("oshxona-1");
+        assertThat(revised.displayName()).isEqualTo("Oshxona No.1");
+        assertThat(h.published)
+                .filteredOn(BrandRevised.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(BrandRevised.class, event -> {
+                    assertThat(event.code()).isEqualTo("OSHXONA_1");
+                    assertThat(event.displayName()).isEqualTo("Oshxona No.1");
+                });
+        assertThat(h.actions()).contains("brand.revised");
+    }
+
+    @Test
+    @DisplayName("a live brand can be renamed but keeps the code and slug things are built on")
+    void aLiveBrandKeepsItsCodeAndSlug() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("CAFE", "cafe");
+        h.service.activateBrand(h.tenantId, brandId);
+
+        assertThatThrownBy(() ->
+                        h.service.reviseBrand(h.tenantId, brandId, 0, new ReviseBrandCommand("CAFE_2", "cafe", "Cafe")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DRAFT");
+        assertThatThrownBy(() ->
+                        h.service.reviseBrand(h.tenantId, brandId, 0, new ReviseBrandCommand("CAFE", "cafe-2", "Cafe")))
+                .isInstanceOf(IllegalStateException.class);
+
+        var renamed = h.service.reviseBrand(h.tenantId, brandId, 0, new ReviseBrandCommand("cafe", "cafe", "Cafe Bar"));
+        assertThat(renamed.displayName()).isEqualTo("Cafe Bar");
+        assertThat(renamed.code())
+                .as("the code arrives in any case and is compared after normalising, so an "
+                        + "unchanged code typed in lower case is not a change")
+                .isEqualTo("CAFE");
+    }
+
+    @Test
+    @DisplayName("a correction from an out-of-date form is refused with both versions, and changes nothing")
+    void aStaleCorrectionIsRefused() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("KEBAB", "kebab");
+
+        assertThatThrownBy(() -> h.service.reviseBrand(
+                        h.tenantId, brandId, 3, new ReviseBrandCommand("KEBAB", "kebab", "Somebody else's")))
+                .isInstanceOfSatisfying(TenantResourceStaleException.class, stale -> {
+                    assertThat(stale.expected()).isEqualTo(3);
+                    assertThat(stale.actual()).isZero();
+                });
+        assertThat(h.store.findBrand(h.tenantId, brandId).orElseThrow().displayName())
+                .isEqualTo("KEBAB name");
+        assertThat(h.published).noneMatch(BrandRevised.class::isInstance);
+    }
+
+    @Test
+    @DisplayName("a code another brand of the tenant holds is refused")
+    void aTakenCodeIsRefused() {
+        Harness h = new Harness();
+        h.brand("PIZZA", "pizza");
+        BrandId other = h.brand("BURGER", "burger");
+
+        assertThatThrownBy(() -> h.service.reviseBrand(
+                        h.tenantId, other, 0, new ReviseBrandCommand("PIZZA", "burger", "Burger")))
+                .isInstanceOf(TenantResourceConflictException.class);
+    }
+
+    /**
+     * Each refusal in the order an operator meets them, and each with the
+     * reason the console turns into what to do next. Nothing is deleted until
+     * every one of them is out of the way.
+     */
+    @Test
+    @DisplayName("a brand is deleted only once it owns no locations and nobody holds access to it")
+    void deletingABrandWaitsForItsLocationsAndItsGrants() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("TYPO", "typo");
+        LocationId locationId = h.location(brandId, "CHILONZOR");
+
+        assertThatThrownBy(() -> h.service.deleteBrand(h.tenantId, brandId, 0))
+                .isInstanceOfSatisfying(
+                        OperatingUnitNotDeletableException.class,
+                        refused -> assertThat(refused.reason())
+                                .isEqualTo(OperatingUnitNotDeletableException.Reason.HAS_LOCATIONS));
+
+        h.service.deleteLocation(h.tenantId, brandId, locationId, 0);
+        assertThat(h.published).anyMatch(LocationDeleted.class::isInstance);
+
+        h.grantsOnAnyScope = 2;
+        assertThatThrownBy(() -> h.service.deleteBrand(h.tenantId, brandId, 0))
+                .isInstanceOfSatisfying(OperatingUnitNotDeletableException.class, refused -> {
+                    assertThat(refused.reason()).isEqualTo(OperatingUnitNotDeletableException.Reason.HAS_ACCESS_GRANTS);
+                    assertThat(refused.getMessage()).contains("2 staff grant(s)");
+                });
+        assertThat(h.store.findBrand(h.tenantId, brandId)).isPresent();
+
+        h.grantsOnAnyScope = 0;
+        h.service.deleteBrand(h.tenantId, brandId, 0);
+
+        assertThat(h.store.findBrand(h.tenantId, brandId)).isEmpty();
+        assertThat(h.published)
+                .filteredOn(BrandDeleted.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        BrandDeleted.class, event -> assertThat(event.code()).isEqualTo("TYPO"));
+        assertThat(h.actions()).contains("location.deleted", "brand.deleted");
+    }
+
+    @Test
+    @DisplayName("a brand or location that has been live is never deleted")
+    void aLiveUnitIsNeverDeleted() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("LIVE", "live");
+        LocationId locationId = h.location(brandId, "YUNUSOBOD");
+        h.service.activateLocation(h.tenantId, brandId, locationId);
+        h.service.activateBrand(h.tenantId, brandId);
+
+        assertThatThrownBy(() -> h.service.deleteLocation(h.tenantId, brandId, locationId, 0))
+                .isInstanceOfSatisfying(
+                        OperatingUnitNotDeletableException.class,
+                        refused -> assertThat(refused.reason())
+                                .isEqualTo(OperatingUnitNotDeletableException.Reason.NOT_DRAFT));
+        assertThatThrownBy(() -> h.service.deleteBrand(h.tenantId, brandId, 0))
+                .isInstanceOfSatisfying(
+                        OperatingUnitNotDeletableException.class,
+                        refused -> assertThat(refused.reason())
+                                .isEqualTo(OperatingUnitNotDeletableException.Reason.NOT_DRAFT));
+        assertThat(h.published).noneMatch(event -> event instanceof BrandDeleted || event instanceof LocationDeleted);
+    }
+
+    @Test
+    @DisplayName("a draft location's timezone can be corrected; a live one's cannot")
+    void aLocationsTimezoneIsFixedOnceItIsLive() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("ZONE", "zone");
+        LocationId locationId = h.location(brandId, "SAMARQAND");
+
+        var moved = h.service.reviseLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                0,
+                new ReviseLocationCommand("SAMARQAND", "samarqand", "Samarqand", "Asia/Samarkand"));
+        assertThat(moved.timezone()).isEqualTo("Asia/Samarkand");
+        assertThat(h.published)
+                .filteredOn(LocationRevised.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        LocationRevised.class,
+                        event -> assertThat(event.timezone()).isEqualTo("Asia/Samarkand"));
+
+        h.service.activateLocation(h.tenantId, brandId, locationId);
+        assertThatThrownBy(() -> h.service.reviseLocation(
+                        h.tenantId,
+                        brandId,
+                        locationId,
+                        0,
+                        new ReviseLocationCommand("SAMARQAND", "samarqand", "Samarqand", "Asia/Tashkent")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("timezone");
+    }
+
+    /**
+     * {@code ZoneId.of} throws {@code DateTimeException}, which no handler
+     * maps, so a mistyped zone came back from location creation as a 500. An
+     * {@code IllegalArgumentException} is what this module's handler turns into
+     * a 400 the console can explain.
+     */
+    @Test
+    @DisplayName("a mistyped timezone is the caller's mistake, not a server error")
+    void aMistypedTimezoneIsRefusedAsInvalid() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("TZ", "tz");
+
+        assertThatThrownBy(() -> h.service.createLocation(
+                        h.tenantId, brandId, new CreateLocationCommand("TYPO", "typo", "Typo", "Asia/Tashkentt")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Asia/Tashkentt");
+
+        LocationId locationId = h.location(brandId, "OK");
+        assertThatThrownBy(() -> h.service.reviseLocation(
+                        h.tenantId,
+                        brandId,
+                        locationId,
+                        0,
+                        new ReviseLocationCommand("OK", "ok", "Ok", "Mars/Olympus")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     /**
@@ -533,6 +792,26 @@ class TenantControlPlaneServiceTests {
         public void updateBrandStatus(Brand brand) {}
 
         @Override
+        public boolean brandCodeOrSlugTakenByAnother(Brand brand) {
+            return brands.values().stream()
+                    .anyMatch(other -> other.tenantId().equals(brand.tenantId())
+                            && !other.id().equals(brand.id())
+                            && (other.code().equals(brand.code())
+                                    || other.slug().equals(brand.slug())));
+        }
+
+        /** The aggregate is held by reference, so the revision is already in place; versions are the JDBC store's. */
+        @Override
+        public boolean updateBrandIdentity(Brand brand) {
+            return brands.containsKey(brand.id());
+        }
+
+        @Override
+        public boolean deleteBrand(Brand brand) {
+            return brands.remove(brand.id()) != null;
+        }
+
+        @Override
         public boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug) {
             return locations.stream()
                     .anyMatch(location -> location.brandId().equals(brand.id())
@@ -556,6 +835,25 @@ class TenantControlPlaneServiceTests {
         /** Same reasoning as {@link #updateLocationPlace}. */
         @Override
         public void updateLocationStatus(Location location) {}
+
+        @Override
+        public boolean locationCodeOrSlugTakenByAnother(Location location) {
+            return locations.stream()
+                    .anyMatch(other -> other.brandId().equals(location.brandId())
+                            && !other.id().equals(location.id())
+                            && (other.code().equals(location.code())
+                                    || other.slug().equals(location.slug())));
+        }
+
+        @Override
+        public boolean updateLocationIdentity(Location location) {
+            return locations.contains(location);
+        }
+
+        @Override
+        public boolean deleteLocation(Location location) {
+            return locations.remove(location);
+        }
 
         @Override
         public List<Location> findLocations(Brand brand) {

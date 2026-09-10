@@ -1695,6 +1695,10 @@
           "tenantId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -7079,6 +7083,10 @@
           },
           "timezone" : {
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -12922,6 +12930,58 @@
         "required" : [ "differenceId", "outcome" ],
         "type" : "object"
       },
+      "ReviseLocationRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z0-9][A-Za-z0-9_-]{0,31}",
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "slug" : {
+            "maxLength" : 63,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?",
+            "type" : "string"
+          },
+          "timezone" : {
+            "example" : "Asia/Tashkent",
+            "maxLength" : 63,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "slug", "timezone" ],
+        "type" : "object"
+      },
+      "ReviseOperatingUnitRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z0-9][A-Za-z0-9_-]{0,31}",
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "slug" : {
+            "maxLength" : 63,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?",
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "slug" ],
+        "type" : "object"
+      },
       "RevisionResponse" : {
         "properties" : {
           "amendmentId" : {
@@ -17879,6 +17939,81 @@
         "tags" : [ "SaaS control plane" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}" : {
+      "delete" : {
+        "description" : "For setting a tenant up: only a brand that never left DRAFT, owns no locations, has no staff access scoped to it, and that nothing else refers to. Nothing is ever deleted along with it. A refusal is 409 RESOURCE_CONFLICT with a `reason` of NOT_DRAFT, HAS_LOCATIONS, HAS_ACCESS_GRANTS or STILL_REFERENCED, and for the last a `referencedBy` table where it is known. Requires If-Match.",
+        "operationId" : "deleteBrand",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Delete a draft brand",
+        "tags" : [ "SaaS control plane" ]
+      },
+      "put" : {
+        "description" : "The whole editable identity, as a form holds it. The display name can be corrected at any time; the code and slug only while the brand is DRAFT, because the storefront is addressed by the slug and operators, exports and onboarding name a brand by its code once it is live. Requires If-Match.",
+        "operationId" : "reviseBrand",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviseOperatingUnitRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a brand",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate" : {
       "post" : {
         "description" : "A brand is created DRAFT and nothing else in this codebase moves it to ACTIVE — onboarding readiness checks that a brand exists, not its status, so a tenant can reach ACTIVE with a brand still DRAFT. Several customer-facing reads require ACTIVE explicitly (pickup-location discovery among them). Idempotent: a no-op when already ACTIVE.",
@@ -19731,6 +19866,97 @@
           }
         },
         "summary" : "Create a location owned by exactly one brand",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}" : {
+      "delete" : {
+        "description" : "Only a location that never left DRAFT, has no staff access scoped to it, and that nothing else refers to — a legal entity assignment, a sales channel, a menu offering. Nothing is ever deleted along with it. Refusals are as for a brand, less HAS_LOCATIONS. Requires If-Match.",
+        "operationId" : "deleteLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Delete a draft location",
+        "tags" : [ "SaaS control plane" ]
+      },
+      "put" : {
+        "description" : "The whole editable identity, as a form holds it. The display name can be corrected at any time; the code, slug and timezone only while the location is DRAFT — schedules, business days and order numbering are computed in its timezone. The address and point are the place endpoint's. Requires If-Match.",
+        "operationId" : "reviseLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviseLocationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a location",
         "tags" : [ "SaaS control plane" ]
       }
     },

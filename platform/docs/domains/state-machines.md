@@ -29,6 +29,40 @@ stateDiagram-v2
 Each onboarding step is idempotent and stores its attempt, checkpoint, result,
 and error. A run cannot reach `READY` until all required checks pass.
 
+A transient failure is retried with backoff, at most five times. A step that
+fails outright, or runs out of attempts, halts its run: the scheduler never runs
+it again, and no later step runs past it, until someone fixes the cause and
+resumes the run. Resuming is the only edge out of `FAILED`.
+
+## Brand and location
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Created
+    DRAFT --> ACTIVE: Activated
+    DRAFT --> [*]: Deleted, if nothing refers to it
+    ACTIVE --> SUSPENDED
+    SUSPENDED --> ACTIVE: Activated
+    DRAFT --> ARCHIVED
+    SUSPENDED --> ARCHIVED
+```
+
+Brands and locations follow the same machine. The control plane reaches
+creation, activation and deletion; suspension and archiving exist in the
+domain with no endpoint yet.
+
+Only a `DRAFT` can be deleted, and only once nothing refers to it: a brand's
+locations go first, staff access scoped to it is revoked first, and any other
+record that names it — a legal entity assignment, a sales channel, an order
+counter — blocks the delete rather than going with it. A unit that has been
+active keeps its history and is never deleted.
+
+The display name can be corrected in any state. The code and slug, and a
+location's timezone, are fixed once the unit leaves `DRAFT`: the storefront is
+addressed by the slug, operators and exports name a unit by its code, and a
+location's schedules, business days and order numbering are all computed in its
+timezone.
+
 ## Cart lifecycle
 
 ```mermaid

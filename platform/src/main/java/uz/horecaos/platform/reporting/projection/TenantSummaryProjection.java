@@ -162,6 +162,88 @@ public abstract class TenantSummaryProjection<T> implements InboxHandler<T> {
         }
     }
 
+    /** Handles {@code BrandDeleted}. */
+    @Component
+    public static class BrandDeletedProjection extends TenantSummaryProjection<Map<String, Object>> {
+
+        public BrandDeletedProjection(JdbcClient jdbc) {
+            super(jdbc);
+        }
+
+        @Override
+        public String eventType() {
+            return "BrandDeleted";
+        }
+
+        @Override
+        public int eventVersion() {
+            return 1;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public Class<Map<String, Object>> payloadType() {
+            return (Class<Map<String, Object>>) (Class<?>) Map.class;
+        }
+
+        @Override
+        public void handle(ExternalEventEnvelope<Map<String, Object>> event) {
+            decrementCount(jdbc, "brand_count", event.tenantId(), at(event.occurredAt()));
+        }
+    }
+
+    /** Handles {@code LocationDeleted}. */
+    @Component
+    public static class LocationDeletedProjection extends TenantSummaryProjection<Map<String, Object>> {
+
+        public LocationDeletedProjection(JdbcClient jdbc) {
+            super(jdbc);
+        }
+
+        @Override
+        public String eventType() {
+            return "LocationDeleted";
+        }
+
+        @Override
+        public int eventVersion() {
+            return 1;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public Class<Map<String, Object>> payloadType() {
+            return (Class<Map<String, Object>>) (Class<?>) Map.class;
+        }
+
+        @Override
+        public void handle(ExternalEventEnvelope<Map<String, Object>> event) {
+            decrementCount(jdbc, "location_count", event.tenantId(), at(event.occurredAt()));
+        }
+    }
+
+    /**
+     * The inverse of {@link #incrementCount}. A deletion shares its unit's
+     * partition key with the creation, so it cannot overtake it; the floor at
+     * zero is for a projection rebuilt from a topic whose retention has already
+     * dropped the creation, where going negative would be the one wrong answer.
+     */
+    private static void decrementCount(JdbcClient jdbc, String column, UUID tenantId, OffsetDateTime occurredAt) {
+
+        jdbc.sql("""
+                INSERT INTO reporting.tenant_summaries (
+                    tenant_id, slug, status, %s, first_seen_at, last_event_at)
+                VALUES (:tenantId, 'pending', 'UNKNOWN', 0, :occurredAt, :occurredAt)
+                ON CONFLICT (tenant_id) DO UPDATE SET
+                    %s = GREATEST(reporting.tenant_summaries.%s - 1, 0),
+                    last_event_at = GREATEST(
+                        reporting.tenant_summaries.last_event_at, excluded.last_event_at)
+                """.formatted(column, column, column))
+                .param("tenantId", tenantId)
+                .param("occurredAt", occurredAt)
+                .update();
+    }
+
     /**
      * A tenant row may not exist yet if events arrive out of order across
      * partitions, so the increment creates a placeholder rather than failing.

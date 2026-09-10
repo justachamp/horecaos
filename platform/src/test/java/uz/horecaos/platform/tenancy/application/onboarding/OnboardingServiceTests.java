@@ -129,7 +129,8 @@ class OnboardingServiceTests {
                 recorder,
                 systemActor,
                 transactions,
-                provisioner);
+                provisioner,
+                scope -> 0);
 
         service = new OnboardingService(
                 jdbc,

@@ -54,6 +54,8 @@ export interface BrandView {
   readonly slug: string;
   readonly displayName: string;
   readonly status: OperatingUnitStatus;
+  /** Sent back as `If-Match` when correcting or deleting (ADR 0031). */
+  readonly version: number;
 }
 
 export interface CreateOperatingUnitRequest {
@@ -79,6 +81,8 @@ export interface LocationView {
   readonly latitude: number | null;
   readonly longitude: number | null;
   readonly coordinateSource: string;
+  /** Sent back as `If-Match` when correcting or deleting (ADR 0031). */
+  readonly version: number;
 }
 
 export interface CreateLocationRequest {
@@ -217,6 +221,31 @@ export class TenantsApi {
     );
   }
 
+  /**
+   * The whole editable identity. The server refuses a changed code or slug
+   * once the brand has left DRAFT, and refuses a stale `version`.
+   */
+  async reviseBrand(
+    tenantId: string,
+    brand: Pick<BrandView, 'id' | 'version'>,
+    request: CreateOperatingUnitRequest,
+  ): Promise<BrandView> {
+    return firstValueFrom(
+      this.api.put<BrandView>(`/api/v1/control-plane/tenants/${tenantId}/brands/${brand.id}`, request, {
+        expectedVersion: brand.version,
+      }),
+    );
+  }
+
+  /** Only a DRAFT with no locations, no scoped staff access, and nothing else referring to it. */
+  async deleteBrand(tenantId: string, brand: Pick<BrandView, 'id' | 'version'>): Promise<void> {
+    await firstValueFrom(
+      this.api.delete<void>(`/api/v1/control-plane/tenants/${tenantId}/brands/${brand.id}`, null, {
+        expectedVersion: brand.version,
+      }),
+    );
+  }
+
   async getLocations(tenantId: string, brandId: string): Promise<LocationView[]> {
     return firstValueFrom(
       this.api.get<LocationView[]>(
@@ -234,6 +263,34 @@ export class TenantsApi {
       this.api.post<LocationView>(
         `/api/v1/control-plane/tenants/${tenantId}/brands/${brandId}/locations`,
         request,
+      ),
+    );
+  }
+
+  /** As {@link reviseBrand}; the timezone joins the code and slug in being fixed after DRAFT. */
+  async reviseLocation(
+    tenantId: string,
+    location: Pick<LocationView, 'id' | 'brandId' | 'version'>,
+    request: CreateLocationRequest,
+  ): Promise<LocationView> {
+    return firstValueFrom(
+      this.api.put<LocationView>(
+        `/api/v1/control-plane/tenants/${tenantId}/brands/${location.brandId}/locations/${location.id}`,
+        request,
+        { expectedVersion: location.version },
+      ),
+    );
+  }
+
+  async deleteLocation(
+    tenantId: string,
+    location: Pick<LocationView, 'id' | 'brandId' | 'version'>,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.delete<void>(
+        `/api/v1/control-plane/tenants/${tenantId}/brands/${location.brandId}/locations/${location.id}`,
+        null,
+        { expectedVersion: location.version },
       ),
     );
   }

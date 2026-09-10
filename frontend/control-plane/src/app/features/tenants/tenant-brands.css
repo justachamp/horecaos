@@ -170,3 +170,28 @@
   border: 1px solid var(--q-hairline);
   color: var(--q-ink);
 }
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The second press of a delete: the one control on this screen that loses data. */
+.brandActions .danger,
+.table .danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.brandActions button:disabled,
+.table button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field input:disabled {
+  color: var(--q-ink-muted);
+  background: var(--q-hairline);
+  cursor: not-allowed;
+}
