@@ -465,8 +465,47 @@ def check_storefront_api_routing() -> None:
            "See the comments on (storefront_api) in deploy/infra/caddy/Caddyfile.")
 
 
+def check_deploy_copies_match() -> None:
+    """Deploy: the files deploy/ ships as verbatim copies are still verbatim.
+
+    deploy/ is what an operator copies to a host, so it carries its own copy of
+    the database init scripts and the Keycloak entrypoint rather than reaching
+    into platform/. Until 2026-09-10 nothing compared them. V0161 moved the
+    ADR 0056 bypass role's membership grant into the init script, the copy under
+    deploy/ never got it, and the first host built from deploy/ came up with
+    every platform-scope sweeper failing on `permission denied to set role`.
+
+    Matching copies are not enough on their own -- deleting the grant from both
+    would pass -- so the grant the platform relies on is checked for by name.
+    """
+    deploy = ROOT.parent / "deploy" / "infra"
+    platform = ROOT / "infra" / "production"
+    src = platform.relative_to(ROOT.parent)
+    problems = []
+    for sub in ("postgres-init", "keycloak"):
+        ours = {q.relative_to(platform / sub) for q in (platform / sub).rglob("*") if q.is_file()}
+        theirs = {q.relative_to(deploy / sub) for q in (deploy / sub).rglob("*") if q.is_file()}
+        names = sorted(ours | theirs) if sub == "postgres-init" else sorted(ours & theirs)
+        for name in names:
+            a, b = platform / sub / name, deploy / sub / name
+            if not a.exists() or not b.exists():
+                problems.append(f"{sub}/{name} exists under only one of "
+                                f"{src}/ and deploy/infra/")
+            elif a.read_bytes() != b.read_bytes():
+                problems.append(f"deploy/infra/{sub}/{name} differs from {src}/{sub}/{name}")
+    for init in (platform / "postgres-init", deploy / "postgres-init"):
+        text = "".join(q.read_text() for q in sorted(init.glob("*.sh")))
+        if not re.search(r"GRANT\s+horecaos_platform_bypass\s+TO\s+horecaos_app\s+WITH\s+INHERIT\s+FALSE", text):
+            problems.append(f"{init.relative_to(ROOT.parent)} does not grant horecaos_platform_bypass to "
+                            "horecaos_app WITH INHERIT FALSE -- TenantRlsSession.bindPlatform "
+                            "fails on every fresh volume without it")
+    result("deploy: verbatim copies match, and the bypass grant is in both", problems,
+           f"Copy from {src}/ into deploy/infra/, never the other way round.")
+
+
 CHECKS = [
     check_storefront_api_routing,
+    check_deploy_copies_match,
     check_unique_versions,
     check_grants,
     check_timestamptz,
