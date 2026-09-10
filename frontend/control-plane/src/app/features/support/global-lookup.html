@@ -56,3 +56,31 @@
     </div>
   }
 }
+
+@if (session.has('CUSTOMER_PII_REVEAL')) {
+  <section class="phoneLookup">
+    <h2 class="q-subhead">{{ i18n.t('globalLookup.phone.title') }}</h2>
+    <p class="q-caption muted">{{ i18n.t('globalLookup.phone.lead') }}</p>
+    <form class="picker phoneForm" (submit)="findPhone($event)">
+      <input class="q-body-sm" type="tel" name="phone" autocomplete="off" [placeholder]="i18n.t('globalLookup.phone.number')" [value]="phone()" (input)="phone.set($any($event.target).value)" />
+      <input class="q-body-sm" name="phoneReason" [placeholder]="i18n.t('common.reason')" [value]="phoneReason()" (input)="phoneReason.set($any($event.target).value)" />
+      <button type="submit" [disabled]="phoneBusy() || phone().trim().length < 7 || phoneReason().trim().length === 0">{{ i18n.t('globalLookup.search') }}</button>
+    </form>
+    @if (phoneError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else if (phoneResult(); as result) {
+      @if (result.matches.length === 0) {
+        <p class="q-body-sm state">{{ i18n.t('globalLookup.phone.none', { tenants: result.tenantsSearched }) }}</p>
+      } @else {
+        <ul class="phoneMatches">
+          @for (match of result.matches; track match.accountId) {
+            <li class="q-body-sm" [attr.data-account]="match.accountId">
+              <a [routerLink]="['/tenants', match.tenantId]">{{ match.tenantName }}</a>
+              <span class="q-caption muted q-tnum">{{ i18n.t('globalLookup.phone.account', { id: match.accountId }) }}</span>
+            </li>
+          }
+        </ul>
+      }
+    }
+  </section>
+}

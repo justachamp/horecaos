@@ -52,6 +52,7 @@ const SUBSCRIPTION: SubscriptionView = {
   suspensionReason: null,
   version: 4,
   allowedNext: ['CANCELLATION_SCHEDULED', 'PAST_DUE', 'SUSPENDED', 'TERMINATED'],
+  termMonths: 1,
 };
 
 const version = (id: string, n: number, status: string) => ({
@@ -65,6 +66,11 @@ const version = (id: string, n: number, status: string) => ({
   approvedBy: status === 'ACTIVE' ? 'b' : null,
   activatedAt: status === 'ACTIVE' ? '2026-09-01T00:00:00Z' : null,
   entitlements: [],
+  terms: {
+    trialDays: null,
+    activationDeposit: { amountMinor: 0, currency: 'UZS' },
+    termDiscounts: n === 1 ? [{ termMonths: 12, discountBasisPoints: 1_000 }] : [],
+  },
 });
 
 const PLANS: PlanDetail[] = [
@@ -180,7 +186,21 @@ describe('Entitlements', () => {
     el<HTMLButtonElement>('.startForm button[type="submit"]').click();
     await settle();
 
-    expect(api.startSubscription).toHaveBeenCalledWith('tenant-1', 'v1', 'signed the Network contract', 14);
+    expect(api.startSubscription).toHaveBeenCalledWith('tenant-1', 'v1', 'signed the Network contract', 14, 1);
+  });
+
+  it('offers the terms the chosen version sells and sends the one picked', async () => {
+    await create(null);
+
+    await set('select[name="startPlan"]', 'v1', 'change');
+    const terms = Array.from(el<HTMLSelectElement>('select[name="startTerm"]').options).map((o) => o.value);
+    expect(terms).toEqual(['1', '12']);
+    await set('select[name="startTerm"]', '12', 'change');
+    await set('input[name="startReason"]', 'a year up front');
+    el<HTMLButtonElement>('.startForm button[type="submit"]').click();
+    await settle();
+
+    expect(api.startSubscription).toHaveBeenCalledWith('tenant-1', 'v1', 'a year up front', undefined, 12);
   });
 
   it('grants an override with the operator’s own reason and a colleague as the second name', async () => {

@@ -916,12 +916,15 @@ export interface CommercialAdminControllerAdjustmentRequest {
 }
 
 export interface CommercialAdminControllerDraftVersionRequest {
+  activationDepositMinor?: number;
   billingPeriod: string;
   currency: string;
   entitlements?: Array<EntitlementLineRequest>;
   priceMinor?: number;
   reason: string;
+  termDiscounts?: Array<TermDiscountRequest>;
   termsReference?: string;
+  trialDays?: number;
 }
 
 export interface CommercialAdminControllerReasonRequest {
@@ -956,6 +959,7 @@ export interface CommercialControlPlaneControllerSubscriptionResponse {
   status?: string;
   subscriptionId?: string;
   suspensionReason?: string;
+  termMonths?: number;
   trialEndAt?: string;
   version?: number;
 }
@@ -1422,6 +1426,11 @@ export interface CredentialResponse {
   tokenEndpoint?: string;
 }
 
+export interface CredentialsDue {
+  credentials?: Array<DueCredential>;
+  rotationIntervalDays?: number;
+}
+
 export interface CustomerControllerErasureRequestResponse {
   cancelledAt?: string;
   cancelledByActorId?: string;
@@ -1463,12 +1472,19 @@ export interface CustomerLookupCandidateResponse {
   recentOrderCount?: number;
 }
 
-export interface CustomerLookupRequest {
-  phone: string;
-}
-
 export interface CustomerLookupResponse {
   candidates?: Array<CustomerLookupCandidateResponse>;
+}
+
+export interface CustomerLookupResult {
+  matches?: Array<CustomerMatch>;
+  tenantsSearched?: number;
+}
+
+export interface CustomerMatch {
+  accountId?: string;
+  tenantId?: string;
+  tenantName?: string;
 }
 
 export interface CustomerOrderHistoryControllerOrderSummaryResponse {
@@ -1802,6 +1818,15 @@ export interface DraftRedemptionPolicyRequest {
   minOrderMinor?: number;
   validFrom?: string;
   validUntil?: string;
+}
+
+export interface DueCredential {
+  daysOld?: number;
+  id?: string;
+  kind?: string;
+  label?: string;
+  lastRotatedAt?: string;
+  providerType?: string;
 }
 
 export interface DutySessionResponse {
@@ -2933,6 +2958,10 @@ export interface OperationsOrderControllerCancelRequest {
   reasonId?: string;
 }
 
+export interface OperationsOrderControllerCustomerLookupRequest {
+  phone: string;
+}
+
 export interface OperationsOrderControllerDecisionRequest {
   action: "APPROVE" | "REJECT";
   decisionId: string;
@@ -3565,6 +3594,12 @@ export interface PlanResponse {
   versions?: Array<PlanVersionDetail>;
 }
 
+export interface PlanTermsView {
+  activationDeposit?: ApiMoney;
+  termDiscounts?: Array<TermDiscountView>;
+  trialDays?: number;
+}
+
 export interface PlanVersionDetail {
   activatedAt?: string;
   approvedBy?: string;
@@ -3574,6 +3609,7 @@ export interface PlanVersionDetail {
   planVersionId?: string;
   price?: ApiMoney;
   status?: string;
+  terms?: PlanTermsView;
   termsReference?: string;
   versionNumber?: number;
 }
@@ -3584,6 +3620,7 @@ export interface PlanVersionResponse {
   planCode?: string;
   planVersionId?: string;
   price?: ApiMoney;
+  terms?: PlanTermsView;
   versionNumber?: number;
 }
 
@@ -3591,6 +3628,11 @@ export interface PlatformBlockedDocument {
   document?: BlockedDocumentResponse;
   tenantId?: string;
   tenantName?: string;
+}
+
+export interface PlatformCustomerLookupControllerCustomerLookupRequest {
+  phone: string;
+  reason: string;
 }
 
 export interface PlatformGrantControllerReasonRequest {
@@ -4999,6 +5041,7 @@ export interface StartRunRequest {
 export interface StartSubscriptionRequest {
   planVersionId: string;
   reason: string;
+  termMonths?: number;
   trialDays?: number;
 }
 
@@ -5458,6 +5501,16 @@ export interface TenantView {
   status?: "PROVISIONING" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
 }
 
+export interface TermDiscountRequest {
+  discountBasisPoints?: number;
+  termMonths?: number;
+}
+
+export interface TermDiscountView {
+  discountBasisPoints?: number;
+  termMonths?: number;
+}
+
 export interface TermsVersionSummaryView {
   id?: string;
   locales?: Array<string>;
@@ -5724,6 +5777,7 @@ export interface Operations {
   "keys": { method: "GET"; path: "/api/v1/control-plane/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<ConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
+  "lookup": { method: "POST"; path: "/api/v1/control-plane/customer-lookups"; request: { parameters: Record<string, never>; body: PlatformCustomerLookupControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResult } };
   "overview": { method: "GET"; path: "/api/v1/control-plane/data-protection"; request: { parameters: Record<string, never> }; responses: { "200": DataProtection } };
   "begin": { method: "POST"; path: "/api/v1/control-plane/device-enrolments"; request: { parameters: Record<string, never>; body: BeginRequest }; responses: { "200": BeginResponse } };
   "poll": { method: "POST"; path: "/api/v1/control-plane/device-enrolments/{deviceCode}/poll"; request: { parameters: { path: { deviceCode: string } } }; responses: { "200": PollResponse } };
@@ -5848,6 +5902,7 @@ export interface Operations {
   "activate_10": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } }; body: ActivateRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
+  "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };
   "entitlements_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerEntitlementSnapshotResponse } };
   "list_16": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
@@ -6222,7 +6277,7 @@ export interface Operations {
   "place": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": PlaceOrderResponse } };
   "bulkAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkActionRequest }; responses: { "200": BulkActionResponse } };
   "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": OrderCountsResponse } };
-  "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
+  "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OperationsOrderControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
   "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };
   "detail_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { revision?: number } } }; responses: { "200": OrderDetailResponse } };

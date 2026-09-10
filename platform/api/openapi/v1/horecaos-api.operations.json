@@ -2799,17 +2799,6 @@
         },
         "type" : "object"
       },
-      "CustomerLookupRequest" : {
-        "properties" : {
-          "phone" : {
-            "maxLength" : 32,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "phone" ],
-        "type" : "object"
-      },
       "CustomerLookupResponse" : {
         "properties" : {
           "candidates" : {
@@ -5254,6 +5243,17 @@
           }
         },
         "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
+      "OperationsOrderControllerCustomerLookupRequest" : {
+        "properties" : {
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone" ],
         "type" : "object"
       },
       "OperationsOrderControllerDecisionRequest" : {
@@ -19272,7 +19272,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/CustomerLookupRequest"
+                "$ref" : "#/components/schemas/OperationsOrderControllerCustomerLookupRequest"
               }
             }
           },

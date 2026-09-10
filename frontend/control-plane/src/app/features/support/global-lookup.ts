@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { ApiError } from '../../core/api/problem';
+import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
 
@@ -15,6 +16,13 @@ export interface LookupHit {
   readonly tenantName: string | null;
   readonly matchedOn: string;
   readonly label: string;
+}
+
+/** A tenant's account holding a phone number: identifiers only. */
+export interface CustomerMatch {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly accountId: string;
 }
 
 /**
@@ -44,9 +52,46 @@ export class GlobalLookup {
   protected readonly hits = signal<readonly LookupHit[]>([]);
   protected readonly error = signal<string | null>(null);
 
+  protected readonly session = inject(SessionContextService);
+  protected readonly phone = signal('');
+  protected readonly phoneReason = signal('');
+  protected readonly phoneBusy = signal(false);
+  protected readonly phoneError = signal<string | null>(null);
+  protected readonly phoneResult = signal<{ tenantsSearched: number; matches: readonly CustomerMatch[] } | null>(null);
+
   constructor() {
     if (this.query().trim().length > 0) {
       void this.run();
+    }
+  }
+
+  /**
+   * Which tenants know a phone number as a customer. The number goes in the
+   * request body, never the address, and the lookup is audited with its reason.
+   */
+  protected async findPhone(event: Event): Promise<void> {
+    event.preventDefault();
+    const phone = this.phone().trim();
+    const reason = this.phoneReason().trim();
+    if (phone.length < 7 || reason.length === 0 || this.phoneBusy()) {
+      return;
+    }
+    this.phoneBusy.set(true);
+    this.phoneError.set(null);
+    try {
+      this.phoneResult.set(
+        await firstValueFrom(
+          this.api.post<{ tenantsSearched: number; matches: CustomerMatch[] }>('/api/v1/control-plane/customer-lookups', {
+            phone,
+            reason,
+          }),
+        ),
+      );
+    } catch (thrown) {
+      this.phoneResult.set(null);
+      this.phoneError.set(this.i18n.describe(thrown as ApiError));
+    } finally {
+      this.phoneBusy.set(false);
     }
   }
 

@@ -892,10 +892,6 @@ export interface CustomerLookupCandidateResponse {
   recentOrderCount?: number;
 }
 
-export interface CustomerLookupRequest {
-  phone: string;
-}
-
 export interface CustomerLookupResponse {
   candidates?: Array<CustomerLookupCandidateResponse>;
 }
@@ -1651,6 +1647,10 @@ export interface OperationsOrderControllerCancelRequest {
   note?: string;
   reasonCode: string;
   reasonId?: string;
+}
+
+export interface OperationsOrderControllerCustomerLookupRequest {
+  phone: string;
 }
 
 export interface OperationsOrderControllerDecisionRequest {
@@ -3337,7 +3337,7 @@ export interface Operations {
   "place": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": PlaceOrderResponse } };
   "bulkAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkActionRequest }; responses: { "200": BulkActionResponse } };
   "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": OrderCountsResponse } };
-  "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
+  "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OperationsOrderControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
   "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };
   "detail_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { revision?: number } } }; responses: { "200": OrderDetailResponse } };

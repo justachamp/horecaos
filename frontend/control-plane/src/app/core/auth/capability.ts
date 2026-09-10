@@ -51,6 +51,7 @@ export type Capability =
   // 2026-09-02 amendment moved to the operations app's Settings section.
   | 'INTEGRATION_INSTALLATION_MANAGE'
   | 'NOTIFICATION_READ'
+  | 'CUSTOMER_PII_REVEAL'
   | 'NOTIFICATION_TEMPLATE_ACTIVATE'
   | 'INTEGRATION_FAILURE_READ'
   | 'INTEGRATION_FAILURE_RETRY'

@@ -37,16 +37,22 @@ public class JdbcSubscriptionStore {
     }
 
     public void insert(Subscription subscription, Instant now) {
+        insert(subscription, 1, now);
+    }
+
+    /** Writes a new subscription sold on a term of {@code termMonths} (ADR 0093); 1 is month to month. */
+    public void insert(Subscription subscription, int termMonths, Instant now) {
         jdbc.sql("""
                 INSERT INTO commercial.subscriptions (
                     id, tenant_id, plan_version_id, status, start_at, trial_end_at,
                     current_period_start, current_period_end, external_billing_reference,
-                    version, status_changed_at, created_at, updated_at)
+                    version, status_changed_at, term_months, created_at, updated_at)
                 VALUES (
                     :id, :tenantId, :planVersionId, :status, :startAt, :trialEndAt,
                     :periodStart, :periodEnd, :externalReference,
-                    1, :now, :now, :now)
+                    1, :now, :termMonths, :now, :now)
                 """)
+                .param("termMonths", termMonths)
                 .param("id", subscription.id())
                 .param("tenantId", subscription.tenantId())
                 .param("planVersionId", subscription.planVersionId())
@@ -148,6 +154,15 @@ public class JdbcSubscriptionStore {
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /** The term a subscription was sold on, in months; 1 is month to month (ADR 0093). */
+    public int termMonths(UUID subscriptionId) {
+        return jdbc.sql("SELECT term_months FROM commercial.subscriptions WHERE id = :id")
+                .param("id", subscriptionId)
+                .query(Integer.class)
+                .optional()
+                .orElse(1);
     }
 
     // ------------------------------------------------------------- overrides

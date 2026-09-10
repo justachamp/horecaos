@@ -10,6 +10,7 @@ import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
 import { BlockedDocumentResponse, FiscalApi } from '../compliance/fiscal-api';
 import { FailureSummary, IntegrationOpsApi } from '../integration-ops/integration-ops-api';
+import { DueCredential, ProvidersApi } from '../providers/providers-api';
 import { PosExportCandidate, PosExportDecision, PosExportView, PosExportsApi } from './pos-exports-api';
 
 /**
@@ -22,8 +23,9 @@ import { PosExportCandidate, PosExportDecision, PosExportView, PosExportsApi } f
  * received, then decide whether the order reached the till, never did (one
  * more send is allowed), or is being handled another way.
  *
- * Expiring credentials are not listed: nothing defines when a credential
- * counts as expired yet.
+ * Credentials are listed once they are older than the rotation interval,
+ * counted from their last rotation, since providers do not say when theirs
+ * expire.
  */
 @Component({
   selector: 'app-tenant-issue-queue',
@@ -50,10 +52,13 @@ export class TenantIssueQueue {
   protected readonly deadLetters = signal<readonly FailureSummary[]>([]);
   protected readonly blockedDocuments = signal<readonly BlockedDocumentResponse[]>([]);
   protected readonly posExports = signal<readonly PosExportView[]>([]);
+  protected readonly credentialsDue = signal<readonly DueCredential[]>([]);
+  protected readonly rotationDays = signal(180);
 
   protected readonly asDate = asDate;
   protected readonly session = inject(SessionContextService);
   private readonly posExportsApi = inject(PosExportsApi);
+  private readonly providersApi = inject(ProvidersApi);
   protected readonly deciding = signal<string | null>(null);
   protected readonly candidates = signal<readonly PosExportCandidate[]>([]);
   protected readonly decisions: readonly PosExportDecision[] = ['LANDED', 'ABSENT', 'ABANDON'];
@@ -88,14 +93,17 @@ export class TenantIssueQueue {
     this.loadError.set(null);
     this.searched.set(true);
     try {
-      const [outbox, blocked, exports] = await Promise.all([
+      const [outbox, blocked, exports, credentials] = await Promise.all([
         this.integrationOpsApi.outboxFailures('DEAD_LETTER', 100, tenantId),
         this.fiscalApi.blocked(tenantId),
         this.posExportsApi.awaiting(tenantId),
+        this.providersApi.credentialsDue(tenantId),
       ]);
       this.deadLetters.set(outbox.items);
       this.blockedDocuments.set(blocked.documents);
       this.posExports.set(exports.items);
+      this.credentialsDue.set(credentials.credentials);
+      this.rotationDays.set(credentials.rotationIntervalDays);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
@@ -104,7 +112,12 @@ export class TenantIssueQueue {
   }
 
   protected get issueCount(): number {
-    return this.deadLetters().length + this.blockedDocuments().length + this.posExports().length;
+    return (
+      this.deadLetters().length +
+      this.blockedDocuments().length +
+      this.posExports().length +
+      this.credentialsDue().length
+    );
   }
 
   // ------------------------------------------------------------ POS exports
