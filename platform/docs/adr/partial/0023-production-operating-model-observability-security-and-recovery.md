@@ -6,7 +6,7 @@
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture, and the person who carries the pager)
 - Depends on: ADR 0004–0007, ADR 0024, ADR 0027, ADR 0028, ADR 0029, ADR 0033, ADR 0034
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: — / ADR 0080 for unattended restart only: a host that enrols unseals itself at boot; every other host, and everything else in this record, is unchanged
 - Open inputs: none
 - Closed inputs: hosting, orchestrator, off-site backups, and the recovery-time table are settled in ADR 0034 (2026-08-23); the platform is operated by one person; Clopos is the pilot's POS
 

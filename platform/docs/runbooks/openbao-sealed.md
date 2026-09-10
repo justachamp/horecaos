@@ -6,6 +6,14 @@
 reboot and needs the unseal material by hand. That is the gap that makes
 unattended reboot recovery a claim ADR 0023 does not make.
 
+**Unless the host is enrolled for unattended restart (ADR 0080).** Then a boot
+unseals itself, and this alert after a boot means `horecaos-boot.service`
+failed. Read why before anything else — `sudo journalctl -u horecaos-boot -b`,
+or `sudo ./unattended-boot.sh status` — then restore by hand with
+`sudo ./session-start.sh`. Refused shares or a refused boot credential mean the
+host needs enrolling again; a TPM that no longer opens the credentials means
+the instance, or its vTPM, was replaced.
+
 ## 1. Confirm
 
 ```bash

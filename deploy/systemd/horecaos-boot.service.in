@@ -1,0 +1,46 @@
+# Restores the HorecaOS stack after the host boots, without a person (ADR 0080).
+#
+# Installed by unattended-boot.sh enrol, which replaces @DEPLOY_DIR@ and puts
+# the credentials below in /etc/credstore.encrypted, sealed to this host's TPM.
+# It runs session-start.sh --unattended: the restoration a person runs by
+# hand, taking the unseal shares and the horecaos-boot AppRole credential from
+# systemd instead of a keyboard. When anything fails the unit fails and the
+# journal says why (journalctl -u horecaos-boot), and `sudo session-start.sh`
+# by hand still works; it is the fallback, not a different procedure.
+#
+# No mount-namespace hardening: no PrivateTmp, ProtectSystem, ProtectHome,
+# ReadOnlyPaths or PrivateMounts. The work is done through the Docker daemon,
+# which lives in the host's namespace, and anything this unit could only see
+# privately the daemon could not see at all.
+
+[Unit]
+Description=HorecaOS: restore the stack after boot
+Documentation=file://@DEPLOY_DIR@/README.md
+Requires=docker.service run-horecaos-secrets.mount
+After=docker.service network-online.target run-horecaos-secrets.mount
+Wants=network-online.target
+# Present only on an enrolled host. `unattended-boot.sh revoke` removes it, and
+# the unit is then skipped rather than failed.
+ConditionPathExists=/etc/credstore.encrypted/horecaos-boot-secret-id
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# docker's CLI reads its registry credentials from $HOME, which a system
+# service does not otherwise have.
+Environment=HOME=/root
+Environment=HORECAOS_ENV_FILE=/etc/horecaos/production.env
+# Decrypted by PID 1 at start into a directory only this unit can read, and
+# gone when it stops. The files at rest open only with this host's key AND its
+# TPM: a copy of the disk, attached anywhere else, decrypts nothing.
+LoadCredentialEncrypted=horecaos-unseal-1:/etc/credstore.encrypted/horecaos-unseal-1
+LoadCredentialEncrypted=horecaos-unseal-2:/etc/credstore.encrypted/horecaos-unseal-2
+LoadCredentialEncrypted=horecaos-unseal-3:/etc/credstore.encrypted/horecaos-unseal-3
+LoadCredentialEncrypted=horecaos-boot-role-id:/etc/credstore.encrypted/horecaos-boot-role-id
+LoadCredentialEncrypted=horecaos-boot-secret-id:/etc/credstore.encrypted/horecaos-boot-secret-id
+ExecStart=@DEPLOY_DIR@/session-start.sh --unattended
+# Dependencies get 300s and services 420s inside the script, plus OpenBao.
+TimeoutStartSec=25min
+
+[Install]
+WantedBy=multi-user.target

@@ -675,6 +675,40 @@ on purpose.
 
 ---
 
+### After a reboot — and, optionally, unattended restart (ADR 0080)
+
+A reboot seals OpenBao and empties the RAM-backed secret directory, and the
+stack waits until it is restored:
+
+```bash
+sudo ./session-start.sh     # three unseal shares, then a root or horecaos-deploy token
+```
+
+A host with a TPM 2.0 can instead restore itself at every boot. Enrolling
+stores three unseal shares and a narrow OpenBao credential on the host, each
+sealed to its TPM, and installs `horecaos-boot.service`. Read ADR 0080 before
+doing it: an enrolled host can unseal its own OpenBao, so the escrow is no
+longer the only way in. Do it once, on a running stack:
+
+```bash
+sudo ./unattended-boot.sh enrol     # root token, then three shares, all at hidden prompts
+```
+
+It offers to prove itself straight away by sealing OpenBao and letting the unit
+bring everything back — a few minutes of downtime, and the only way to learn
+now rather than at the next boot whether the stored shares are right.
+
+**Check:** `sudo ./unattended-boot.sh status` shows the unit `enabled`, all five
+credentials `sealed`, and after a boot its last run as `success`. A failed run
+leaves the stack exactly as a reboot without enrolment would, and
+`sudo ./session-start.sh` restores it by hand; `journalctl -u horecaos-boot -b`
+says why it failed.
+
+Enrolling again rotates the stored credential and invalidates the old one, and
+is also what rekeying OpenBao requires. `sudo ./unattended-boot.sh revoke`
+removes the units, the stored credentials and the `horecaos-boot` role, after
+which every boot waits for a person again.
+
 ## 6. Backups
 
 **What exists today: nightly encrypted logical backups (`pg_dump`), not
