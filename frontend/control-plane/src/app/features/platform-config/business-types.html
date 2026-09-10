@@ -1,0 +1,73 @@
+<h1 class="q-title">{{ i18n.t('nav.businessTypes') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('businessTypes.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <div class="types">
+    @for (type of types(); track type.code) {
+      <button type="button" class="type" [class.active]="filter() === type.code" [attr.data-type]="type.code" (click)="filter.set(filter() === type.code ? '' : type.code)">
+        <strong class="q-body-sm">{{ i18n.t(typeKey(type.code)) }}</strong>
+        <span class="q-caption muted">
+          @for (handover of type.handovers; track handover; let last = $last) {
+            {{ i18n.t(handoverKey(handover)) }}@if (!last) {, }
+          }
+        </span>
+        <span class="q-caption muted">{{ i18n.t(type.kitchenDisplay ? 'businessTypes.kitchen' : 'businessTypes.noKitchen') }}</span>
+        <span class="q-caption q-tnum count">{{ i18n.t('residency.tenantCount', { count: type.tenants }) }}</span>
+      </button>
+    }
+  </div>
+  <p class="q-caption muted">{{ i18n.t('businessTypes.note') }}</p>
+
+  <div class="scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.businessType') }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tenant of shown(); track tenant.tenantId) {
+          <tr [attr.data-tenant]="tenant.tenantId">
+            <td class="q-body-sm"><a [routerLink]="['/tenants', tenant.tenantId]">{{ tenant.displayName }}</a></td>
+            <td class="q-body-sm">{{ i18n.t(typeKey(tenant.businessType)) }}</td>
+            <td class="q-body-sm">
+              @if (session.has('TENANT_WRITE')) {
+                <button type="button" class="editToggle" (click)="open(tenant)">{{ i18n.t('businessTypes.change') }}</button>
+              }
+            </td>
+          </tr>
+          @if (editing() === tenant.tenantId) {
+            <tr>
+              <td colspan="3">
+                <div class="changeForm">
+                  <select class="q-body-sm" name="businessType" (change)="nextType.set($any($event.target).value)">
+                    @for (type of types(); track type.code) {
+                      <option [value]="type.code" [selected]="type.code === nextType()">{{ i18n.t(typeKey(type.code)) }}</option>
+                    }
+                  </select>
+                  <input class="q-body-sm" name="typeReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+                  <button type="button" class="confirmChange confirmType" [disabled]="busy() || reason().trim().length === 0 || nextType() === tenant.businessType" (click)="save(tenant)">{{ i18n.t('businessTypes.save') }}</button>
+                </div>
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr><td colspan="3" class="q-body-sm muted">{{ i18n.t('businessTypes.none') }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

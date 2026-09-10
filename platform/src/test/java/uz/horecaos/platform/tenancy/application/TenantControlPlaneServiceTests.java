@@ -739,7 +739,9 @@ class TenantControlPlaneServiceTests {
                             tenant.defaultCurrency().getCurrencyCode(),
                             tenant.defaultTimezone().getId(),
                             tenant.status(),
-                            Instant.EPOCH))
+                            Instant.EPOCH,
+                            "UZ",
+                            "RESTAURANT"))
                     .toList();
         }
 

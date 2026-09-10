@@ -1,48 +1,101 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
+import { asDate } from '../../core/api/dates';
+import { ApiError } from '../../core/api/problem';
+import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { AccessApi } from '../access/access-api';
+import { PlatformPendingApproval, ResidencyApi } from './residency-api';
 
 /**
- * IA 6.5 Approvals -- not built.
+ * IA 6.5 Approvals -- platform decisions waiting for a second signature, in
+ * every tenant: a change of the country a tenant trades in, and a tenant's
+ * activation where a policy asks for one.
  *
- * `ApprovalRequestController`'s pending-decision queue is real and generic
- * over any `actionCode` a tenant's approval policy governs -- IA 7.1 Staff &
- * roles already reuses it for the IAM-grant checker half of maker-checker.
- * What this row names as its reason to exist is different: platform-side
- * approvals for residency change, bulk export, and retention override. None
- * of the three is an action anything in this codebase raises -- per-tenant
- * residency is not modeled (IA 6.3), there is no bulk PII export path, and
- * there is no retention-override mechanism (IA 6.4) -- so no approval
- * request with one of those action codes can ever exist to list. Building
- * this screen today would either duplicate 7.1's identical generic queue for
- * nothing this row specifically asks for, or list nothing at all; either way
- * it stays unbuilt until the actions it is meant to gate exist.
+ * Nobody can decide their own request, and each row says whether the reader
+ * could. Bulk export and retention override are not actions the platform has
+ * yet, so there is nothing of theirs to wait here.
  */
 @Component({
   selector: 'app-platform-approvals',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <h1 class="q-title">{{ i18n.t('nav.platformApprovals') }}</h1>
-    <section class="notice">
-      <h2 class="q-subhead">{{ i18n.t('state.notBuilt.title') }}</h2>
-      <p class="q-body-sm body">{{ i18n.t('platformApprovals.notBuilt.body') }}</p>
-    </section>
-  `,
-  styles: `
-    .notice {
-      margin-top: 24px;
-      background: var(--q-canvas);
-      border: 1px solid var(--q-hairline);
-      padding: 24px;
-      max-width: 640px;
-    }
-
-    .body {
-      color: var(--q-ink-muted);
-      margin-top: 8px;
-    }
-  `,
+  imports: [RouterLink],
+  templateUrl: './platform-approvals.html',
+  styleUrl: './residency-hosting.css',
 })
 export class PlatformApprovals {
   protected readonly i18n = inject(I18nService);
+  protected readonly asDate = asDate;
+  protected readonly session = inject(SessionContextService);
+  private readonly api = inject(ResidencyApi);
+  private readonly access = inject(AccessApi);
+  protected readonly directory = inject(TenantDirectory);
+
+  protected readonly loading = signal(true);
+  protected readonly loadError = signal<string | null>(null);
+  protected readonly waiting = signal<readonly PlatformPendingApproval[]>([]);
+
+  protected readonly deciding = signal<{ id: string; decision: 'APPROVE' | 'DECLINE' } | null>(null);
+  protected readonly reason = signal('');
+  protected readonly busy = signal(false);
+  protected readonly actionError = signal<string | null>(null);
+  protected readonly actionMessage = signal<string | null>(null);
+
+  constructor() {
+    void this.directory.load();
+    void this.load();
+  }
+
+  private async load(): Promise<void> {
+    this.loading.set(true);
+    this.loadError.set(null);
+    try {
+      this.waiting.set(await this.api.platformApprovals());
+    } catch (error) {
+      this.loadError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected actionKey(code: string): MessageKey {
+    return `platformApprovals.action.${code.replace(/\./g, '_')}` as MessageKey;
+  }
+
+  protected open(row: PlatformPendingApproval, decision: 'APPROVE' | 'DECLINE'): void {
+    const current = this.deciding();
+    this.deciding.set(
+      current?.id === row.request.id && current.decision === decision ? null : { id: row.request.id, decision },
+    );
+    this.reason.set('');
+    this.actionError.set(null);
+  }
+
+  protected async confirm(row: PlatformPendingApproval): Promise<void> {
+    const action = this.deciding();
+    const reason = this.reason().trim();
+    if (action === null || reason.length === 0 || this.busy()) {
+      return;
+    }
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.actionMessage.set(null);
+    try {
+      await this.access.decide(row.tenantId, row.request.id, action.decision, reason);
+      this.deciding.set(null);
+      this.actionMessage.set(
+        this.i18n.t(action.decision === 'APPROVE' ? 'platformApprovals.approved' : 'platformApprovals.declined', {
+          tenant: this.directory.nameOf(row.tenantId),
+        }),
+      );
+      await this.load();
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.busy.set(false);
+    }
+  }
 }

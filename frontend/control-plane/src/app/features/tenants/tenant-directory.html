@@ -21,8 +21,12 @@
         <tr>
           <th class="q-caption">{{ i18n.t('tenants.column.displayName') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.slug') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.country') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.businessType') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.plan') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.currency') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.status') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.health') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.created') }}</th>
         </tr>
       </thead>
@@ -33,9 +37,19 @@
               <a [routerLink]="['/tenants', tenant.id]">{{ tenant.displayName }}</a>
             </td>
             <td class="q-body-sm q-tnum">{{ tenant.slug }}</td>
+            <td class="q-body-sm q-tnum">{{ tenant.countryCode }}</td>
+            <td class="q-body-sm">{{ i18n.t(businessTypeKey(tenant.businessType)) }}</td>
+            <td class="q-body-sm q-tnum plan">{{ planOf(tenant.id) }}</td>
             <td class="q-body-sm q-tnum">{{ tenant.defaultCurrency }}</td>
             <td class="q-body-sm">
               <span class="pill" [class]="'pill-' + tenant.status">{{ i18n.t(statusKey(tenant.status)) }}</span>
+            </td>
+            <td class="q-body-sm q-tnum health" [attr.data-problems]="problemsOf(tenant.id)">
+              @if (problemsOf(tenant.id) > 0) {
+                <a routerLink="/support/issue-queue" [queryParams]="{ tenantId: tenant.id }">{{ i18n.t('tenants.health.problems', { count: problemsOf(tenant.id) }) }}</a>
+              } @else {
+                <span class="muted">{{ i18n.t('tenants.health.clear') }}</span>
+              }
             </td>
             <td class="q-body-sm q-tnum">{{ i18n.day(asDate(tenant.createdAt)) }}</td>
           </tr>

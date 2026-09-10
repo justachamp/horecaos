@@ -62,3 +62,84 @@
   flex-direction: column;
   gap: 4px;
 }
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.holidayForm {
+  margin: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.holidayForm .short {
+  width: 80px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.groupHead {
+  margin: 12px 0 4px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.holidayList,
+.buckets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.holidayList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.when {
+  min-width: 88px;
+  color: var(--q-ink-muted);
+}
+
+.buckets {
+  list-style: decimal inside;
+}
+
+button {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button[type='submit'] {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

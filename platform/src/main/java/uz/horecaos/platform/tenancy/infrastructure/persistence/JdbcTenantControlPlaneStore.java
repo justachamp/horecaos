@@ -93,7 +93,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     public List<TenantSummary> listTenants(@Nullable TenantId afterTenantId, int limit) {
         return jdbc.sql("""
                         SELECT id, slug, legal_name, display_name, default_currency,
-                               default_timezone, status, created_at
+                               default_timezone, status, created_at, country_code, business_type
                         FROM tenant.tenants
                         WHERE (CAST(:afterTenantId AS uuid) IS NULL OR id > CAST(:afterTenantId AS uuid))
                         ORDER BY id
@@ -549,7 +549,9 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 resultSet.getString("default_currency"),
                 resultSet.getString("default_timezone"),
                 TenantStatus.valueOf(resultSet.getString("status")),
-                resultSet.getObject("created_at", OffsetDateTime.class).toInstant());
+                resultSet.getObject("created_at", OffsetDateTime.class).toInstant(),
+                resultSet.getString("country_code"),
+                resultSet.getString("business_type"));
     }
 
     private static Tenant mapTenant(ResultSet resultSet, int rowNumber) throws SQLException {

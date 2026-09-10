@@ -153,6 +153,47 @@ public class ApprovalDecisionService {
     }
 
     /**
+     * Requests for the given actions waiting in any tenant (ADR 0090): the
+     * platform approvals queue, for decisions HorecaOS staff take across
+     * tenants such as a change of country.
+     *
+     * <p>The same columns and the same rule as {@link #pending}: the maker's
+     * reason is not returned, and lapsed requests are excluded.
+     */
+    public List<TenantPendingApproval> pendingAcrossTenants(
+            java.util.Collection<String> actionCodes, int limit, String subject) {
+        if (actionCodes.isEmpty()) {
+            return List.of();
+        }
+        return jdbc
+                .sql("""
+                        SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
+                               r.scope_type, r.scope_id, r.threshold_description,
+                               r.policy_version, r.requested_by, r.requested_at, r.expires_at,
+                               p.required_approver_capability
+                          FROM audit.approval_requests r
+                          JOIN audit.approval_policies p ON p.id = r.policy_id
+                         WHERE r.tenant_id IS NOT NULL
+                           AND r.action_code IN (:actionCodes)
+                           AND r.status = 'PENDING'
+                           AND r.expires_at > :now
+                         ORDER BY r.requested_at
+                         LIMIT :limit
+                        """)
+                .param("actionCodes", List.copyOf(actionCodes))
+                .param("now", clock.instant().atOffset(ZoneOffset.UTC))
+                .param("limit", limit)
+                .query(ApprovalDecisionService::mapRequest)
+                .list()
+                .stream()
+                .map(row -> new TenantPendingApproval(row.tenantId(), PendingApproval.of(row, mayDecide(row, subject))))
+                .toList();
+    }
+
+    /** A pending request and the tenant it waits in. */
+    public record TenantPendingApproval(UUID tenantId, PendingApproval approval) {}
+
+    /**
      * Approves or declines one pending request.
      *
      * @throws ApiException {@code RESOURCE_NOT_FOUND} when the request is not

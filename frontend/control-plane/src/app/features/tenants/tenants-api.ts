@@ -23,6 +23,24 @@ export interface TenantSummaryView {
   readonly defaultTimezone: string;
   readonly status: TenantStatus;
   readonly createdAt: string;
+  readonly countryCode: string;
+  readonly businessType: string;
+}
+
+/** GET /control-plane/tenant-plans -- a tenant's live subscription, by plan. */
+export interface TenantPlanView {
+  readonly tenantId: string;
+  readonly planCode: string;
+  readonly planVersionNumber: number;
+  readonly status: string;
+}
+
+/** GET /control-plane/tenant-health -- a tenant's open problems, by kind. */
+export interface TenantHealthView {
+  readonly tenantId: string;
+  readonly deadLetters: number;
+  readonly blockedReceipts: number;
+  readonly posOrdersAwaiting: number;
 }
 
 /** TenantControlPlaneService.TenantView. */
@@ -222,6 +240,16 @@ export interface ActivationOutcome {
 @Injectable({ providedIn: 'root' })
 export class TenantsApi {
   private readonly api = inject(ApiClient);
+
+  /** Every tenant's live subscription; a tenant without one is absent. */
+  async tenantPlans(): Promise<TenantPlanView[]> {
+    return firstValueFrom(this.api.get<TenantPlanView[]>('/api/v1/control-plane/tenant-plans'));
+  }
+
+  /** Open problems per tenant; a tenant with none is absent. */
+  async tenantHealth(): Promise<TenantHealthView[]> {
+    return firstValueFrom(this.api.get<TenantHealthView[]>('/api/v1/control-plane/tenant-health'));
+  }
 
   async listTenants(cursor: string | null = null, limit = 50): Promise<Page<TenantSummaryView>> {
     return firstValueFrom(

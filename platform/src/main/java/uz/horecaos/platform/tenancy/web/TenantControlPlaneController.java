@@ -89,8 +89,8 @@ public class TenantControlPlaneController {
     @RequiresCapability(value = Capability.TENANT_READ, scope = ScopeType.PLATFORM)
     @Operation(
             summary = "List every tenant",
-            description = "Platform-admin only. No plan, business type, country, or health score "
-                    + "is returned because none of those exist in the schema yet.")
+            description = "Platform-admin only. Each tenant's country and business type; its plan "
+                    + "and open problems are read from the tenant-plans and tenant-health endpoints.")
     Page<TenantControlPlaneService.TenantSummaryView> listTenants(
             @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page") UUID cursor,
             @RequestParam(required = false) Integer limit) {

@@ -32,6 +32,14 @@ public enum ApprovalAction {
     COURIER_MANUAL_PENALTY("courier.adjustment.create.manual-penalty", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
 
     TENANT_ACTIVATE("tenant.activate", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * ADR 0090: moving a tenant to another market. Governed from the first day
+     * by the platform-scope policy V0203 seeds, and fail-closed without one: a
+     * residency change is exactly the decision a second signature exists for,
+     * so a deployment that deleted the policy should stop, not proceed alone.
+     */
+    TENANT_COUNTRY_CHANGE("tenant.country.change", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
     INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
 
     /**

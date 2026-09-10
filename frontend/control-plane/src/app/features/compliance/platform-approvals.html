@@ -1,0 +1,65 @@
+<h1 class="q-title">{{ i18n.t('nav.platformApprovals') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('platformApprovals.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (waiting().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('platformApprovals.empty') }}</p>
+} @else {
+  <div class="scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('platformApprovals.column.action') }}</th>
+          <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+          <th class="q-caption">{{ i18n.t('platformApprovals.column.asked') }}</th>
+          <th class="q-caption">{{ i18n.t('platformApprovals.column.expires') }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of waiting(); track row.request.id) {
+          <tr [attr.data-request]="row.request.id">
+            <td class="q-body-sm">
+              {{ i18n.t(actionKey(row.request.actionCode)) }}
+              <div class="q-caption muted">{{ row.request.thresholdDescription }}</div>
+            </td>
+            <td class="q-body-sm"><a [routerLink]="['/tenants', row.tenantId]">{{ directory.nameOf(row.tenantId) }}</a></td>
+            <td class="q-body-sm">{{ row.request.requestedBy }} · {{ i18n.dateTime(asDate(row.request.requestedAt)) }}</td>
+            <td class="q-body-sm q-tnum">{{ i18n.dateTime(asDate(row.request.expiresAt)) }}</td>
+            <td class="q-body-sm">
+              @if (row.request.mayDecide) {
+                <button type="button" class="approveToggle" (click)="open(row, 'APPROVE')">{{ i18n.t('platformApprovals.approve') }}</button>
+                <button type="button" class="declineToggle" (click)="open(row, 'DECLINE')">{{ i18n.t('platformApprovals.decline') }}</button>
+              } @else {
+                <span class="q-caption muted">{{ i18n.t('platformApprovals.notYours') }}</span>
+              }
+            </td>
+          </tr>
+          @if (deciding()?.id === row.request.id) {
+            <tr>
+              <td colspan="5">
+                <div class="changeForm">
+                  <input class="q-body-sm" name="decisionReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+                  <button type="button" class="confirmChange confirmDecision" [disabled]="busy() || reason().trim().length === 0" (click)="confirm(row)">
+                    {{ i18n.t(deciding()?.decision === 'APPROVE' ? 'platformApprovals.approve' : 'platformApprovals.decline') }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+}
+<p class="q-caption muted gapNote">{{ i18n.t('platformApprovals.gap') }}</p>

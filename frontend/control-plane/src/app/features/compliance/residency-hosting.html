@@ -1,0 +1,81 @@
+<h1 class="q-title">{{ i18n.t('nav.residencyHosting') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('residency.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (view(); as v) {
+  <section class="hosting">
+    <p class="q-subhead">{{ i18n.t('residency.hosting', { country: marketName(v.hostingCountry) }) }}</p>
+    <p class="q-caption muted">{{ i18n.t('residency.hostingNote') }}</p>
+  </section>
+
+  <div class="markets">
+    @for (market of v.markets; track market.code) {
+      <div class="market" [attr.data-market]="market.code">
+        <span class="q-caption muted">{{ market.code }}</span>
+        <strong class="q-body-sm">{{ market.name }}</strong>
+        <span class="q-caption q-tnum">{{ market.defaultCurrency }} · {{ market.defaultTimezone }}</span>
+        <span class="q-caption">{{ i18n.t('residency.tenantCount', { count: countByCountry().get(market.code) ?? 0 }) }}</span>
+      </div>
+    }
+  </div>
+
+  <div class="scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.country') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.businessType') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.currency') }}</th>
+          <th class="q-caption">{{ i18n.t('residency.column.timezone') }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tenant of v.tenants; track tenant.tenantId) {
+          <tr [attr.data-tenant]="tenant.tenantId">
+            <td class="q-body-sm"><a [routerLink]="['/tenants', tenant.tenantId]">{{ tenant.displayName }}</a></td>
+            <td class="q-body-sm">{{ marketName(tenant.countryCode) }}</td>
+            <td class="q-body-sm">{{ i18n.t(typeKey(tenant.businessType)) }}</td>
+            <td class="q-body-sm q-tnum">{{ tenant.defaultCurrency }}</td>
+            <td class="q-body-sm">{{ tenant.defaultTimezone }}</td>
+            <td class="q-body-sm">
+              @if (session.has('TENANT_WRITE')) {
+                <button type="button" class="changeToggle" (click)="open(tenant)">{{ i18n.t('residency.change.open') }}</button>
+              }
+            </td>
+          </tr>
+          @if (changing() === tenant.tenantId) {
+            <tr>
+              <td colspan="6">
+                <div class="changeForm">
+                  <select class="q-body-sm" name="country" (change)="country.set($any($event.target).value)">
+                    <option value="" [selected]="country() === ''">{{ i18n.t('residency.change.choose') }}</option>
+                    @for (market of v.markets; track market.code) {
+                      @if (market.code !== tenant.countryCode) {
+                        <option [value]="market.code" [selected]="market.code === country()">{{ market.name }}</option>
+                      }
+                    }
+                  </select>
+                  <input class="q-body-sm" name="countryReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+                  <button type="button" class="confirmChange" [disabled]="!canChange(tenant)" (click)="change(tenant)">{{ i18n.t('residency.change.submit') }}</button>
+                </div>
+                <p class="q-caption muted">{{ i18n.t('residency.change.note') }}</p>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+}
