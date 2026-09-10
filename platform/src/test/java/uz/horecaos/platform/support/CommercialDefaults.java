@@ -8,6 +8,7 @@ import uz.horecaos.platform.commercial.api.UsageMeter;
 import uz.horecaos.platform.commercial.application.EnforcementCeiling;
 import uz.horecaos.platform.commercial.application.EntitlementQueryService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
@@ -41,7 +42,8 @@ public final class CommercialDefaults {
         JdbcSubscriptionStore subscriptions = new JdbcSubscriptionStore(jdbc);
         JdbcUsageStore usage = new JdbcUsageStore(jdbc, JsonMapper.builder().build());
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));
-        EntitlementQueryService entitlements = new EntitlementQueryService(subscriptions, plans, usage, ceiling, clock);
+        EntitlementQueryService entitlements =
+                new EntitlementQueryService(subscriptions, plans, usage, new JdbcModuleStore(jdbc), ceiling, clock);
         UsageMeteringService metering = new UsageMeteringService(usage, entitlements, clock);
         return new Wired(entitlements, metering);
     }

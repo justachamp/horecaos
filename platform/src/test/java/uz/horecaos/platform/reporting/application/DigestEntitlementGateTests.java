@@ -32,6 +32,7 @@ import uz.horecaos.platform.commercial.application.EntitlementQueryService;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
@@ -110,8 +111,8 @@ class DigestEntitlementGateTests {
         JdbcUsageStore usageStore =
                 new JdbcUsageStore(jdbc, JsonMapper.builder().build());
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));
-        EntitlementQueryService entitlementService =
-                new EntitlementQueryService(subscriptionStore, planStore, usageStore, ceiling, clock);
+        EntitlementQueryService entitlementService = new EntitlementQueryService(
+                subscriptionStore, planStore, usageStore, new JdbcModuleStore(jdbc), ceiling, clock);
         entitlements = entitlementService;
 
         AuditRecorder audit = new RecordingAuditRecorder();

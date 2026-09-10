@@ -67,6 +67,17 @@ public enum SubscriptionStatus {
         };
     }
 
+    /**
+     * Whether this status stops the tenant adding to its counted limits.
+     *
+     * <p>Only suspension does, and it deletes nothing: every counted limit
+     * resolves to zero, so what exists stays and nothing more is added. The
+     * arrears board reads this rather than restating it.
+     */
+    public boolean blocksAdditions() {
+        return this == SUSPENDED;
+    }
+
     public boolean canTransitionTo(SubscriptionStatus next) {
         return allowedNext().contains(next);
     }

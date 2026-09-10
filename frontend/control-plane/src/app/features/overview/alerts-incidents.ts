@@ -8,7 +8,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { IncidentView, IncidentsApi } from './incidents-api';
 
 /** Alert classes this console has words for; any other shows its code. */
-const KNOWN_CLASSES = new Set(['CONTROL_BAND_ESCALATED', 'ONBOARDING_RUN_STUCK']);
+const KNOWN_CLASSES = new Set(['CONTROL_BAND_ESCALATED', 'ONBOARDING_RUN_STUCK', 'COMMERCIAL_ARREARS_REVIEW']);
 
 /**
  * IA 1.2 Alerts & incidents -- every platform alert, kept until someone

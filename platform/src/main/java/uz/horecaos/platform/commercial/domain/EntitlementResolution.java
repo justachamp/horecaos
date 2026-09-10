@@ -49,6 +49,28 @@ public final class EntitlementResolution {
             @Nullable String planCurrency,
             EnforcementMode ceiling,
             Instant at) {
+        return resolve(key, planEntitlement, override, status, planCurrency, ceiling, at, false);
+    }
+
+    /**
+     * Resolves one key, with whether a module the tenant has switches it on.
+     *
+     * <p>A module (ADR 0087) sits between the override and the plan, and only
+     * for a feature: it turns on what the plan left off. It lapses exactly when
+     * the plan's entitlements do, so a suspended or ended subscription does not
+     * keep a module's features running.
+     *
+     * @param moduleGrantsFeature whether a live module of the tenant names this key
+     */
+    public static EntitlementValue resolve(
+            EntitlementKey<?> key,
+            @Nullable PlanEntitlement planEntitlement,
+            @Nullable EntitlementOverride override,
+            @Nullable SubscriptionStatus status,
+            @Nullable String planCurrency,
+            EnforcementMode ceiling,
+            Instant at,
+            boolean moduleGrantsFeature) {
 
         boolean planApplies = planEntitlement != null && status != null && status.grantsPlanEntitlements();
         PlanEntitlement plan = planApplies ? planEntitlement : null;
@@ -92,6 +114,12 @@ public final class EntitlementResolution {
             warnThreshold = null;
         }
 
+        boolean moduleApplies = moduleGrantsFeature && status != null && status.grantsPlanEntitlements();
+        if (moduleApplies && key.isFeature() && live == null && !Boolean.TRUE.equals(feature)) {
+            feature = true;
+            source = EntitlementSource.MODULE;
+        }
+
         // Suspension is the one policy that may make an entitlement stricter
         // than the plan sold. It blocks additions and touches nothing that
         // already exists: ADR 0021 refuses to delete a customer's data over a
@@ -102,7 +130,7 @@ public final class EntitlementResolution {
         // capability decisions rather than entitlements, and are deliberately
         // not modelled here. A plan must never be able to grant or remove a
         // user's permission.
-        if (status == SubscriptionStatus.SUSPENDED && key.isCounted() && live == null) {
+        if (status != null && status.blocksAdditions() && key.isCounted() && live == null) {
             limit = 0L;
             declaredMode = EnforcementMode.HARD;
             source = EntitlementSource.SUSPENSION_POLICY;

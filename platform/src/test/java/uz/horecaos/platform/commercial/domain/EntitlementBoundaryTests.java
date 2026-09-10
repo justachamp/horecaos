@@ -225,6 +225,36 @@ class EntitlementBoundaryTests {
     class Precedence {
 
         @Test
+        void aModuleTurnsOnAFeatureThePlanLeftOffButNotAnOverridesNoOrALapsedSubscription() {
+            EntitlementKey<Boolean> analytics = EntitlementKeys.TELEGRAM_DIGESTS_ENABLED;
+            PlanEntitlement off = PlanEntitlement.feature(analytics.code(), false, EnforcementMode.HARD);
+
+            EntitlementValue granted = EntitlementResolution.resolve(
+                    analytics, off, null, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW, true);
+            assertThat(granted.featureEnabled()).isTrue();
+            assertThat(granted.source()).isEqualTo(EntitlementSource.MODULE);
+
+            EntitlementOverride no = new EntitlementOverride(
+                    analytics.code(), null, false, null, NOW.minusSeconds(60), NOW.plusSeconds(3_600));
+            EntitlementValue overridden = EntitlementResolution.resolve(
+                    analytics, off, no, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW, true);
+            assertThat(overridden.featureEnabled())
+                    .as("an override is the one thing above a module")
+                    .isFalse();
+
+            EntitlementValue suspended = EntitlementResolution.resolve(
+                    analytics, off, null, SubscriptionStatus.SUSPENDED, "UZS", EnforcementMode.HARD, NOW, true);
+            assertThat(suspended.featureEnabled()).isNotEqualTo(Boolean.TRUE);
+            assertThat(suspended.source()).isNotEqualTo(EntitlementSource.MODULE);
+
+            EntitlementValue counted = EntitlementResolution.resolve(
+                    ORDERS, null, null, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW, true);
+            assertThat(counted.source())
+                    .as("a module never touches a counted limit")
+                    .isNotEqualTo(EntitlementSource.MODULE);
+        }
+
+        @Test
         void anOverrideBeatsThePlanAndKeepsThePlansShape() {
             PlanEntitlement plan = PlanEntitlement.counted(
                     ORDERS.code(), 100, EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, 8_000, 500L);

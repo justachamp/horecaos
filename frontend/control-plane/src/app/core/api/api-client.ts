@@ -120,6 +120,15 @@ export class ApiClient {
       );
   }
 
+  /** GET a text document, such as a CSV export. */
+  getText(path: string, options: ReadOptions = {}): Observable<string> {
+    return this.http.get(this.url(path), {
+      params: toParams(options.query),
+      context: platformApi(),
+      responseType: 'text',
+    });
+  }
+
   /** GET one page of a cursor-paginated collection. */
   getPage<T>(path: string, page: PageQuery = {}, options: ReadOptions = {}): Observable<Page<T>> {
     return this.http.get<Page<T>>(this.url(path), {

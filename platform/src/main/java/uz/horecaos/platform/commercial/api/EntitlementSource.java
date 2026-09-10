@@ -17,6 +17,12 @@ public enum EntitlementSource {
     PLAN_VERSION,
 
     /**
+     * A module the tenant has switched this feature on where the plan did not
+     * (ADR 0087). Only ever a feature: a module never raises a counted limit.
+     */
+    MODULE,
+
+    /**
      * The subscription is suspended and a safety policy replaced the plan value.
      * Never destructive: it degrades what may be added, not what exists.
      */

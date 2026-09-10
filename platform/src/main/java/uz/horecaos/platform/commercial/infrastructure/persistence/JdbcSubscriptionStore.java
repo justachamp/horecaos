@@ -41,11 +41,11 @@ public class JdbcSubscriptionStore {
                 INSERT INTO commercial.subscriptions (
                     id, tenant_id, plan_version_id, status, start_at, trial_end_at,
                     current_period_start, current_period_end, external_billing_reference,
-                    version, created_at, updated_at)
+                    version, status_changed_at, created_at, updated_at)
                 VALUES (
                     :id, :tenantId, :planVersionId, :status, :startAt, :trialEndAt,
                     :periodStart, :periodEnd, :externalReference,
-                    1, :now, :now)
+                    1, :now, :now, :now)
                 """)
                 .param("id", subscription.id())
                 .param("tenantId", subscription.tenantId())
@@ -106,6 +106,7 @@ public class JdbcSubscriptionStore {
                        cancel_at = :cancelAt,
                        ended_at = :endedAt,
                        version = version + 1,
+                       status_changed_at = :now,
                        updated_at = :now
                  WHERE id = :id AND tenant_id = :tenantId
                    AND status = :from AND version = :expectedVersion

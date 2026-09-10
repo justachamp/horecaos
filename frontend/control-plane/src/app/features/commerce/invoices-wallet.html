@@ -1,0 +1,156 @@
+<h1 class="q-title">{{ i18n.t('nav.invoicesWallet') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('statements.lead') }}</p>
+
+<app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (tenantId().length > 0) {
+  <section class="panel preview">
+    <header class="planHeader">
+      <h2 class="q-subhead">{{ i18n.t('statements.preview.title') }}</h2>
+      <label class="q-caption month">
+        {{ i18n.t('statements.preview.month') }}
+        <input type="month" class="q-body-sm" name="periodKey" [value]="periodKey()" (change)="choosePeriod($any($event.target).value)" />
+      </label>
+    </header>
+    @if (draftError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else if (draft(); as statement) {
+      @if (statement.lines.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('statements.preview.nothing') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table lines">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('statements.column.charge') }}</th>
+                <th class="q-caption">{{ i18n.t('statements.column.quantity') }}</th>
+                <th class="q-caption">{{ i18n.t('statements.column.unitPrice') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.amount') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of statement.lines; track line.lineNumber) {
+                <tr [attr.data-kind]="line.kind">
+                  <td class="q-body-sm">
+                    <span class="q-caption muted">{{ i18n.t(kindKey(line.kind)) }}</span> {{ line.description }}
+                  </td>
+                  <td class="q-body-sm q-tnum">{{ line.quantity }}</td>
+                  <td class="q-body-sm q-tnum">{{ i18n.money(line.unitPrice) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.money(line.amount) }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <td class="q-body-sm" colspan="3"><strong>{{ i18n.t('statements.total') }}</strong></td>
+                <td class="q-body-sm q-tnum num total"><strong>{{ statement.total ? i18n.money(statement.total) : '—' }}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="q-caption muted">{{ i18n.t('statements.beforeTax') }}</p>
+      }
+      @if (session.has('COMMERCIAL_STATEMENT_ISSUE')) {
+        @if (!monthEnded(statement)) {
+          <p class="q-caption muted">{{ i18n.t('statements.issue.notEnded') }}</p>
+        } @else if (alreadyIssued()) {
+          <p class="q-caption muted">{{ i18n.t('statements.issue.already') }}</p>
+        } @else if (statement.lines.length > 0) {
+          <form class="issueForm" (submit)="issue($event)">
+            <input class="q-body-sm" name="issueReason" [placeholder]="i18n.t('common.reason')" [value]="issueReason()" (input)="issueReason.set($any($event.target).value)" />
+            <button type="submit" [disabled]="!canIssue(statement)">{{ i18n.t('statements.issue.submit', { month: statement.periodKey }) }}</button>
+          </form>
+        }
+      }
+    }
+  </section>
+
+  <section class="panel issued">
+    <h2 class="q-subhead">{{ i18n.t('statements.issued.title') }}</h2>
+    @if (loading()) {
+      <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+    } @else if (loadError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else if (issued().length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('statements.issued.none') }}</p>
+    } @else {
+      <div class="scroll">
+        <table class="table statements">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ i18n.t('statements.column.number') }}</th>
+              <th class="q-caption">{{ i18n.t('statements.preview.month') }}</th>
+              <th class="q-caption num">{{ i18n.t('statements.total') }}</th>
+              <th class="q-caption">{{ i18n.t('statements.column.status') }}</th>
+              <th class="q-caption"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (statement of issued(); track statement.statementId) {
+              <tr [class.void]="statement.status === 'VOID'" [attr.data-number]="statement.number">
+                <td class="q-body-sm q-tnum"><button type="button" class="link" (click)="show(statement)">{{ statement.number }}</button></td>
+                <td class="q-body-sm q-tnum">{{ statement.periodKey }}</td>
+                <td class="q-body-sm q-tnum num">{{ statement.total ? i18n.money(statement.total) : '—' }}</td>
+                <td class="q-body-sm">
+                  <span class="chip" [class.live]="statement.status === 'ISSUED'">{{ i18n.t(statusKey(statement.status)) }}</span>
+                  @if (statement.issuedAt) {
+                    <div class="q-caption muted">{{ i18n.dateTime(asDate(statement.issuedAt)) }} · {{ statement.issuedBy }}</div>
+                  }
+                  @if (statement.voidReason) {
+                    <div class="q-caption muted">{{ statement.voidReason }}</div>
+                  }
+                </td>
+                <td class="q-body-sm actions">
+                  <button type="button" class="exportCsv" (click)="exportCsv(statement)">{{ i18n.t('statements.export') }}</button>
+                  @if (statement.status === 'ISSUED' && session.has('COMMERCIAL_STATEMENT_ISSUE')) {
+                    <button type="button" class="voidToggle" (click)="openVoid(statement)">{{ i18n.t('statements.void.open') }}</button>
+                  }
+                </td>
+              </tr>
+              @if (voiding() === statement.statementId) {
+                <tr>
+                  <td colspan="5">
+                    <span class="confirm">
+                      <input class="q-body-sm" name="voidReason" [placeholder]="i18n.t('common.reason')" [value]="voidReason()" (input)="voidReason.set($any($event.target).value)" />
+                      <button type="button" class="confirmVoid" [disabled]="busy() || voidReason().trim().length === 0" (click)="confirmVoid(statement)">{{ i18n.t('statements.void.submit') }}</button>
+                    </span>
+                  </td>
+                </tr>
+              }
+              @if (open()?.statementId === statement.statementId && open(); as detail) {
+                <tr>
+                  <td colspan="5">
+                    <table class="innerTable">
+                      <tbody>
+                        @for (line of detail.lines; track line.lineNumber) {
+                          <tr>
+                            <td class="q-caption">{{ i18n.t(kindKey(line.kind)) }}</td>
+                            <td class="q-body-sm">{{ line.description }}</td>
+                            <td class="q-body-sm q-tnum">{{ line.quantity }} × {{ i18n.money(line.unitPrice) }}</td>
+                            <td class="q-body-sm q-tnum num">{{ i18n.money(line.amount) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}
+
+<section class="panel wallet">
+  <h2 class="q-subhead">{{ i18n.t('statements.wallet.title') }}</h2>
+  <p class="q-body-sm muted">{{ i18n.t('statements.wallet.body') }}</p>
+</section>

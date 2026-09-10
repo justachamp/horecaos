@@ -189,12 +189,14 @@ public class SchedulingConfiguration {
      * JdbcPosLiveAvailabilityStore#replace} takes as a {@code
      * pg_advisory_xact_lock} on the binding rather than a row claim; see that
      * class's own doc for the race its two-replica test caught before the lock
-     * existed. Anything adding a {@code
+     * existed. ADR 0089 added {@code CommercialArrearsReviewSweeper.sweepOnce},
+     * an hourly read of past-due subscriptions that raises an incident and
+     * holds nothing across it. Anything adding a {@code
      * @Scheduled} method here should expect the same off-by-one wave 73/77 hit,
      * and trust {@code SchedulerPoolSizeTests}, which counts them, over the
      * number written here.
      */
-    static final int DEFAULT_POOL_SIZE = 52;
+    static final int DEFAULT_POOL_SIZE = 53;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

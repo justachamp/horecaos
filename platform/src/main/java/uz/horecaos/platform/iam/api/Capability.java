@@ -905,6 +905,16 @@ public enum Capability {
     COMMERCIAL_USAGE_ADJUST("commercial.usage.adjust", "commercial", "usage.adjust"),
 
     /**
+     * ADR 0088: closing a tenant's month by issuing its statement, and voiding
+     * one issued by mistake.
+     *
+     * <p>HorecaOS staff only. A statement is the evidence an invoice is made
+     * from, and a tenant that could issue or void its own would be deciding
+     * what it owes. Reading one is {@code commercial.usage.read}.
+     */
+    COMMERCIAL_STATEMENT_ISSUE("commercial.statement.issue", "commercial", "statement.issue"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *

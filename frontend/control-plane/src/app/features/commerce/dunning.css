@@ -1,0 +1,41 @@
+.stages {
+  list-style: none;
+  margin: 24px 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.stage {
+  background: var(--q-canvas);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.warn {
+  color: var(--q-warning-text);
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirm input {
+  min-width: 240px;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.actions button + button {
+  margin-left: 6px;
+}

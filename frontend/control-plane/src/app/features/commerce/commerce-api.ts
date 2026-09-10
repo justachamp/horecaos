@@ -139,6 +139,116 @@ export interface UsageDivergence {
   readonly recomputed: number;
 }
 
+/** A module sold beside the plans, billed on its own unit. */
+export interface ModuleView {
+  readonly moduleId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly billingUnit: string;
+  readonly unitPrice: Money;
+  readonly featureKeys: readonly string[];
+  readonly status: 'DRAFT' | 'ACTIVE' | 'RETIRED' | (string & {});
+  readonly createdBy: string;
+  readonly approvedBy: string | null;
+  readonly activatedAt: string | null;
+  readonly retiredAt: string | null;
+}
+
+/** One module one tenant has had. */
+export interface TenantModuleView {
+  readonly tenantModuleId: string;
+  readonly moduleId: string;
+  readonly moduleCode: string;
+  readonly moduleName: string;
+  readonly billingUnit: string;
+  readonly unitPrice: Money;
+  readonly quantity: number | null;
+  readonly startedAt: string;
+  readonly startedBy: string;
+  readonly startReason: string;
+  readonly endedAt: string | null;
+  readonly endedBy: string | null;
+  readonly endReason: string | null;
+}
+
+export interface DraftModuleRequest {
+  readonly code: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly billingUnit: string;
+  readonly currency: string;
+  readonly unitPriceMinor: number;
+  readonly featureKeys: readonly string[];
+  readonly reason: string;
+}
+
+/** One charge on a statement. */
+export interface StatementLineView {
+  readonly lineNumber: number;
+  readonly kind: 'PLAN' | 'MODULE' | 'OVERAGE' | (string & {});
+  readonly referenceCode: string;
+  readonly description: string;
+  readonly quantity: number;
+  readonly unitPrice: Money;
+  readonly amount: Money;
+}
+
+/** A month of what a tenant owes, drafted or issued. */
+export interface StatementView {
+  readonly statementId: string | null;
+  readonly number: string | null;
+  readonly periodKey: string;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly status: 'DRAFT' | 'ISSUED' | 'VOID' | (string & {});
+  readonly total: Money | null;
+  readonly issuedBy: string | null;
+  readonly issuedAt: string | null;
+  readonly issueReason: string | null;
+  readonly voidedBy: string | null;
+  readonly voidedAt: string | null;
+  readonly voidReason: string | null;
+  readonly lines: readonly StatementLineView[];
+}
+
+/** What one arrears stage does to a tenant. */
+export interface ArrearsStageView {
+  readonly status: string;
+  readonly planEntitlementsApply: boolean;
+  readonly additionsBlocked: boolean;
+  readonly allowedNext: readonly string[];
+}
+
+/** One tenant in arrears. */
+export interface ArrearView {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly subscriptionId: string;
+  readonly status: string;
+  readonly since: string;
+  readonly daysInStatus: number;
+  readonly planCode: string;
+  readonly planVersionNumber: number;
+  readonly version: number;
+  readonly allowedNext: readonly string[];
+  readonly suspensionReason: string | null;
+  readonly latestStatement: {
+    readonly statementId: string;
+    readonly number: string;
+    readonly periodKey: string;
+    readonly total: Money;
+    readonly issuedAt: string;
+  } | null;
+}
+
+export interface ArrearsBoardView {
+  readonly stages: readonly ArrearsStageView[];
+  readonly subscriptions: readonly ArrearView[];
+}
+
+export const BILLING_UNITS = ['PER_TENANT', 'PER_BRAND', 'PER_LOCATION', 'PER_UNIT', 'ONE_OFF'] as const;
+
 export const BILLING_PERIODS = ['MONTHLY', 'QUARTERLY', 'YEARLY', 'NONE'] as const;
 export const ENFORCEMENT_MODES = ['METER_ONLY', 'SOFT', 'HARD', 'DISABLED'] as const;
 
@@ -289,5 +399,112 @@ export class CommerceApi {
         {},
       ),
     );
+  }
+
+  // ------------------------------------------------------------- modules
+
+  /** Every module, drafts and retired ones included (the authoring view). */
+  async listModules(): Promise<ModuleView[]> {
+    return firstValueFrom(this.api.get<ModuleView[]>('/api/v1/platform-admin/commercial/modules'));
+  }
+
+  async draftModule(request: DraftModuleRequest): Promise<{ moduleId: string }> {
+    return firstValueFrom(this.api.post<{ moduleId: string }>('/api/v1/platform-admin/commercial/modules', request));
+  }
+
+  /** Irreversible, and refused when the approver drafted the module. */
+  async activateModule(moduleId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/activation`, { reason }),
+    );
+  }
+
+  async retireModule(moduleId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/retirement`, { reason }),
+    );
+  }
+
+  async tenantModules(tenantId: string): Promise<TenantModuleView[]> {
+    return firstValueFrom(
+      this.api.get<TenantModuleView[]>(`/api/v1/control-plane/tenants/${tenantId}/modules`),
+    );
+  }
+
+  async addTenantModule(
+    tenantId: string,
+    moduleId: string,
+    reason: string,
+    quantity?: number,
+  ): Promise<{ tenantModuleId: string }> {
+    return firstValueFrom(
+      this.api.post<{ tenantModuleId: string }>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/modules`,
+        { moduleId, quantity, reason },
+      ),
+    );
+  }
+
+  async endTenantModule(tenantId: string, tenantModuleId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/modules/${tenantModuleId}/end`,
+        { reason },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------- statements
+
+  async listStatements(tenantId: string): Promise<StatementView[]> {
+    return firstValueFrom(
+      this.api.get<StatementView[]>(`/api/v1/control-plane/tenants/${tenantId}/statements`),
+    );
+  }
+
+  /** What a month would be billed if it were issued now. */
+  async draftStatement(tenantId: string, periodKey: string): Promise<StatementView> {
+    return firstValueFrom(
+      this.api.get<StatementView>(`/api/v1/control-plane/tenants/${tenantId}/statements/draft`, {
+        query: { periodKey },
+      }),
+    );
+  }
+
+  async statement(tenantId: string, statementId: string): Promise<StatementView> {
+    return firstValueFrom(
+      this.api.get<StatementView>(`/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}`),
+    );
+  }
+
+  /** The issued statement as CSV text, for the accounting system. */
+  async exportStatement(tenantId: string, statementId: string): Promise<string> {
+    return firstValueFrom(
+      this.api.getText(`/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}/export`),
+    );
+  }
+
+  async issueStatement(tenantId: string, periodKey: string, reason: string): Promise<{ statementId: string; number: string }> {
+    return firstValueFrom(
+      this.api.post<{ statementId: string; number: string }>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/statements`,
+        { periodKey, reason },
+      ),
+    );
+  }
+
+  async voidStatement(tenantId: string, statementId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/statements/${statementId}/void`,
+        { reason },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------- arrears
+
+  async arrears(): Promise<ArrearsBoardView> {
+    return firstValueFrom(this.api.get<ArrearsBoardView>('/api/v1/control-plane/arrears'));
   }
 }

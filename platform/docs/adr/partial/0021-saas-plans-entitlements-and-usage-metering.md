@@ -45,9 +45,11 @@
   to add a call to; `notifications.monthly_included` —
   `NotificationDispatchService#dispatch` is deliberately not `@Transactional`
   because it calls a provider mid-method, so there is no single commit to meter
-  against yet. No consumer is wired to the ADR 0005 inbox; there is no period
-  close, invoice export, dashboard, alert or runbook; and no onboarding path
-  creates a subscription.
+  against yet. No consumer is wired to the ADR 0005 inbox. A month is closed
+  and exported as an ADR 0088 statement, modules beside the plans are ADR
+  0087's, and a tenant long past due raises ADR 0089's review incident; there
+  is still no dashboard or runbook, and no onboarding path creates a
+  subscription.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product
