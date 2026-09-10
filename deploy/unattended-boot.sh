@@ -209,12 +209,19 @@ PROVE
 
 status() {
     [ "$(id -u)" -eq 0 ] || die "Run with sudo."
-    local enabled result
-    # is-enabled exits non-zero for "disabled" too, so its output is kept and
-    # only an empty answer means the unit is not installed at all.
-    enabled="$(systemctl is-enabled horecaos-boot.service 2>/dev/null)" || true
-    result="$(systemctl show -p Result --value horecaos-boot.service 2>/dev/null)" || true
-    printf 'horecaos-boot.service: %s; last run: %s\n' "${enabled:-not installed}" "${result:-none}"
+    local enabled result exited
+    if [ ! -f "${UNIT_DIR}/horecaos-boot.service" ]; then
+        printf 'horecaos-boot.service: not installed -- this host is not enrolled\n'
+    else
+        # is-enabled exits non-zero for "disabled" too, so its output is kept.
+        enabled="$(systemctl is-enabled horecaos-boot.service 2>/dev/null)" || true
+        # `show` answers Result=success for a unit that has never run at all, so
+        # the result is only reported once there is an exit to report on.
+        exited="$(systemctl show -p ExecMainExitTimestampMonotonic --value horecaos-boot.service 2>/dev/null)" || true
+        result="$(systemctl show -p Result --value horecaos-boot.service 2>/dev/null)" || true
+        if [ -z "${exited}" ] || [ "${exited}" = 0 ]; then result="not run since this boot"; fi
+        printf 'horecaos-boot.service: %s; last run: %s\n' "${enabled:-unknown}" "${result:-unknown}"
+    fi
     for name in "${CREDENTIALS[@]}"; do
         if [ -f "${CREDSTORE}/${name}" ]; then printf '  %-26s sealed\n' "${name}"
         else printf '  %-26s missing\n' "${name}"; fi
