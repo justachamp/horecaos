@@ -175,9 +175,14 @@ export const routes: Routes = [
       },
       {
         path: 'commerce/invoices',
-        canActivate: [requiresCapability('COMMERCIAL_PLAN_READ')],
+        canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
         loadComponent: () =>
           import('./features/commerce/invoices-wallet').then((m) => m.InvoicesWallet),
+      },
+      {
+        path: 'commerce/dunning',
+        canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
+        loadComponent: () => import('./features/commerce/dunning').then((m) => m.Dunning),
       },
 
       // IA §6 Compliance & fiscal

@@ -34,6 +34,7 @@ import uz.horecaos.platform.commercial.api.UsageMovement;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
@@ -116,7 +117,8 @@ class CommercialPlatformTests {
         audit = new RecordingAuditRecorder();
 
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));
-        entitlements = new EntitlementQueryService(subscriptionStore, planStore, usageStore, ceiling, clock);
+        entitlements = new EntitlementQueryService(
+                subscriptionStore, planStore, usageStore, new JdbcModuleStore(jdbc), ceiling, clock);
         metering = new UsageMeteringService(usageStore, entitlements, clock);
         plans = new PlanCatalogService(planStore, audit, clock);
         subscriptions = new SubscriptionService(subscriptionStore, planStore, entitlements, audit, clock);

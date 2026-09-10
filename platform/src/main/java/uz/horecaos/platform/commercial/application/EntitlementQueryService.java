@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.domain.UsagePeriods;
 import uz.horecaos.platform.commercial.domain.UsageTotals;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
@@ -48,6 +50,7 @@ public class EntitlementQueryService implements EntitlementService {
     private final JdbcSubscriptionStore subscriptions;
     private final JdbcPlanStore plans;
     private final JdbcUsageStore usage;
+    private final JdbcModuleStore modules;
     private final EnforcementCeiling ceiling;
     private final Clock clock;
 
@@ -55,11 +58,13 @@ public class EntitlementQueryService implements EntitlementService {
             JdbcSubscriptionStore subscriptions,
             JdbcPlanStore plans,
             JdbcUsageStore usage,
+            JdbcModuleStore modules,
             EnforcementCeiling ceiling,
             Clock clock) {
         this.subscriptions = subscriptions;
         this.plans = plans;
         this.usage = usage;
+        this.modules = modules;
         this.ceiling = ceiling;
         this.clock = clock;
     }
@@ -200,6 +205,7 @@ public class EntitlementQueryService implements EntitlementService {
                 planVersion,
                 planEntitlements,
                 subscriptions.overrides(tenantId),
+                modules.liveFeatureKeys(tenantId),
                 subscriptions.timezone(tenantId),
                 ceiling.forTenant(tenantId));
     }
@@ -208,7 +214,7 @@ public class EntitlementQueryService implements EntitlementService {
      * Everything one tenant's resolution needs, fetched once.
      *
      * <p>Assembled before any key is resolved so that a snapshot of twelve keys
-     * is four queries rather than forty-eight, and so that every key in one
+     * is five queries rather than sixty, and so that every key in one
      * snapshot sees the same subscription and the same ceiling.
      */
     record Context(
@@ -216,6 +222,7 @@ public class EntitlementQueryService implements EntitlementService {
             Optional<PlanVersion> planVersion,
             Map<String, PlanEntitlement> planEntitlements,
             Map<String, EntitlementOverride> overrides,
+            Set<String> moduleFeatures,
             ZoneId timezone,
             EnforcementMode ceiling) {
 
@@ -228,7 +235,8 @@ public class EntitlementQueryService implements EntitlementService {
                     status,
                     planVersion.map(PlanVersion::currency).orElse(null),
                     ceiling,
-                    at);
+                    at,
+                    moduleFeatures.contains(key.code()));
         }
 
         UsagePeriod periodFor(EntitlementValue value, Instant at) {

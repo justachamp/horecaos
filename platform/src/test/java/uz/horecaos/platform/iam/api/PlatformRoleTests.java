@@ -43,6 +43,7 @@ class PlatformRoleTests {
             Capability.COMMERCIAL_PLAN_MANAGE,
             Capability.COMMERCIAL_PLAN_ACTIVATE,
             Capability.COMMERCIAL_USAGE_ADJUST,
+            Capability.COMMERCIAL_STATEMENT_ISSUE,
             Capability.MIGRATION_READ,
             Capability.MIGRATION_SCOPE_MANAGE,
             Capability.MIGRATION_RUN_EXECUTE,

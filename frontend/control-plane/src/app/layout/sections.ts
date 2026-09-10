@@ -166,7 +166,14 @@ export const SECTIONS: readonly Section[] = [
     labelKey: 'nav.invoicesWallet',
     route: '/commerce/invoices',
     group: 'nav.group.commerce',
-    capability: 'COMMERCIAL_PLAN_READ',
+    capability: 'COMMERCIAL_USAGE_READ',
+  },
+  {
+    id: 'dunning',
+    labelKey: 'nav.dunning',
+    route: '/commerce/dunning',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_USAGE_READ',
   },
 
   // IA §6 Compliance & fiscal

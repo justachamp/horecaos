@@ -1,0 +1,48 @@
+.month {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.num {
+  text-align: right;
+}
+
+.table tfoot td {
+  padding: 10px 12px;
+  background: var(--q-canvas);
+}
+
+.issueForm,
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.issueForm input,
+.confirm input {
+  min-width: 260px;
+}
+
+tr.void td {
+  color: var(--q-ink-muted);
+}
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--q-link, var(--q-primary));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.actions button + button {
+  margin-left: 6px;
+}
