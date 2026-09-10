@@ -10,20 +10,25 @@
 # compared before the next one is rotated -- a secret Keycloak holds that
 # OpenBao does not is an outage for whatever uses that client. No list, no
 # delete, and no path outside the four slots the platform resolves.
+#
+# @ENVIRONMENT@ is HORECAOS_ENVIRONMENT, filled in by whatever loads this file
+# -- the runbook, keycloak-stage2.sh, unattended-boot.sh, local-smoke.sh -- so
+# one file serves every environment's store. Loaded without rendering, it grants
+# a path nothing uses: it fails closed, never open.
 
-path "horecaos/data/production/identity_admin/keycloak/provisioning-secret" {
+path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/provisioning-secret" {
   capabilities = ["create", "update", "read"]
 }
 
-path "horecaos/data/production/identity_admin/keycloak/reader-secret" {
+path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/reader-secret" {
   capabilities = ["create", "update", "read"]
 }
 
-path "horecaos/data/production/identity_admin/keycloak/staff-login-secret" {
+path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/staff-login-secret" {
   capabilities = ["create", "update", "read"]
 }
 
-path "horecaos/data/production/identity_admin/keycloak/device-provisioning-secret" {
+path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/device-provisioning-secret" {
   capabilities = ["create", "update", "read"]
 }
 

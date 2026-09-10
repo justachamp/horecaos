@@ -41,9 +41,9 @@ ENV_FILE="${HORECAOS_ENV_FILE:-/etc/horecaos/production.env}"
 SECRET_DIR="${HORECAOS_SECRET_DIR:-/run/horecaos/secrets}"
 export HORECAOS_SECRET_DIR="${SECRET_DIR}"
 
-# KV v2 logical paths. `bao kv` adds the `data/` segment the HTTP API needs.
-# The environment segment is "production" because the OpenBao policies are
-# written for it; see HORECAOS_ENVIRONMENT's comment in env.template.
+# KV v2 logical paths. `bao kv` adds the `data/` segment the HTTP API needs,
+# and the environment segment is HORECAOS_ENVIRONMENT's (read below), the same
+# one the policies are rendered with.
 DEPLOY_POLICY="horecaos-deploy"
 APPROLE="auth/approle/role/horecaos-platform"
 
@@ -75,6 +75,14 @@ BOOT_CREDENTIALS=(horecaos-unseal-1 horecaos-unseal-2 horecaos-unseal-3
 [ "$(id -u)" -eq 0 ] || die "Run with sudo: mounting the secret tmpfs needs root."
 [ -f "${COMPOSE_FILE}" ] || die "No compose.production.yml next to this script (${HERE})."
 [ -f "${ENV_FILE}" ] || die "No environment file at ${ENV_FILE}. Set HORECAOS_ENV_FILE."
+
+# The OpenBao environment segment, read from the file compose reads, so this
+# script and the stack cannot disagree about which store they are in. The
+# default is compose's own.
+ENVIRONMENT="$(sed -n 's/^HORECAOS_ENVIRONMENT=//p' "${ENV_FILE}" | tail -1 | tr -d "\"' ")"
+ENVIRONMENT="${ENVIRONMENT:-production}"
+[[ "${ENVIRONMENT}" =~ ^[a-z][a-z0-9-]{0,30}$ ]] \
+    || die "HORECAOS_ENVIRONMENT in ${ENV_FILE} is not a plain lower-case name."
 if [ "${UNATTENDED}" = true ]; then
     [ -n "${CREDENTIALS_DIRECTORY:-}" ] \
         || die "--unattended is for horecaos-boot.service, which supplies the credentials. By hand, run without it."
@@ -277,10 +285,10 @@ write_secret() {
 }
 
 say "Reading startup secrets from OpenBao into RAM"
-write_secret platform-db-migrator-password horecaos/production/database/platform/migrator-password
-write_secret platform-db-app-password      horecaos/production/database/platform/app-password
-write_secret keycloak-db-password          horecaos/production/database/keycloak/password
-write_secret minio-root-password           horecaos/production/object_storage/platform/root-password
+write_secret platform-db-migrator-password "horecaos/${ENVIRONMENT}/database/platform/migrator-password"
+write_secret platform-db-app-password      "horecaos/${ENVIRONMENT}/database/platform/app-password"
+write_secret keycloak-db-password          "horecaos/${ENVIRONMENT}/database/keycloak/password"
+write_secret minio-root-password           "horecaos/${ENVIRONMENT}/object_storage/platform/root-password"
 
 say "Issuing a fresh AppRole secret-id for the agent"
 role_id="$(bao_run bao read -field=role_id "${APPROLE}/role-id")" || die "Could not read the role-id."

@@ -42,6 +42,13 @@ for f in "${COMPOSE_FILE}" "${ENV_FILE}" "${KEYCLOAK_DIR}/stage2-inner.sh" \
          "${KEYCLOAK_DIR}/assign-service-account-roles.sh" "${POLICY_FILE}"; do
     [ -f "${f}" ] || die "Missing ${f}."
 done
+
+# The OpenBao environment segment, read from the file compose reads, so this
+# script and the stack cannot disagree about which store they are in.
+ENVIRONMENT="$(sed -n 's/^HORECAOS_ENVIRONMENT=//p' "${ENV_FILE}" | tail -1 | tr -d "\"' ")"
+ENVIRONMENT="${ENVIRONMENT:-production}"
+[[ "${ENVIRONMENT}" =~ ^[a-z][a-z0-9-]{0,30}$ ]] \
+    || die "HORECAOS_ENVIRONMENT in ${ENV_FILE} is not a plain lower-case name."
 compose exec -T openbao bao status 2>/dev/null | grep -qE '^Sealed +false' \
     || die "OpenBao is sealed. Run session-start.sh first."
 for svc in keycloak platform-app; do
@@ -97,8 +104,11 @@ unset lookup
 # -------------------------------------------- a token scoped to rotation only
 
 say "Loading the rotation policy and minting a 10-minute token under it"
-docker cp "${POLICY_FILE}" "$(compose ps -q openbao):/tmp/horecaos-keycloak-rotation.hcl"
-bao_as "${ROOT}" bao policy write horecaos-keycloak-rotation /tmp/horecaos-keycloak-rotation.hcl >/dev/null
+# The token on stdin's first line and the policy, rendered for this
+# environment, after it: nothing written to disk, nothing in argv.
+{ printf '%s\n' "${ROOT}"; sed "s/@ENVIRONMENT@/${ENVIRONMENT}/g" "${POLICY_FILE}"; } \
+    | compose exec -T openbao sh -c 'IFS= read -r BAO_TOKEN; export BAO_TOKEN; bao policy write "$1" -' \
+        _ horecaos-keycloak-rotation >/dev/null
 SCOPED="$(bao_as "${ROOT}" bao token create -policy=horecaos-keycloak-rotation -ttl=10m -field=token)" \
     || die "Could not mint the rotation token."
 unset ROOT
@@ -152,7 +162,7 @@ unset boot
 
 say "Rotating secrets, assigning roles, creating your account"
 out="$(printf '%s\n%s\n%s\n%s\n%s\n' "${SCOPED}" "${ADMIN_EMAIL}" "${PW1}" "${TMP_USER}" "${TMP_PASSWORD}" \
-    | compose --profile ops run --rm --no-TTY -T \
+    | compose --profile ops run --rm --no-TTY -T -e HORECAOS_ENVIRONMENT="${ENVIRONMENT}" \
         --volume "${KEYCLOAK_DIR}:/keycloak:ro" --entrypoint bash ops /keycloak/stage2-inner.sh 2>&1)" \
     || { printf '%s\n' "${out}" | grep -v '^SUBJECT=' >&2; die "Stopped. Running this again is safe."; }
 printf '%s\n' "${out}" | grep -v '^SUBJECT='
