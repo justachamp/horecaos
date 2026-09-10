@@ -1,7 +1,6 @@
 {
-  "why": "Floating-point money silently loses value. Money is integer minor units plus an ISO currency code, everywhere.",
+  "why": "Floating-point money silently loses value. Money is integer minor units plus an ISO currency code, everywhere — and in this platform a UZS minor unit is a whole som (ADR 0038), so an amount column that does not say it is minor units is genuinely ambiguous rather than merely unlabelled. The repository writes that in the column name: amount_minor, adjustments_minor, attested_money_minor. Currency is deliberately not asserted here. pricing.quote_adjustments carries no currency column and must not: pricing.quotes.currency owns it for the whole quote, and a per-adjustment currency could disagree with the quote it belongs to. A case that accepted the word 'currency' as an alternative would have rewarded exactly that mistake on this table.",
   "prompt": "Add a `discount_amount` column to the pricing adjustments table and the matching Java field.",
-  "expect_all": ["bigint|long"],
-  "expect_any": ["minor unit", "currency"],
+  "expect_all": ["bigint|long", "_minor\\b|minor unit"],
   "forbid": ["double precision", "\\bfloat\\b", "BigDecimal.*money"]
 }

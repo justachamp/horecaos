@@ -114,7 +114,14 @@ def main() -> int:
     ap.add_argument("patterns", nargs="*", help="case id globs")
     ap.add_argument("--min-pass", type=float, default=1.0,
                     help="fail below this pass rate (default 1.0)")
-    ap.add_argument("--timeout", type=int, default=300, help="per-case seconds")
+    # 600, not 300. Every case shells out to the CLI and waits for a whole
+    # agent turn; the runs of 2026-09-10 had passing cases land at 281.6s,
+    # 267.6s and 256.4s against a 300s budget, so on any given run some case
+    # crossed it and the suite reported itself inconclusive rather than
+    # reporting a pass rate. Three cases that failed under that pressure
+    # passed cleanly on an idle machine. A budget a case can nearly exhaust
+    # while succeeding is measuring the machine, not the configuration.
+    ap.add_argument("--timeout", type=int, default=600, help="per-case seconds")
     ap.add_argument("--jobs", type=int, default=4, help="cases in parallel")
     ap.add_argument("--verbose", action="store_true", help="print agent output")
     args = ap.parse_args()
