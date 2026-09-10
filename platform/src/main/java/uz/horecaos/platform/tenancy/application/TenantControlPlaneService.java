@@ -540,8 +540,9 @@ public class TenantControlPlaneService {
     /**
      * Deletes a brand that never left {@code DRAFT} and that nothing refers to.
      *
-     * <p>Tenant scope, like creation: whoever may add a brand to the tenant may
-     * take back one added by mistake. Each refusal says what to do instead —
+     * <p>Brand scope, like correcting and activating it: the brand's own
+     * manager may take back a draft made by mistake. Each refusal says what to
+     * do instead —
      * delete its locations first, revoke the access scoped to it, or remove
      * whatever the database names as still referring to it — and nothing is
      * ever removed along with it; see {@link OperatingUnitNotDeletableException}.
@@ -549,7 +550,8 @@ public class TenantControlPlaneService {
     @Transactional
     public void deleteBrand(TenantId tenantId, BrandId brandId, long expectedVersion) {
         Tenant tenant = requireTenant(tenantId);
-        accessPolicy.requireTenantManagement(tenant, Capability.BRAND_WRITE, ResourceScope.tenant(tenantId.value()));
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.BRAND_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
         Brand brand = requireBrand(tenantId, brandId);
         requireVersion(expectedVersion, brand.version());
 

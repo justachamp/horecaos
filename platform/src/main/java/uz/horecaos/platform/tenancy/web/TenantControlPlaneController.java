@@ -244,7 +244,7 @@ public class TenantControlPlaneController {
     }
 
     @DeleteMapping("/{tenantId}/brands/{brandId}")
-    @RequiresCapability(value = Capability.BRAND_WRITE, mutating = true)
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Delete a draft brand",
             description = "For setting a tenant up: only a brand that never left DRAFT, owns no "
