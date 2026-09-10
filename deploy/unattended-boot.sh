@@ -131,7 +131,12 @@ WHAT
             printf 'Unseal share %d of 3 (hidden): ' "${n}"; read -r -s share; printf '\n'
             share="${share//[[:space:]]/}"
             # The two forms `bao operator init` prints: base64 (44) or hex (66).
-            if [[ ! "${share}" =~ ^[A-Za-z0-9+/]{43}=$ && ! "${share}" =~ ^[0-9a-fA-F]{66}$ ]]; then
+            # A share is the 32-byte key plus one index byte, 33 bytes, which
+            # base64 encodes to 44 characters with no `=` padding at all. The
+            # last character is allowed to be `=` only so that a share from a
+            # differently sized key is not refused here; OpenBao is the real
+            # judge, when the stored shares are proved.
+            if [[ ! "${share}" =~ ^[A-Za-z0-9+/]{43}[A-Za-z0-9+/=]$ && ! "${share}" =~ ^[0-9a-fA-F]{66}$ ]]; then
                 warn "That is not an unseal share: expected 44 characters of base64 or 66 of hex."; continue
             fi
             for earlier in "${SHARES[@]}"; do
