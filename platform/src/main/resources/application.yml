@@ -196,8 +196,8 @@ horecaos:
       region: ${HORECAOS_AUDIT_ARCHIVE_REGION:us-east-1}
       bucket: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:horecaos-audit-archive}
       # References, not values (ADR 0028), same as media's.
-      access-key-reference: ${HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY_REF:horecaos:local:object_storage:platform:audit-archive-access-key}
-      secret-key-reference: ${HORECAOS_AUDIT_ARCHIVE_SECRET_KEY_REF:horecaos:local:object_storage:platform:audit-archive-secret-key}
+      access-key-reference: ${HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY_REF:horecaos:${horecaos.environment}:object_storage:platform:audit-archive-access-key}
+      secret-key-reference: ${HORECAOS_AUDIT_ARCHIVE_SECRET_KEY_REF:horecaos:${horecaos.environment}:object_storage:platform:audit-archive-secret-key}
       initial-delay: ${HORECAOS_AUDIT_ARCHIVE_INITIAL_DELAY:PT3M}
       interval: ${HORECAOS_AUDIT_ARCHIVE_INTERVAL:P1D}
   realtime:
