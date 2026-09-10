@@ -66,6 +66,7 @@ export class Entitlements {
 
   protected readonly startPlan = signal('');
   protected readonly startTrialDays = signal('');
+  protected readonly startTerm = signal('1');
   protected readonly startReason = signal('');
 
   protected readonly nextStatus = signal('');
@@ -90,6 +91,25 @@ export class Entitlements {
           label: `${plan.name} v${version.versionNumber} · ${this.i18n.money(version.price)}`,
         })),
     ),
+  );
+
+  /** The terms the chosen version offers, month to month always first. */
+  protected readonly termChoices = computed<readonly { months: number; basisPoints: number }[]>(() => {
+    const version = this.plans()
+      .flatMap((plan) => plan.versions)
+      .find((candidate) => candidate.planVersionId === this.startPlan());
+    return [
+      { months: 1, basisPoints: 0 },
+      ...(version?.terms.termDiscounts ?? []).map((term) => ({ months: term.termMonths, basisPoints: term.discountBasisPoints })),
+    ];
+  });
+
+  /** The chosen version's own trial, shown as what an empty trial field means. */
+  protected readonly planTrialDays = computed<number | null>(
+    () =>
+      this.plans()
+        .flatMap((plan) => plan.versions)
+        .find((candidate) => candidate.planVersionId === this.startPlan())?.terms.trialDays ?? null,
   );
 
   protected readonly overrideTarget = computed<ResolvedEntitlement | null>(
@@ -194,12 +214,19 @@ export class Entitlements {
         this.startPlan(),
         this.startReason().trim(),
         trial.length > 0 ? Number(trial) : undefined,
+        Number(this.startTerm()),
       );
       this.startPlan.set('');
       this.startTrialDays.set('');
+      this.startTerm.set('1');
       this.startReason.set('');
       return this.i18n.t('entitlements.start.done');
     });
+  }
+
+  /** Basis points as a percentage without trailing zeros: 1000 is "10", 250 is "2.5". */
+  protected percent(basisPoints: number): string {
+    return String(basisPoints / 100);
   }
 
   // ------------------------------------------------------------ transition

@@ -9,6 +9,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import {
   BILLING_PERIODS,
   CommerceApi,
+  DraftVersionRequest,
   ENFORCEMENT_MODES,
   EntitlementKeyView,
   EntitlementLineRequest,
@@ -77,6 +78,10 @@ export class PlanCatalog {
   protected readonly price = signal('');
   protected readonly billingPeriod = signal<string>('MONTHLY');
   protected readonly termsReference = signal('');
+  protected readonly trialDays = signal('');
+  protected readonly deposit = signal('');
+  protected readonly discount6 = signal('');
+  protected readonly discount12 = signal('');
   protected readonly draftReason = signal('');
   protected readonly lines = signal<readonly DraftLine[]>([]);
 
@@ -112,6 +117,23 @@ export class PlanCatalog {
 
   protected modeKey(mode: string): MessageKey {
     return `commerce.mode.${mode}` as MessageKey;
+  }
+
+  /** "14-day trial · 500 000 deposit · 6 months −5% · 12 months −10%", or empty when a version sells none. */
+  protected termsLine(version: PlanVersionDetail): string {
+    const parts: string[] = [];
+    if (version.terms.trialDays !== null) {
+      parts.push(this.i18n.t('planCatalog.termsLine.trial', { days: version.terms.trialDays }));
+    }
+    if (version.terms.activationDeposit.amountMinor > 0) {
+      parts.push(this.i18n.t('planCatalog.termsLine.deposit', { amount: this.i18n.money(version.terms.activationDeposit) }));
+    }
+    for (const term of version.terms.termDiscounts) {
+      parts.push(
+        this.i18n.t('planCatalog.termsLine.discount', { months: term.termMonths, percent: term.discountBasisPoints / 100 }),
+      );
+    }
+    return parts.join(' · ');
   }
 
   protected resetKey(period: string): MessageKey {
@@ -189,6 +211,14 @@ export class PlanCatalog {
     this.price.set(newest ? formatAmount(newest.price) : '');
     this.billingPeriod.set(newest?.billingPeriod ?? 'MONTHLY');
     this.termsReference.set(newest?.termsReference ?? '');
+    this.trialDays.set(newest?.terms.trialDays === null || newest === undefined ? '' : String(newest.terms.trialDays));
+    this.deposit.set(
+      newest === undefined || newest.terms.activationDeposit.amountMinor === 0
+        ? ''
+        : formatAmount(newest.terms.activationDeposit),
+    );
+    this.discount6.set(this.percentOf(newest, 6));
+    this.discount12.set(this.percentOf(newest, 12));
     this.draftReason.set('');
     this.lines.set(this.keys.map((key) => this.lineFrom(key, newest)));
     this.draftFor.set(plan.planId);
@@ -253,11 +283,63 @@ export class PlanCatalog {
     return parseAmount(this.price(), this.currency());
   }
 
+  /** A version's discount for a term as the form shows it: "10", "2.5", or empty. */
+  private percentOf(version: PlanVersionDetail | undefined, months: number): string {
+    const term = version?.terms.termDiscounts.find((candidate) => candidate.termMonths === months);
+    return term === undefined ? '' : String(term.discountBasisPoints / 100);
+  }
+
+  /** A percentage typed as "10" or "2.5" in basis points, null when it is not one between 0.01 and 50. */
+  protected basisPoints(text: string): number | null {
+    const trimmed = text.trim().replace(',', '.');
+    if (!/^\d{1,2}(\.\d{1,2})?$/.test(trimmed)) {
+      return null;
+    }
+    const points = Math.round(Number(trimmed) * 100);
+    return points >= 1 && points <= 5_000 ? points : null;
+  }
+
+  /** The draft's trial, deposit and discounts as the server takes them, or null while one cannot be read. */
+  protected termsRequest(): Pick<DraftVersionRequest, 'trialDays' | 'activationDepositMinor' | 'termDiscounts'> | null {
+    const trial = this.trialDays().trim();
+    if (trial.length > 0 && !/^([1-9]|[1-8]\d|90)$/.test(trial)) {
+      return null;
+    }
+    const deposit = this.deposit().trim();
+    const depositMinor = deposit.length > 0 ? parseAmount(deposit, this.currency()) : 0;
+    if (depositMinor === null) {
+      return null;
+    }
+    const discounts: { termMonths: number; discountBasisPoints: number }[] = [];
+    for (const [months, text] of [
+      [6, this.discount6()],
+      [12, this.discount12()],
+    ] as const) {
+      if (text.trim().length === 0) {
+        continue;
+      }
+      const points = this.basisPoints(text);
+      if (points === null) {
+        return null;
+      }
+      discounts.push({ termMonths: months, discountBasisPoints: points });
+    }
+    if (discounts.length > 0 && this.billingPeriod() !== 'MONTHLY') {
+      return null;
+    }
+    return {
+      trialDays: trial.length > 0 ? Number(trial) : undefined,
+      activationDepositMinor: depositMinor > 0 ? depositMinor : undefined,
+      termDiscounts: discounts,
+    };
+  }
+
   protected canDraft(): boolean {
     return (
       !this.busy() &&
       this.priceMinor() !== null &&
       this.draftRequest() !== null &&
+      this.termsRequest() !== null &&
       this.draftReason().trim().length > 0
     );
   }
@@ -266,17 +348,19 @@ export class PlanCatalog {
     event.preventDefault();
     const entitlements = this.draftRequest();
     const priceMinor = this.priceMinor();
-    if (!this.canDraft() || entitlements === null || priceMinor === null) {
+    const terms = this.termsRequest();
+    if (!this.canDraft() || entitlements === null || priceMinor === null || terms === null) {
       return;
     }
-    const terms = this.termsReference().trim();
+    const termsReference = this.termsReference().trim();
     await this.run(async () => {
       await this.api.draftVersion(plan.planId, {
         currency: this.currency(),
         priceMinor,
         billingPeriod: this.billingPeriod(),
-        termsReference: terms.length > 0 ? terms : undefined,
+        termsReference: termsReference.length > 0 ? termsReference : undefined,
         entitlements,
+        ...terms,
         reason: this.draftReason().trim(),
       });
       this.draftFor.set(null);

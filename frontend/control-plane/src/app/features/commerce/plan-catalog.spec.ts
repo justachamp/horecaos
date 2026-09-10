@@ -30,6 +30,11 @@ const LIVE: PlanVersionDetail = {
       overageUnitPrice: { amountMinor: 250_000, currency: 'UZS' },
     },
   ],
+  terms: {
+    trialDays: 14,
+    activationDeposit: { amountMinor: 500_000, currency: 'UZS' },
+    termDiscounts: [{ termMonths: 12, discountBasisPoints: 1_000 }],
+  },
 };
 
 const DRAFT: PlanVersionDetail = {
@@ -192,8 +197,40 @@ describe('PlanCatalog', () => {
           overageUnitPriceMinor: 250_000,
         },
       ],
+      // Carried over from the newest version: the trial, the deposit and the yearly discount.
+      trialDays: 14,
+      activationDepositMinor: 500_000,
+      termDiscounts: [{ termMonths: 12, discountBasisPoints: 1_000 }],
       reason: 'repriced for 2027',
     });
+  });
+
+  it('offers a term discount on a monthly plan only, and reads 2.5 as 250 basis points', async () => {
+    await create('me');
+
+    button(ru['planCatalog.draft.open']).click();
+    await settle();
+    await type('input[name="discount6"]', '2,5');
+    await type('input[name="draftReason"]', 'a half-year term');
+    el<HTMLButtonElement>('.draftForm button[type="submit"]').click();
+    await settle();
+    expect(api.draftVersion).toHaveBeenLastCalledWith(
+      'plan-1',
+      expect.objectContaining({
+        termDiscounts: [
+          { termMonths: 6, discountBasisPoints: 250 },
+          { termMonths: 12, discountBasisPoints: 1_000 },
+        ],
+      }),
+    );
+
+    button(ru['planCatalog.draft.open']).click();
+    await settle();
+    const period = el<HTMLSelectElement>('select[name="billingPeriod"]');
+    period.value = 'YEARLY';
+    period.dispatchEvent(new Event('change'));
+    await settle();
+    expect(fixture.nativeElement.textContent).toContain(ru['planCatalog.draft.termsInvalid']);
   });
 
   it('keeps a draft unsendable while its price cannot be read exactly', async () => {

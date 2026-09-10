@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -90,8 +91,41 @@ public class PlanCatalogService {
             ActorRef actor,
             String reason,
             String correlationId) {
+        return draftVersion(
+                planId,
+                currency,
+                priceMinor,
+                billingPeriod,
+                termsReference,
+                entitlements,
+                PlanTerms.NONE,
+                actor,
+                reason,
+                correlationId);
+    }
+
+    /**
+     * Drafts a new version with what it sells beside its price (ADR 0093): a
+     * trial length, an activation deposit, and discounts for longer terms.
+     *
+     * <p>A term discount is offered only on a monthly plan: a longer term is a
+     * number of months, and a quarterly or yearly price is already a term.
+     */
+    @Transactional
+    public UUID draftVersion(
+            UUID planId,
+            String currency,
+            long priceMinor,
+            String billingPeriod,
+            @Nullable String termsReference,
+            Map<String, PlanEntitlement> entitlements,
+            PlanTerms terms,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
         validate(entitlements);
+        validate(terms, billingPeriod);
 
         UUID id = UUID.randomUUID();
         Instant now = clock.instant();
@@ -108,6 +142,9 @@ public class PlanCatalogService {
                 actorSubject(actor),
                 now);
         entitlements.forEach((key, entitlement) -> plans.upsertPlanEntitlement(id, key, entitlement));
+        if (!terms.equals(PlanTerms.NONE)) {
+            plans.insertTerms(id, terms);
+        }
 
         Map<String, Object> change = new HashMap<>();
         change.put("versionNumber", versionNumber);
@@ -115,6 +152,13 @@ public class PlanCatalogService {
         change.put("priceMinor", priceMinor);
         change.put("billingPeriod", billingPeriod);
         change.put("entitlementKeys", List.copyOf(entitlements.keySet()));
+        if (!terms.equals(PlanTerms.NONE)) {
+            change.put("activationDepositMinor", terms.activationDepositMinor());
+            change.put("termDiscounts", terms.termDiscounts().toString());
+            if (terms.trialDays() != null) {
+                change.put("trialDays", terms.trialDays());
+            }
+        }
 
         audit.record(AuditFact.of("commercial.plan_version.drafted", AuditClass.BUSINESS)
                 .by(actor)
@@ -223,6 +267,32 @@ public class PlanCatalogService {
 
     public Map<String, PlanEntitlement> entitlementsOf(UUID planVersionId) {
         return plans.entitlementsOf(planVersionId);
+    }
+
+    public PlanTerms termsOf(UUID planVersionId) {
+        return plans.termsOf(planVersionId);
+    }
+
+    private static void validate(PlanTerms terms, String billingPeriod) {
+        Integer trialDays = terms.trialDays();
+        if (trialDays != null && (trialDays < 1 || trialDays > 90)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A trial is between 1 and 90 days");
+        }
+        if (terms.activationDepositMinor() < 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A deposit is never negative");
+        }
+        if (!terms.termDiscounts().isEmpty() && !"MONTHLY".equals(billingPeriod)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Term discounts are offered on a monthly plan only");
+        }
+        terms.termDiscounts().forEach((months, basisPoints) -> {
+            if (!List.of(3, 6, 12, 24).contains(months)) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "A term is 3, 6, 12 or 24 months, not %d".formatted(months));
+            }
+            if (basisPoints < 1 || basisPoints > 5_000) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "A term discount is between 0.01% and 50%");
+            }
+        });
     }
 
     /**

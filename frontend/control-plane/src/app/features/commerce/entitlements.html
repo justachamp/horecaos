@@ -25,6 +25,8 @@
         <dd class="q-body-sm">{{ planName(sub.planVersionId) }}</dd>
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.since') }}</dt>
         <dd class="q-body-sm">{{ i18n.day(asDate(sub.startAt)) }}</dd>
+        <dt class="q-caption">{{ i18n.t('entitlements.start.term') }}</dt>
+        <dd class="q-body-sm term">{{ sub.termMonths > 1 ? i18n.t('entitlements.subscription.termMonths', { months: sub.termMonths }) : i18n.t('entitlements.start.monthToMonth') }}</dd>
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.period') }}</dt>
         <dd class="q-body-sm">{{ i18n.day(asDate(sub.currentPeriodStart)) }} – {{ i18n.day(asDate(sub.currentPeriodEnd)) }}</dd>
         @if (sub.trialEndAt; as trialEnd) {
@@ -104,11 +106,22 @@
               </select>
             </label>
             <label class="field">
+              <span class="q-caption">{{ i18n.t('entitlements.start.term') }}</span>
+              <select class="q-body-sm" name="startTerm" (change)="startTerm.set($any($event.target).value)">
+                @for (term of termChoices(); track term.months) {
+                  <option [value]="term.months" [selected]="term.months + '' === startTerm()">
+                    {{ term.months === 1 ? i18n.t('entitlements.start.monthToMonth') : i18n.t('entitlements.start.termOption', { months: term.months, percent: percent(term.basisPoints) }) }}
+                  </option>
+                }
+              </select>
+            </label>
+            <label class="field">
               <span class="q-caption">{{ i18n.t('entitlements.start.trialDays') }}</span>
               <input
                 class="q-body-sm narrow"
                 name="trialDays"
                 inputmode="numeric"
+                [placeholder]="planTrialDays() === null ? '' : planTrialDays() + ''"
                 [value]="startTrialDays()"
                 (input)="startTrialDays.set($any($event.target).value)"
               />

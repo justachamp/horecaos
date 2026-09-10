@@ -3,6 +3,8 @@ package uz.horecaos.platform.commercial.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -30,6 +32,7 @@ import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.iam.api.Capability;
@@ -85,7 +88,7 @@ public class CommercialAdminController {
                     + "live versions only.")
     public ResponseEntity<List<PlanResponse>> plans() {
         return ResponseEntity.ok(plans.catalogueWithDrafts().stream()
-                .map(plan -> PlanResponse.of(plan, plans::entitlementsOf))
+                .map(plan -> PlanResponse.of(plan, plans::entitlementsOf, plans::termsOf))
                 .toList());
     }
 
@@ -126,6 +129,7 @@ public class CommercialAdminController {
                 body.billingPeriod(),
                 body.termsReference(),
                 toEntitlements(body.entitlements()),
+                toTerms(body),
                 actor(),
                 body.reason(),
                 correlationId());
@@ -155,7 +159,13 @@ public class CommercialAdminController {
             @PathVariable UUID tenantId, @Valid @RequestBody StartSubscriptionRequest body) {
 
         UUID id = subscriptions.start(
-                tenantId, body.planVersionId(), body.trialDays(), actor(), body.reason(), correlationId());
+                tenantId,
+                body.planVersionId(),
+                body.trialDays(),
+                body.termMonths() == null ? 1 : body.termMonths(),
+                actor(),
+                body.reason(),
+                correlationId());
         return ResponseEntity.ok(Map.of("subscriptionId", id));
     }
 
@@ -290,6 +300,21 @@ public class CommercialAdminController {
         return entitlements;
     }
 
+    private static PlanTerms toTerms(DraftVersionRequest body) {
+        Map<Integer, Integer> discounts = new LinkedHashMap<>();
+        if (body.termDiscounts() != null) {
+            for (TermDiscountRequest discount : body.termDiscounts()) {
+                if (discounts.put(discount.termMonths(), discount.discountBasisPoints()) != null) {
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED,
+                            "The %d-month term is offered twice".formatted(discount.termMonths()));
+                }
+            }
+        }
+        long deposit = body.activationDepositMinor() == null ? 0 : body.activationDepositMinor();
+        return new PlanTerms(body.trialDays(), deposit, discounts);
+    }
+
     private static <E extends Enum<E>> E parse(Class<E> type, String value, String what) {
         try {
             return Enum.valueOf(type, value);
@@ -319,14 +344,17 @@ public class CommercialAdminController {
     public record PlanResponse(UUID planId, String code, String name, String status, List<PlanVersionDetail> versions) {
 
         static PlanResponse of(
-                PlanCatalogService.PlanHistory plan, Function<UUID, Map<String, PlanEntitlement>> entitlementsOf) {
+                PlanCatalogService.PlanHistory plan,
+                Function<UUID, Map<String, PlanEntitlement>> entitlementsOf,
+                Function<UUID, PlanTerms> termsOf) {
             return new PlanResponse(
                     plan.planId(),
                     plan.code(),
                     plan.name(),
                     plan.status(),
                     plan.versions().stream()
-                            .map(version -> PlanVersionDetail.of(version, entitlementsOf.apply(version.id())))
+                            .map(version -> PlanVersionDetail.of(
+                                    version, entitlementsOf.apply(version.id()), termsOf.apply(version.id())))
                             .toList());
         }
     }
@@ -342,9 +370,10 @@ public class CommercialAdminController {
             String createdBy,
             @Nullable String approvedBy,
             @Nullable String activatedAt,
-            List<CommercialControlPlaneController.EntitlementLine> entitlements) {
+            List<CommercialControlPlaneController.EntitlementLine> entitlements,
+            CommercialControlPlaneController.PlanTermsView terms) {
 
-        static PlanVersionDetail of(PlanVersion version, Map<String, PlanEntitlement> entitlements) {
+        static PlanVersionDetail of(PlanVersion version, Map<String, PlanEntitlement> entitlements, PlanTerms terms) {
             Instant activatedAt = version.activatedAt();
             return new PlanVersionDetail(
                     version.id(),
@@ -358,7 +387,8 @@ public class CommercialAdminController {
                     activatedAt == null ? null : activatedAt.toString(),
                     entitlements.values().stream()
                             .map(line -> CommercialControlPlaneController.EntitlementLine.of(line, version.currency()))
-                            .toList());
+                            .toList(),
+                    CommercialControlPlaneController.PlanTermsView.of(terms, version.currency()));
         }
     }
 
@@ -390,7 +420,13 @@ public class CommercialAdminController {
             @NotBlank String billingPeriod,
             @Size(max = 500) String termsReference,
             List<EntitlementLineRequest> entitlements,
+            @Min(1) @Max(90) Integer trialDays,
+            @Min(0) Long activationDepositMinor,
+            List<TermDiscountRequest> termDiscounts,
             @NotBlank @Size(max = 1000) String reason) {}
+
+    /** A term in months and its discount in basis points of the monthly price. */
+    public record TermDiscountRequest(int termMonths, int discountBasisPoints) {}
 
     public record EntitlementLineRequest(
             @NotBlank String entitlementKey,
@@ -404,6 +440,7 @@ public class CommercialAdminController {
     public record StartSubscriptionRequest(
             @NotNull UUID planVersionId,
             Integer trialDays,
+            Integer termMonths,
             @NotBlank @Size(max = 1000) String reason) {}
 
     public record TransitionRequest(

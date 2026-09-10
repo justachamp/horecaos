@@ -1,6 +1,5 @@
 <h1 class="q-title">{{ i18n.t('tenantIssueQueue.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('tenantIssueQueue.lead') }}</p>
-<p class="q-caption notice">{{ i18n.t('tenantIssueQueue.gap') }}</p>
 
 <app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
 
@@ -211,6 +210,26 @@
         </table>
       }
       <a class="q-body-sm" [routerLink]="['/compliance/fiscalization']">{{ i18n.t('tenantIssueQueue.fiscal.fullScreen') }}</a>
+    </section>
+
+    <section class="panel credentials">
+      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.credentials.title') }} ({{ credentialsDue().length }})</h2>
+      <p class="q-caption muted">{{ i18n.t('tenantIssueQueue.credentials.rule', { days: rotationDays() }) }}</p>
+      @if (credentialsDue().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.credentials.empty') }}</p>
+      } @else {
+        <ul class="dueList">
+          @for (credential of credentialsDue(); track credential.id) {
+            <li class="q-body-sm" [attr.data-credential]="credential.id">
+              <strong>{{ credential.providerType }}</strong> · {{ credential.label }}
+              <span class="q-caption muted">
+                {{ credential.lastRotatedAt ? i18n.t('tenantIssueQueue.credentials.rotated', { days: credential.daysOld }) : i18n.t('tenantIssueQueue.credentials.never', { days: credential.daysOld }) }}
+              </span>
+            </li>
+          }
+        </ul>
+        <a class="q-body-sm" [routerLink]="['/providers/installations']">{{ i18n.t('tenantIssueQueue.credentials.replace') }}</a>
+      }
     </section>
   }
 }

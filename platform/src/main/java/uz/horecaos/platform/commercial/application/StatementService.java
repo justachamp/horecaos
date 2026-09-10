@@ -26,6 +26,7 @@ import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 import uz.horecaos.platform.commercial.domain.EntitlementOverride;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.SellableModule;
 import uz.horecaos.platform.commercial.domain.Statement;
@@ -127,17 +128,33 @@ public class StatementService {
             currency = version.currency();
             String reference = version.planCode() + "@v" + version.versionNumber();
 
+            PlanTerms terms = plans.termsOf(version.id());
+            int termMonths = subscriptions.termMonths(subscription.id());
             if (chargedIn(version, subscription, month, zone)) {
                 Instant trialEnd = subscription.trialEndAt();
                 boolean wholeMonthInTrial = trialEnd != null && !trialEnd.isBefore(end);
+                int discount = terms.discountFor(termMonths);
                 lines.add(StatementLine.of(
                         lines.size() + 1,
                         StatementLine.PLAN,
                         reference,
                         version.planCode() + " v" + version.versionNumber() + ", " + version.billingPeriod()
+                                + (discount > 0
+                                        ? ", %d-month term, %s%% off".formatted(termMonths, percent(discount))
+                                        : "")
                                 + (wholeMonthInTrial ? ", trial" : ""),
                         wholeMonthInTrial ? 0 : 1,
-                        version.priceMinor()));
+                        terms.monthlyPriceOn(version.priceMinor(), termMonths)));
+            }
+            Instant started = subscription.startAt();
+            if (terms.activationDepositMinor() > 0 && !started.isBefore(start) && started.isBefore(end)) {
+                lines.add(StatementLine.of(
+                        lines.size() + 1,
+                        StatementLine.DEPOSIT,
+                        reference,
+                        version.planCode() + " v" + version.versionNumber() + ", activation deposit",
+                        1,
+                        terms.activationDepositMinor()));
             }
             addOverage(lines, tenantId, version, periodKey, start, end);
         }
@@ -349,6 +366,11 @@ public class StatementService {
         YearMonth first = YearMonth.from(subscription.startAt().atZone(zone));
         long elapsed = first.until(month, ChronoUnit.MONTHS);
         return elapsed >= 0 && elapsed % months == 0;
+    }
+
+    /** Basis points as a percentage, without a trailing zero: 1000 is "10", 250 is "2.5". */
+    static String percent(int basisPoints) {
+        return java.math.BigDecimal.valueOf(basisPoints, 2).stripTrailingZeros().toPlainString();
     }
 
     private static boolean overlaps(Subscription subscription, Instant start, Instant end) {

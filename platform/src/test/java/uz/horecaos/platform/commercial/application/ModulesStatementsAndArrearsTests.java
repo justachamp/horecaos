@@ -30,6 +30,7 @@ import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsageMovement;
 import uz.horecaos.platform.commercial.domain.BillingUnit;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.StatementLine;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
@@ -297,6 +298,88 @@ class ModulesStatementsAndArrearsTests {
         assertThatThrownBy(() -> statements.issue(PILOT, "2026-08", AUTHOR, "empty", "corr"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Nothing is billable");
+    }
+
+    // ------------------------------------------------------------ plan terms
+
+    @Test
+    void aTwelveMonthTermIsBilledAtItsDiscountAndTheDepositOnceInTheMonthItStarted() {
+        UUID versionId = activeTermsPlan();
+        subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
+        clock.set(SEPTEMBER);
+
+        Statement july = statements.draft(PILOT, "2026-07");
+        assertThat(july.lines())
+                .extracting(StatementLine::kind, StatementLine::unitPriceMinor, StatementLine::quantity)
+                .containsExactly(
+                        // The fourteen-day trial ends inside July, and nothing is
+                        // prorated: a month only partly in trial bills in full.
+                        org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L, 1L),
+                        org.assertj.core.groups.Tuple.tuple("DEPOSIT", 500_000L, 1L));
+        assertThat(july.lines().getFirst().description()).contains("12-month term, 10% off");
+
+        Statement august = statements.draft(PILOT, "2026-08");
+        assertThat(august.lines())
+                .extracting(StatementLine::kind, StatementLine::amountMinor)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L));
+    }
+
+    @Test
+    void aSubscriptionTakesThePlansTrialAndOnlyATermThePlanOffers() {
+        UUID versionId = activeTermsPlan();
+
+        assertThatThrownBy(() -> subscriptions.start(PILOT, versionId, null, 6, AUTHOR, "half a year", "corr"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("no 6-month term");
+
+        subscriptions.start(PILOT, versionId, null, 1, AUTHOR, "month to month", "corr");
+        var live = subscriptions.live(PILOT).orElseThrow();
+        assertThat(live.status()).isEqualTo(SubscriptionStatus.TRIALING);
+        assertThat(live.trialEndAt()).isEqualTo(JULY.plus(java.time.Duration.ofDays(14)));
+        assertThat(subscriptions.termMonths(live.id())).isEqualTo(1);
+    }
+
+    @Test
+    void aPlansTermsAreFrozenWithItAndOfferedOnAMonthlyPlanOnly() {
+        UUID versionId = activeTermsPlan();
+
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO commercial.plan_term_discounts (plan_version_id, term_months, discount_basis_points)
+                        VALUES (:id, 6, 500)
+                        """).param("id", versionId).update()).hasMessageContaining("immutable");
+
+        UUID yearly = plans.createPlan("YEARLY", "Yearly", AUTHOR, "a yearly price", "corr");
+        assertThatThrownBy(() -> plans.draftVersion(
+                        yearly,
+                        "UZS",
+                        12_000_000,
+                        "YEARLY",
+                        null,
+                        Map.of(),
+                        new PlanTerms(null, 0, Map.of(12, 1_000)),
+                        AUTHOR,
+                        "a yearly term discount",
+                        "corr"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("monthly plan only");
+    }
+
+    /** A monthly plan: 1 200 000 a month, a fourteen-day trial, a 500 000 deposit, 10% off a year. */
+    private UUID activeTermsPlan() {
+        UUID planId = plans.createPlan("TERMS", "Terms", AUTHOR, "the price list", "corr");
+        UUID versionId = plans.draftVersion(
+                planId,
+                "UZS",
+                1_200_000,
+                "MONTHLY",
+                null,
+                Map.of(),
+                new PlanTerms(14, 500_000, Map.of(12, 1_000)),
+                AUTHOR,
+                "terms",
+                "corr");
+        plans.activate(versionId, APPROVER, "signed off", "corr");
+        return versionId;
     }
 
     // ------------------------------------------------------------- arrears

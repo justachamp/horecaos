@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 
 /**
@@ -197,6 +198,48 @@ public class JdbcPlanStore {
 
     /** A plan row as stored: its versions are read separately. */
     public record StoredPlan(UUID id, String code, String name, String status) {}
+
+    /** Writes a draft version's trial, deposit and term discounts (ADR 0093). */
+    public void insertTerms(UUID planVersionId, PlanTerms terms) {
+        jdbc.sql("""
+                        INSERT INTO commercial.plan_version_terms (plan_version_id, trial_days, activation_deposit_minor)
+                        VALUES (:id, :trialDays, :deposit)
+                        """)
+                .param("id", planVersionId)
+                .param("trialDays", terms.trialDays())
+                .param("deposit", terms.activationDepositMinor())
+                .update();
+        terms.termDiscounts()
+                .forEach((months, basisPoints) -> jdbc.sql("""
+                        INSERT INTO commercial.plan_term_discounts (plan_version_id, term_months, discount_basis_points)
+                        VALUES (:id, :months, :basisPoints)
+                        """)
+                        .param("id", planVersionId)
+                        .param("months", months)
+                        .param("basisPoints", basisPoints)
+                        .update());
+    }
+
+    /** A version's trial, deposit and term discounts; none for a version drafted before ADR 0093. */
+    public PlanTerms termsOf(UUID planVersionId) {
+        java.util.Map<Integer, Integer> discounts = new java.util.TreeMap<>();
+        jdbc.sql("""
+                        SELECT term_months, discount_basis_points FROM commercial.plan_term_discounts
+                         WHERE plan_version_id = :id
+                        """)
+                .param("id", planVersionId)
+                .query((row, number) -> discounts.put(row.getInt("term_months"), row.getInt("discount_basis_points")))
+                .list();
+        return jdbc.sql("""
+                        SELECT trial_days, activation_deposit_minor FROM commercial.plan_version_terms
+                         WHERE plan_version_id = :id
+                        """)
+                .param("id", planVersionId)
+                .query((row, number) -> new PlanTerms(
+                        row.getObject("trial_days", Integer.class), row.getLong("activation_deposit_minor"), discounts))
+                .optional()
+                .orElseGet(() -> new PlanTerms(null, 0, discounts));
+    }
 
     public Map<String, PlanEntitlement> entitlementsOf(UUID planVersionId) {
         List<PlanEntitlement> rows = jdbc.sql("""

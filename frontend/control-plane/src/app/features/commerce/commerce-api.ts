@@ -36,6 +36,7 @@ export interface SubscriptionView {
   readonly suspensionReason: string | null;
   readonly version: number;
   readonly allowedNext: readonly string[];
+  readonly termMonths: number;
 }
 
 /** One line of a plan version: the limit, the boundary behaviour, the overage rate. */
@@ -49,6 +50,13 @@ export interface PlanEntitlementLineView {
   readonly overageUnitPrice: Money | null;
 }
 
+/** What a plan version sells beside its price: a trial, a deposit, discounts for longer terms. */
+export interface PlanTermsView {
+  readonly trialDays: number | null;
+  readonly activationDeposit: Money;
+  readonly termDiscounts: readonly { termMonths: number; discountBasisPoints: number }[];
+}
+
 /** A live plan version as the price list shows it. */
 export interface PlanVersionView {
   readonly planVersionId: string;
@@ -57,6 +65,7 @@ export interface PlanVersionView {
   readonly price: Money;
   readonly billingPeriod: string;
   readonly entitlements: readonly PlanEntitlementLineView[];
+  readonly terms: PlanTermsView;
 }
 
 /** A version in the authoring view: drafts included, with who drafted and who approved. */
@@ -71,6 +80,7 @@ export interface PlanVersionDetail {
   readonly approvedBy: string | null;
   readonly activatedAt: string | null;
   readonly entitlements: readonly PlanEntitlementLineView[];
+  readonly terms: PlanTermsView;
 }
 
 /** A plan and every version of it, newest first. */
@@ -107,6 +117,9 @@ export interface DraftVersionRequest {
   readonly billingPeriod: string;
   readonly termsReference?: string;
   readonly entitlements: readonly EntitlementLineRequest[];
+  readonly trialDays?: number;
+  readonly activationDepositMinor?: number;
+  readonly termDiscounts?: readonly { termMonths: number; discountBasisPoints: number }[];
   readonly reason: string;
 }
 
@@ -335,11 +348,12 @@ export class CommerceApi {
     planVersionId: string,
     reason: string,
     trialDays?: number,
+    termMonths?: number,
   ): Promise<{ subscriptionId: string }> {
     return firstValueFrom(
       this.api.post<{ subscriptionId: string }>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/subscriptions`,
-        { planVersionId, trialDays, reason },
+        { planVersionId, trialDays, termMonths, reason },
       ),
     );
   }

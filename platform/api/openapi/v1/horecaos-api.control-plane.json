@@ -1280,6 +1280,11 @@
       },
       "CommercialAdminControllerDraftVersionRequest" : {
         "properties" : {
+          "activationDepositMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
           "billingPeriod" : {
             "minLength" : 1,
             "type" : "string"
@@ -1304,10 +1309,22 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "termDiscounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TermDiscountRequest"
+            },
+            "type" : "array"
+          },
           "termsReference" : {
             "maxLength" : 500,
             "minLength" : 0,
             "type" : "string"
+          },
+          "trialDays" : {
+            "format" : "int32",
+            "maximum" : 90,
+            "minimum" : 1,
+            "type" : "integer"
           }
         },
         "required" : [ "billingPeriod", "currency", "reason" ],
@@ -1409,6 +1426,10 @@
           },
           "suspensionReason" : {
             "type" : "string"
+          },
+          "termMonths" : {
+            "format" : "int32",
+            "type" : "integer"
           },
           "trialEndAt" : {
             "type" : "string"
@@ -2089,6 +2110,52 @@
         },
         "type" : "object"
       },
+      "CredentialsDue" : {
+        "properties" : {
+          "credentials" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DueCredential"
+            },
+            "type" : "array"
+          },
+          "rotationIntervalDays" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerLookupResult" : {
+        "properties" : {
+          "matches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CustomerMatch"
+            },
+            "type" : "array"
+          },
+          "tenantsSearched" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerMatch" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CutoverDecisionRequest" : {
         "properties" : {
           "approvalRequestId" : {
@@ -2616,6 +2683,31 @@
           }
         },
         "required" : [ "billingUnit", "code", "currency", "name", "reason" ],
+        "type" : "object"
+      },
+      "DueCredential" : {
+        "properties" : {
+          "daysOld" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "lastRotatedAt" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "EgressCount" : {
@@ -4890,6 +4982,24 @@
         },
         "type" : "object"
       },
+      "PlanTermsView" : {
+        "properties" : {
+          "activationDeposit" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "termDiscounts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TermDiscountView"
+            },
+            "type" : "array"
+          },
+          "trialDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "PlanVersionDetail" : {
         "properties" : {
           "activatedAt" : {
@@ -4919,6 +5029,9 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "terms" : {
+            "$ref" : "#/components/schemas/PlanTermsView"
           },
           "termsReference" : {
             "type" : "string"
@@ -4951,6 +5064,9 @@
           "price" : {
             "$ref" : "#/components/schemas/ApiMoney"
           },
+          "terms" : {
+            "$ref" : "#/components/schemas/PlanTermsView"
+          },
           "versionNumber" : {
             "format" : "int32",
             "type" : "integer"
@@ -4971,6 +5087,22 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "PlatformCustomerLookupControllerCustomerLookupRequest" : {
+        "properties" : {
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone", "reason" ],
         "type" : "object"
       },
       "PlatformGrantControllerReasonRequest" : {
@@ -6826,6 +6958,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "termMonths" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "trialDays" : {
             "format" : "int32",
             "type" : "integer"
@@ -7478,6 +7614,32 @@
           "status" : {
             "enum" : [ "PROVISIONING", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TermDiscountRequest" : {
+        "properties" : {
+          "discountBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "termMonths" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TermDiscountView" : {
+        "properties" : {
+          "discountBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "termMonths" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8275,6 +8437,36 @@
         },
         "summary" : "Set the value stored at exactly one key and scope",
         "tags" : [ "Configuration" ]
+      }
+    },
+    "/api/v1/control-plane/customer-lookups" : {
+      "post" : {
+        "description" : "Answers tenants and account identifiers only. Audited with its reason whether or not anything matched; the number is never recorded.",
+        "operationId" : "lookup",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformCustomerLookupControllerCustomerLookupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerLookupResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find which tenants know a phone number as a customer",
+        "tags" : [ "Global lookup" ]
       }
     },
     "/api/v1/control-plane/data-protection" : {
@@ -13459,6 +13651,35 @@
         },
         "summary" : "Move a tenant to another market",
         "tags" : [ "Tenant residency and business type" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/credentials-due" : {
+      "get" : {
+        "description" : "Provider installations and payment merchant accounts whose credential has not been rotated through the platform within the rotation interval, oldest first.",
+        "operationId" : "due",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CredentialsDue"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's credentials due to be rotated",
+        "tags" : [ "Platform integration administration" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/entitlements" : {

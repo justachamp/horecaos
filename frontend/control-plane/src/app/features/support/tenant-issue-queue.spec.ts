@@ -7,6 +7,7 @@ import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { ru } from '../../core/i18n/messages.ru';
 import { FiscalApi } from '../compliance/fiscal-api';
 import { IntegrationOpsApi } from '../integration-ops/integration-ops-api';
+import { ProvidersApi } from '../providers/providers-api';
 import { TenantsApi } from '../tenants/tenants-api';
 import { PosExportCandidate, PosExportView, PosExportsApi } from './pos-exports-api';
 import { TenantIssueQueue } from './tenant-issue-queue';
@@ -43,7 +44,14 @@ describe('TenantIssueQueue', () => {
     resolve: ReturnType<typeof vi.fn>;
   };
 
-  async function create(rows: PosExportView[], candidates: PosExportCandidate[] = []): Promise<void> {
+  let providers: { credentialsDue: ReturnType<typeof vi.fn> };
+
+  async function create(
+    rows: PosExportView[],
+    candidates: PosExportCandidate[] = [],
+    due: { id: string; kind: string; providerType: string; label: string; lastRotatedAt: string | null; daysOld: number }[] = [],
+  ): Promise<void> {
+    providers = { credentialsDue: vi.fn().mockResolvedValue({ rotationIntervalDays: 180, credentials: due }) };
     pos = {
       awaiting: vi.fn().mockResolvedValue({ items: rows, nextCursor: null }),
       candidates: vi.fn().mockResolvedValue({ items: candidates, nextCursor: null }),
@@ -58,6 +66,7 @@ describe('TenantIssueQueue', () => {
         { provide: PosExportsApi, useValue: pos },
         { provide: IntegrationOpsApi, useValue: { outboxFailures: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
         { provide: FiscalApi, useValue: { blocked: vi.fn().mockResolvedValue({ documents: [], warning: null }) } },
+        { provide: ProvidersApi, useValue: providers },
         { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
         { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
@@ -131,5 +140,16 @@ describe('TenantIssueQueue', () => {
     await settle();
 
     expect(pos.resolve).toHaveBeenCalledWith('tenant-1', 'e3', 'ABSENT', 'the till was offline all morning', undefined);
+  });
+
+  it('lists a credential not rotated within the interval, and says how old it is', async () => {
+    await create([], [], [
+      { id: 'inst-1', kind: 'INSTALLATION', providerType: 'SMSGW_VAS', label: 'SMS gateway', lastRotatedAt: null, daysOld: 400 },
+    ]);
+
+    const row = fixture.nativeElement.querySelector('[data-credential="inst-1"]') as HTMLElement;
+    expect(row.textContent).toContain('SMSGW_VAS');
+    expect(row.textContent).toContain(ru['tenantIssueQueue.credentials.never'].replace('{days}', '400'));
+    expect(providers.credentialsDue).toHaveBeenCalledWith('tenant-1');
   });
 });

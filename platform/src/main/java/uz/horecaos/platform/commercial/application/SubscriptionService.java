@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
@@ -74,6 +75,32 @@ public class SubscriptionService {
             ActorRef actor,
             String reason,
             String correlationId) {
+        return start(tenantId, planVersionId, trialDays, 1, actor, reason, correlationId);
+    }
+
+    /**
+     * Puts a tenant on a plan version for a term (ADR 0093).
+     *
+     * <p>A term longer than a month must be one the version offers a discount
+     * for. With no trial named, the version's own trial applies.
+     */
+    @Transactional
+    public UUID start(
+            UUID tenantId,
+            UUID planVersionId,
+            @Nullable Integer requestedTrialDays,
+            int termMonths,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
+        PlanTerms terms = plans.termsOf(planVersionId);
+        if (termMonths != 1 && terms.discountFor(termMonths) == 0) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "This plan version offers no %d-month term".formatted(termMonths),
+                    Map.of("termMonths", termMonths));
+        }
+        Integer trialDays = requestedTrialDays != null ? requestedTrialDays : terms.trialDays();
 
         PlanVersion version = plans.findVersion(planVersionId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such plan version"));
@@ -115,13 +142,14 @@ public class SubscriptionService {
                 null,
                 1);
 
-        subscriptions.insert(subscription, now);
+        subscriptions.insert(subscription, termMonths, now);
 
         EntitlementSnapshot snapshot = entitlements.snapshot(tenantId);
         Map<String, Object> change = new HashMap<>();
         change.put("planCode", version.planCode());
         change.put("planVersionNumber", version.versionNumber());
         change.put("status", subscription.status().name());
+        change.put("termMonths", termMonths);
         change.put("entitlementHash", snapshot.hash());
 
         audit.record(AuditFact.of("commercial.subscription.started", AuditClass.BUSINESS)
@@ -277,6 +305,10 @@ public class SubscriptionService {
                 .occurredAt(now)
                 .build());
         return id;
+    }
+
+    public int termMonths(UUID subscriptionId) {
+        return subscriptions.termMonths(subscriptionId);
     }
 
     public Optional<Subscription> live(UUID tenantId) {

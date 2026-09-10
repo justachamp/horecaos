@@ -19,6 +19,7 @@ import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
+import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
@@ -73,7 +74,8 @@ public class CommercialControlPlaneController {
                     + "decision and showing one invites somebody to quote it.")
     public ResponseEntity<List<PlanVersionResponse>> planCatalogue() {
         return ResponseEntity.ok(plans.activeVersions().stream()
-                .map(version -> PlanVersionResponse.of(version, plans.entitlementsOf(version.id())))
+                .map(version -> PlanVersionResponse.of(
+                        version, plans.entitlementsOf(version.id()), plans.termsOf(version.id())))
                 .toList());
     }
 
@@ -86,7 +88,9 @@ public class CommercialControlPlaneController {
                 .orElseThrow(
                         () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
 
-        return ResponseEntity.ok().eTag(AggregateVersion.toETag(live.version())).body(SubscriptionResponse.of(live));
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(live.version()))
+                .body(SubscriptionResponse.of(live, subscriptions.termMonths(live.id())));
     }
 
     @GetMapping("/tenants/{tenantId}/entitlements")
@@ -122,9 +126,10 @@ public class CommercialControlPlaneController {
             int versionNumber,
             ApiMoney price,
             String billingPeriod,
-            List<EntitlementLine> entitlements) {
+            List<EntitlementLine> entitlements,
+            PlanTermsView terms) {
 
-        static PlanVersionResponse of(PlanVersion version, Map<String, PlanEntitlement> entitlements) {
+        static PlanVersionResponse of(PlanVersion version, Map<String, PlanEntitlement> entitlements, PlanTerms terms) {
             return new PlanVersionResponse(
                     version.id(),
                     version.planCode(),
@@ -133,9 +138,27 @@ public class CommercialControlPlaneController {
                     version.billingPeriod(),
                     entitlements.values().stream()
                             .map(line -> EntitlementLine.of(line, version.currency()))
+                            .toList(),
+                    PlanTermsView.of(terms, version.currency()));
+        }
+    }
+
+    /** What a plan version sells beside its price: a trial, a deposit, term discounts (ADR 0093). */
+    public record PlanTermsView(
+            @Nullable Integer trialDays, ApiMoney activationDeposit, List<TermDiscountView> termDiscounts) {
+
+        static PlanTermsView of(PlanTerms terms, String currency) {
+            return new PlanTermsView(
+                    terms.trialDays(),
+                    ApiMoney.of(terms.activationDepositMinor(), currency),
+                    terms.termDiscounts().entrySet().stream()
+                            .map(entry -> new TermDiscountView(entry.getKey(), entry.getValue()))
                             .toList());
         }
     }
+
+    /** A term in months and its discount in basis points of the monthly price. */
+    public record TermDiscountView(int termMonths, int discountBasisPoints) {}
 
     /** One line of a plan: the limit, the boundary behaviour, and the overage rate. */
     public record EntitlementLine(
@@ -171,9 +194,10 @@ public class CommercialControlPlaneController {
             String currentPeriodEnd,
             @Nullable String suspensionReason,
             long version,
-            List<String> allowedNext) {
+            List<String> allowedNext,
+            int termMonths) {
 
-        static SubscriptionResponse of(Subscription subscription) {
+        static SubscriptionResponse of(Subscription subscription, int termMonths) {
             return new SubscriptionResponse(
                     subscription.id(),
                     subscription.planVersionId(),
@@ -188,7 +212,8 @@ public class CommercialControlPlaneController {
                     subscription.status().allowedNext().stream()
                             .map(Enum::name)
                             .sorted()
-                            .toList());
+                            .toList(),
+                    termMonths);
         }
 
         private static @Nullable String text(java.time.@Nullable Instant instant) {

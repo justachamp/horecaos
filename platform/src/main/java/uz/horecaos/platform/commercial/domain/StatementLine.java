@@ -19,6 +19,7 @@ public record StatementLine(
     public static final String PLAN = "PLAN";
     public static final String MODULE = "MODULE";
     public static final String OVERAGE = "OVERAGE";
+    public static final String DEPOSIT = "DEPOSIT";
 
     public static StatementLine of(
             int lineNumber, String kind, String referenceCode, String description, long quantity, long unitPriceMinor) {

@@ -57,6 +57,16 @@ export interface ConnectionCheck {
   readonly capabilities?: Readonly<Record<string, unknown>>;
 }
 
+/** A credential older than the rotation interval: an installation's or a payment merchant account's. */
+export interface DueCredential {
+  readonly kind: 'INSTALLATION' | 'MERCHANT_ACCOUNT' | (string & {});
+  readonly id: string;
+  readonly providerType: string;
+  readonly label: string;
+  readonly lastRotatedAt: string | null;
+  readonly daysOld: number;
+}
+
 /** An approved provider endpoint a tenant can be installed against; tenants never supply a URL. */
 export interface ProviderEnvironment {
   readonly code: string;
@@ -265,6 +275,15 @@ export class ProvidersApi {
       this.api.post<unknown>(`/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/settings`, {
         requireClerkApproval,
       }),
+    );
+  }
+
+  /** The tenant's credentials older than the rotation interval, oldest first. */
+  async credentialsDue(tenantId: string): Promise<{ rotationIntervalDays: number; credentials: DueCredential[] }> {
+    return firstValueFrom(
+      this.api.get<{ rotationIntervalDays: number; credentials: DueCredential[] }>(
+        `/api/v1/control-plane/tenants/${tenantId}/credentials-due`,
+      ),
     );
   }
 
