@@ -11,10 +11,10 @@ import { MessageKey } from '../core/i18n/messages.en';
  * 22 screens) has a route here. A screen the backend cannot support yet
  * still gets a route -- it renders the "not built" state rather than being
  * hidden, because a grey rail item invites "is this broken?" while an
- * absent one invites nothing. 3-tier rows (wave 3, and the single row this
- * document defers on a decision) are deliberately absent: a navigation
- * entry that leads nowhere is worse than one that does not exist yet, and
- * unlike the tier-2 gaps above, nobody is waiting on these this wave.
+ * absent one invites nothing. The one 3-tier row, Dunning, has a route now
+ * that its screen exists; a navigation entry that leads nowhere is worse
+ * than one that does not exist yet, so a tier-3 row joins the rail only
+ * with its screen.
  *
  * `group` is a rail section heading (IA §1-10), shown once above the first
  * routed item that carries it; items with the same `group` value render
