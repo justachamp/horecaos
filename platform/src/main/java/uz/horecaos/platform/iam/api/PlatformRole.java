@@ -58,11 +58,18 @@ public enum PlatformRole {
      */
     PLATFORM_ADMIN("platform-admin", ScopeType.PLATFORM, EnumSet.complementOf(EnumSet.of(COURIER_TRACK_REVEAL))),
 
-    /** Read-only cross-tenant support. Deliberately excludes every mutation. */
+    /**
+     * Read-only cross-tenant support. Deliberately excludes every mutation of
+     * tenant data. The one act it holds is opening a support session (ADR
+     * 0081): anything more than looking happens inside one, time-boxed, with a
+     * reason the tenant can read.
+     */
     PLATFORM_SUPPORT(
             "platform-support",
             ScopeType.PLATFORM,
             EnumSet.of(
+                    SUPPORT_SESSION_START,
+                    SUPPORT_SESSION_READ,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,
@@ -269,6 +276,8 @@ public enum PlatformRole {
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
                     IAM_GRANT_MANAGE,
+                    // ADR 0081: who from HorecaOS entered this account, and why.
+                    SUPPORT_SESSION_READ,
                     REPORTING_READ,
                     AUDIT_READ)),
 
@@ -404,6 +413,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
                     IAM_GRANT_MANAGE,
+                    // ADR 0081: who from HorecaOS entered this account, and why.
+                    SUPPORT_SESSION_READ,
                     REPORTING_READ)),
 
     /**
@@ -662,6 +673,80 @@ public enum PlatformRole {
      */
     KITCHEN_DEVICE("kitchen-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_TICKET_ADVANCE)),
 
+    /**
+     * ADR 0081: what a HorecaOS support person may see inside one tenant during
+     * a support session. The platform-support reads, narrowed to the tenant,
+     * and the few operational reads a fault is usually found in. Conferred only
+     * by a support session and never grantable by hand; no reveal, no export.
+     */
+    SUPPORT_SESSION_VIEW(
+            "support-session-view",
+            ScopeType.TENANT,
+            EnumSet.of(
+                    SUPPORT_SESSION_READ,
+                    TENANT_READ,
+                    BRAND_READ,
+                    LOCATION_READ,
+                    CATALOG_READ,
+                    CHANNEL_READ,
+                    INVENTORY_READ,
+                    PRICING_READ,
+                    ORDER_READ,
+                    CUSTOMER_READ,
+                    KITCHEN_TICKET_READ,
+                    DELIVERY_PLAN_READ,
+                    FISCAL_DOCUMENT_READ,
+                    POS_EXPORT_READ,
+                    NOTIFICATION_READ,
+                    INTEGRATION_FAILURE_READ,
+                    REPORTING_READ,
+                    AUDIT_READ)),
+
+    /**
+     * ADR 0081: the view above plus the order-floor acts a support person is
+     * asked to do on a restaurant's behalf — move, amend or cancel a stuck
+     * order, mark an item unavailable, close a branch for an hour, settle a POS
+     * export, assign a courier. Everything here is something the tenant's own
+     * location manager can already do. Nothing that moves money (refunds,
+     * courier cash, paid hours), reveals a customer, publishes a catalogue or
+     * changes who has access.
+     */
+    SUPPORT_SESSION_ASSIST(
+            "support-session-assist",
+            ScopeType.TENANT,
+            EnumSet.of(
+                    SUPPORT_SESSION_READ,
+                    TENANT_READ,
+                    BRAND_READ,
+                    LOCATION_READ,
+                    CATALOG_READ,
+                    CHANNEL_READ,
+                    INVENTORY_READ,
+                    PRICING_READ,
+                    ORDER_READ,
+                    CUSTOMER_READ,
+                    KITCHEN_TICKET_READ,
+                    DELIVERY_PLAN_READ,
+                    FISCAL_DOCUMENT_READ,
+                    POS_EXPORT_READ,
+                    NOTIFICATION_READ,
+                    INTEGRATION_FAILURE_READ,
+                    REPORTING_READ,
+                    AUDIT_READ,
+                    ORDER_APPROVE,
+                    ORDER_ADVANCE,
+                    ORDER_AMEND,
+                    ORDER_CANCEL,
+                    OFFERING_MANAGE,
+                    LOCATION_SERVICE_STATE_CHANGE,
+                    KITCHEN_TICKET_ADVANCE,
+                    KITCHEN_TICKET_RECALL,
+                    KITCHEN_TICKET_RELEASE,
+                    DELIVERY_MANUAL_ASSIGN,
+                    RECOVERY_CASE_MANAGE,
+                    POS_EXPORT_RESOLVE,
+                    MARKETPLACE_AVAILABILITY_PUSH)),
+
     COURIER_DISPATCHER(
             "courier-dispatcher",
             ScopeType.BRAND,
@@ -759,6 +844,14 @@ public enum PlatformRole {
 
     public boolean grants(Capability capability) {
         return capabilities.contains(capability);
+    }
+
+    /**
+     * ADR 0081: conferred only by opening a support session, never granted by
+     * hand and never offered to a tenant as a job to give its staff.
+     */
+    public boolean supportSessionOnly() {
+        return this == SUPPORT_SESSION_VIEW || this == SUPPORT_SESSION_ASSIST;
     }
 
     public static Optional<PlatformRole> find(String code) {

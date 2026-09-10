@@ -79,7 +79,7 @@ export const routes: Routes = [
       },
       {
         path: 'tenants/:tenantId/impersonation',
-        canActivate: [requiresCapability('TENANT_READ')],
+        canActivate: [requiresCapability('SUPPORT_SESSION_READ')],
         loadComponent: () =>
           import('./features/tenants/tenant-impersonation').then((m) => m.TenantImpersonation),
       },

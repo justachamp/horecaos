@@ -14,4 +14,5 @@ window.horecaosControlPlaneConfig = {
   issuerUrl: '${APP_ISSUER_URL}',
   clientId: '${APP_CLIENT_ID}',
   displayTimeZone: '${APP_DISPLAY_TIME_ZONE}',
+  operationsAppUrl: '${APP_OPERATIONS_URL}',
 };

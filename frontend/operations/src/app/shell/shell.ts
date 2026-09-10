@@ -7,6 +7,7 @@ import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { NAVIGATION } from './navigation';
 import { ServiceStatus } from './service-status';
+import { SupportBanner } from './support-banner';
 
 /**
  * The console shell: rail, top bar, and the routed view.
@@ -44,7 +45,7 @@ import { ServiceStatus } from './service-status';
  */
 @Component({
   selector: 'q-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

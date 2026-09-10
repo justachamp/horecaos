@@ -48,7 +48,8 @@ public final class TenantRoleCatalog {
         return Arrays.stream(PlatformRole.values())
                 .filter(role -> role != PlatformRole.PLATFORM_ADMIN
                         && role != PlatformRole.PLATFORM_SUPPORT
-                        && role != PlatformRole.KITCHEN_DEVICE)
+                        && role != PlatformRole.KITCHEN_DEVICE
+                        && !role.supportSessionOnly())
                 .map(RoleDescriptor::of)
                 .toList();
     }

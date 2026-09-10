@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -195,6 +196,42 @@ class PlatformRoleTests {
                 .as("cross-tenant support is read-only by construction")
                 .doesNotContainAnyElementsOf(mutations);
         assertThat(PlatformRole.PLATFORM_SUPPORT.grants(Capability.ORDER_READ)).isTrue();
+    }
+
+    @Test
+    void aSupportSessionHoldsNothingTheTenantsOwnPeopleCouldNotAndNothingThatMovesMoneyOrReveals() {
+        Set<Capability> tenantsOwn = EnumSet.noneOf(Capability.class);
+        tenantsOwn.addAll(PlatformRole.TENANT_ADMIN.capabilities());
+        tenantsOwn.addAll(PlatformRole.LOCATION_MANAGER.capabilities());
+        tenantsOwn.addAll(PlatformRole.PLATFORM_SUPPORT.capabilities());
+        Set<Capability> never = EnumSet.of(
+                Capability.REFUND_REQUEST,
+                Capability.REFUND_EXECUTE,
+                Capability.CUSTOMER_PII_REVEAL,
+                Capability.AUDIENCE_EXPORT,
+                Capability.IAM_GRANT_MANAGE,
+                Capability.CATALOG_PUBLISH,
+                Capability.COURIER_CASH_CONFIRM,
+                Capability.COURIER_ADJUSTMENT_CREATE,
+                Capability.SUPPORT_SESSION_START);
+
+        List<PlatformRole> support = Arrays.stream(PlatformRole.values())
+                .filter(PlatformRole::supportSessionOnly)
+                .toList();
+        assertThat(support)
+                .containsExactlyInAnyOrder(PlatformRole.SUPPORT_SESSION_VIEW, PlatformRole.SUPPORT_SESSION_ASSIST);
+        for (PlatformRole role : support) {
+            assertThat(role.scopeType()).isEqualTo(ResourceScope.ScopeType.TENANT);
+            assertThat(tenantsOwn)
+                    .as("%s: support does only what the tenant's own administrator or manager could", role)
+                    .containsAll(role.capabilities());
+            assertThat(role.capabilities())
+                    .as("%s: no money, no reveal, no access changes, and no session opening another", role)
+                    .doesNotContainAnyElementsOf(never);
+            assertThat(role.capabilities().stream().filter(c -> c.action().endsWith("reveal")))
+                    .isEmpty();
+        }
+        assertThat(PlatformRole.SUPPORT_SESSION_VIEW.capabilities()).allMatch(Capability::isRead, "VIEW only looks");
     }
 
     @Test
