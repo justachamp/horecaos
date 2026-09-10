@@ -348,7 +348,15 @@ services:
       # platform/compose.production.yaml's own long comment on why: a
       # presigned URL is handed to a browser, and the presigner and the
       # browser must agree on which host the signature was computed for.
-      HORECAOS_MEDIA_ENDPOINT: ${HORECAOS_MEDIA_ORIGIN}
+      # Defaults to the public media origin, which is where MinIO sits in the
+      # in-stack topology this file was written for. An environment whose
+      # object storage is a managed service sets HORECAOS_MEDIA_ENDPOINT to
+      # that service's own endpoint instead: the application uses this value
+      # both to reach the store and to sign the URLs it hands out, so the two
+      # move together and presigned uploads then go straight to the provider
+      # rather than through this host's edge -- which also takes them out from
+      # under any CDN request-body limit in front of the media origin.
+      HORECAOS_MEDIA_ENDPOINT: ${HORECAOS_MEDIA_ENDPOINT:-${HORECAOS_MEDIA_ORIGIN}}
       HORECAOS_MEDIA_BUCKET: ${HORECAOS_MEDIA_BUCKET:-horecaos-media}
       HORECAOS_MEDIA_REGION: ${HORECAOS_MEDIA_REGION:-us-east-1}
       HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
