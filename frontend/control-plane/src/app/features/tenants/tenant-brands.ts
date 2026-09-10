@@ -86,6 +86,18 @@ export class TenantBrands {
   protected readonly editTimezone = signal('');
   protected readonly editSubmitting = signal(false);
 
+  /** The location whose address and pin are being edited. */
+  protected readonly placeFor = signal<LocationView | null>(null);
+  protected readonly placeAddress = signal('');
+  protected readonly placeDistrict = signal('');
+  protected readonly placeCity = signal('');
+  protected readonly placeLandmark = signal('');
+  protected readonly placePhone = signal('');
+  protected readonly placeLatitude = signal('');
+  protected readonly placeLongitude = signal('');
+  protected readonly placeSubmitting = signal(false);
+  protected readonly placeError = signal<string | null>(null);
+
   /** The brand or location whose Delete has been pressed once and awaits confirmation. */
   protected readonly confirmingDelete = signal<string | null>(null);
   protected readonly deleting = signal(false);
@@ -326,6 +338,93 @@ export class TenantBrands {
     } finally {
       this.editSubmitting.set(false);
     }
+  }
+
+  protected openPlace(location: LocationView): void {
+    this.placeFor.set(location);
+    this.placeAddress.set(location.addressLine ?? '');
+    this.placeDistrict.set(location.district ?? '');
+    this.placeCity.set(location.city ?? '');
+    this.placeLandmark.set(location.landmark ?? '');
+    this.placePhone.set(location.contactPhone ?? '');
+    this.placeLatitude.set(location.latitude === null ? '' : String(location.latitude));
+    this.placeLongitude.set(location.longitude === null ? '' : String(location.longitude));
+    this.placeError.set(null);
+    this.actionError.set(null);
+    this.confirmingDelete.set(null);
+  }
+
+  protected closePlace(): void {
+    this.placeFor.set(null);
+  }
+
+  /**
+   * The same checks the server makes, so the common mistakes are named here in
+   * the operator's language instead of coming back as a validation failure.
+   */
+  private placeProblem(): string | null {
+    const latitude = this.placeLatitude().trim();
+    const longitude = this.placeLongitude().trim();
+    if ((latitude === '') !== (longitude === '')) {
+      return this.i18n.t('tenantBrands.place.pairError');
+    }
+    if (latitude !== '') {
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        return this.i18n.t('tenantBrands.place.rangeError');
+      }
+    }
+    const phone = this.placePhone().trim();
+    if (phone !== '' && !/^\+[1-9][0-9]{7,14}$/.test(phone)) {
+      return this.i18n.t('tenantBrands.place.phoneError');
+    }
+    return null;
+  }
+
+  protected async submitPlace(event: Event): Promise<void> {
+    event.preventDefault();
+    const location = this.placeFor();
+    if (location === null || this.placeSubmitting()) {
+      return;
+    }
+    const problem = this.placeProblem();
+    if (problem !== null) {
+      this.placeError.set(problem);
+      return;
+    }
+    const orNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
+    const latitude = orNull(this.placeLatitude());
+    const longitude = orNull(this.placeLongitude());
+    this.placeSubmitting.set(true);
+    this.placeError.set(null);
+    try {
+      const described = await this.tenantsApi.describeLocation(this.tenantId, location, {
+        addressLine: orNull(this.placeAddress()),
+        district: orNull(this.placeDistrict()),
+        city: orNull(this.placeCity()),
+        landmark: orNull(this.placeLandmark()),
+        contactPhone: orNull(this.placePhone()),
+        latitude: latitude === null ? null : Number(latitude),
+        longitude: longitude === null ? null : Number(longitude),
+        // Entered here by platform staff, so a point is an operator's pin.
+        ...(latitude === null ? {} : { coordinateSource: 'OPERATOR_PIN' as const }),
+      });
+      this.replaceLocation(described.brandId, described.id, described);
+      this.placeFor.set(null);
+    } catch (error) {
+      this.placeError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.placeSubmitting.set(false);
+    }
+  }
+
+  /** The address as one line for the table, or null when nothing is recorded. */
+  protected addressSummary(location: LocationView): string | null {
+    const parts = [location.addressLine, location.district, location.city].filter(
+      (part): part is string => part !== null && part.trim() !== '',
+    );
+    return parts.length === 0 ? null : parts.join(', ');
   }
 
   protected askDelete(id: string): void {

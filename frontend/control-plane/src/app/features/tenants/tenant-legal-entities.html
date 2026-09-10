@@ -16,6 +16,9 @@
   @if (actionError(); as message) {
     <p class="q-body-sm error">{{ message }}</p>
   }
+  @if (assignDone(); as done) {
+    <p class="q-body-sm muted">{{ done }}</p>
+  }
 
   @if (entities().length === 0) {
     <p class="q-body-sm state">{{ i18n.t('legalEntities.empty') }}</p>
@@ -44,12 +47,96 @@
                 <button type="button" (click)="activate(entity)">{{ i18n.t('legalEntities.activate') }}</button>
               }
               <button type="button" (click)="openAssign(entity.id)">{{ i18n.t('legalEntities.assign.action') }}</button>
+              <button type="button" (click)="toggleDetails(entity.id)">
+                {{ detailsOpen() === entity.id ? i18n.t('legalEntities.details.hide') : i18n.t('legalEntities.details.show') }}
+              </button>
             </td>
           </tr>
+          @if (detailsOpen() === entity.id) {
+            <tr class="detailRow">
+              <td colspan="5">
+                <dl class="details">
+                  <div><dt class="q-caption">{{ i18n.t('legalEntities.details.code') }}</dt><dd class="q-body-sm q-tnum">{{ entity.code }}</dd></div>
+                  <div><dt class="q-caption">{{ i18n.t('legalEntities.details.shortName') }}</dt><dd class="q-body-sm">{{ entity.shortName ?? i18n.t('legalEntities.details.none') }}</dd></div>
+                  <div><dt class="q-caption">{{ i18n.t('legalEntities.details.registeredAddress') }}</dt><dd class="q-body-sm">{{ entity.registeredAddress ?? i18n.t('legalEntities.details.none') }}</dd></div>
+                  <div><dt class="q-caption">{{ i18n.t('legalEntities.details.contactPhone') }}</dt><dd class="q-body-sm q-tnum">{{ entity.contactPhone ?? i18n.t('legalEntities.details.none') }}</dd></div>
+                  <div><dt class="q-caption">{{ i18n.t('legalEntities.details.vatCertificate') }}</dt><dd class="q-body-sm">{{ entity.vatCertificateReference ?? i18n.t('legalEntities.details.none') }}</dd></div>
+                </dl>
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
   }
+}
+
+@if (!loading() && !loadError()) {
+  <section class="locations">
+    <h2 class="q-subhead">{{ i18n.t('legalEntities.locations.title') }}</h2>
+    <p class="q-body-sm muted">{{ i18n.t('legalEntities.locations.lead') }}</p>
+    @if (locations().length === 0) {
+      <p class="q-body-sm state">{{ i18n.t('legalEntities.assign.noLocations') }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('legalEntities.locations.column.location') }}</th>
+            <th class="q-caption">{{ i18n.t('legalEntities.locations.column.entity') }}</th>
+            <th class="q-caption">{{ i18n.t('legalEntities.locations.column.since') }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (pick of locations(); track pick.location.id) {
+            <tr>
+              <td class="q-body-sm">{{ pick.brand.displayName }} › {{ pick.location.displayName }}</td>
+              @if (currentAssignment(pick.location.id); as current) {
+                <td class="q-body-sm">
+                  {{ entity(current.legalEntityId)?.legalName ?? current.legalEntityId }}
+                  @if (entity(current.legalEntityId)?.status !== 'ACTIVE') {
+                    <span class="pill pill-DRAFT">{{ i18n.t('legalEntities.locations.inactive') }}</span>
+                  }
+                </td>
+                <td class="q-body-sm q-tnum">{{ current.effectiveFrom }}</td>
+              } @else {
+                <td class="q-body-sm"><span class="pill pill-SUSPENDED">{{ i18n.t('legalEntities.locations.unassigned') }}</span></td>
+                <td class="q-body-sm"></td>
+              }
+              <td class="q-body-sm actionsCell">
+                <button type="button" (click)="toggleHistory(pick.location.id)">
+                  {{ historyOpen() === pick.location.id ? i18n.t('legalEntities.locations.hideHistory') : i18n.t('legalEntities.locations.showHistory') }}
+                </button>
+              </td>
+            </tr>
+            @if (historyOpen() === pick.location.id) {
+              <tr class="detailRow">
+                <td colspan="4">
+                  @if (history(pick.location.id).length === 0) {
+                    <p class="q-body-sm muted">{{ i18n.t('legalEntities.locations.noHistory') }}</p>
+                  } @else {
+                    <ul class="history">
+                      @for (a of history(pick.location.id); track a.id) {
+                        <li class="q-body-sm">
+                          <span>{{ entity(a.legalEntityId)?.legalName ?? a.legalEntityId }}</span>
+                          <span class="muted q-tnum">
+                            {{ a.effectiveUntil === null
+                              ? i18n.t('legalEntities.history.open', { from: a.effectiveFrom })
+                              : i18n.t('legalEntities.history.range', { from: a.effectiveFrom, until: a.effectiveUntil }) }}
+                          </span>
+                          <span class="muted">{{ i18n.t('legalEntities.history.approvedBy', { who: a.approvedBy }) }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    }
+  </section>
 }
 
 @if (registering()) {
@@ -89,14 +176,19 @@
   <form class="drawer" (submit)="submitAssign($event)">
     <h2 class="q-subhead">{{ i18n.t('legalEntities.assign.title') }}</h2>
     <p class="q-body-sm muted">{{ i18n.t('legalEntities.assign.lead') }}</p>
-    <label class="field">
-      <span class="q-caption">{{ i18n.t('legalEntities.assign.brandId') }}</span>
-      <input class="q-body-sm" type="text" [value]="assignBrandId()" (input)="assignBrandId.set($any($event.target).value)" required />
-    </label>
-    <label class="field">
-      <span class="q-caption">{{ i18n.t('legalEntities.assign.locationId') }}</span>
-      <input class="q-body-sm" type="text" [value]="assignLocationId()" (input)="assignLocationId.set($any($event.target).value)" required />
-    </label>
+    @if (locations().length === 0) {
+      <p class="q-body-sm error">{{ i18n.t('legalEntities.assign.noLocations') }}</p>
+    } @else {
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('legalEntities.assign.location') }}</span>
+        <select class="q-body-sm" name="location" [value]="assignLocationKey()" (change)="assignLocationKey.set($any($event.target).value)" required>
+          <option value="">{{ i18n.t('legalEntities.assign.chooseLocation') }}</option>
+          @for (pick of locations(); track pick.location.id) {
+            <option [value]="pick.brand.id + '/' + pick.location.id">{{ pick.brand.displayName }} › {{ pick.location.displayName }}</option>
+          }
+        </select>
+      </label>
+    }
     <label class="field">
       <span class="q-caption">{{ i18n.t('legalEntities.assign.effectiveFrom') }}</span>
       <input class="q-body-sm" type="date" [value]="assignEffectiveFrom()" (input)="assignEffectiveFrom.set($any($event.target).value)" required />

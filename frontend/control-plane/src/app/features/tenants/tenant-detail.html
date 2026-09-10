@@ -40,6 +40,44 @@
     </dl>
   </section>
 
+  @if (session.has('PLATFORM_ADMIN')) {
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('tenantDetail.status.title') }}</h2>
+      <p class="q-body-sm">
+        <span class="pill" [class]="'pill-' + t.status">{{ i18n.t(statusKey(t.status)) }}</span>
+      </p>
+      @if (statusDone(); as done) {
+        <p class="q-body-sm muted">{{ done }}</p>
+      }
+      @if (changing(); as change) {
+        <form class="statusForm" (submit)="confirmStatusChange($event)">
+          <p class="q-body-sm muted">
+            {{ change === 'suspend' ? i18n.t('tenantDetail.status.suspendLead') : i18n.t('tenantDetail.status.reactivateLead') }}
+          </p>
+          <label class="field">
+            <span class="q-caption">{{ i18n.t('tenantDetail.status.reason') }}</span>
+            <input class="q-body-sm" type="text" name="reason" [value]="reason()" (input)="reason.set($any($event.target).value)" required />
+          </label>
+          @if (statusError(); as message) {
+            <p class="q-body-sm error">{{ message }}</p>
+          }
+          <div class="formActions">
+            <button type="button" class="q-body-sm" (click)="cancelStatusChange()">{{ i18n.t('tenants.create.cancel') }}</button>
+            <button type="submit" class="q-body-sm" [class.danger]="change === 'suspend'" [disabled]="working() || reason().trim().length === 0">
+              {{ working() ? i18n.t('tenantDetail.status.working') : change === 'suspend' ? i18n.t('tenantDetail.status.confirmSuspend') : i18n.t('tenantDetail.status.confirmReactivate') }}
+            </button>
+          </div>
+        </form>
+      } @else if (t.status === 'ACTIVE') {
+        <button type="button" class="q-body-sm statusAction danger" (click)="openStatusChange('suspend')">{{ i18n.t('tenantDetail.status.suspend') }}</button>
+      } @else if (t.status === 'SUSPENDED') {
+        <button type="button" class="q-body-sm statusAction" (click)="openStatusChange('reactivate')">{{ i18n.t('tenantDetail.status.reactivate') }}</button>
+      } @else {
+        <p class="q-body-sm muted">{{ i18n.t('tenantDetail.status.notYetLive') }}</p>
+      }
+    </section>
+  }
+
   <section class="panel">
     <h2 class="q-subhead">{{ i18n.t('tenantDetail.brands.title') }}</h2>
     @if (brands().length === 0) {
