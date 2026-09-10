@@ -20,6 +20,17 @@ export interface PlatformGrantResponse {
   readonly approvalRequestId: string | null;
 }
 
+/** AuditQueryService.AuditEventDetail: the list row plus what the list leaves out on purpose. */
+export interface AuditEventDetail extends AuditEventView {
+  readonly onBehalfOfSubject: string | null;
+  readonly targetVersion: number | null;
+  readonly changeDocument: Readonly<Record<string, unknown>> | null;
+  readonly evidenceReference: string | null;
+  readonly approvalRequestId: string | null;
+  readonly correlationId: string;
+  readonly occurredAt: string;
+}
+
 /** GrantManagementService.GrantView. */
 export interface TenantGrantView {
   readonly id: string;
@@ -219,9 +230,25 @@ export class AccessApi {
     );
   }
 
-  async auditEvents(tenantId: string): Promise<Page<AuditEventView>> {
+  /** One page of a tenant's audit events, newest first; filters are exact matches. */
+  async auditEvents(
+    tenantId: string,
+    filters: { readonly actionCode?: string; readonly outcome?: string } = {},
+    cursor: string | null = null,
+  ): Promise<Page<AuditEventView>> {
     return firstValueFrom(
-      this.api.getPage<AuditEventView>(`/api/v1/control-plane/tenants/${tenantId}/audit-events`),
+      this.api.getPage<AuditEventView>(
+        `/api/v1/control-plane/tenants/${tenantId}/audit-events`,
+        { cursor, limit: 50 },
+        { query: { actionCode: filters.actionCode || undefined, outcome: filters.outcome || undefined } },
+      ),
+    );
+  }
+
+  /** The full record, change document included. The read is itself audited server-side. */
+  async auditEvent(tenantId: string, eventId: string): Promise<AuditEventDetail> {
+    return firstValueFrom(
+      this.api.get<AuditEventDetail>(`/api/v1/control-plane/tenants/${tenantId}/audit-events/${eventId}`),
     );
   }
 

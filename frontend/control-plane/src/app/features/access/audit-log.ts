@@ -6,7 +6,7 @@ import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
-import { AccessApi, AuditEventView } from './access-api';
+import { AccessApi, AuditEventDetail, AuditEventView } from './access-api';
 
 /**
  * IA 7.5 Audit log -- platform actions, non-human actors first-class
@@ -40,6 +40,13 @@ export class AuditLog {
   protected readonly loadError = signal<string | null>(null);
   protected readonly events = signal<readonly AuditEventView[]>([]);
   protected readonly searched = signal(false);
+  protected readonly actionCode = signal('');
+  protected readonly outcome = signal('');
+  protected readonly nextCursor = signal<string | null>(null);
+  protected readonly loadingMore = signal(false);
+  protected readonly openId = signal<string | null>(null);
+  protected readonly detail = signal<AuditEventDetail | null>(null);
+  protected readonly detailError = signal<string | null>(null);
 
   constructor() {
     if (this.tenantId().length > 0) {
@@ -65,12 +72,64 @@ export class AuditLog {
     this.loadError.set(null);
     this.searched.set(true);
     try {
-      const page = await this.api.auditEvents(tenantId);
+      const page = await this.api.auditEvents(tenantId, { actionCode: this.actionCode().trim(), outcome: this.outcome() });
       this.events.set(page.items);
+      this.nextCursor.set(page.nextCursor);
+      this.openId.set(null);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  protected async loadMore(): Promise<void> {
+    const cursor = this.nextCursor();
+    if (cursor === null || this.loadingMore()) {
+      return;
+    }
+    this.loadingMore.set(true);
+    try {
+      const page = await this.api.auditEvents(
+        this.tenantId(),
+        { actionCode: this.actionCode().trim(), outcome: this.outcome() },
+        cursor,
+      );
+      this.events.update((events) => [...events, ...page.items]);
+      this.nextCursor.set(page.nextCursor);
+    } catch (error) {
+      this.loadError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+
+  /**
+   * The full record is fetched only when asked for: the list leaves the change
+   * document out on purpose, and each read of it is audited server-side.
+   */
+  protected async toggle(event: AuditEventView): Promise<void> {
+    if (this.openId() === event.id) {
+      this.openId.set(null);
+      return;
+    }
+    this.openId.set(event.id);
+    this.detail.set(null);
+    this.detailError.set(null);
+    try {
+      this.detail.set(await this.api.auditEvent(this.tenantId(), event.id));
+    } catch (error) {
+      this.detailError.set(this.i18n.describe(error as ApiError));
+    }
+  }
+
+  protected changeText(detail: AuditEventDetail): string | null {
+    return detail.changeDocument === null ? null : JSON.stringify(detail.changeDocument, null, 2);
+  }
+
+  protected outcomeLabel(outcome: string): string {
+    return ['SUCCEEDED', 'REJECTED', 'FAILED'].includes(outcome)
+      ? this.i18n.t(`auditLog.outcome.${outcome as 'SUCCEEDED' | 'REJECTED' | 'FAILED'}`)
+      : outcome;
   }
 }

@@ -70,3 +70,77 @@
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.filters input,
+.filters select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.filters button,
+.rowButton,
+.more {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.more {
+  margin-top: 12px;
+}
+
+.detailRow td {
+  background: var(--q-surface-1, var(--q-canvas));
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+  margin: 8px 0 0;
+}
+
+.detail dt {
+  color: var(--q-ink-subtle);
+}
+
+.detail dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.changeTitle {
+  margin: 16px 0 6px;
+  color: var(--q-ink-subtle);
+}
+
+/* The change document is data, shown as recorded: monospace, and scrolling rather than wrapping. */
+.changeDocument {
+  font-family: var(--q-font-mono);
+  font-size: 12px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 12px;
+  margin: 0;
+  overflow-x: auto;
+  max-height: 360px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-error-text);
+}

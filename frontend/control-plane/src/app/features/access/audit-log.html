@@ -3,6 +3,19 @@
 
 <app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
 
+@if (tenantId() !== '') {
+  <form class="filters" (submit)="load($event)">
+    <input class="q-body-sm" type="text" name="actionCode" [placeholder]="i18n.t('auditLog.filter.action')" [value]="actionCode()" (input)="actionCode.set($any($event.target).value)" />
+    <select class="q-body-sm" name="outcome" [value]="outcome()" (change)="outcome.set($any($event.target).value)">
+      <option value="">{{ i18n.t('auditLog.filter.anyOutcome') }}</option>
+      <option value="SUCCEEDED">{{ i18n.t('auditLog.outcome.SUCCEEDED') }}</option>
+      <option value="REJECTED">{{ i18n.t('auditLog.outcome.REJECTED') }}</option>
+      <option value="FAILED">{{ i18n.t('auditLog.outcome.FAILED') }}</option>
+    </select>
+    <button type="submit">{{ i18n.t('auditLog.filter.apply') }}</button>
+  </form>
+}
+
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 } @else if (loadError(); as message) {
@@ -19,6 +32,7 @@
           <th class="q-caption">{{ i18n.t('auditLog.column.actor') }}</th>
           <th class="q-caption">{{ i18n.t('auditLog.column.target') }}</th>
           <th class="q-caption">{{ i18n.t('auditLog.column.outcome') }}</th>
+          <th class="q-caption"></th>
         </tr>
       </thead>
       <tbody>
@@ -30,10 +44,57 @@
               {{ event.actorType === 'SYSTEM' ? i18n.t('auditLog.actor.system') : event.actorDisplay ?? event.actorSubject }}
             </td>
             <td class="q-body-sm muted">{{ event.targetType }}</td>
-            <td class="q-body-sm">{{ event.outcome }}</td>
+            <td class="q-body-sm">{{ outcomeLabel(event.outcome) }}</td>
+            <td class="q-body-sm">
+              <button type="button" class="rowButton" (click)="toggle(event)">
+                {{ openId() === event.id ? i18n.t('auditLog.close') : i18n.t('auditLog.open') }}
+              </button>
+            </td>
           </tr>
+          @if (openId() === event.id) {
+            <tr class="detailRow">
+              <td colspan="6">
+                @if (detailError(); as message) {
+                  <p class="q-body-sm error">{{ message }}</p>
+                } @else if (detail(); as d) {
+                  <p class="q-caption muted">{{ i18n.t('auditLog.detail.lead') }}</p>
+                  <dl class="detail">
+                    <div><dt class="q-caption">{{ i18n.t('auditLog.detail.actor') }}</dt><dd class="q-body-sm">{{ d.actorDisplay ?? d.actorSubject }} · {{ d.actorType }}</dd></div>
+                    @if (d.onBehalfOfSubject) {
+                      <div><dt class="q-caption">{{ i18n.t('auditLog.detail.onBehalfOf') }}</dt><dd class="q-body-sm q-tnum">{{ d.onBehalfOfSubject }}</dd></div>
+                    }
+                    <div><dt class="q-caption">{{ i18n.t('auditLog.detail.scope') }}</dt><dd class="q-body-sm">{{ d.scopeType }} <span class="q-tnum muted">{{ d.scopeId ?? '' }}</span></dd></div>
+                    <div><dt class="q-caption">{{ i18n.t('auditLog.detail.target') }}</dt><dd class="q-body-sm">{{ d.targetType ?? '—' }} <span class="q-tnum muted">{{ d.targetId ?? '' }}{{ d.targetVersion !== null ? ' v' + d.targetVersion : '' }}</span></dd></div>
+                    @if (d.reason) {
+                      <div><dt class="q-caption">{{ i18n.t('auditLog.detail.reason') }}</dt><dd class="q-body-sm">{{ d.reason }}</dd></div>
+                    }
+                    @if (d.capabilityUsed) {
+                      <div><dt class="q-caption">{{ i18n.t('auditLog.detail.capability') }}</dt><dd class="q-body-sm q-tnum">{{ d.capabilityUsed }}</dd></div>
+                    }
+                    @if (d.approvalRequestId) {
+                      <div><dt class="q-caption">{{ i18n.t('auditLog.detail.approval') }}</dt><dd class="q-body-sm q-tnum">{{ d.approvalRequestId }}</dd></div>
+                    }
+                    <div><dt class="q-caption">{{ i18n.t('auditLog.detail.correlation') }}</dt><dd class="q-body-sm q-tnum">{{ d.correlationId }}</dd></div>
+                  </dl>
+                  <h3 class="q-caption changeTitle">{{ i18n.t('auditLog.detail.change') }}</h3>
+                  @if (changeText(d); as text) {
+                    <pre class="changeDocument">{{ text }}</pre>
+                  } @else {
+                    <p class="q-body-sm muted">{{ i18n.t('auditLog.detail.noChange') }}</p>
+                  }
+                } @else {
+                  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+                }
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
+    @if (nextCursor() !== null) {
+      <button type="button" class="more" [disabled]="loadingMore()" (click)="loadMore()">
+        {{ loadingMore() ? i18n.t('tenants.loading') : i18n.t('auditLog.more') }}
+      </button>
+    }
   }
 }
