@@ -3,6 +3,7 @@ package uz.horecaos.platform.audit.infrastructure.storage;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -32,6 +33,13 @@ import uz.horecaos.platform.iam.api.secrets.SecretResolver;
  * only wrapped inside {@link S3AuditArchiveStore}.
  */
 @Configuration
+// The same switch AuditPartitionArchiver carries, and for a reason that is not
+// symmetry: the archiver is this store's only consumer, and the store resolves
+// both object-storage secrets the moment it is built. Unguarded, turning
+// archival off still demanded its credentials at boot — so an environment whose
+// object store has no S3 Object Lock, which S3AuditArchiveStore requires and
+// GCS's S3 interoperability layer does not implement, could not start at all.
+@ConditionalOnProperty(name = "horecaos.audit.archive.enabled", havingValue = "true", matchIfMissing = true)
 public class AuditArchiveStorageConfiguration {
 
     @Bean

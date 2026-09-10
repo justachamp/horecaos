@@ -362,6 +362,15 @@ services:
       HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
       HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-secret-key
       HORECAOS_HANDOVER_PEPPER_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:handover-pepper
+      # ADR 0027's partition archive. Needs an object store with S3 Object Lock
+      # (GOVERNANCE mode, confirmed by read-back); a store without it cannot hold
+      # this evidence, and this must then be `false` rather than pointed at it.
+      # The secret references follow HORECAOS_ENVIRONMENT like every other one,
+      # built in application.yml, so only the endpoint and bucket live here.
+      HORECAOS_AUDIT_ARCHIVE_ENABLED: ${HORECAOS_AUDIT_ARCHIVE_ENABLED:-true}
+      HORECAOS_AUDIT_ARCHIVE_ENDPOINT: ${HORECAOS_AUDIT_ARCHIVE_ENDPOINT:-http://minio:9000}
+      HORECAOS_AUDIT_ARCHIVE_BUCKET: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:-horecaos-audit-archive}
+      HORECAOS_AUDIT_ARCHIVE_REGION: ${HORECAOS_AUDIT_ARCHIVE_REGION:-us-east-1}
 
       HORECAOS_API_DOCS_ENABLED: "false"
       HORECAOS_SWAGGER_UI_ENABLED: "false"
