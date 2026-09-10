@@ -136,7 +136,7 @@ class ConfigurationControllerTests {
                 .satisfies(key -> {
                     assertThat(key.owningModule()).isEqualTo("ordering");
                     assertThat(key.tenantVisible()).isTrue();
-                    assertThat(key.defaultValue()).isEqualTo(60);
+                    assertThat(key.defaultValue()).isEqualTo(240);
                 });
     }
 
@@ -152,7 +152,7 @@ class ConfigurationControllerTests {
         assertThat(java.util.Objects.requireNonNull(resolver.lastKey).code())
                 .isEqualTo(ConfigurationKeys.CART_EXPIRY_MINUTES.code());
         assertThat(resolver.lastScope).isEqualTo(ResourceScope.tenant(TENANT_ID));
-        assertThat(response.value()).isEqualTo(60);
+        assertThat(response.value()).isEqualTo(240);
         assertThat(response.cameFromDefault()).isTrue();
         assertThat(response.source()).isEqualTo("CODE_DEFAULT");
         assertThat(response.inspectedLevels()).hasSize(1);
@@ -263,7 +263,7 @@ class ConfigurationControllerTests {
         var request = new ConfigurationController.SetConfigurationValueRequest(
                 ScopeType.BRAND, TENANT_ID, BRAND_ID, null, false, null, 21L, null, null, null, "because");
 
-        controller.setValue(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.code(), request);
+        controller.setValue(ConfigurationKeys.CART_EXPIRY_MINUTES.code(), request);
 
         assertThat(values.lastScope).isEqualTo(ResourceScope.brand(TENANT_ID, BRAND_ID));
     }
@@ -275,7 +275,7 @@ class ConfigurationControllerTests {
         var request = new ConfigurationController.SetConfigurationValueRequest(
                 ScopeType.BRAND, TENANT_ID, BRAND_ID, null, true, null, null, null, null, null, "disable locally");
 
-        controller.setValue(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.code(), request);
+        controller.setValue(ConfigurationKeys.CART_EXPIRY_MINUTES.code(), request);
 
         assertThat(values.lastExplicitNull).isTrue();
         assertThat(values.lastValue).isNull();

@@ -59,6 +59,7 @@ import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -178,7 +179,8 @@ class DeliveryFeeResolutionTests {
                 resolver,
                 promoCodeStore,
                 new PromoCodeEligibilityService(promoCodeStore),
-                clock);
+                clock,
+                new FakeConfigurationResolver());
 
         seedTenancy();
         cityTariff = seedTashkentTariff();

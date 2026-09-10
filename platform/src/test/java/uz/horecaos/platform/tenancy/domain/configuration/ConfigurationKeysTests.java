@@ -32,8 +32,8 @@ class ConfigurationKeysTests {
 
     @Test
     void aRegisteredKeyResolves() {
-        assertThat(ConfigurationKeys.require("ordering.approval_timeout_seconds"))
-                .isSameAs(ConfigurationKeys.ORDER_APPROVAL_TIMEOUT_SECONDS);
+        assertThat(ConfigurationKeys.require("pricing.quote_ttl_seconds"))
+                .isSameAs(ConfigurationKeys.QUOTE_TTL_SECONDS);
     }
 
     @Test
@@ -61,10 +61,10 @@ class ConfigurationKeysTests {
 
     @Test
     void scopeRestrictionsAreHonoured() {
-        assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.LOCATION))
-                .as("quiet hours are deliberately not settable per location")
+        assertThat(ConfigurationKeys.CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN.isSettableAt(ScopeType.LOCATION))
+                .as("the phone-shape gate is deliberately not settable per location")
                 .isFalse();
-        assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.BRAND))
+        assertThat(ConfigurationKeys.CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN.isSettableAt(ScopeType.BRAND))
                 .isTrue();
     }
 

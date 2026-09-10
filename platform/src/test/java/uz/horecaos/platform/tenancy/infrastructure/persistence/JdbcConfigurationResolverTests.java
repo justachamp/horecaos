@@ -25,8 +25,14 @@ import uz.horecaos.platform.tenancy.api.ConfigurationKey;
  */
 class JdbcConfigurationResolverTests {
 
+    // A synthetic key, deliberately not any registered code: this class tests
+    // JdbcConfigurationResolver directly against hand-inserted rows and never
+    // goes through ConfigurationKeys or its startup validator, so nothing here
+    // needs a real declaration. (Not ordering.approval_timeout_seconds, which
+    // this field's code used to reuse before that key was deleted 2026-09-10
+    // in favor of the ordering.acceptance policy document's own field.)
     private static final ConfigurationKey<Integer> TIMEOUT = ConfigurationKey.of(
-                    "ordering.approval_timeout_seconds", Integer.class)
+                    "testing.resolver_probe_seconds", Integer.class)
             .defaultValue(600)
             .build();
 

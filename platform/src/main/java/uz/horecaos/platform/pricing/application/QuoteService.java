@@ -22,7 +22,9 @@ import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.PricingConfigurationKeys;
 import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
@@ -33,6 +35,7 @@ import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -50,10 +53,19 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private static final Logger log = LoggerFactory.getLogger(QuoteService.class);
 
     /**
-     * Long enough to finish a checkout, short enough that a sold-out item or a
-     * price change is caught before payment rather than after. Matches the
-     * ADR 0017 reservation TTL, so a hold never outlives the price it was
-     * taken for.
+     * The platform default: long enough to finish a checkout, short enough
+     * that a sold-out item or a price change is caught before payment rather
+     * than after. Matches the ADR 0017 reservation TTL, so a hold never
+     * outlives the price it was taken for — {@code
+     * PricingConfigurationKeyTests} keeps this literal equal to {@link
+     * PricingConfigurationKeys#QUOTE_TTL_SECONDS}'s own default so the two
+     * cannot drift apart.
+     *
+     * <p>Wired 2026-09-10 to {@code pricing.quote_ttl_seconds} (ADR 0030):
+     * {@link #quote} resolves the live TTL per tenant/brand/location rather
+     * than using this constant directly. It survives as the code default a
+     * tenant that has never overridden the key still gets, and as the number
+     * this class's own javadoc and tests can point at.
      */
     public static final Duration QUOTE_TTL = Duration.ofMinutes(15);
 
@@ -68,6 +80,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final JdbcPromoCodeStore promoCodes;
     private final PromoCodeEligibilityService promoCodeEligibility;
     private final Clock clock;
+    private final ConfigurationResolver configuration;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public QuoteService(
@@ -78,7 +91,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             DeliveryFeePort deliveryFees,
             JdbcPromoCodeStore promoCodes,
             PromoCodeEligibilityService promoCodeEligibility,
-            Clock clock) {
+            Clock clock,
+            ConfigurationResolver configuration) {
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
@@ -87,6 +101,20 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         this.promoCodes = promoCodes;
         this.promoCodeEligibility = promoCodeEligibility;
         this.clock = clock;
+        this.configuration = configuration;
+    }
+
+    /**
+     * The ADR 0030 quote TTL in force at this scope (ADR 0030,
+     * {@code pricing.quote_ttl_seconds}), falling back to {@link #QUOTE_TTL}
+     * only in the sense that the key's own code default is that same value —
+     * see {@link PricingConfigurationKeys#QUOTE_TTL_SECONDS}.
+     */
+    private Duration quoteTtl(UUID tenantId, UUID brandId, UUID locationId) {
+        Integer seconds = configuration.value(
+                PricingConfigurationKeys.QUOTE_TTL_SECONDS, ResourceScope.location(tenantId, brandId, locationId));
+        return Duration.ofSeconds(Objects.requireNonNull(
+                seconds, "pricing.quote_ttl_seconds declares a code default and never terminates on explicit null"));
     }
 
     /**
@@ -166,6 +194,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
 
         var result = engine.price(request, inputs, now);
 
+        Duration ttl = quoteTtl(request.tenantId(), request.brandId(), request.locationId());
         Quote quote = new Quote(
                 quoteId,
                 request.tenantId(),
@@ -184,7 +213,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 result.total(),
                 result.lines(),
                 result.adjustments(),
-                now.plus(QUOTE_TTL),
+                now.plus(ttl),
                 now);
 
         store.insertQuote(quote, request.idempotencyKey(), evidence(request, inputs, result));

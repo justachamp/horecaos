@@ -29,16 +29,22 @@ const ENFORCEMENT_CEILING: ConfigurationKeyView = {
   description: 'The strongest enforcement mode.',
 };
 
-// Registered but consumed nowhere -- must stay read-only.
-const CART_EXPIRY: ConfigurationKeyView = {
-  code: 'ordering.cart_expiry_minutes',
+// Registered but consumed nowhere -- must stay read-only. Deliberately not
+// any real key's code: ordering.cart_expiry_minutes filled this role until
+// 2026-09-10, when it was wired to CartService and moved into
+// WRITABLE_KEY_CODES, which would have made this fixture silently start
+// exercising the *writable* path instead of the read-only one it exists to
+// prove. A hypothetical code cannot go stale the same way the next real key
+// gets wired.
+const UNWIRED_KEY: ConfigurationKeyView = {
+  code: 'catalog.hypothetical_unwired_key',
   valueType: 'Integer',
   defaultValue: 60,
   settableScopes: ['PLATFORM', 'TENANT', 'BRAND', 'LOCATION'],
-  owningModule: 'ordering',
+  owningModule: 'catalog',
   tenantVisible: true,
   explicitNullTerminates: false,
-  description: 'Minutes an untouched cart stays active before expiring.',
+  description: 'A registered key with no consumer, for testing the read-only path.',
 };
 
 function resolutionFor(value: unknown, currentVersionAtScope: number | null): ConfigurationResolutionView {
@@ -102,7 +108,7 @@ describe('ConfigurationPolicy', () => {
 
   beforeEach(async () => {
     api = new FakeConfigurationApi();
-    api.listKeys.mockResolvedValue([ENFORCEMENT_CEILING, CART_EXPIRY]);
+    api.listKeys.mockResolvedValue([ENFORCEMENT_CEILING, UNWIRED_KEY]);
 
     await TestBed.configureTestingModule({
       imports: [ConfigurationPolicy],
@@ -130,7 +136,7 @@ describe('ConfigurationPolicy', () => {
   it('shows a key with no consumer as read-only, with no Save control', async () => {
     api.resolve.mockResolvedValue(resolutionFor(60, null));
 
-    await fillPicker(fixture, 'ordering.cart_expiry_minutes', 'TENANT', 'tenant-1');
+    await fillPicker(fixture, 'catalog.hypothetical_unwired_key', 'TENANT', 'tenant-1');
 
     expect(fixture.nativeElement.querySelector('.writeForm')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('ничего не читает');
@@ -251,8 +257,7 @@ describe('ConfigurationPolicy', () => {
   });
 
   it('rejects a non-integer value for an Integer-typed key before it ever reaches the server', async () => {
-    // ordering.cart_expiry_minutes has no consumer, so use a hypothetical
-    // Integer key with a consumer instead: telemetry.track_retention_days.
+    // Needs a writable Integer-typed key: telemetry.track_retention_days.
     const trackRetention: ConfigurationKeyView = {
       code: 'telemetry.track_retention_days',
       valueType: 'Integer',
@@ -263,7 +268,7 @@ describe('ConfigurationPolicy', () => {
       explicitNullTerminates: false,
       description: 'Days of track retention.',
     };
-    api.listKeys.mockResolvedValue([ENFORCEMENT_CEILING, CART_EXPIRY, trackRetention]);
+    api.listKeys.mockResolvedValue([ENFORCEMENT_CEILING, UNWIRED_KEY, trackRetention]);
     fixture = TestBed.createComponent(ConfigurationPolicy);
     fixture.detectChanges();
     await fixture.whenStable();

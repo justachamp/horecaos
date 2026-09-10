@@ -83,7 +83,12 @@ class CheckoutReservationStep {
         // silently reused when the earlier hold has lapsed.
         Map<UUID, Integer> quantities = quantitiesOf(quote);
         ReservationResult reservation = inventory.reserveForQuote(
-                command.tenantId(), command.brandId(), cart.locationId(), command.quoteId(), quantities);
+                command.tenantId(),
+                command.brandId(),
+                cart.locationId(),
+                command.quoteId(),
+                quote.expiresAt(),
+                quantities);
         if (!reservation.isHeld()) {
             promoCodes.release(command.tenantId(), command.quoteId());
             return new ItemsUnavailable(reservation.refusal());

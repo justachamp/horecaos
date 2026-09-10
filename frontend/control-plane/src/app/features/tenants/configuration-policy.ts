@@ -14,21 +14,44 @@ import {
 /**
  * Key codes this screen offers a Save control for.
  *
- * `ConfigurationKeys` (ADR 0030) declares fourteen keys as of 2026-09-09.
- * Registration alone is not the same as a key doing anything: a
- * repository-wide search for each key's literal code turns up a live
+ * `ConfigurationKeys` (ADR 0030) declared fourteen keys as of 2026-09-09, and
+ * a repository-wide search for each key's literal code found a live
  * `ConfigurationResolver` consumer -- or, for the two audit-retention keys,
  * `AuditPartitionArchiver`'s documented direct-SQL escape hatch, the same
  * one `TrackRetentionSweeper` uses for `telemetry.track_retention_days` --
- * for exactly these seven. The other seven (the ordering, pricing,
- * inventory, platform-locale and notifications keys) pass ADR 0030's
- * startup validator and resolve correctly, so they are safe to read and
- * explain here, but nothing in this build ever reads the stored value back
- * on any request path: a Save button for one of them would write a durable,
- * audited row that the running process will never re-read, exactly the
- * "lie told to an operator" this screen exists not to tell. They stay
- * read-only until a module actually consumes one -- move a code here in the
- * same change that wires the first consumer, not before.
+ * for exactly seven of them. The other seven were configuration in name
+ * only: registered, passing ADR 0030's startup validator, resolvable and
+ * explainable on this screen, but read by nothing on any request path. A
+ * Save button for one of those seven would have written a durable, audited
+ * row the running process would never re-read -- the "lie told to an
+ * operator" this screen exists not to tell.
+ *
+ * As of 2026-09-10 that count is settled, not merely re-measured. Four of
+ * the seven dead keys were deleted outright (`ordering.approval_timeout_seconds`,
+ * `notifications.quiet_hours_start_hour`, `platform.default_locale`,
+ * `integration.pos_sync_enabled`) because each already had a better, live
+ * source of truth doing its job under a different name; deleting a
+ * declaration required deleting any stored rows for it in the same
+ * migration (`V0194`), since `ConfigurationKeyStartupValidator` refuses to
+ * boot over an orphaned row. The remaining three were wired to a real
+ * consumer instead -- `pricing.quote_ttl_seconds` (`QuoteService`),
+ * `ordering.cart_expiry_minutes` (`CartService`), and
+ * `inventory.reservation_ttl_seconds` (`InventoryService`, whose reservation
+ * expiry is additionally floored against the specific quote it backs, never
+ * only against this key, so the two TTLs cannot be configured into
+ * overselling stock) -- and their declared defaults were corrected to match
+ * what the code had always done (900 seconds and 240 minutes, not the 300
+ * and 60 an earlier draft of the registry declared), because a wired key's
+ * default becomes the live value for every tenant that has not overridden
+ * it.
+ *
+ * Ten keys remain declared, and all ten now have a live consumer, so this
+ * set names all ten. It stays a set rather than "always writable" because a
+ * key that is registered-but-dead is a real, recurring shape in this
+ * registry, not a one-time cleanup: the next module that declares a key
+ * ahead of its consumer reintroduces exactly the state this screen existed
+ * to catch, and belongs on the read-only side of this list until it moves
+ * here in the same change that wires it.
  */
 const WRITABLE_KEY_CODES: ReadonlySet<string> = new Set([
   'commercial.enforcement_ceiling',
@@ -38,6 +61,9 @@ const WRITABLE_KEY_CODES: ReadonlySet<string> = new Set([
   'audit.business_retention_days',
   'customers.telegram_auth_phone_pattern',
   'customers.otp_delivery_channel_order',
+  'pricing.quote_ttl_seconds',
+  'ordering.cart_expiry_minutes',
+  'inventory.reservation_ttl_seconds',
 ]);
 
 /**
