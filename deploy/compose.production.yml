@@ -137,6 +137,18 @@ services:
       HORECAOS_TLS_MODE: ${HORECAOS_TLS_MODE:-}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Operator-supplied TLS material, for the case where certificates come
+      # from somewhere other than ACME -- a CDN's origin CA, a corporate PKI,
+      # an offline issuer. HORECAOS_TLS_MODE then names the two files inside
+      # this directory rather than `internal` or an ACME email, because
+      # Caddy's own `tls` directive already accepts `<cert> <key>`; nothing in
+      # the Caddyfile needs a third mode.
+      #
+      # Defaults to a directory holding only a .gitignore, so the mount always
+      # resolves and an environment that does not use this is unaffected.
+      # Point HORECAOS_TLS_DIR at a path OUTSIDE any clone for real material:
+      # a private key in a working tree is one `git add` from being published.
+      - ${HORECAOS_TLS_DIR:-./infra/caddy/tls}:/etc/caddy/tls:ro
       - edge-data:/data
       - edge-config:/config
     networks:

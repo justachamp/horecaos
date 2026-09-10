@@ -1,0 +1,8 @@
+# A private key must never reach this repository. This directory exists so the
+# edge container always has a mount point to read operator-supplied TLS
+# material from; the material itself lives on the host, outside any clone.
+#
+# Ignore everything here except this file, so `git add` cannot pick up a
+# certificate or key even by accident -- not with -A, not with a glob.
+*
+!.gitignore
