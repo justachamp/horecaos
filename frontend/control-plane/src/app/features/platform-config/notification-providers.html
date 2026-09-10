@@ -1,0 +1,111 @@
+<h1 class="q-title">{{ i18n.t('nav.notificationProviders') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('notificationProviders.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <h2 class="q-subhead section">{{ i18n.t('notificationProviders.gateways') }}</h2>
+  <div class="gateways">
+    @for (gateway of gateways(); track gateway.code) {
+      <div class="gateway" [attr.data-gateway]="gateway.code">
+        <strong class="q-body-sm">{{ gateway.providerType }}</strong>
+        <span class="q-caption q-tnum muted">{{ gateway.code }}</span>
+        <span class="q-caption">{{ i18n.t(gateway.production ? 'notificationProviders.live' : 'notificationProviders.test') }}</span>
+      </div>
+    } @empty {
+      <p class="q-body-sm muted">{{ i18n.t('notificationProviders.noGateways') }}</p>
+    }
+  </div>
+
+  <h2 class="q-subhead section">{{ i18n.t('notificationProviders.senders') }}</h2>
+  @if (senders().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('notificationProviders.noSenders') }}</p>
+  } @else {
+    <div class="scroll">
+      <table class="table senders">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+            <th class="q-caption">{{ i18n.t('notificationProviders.column.gateway') }}</th>
+            <th class="q-caption">{{ i18n.t('notificationProviders.column.sender') }}</th>
+            <th class="q-caption">{{ i18n.t('notificationProviders.column.status') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sender of senders(); track sender.installationId) {
+            <tr [attr.data-sender]="sender.installationId">
+              <td class="q-body-sm"><a [routerLink]="['/tenants', sender.tenantId]">{{ sender.tenantName }}</a></td>
+              <td class="q-body-sm q-tnum">{{ sender.providerType }} · {{ sender.environmentCode }}</td>
+              <td class="q-body-sm q-tnum">
+                {{ sender.sender ?? '—' }}
+                @if (sender.brandSenders > 0) {
+                  <span class="q-caption muted"> · {{ i18n.t('notificationProviders.brandSenders', { count: sender.brandSenders }) }}</span>
+                }
+              </td>
+              <td class="q-body-sm">{{ sender.status }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <h2 class="q-subhead section">{{ i18n.t('notificationProviders.reviews') }}</h2>
+  <p class="q-caption muted">{{ i18n.t('notificationProviders.reviewsNote') }}</p>
+  <div class="filters">
+    @for (state of states; track state) {
+      <button type="button" class="filter" [class.active]="filter() === state" [attr.data-filter]="state" (click)="chooseFilter(state)">{{ i18n.t(stateKey(state)) }}</button>
+    }
+    <button type="button" class="filter" [class.active]="filter() === ''" data-filter="ALL" (click)="chooseFilter('')">{{ i18n.t('notificationProviders.allWordings') }}</button>
+  </div>
+  @if (reviews().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('notificationProviders.noReviews') }}</p>
+  } @else {
+    <ul class="reviews">
+      @for (review of reviews(); track review.versionId) {
+        <li class="review" [attr.data-review]="review.versionId" [attr.data-state]="review.providerReview">
+          <header class="reviewHead">
+            <span class="q-body-sm"><strong>{{ review.templateKey }}</strong> v{{ review.versionNumber }} · {{ review.locale }} · {{ review.tenantName }}</span>
+            <span class="chip q-caption">{{ i18n.t(stateKey(review.providerReview)) }}</span>
+          </header>
+          <p class="q-body-sm body">{{ review.body }}</p>
+          @if (review.reference || review.providerNote) {
+            <p class="q-caption muted">{{ review.reference }} {{ review.providerNote }}</p>
+          }
+          @if (review.updatedBy && review.updatedAt) {
+            <p class="q-caption muted">{{ review.updatedBy }} · {{ i18n.dateTime(asDate(review.updatedAt)) }}</p>
+          }
+          @if (session.has('NOTIFICATION_TEMPLATE_ACTIVATE')) {
+            <button type="button" class="recordToggle" (click)="open(review)">{{ i18n.t('notificationProviders.record') }}</button>
+            @if (acting() === review.versionId) {
+              <div class="changeForm">
+                <select class="q-body-sm" name="reviewState" (change)="nextState.set($any($event.target).value)">
+                  @for (state of states; track state) {
+                    <option [value]="state" [selected]="state === nextState()">{{ i18n.t(stateKey(state)) }}</option>
+                  }
+                </select>
+                @if (nextState() === 'APPROVED') {
+                  <input class="q-body-sm" name="reviewReference" [placeholder]="i18n.t('notificationProviders.reference')" [value]="reference()" (input)="reference.set($any($event.target).value)" />
+                }
+                @if (nextState() === 'REJECTED') {
+                  <input class="q-body-sm" name="reviewNote" [placeholder]="i18n.t('notificationProviders.objection')" [value]="providerNote()" (input)="providerNote.set($any($event.target).value)" />
+                }
+                <input class="q-body-sm" name="reviewReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+                <button type="button" class="confirmChange confirmReview" [disabled]="!canRecord()" (click)="record(review)">{{ i18n.t('notificationProviders.save') }}</button>
+              </div>
+            }
+          }
+        </li>
+      }
+    </ul>
+  }
+}

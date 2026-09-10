@@ -1556,6 +1556,20 @@ export interface CutoverDecisionView {
   toState?: "DISCOVERY" | "MAPPING_APPROVED" | "BACKFILLING" | "CATCHING_UP" | "SHADOW_READING" | "CANARY" | "CUTOVER_READY" | "TARGET_OWNED" | "ROLLBACK_WINDOW" | "LEGACY_READ_ONLY" | "RETIRED" | "PAUSED" | "BLOCKED_RECONCILIATION" | "ROLLING_BACK";
 }
 
+export interface DataClassView {
+  code?: string;
+  mayLeaveTheDatabase?: boolean;
+  requiresEncryption?: boolean;
+}
+
+export interface DataProtection {
+  classes?: Array<DataClassView>;
+  egressLast30Days?: Array<EgressCount>;
+  encryptedColumns?: Array<EncryptedColumn>;
+  erasure?: Erasure;
+  retention?: Array<RetentionRule>;
+}
+
 export interface DateOfBirthRequest {
   dateOfBirth?: string;
 }
@@ -1801,6 +1815,17 @@ export interface DutySessionResponse {
   status?: string;
 }
 
+export interface EgressCount {
+  actionCode?: string;
+  count?: number;
+}
+
+export interface EncryptedColumn {
+  column?: string;
+  schema?: string;
+  table?: string;
+}
+
 export interface EndPolicyRequest {
   effectiveAt?: string;
   reason: string;
@@ -1855,6 +1880,13 @@ export interface EntityMappingResponse {
   status?: "MAPPED" | "QUARANTINED" | "SUPERSEDED";
   supersededByMappingId?: string;
   targetId?: string;
+}
+
+export interface Erasure {
+  cancelled?: number;
+  completed?: number;
+  pending?: number;
+  waiting?: Array<PendingErasure>;
 }
 
 export interface EstimateResponse {
@@ -2055,6 +2087,13 @@ export interface FutureDiscountRequest {
   reasonCode: string;
   uses?: number;
   validForDays?: number;
+}
+
+export interface Gateway {
+  code?: string;
+  notes?: string;
+  production?: boolean;
+  providerType?: string;
 }
 
 export interface GrantControllerReasonRequest {
@@ -2725,6 +2764,11 @@ export interface NoteRequest {
 export interface NoteResponse {
   lineId?: string;
   note?: string;
+}
+
+export interface NotificationProviders {
+  gateways?: Array<Gateway>;
+  senders?: Array<Sender>;
 }
 
 export interface NotificationResponse {
@@ -3446,6 +3490,14 @@ export interface PendingApprovalResponse {
   scopeId?: string;
   scopeType?: string;
   thresholdDescription?: string;
+}
+
+export interface PendingErasure {
+  daysWaiting?: number;
+  requestId?: string;
+  requestedAt?: string;
+  requestedVia?: string;
+  tenantId?: string;
 }
 
 export interface PhoneRevealResponse {
@@ -4336,6 +4388,12 @@ export interface ResumeScopeRequest {
   reason: string;
 }
 
+export interface RetentionRule {
+  code?: string;
+  enforcedBy?: string;
+  keptFor?: string;
+}
+
 export interface RetryRequest {
   reason: string;
 }
@@ -4398,6 +4456,13 @@ export interface ReviewDecisionRequest {
   differenceId: string;
   note?: string;
   outcome: "APPROVED" | "REJECTED" | "DEFERRED";
+}
+
+export interface ReviewRequest {
+  providerNote?: string;
+  reason: string;
+  reference?: string;
+  state: string;
 }
 
 export interface ReviseLocationRequest {
@@ -4653,6 +4718,17 @@ export interface SendPulseImportReport {
 
 export interface SendReplyRequest {
   body: string;
+}
+
+export interface Sender {
+  brandSenders?: number;
+  environmentCode?: string;
+  installationId?: string;
+  providerType?: string;
+  sender?: string;
+  status?: string;
+  tenantId?: string;
+  tenantName?: string;
 }
 
 export interface ServiceStateRequest {
@@ -5273,6 +5349,22 @@ export interface TemplateResponse {
   version?: number;
 }
 
+export interface TemplateReviewView {
+  body?: string;
+  locale?: string;
+  providerNote?: string;
+  providerReview?: string;
+  reference?: string;
+  status?: string;
+  templateKey?: string;
+  tenantId?: string;
+  tenantName?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  versionId?: string;
+  versionNumber?: number;
+}
+
 export interface TemplateView {
   code?: string;
   createdAt?: string;
@@ -5628,13 +5720,14 @@ export interface Operations {
   "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
   "businessTypes": { method: "GET"; path: "/api/v1/control-plane/business-types"; request: { parameters: Record<string, never> }; responses: { "200": Array<BusinessTypeView> } };
-  "list_31": { method: "GET"; path: "/api/v1/control-plane/capabilities"; request: { parameters: Record<string, never> }; responses: { "200": Array<CapabilityDescriptor> } };
+  "list_32": { method: "GET"; path: "/api/v1/control-plane/capabilities"; request: { parameters: Record<string, never> }; responses: { "200": Array<CapabilityDescriptor> } };
   "keys": { method: "GET"; path: "/api/v1/control-plane/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<ConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
+  "overview": { method: "GET"; path: "/api/v1/control-plane/data-protection"; request: { parameters: Record<string, never> }; responses: { "200": DataProtection } };
   "begin": { method: "POST"; path: "/api/v1/control-plane/device-enrolments"; request: { parameters: Record<string, never>; body: BeginRequest }; responses: { "200": BeginResponse } };
   "poll": { method: "POST"; path: "/api/v1/control-plane/device-enrolments/{deviceCode}/poll"; request: { parameters: { path: { deviceCode: string } } }; responses: { "200": PollResponse } };
-  "list_30": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
+  "list_31": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
   "taxonomy": { method: "GET"; path: "/api/v1/control-plane/failure-taxonomy"; request: { parameters: Record<string, never> }; responses: { "200": Array<CategoryView> } };
   "flags": { method: "GET"; path: "/api/v1/control-plane/feature-flags"; request: { parameters: Record<string, never> }; responses: { "200": Array<FeatureFlagView> } };
   "blocked_1": { method: "GET"; path: "/api/v1/control-plane/fiscal-documents/blocked"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<PlatformBlockedDocument> } };
@@ -5643,7 +5736,7 @@ export interface Operations {
   "list_20": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_2": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
-  "list_29": { method: "GET"; path: "/api/v1/control-plane/incidents"; request: { parameters: { query: { includeResolved?: boolean; limit?: number } } }; responses: { "200": Array<IncidentView> } };
+  "list_30": { method: "GET"; path: "/api/v1/control-plane/incidents"; request: { parameters: { query: { includeResolved?: boolean; limit?: number } } }; responses: { "200": Array<IncidentView> } };
   "acknowledge_1": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/acknowledgement"; request: { parameters: { path: { incidentId: string } }; body?: NoteRequest }; responses: { "200": unknown } };
   "resolve_3": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/resolution"; request: { parameters: { path: { incidentId: string } }; body: ControlPlaneIncidentControllerResolveRequest }; responses: { "200": unknown } };
   "installations": { method: "GET"; path: "/api/v1/control-plane/installations"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PagePlatformInstallationView } };
@@ -5658,7 +5751,8 @@ export interface Operations {
   "retryOutbox": { method: "POST"; path: "/api/v1/control-plane/integration/failures/outbox/{eventId}/retry"; request: { parameters: { path: { eventId: string } }; body: FailureOperationsControllerReasonRequest }; responses: { "200": {  } } };
   "find_3": { method: "GET"; path: "/api/v1/control-plane/lookup"; request: { parameters: { query: { q: string } } }; responses: { "200": Array<LookupHit> } };
   "onSale": { method: "GET"; path: "/api/v1/control-plane/modules"; request: { parameters: Record<string, never> }; responses: { "200": Array<ModuleView> } };
-  "list_28": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
+  "registry": { method: "GET"; path: "/api/v1/control-plane/notification-providers"; request: { parameters: Record<string, never> }; responses: { "200": NotificationProviders } };
+  "list_29": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
   "currentDefault": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/default"; request: { parameters: Record<string, never> }; responses: { "200": TemplateView } };
   "get_11": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
@@ -5672,6 +5766,7 @@ export interface Operations {
   "buckets": { method: "GET"; path: "/api/v1/control-plane/reference-data/sla-buckets"; request: { parameters: Record<string, never> }; responses: { "200": SlaBuckets } };
   "residency": { method: "GET"; path: "/api/v1/control-plane/residency"; request: { parameters: Record<string, never> }; responses: { "200": ResidencyView } };
   "mine_1": { method: "GET"; path: "/api/v1/control-plane/support-sessions/mine"; request: { parameters: Record<string, never> }; responses: { "200": Array<SupportSessionView> } };
+  "list_28": { method: "GET"; path: "/api/v1/control-plane/template-reviews"; request: { parameters: { query: { limit?: number; state?: string } } }; responses: { "200": Array<TemplateReviewView> } };
   "health": { method: "GET"; path: "/api/v1/control-plane/tenant-health"; request: { parameters: Record<string, never> }; responses: { "200": Array<TenantHealth> } };
   "plans_1": { method: "GET"; path: "/api/v1/control-plane/tenant-plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<TenantPlan> } };
   "listTenants": { method: "GET"; path: "/api/v1/control-plane/tenants"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PageTenantSummaryView } };
@@ -5822,6 +5917,7 @@ export interface Operations {
   "open_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/support-sessions"; request: { parameters: { path: { tenantId: string } }; body: SupportSessionControllerOpenRequest }; responses: { "200": SupportSessionView } };
   "end_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/support-sessions/{sessionId}/end"; request: { parameters: { path: { sessionId: string; tenantId: string } }; body: EndRequest }; responses: { "200": SupportSessionView } };
   "suspendTenant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/suspend"; request: { parameters: { path: { tenantId: string } }; body: TenantStatusChangeRequest }; responses: { "200": TenantView } };
+  "record": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/template-versions/{versionId}/provider-review"; request: { parameters: { path: { tenantId: string; versionId: string } }; body: ReviewRequest }; responses: { "200": unknown } };
   "usage_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialControlPlaneControllerUsageResponse> } };
   "deliveries": { method: "GET"; path: "/api/v1/control-plane/webhooks"; request: { parameters: { query: { invalidSignatureOnly?: boolean; limit?: number; provider?: string } } }; responses: { "200": Array<WebhookDelivery> } };
   "declareCash": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/cash-handovers/{handoverId}/declaration"; request: { parameters: { path: { brandId: string; handoverId: string; locationId: string; tenantId: string } }; body: CashDeclarationRequest }; responses: { "200": unknown } };

@@ -429,6 +429,60 @@ class PaymentAndQuietHoursNotificationTests {
     }
 
     @Test
+    @DisplayName("an SMS wording waiting on its gateway is withheld, and sends once the gateway approves it")
+    void aWordingAwaitingItsGatewayIsWithheldUntilApproved() {
+        UUID accountId = seedCustomer(TENANT);
+        UUID orderId = seedOrder(TENANT, accountId);
+        activateTemplate(
+                TENANT, PaymentFailureCustomerTrigger.PAYMENT_FAILED, NotificationClass.TRANSACTIONAL_REQUIRED, null);
+        setProviderReview(TENANT, "PENDING");
+        PaymentFailureCustomerTrigger trigger = new PaymentFailureCustomerTrigger(customerAlerts, Duration.ofHours(2));
+
+        trigger.onAttemptFailed(new PaymentAttemptFailed(
+                UUID.randomUUID(),
+                TENANT,
+                brandId(TENANT),
+                locationId(TENANT),
+                orderId,
+                UUID.randomUUID(),
+                "DECLINED",
+                clock.instant()));
+        UUID withheld =
+                notifications.forSubject(TENANT, "Order", orderId).getFirst().id();
+
+        assertThat(eligibility.evaluate(claim(withheld))).isFalse();
+        assertThat(notifications.find(TENANT, withheld).orElseThrow().suppressionReason())
+                .isEqualTo("TEMPLATE_AWAITING_PROVIDER");
+
+        setProviderReview(TENANT, "APPROVED");
+        UUID secondOrder = seedOrder(TENANT, accountId);
+        trigger.onAttemptFailed(new PaymentAttemptFailed(
+                UUID.randomUUID(),
+                TENANT,
+                brandId(TENANT),
+                locationId(TENANT),
+                secondOrder,
+                UUID.randomUUID(),
+                "DECLINED",
+                clock.instant()));
+        UUID sent = notifications
+                .forSubject(TENANT, "Order", secondOrder)
+                .getFirst()
+                .id();
+
+        assertThat(eligibility.evaluate(claim(sent))).isTrue();
+    }
+
+    private void setProviderReview(UUID tenantId, String state) {
+        jdbc.sql("""
+                UPDATE notifications.template_versions
+                   SET provider_review = :state, provider_review_updated_by = 'moderation-desk',
+                       provider_review_updated_at = now()
+                 WHERE tenant_id = :tenantId
+                """).param("state", state).param("tenantId", tenantId).update();
+    }
+
+    @Test
     @DisplayName("a quiet-hours window set for one tenant's customer does not hold another tenant's message")
     void quietHoursIsTenantScoped() {
         UUID accountId = seedCustomer(TENANT);
