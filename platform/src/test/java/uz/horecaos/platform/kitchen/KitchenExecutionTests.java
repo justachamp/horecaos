@@ -1472,7 +1472,12 @@ class KitchenExecutionTests {
 
         @Override
         public ReservationResult reserveForQuote(
-                UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID quoteId,
+                java.time.Instant quoteExpiresAt,
+                Map<UUID, Integer> quantitiesByVariant) {
             throw new AssertionError("A kitchen proposal must not reserve stock");
         }
 

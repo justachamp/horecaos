@@ -30,6 +30,7 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler.StepResult;
@@ -233,7 +234,8 @@ class OrderingOnboardingStepHandlersTests {
                 deliveryFees,
                 promoCodeStore,
                 new PromoCodeEligibilityService(promoCodeStore),
-                CLOCK);
+                CLOCK,
+                new FakeConfigurationResolver());
         return new OrderingOnboardingStepHandlers.ActivationSmokeTest(
                 jdbc, channels, serviceability, pricing, inventory(), CLOCK);
     }

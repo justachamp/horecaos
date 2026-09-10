@@ -11,10 +11,12 @@
   are validated at startup by `ConfigurationKeyStartupValidator`; `JdbcConfigurationResolver`
   and `JdbcPolicyResolver` implement precedence, explicit-null semantics, the resolution
   trace and pinned re-resolution, and both are `@Cacheable` under ADR 0033's
-  `tenant.configuration` and `tenant.policy_current`. `ConfigurationResolver` has three
+  `tenant.configuration` and `tenant.policy_current`. `ConfigurationResolver` had three
   consumers as of 2026-09-08 (`EnforcementCeiling`, `TelemetryIngestService`, and
-  `TelegramUpdateHandler`'s ADR 0063 phone-pattern gate); `PolicyResolver` has twelve across
-  courier, fiscal, ordering and — as of V0054 — fulfillment. ADR 0050 gives approval actions
+  `TelegramUpdateHandler`'s ADR 0063 phone-pattern gate) and gained three more on 2026-09-10
+  — `QuoteService`, `CartService`, and `InventoryService`, see below; `PolicyResolver` has
+  twelve across courier, fiscal, ordering and — as of V0054 — fulfillment. ADR 0050 gives
+  approval actions
   a code-owned typed register and `JdbcApprovalService` uses `ResourceScope.chain()` for the
   canonical precedence rule, but approval-policy rows remain an audit-owned snapshotting
   exception rather than a `PolicyResolver` consumer. V0012 moved order acceptance off its
@@ -49,18 +51,61 @@
   `currentVersionAtScope` the same screen's own `resolve` call last read, so a concurrent
   writer is caught as `STALE_VERSION` rather than silently overwritten; and a successful
   write re-resolves rather than trusting its own echo, so the operator sees what the platform
-  will actually hand back next, not just the row just written. Not every registered key gets
-  a Save control: a repository-wide search found a live `ConfigurationResolver` (or
-  documented direct-SQL) consumer for exactly seven of the fourteen keys
-  (`commercial.enforcement_ceiling`, `telemetry.courier_collection_gate`,
+  will actually hand back next, not just the row just written. As of 2026-09-09, not every
+  registered key got a Save control: a repository-wide search found a live
+  `ConfigurationResolver` (or documented direct-SQL) consumer for exactly seven of the
+  fourteen keys (`commercial.enforcement_ceiling`, `telemetry.courier_collection_gate`,
   `telemetry.track_retention_days`, `audit.security_retention_days`,
   `audit.business_retention_days`, `customers.telegram_auth_phone_pattern`,
   `customers.otp_delivery_channel_order`); the other seven (the ordering, pricing, inventory,
-  platform-locale and notifications keys) pass startup validation and resolve correctly but
-  are read by nothing on any request path today, so the screen shows them read-only rather
+  platform-locale and notifications keys) passed startup validation and resolved correctly
+  but were read by nothing on any request path, so the screen showed them read-only rather
   than offer a Save button that would write an audited row the running process never
-  re-reads — `ConfigurationPolicy`'s own `WRITABLE_KEY_CODES` names this explicitly and asks
-  the next module that wires a consumer to move its code into that set in the same change.
+  re-read — `ConfigurationPolicy`'s own `WRITABLE_KEY_CODES` named this explicitly and asked
+  the next module that wired a consumer to move its code into that set in the same change.
+
+  **2026-09-10 closed that gap.** Verifying each of the seven dead keys individually found
+  four with a second, better source of truth already doing the same job under a different
+  name, and three genuinely missing their wiring. The four —
+  `ordering.approval_timeout_seconds` (superseded by the `ordering.acceptance` policy
+  document's own `approvalTimeoutSeconds` field, migrated off its specialised table by
+  V0012), `notifications.quiet_hours_start_hour` (superseded by marketing's per-tenant
+  `quiet_hours_start`/`quiet_hours_end` engagement-policy columns), `platform.default_locale`
+  (the only locale default anything reads is the narrowly Telegram-specific
+  `horecaos.notifications.telegram.group-locale` Spring property, not a platform-wide
+  concept), and `integration.pos_sync_enabled` (superseded by
+  `integration.pos_sync_schedules.enabled`, a per-binding flag the scheduler already reads,
+  together with a binding's own `CATALOG_READ` capability state — finer-grained than a
+  scope-settable boolean could express, since one tenant may hold more than one POS binding)
+  — were deleted from `ConfigurationKeys` outright, with `V0194` deleting any stored rows for
+  them in the same change (`ConfigurationKeyStartupValidator` refuses to boot over an
+  orphaned row). The three — `pricing.quote_ttl_seconds`, `ordering.cart_expiry_minutes`,
+  `inventory.reservation_ttl_seconds` — were wired to `QuoteService`, `CartService`, and
+  `InventoryService` respectively, each now resolving its TTL through `ConfigurationResolver`
+  at `ResourceScope.location(tenantId, brandId, locationId)` instead of a hardcoded
+  `Duration` constant. Two of the three declared defaults disagreed with the code the whole
+  time this ADR's own key registry existed — `pricing.quote_ttl_seconds` declared 300 seconds
+  against `QuoteService.QUOTE_TTL`'s fifteen minutes (900), and `ordering.cart_expiry_minutes`
+  declared 60 minutes against `CartService.CART_TTL`'s four hours (240) — inert only because
+  the keys were dead; both were corrected in the same change that wired them, because a wired
+  key's default becomes the live value for every tenant that has not overridden it. Ten keys
+  remain declared, all ten now have a live consumer, and `WRITABLE_KEY_CODES` names all ten —
+  see that constant's own doc for why the mechanism (a set a module joins in the same change
+  it wires a consumer) stays in place rather than being deleted along with the four dead
+  keys: it is a recurring shape in this registry, not a one-time cleanup.
+
+  Wiring `inventory.reservation_ttl_seconds` independently of `pricing.quote_ttl_seconds`
+  reopened a trap `InventoryService.RESERVATION_TTL`'s and `QuoteService.QUOTE_TTL`'s own docs
+  had each already named by citing the other's duration: a reservation configured shorter
+  than the quote it backs releases stock while the price on it is still acceptable at
+  checkout — overselling. Two independently resolved keys cannot be trusted to agree (they
+  may be overridden at different scopes, or a config change may land between a quote being
+  priced and the same customer checking out minutes later), so the fix is not "resolve both
+  keys and compare". `InventoryReservationPort#reserveForQuote` now takes the specific quote's
+  own stored `expiresAt` as a parameter, and `inventory.domain.ReservationExpiry` floors the
+  reservation's computed expiry against that one concrete, never-changing fact rather than
+  against a second configuration resolution — `ReservationExpiryTests` proves the floor holds
+  even when the reservation TTL is configured far shorter than the quote TTL.
   Unlike a policy, a value is mutated in place
   under its own `version` column rather than append-only versioned — this ADR's own Decision
   draws that line ("only policies are snapshotted onto business facts") — so it uses ordinary
@@ -313,6 +358,11 @@ scope, and fetched rows, so it is tested exhaustively without a database.
 - [x] Add control-plane read and write APIs with ADR 0025 capabilities and ADR 0027 audit (`ConfigurationController`, `OrderAcceptancePolicyController`).
 - [x] Wire a control-plane screen to the configuration-value writer end to end, scope-safe and typed (`ConfigurationPolicy`, `ConfigurationApi.setValue`, `frontend/control-plane`).
 - [x] Add precedence, pinning, and isolation tests (`ScopeResolutionTests`, `ResourceScopeTests`, `JdbcConfigurationResolverTests`, `JdbcPolicyResolverTests`, `JdbcConfigurationValueAuthorTests`).
+- [x] Resolve every registered-but-dead key: remove the four with a better source of truth
+      (`V0194`), wire the three genuinely missing a consumer (`QuoteService`, `CartService`,
+      `InventoryService`), correct their declared defaults to match the code, and enforce the
+      quote/reservation TTL invariant structurally rather than by convention
+      (`ReservationExpiry`, `ReservationExpiryTests`).
 
 ## Exit criteria
 

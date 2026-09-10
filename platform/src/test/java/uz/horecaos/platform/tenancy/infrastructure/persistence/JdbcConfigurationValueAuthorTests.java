@@ -43,8 +43,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 class JdbcConfigurationValueAuthorTests {
 
+    // A synthetic key, deliberately not any registered code: this class tests
+    // JdbcConfigurationValueAuthor built directly, never through
+    // ConfigurationKeys or its startup validator. (Not
+    // ordering.approval_timeout_seconds, which this field's code used to
+    // reuse before that key was deleted 2026-09-10.)
     private static final ConfigurationKey<Integer> TIMEOUT = ConfigurationKey.of(
-                    "ordering.approval_timeout_seconds", Integer.class)
+                    "testing.author_probe_seconds", Integer.class)
             .defaultValue(600)
             .build();
 

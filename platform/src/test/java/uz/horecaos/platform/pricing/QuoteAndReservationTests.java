@@ -32,6 +32,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.catalog.PricingVariantLookup;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
@@ -122,7 +123,8 @@ class QuoteAndReservationTests {
                 deliveryFees,
                 promoCodeStore,
                 new PromoCodeEligibilityService(promoCodeStore),
-                clock);
+                clock,
+                new FakeConfigurationResolver());
 
         seedTenancyAndCatalog();
         seedPricing();
@@ -312,7 +314,11 @@ class QuoteAndReservationTests {
 
         inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "OUT_OF_INGREDIENTS", null);
 
-        var result = inventory.reserveForQuote(TENANT, BRAND, LOCATION, UUID.randomUUID(), Map.of(burgerVariant, 1));
+        // The quote's own expiresAt is irrelevant here: the reservation is
+        // refused on availability before the floor in ReservationExpiry is
+        // ever reached, so "now" is a fine stand-in.
+        var result = inventory.reserveForQuote(
+                TENANT, BRAND, LOCATION, UUID.randomUUID(), clock.instant(), Map.of(burgerVariant, 1));
 
         assertThat(result.isHeld()).isFalse();
         // Naming the item is the difference between a customer who can fix their
@@ -340,8 +346,10 @@ class QuoteAndReservationTests {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
         UUID quoteId = UUID.randomUUID();
 
-        var first = inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, Map.of(burgerVariant, 1));
-        var second = inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, Map.of(burgerVariant, 1));
+        var first =
+                inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, clock.instant(), Map.of(burgerVariant, 1));
+        var second =
+                inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, clock.instant(), Map.of(burgerVariant, 1));
 
         assertThat(second.reservationId()).isEqualTo(first.reservationId());
         assertThat(jdbc.sql("SELECT count(*) FROM inventory.reservations")
@@ -355,7 +363,7 @@ class QuoteAndReservationTests {
     void aReleasedHoldCannotBeCommitted() {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
         UUID quoteId = UUID.randomUUID();
-        inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, Map.of(burgerVariant, 1));
+        inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, clock.instant(), Map.of(burgerVariant, 1));
 
         assertThat(inventory.release(TENANT, quoteId)).isTrue();
         // The status predicate is in the UPDATE, so a late commit cannot revive
@@ -368,7 +376,7 @@ class QuoteAndReservationTests {
     void abandonedHoldsExpire() {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
         UUID quoteId = UUID.randomUUID();
-        inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, Map.of(burgerVariant, 1));
+        inventory.reserveForQuote(TENANT, BRAND, LOCATION, quoteId, clock.instant(), Map.of(burgerVariant, 1));
 
         clock.advance(Duration.ofMinutes(16));
 

@@ -103,7 +103,11 @@ class CacheEvictionIntegrationTests {
      */
     @Test
     void aResolvedConfigurationValueStaysCachedAcrossADirectDatabaseChange() {
-        ConfigurationKey<Integer> key = ConfigurationKey.of("ordering.approval_timeout_seconds", Integer.class)
+        // A synthetic code, deliberately not any registered key: eviction
+        // behavior is agnostic to which key is involved. (Not
+        // ordering.approval_timeout_seconds, which this literal used to reuse
+        // before that key was deleted 2026-09-10.)
+        ConfigurationKey<Integer> key = ConfigurationKey.of("testing.cache_probe_seconds", Integer.class)
                 .defaultValue(600)
                 .build();
         ResourceScope scope = ResourceScope.tenant(TENANT);
@@ -138,7 +142,11 @@ class CacheEvictionIntegrationTests {
      */
     @Test
     void aValueSetThroughTheAuthorIsVisibleOnTheVeryNextResolutionThroughTheRealCache() {
-        ConfigurationKey<Integer> key = ConfigurationKey.of("ordering.approval_timeout_seconds", Integer.class)
+        // A synthetic code, deliberately not any registered key: eviction
+        // behavior is agnostic to which key is involved. (Not
+        // ordering.approval_timeout_seconds, which this literal used to reuse
+        // before that key was deleted 2026-09-10.)
+        ConfigurationKey<Integer> key = ConfigurationKey.of("testing.cache_probe_seconds", Integer.class)
                 .defaultValue(600)
                 .build();
         ResourceScope scope = ResourceScope.tenant(TENANT);

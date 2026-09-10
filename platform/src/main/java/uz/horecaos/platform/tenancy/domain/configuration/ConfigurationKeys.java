@@ -15,60 +15,84 @@ import uz.horecaos.platform.tenancy.api.ConfigurationKey;
  * unknown or mistyped key fail at startup instead of silently resolving to a
  * default at read time. Adding a key is a release; composing values per tenant
  * is not.
+ *
+ * <p><strong>Four keys were removed here on 2026-09-10</strong> — {@code
+ * ordering.approval_timeout_seconds}, {@code notifications.quiet_hours_start_hour},
+ * {@code platform.default_locale}, and {@code integration.pos_sync_enabled} —
+ * because each had a repository-wide search turn up zero consumers and a
+ * better, already-live source of truth: order acceptance's own {@code
+ * ordering.acceptance} policy document, marketing's per-tenant {@code
+ * quiet_hours_start}/{@code quiet_hours_end} engagement-store columns, the
+ * Telegram-specific {@code horecaos.notifications.telegram.group-locale}
+ * property, and {@code integration.pos_sync_schedules.enabled} together with a
+ * binding's own {@code CATALOG_READ} capability state, respectively. {@code
+ * ConfigurationKeyStartupValidator} refuses to boot over an undeclared stored
+ * key, so removing a declaration here required deleting any stored rows for it
+ * in the same change — {@code V0194}. Never re-add a code under one of these
+ * four names without checking whether the same duplication is what made it
+ * dead the first time.
  */
 public final class ConfigurationKeys {
 
-    public static final ConfigurationKey<Integer> ORDER_APPROVAL_TIMEOUT_SECONDS = ConfigurationKey.of(
-                    "ordering.approval_timeout_seconds", Integer.class)
-            .defaultValue(600)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Seconds a restaurant-approval order waits before the timeout action applies.")
+    /**
+     * Seconds a pricing quote stays acceptable at checkout.
+     *
+     * <p>900 (fifteen minutes), not the five minutes an earlier draft of this
+     * key declared: {@code QuoteService.QUOTE_TTL} has always been fifteen
+     * minutes, and until this key was wired to a consumer nobody noticed the
+     * declared default disagreed with the code by 3x. A wired key's default is
+     * the live value for every tenant that has not overridden it, so the two
+     * must agree exactly. {@code pricing.api.PricingConfigurationKeys}
+     * declares the identical key for the same cyclic-dependency reason
+     * recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}; {@code
+     * PricingConfigurationKeyTests} keeps the two in step.
+     *
+     * <p>Coupled by design to {@link #INVENTORY_RESERVATION_TTL_SECONDS}: an
+     * inventory reservation must never expire before the quote it backs, or
+     * stock releases while the price is still acceptable — overselling.
+     * {@code InventoryService.reserveForQuote} enforces that floor
+     * structurally, against the specific quote's own stored expiry, not by
+     * trusting the two keys to agree (see that method's own doc and {@code
+     * ReservationExpiryTests}).
+     */
+    public static final ConfigurationKey<Integer> QUOTE_TTL_SECONDS = ConfigurationKey.of(
+                    "pricing.quote_ttl_seconds", Integer.class)
+            .defaultValue(900)
+            .ownedBy("pricing")
+            .describedAs("Seconds a pricing quote stays acceptable at checkout.")
             .build();
 
+    /**
+     * Minutes an untouched cart stays active before expiring.
+     *
+     * <p>240 (four hours), not the sixty minutes an earlier draft of this key
+     * declared: {@code CartService.CART_TTL} has always been four hours,
+     * deliberately far longer than the quote TTL because a cart survives an
+     * interruption but a price does not (see that field's own doc). The same
+     * "a wired key's default is a live value" correction as {@link
+     * #QUOTE_TTL_SECONDS}.
+     */
     public static final ConfigurationKey<Integer> CART_EXPIRY_MINUTES = ConfigurationKey.of(
                     "ordering.cart_expiry_minutes", Integer.class)
-            .defaultValue(60)
+            .defaultValue(240)
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Minutes an untouched cart stays active before expiring.")
             .build();
 
-    public static final ConfigurationKey<Integer> QUOTE_TTL_SECONDS = ConfigurationKey.of(
-                    "pricing.quote_ttl_seconds", Integer.class)
-            .defaultValue(300)
-            .ownedBy("pricing")
-            .describedAs("Seconds a pricing quote stays acceptable at checkout.")
-            .build();
-
+    /**
+     * Seconds an inventory reservation is held before expiry.
+     *
+     * <p>Settable, but never the last word: see {@link #QUOTE_TTL_SECONDS}'s
+     * doc for why a hold may never expire before the quote it was taken for,
+     * and {@code InventoryService.reserveForQuote} for where that is actually
+     * enforced.
+     */
     public static final ConfigurationKey<Integer> INVENTORY_RESERVATION_TTL_SECONDS = ConfigurationKey.of(
                     "inventory.reservation_ttl_seconds", Integer.class)
             .defaultValue(900)
             .ownedBy("inventory")
             .describedAs("Seconds an inventory reservation is held before expiry.")
-            .build();
-
-    public static final ConfigurationKey<String> DEFAULT_LOCALE = ConfigurationKey.of(
-                    "platform.default_locale", String.class)
-            .defaultValue("uz")
-            .tenantVisible()
-            .describedAs("Locale used when a request expresses no supported preference.")
-            .build();
-
-    public static final ConfigurationKey<Boolean> POS_SYNC_ENABLED = ConfigurationKey.of(
-                    "integration.pos_sync_enabled", Boolean.class)
-            .defaultValue(Boolean.FALSE)
-            .ownedBy("integration")
-            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
-            .describedAs("Whether scheduled POS catalogue synchronisation runs for this scope.")
-            .build();
-
-    public static final ConfigurationKey<Integer> NOTIFICATION_QUIET_HOURS_START = ConfigurationKey.of(
-                    "notifications.quiet_hours_start_hour", Integer.class)
-            .ownedBy("notifications")
-            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
-            .explicitNullTerminates()
-            .describedAs("Local hour quiet hours begin; an explicit null disables quiet hours here.")
             .build();
 
     /**
@@ -228,13 +252,9 @@ public final class ConfigurationKeys {
             .build();
 
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
-            ORDER_APPROVAL_TIMEOUT_SECONDS,
             CART_EXPIRY_MINUTES,
             QUOTE_TTL_SECONDS,
             INVENTORY_RESERVATION_TTL_SECONDS,
-            DEFAULT_LOCALE,
-            POS_SYNC_ENABLED,
-            NOTIFICATION_QUIET_HOURS_START,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,
             TELEMETRY_TRACK_RETENTION_DAYS,

@@ -113,7 +113,12 @@ class InventoryReservationAndAvailabilityTests {
         UUID quoteId = UUID.randomUUID();
 
         ReservationResult held = tx(() -> inventory.reserveForQuote(
-                fixture.tenantId(), fixture.brandId(), fixture.locationId(), quoteId, Map.of(fixture.variantId(), 1)));
+                fixture.tenantId(),
+                fixture.brandId(),
+                fixture.locationId(),
+                quoteId,
+                clock.instant(),
+                Map.of(fixture.variantId(), 1)));
         UUID reservationId = requireHeldId(held);
         assertThat(reservationStatus(reservationId)).isEqualTo("HELD");
 
@@ -137,7 +142,12 @@ class InventoryReservationAndAvailabilityTests {
         UUID quoteId = UUID.randomUUID();
 
         ReservationResult held = tx(() -> inventory.reserveForQuote(
-                fixture.tenantId(), fixture.brandId(), fixture.locationId(), quoteId, Map.of(fixture.variantId(), 1)));
+                fixture.tenantId(),
+                fixture.brandId(),
+                fixture.locationId(),
+                quoteId,
+                clock.instant(),
+                Map.of(fixture.variantId(), 1)));
         UUID reservationId = requireHeldId(held);
 
         boolean released = tx(() -> inventory.release(fixture.tenantId(), quoteId));
@@ -161,7 +171,12 @@ class InventoryReservationAndAvailabilityTests {
         UUID quoteId = UUID.randomUUID();
 
         ReservationResult held = tx(() -> inventory.reserveForQuote(
-                fixture.tenantId(), fixture.brandId(), fixture.locationId(), quoteId, Map.of(fixture.variantId(), 1)));
+                fixture.tenantId(),
+                fixture.brandId(),
+                fixture.locationId(),
+                quoteId,
+                clock.instant(),
+                Map.of(fixture.variantId(), 1)));
         UUID reservationId = requireHeldId(held);
 
         // The customer never comes back. Advancing the clock past the real
@@ -182,7 +197,12 @@ class InventoryReservationAndAvailabilityTests {
         UUID quoteId = UUID.randomUUID();
 
         ReservationResult held = tx(() -> inventory.reserveForQuote(
-                fixture.tenantId(), fixture.brandId(), fixture.locationId(), quoteId, Map.of(fixture.variantId(), 1)));
+                fixture.tenantId(),
+                fixture.brandId(),
+                fixture.locationId(),
+                quoteId,
+                clock.instant(),
+                Map.of(fixture.variantId(), 1)));
         UUID reservationId = requireHeldId(held);
 
         // Five minutes of a fifteen-minute TTL: comfortably still live.

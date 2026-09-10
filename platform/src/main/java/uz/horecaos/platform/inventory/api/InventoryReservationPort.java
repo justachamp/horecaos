@@ -1,5 +1,6 @@
 package uz.horecaos.platform.inventory.api;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -25,9 +26,24 @@ public interface InventoryReservationPort {
      *
      * <p>Repeating the call for the same quote returns the existing hold rather
      * than taking a second one.
+     *
+     * @param quoteExpiresAt the specific quote's own stored expiry (ADR 0018).
+     *                       The reservation this call takes is never granted an
+     *                       expiry earlier than this, regardless of how {@code
+     *                       inventory.reservation_ttl_seconds} is configured
+     *                       (ADR 0030) — a hold that outlived its own configured
+     *                       TTL but expired before the quote would release stock
+     *                       while the price on it was still acceptable at
+     *                       checkout. See {@code
+     *                       uz.horecaos.platform.inventory.domain.ReservationExpiry}.
      */
     ReservationResult reserveForQuote(
-            UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant);
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID quoteId,
+            Instant quoteExpiresAt,
+            Map<UUID, Integer> quantitiesByVariant);
 
     /**
      * Turns a hold into a committed sale when an order is confirmed.

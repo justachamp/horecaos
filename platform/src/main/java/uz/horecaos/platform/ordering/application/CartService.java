@@ -16,9 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
@@ -27,6 +29,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.Ca
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -62,10 +65,18 @@ public class CartService {
     private static final Logger log = LoggerFactory.getLogger(CartService.class);
 
     /**
-     * Long enough for a customer to be interrupted and come back, short enough
-     * that an abandoned basket stops looking live to the branch. Deliberately far
-     * longer than the fifteen-minute quote TTL: the cart survives, the price does
-     * not.
+     * The platform default: long enough for a customer to be interrupted and
+     * come back, short enough that an abandoned basket stops looking live to
+     * the branch. Deliberately far longer than the fifteen-minute quote TTL:
+     * the cart survives, the price does not. {@code OrderingConfigurationKeyTests}
+     * keeps this literal equal to {@link
+     * OrderingConfigurationKeys#CART_EXPIRY_MINUTES}'s own default so the two
+     * cannot drift apart.
+     *
+     * <p>Wired 2026-09-10 to {@code ordering.cart_expiry_minutes} (ADR 0030):
+     * {@link #create} resolves the live TTL per tenant/brand/location rather
+     * than using this constant directly. It survives as the code default a
+     * tenant that has never overridden the key still gets.
      */
     public static final Duration CART_TTL = Duration.ofHours(4);
 
@@ -93,6 +104,7 @@ public class CartService {
     private final Clock clock;
     private final CustomerBlacklistPort blacklist;
     private final PromoCodeQueryPort promoCodes;
+    private final ConfigurationResolver configuration;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -107,7 +119,8 @@ public class CartService {
             ObjectMapper objectMapper,
             Clock clock,
             CustomerBlacklistPort blacklist,
-            PromoCodeQueryPort promoCodes) {
+            PromoCodeQueryPort promoCodes,
+            ConfigurationResolver configuration) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -120,6 +133,7 @@ public class CartService {
         this.clock = clock;
         this.blacklist = blacklist;
         this.promoCodes = promoCodes;
+        this.configuration = configuration;
     }
 
     /**
@@ -194,7 +208,7 @@ public class CartService {
                 null,
                 null,
                 1,
-                now.plus(CART_TTL),
+                now.plus(cartTtl(tenantId, brandId, locationId)),
                 null,
                 null);
 
@@ -455,6 +469,19 @@ public class CartService {
                 .filter(cart -> ownedBy(cart, callerAccountId))
                 .flatMap(cart -> carts.findFulfillment(tenantId, cartId))
                 .map(JdbcCartStore.CartFulfillmentRow::customerAddressId);
+    }
+
+    /**
+     * The ADR 0030 cart TTL in force at this scope ({@code
+     * ordering.cart_expiry_minutes}), falling back to {@link #CART_TTL} only
+     * in the sense that the key's own code default is that same value — see
+     * {@link OrderingConfigurationKeys#CART_EXPIRY_MINUTES}.
+     */
+    private Duration cartTtl(UUID tenantId, UUID brandId, UUID locationId) {
+        Integer minutes = configuration.value(
+                OrderingConfigurationKeys.CART_EXPIRY_MINUTES, ResourceScope.location(tenantId, brandId, locationId));
+        return Duration.ofMinutes(Objects.requireNonNull(
+                minutes, "ordering.cart_expiry_minutes declares a code default and never terminates on explicit null"));
     }
 
     private @Nullable String encrypt(UUID tenantId, UUID cartId, String column, @Nullable String plaintext) {

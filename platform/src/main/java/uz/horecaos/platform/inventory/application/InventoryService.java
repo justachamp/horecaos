@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -24,14 +25,20 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
+import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.inventory.api.TrackingMode;
+import uz.horecaos.platform.inventory.domain.ReservationExpiry;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.StockItemRow;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
+import uz.horecaos.platform.tenancy.api.Resolved;
 
 /**
  * Binary availability and the reservation path (ADR 0017).
@@ -48,8 +55,18 @@ public class InventoryService implements InventoryReservationPort {
     private static final Logger log = LoggerFactory.getLogger(InventoryService.class);
 
     /**
-     * Matches the ADR 0018 quote TTL. A hold outliving its quote would keep stock
-     * back for a price nobody can still accept.
+     * The platform default: matches the ADR 0018 quote TTL, so a hold does not
+     * outlive its quote and keep stock back for a price nobody can still
+     * accept. {@code InventoryConfigurationKeyTests} keeps this literal equal
+     * to {@link InventoryConfigurationKeys#RESERVATION_TTL_SECONDS}'s own
+     * default so the two cannot drift apart.
+     *
+     * <p>Wired 2026-09-10 to {@code inventory.reservation_ttl_seconds}
+     * (ADR 0030): {@link #reserveForQuote} resolves the live TTL per
+     * tenant/brand/location rather than using this constant directly, and
+     * then never returns an expiry earlier than the specific quote's own
+     * stored {@code expiresAt} — see {@link ReservationExpiry} for why that
+     * floor exists and is not merely "resolve pricing's key too and compare".
      */
     public static final Duration RESERVATION_TTL = Duration.ofMinutes(15);
 
@@ -59,7 +76,7 @@ public class InventoryService implements InventoryReservationPort {
      * Every existing caller that builds this service by hand (test fixtures
      * that predate ADR 0060, none of which cares whether a sold-out toggle is
      * audited) gets this rather than a constructor signature change that
-     * would touch all of them. Production wiring uses the five-argument,
+     * would touch all of them. Production wiring uses the six-argument,
      * {@code @Autowired} constructor below and gets the real recorder.
      */
     private static final AuditRecorder NO_OP_AUDIT = fact -> {};
@@ -69,7 +86,7 @@ public class InventoryService implements InventoryReservationPort {
      * every fixture built by hand here runs against {@code TestDatabase}'s
      * migrator connection, which owns every table row-level security could
      * ever apply to and so is exempt from it regardless of what this binds.
-     * Production wiring uses the five-argument, {@code @Autowired}
+     * Production wiring uses the six-argument, {@code @Autowired}
      * constructor below and gets {@link uz.horecaos.platform.configuration.rls.JdbcTenantRlsSession},
      * the one that actually talks to PostgreSQL.
      */
@@ -81,11 +98,37 @@ public class InventoryService implements InventoryReservationPort {
         public void bindPlatform() {}
     };
 
+    /**
+     * The same story again, for ADR 0030: a fixture built by hand here has
+     * nothing configured, and "nothing configured" is exactly what a key's own
+     * code default means. Every value this returns is {@link
+     * ConfigurationKey#defaultValue()} regardless of scope, which for {@link
+     * InventoryConfigurationKeys#RESERVATION_TTL_SECONDS} is the same 900
+     * seconds {@link #RESERVATION_TTL} already names — so wiring the real
+     * resolver in changes nothing an existing fixture asserts. Production
+     * wiring uses the six-argument, {@code @Autowired} constructor below and
+     * gets {@link uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver}.
+     */
+    private static final ConfigurationResolver NO_OP_CONFIGURATION = new ConfigurationResolver() {
+        @Override
+        public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
+            return new Resolved<>(
+                    key.defaultValue(),
+                    new ResolutionTrace(key.code(), ResolutionTrace.Source.CODE_DEFAULT, null, List.of()));
+        }
+
+        @Override
+        public ResolutionTrace explain(ConfigurationKey<?> key, ResourceScope scope) {
+            return resolve(key, scope).trace();
+        }
+    };
+
     private final JdbcInventoryStore store;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final AuditRecorder audit;
     private final TenantRlsSession rls;
+    private final ConfigurationResolver configuration;
 
     public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
         this(store, events, clock, NO_OP_AUDIT);
@@ -96,18 +139,29 @@ public class InventoryService implements InventoryReservationPort {
         this(store, events, clock, audit, NO_OP_RLS);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public InventoryService(
             JdbcInventoryStore store,
             ApplicationEventPublisher events,
             Clock clock,
             AuditRecorder audit,
             TenantRlsSession rls) {
+        this(store, events, clock, audit, rls, NO_OP_CONFIGURATION);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(
+            JdbcInventoryStore store,
+            ApplicationEventPublisher events,
+            Clock clock,
+            AuditRecorder audit,
+            TenantRlsSession rls,
+            ConfigurationResolver configuration) {
         this.store = store;
         this.events = events;
         this.clock = clock;
         this.audit = audit;
         this.rls = rls;
+        this.configuration = configuration;
     }
 
     @Transactional
@@ -298,12 +352,22 @@ public class InventoryService implements InventoryReservationPort {
      * <p>Availability is checked and the hold taken in one transaction, so a dish
      * marked sold out between the check and the hold cannot slip through.
      *
+     * <p>The expiry actually stored is never earlier than {@code
+     * quoteExpiresAt}: see {@link ReservationExpiry} for why a reservation
+     * that expired before the quote it backs is how stock gets sold twice at
+     * two different prices.
+     *
      * @return a hold, or the reason it was refused
      */
     @Override
     @Transactional
     public ReservationResult reserveForQuote(
-            UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID quoteId,
+            Instant quoteExpiresAt,
+            Map<UUID, Integer> quantitiesByVariant) {
         rls.bindTenant(tenantId);
 
         // ADR 0024 forbids a historical import from changing inventory, and this
@@ -326,9 +390,10 @@ public class InventoryService implements InventoryReservationPort {
 
         Instant now = clock.instant();
         UUID reservationId = UUID.randomUUID();
+        Instant expiresAt = reservationExpiry(tenantId, brandId, locationId, now, quoteExpiresAt);
 
         boolean created = store.insertReservation(
-                reservationId, tenantId, brandId, locationId, OWNER_QUOTE, quoteId, now.plus(RESERVATION_TTL), now);
+                reservationId, tenantId, brandId, locationId, OWNER_QUOTE, quoteId, expiresAt, now);
 
         if (!created) {
             // A reservation row already exists for this quote. The uniqueness
@@ -370,7 +435,30 @@ public class InventoryService implements InventoryReservationPort {
             store.insertReservationLine(reservationId, tenantId, item.stockItemId(), BigDecimal.valueOf(quantity));
         });
 
-        return ReservationResult.held(reservationId, now.plus(RESERVATION_TTL));
+        return ReservationResult.held(reservationId, expiresAt);
+    }
+
+    /**
+     * The configured reservation TTL from {@code now}, floored so it never
+     * expires before the quote this reservation is being taken for.
+     *
+     * <p>Deliberately not "resolve {@code pricing.quote_ttl_seconds} here too
+     * and take the max of two resolutions" — see {@link ReservationExpiry}'s
+     * own doc for why that would not actually guarantee the invariant it
+     * looks like it guarantees. {@code quoteExpiresAt} is the one fact that
+     * cannot drift: the caller already holds the specific quote it is
+     * reserving stock for, and that quote's {@code expiresAt} was fixed the
+     * instant the quote was priced.
+     */
+    private Instant reservationExpiry(
+            UUID tenantId, UUID brandId, UUID locationId, Instant now, Instant quoteExpiresAt) {
+        Integer seconds = configuration.value(
+                InventoryConfigurationKeys.RESERVATION_TTL_SECONDS,
+                ResourceScope.location(tenantId, brandId, locationId));
+        Duration configuredTtl = Duration.ofSeconds(Objects.requireNonNull(
+                seconds,
+                "inventory.reservation_ttl_seconds declares a code default and never terminates on explicit null"));
+        return ReservationExpiry.notBefore(now.plus(configuredTtl), quoteExpiresAt);
     }
 
     /** Turns a hold into a committed sale when an order is confirmed. */

@@ -120,6 +120,7 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -350,7 +351,8 @@ class CartCheckoutAndOrderTests {
                 deliveryFees,
                 promoCodeStore,
                 new PromoCodeEligibilityService(promoCodeStore),
-                clock);
+                clock,
+                new FakeConfigurationResolver());
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
 
         cartStore = new JdbcCartStore(jdbc);
@@ -397,7 +399,8 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 clock,
                 customerBlacklist,
-                new PromoCodeEligibilityService(promoCodeStore));
+                new PromoCodeEligibilityService(promoCodeStore),
+                new FakeConfigurationResolver());
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
@@ -1765,7 +1768,12 @@ class CartCheckoutAndOrderTests {
         // reservation on; the point is that checkout must not treat a dead hold as
         // a live one.
         tx(() -> inventory.reserveForQuote(
-                TENANT, BRAND, LOCATION, priced.quote().quoteId(), Map.of(burgerVariant, 2)));
+                TENANT,
+                BRAND,
+                LOCATION,
+                priced.quote().quoteId(),
+                priced.quote().expiresAt(),
+                Map.of(burgerVariant, 2)));
         jdbc.sql("UPDATE inventory.reservations SET status = 'EXPIRED'").update();
 
         var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-dead-hold")));

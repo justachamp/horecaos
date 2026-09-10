@@ -48,6 +48,7 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -465,7 +466,8 @@ class OnboardingFullRunIntegrationTests {
                 deliveryFees,
                 promoCodeStore,
                 new PromoCodeEligibilityService(promoCodeStore),
-                CLOCK);
+                CLOCK,
+                new FakeConfigurationResolver());
 
         JdbcMediaAssetStore mediaStore = new JdbcMediaAssetStore(jdbc);
         uz.horecaos.platform.media.api.MediaAvailability media = (tid, assetIds) -> assetIds.stream()
