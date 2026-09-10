@@ -1,0 +1,76 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  max-width: 1100px;
+}
+
+.card {
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card.hot {
+  box-shadow: inset 3px 0 0 var(--q-error);
+}
+
+.card h2,
+.card p {
+  margin: 0;
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.action {
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 1px 6px;
+  background: var(--q-hairline);
+}
+
+.tag.warn {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.counts {
+  color: var(--q-ink-muted);
+}

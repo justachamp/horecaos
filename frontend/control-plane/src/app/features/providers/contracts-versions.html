@@ -7,6 +7,33 @@
 } @else if (loadError(); as message) {
   <p class="q-body-sm state error">{{ message }}</p>
 } @else {
+  <h2 class="q-subhead section">{{ i18n.t('contractsVersions.adapters.title') }}</h2>
+  @if (adapters().length === 0) {
+    <p class="q-body-sm state">{{ i18n.t('contractsVersions.adapters.empty') }}</p>
+  } @else {
+    <table class="table adapters">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('contractsVersions.adapters.provider') }}</th>
+          <th class="q-caption">{{ i18n.t('contractsVersions.adapters.version') }}</th>
+          <th class="q-caption">{{ i18n.t('contractsVersions.adapters.installations') }}</th>
+          <th class="q-caption">{{ i18n.t('contractsVersions.adapters.connected') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of adapters(); track row.providerType + (row.adapterVersion ?? '')) {
+          <tr>
+            <td class="q-body-sm">{{ row.providerType }}</td>
+            <td class="q-body-sm q-tnum">{{ row.adapterVersion ?? i18n.t('contractsVersions.adapters.unchecked') }}</td>
+            <td class="q-body-sm q-tnum">{{ row.installations }}</td>
+            <td class="q-body-sm q-tnum">{{ row.connected }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <h2 class="q-subhead section">{{ i18n.t('contractsVersions.events.title') }}</h2>
   <table class="table">
     <thead>
       <tr>

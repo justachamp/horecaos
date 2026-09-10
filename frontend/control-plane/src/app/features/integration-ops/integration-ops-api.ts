@@ -46,6 +46,32 @@ export type FailureDetail = Readonly<Record<string, string | number | boolean | 
  * (Message flow) and 4.2 (Dead letters & replay), which read the same two
  * queues at different granularity.
  */
+/** One call a payment provider made to HorecaOS. */
+export interface WebhookDelivery {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly provider: string;
+  readonly kind: string;
+  readonly providerReference: string;
+  readonly signatureValid: boolean;
+  readonly responseCode: string;
+  readonly receivedAt: string;
+  readonly matchedPayment: boolean;
+}
+
+/** A failure category with its rules and what sits in it now. */
+export interface FailureCategoryView {
+  readonly code: string;
+  readonly retryableByTimer: boolean;
+  readonly requiresReconciliation: boolean;
+  readonly securityRelevant: boolean;
+  readonly outboxDeadLettered: number;
+  readonly outboxWaiting: number;
+  readonly inboxDeadLettered: number;
+  readonly inboxWaiting: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class IntegrationOpsApi {
   private readonly api = inject(ApiClient);
@@ -144,5 +170,19 @@ export class IntegrationOpsApi {
         { category, reason, evidenceReference },
       ),
     );
+  }
+
+  /** Payment providers' calls, newest first. */
+  async webhooks(provider: string | null, invalidSignatureOnly: boolean): Promise<WebhookDelivery[]> {
+    return firstValueFrom(
+      this.api.get<WebhookDelivery[]>('/api/v1/control-plane/webhooks', {
+        query: { provider: provider ?? undefined, invalidSignatureOnly, limit: 200 },
+      }),
+    );
+  }
+
+  /** Every failure category, its rules and its live counts. */
+  async failureTaxonomy(): Promise<FailureCategoryView[]> {
+    return firstValueFrom(this.api.get<FailureCategoryView[]>('/api/v1/control-plane/failure-taxonomy'));
   }
 }

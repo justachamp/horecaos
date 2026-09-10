@@ -2,18 +2,15 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { EventContractView, ProvidersApi } from './providers-api';
+import { AdapterVersionView, EventContractView, ProvidersApi } from './providers-api';
 
 /**
- * IA 3.4 Contracts & versions -- the ADR 0032 event/schema contract half of
- * this row, real and code-owned (`EventCatalog`).
+ * IA 3.4 Contracts & versions -- every event this build can publish with its
+ * schema version, and which adapter version each provider's installations
+ * run, with how many of them last connected.
  *
- * Named gap, same discipline as 3.1 Provider registry: "adapter versions,
- * deprecations, consumer compatibility" -- provider adapter versioning
- * distinct from an event contract -- is not modeled anywhere in this build.
- * `EventContractController`'s own doc comment names this directly. This
- * screen shows the contract registry, which is real, and invents nothing for
- * the other half.
+ * Deprecations are not recorded: no adapter has been retired yet, so there is
+ * nothing to list, and the screen says so rather than inventing a schedule.
  */
 @Component({
   selector: 'app-contracts-versions',
@@ -28,6 +25,7 @@ export class ContractsVersions {
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
   protected readonly contracts = signal<readonly EventContractView[]>([]);
+  protected readonly adapters = signal<readonly AdapterVersionView[]>([]);
 
   constructor() {
     void this.load();
@@ -37,7 +35,12 @@ export class ContractsVersions {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      this.contracts.set(await this.api.listEventContracts());
+      const [contracts, adapters] = await Promise.all([
+        this.api.listEventContracts(),
+        this.api.adapterVersions().catch(() => []),
+      ]);
+      this.contracts.set(contracts);
+      this.adapters.set(adapters);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {

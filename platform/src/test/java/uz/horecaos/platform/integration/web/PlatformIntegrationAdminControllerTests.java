@@ -127,6 +127,26 @@ class PlatformIntegrationAdminControllerTests {
                 .doesNotContain("baseUrl", "egressAllowlist");
     }
 
+    @Test
+    void adapterVersionsAreCountedFromTheInstallationsThemselves() {
+        UUID tenant = tenant("versions", "Versions Tenant");
+        installation(tenant, "CLICK", "Click one");
+        installation(tenant, "PAYME", "Payme one");
+        jdbc.sql("UPDATE integration.installations SET adapter_version = '2.1', last_connection_status = 'SUCCEEDED' "
+                        + "WHERE provider_type = 'CLICK'")
+                .update();
+
+        assertThat(controller.adapterVersions())
+                .extracting(
+                        PlatformIntegrationAdminController.AdapterVersionView::providerType,
+                        PlatformIntegrationAdminController.AdapterVersionView::adapterVersion,
+                        PlatformIntegrationAdminController.AdapterVersionView::installations,
+                        PlatformIntegrationAdminController.AdapterVersionView::connected)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("CLICK", "2.1", 1L, 1L),
+                        org.assertj.core.groups.Tuple.tuple("PAYME", null, 1L, 0L));
+    }
+
     private UUID tenant(String slug, String name) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""

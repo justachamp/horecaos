@@ -86,6 +86,28 @@ public class PlatformIntegrationAdminController {
                 .list();
     }
 
+    @GetMapping("/adapter-versions")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Which adapter version each provider's installations run",
+            description = "Counted from the installations themselves, with how many of each last "
+                    + "passed a connection check. An installation never checked reports no version.")
+    List<AdapterVersionView> adapterVersions() {
+        return jdbc.sql("""
+                        SELECT provider_type, adapter_version, count(*) AS installations,
+                               count(*) FILTER (WHERE last_connection_status = 'SUCCEEDED') AS connected
+                          FROM integration.installations
+                         GROUP BY provider_type, adapter_version
+                         ORDER BY provider_type, adapter_version NULLS LAST
+                        """)
+                .query((rs, rowNumber) -> new AdapterVersionView(
+                        rs.getString("provider_type"),
+                        rs.getString("adapter_version"),
+                        rs.getLong("installations"),
+                        rs.getLong("connected")))
+                .list();
+    }
+
     @GetMapping("/installations")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM)
     @Operation(
@@ -133,6 +155,13 @@ public class PlatformIntegrationAdminController {
                 items.size() < pageSize ? null : items.getLast().id().toString();
         return new Page<>(items, nextCursor);
     }
+
+    /**
+     * @param adapterVersion null for installations no connection check has reached yet
+     * @param connected how many of them last passed a connection check
+     */
+    public record AdapterVersionView(
+            String providerType, @Nullable String adapterVersion, long installations, long connected) {}
 
     /** An approved provider endpoint, by name: its category, provider, and whether it is live. */
     public record ProviderEnvironmentView(

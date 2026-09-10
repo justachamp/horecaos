@@ -1,0 +1,61 @@
+<h1 class="q-title">{{ i18n.t('nav.webhookDeliveries') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('webhookDeliveries.lead') }}</p>
+
+<div class="filters">
+  <label class="field">
+    <span class="q-caption">{{ i18n.t('webhookDeliveries.provider') }}</span>
+    <select class="q-body-sm" name="provider" (change)="chooseProvider($any($event.target).value)">
+      <option value="" [selected]="provider() === ''">{{ i18n.t('webhookDeliveries.allProviders') }}</option>
+      @for (p of providers; track p) {
+        <option [value]="p" [selected]="p === provider()">{{ p }}</option>
+      }
+    </select>
+  </label>
+  <label class="q-body-sm check">
+    <input type="checkbox" name="invalidOnly" [checked]="invalidOnly()" (change)="chooseInvalidOnly($any($event.target).checked)" />
+    {{ i18n.t('webhookDeliveries.invalidOnly') }}
+  </label>
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (deliveries().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('webhookDeliveries.empty') }}</p>
+} @else {
+  @if (invalidCount() > 0 && !invalidOnly()) {
+    <p class="q-body-sm warning">{{ i18n.t('webhookDeliveries.invalidWarning', { count: invalidCount() }) }}</p>
+  }
+  <div class="scroll">
+    <table class="table deliveries">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('webhookDeliveries.column.received') }}</th>
+          <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+          <th class="q-caption">{{ i18n.t('webhookDeliveries.column.call') }}</th>
+          <th class="q-caption">{{ i18n.t('webhookDeliveries.column.reference') }}</th>
+          <th class="q-caption">{{ i18n.t('webhookDeliveries.column.signature') }}</th>
+          <th class="q-caption">{{ i18n.t('webhookDeliveries.column.answer') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of deliveries(); track d.id) {
+          <tr [class.invalid]="!d.signatureValid">
+            <td class="q-body-sm">{{ i18n.dateTime(asDate(d.receivedAt)) }}</td>
+            <td class="q-body-sm"><a [routerLink]="['/tenants', d.tenantId]">{{ d.tenantName }}</a></td>
+            <td class="q-body-sm q-tnum">{{ d.kind }}</td>
+            <td class="q-body-sm q-tnum">
+              {{ d.providerReference }}
+              @if (!d.matchedPayment) {
+                <span class="q-caption muted"> · {{ i18n.t('webhookDeliveries.unmatched') }}</span>
+              }
+            </td>
+            <td class="q-body-sm">{{ i18n.t(d.signatureValid ? 'webhookDeliveries.signature.valid' : 'webhookDeliveries.signature.invalid') }}</td>
+            <td class="q-body-sm q-tnum">{{ d.responseCode }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
