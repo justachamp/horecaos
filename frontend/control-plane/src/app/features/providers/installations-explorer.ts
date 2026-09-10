@@ -1,35 +1,46 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
+import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import { BrandView, LocationView, TenantsApi } from '../tenants/tenants-api';
-import { BindingView, PlatformInstallationView, ProvidersApi } from './providers-api';
+import {
+  BindingView,
+  PlatformInstallationView,
+  ProviderConnectDeclaration,
+  ProviderEnvironment,
+  ProvidersApi,
+  acceptsCredential,
+} from './providers-api';
 
 /**
- * IA 3.3 Installations explorer -- every `(tenant, provider, branch)`
- * installation at platform scope.
+ * IA 3.3 Installations -- every provider installation across tenants.
  *
- * No error-rate column: nothing in the schema records one. `lastConnectionStatus`
- * and `lastSecretRotatedAt` are the closest real signals, and this screen
- * shows those rather than a fabricated rate.
+ * Staff can install a provider for a tenant against an approved endpoint,
+ * bind it to a brand or branch (created suspended, activated once someone
+ * confirms the place), check its connection with the restaurant's own
+ * credential, and replace that credential. A credential is typed once, sent
+ * through the write-only door, and cleared from the form; it is never shown
+ * again. Merchants can connect providers themselves in the operations app.
  *
- * Manage opens one installation for incident work: check its connection
- * with the restaurant's own credential, see which brands and locations it
- * serves, and suspend or reactivate one of those with a reason. Connecting a
- * provider in the first place is the merchant's own, in the operations app.
+ * There is no error-rate column: nothing records one. The last connection
+ * result and the last credential rotation are shown instead.
  */
 @Component({
   selector: 'app-installations-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, TenantPicker],
   templateUrl: './installations-explorer.html',
   styleUrl: './installations-explorer.css',
 })
 export class InstallationsExplorer {
   protected readonly i18n = inject(I18nService);
   protected readonly asDate = asDate;
+  protected readonly acceptsCredential = acceptsCredential;
   private readonly api = inject(ProvidersApi);
   private readonly tenantsApi = inject(TenantsApi);
 
@@ -49,6 +60,46 @@ export class InstallationsExplorer {
   protected readonly changingBinding = signal<{ id: string; action: 'suspend' | 'activate' } | null>(null);
   protected readonly bindingReason = signal('');
   protected readonly bindingMessage = signal<string | null>(null);
+
+  protected readonly session = inject(SessionContextService);
+  private readonly directory = inject(TenantDirectory);
+  protected readonly busy = signal(false);
+  protected readonly actionMessage = signal<string | null>(null);
+
+  // ---------------------------------------------------------------- install
+  protected readonly installing = signal(false);
+  protected readonly environments = signal<readonly ProviderEnvironment[]>([]);
+  private readonly declarations = signal<readonly ProviderConnectDeclaration[]>([]);
+  protected readonly installTenantId = signal(this.directory.selected());
+  protected readonly environmentCode = signal('');
+  protected readonly displayName = signal('');
+  /** Held only until it is sent through the door, then cleared. */
+  protected readonly credential = signal('');
+  protected readonly externalAccount = signal('');
+  protected readonly installError = signal<string | null>(null);
+  protected readonly environment = computed(
+    () => this.environments().find((candidate) => candidate.code === this.environmentCode()) ?? null,
+  );
+  /** The name the provider gives its credential (Click's secret key, a bot token), when the build declares it. */
+  protected readonly credentialField = computed(() => {
+    const environment = this.environment();
+    const declaration = this.declarations().find(
+      (candidate) => candidate.providerType.toLowerCase() === environment?.providerType.toLowerCase(),
+    );
+    return declaration?.fields.find((field) => field.secret)?.key ?? null;
+  });
+
+  // ---------------------------------------------------------------- bind, rotate, settings
+  protected readonly declaredCapabilities = signal<readonly string[]>([]);
+  protected readonly bindBrandId = signal('');
+  protected readonly bindLocationId = signal('');
+  protected readonly bindCapabilities = signal<ReadonlySet<string>>(new Set());
+  protected readonly rotateValue = signal('');
+  protected readonly rotateReason = signal('');
+  protected readonly clerkApproval = signal<boolean | null>(null);
+  protected readonly bindLocations = computed(() =>
+    this.locations().filter((location) => location.brandId === this.bindBrandId()),
+  );
 
   constructor() {
     void this.load();
@@ -96,6 +147,15 @@ export class InstallationsExplorer {
     this.checkResult.set(null);
     this.bindingMessage.set(null);
     this.changingBinding.set(null);
+    this.actionMessage.set(null);
+    this.bindBrandId.set('');
+    this.bindLocationId.set('');
+    this.bindCapabilities.set(new Set());
+    this.rotateValue.set('');
+    this.rotateReason.set('');
+    this.clerkApproval.set(null);
+    this.declaredCapabilities.set([]);
+    void this.loadProviderDetail(installation);
     try {
       const [bindings, brands] = await Promise.all([
         this.api.bindings(installation.tenantId, installation.id),
@@ -163,6 +223,176 @@ export class InstallationsExplorer {
       this.bindings.set(await this.api.bindings(installation.tenantId, installation.id));
     } catch (error) {
       this.manageError.set(this.i18n.describe(error as ApiError));
+    }
+  }
+
+  /** What a POS adapter declares it can do, and Clopos's acceptance setting; both optional extras. */
+  private async loadProviderDetail(installation: PlatformInstallationView): Promise<void> {
+    if (installation.category === 'POS') {
+      const matrix = await this.api.capabilityMatrix().catch(() => []);
+      const declared = matrix.find((row) => row.providerType.toLowerCase() === installation.providerType.toLowerCase());
+      this.declaredCapabilities.set(declared?.declaredCapabilities ?? []);
+    }
+    if (installation.providerType.toLowerCase() === 'clopos') {
+      const settings = await this.api.cloposSettings(installation.tenantId, installation.id).catch(() => null);
+      this.clerkApproval.set(settings?.requireClerkApproval ?? null);
+    }
+  }
+
+  // ---------------------------------------------------------------- install
+
+  protected async openInstall(): Promise<void> {
+    this.installing.set(!this.installing());
+    this.installError.set(null);
+    if (!this.installing() || this.environments().length > 0) {
+      return;
+    }
+    try {
+      const [environments, declarations] = await Promise.all([
+        this.api.environments(),
+        this.api.listProviders().catch(() => []),
+      ]);
+      this.environments.set(environments);
+      this.declarations.set(declarations);
+    } catch (error) {
+      this.installError.set(this.i18n.describe(error as ApiError));
+    }
+  }
+
+  protected canInstall(): boolean {
+    return (
+      !this.busy() &&
+      this.installTenantId().length > 0 &&
+      this.environment() !== null &&
+      this.displayName().trim().length > 0
+    );
+  }
+
+  /**
+   * Writes the credential through the door first, when one was typed, and
+   * installs with the reference that comes back. The typed value is cleared
+   * before either call, so it does not outlive the request even on failure.
+   */
+  protected async install(event: Event): Promise<void> {
+    event.preventDefault();
+    const environment = this.environment();
+    if (!this.canInstall() || environment === null) {
+      return;
+    }
+    const tenantId = this.installTenantId();
+    const value = this.credential();
+    this.credential.set('');
+    this.busy.set(true);
+    this.installError.set(null);
+    this.actionMessage.set(null);
+    try {
+      const secretReference =
+        value.trim().length > 0 && acceptsCredential(environment.category)
+          ? await this.api.writeCredential(tenantId, environment.category, environment.providerType, value)
+          : undefined;
+      await this.api.install(tenantId, {
+        category: environment.category,
+        providerType: environment.providerType,
+        environmentCode: environment.code,
+        displayName: this.displayName().trim(),
+        secretReference,
+        externalAccountReference: this.externalAccount().trim() || undefined,
+      });
+      this.installing.set(false);
+      this.displayName.set('');
+      this.externalAccount.set('');
+      this.environmentCode.set('');
+      this.actionMessage.set(this.i18n.t('installationsExplorer.install.done', { tenant: this.directory.nameOf(tenantId) }));
+      await this.load();
+    } catch (error) {
+      this.installError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // ---------------------------------------------------------------- bind
+
+  protected toggleCapability(code: string, on: boolean): void {
+    this.bindCapabilities.update((current) => {
+      const next = new Set(current);
+      if (on) {
+        next.add(code);
+      } else {
+        next.delete(code);
+      }
+      return next;
+    });
+  }
+
+  protected async bind(installation: PlatformInstallationView): Promise<void> {
+    if (this.busy() || this.bindBrandId().length === 0) {
+      return;
+    }
+    this.busy.set(true);
+    this.manageError.set(null);
+    const capabilities = [...this.bindCapabilities()];
+    try {
+      await this.api.bind(installation.tenantId, installation.id, {
+        brandId: this.bindBrandId(),
+        locationId: this.bindLocationId() || undefined,
+        capabilities,
+        // Each capability this binding takes on is its place's main one; the server
+        // refuses a second main provider for the same place and capability.
+        primaryCapabilities: capabilities,
+      });
+      this.bindBrandId.set('');
+      this.bindLocationId.set('');
+      this.bindCapabilities.set(new Set());
+      this.bindingMessage.set(this.i18n.t('installationsExplorer.bind.done'));
+      this.bindings.set(await this.api.bindings(installation.tenantId, installation.id));
+    } catch (error) {
+      this.manageError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // ---------------------------------------------------------------- rotate & settings
+
+  protected async rotate(installation: PlatformInstallationView): Promise<void> {
+    const value = this.rotateValue();
+    const reason = this.rotateReason().trim();
+    if (this.busy() || value.trim().length === 0 || reason.length === 0) {
+      return;
+    }
+    this.rotateValue.set('');
+    this.busy.set(true);
+    this.manageError.set(null);
+    try {
+      await this.api.rotateCredential(installation.tenantId, installation.id, value, reason);
+      this.rotateReason.set('');
+      this.bindingMessage.set(this.i18n.t('installationsExplorer.rotate.done'));
+      const now = new Date().toISOString();
+      this.installations.update((rows) =>
+        rows.map((row) => (row.id === installation.id ? { ...row, lastSecretRotatedAt: now } : row)),
+      );
+    } catch (error) {
+      this.manageError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async setClerkApproval(installation: PlatformInstallationView, required: boolean): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    this.busy.set(true);
+    this.manageError.set(null);
+    try {
+      await this.api.setCloposSettings(installation.tenantId, installation.id, required);
+      this.clerkApproval.set(required);
+      this.bindingMessage.set(this.i18n.t('installationsExplorer.clopos.saved'));
+    } catch (error) {
+      this.manageError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.busy.set(false);
     }
   }
 }

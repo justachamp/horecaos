@@ -149,3 +149,84 @@
 .error {
   color: var(--q-error-text);
 }
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.installToggle {
+  margin-top: 16px;
+}
+
+.installForm {
+  margin-top: 12px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.installForm input,
+.installForm select,
+.manageBlock input:not([type='checkbox']),
+.manageBlock select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+  align-self: flex-start;
+}
+
+.manageBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--q-hairline);
+  margin-top: 12px;
+  padding-top: 4px;
+}
+
+.manageBlock p {
+  margin: 0;
+}
+
+.manageBlock .rowButton {
+  align-self: flex-start;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline input {
+  flex: 1 1 220px;
+}
+
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.capability {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

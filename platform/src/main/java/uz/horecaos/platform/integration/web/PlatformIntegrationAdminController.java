@@ -64,6 +64,28 @@ public class PlatformIntegrationAdminController {
         return ConnectFieldCatalog.all();
     }
 
+    @GetMapping("/provider-environments")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "The approved provider endpoints an installation may use",
+            description = "An installation names one of these by code; nobody types a URL. The host "
+                    + "itself is not returned: choosing an endpoint needs its name, its provider and "
+                    + "whether it is live, not where it points.")
+    List<ProviderEnvironmentView> providerEnvironments() {
+        return jdbc.sql("""
+                        SELECT code, provider_category, provider_type, is_production, notes
+                          FROM integration.provider_environments
+                         ORDER BY provider_type, is_production DESC, code
+                        """)
+                .query((rs, rowNumber) -> new ProviderEnvironmentView(
+                        rs.getString("code"),
+                        rs.getString("provider_category"),
+                        rs.getString("provider_type"),
+                        rs.getBoolean("is_production"),
+                        rs.getString("notes")))
+                .list();
+    }
+
     @GetMapping("/installations")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM)
     @Operation(
@@ -111,6 +133,14 @@ public class PlatformIntegrationAdminController {
                 items.size() < pageSize ? null : items.getLast().id().toString();
         return new Page<>(items, nextCursor);
     }
+
+    /** An approved provider endpoint, by name: its category, provider, and whether it is live. */
+    public record ProviderEnvironmentView(
+            String code,
+            String category,
+            String providerType,
+            boolean production,
+            @Nullable String notes) {}
 
     /**
      * One installation, with the tenant it belongs to named — the field

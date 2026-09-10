@@ -1,6 +1,66 @@
 <h1 class="q-title">{{ i18n.t('installationsExplorer.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('installationsExplorer.lead') }}</p>
 
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+
+@if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
+  <button type="button" class="rowButton installToggle" (click)="openInstall()">
+    {{ installing() ? i18n.t('common.cancel') : i18n.t('installationsExplorer.install.open') }}
+  </button>
+  @if (installing()) {
+    <form class="installForm" (submit)="install($event)" autocomplete="off">
+      <app-tenant-picker [value]="installTenantId()" (tenantChange)="installTenantId.set($event)" />
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('installationsExplorer.install.environment') }}</span>
+        <select class="q-body-sm" name="environment" (change)="environmentCode.set($any($event.target).value)">
+          <option value="" [selected]="environmentCode() === ''">{{ i18n.t('installationsExplorer.install.chooseEnvironment') }}</option>
+          @for (env of environments(); track env.code) {
+            <option [value]="env.code" [selected]="env.code === environmentCode()">
+              {{ env.providerType }} · {{ env.code }} · {{ env.production ? i18n.t('installationsExplorer.install.live') : i18n.t('installationsExplorer.install.test') }}
+            </option>
+          }
+        </select>
+        @if (environment()?.notes; as notes) {
+          <span class="q-caption muted">{{ notes }}</span>
+        }
+      </label>
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('installationsExplorer.install.displayName') }}</span>
+        <input class="q-body-sm" name="displayName" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />
+      </label>
+      @if (environment(); as env) {
+        @if (acceptsCredential(env.category)) {
+          <label class="field">
+            <span class="q-caption">
+              {{ credentialField() ? i18n.t('installationsExplorer.install.credentialNamed', { field: credentialField()! }) : i18n.t('installationsExplorer.install.credential') }}
+            </span>
+            <input
+              class="q-body-sm"
+              type="password"
+              name="credential"
+              autocomplete="new-password"
+              spellcheck="false"
+              [value]="credential()"
+              (input)="credential.set($any($event.target).value)"
+            />
+            <span class="q-caption muted">{{ i18n.t('installationsExplorer.install.credentialHint') }}</span>
+          </label>
+        }
+      }
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('installationsExplorer.install.account') }}</span>
+        <input class="q-body-sm" name="externalAccount" [value]="externalAccount()" (input)="externalAccount.set($any($event.target).value)" />
+      </label>
+      @if (installError(); as message) {
+        <p class="q-body-sm error">{{ message }}</p>
+      }
+      <button type="submit" class="rowButton primary" [disabled]="!canInstall()">{{ i18n.t('installationsExplorer.install.submit') }}</button>
+    </form>
+  }
+}
+
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
 } @else if (loadError(); as message) {
@@ -81,6 +141,93 @@
                     </li>
                   }
                 </ul>
+              }
+
+              @if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
+                <div class="manageBlock bindForm">
+                  <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.bind.title') }}</h3>
+                  <div class="inline">
+                    <select class="q-body-sm" name="bindBrand" (change)="bindBrandId.set($any($event.target).value); bindLocationId.set('')">
+                      <option value="" [selected]="bindBrandId() === ''">{{ i18n.t('installationsExplorer.bind.chooseBrand') }}</option>
+                      @for (brand of brands(); track brand.id) {
+                        <option [value]="brand.id" [selected]="brand.id === bindBrandId()">{{ brand.displayName }}</option>
+                      }
+                    </select>
+                    <select class="q-body-sm" name="bindLocation" [disabled]="bindBrandId() === ''" (change)="bindLocationId.set($any($event.target).value)">
+                      <option value="">{{ i18n.t('installationsExplorer.bindings.wholeBrand') }}</option>
+                      @for (location of bindLocations(); track location.id) {
+                        <option [value]="location.id" [selected]="location.id === bindLocationId()">{{ location.displayName }}</option>
+                      }
+                    </select>
+                  </div>
+                  @if (declaredCapabilities().length > 0) {
+                    <div class="capabilities">
+                      @for (code of declaredCapabilities(); track code) {
+                        <label class="q-body-sm capability">
+                          <input
+                            type="checkbox"
+                            [attr.name]="'capability-' + code"
+                            [checked]="bindCapabilities().has(code)"
+                            (change)="toggleCapability(code, $any($event.target).checked)"
+                          />
+                          <span class="q-tnum">{{ code }}</span>
+                        </label>
+                      }
+                    </div>
+                  }
+                  <p class="q-caption muted">{{ i18n.t('installationsExplorer.bind.hint') }}</p>
+                  <button type="button" class="rowButton bindSubmit" [disabled]="busy() || bindBrandId() === ''" (click)="bind(installation)">
+                    {{ i18n.t('installationsExplorer.bind.submit') }}
+                  </button>
+                </div>
+
+                <div class="manageBlock rotateForm">
+                  <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.rotate.title') }}</h3>
+                  <div class="inline">
+                    <input
+                      class="q-body-sm"
+                      type="password"
+                      name="rotateValue"
+                      autocomplete="new-password"
+                      spellcheck="false"
+                      [placeholder]="i18n.t('installationsExplorer.rotate.value')"
+                      [value]="rotateValue()"
+                      (input)="rotateValue.set($any($event.target).value)"
+                    />
+                    <input
+                      class="q-body-sm"
+                      name="rotateReason"
+                      [placeholder]="i18n.t('common.reason')"
+                      [value]="rotateReason()"
+                      (input)="rotateReason.set($any($event.target).value)"
+                    />
+                    <button
+                      type="button"
+                      class="rowButton rotateSubmit"
+                      [disabled]="busy() || rotateValue().trim().length === 0 || rotateReason().trim().length === 0"
+                      (click)="rotate(installation)"
+                    >
+                      {{ i18n.t('installationsExplorer.rotate.submit') }}
+                    </button>
+                  </div>
+                  <p class="q-caption muted">{{ i18n.t('installationsExplorer.install.credentialHint') }}</p>
+                </div>
+
+                @if (clerkApproval() !== null) {
+                  <div class="manageBlock clopos">
+                    <label class="q-body-sm capability">
+                      <input
+                        type="checkbox"
+                        name="clerkApproval"
+                        [checked]="clerkApproval()"
+                        [disabled]="busy()"
+                        (change)="setClerkApproval(installation, $any($event.target).checked)"
+                      />
+                      {{ i18n.t('installationsExplorer.clopos.clerk') }}
+                    </label>
+                    <p class="q-caption muted">{{ i18n.t('installationsExplorer.clopos.hint') }}</p>
+                  </div>
+                }
               }
             </td>
           </tr>

@@ -4615,6 +4615,26 @@
         },
         "type" : "object"
       },
+      "ProviderEnvironmentView" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "production" : {
+            "type" : "boolean"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ProviderInstallationControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -7435,6 +7455,29 @@
         },
         "summary" : "Declared capabilities per wired POS adapter",
         "tags" : [ "POS capability matrix" ]
+      }
+    },
+    "/api/v1/control-plane/provider-environments" : {
+      "get" : {
+        "description" : "An installation names one of these by code; nobody types a URL. The host itself is not returned: choosing an endpoint needs its name, its provider and whether it is live, not where it points.",
+        "operationId" : "providerEnvironments",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderEnvironmentView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The approved provider endpoints an installation may use",
+        "tags" : [ "Platform integration administration" ]
       }
     },
     "/api/v1/control-plane/providers" : {

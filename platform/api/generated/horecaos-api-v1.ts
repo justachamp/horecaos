@@ -3583,6 +3583,14 @@ export interface ProviderConnectDeclaration {
   providerType?: string;
 }
 
+export interface ProviderEnvironmentView {
+  category?: string;
+  code?: string;
+  notes?: string;
+  production?: boolean;
+  providerType?: string;
+}
+
 export interface ProviderInstallationControllerReasonRequest {
   reason: string;
 }
@@ -5251,6 +5259,7 @@ export interface Operations {
   "get_11": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
   "matrix": { method: "GET"; path: "/api/v1/control-plane/pos-capability-matrix"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterCapabilities> } };
+  "providerEnvironments": { method: "GET"; path: "/api/v1/control-plane/provider-environments"; request: { parameters: Record<string, never> }; responses: { "200": Array<ProviderEnvironmentView> } };
   "providers": { method: "GET"; path: "/api/v1/control-plane/providers"; request: { parameters: Record<string, never> }; responses: { "200": Array<ProviderConnectDeclaration> } };
   "get_10": { method: "GET"; path: "/api/v1/control-plane/reference-data"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceData } };
   "listTenants": { method: "GET"; path: "/api/v1/control-plane/tenants"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PageTenantSummaryView } };
