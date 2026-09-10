@@ -22,6 +22,7 @@ Read that to actually deploy something. This file is the map.
 | `env.template` | The per-environment file, exhaustively documented inline. Copy it, fill it, keep the result outside this repository. |
 | `env.staging.example` | A filled example for a hypothetical aHOST staging VM — a different provider than production, which ADR 0061 requires. |
 | `env.local-test` | What `local-smoke.sh` uses. Test values only; never copy this onto a server. |
+| `session-start.sh` | Brings the stack back after the host reboots: unseals OpenBao (you type the shares), restores the RAM-backed startup secrets through a short-lived deploy-scoped token, then starts everything in dependency order and waits for health. Deliberately does **no** realm import, migration or image change — re-importing the realm after hardening restores the repository's published client secrets. Safe to re-run: it exits without touching a stack that is already healthy. |
 | `local-smoke.sh` | Builds every image from source, brings the whole stack up under an isolated compose project, runs the smoke checklist, tears down. The repeatable form of "does this actually work" that needs no server. |
 | `infra/caddy/Caddyfile` | TLS (Let's Encrypt in production, Caddy's own internal CA when `HORECAOS_TLS_MODE=internal`), routing, and what is not exposed. |
 | `infra/postgres-init/` | Creates the least-privilege application login (`horecaos_app`) on a fresh database volume. Shared verbatim with `platform/compose.yaml`'s own copy in spirit — see the file's own header for why that sharing matters. |
