@@ -78,3 +78,74 @@
   cursor: default;
   color: var(--q-ink-subtle);
 }
+
+.rowButton {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.rowButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manageRow td {
+  background: var(--q-surface-1, var(--q-canvas));
+}
+
+.check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.check p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.subTitle {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.bindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bindings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bindings input {
+  border: 1px solid var(--q-hairline);
+  padding: 6px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  min-width: 240px;
+}
+
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-error-text);
+}

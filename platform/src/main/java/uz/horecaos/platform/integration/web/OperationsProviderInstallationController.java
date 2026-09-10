@@ -81,6 +81,14 @@ public class OperationsProviderInstallationController {
         return delegate.list(tenantId);
     }
 
+    @GetMapping("/{installationId}/bindings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(summary = "List an installation's bindings")
+    List<ProviderInstallationController.BindingView> bindings(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return delegate.bindings(tenantId, installationId);
+    }
+
     @PostMapping
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
     @Operation(

@@ -16,6 +16,7 @@
         <th class="q-caption">{{ i18n.t('installationsExplorer.column.status') }}</th>
         <th class="q-caption">{{ i18n.t('installationsExplorer.column.connection') }}</th>
         <th class="q-caption">{{ i18n.t('installationsExplorer.column.rotated') }}</th>
+        <th class="q-caption"></th>
       </tr>
     </thead>
     <tbody>
@@ -30,7 +31,60 @@
           </td>
           <td class="q-body-sm">{{ installation.lastConnectionStatus ?? i18n.t('installationsExplorer.neverChecked') }}</td>
           <td class="q-body-sm">{{ installation.lastSecretRotatedAt ? i18n.day(asDate(installation.lastSecretRotatedAt)) : i18n.t('installationsExplorer.neverRotated') }}</td>
+          <td class="q-body-sm">
+            <button type="button" class="rowButton" (click)="toggle(installation)">
+              {{ openId() === installation.id ? i18n.t('installationsExplorer.hide') : i18n.t('installationsExplorer.manage') }}
+            </button>
+          </td>
         </tr>
+        @if (openId() === installation.id) {
+          <tr class="manageRow">
+            <td colspan="6">
+              @if (manageError(); as message) {
+                <p class="q-body-sm error">{{ message }}</p>
+              }
+              <div class="check">
+                <p class="q-body-sm muted">{{ i18n.t('installationsExplorer.check.lead') }}</p>
+                <button type="button" class="rowButton" [disabled]="checking()" (click)="checkConnection(installation)">
+                  {{ checking() ? i18n.t('installationsExplorer.check.working') : i18n.t('installationsExplorer.check.action') }}
+                </button>
+                @if (checkResult(); as result) {
+                  <span class="q-body-sm">{{ result }}</span>
+                }
+              </div>
+              <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.bindings.title') }}</h3>
+              @if (bindingMessage(); as message) {
+                <p class="q-body-sm muted">{{ message }}</p>
+              }
+              @if (bindings().length === 0) {
+                <p class="q-body-sm muted">{{ i18n.t('installationsExplorer.bindings.empty') }}</p>
+              } @else {
+                <ul class="bindings">
+                  @for (binding of bindings(); track binding.id) {
+                    <li class="q-body-sm">
+                      <span>{{ placeOf(binding) }}</span>
+                      <span class="pill" [class]="'pill-' + binding.status">{{ binding.status }}</span>
+                      @if (changingBinding()?.id === binding.id) {
+                        @if (changingBinding()?.action === 'suspend') {
+                          <span class="muted">{{ i18n.t('installationsExplorer.bindings.suspendLead') }}</span>
+                        }
+                        <input class="q-body-sm" type="text" name="bindingReason" [placeholder]="i18n.t('installationsExplorer.bindings.reason')" [value]="bindingReason()" (input)="bindingReason.set($any($event.target).value)" />
+                        <button type="button" class="rowButton" [class.danger]="changingBinding()?.action === 'suspend'" [disabled]="bindingReason().trim().length === 0" (click)="confirmBindingChange(installation)">
+                          {{ i18n.t('installationsExplorer.bindings.confirm') }}
+                        </button>
+                        <button type="button" class="rowButton" (click)="changingBinding.set(null)">{{ i18n.t('tenants.create.cancel') }}</button>
+                      } @else {
+                        <button type="button" class="rowButton" (click)="askBindingChange(binding)">
+                          {{ binding.status === 'ACTIVE' ? i18n.t('installationsExplorer.bindings.suspend') : i18n.t('installationsExplorer.bindings.activate') }}
+                        </button>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </td>
+          </tr>
+        }
       }
     </tbody>
   </table>

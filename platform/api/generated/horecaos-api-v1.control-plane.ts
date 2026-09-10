@@ -237,6 +237,16 @@ export interface BindRequest {
   priority?: number;
 }
 
+export interface BindingView {
+  brandId?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+  id?: string;
+  locationId?: string;
+  priority?: number;
+  status?: string;
+}
+
 export interface BrandView {
   code?: string;
   displayName?: string;
@@ -2095,6 +2105,7 @@ export interface Operations {
   "install": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } }; body: InstallRequest }; responses: { "200": {  } } };
   "connectFields": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ProviderConnectDeclaration> } };
   "write": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/secrets"; request: { parameters: { path: { tenantId: string } }; body: SecretIngressRequest }; responses: { "200": SecretIngressResponse } };
+  "bindings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Array<BindingView> } };
   "bind": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: BindRequest }; responses: { "200": {  } } };
   "activateBinding": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/activate"; request: { parameters: { path: { bindingId: string; installationId: string; tenantId: string } }; body: ProviderInstallationControllerReasonRequest }; responses: { "200": {  } } };
   "suspendBinding": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; installationId: string; tenantId: string } }; body: ProviderInstallationControllerReasonRequest }; responses: { "200": {  } } };

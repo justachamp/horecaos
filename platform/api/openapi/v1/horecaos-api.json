@@ -1561,6 +1561,38 @@
         "required" : [ "fulfillmentMode", "scheduleId" ],
         "type" : "object"
       },
+      "BindingView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "effectiveFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BlacklistStatusResponse" : {
         "properties" : {
           "active" : {
@@ -21529,6 +21561,43 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "get" : {
+        "operationId" : "bindings_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List an installation's bindings",
+        "tags" : [ "Provider integrations" ]
+      },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
         "operationId" : "bind_3",
@@ -28314,6 +28383,43 @@
       }
     },
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "get" : {
+        "operationId" : "bindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List an installation's bindings",
+        "tags" : [ "Provider integrations" ]
+      },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
         "operationId" : "bind",

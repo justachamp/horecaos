@@ -40,7 +40,24 @@ export interface PlatformInstallationView {
   readonly lastSecretRotatedAt: string | null;
 }
 
-/** EventContractController.EventContractResponse (ADR 0032). */
+/** ProviderInstallationController.BindingView: where one installation applies. */
+export interface BindingView {
+  readonly id: string;
+  readonly brandId: string | null;
+  readonly locationId: string | null;
+  readonly status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | (string & {});
+  readonly priority: number;
+  readonly effectiveFrom: string;
+  readonly effectiveUntil: string | null;
+}
+
+/** What a connection check found. POS answers through its own discovery run, in a different shape. */
+export interface ConnectionCheck {
+  readonly connectionStatus?: string;
+  readonly capabilities?: Readonly<Record<string, unknown>>;
+}
+
+/** EventContractController.EventContractResponse. */
 export interface EventContractView {
   readonly eventType: string;
   readonly eventVersion: number;
@@ -86,6 +103,51 @@ export class ProvidersApi {
   async listEventContracts(): Promise<EventContractView[]> {
     return firstValueFrom(
       this.api.get<EventContractView[]>('/api/v1/control-plane/event-contracts'),
+    );
+  }
+
+  async bindings(tenantId: string, installationId: string): Promise<BindingView[]> {
+    return firstValueFrom(
+      this.api.get<BindingView[]>(`/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings`),
+    );
+  }
+
+  /** Refused until the installation has passed a connection check. */
+  async activateBinding(tenantId: string, installationId: string, bindingId: string, reason: string): Promise<{ changed: boolean }> {
+    return firstValueFrom(
+      this.api.post<{ changed: boolean }>(
+        `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings/${bindingId}/activate`,
+        { reason },
+      ),
+    );
+  }
+
+  /** The rollback path: the place returns to a manual process; mappings and evidence stay. */
+  async suspendBinding(tenantId: string, installationId: string, bindingId: string, reason: string): Promise<{ changed: boolean }> {
+    return firstValueFrom(
+      this.api.post<{ changed: boolean }>(
+        `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings/${bindingId}/suspend`,
+        { reason },
+      ),
+    );
+  }
+
+  /**
+   * Probes the provider with the restaurant's own credential. POS discovers
+   * through its sync-run path, because what a POS credential can do depends on
+   * the staff user it acts as.
+   */
+  async checkConnection(tenantId: string, installation: Pick<PlatformInstallationView, 'id' | 'category' | 'providerType'>): Promise<ConnectionCheck> {
+    return firstValueFrom(
+      installation.category === 'POS'
+        ? this.api.post<ConnectionCheck>(`/api/v1/control-plane/tenants/${tenantId}/pos-sync-runs/capability-reconciliation`, {
+            installationId: installation.id,
+            providerType: installation.providerType,
+          })
+        : this.api.post<ConnectionCheck>(
+            `/api/v1/control-plane/tenants/${tenantId}/integrations/${installation.id}/capability-reconciliation`,
+            {},
+          ),
     );
   }
 }
