@@ -336,6 +336,21 @@ services:
       HORECAOS_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
       HORECAOS_OIDC_ISSUER_URI: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      # Where the token validator fetches Keycloak's signing keys: over the
+      # private network, the way HORECAOS_KEYCLOAK_BASE_URL already reaches
+      # Keycloak for everything else. Without it the validator discovered its
+      # keys through the PUBLIC issuer URL above, which the internal alias sends
+      # straight to the edge -- and whatever certificate the edge presents must
+      # then be one this JVM trusts. A Cloudflare Origin CA certificate (Full
+      # strict) is trusted only by Cloudflare's edge, so key discovery failed
+      # with PKIX, every authenticated request came back as an empty-bodied 401,
+      # and the control plane reported a response it could not understand.
+      #
+      # issuer-uri is still set above and still enforced: Spring Boot 4.1.1 adds
+      # a JwtIssuerValidator from it (and the audience validator) whichever
+      # source the keys come from, so a token is refused unless its `iss` is
+      # exactly that public URL. Only the key fetch moves.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/horecaos/protocol/openid-connect/certs
       HORECAOS_OIDC_AUDIENCE: horecaos-api
       HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
       HORECAOS_KEYCLOAK_REALM: horecaos
@@ -362,6 +377,12 @@ services:
       HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
       HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-secret-key
       HORECAOS_HANDOVER_PEPPER_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:handover-pepper
+      # Keycloak subject ids to grant PLATFORM scope on startup (ADR 0025's
+      # PlatformAdminBootstrapReconciler). This is the ONLY way a deployment gets
+      # its first platform administrator -- the alternative is a hand-written SQL
+      # grant, which the design forbids -- and until 2026-09-10 compose never
+      # passed it through, so no deployment under this file could create one.
+      HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS: ${HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS:-}
       # ADR 0027's partition archive. Needs an object store with S3 Object Lock
       # (GOVERNANCE mode, confirmed by read-back); a store without it cannot hold
       # this evidence, and this must then be `false` rather than pointed at it.
@@ -440,7 +461,12 @@ services:
   # ---------------------------------------------------------------------------
 
   platform-db:
-    image: ${HORECAOS_REGISTRY}/horecaos-postgres-postgis:${HORECAOS_POSTGRES_IMAGE_TAG:-18}
+    # Required, with no default. It used to default to `18`, a tag CI has never
+    # published: this image is pushed only as :<git-sha> and :main, like every
+    # other image here. So an unset value produced a pull that failed with
+    # `not found` and took every other image in the pull down with it. A
+    # missing value now stops at `compose config` and says what to set.
+    image: ${HORECAOS_REGISTRY}/horecaos-postgres-postgis:${HORECAOS_POSTGRES_IMAGE_TAG:?set HORECAOS_POSTGRES_IMAGE_TAG to a git sha CI published horecaos-postgres-postgis under}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

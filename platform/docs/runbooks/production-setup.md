@@ -921,6 +921,32 @@ existing one is not). If unsure, `docker compose ... run --rm platform-migrate i
 and read the migration file before rolling back — `deploy.md`'s section 3
 has the full decision tree for a genuinely failed migration.
 
+### Once, on a host whose database volume predates 2026-09-10
+
+`deploy/infra/postgres-init/` runs only when the `platform-db` volume is
+first created, and until 2026-09-10 the copy under `deploy/` was older than
+V0161. A volume created from it has no `horecaos_platform_bypass`
+membership for `horecaos_app`, and every platform-scope sweeper (ADR 0056)
+fails with `permission denied to set role "horecaos_platform_bypass"` —
+the inventory reservation sweeper first, every few seconds. Redeploying does
+not fix it; the script will not run again. Make the grant the script would
+have made, once:
+
+```bash
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  exec -T platform-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -c "GRANT horecaos_platform_bypass TO horecaos_app WITH INHERIT FALSE"'
+```
+
+Keep `WITH INHERIT FALSE`, exactly as the script has it. `BYPASSRLS` is a
+role attribute and is never inherited, so only a transaction that says
+`SET LOCAL ROLE horecaos_platform_bypass` can use it either way; the option
+is what stops anything ever granted to the bypass role from reaching every
+ordinary `horecaos_app` connection as well.
+
+**Check:** the sweeper's error stops appearing in
+`docker compose ... logs --since 2m platform-app`.
+
 ---
 
 ## 9. Optional: installing a CI deploy key

@@ -259,6 +259,44 @@
 {$HORECAOS_API_ORIGIN} {
 	tls {$HORECAOS_TLS_MODE}
 
+	# CORS for the two staff apps, and only them. compose points both at this
+	# origin (APP_API_BASE_URL) while the platform itself carries no CORS policy,
+	# so until 2026-09-10 every browser call they made failed its preflight: the
+	# OPTIONS reached Spring Security as an ordinary unauthenticated request and
+	# came back 401 with no CORS headers. Development never saw it, because
+	# Angular's dev-server proxy makes every call same-origin.
+	#
+	# Origins are compared by exact string equality, deliberately not a regex. In
+	# a pattern like `https://control-plane.horecaos.uz` each `.` matches any
+	# character, so a lookalike anyone could register -- control-plane-horecaos.uz
+	# -- would pass. No credentials are allowed: the apps send a Bearer token in a
+	# header and no cookies, so nothing here needs Allow-Credentials.
+	@staff_app expression `{header.Origin} == "{$HORECAOS_CONTROL_PLANE_ORIGIN}" || {header.Origin} == "{$HORECAOS_OPERATIONS_ORIGIN}"`
+
+	# Deferred so they are written after the platform's own response headers, and
+	# Vary appended rather than set, so Accept-Encoding survives for the CDN.
+	# The exposed headers are the three the apps read: without them the browser
+	# hides them from JavaScript, and a save would lose its ETag, so its If-Match,
+	# and fail as a stale version.
+	header @staff_app {
+		defer
+		Access-Control-Allow-Origin {header.Origin}
+		Access-Control-Expose-Headers "ETag, Idempotency-Replayed, X-Correlation-Id"
+		+Vary Origin
+	}
+
+	@staff_preflight {
+		method OPTIONS
+		expression `{header.Origin} == "{$HORECAOS_CONTROL_PLANE_ORIGIN}" || {header.Origin} == "{$HORECAOS_OPERATIONS_ORIGIN}"`
+	}
+
+	handle @staff_preflight {
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE"
+		header Access-Control-Allow-Headers "Authorization, Content-Type, Idempotency-Key, If-Match, X-Correlation-Id"
+		header Access-Control-Max-Age "600"
+		respond 204
+	}
+
 	encode zstd gzip
 
 	handle /actuator/health/readiness {

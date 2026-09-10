@@ -17,11 +17,11 @@
 # granted, and cannot rewrite an audit row. That is not a theoretical benefit on
 # a platform whose audit trail is evidence under ADR 0027.
 #
-# The two NOLOGIN group roles below are also created by migrations V0007 and
-# V0031. They are created here as well because `GRANT horecaos_application TO
-# horecaos_app` has to happen after both roles exist, and the migrations run later.
-# Both sides guard with IF NOT EXISTS, so whichever runs first wins and the other
-# is a no-op.
+# The three NOLOGIN group roles below are also created by migrations V0007,
+# V0031 and V0161. They are created here as well because the GRANTs to
+# horecaos_app below have to happen after every role they name exists, and the
+# migrations run later. Both sides guard with IF NOT EXISTS, so whichever runs
+# first wins and the other is a no-op.
 #
 # This script is mounted by compose.production.yaml AND by compose.yaml. That is
 # deliberate and it is the entire fix for the defect this file used to document
@@ -74,6 +74,12 @@ psql --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
 	    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'horecaos_reporting_read') THEN
 	        CREATE ROLE horecaos_reporting_read NOLOGIN;
 	    END IF;
+	    -- ADR 0056's policy-exempt role. BYPASSRLS here and nowhere else in
+	    -- this script — the point of V0161's design is that holding it is not
+	    -- enough on its own, see the GRANT ... WITH INHERIT FALSE below.
+	    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'horecaos_platform_bypass') THEN
+	        CREATE ROLE horecaos_platform_bypass NOLOGIN BYPASSRLS;
+	    END IF;
 	END
 	$$;
 
@@ -87,8 +93,11 @@ psql --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
 
 	ALTER ROLE horecaos_app PASSWORD :'app_password';
 
-	-- Not superuser, not createdb, not createrole, not replication, and not
-	-- inheriting anything except the one group role below.
+	-- Not superuser, not createdb, not createrole, not replication. INHERIT is
+	-- the role's default for a membership that does not say otherwise, which
+	-- is horecaos_application below; the ADR 0056 membership after it names
+	-- WITH INHERIT FALSE explicitly and that overrides this default for
+	-- exactly that one membership.
 	ALTER ROLE horecaos_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT;
 
 	-- The database name rather than a literal, because this script now runs
@@ -96,6 +105,15 @@ psql --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
 	-- a database that is not the one being initialised.
 	GRANT CONNECT ON DATABASE :"database" TO horecaos_app;
 	GRANT horecaos_application TO horecaos_app;
+
+	-- ADR 0056. WITHOUT INHERIT, deliberately: holding this membership must
+	-- not by itself change what an ordinary horecaos_app connection can see.
+	-- A transaction that genuinely needs to bypass row-level security says so
+	-- explicitly with SET LOCAL ROLE horecaos_platform_bypass
+	-- (TenantRlsSession.bindPlatform), which PostgreSQL reverts at COMMIT or
+	-- ROLLBACK — the same transaction-scoping the tenant GUC itself relies on,
+	-- so neither can leak from one pooled connection's borrower to the next.
+	GRANT horecaos_platform_bypass TO horecaos_app WITH INHERIT FALSE;
 
 	-- PostgreSQL 15 and later already revoke CREATE on public from everyone but
 	-- the owner. Stated here so that a future restore into an older server, or a
