@@ -70,6 +70,12 @@ public enum PlatformRole {
             EnumSet.of(
                     SUPPORT_SESSION_START,
                     SUPPORT_SESSION_READ,
+                    // ADR 0085: support is on call for the platform's incidents. An
+                    // incident is the platform's own record, not tenant data, so
+                    // acknowledging and closing one is not the tenant mutation this role
+                    // is barred from.
+                    CONTROL_PLANE_ALERT_READ,
+                    CONTROL_PLANE_ALERT_MANAGE,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,

@@ -1,0 +1,59 @@
+<h1 class="q-title">{{ i18n.t('nav.sandboxContractTests') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('sandbox.lead') }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <h2 class="q-subhead section">{{ i18n.t('sandbox.environments.title') }}</h2>
+  @if (sandboxEnvironments().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('sandbox.environments.empty') }}</p>
+  } @else {
+    <ul class="envs">
+      @for (env of sandboxEnvironments(); track env.code) {
+        <li class="q-body-sm">
+          <strong>{{ env.providerType }}</strong> <span class="q-tnum muted">{{ env.code }}</span>
+          @if (env.notes) {
+            <span class="q-caption muted"> — {{ env.notes }}</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  <h2 class="q-subhead section">{{ i18n.t('sandbox.installations.title') }}</h2>
+  @if (sandboxInstallations().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('sandbox.installations.empty') }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('installationsExplorer.column.tenant') }}</th>
+          <th class="q-caption">{{ i18n.t('installationsExplorer.column.provider') }}</th>
+          <th class="q-caption">{{ i18n.t('sandbox.column.endpoint') }}</th>
+          <th class="q-caption">{{ i18n.t('installationsExplorer.column.connection') }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (installation of sandboxInstallations(); track installation.id) {
+          <tr>
+            <td class="q-body-sm"><a [routerLink]="['/tenants', installation.tenantId]">{{ installation.tenantDisplayName }}</a></td>
+            <td class="q-body-sm">{{ installation.providerType }} · {{ installation.displayName }}</td>
+            <td class="q-body-sm q-tnum">{{ installation.environmentCode }}</td>
+            <td class="q-body-sm">
+              {{ connection(installation) }}
+            </td>
+            <td class="q-body-sm">
+              <button type="button" class="check" [disabled]="checking() !== null" (click)="check(installation)">
+                {{ checking() === installation.id ? i18n.t('installationsExplorer.check.working') : i18n.t('installationsExplorer.check.action') }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+  <p class="q-caption muted note">{{ i18n.t('sandbox.contractNote') }}</p>
+}

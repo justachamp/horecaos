@@ -1,0 +1,78 @@
+<h1 class="q-title">{{ i18n.t('nav.alertsIncidents') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('alertsIncidents.lead') }}</p>
+
+<label class="q-body-sm toggle">
+  <input type="checkbox" name="includeResolved" [checked]="includeResolved()" (change)="toggleResolved($any($event.target).checked)" />
+  {{ i18n.t('alertsIncidents.showResolved') }}
+</label>
+
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (incidents().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('alertsIncidents.empty') }}</p>
+} @else {
+  <ul class="incidents">
+    @for (incident of incidents(); track incident.id) {
+      <li class="incident" [attr.data-status]="incident.status">
+        <header class="incidentHead">
+          <div>
+            <h2 class="q-subhead">{{ title(incident) }}</h2>
+            <p class="q-caption muted q-tnum">{{ incident.subjectType }} · {{ incident.subjectId }}</p>
+          </div>
+          <span class="chip q-caption">{{ i18n.t(statusKey(incident.status)) }}</span>
+        </header>
+        <p class="q-body-sm">
+          {{ i18n.t('alertsIncidents.raised', {
+            count: incident.occurrences,
+            first: i18n.dateTime(asDate(incident.firstRaisedAt)),
+            last: i18n.dateTime(asDate(incident.lastRaisedAt)) }) }}
+        </p>
+        @if (entries(incident.variables).length > 0) {
+          <dl class="variables">
+            @for (entry of entries(incident.variables); track entry[0]) {
+              <dt class="q-caption">{{ entry[0] }}</dt>
+              <dd class="q-body-sm q-tnum">{{ entry[1] }}</dd>
+            }
+          </dl>
+        }
+        @if (incident.acknowledgedBy) {
+          <p class="q-caption muted">{{ i18n.t('alertsIncidents.acknowledgedBy', { who: incident.acknowledgedBy, time: i18n.dateTime(asDate(incident.acknowledgedAt!)) }) }}</p>
+        }
+        @if (incident.resolvedBy) {
+          <p class="q-caption muted">
+            {{ i18n.t('alertsIncidents.resolvedBy', { who: incident.resolvedBy, time: i18n.dateTime(asDate(incident.resolvedAt!)) }) }}
+            — {{ incident.resolutionNote }}
+          </p>
+        }
+        @if (incident.status !== 'RESOLVED' && session.has('CONTROL_PLANE_ALERT_MANAGE')) {
+          <div class="actions">
+            @if (incident.status === 'OPEN') {
+              <button type="button" class="secondary ackToggle" (click)="open(incident, 'acknowledge')">{{ i18n.t('alertsIncidents.acknowledge') }}</button>
+            }
+            <button type="button" class="secondary resolveToggle" (click)="open(incident, 'resolve')">{{ i18n.t('alertsIncidents.resolve') }}</button>
+          </div>
+          @if (acting()?.id === incident.id) {
+            <div class="confirm">
+              <input
+                class="q-body-sm"
+                name="incidentNote"
+                [placeholder]="i18n.t(acting()?.mode === 'resolve' ? 'alertsIncidents.resolveNote' : 'alertsIncidents.ackNote')"
+                [value]="note()"
+                (input)="note.set($any($event.target).value)"
+              />
+              <button type="button" class="confirmIncident" [disabled]="busy() || note().trim().length === 0" (click)="confirm(incident)">
+                {{ i18n.t(acting()?.mode === 'resolve' ? 'alertsIncidents.resolve' : 'alertsIncidents.acknowledge') }}
+              </button>
+            </div>
+          }
+        }
+      </li>
+    }
+  </ul>
+}

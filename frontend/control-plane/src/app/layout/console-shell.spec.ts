@@ -97,6 +97,7 @@ describe('ConsoleShell', () => {
         'AUDIT_READ',
         'APPROVAL_DECIDE',
         'MIGRATION_READ',
+        'CONTROL_PLANE_ALERT_READ',
         'PLATFORM_ADMIN',
       ]),
     );

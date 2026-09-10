@@ -6,10 +6,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.notifications.api.ControlPlaneAlert;
 import uz.horecaos.platform.notifications.api.ControlPlaneAlertPort;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcControlPlaneAlertStore;
 
 /**
- * v1 of {@link ControlPlaneAlertPort} — see that interface's own Javadoc for
- * why a log line and a counter, not yet a Telegram send.
+ * {@link ControlPlaneAlertPort}: a log line, a counter, and (ADR 0085) an
+ * incident kept until someone resolves it. Not yet a Telegram send; see that
+ * interface's own Javadoc.
  */
 @Component
 public class ControlPlaneAlertService implements ControlPlaneAlertPort {
@@ -17,9 +19,11 @@ public class ControlPlaneAlertService implements ControlPlaneAlertPort {
     private static final Logger log = LoggerFactory.getLogger(ControlPlaneAlertService.class);
 
     private final MeterRegistry meters;
+    private final JdbcControlPlaneAlertStore alerts;
 
-    public ControlPlaneAlertService(MeterRegistry meters) {
+    public ControlPlaneAlertService(MeterRegistry meters, JdbcControlPlaneAlertStore alerts) {
         this.meters = meters;
+        this.alerts = alerts;
     }
 
     @Override
@@ -36,5 +40,14 @@ public class ControlPlaneAlertService implements ControlPlaneAlertPort {
                 alert.subjectType(),
                 alert.subjectId(),
                 alert.variables());
+        // ADR 0085: kept as an incident someone can see, acknowledge and
+        // resolve. Still fire-and-forget: a caller never fails because the
+        // incident could not be written, and the log line above already holds
+        // the fact.
+        try {
+            alerts.raise(alert);
+        } catch (RuntimeException unstored) {
+            log.warn("Control-plane alert {} could not be stored as an incident", alert.eventClass(), unstored);
+        }
     }
 }

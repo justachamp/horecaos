@@ -295,7 +295,9 @@ class JdbcAuthorizationServiceTests {
                 Capability.VOICE_CALL_LOG_READ,
                 // ADR 0081: who from HorecaOS entered the account, and until when.
                 // A suspended tenant's owner may still read it; it takes nothing out.
-                Capability.SUPPORT_SESSION_READ);
+                Capability.SUPPORT_SESSION_READ,
+                // ADR 0085: the platform's incident list names metrics and runs, never tenant data.
+                Capability.CONTROL_PLANE_ALERT_READ);
 
         java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
                 .filter(Capability::isRead)

@@ -1,13 +1,7 @@
 .lead {
   color: var(--q-ink-muted);
   margin-top: 4px;
-  max-width: 640px;
-}
-
-.notice {
-  margin-top: 8px;
-  color: var(--q-ink-subtle);
-  max-width: 640px;
+  max-width: 680px;
 }
 
 .state {
@@ -19,9 +13,23 @@
   color: var(--q-error-text);
 }
 
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.section {
+  margin-top: 24px;
+}
+
+.envs {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .table {
-  margin-top: 16px;
+  margin-top: 8px;
   width: 100%;
+  max-width: 1000px;
   border-collapse: collapse;
   background: var(--q-hairline);
   border: 1px solid var(--q-hairline);
@@ -35,7 +43,7 @@
 .table th,
 .table td {
   text-align: left;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
 }
 
@@ -44,6 +52,15 @@
   font-weight: 400;
 }
 
-.section {
-  margin-top: 24px;
+.check {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.note {
+  margin-top: 16px;
+  max-width: 720px;
 }

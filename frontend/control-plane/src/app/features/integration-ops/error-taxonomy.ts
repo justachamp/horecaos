@@ -1,47 +1,57 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
+import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { FailureCategoryView, IntegrationOpsApi } from './integration-ops-api';
 
 /**
- * IA 4.4 Error taxonomy -- not built.
+ * IA 4.4 Error taxonomy -- the categories every failure is filed under, what
+ * each means, what to do about it, and how many messages are in each now.
  *
- * No single registry maps a raw provider failure to the operator-legible
- * causes and fixes this row names: unmapped product, unmapped payment type,
- * inactive product in POS, expired credential, venue mismatch. What exists
- * are three narrower, unrelated vocabularies for different purposes --
- * `FailureCategory` (ADR 0006 retry semantics: transient vs. terminal),
- * `ProviderExceptionClassifier`'s transport-level codes (`PROVIDER_TIMEOUT`,
- * `PROVIDER_AUTHENTICATION`, ...), and `RejectionCode` (ADR 0040 aggregator
- * order intake: `UNKNOWN_VENUE`, `CURRENCY_MISMATCH`, ...) -- and none of them
- * is the operator-facing cause-and-fix mapping this row asks for. Building
- * that registry is a genuine new subsystem, not a small addition on top of
- * an existing one, so it stays unbuilt this wave.
+ * The categories and whether the platform retries each by itself are the
+ * ones the relay and every consumer already apply; this screen adds the
+ * explanation an operator needs and the live counts.
  */
 @Component({
   selector: 'app-error-taxonomy',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <h1 class="q-title">{{ i18n.t('nav.errorTaxonomy') }}</h1>
-    <section class="notice">
-      <h2 class="q-subhead">{{ i18n.t('state.notBuilt.title') }}</h2>
-      <p class="q-body-sm body">{{ i18n.t('errorTaxonomy.notBuilt.body') }}</p>
-    </section>
-  `,
-  styles: `
-    .notice {
-      margin-top: 24px;
-      background: var(--q-canvas);
-      border: 1px solid var(--q-hairline);
-      padding: 24px;
-      max-width: 640px;
-    }
-
-    .body {
-      color: var(--q-ink-muted);
-      margin-top: 8px;
-    }
-  `,
+  imports: [RouterLink],
+  templateUrl: './error-taxonomy.html',
+  styleUrl: './error-taxonomy.css',
 })
 export class ErrorTaxonomy {
   protected readonly i18n = inject(I18nService);
+  private readonly api = inject(IntegrationOpsApi);
+
+  protected readonly loading = signal(true);
+  protected readonly loadError = signal<string | null>(null);
+  protected readonly categories = signal<readonly FailureCategoryView[]>([]);
+
+  constructor() {
+    void this.load();
+  }
+
+  private async load(): Promise<void> {
+    try {
+      this.categories.set(await this.api.failureTaxonomy());
+    } catch (error) {
+      this.loadError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected key(code: string, part: 'name' | 'meaning' | 'action'): MessageKey {
+    return `errorTaxonomy.${code}.${part}` as MessageKey;
+  }
+
+  protected dead(category: FailureCategoryView): number {
+    return category.outboxDeadLettered + category.inboxDeadLettered;
+  }
+
+  protected waiting(category: FailureCategoryView): number {
+    return category.outboxWaiting + category.inboxWaiting;
+  }
 }

@@ -46,7 +46,7 @@ export const SECTIONS: readonly Section[] = [
     labelKey: 'nav.alertsIncidents',
     route: '/alerts',
     group: 'nav.group.overview',
-    capability: 'PLATFORM_ADMIN',
+    capability: 'CONTROL_PLANE_ALERT_READ',
   },
 
   // IA §2 Tenants

@@ -1,45 +1,89 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
+import { asDate } from '../../core/api/dates';
+import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { PlatformInstallationView, ProviderEnvironment, ProvidersApi } from './providers-api';
 
 /**
- * IA 3.5 Sandbox & contract tests -- not built.
+ * IA 3.5 Sandbox & contract tests -- trying an adapter against a provider's
+ * test endpoint before a restaurant depends on it.
  *
- * ADR 0007 ("Camel route foundation and provider contract testing") stays
- * `Partial`, and the "contract testing" half it names is nowhere in the
- * codebase: no recorded-fixture replay harness, no sandbox run, no
- * pass/fail report an adapter is checked against before rollout. `POS sync
- * runs` (IA 3.5's nearest neighbour) compare a real provider's live catalogue
- * against HorecaOS, not a recorded fixture against an adapter in isolation --
- * a different question with a different answer. Running an adapter against
- * recorded provider fixtures before rollout is a real testing subsystem of
- * its own, not a small addition, so it stays unbuilt this wave.
+ * Lists every installation pointed at a non-production provider endpoint and
+ * runs the same connection check a live installation gets, so an adapter
+ * change can be tried on a sandbox tenant first. Replaying recorded provider
+ * traffic is the contract-test suite's job and runs on every build, not from
+ * this screen.
  */
 @Component({
   selector: 'app-sandbox-contract-tests',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <h1 class="q-title">{{ i18n.t('nav.sandboxContractTests') }}</h1>
-    <section class="notice">
-      <h2 class="q-subhead">{{ i18n.t('state.notBuilt.title') }}</h2>
-      <p class="q-body-sm body">{{ i18n.t('sandboxContractTests.notBuilt.body') }}</p>
-    </section>
-  `,
-  styles: `
-    .notice {
-      margin-top: 24px;
-      background: var(--q-canvas);
-      border: 1px solid var(--q-hairline);
-      padding: 24px;
-      max-width: 640px;
-    }
-
-    .body {
-      color: var(--q-ink-muted);
-      margin-top: 8px;
-    }
-  `,
+  imports: [RouterLink],
+  templateUrl: './sandbox-contract-tests.html',
+  styleUrl: './sandbox-contract-tests.css',
 })
 export class SandboxContractTests {
   protected readonly i18n = inject(I18nService);
+  protected readonly asDate = asDate;
+  private readonly api = inject(ProvidersApi);
+
+  protected readonly loading = signal(true);
+  protected readonly loadError = signal<string | null>(null);
+  protected readonly environments = signal<readonly ProviderEnvironment[]>([]);
+  protected readonly installations = signal<readonly PlatformInstallationView[]>([]);
+  protected readonly checking = signal<string | null>(null);
+  protected readonly results = signal<Readonly<Record<string, string>>>({});
+
+  /** Installations whose endpoint is a sandbox, which is what may be tried freely. */
+  protected readonly sandboxInstallations = computed(() => {
+    const sandbox = new Set(this.environments().filter((e) => !e.production).map((e) => e.code));
+    return this.installations().filter((installation) => sandbox.has(installation.environmentCode));
+  });
+
+  protected readonly sandboxEnvironments = computed(() => this.environments().filter((e) => !e.production));
+
+  constructor() {
+    void this.load();
+  }
+
+  private async load(): Promise<void> {
+    try {
+      const [environments, installations] = await Promise.all([
+        this.api.environments(),
+        this.api.listInstallations(null, 200),
+      ]);
+      this.environments.set(environments);
+      this.installations.set(installations.items);
+    } catch (error) {
+      this.loadError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  /** What the last check here found, else what the installation last reported. */
+  protected connection(installation: PlatformInstallationView): string {
+    const here = this.results()[installation.id] as string | undefined;
+    return here ?? installation.lastConnectionStatus ?? this.i18n.t('installationsExplorer.neverChecked');
+  }
+
+  protected async check(installation: PlatformInstallationView): Promise<void> {
+    if (this.checking() !== null) {
+      return;
+    }
+    this.checking.set(installation.id);
+    try {
+      const result = await this.api.checkConnection(installation.tenantId, installation);
+      const status = result.connectionStatus ?? 'SUCCEEDED';
+      this.results.update((current) => ({
+        ...current,
+        [installation.id]: this.i18n.t('installationsExplorer.check.result', { status }),
+      }));
+    } catch (error) {
+      this.results.update((current) => ({ ...current, [installation.id]: this.i18n.describe(error as ApiError) }));
+    } finally {
+      this.checking.set(null);
+    }
+  }
 }

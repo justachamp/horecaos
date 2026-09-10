@@ -796,6 +796,12 @@ public enum Capability {
      */
     CONTROL_PLANE_ALERT_RAISE("control-plane-alert.raise", "control-plane-alert", "raise"),
 
+    /** ADR 0085: seeing the platform's open and past incidents. */
+    CONTROL_PLANE_ALERT_READ("control-plane-alert.read", "control-plane-alert", "read"),
+
+    /** ADR 0085: saying an incident has been seen, and closing it with a note. */
+    CONTROL_PLANE_ALERT_MANAGE("control-plane-alert.manage", "control-plane-alert", "manage"),
+
     /**
      * ADR 0044: defining an audience, and reading the segments already defined.
      *

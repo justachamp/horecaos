@@ -80,6 +80,14 @@ export function acceptsCredential(category: string): boolean {
   return category in SECRET_CATEGORY;
 }
 
+/** How many of a provider's installations run one adapter version, and how many last connected. */
+export interface AdapterVersionView {
+  readonly providerType: string;
+  readonly adapterVersion: string | null;
+  readonly installations: number;
+  readonly connected: number;
+}
+
 /** EventContractController.EventContractResponse. */
 export interface EventContractView {
   readonly eventType: string;
@@ -258,5 +266,9 @@ export class ProvidersApi {
         requireClerkApproval,
       }),
     );
+  }
+
+  async adapterVersions(): Promise<AdapterVersionView[]> {
+    return firstValueFrom(this.api.get<AdapterVersionView[]>('/api/v1/control-plane/adapter-versions'));
   }
 }

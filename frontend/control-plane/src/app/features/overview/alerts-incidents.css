@@ -1,0 +1,123 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.incidents {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+}
+
+.incident {
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  box-shadow: inset 3px 0 0 var(--q-error);
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.incident[data-status='ACKNOWLEDGED'] {
+  box-shadow: inset 3px 0 0 var(--q-warning);
+}
+
+.incident[data-status='RESOLVED'] {
+  box-shadow: inset 3px 0 0 var(--q-success);
+}
+
+.incident h2,
+.incident p {
+  margin: 0;
+}
+
+.incidentHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chip {
+  padding: 2px 8px;
+  background: var(--q-hairline);
+  color: var(--q-ink);
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.variables {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 16px;
+  margin: 0;
+}
+
+.variables dt {
+  color: var(--q-ink-subtle);
+}
+
+.variables dd {
+  margin: 0;
+}
+
+.actions,
+.confirm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.confirm input {
+  flex: 1 1 280px;
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+  padding: 4px 12px;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

@@ -36,7 +36,7 @@ export const routes: Routes = [
       // IA §1 Overview
       {
         path: 'alerts',
-        canActivate: [requiresCapability('PLATFORM_ADMIN')],
+        canActivate: [requiresCapability('CONTROL_PLANE_ALERT_READ')],
         loadComponent: () =>
           import('./features/overview/alerts-incidents').then((m) => m.AlertsIncidents),
       },
