@@ -107,12 +107,11 @@ export const en = {
     'Access is granted per capability. Ask a platform administrator for the capability this section needs.',
 
   'state.notBuilt.title': 'Not built yet',
-  'state.notBuilt.body':
-    'The foundations are in place and this section has no screen. It is specified in docs/operations-spec in the platform repository.',
+  'state.notBuilt.body': 'This section has no screen yet.',
 
   'overview.title': 'Platform health',
   'overview.lead': 'One board: tenants, integration failures, and the gaps named honestly below.',
-  'overview.sampleNote': 'Counted from the first page (up to 200) — no total-count endpoint exists.',
+  'overview.sampleNote': 'Counted from the first 200 tenants; there is no total yet.',
   'overview.tenants.title': 'Tenants',
   'overview.tenants.active': 'active',
   'overview.tenants.provisioning': 'provisioning',
@@ -121,10 +120,10 @@ export const en = {
   'overview.integrations.deadLettered': 'dead-lettered',
   'overview.integrations.pending': 'pending',
   'overview.gaps.title': 'Not instrumented at platform scope',
-  'overview.gaps.throughput': 'Order throughput — ReportingController is tenant-scoped only; no platform-wide read exists.',
-  'overview.gaps.fiscal': 'Fiscalization failure rate — no cross-tenant fiscal aggregate exists (see Fiscalization operations).',
-  'overview.gaps.lag': 'Queue lag — lives in the platform’s internal metrics (Micrometer/Prometheus), not this HTTP API.',
-  'overview.gaps.slo': 'SLO burn — not measured anywhere in this build.',
+  'overview.gaps.throughput': 'Order throughput — not yet measured across all tenants.',
+  'overview.gaps.fiscal': 'Fiscal failure rate — not yet measured across all tenants; see Fiscalization operations.',
+  'overview.gaps.lag': 'Queue lag — tracked in internal monitoring, not shown here yet.',
+  'overview.gaps.slo': 'Error-budget burn — not measured yet.',
 
   'tenants.title': 'Tenants',
   'tenants.lead': 'Every tenant on the platform: its slug, currency, timezone, and status.',
@@ -273,18 +272,17 @@ export const en = {
   'onboarding.start.submit': 'Start run',
   'onboarding.start.submitting': 'Starting…',
 
-  'impersonation.notBuilt.body':
-    'No support-session endpoint exists yet: entering this tenant’s operations app under a scoped, time-boxed, audited identity is a real security feature of its own, not a small addition, and it has not been built.',
+  'impersonation.notBuilt.body': 'Support sessions — entering a tenant’s operations app under a time-boxed, audited identity — are not built yet.',
 
   'providerRegistry.title': 'Provider registry',
   'providerRegistry.lead': 'Every adapter this build declares, with the connect fields it needs.',
   'providerRegistry.column.provider': 'Provider',
   'providerRegistry.column.category': 'Category',
   'providerRegistry.column.fields': 'Connect fields',
-  'providerRegistry.note': 'Fields in amber travel through the ADR 0065 write-only secret door.',
+  'providerRegistry.note': 'Fields in amber are credentials: they are written once and never shown again.',
 
   'capabilityMatrix.title': 'Capability matrix',
-  'capabilityMatrix.lead': 'Which capabilities each wired POS adapter declares (ADR 0011).',
+  'capabilityMatrix.lead': 'Which capabilities each connected POS adapter declares.',
   'capabilityMatrix.empty': 'No POS adapters are wired in this build.',
 
   'installationsExplorer.title': 'Installations explorer',
@@ -300,7 +298,7 @@ export const en = {
 
   'messageFlow.title': 'Message flow',
   'messageFlow.lead': 'Outbox activity across every tenant.',
-  'messageFlow.gap': 'Queue lag and stuck-partition metrics are not exposed over this API — they live in the platform’s internal metrics, not here.',
+  'messageFlow.gap': 'Queue lag and stuck partitions are tracked in internal monitoring and not shown here yet.',
   'messageFlow.pending.title': 'In flight',
   'messageFlow.pending.note': 'Outbox events currently pending delivery.',
   'messageFlow.pending.empty': 'Nothing pending.',
@@ -322,7 +320,7 @@ export const en = {
   'deadLetters.retry.noChange': 'No change — a colleague may have already acted on this.',
 
   'entitlements.title': 'Entitlements',
-  'entitlements.lead': 'What a tenant is entitled to, its subscription, usage, and overrides (ADR 0021).',
+  'entitlements.lead': 'What a tenant is entitled to: subscription, usage and overrides.',
   'entitlements.tenantId': 'Tenant id',
   'entitlements.load': 'Load',
   'entitlements.subscription.title': 'Subscription',
@@ -346,7 +344,7 @@ export const en = {
   'entitlements.override.success': 'Override granted.',
 
   'fiscalization.title': 'Fiscalization operations',
-  'fiscalization.lead': 'Fiscal receipt failures for one tenant, with an audited retry (ADR 0038).',
+  'fiscalization.lead': 'Fiscal receipt failures for one tenant, with an audited retry.',
   'fiscalization.empty': 'Nothing blocked for this tenant.',
   'fiscalization.column.order': 'Order',
   'fiscalization.column.type': 'Document type',
@@ -398,14 +396,14 @@ export const en = {
   'staff.approvals.empty': 'Nothing pending for this tenant.',
 
   'capabilityRegistry.title': 'Capability registry',
-  'capabilityRegistry.lead': 'The full ADR 0025 capability vocabulary tenant roles are assembled from.',
+  'capabilityRegistry.lead': 'Every capability tenant roles are built from.',
   'capabilityRegistry.filter': 'Filter by code or resource',
   'capabilityRegistry.column.code': 'Code',
   'capabilityRegistry.column.resource': 'Resource',
   'capabilityRegistry.column.action': 'Action',
 
   'secrets.title': 'Secrets',
-  'secrets.lead': 'Provider credential inventory by tenant, rotation status — never a value (ADR 0028).',
+  'secrets.lead': 'Provider credentials by tenant, and when each was last rotated. Values are never shown.',
   'secrets.empty': 'No installations yet.',
   'secrets.column.credential': 'Credential',
   'secrets.column.rotated': 'Last rotated',
@@ -422,12 +420,11 @@ export const en = {
   'auditLog.column.outcome': 'Outcome',
   'auditLog.actor.system': 'System',
 
-  'featureFlags.notBuilt.body':
-    'No cohort or percentage-rollout mechanism exists anywhere in this build. Progressive enablement is a genuine new subsystem, not a small addition, and has not been built.',
+  'featureFlags.notBuilt.body': 'Feature flags and per-tenant rollout are not built yet.',
 
   'referenceData.title': 'Reference data',
-  'referenceData.lead': 'The platform’s own supported countries, currencies, locales, and timezones (ADR 0034).',
-  'referenceData.gap': 'National holiday seeds and default SLA buckets are not modeled anywhere in this build and are not shown here.',
+  'referenceData.lead': 'The countries, currencies, languages and timezones the platform supports.',
+  'referenceData.gap': 'National holidays and default service-level buckets are not recorded yet.',
   'referenceData.countries': 'Countries',
   'referenceData.column.country': 'Country',
   'referenceData.column.currency': 'Default currency',
@@ -435,7 +432,7 @@ export const en = {
   'referenceData.locales': 'Locales',
 
   'migrationRuns.title': 'Migration runs',
-  'migrationRuns.lead': 'Per-tenant legacy import: programs, the capability scopes they open, and resumability (ADR 0024).',
+  'migrationRuns.lead': 'Moving a tenant over from the legacy system: programs, the scopes they open, and where each can resume.',
   'migrationRuns.program.title': 'Find or create a program',
   'migrationRuns.program.lead': 'Creation is idempotent by name: entering the same name again returns the same program.',
   'migrationRuns.program.name': 'Program name',
@@ -455,26 +452,24 @@ export const en = {
 
   'globalLookup.title': 'Global lookup',
   'globalLookup.lead': 'Find a tenant by slug, across the platform.',
-  'globalLookup.gap': 'Order, customer, courier, and device lookup by any identifier — including provider external IDs — does not exist yet: no cross-tenant index is built, confirmed by an exhaustive search of the backend. Only tenant-by-slug is real today.',
+  'globalLookup.gap': 'Finding an order, customer, courier or device by any identifier across tenants is not built yet. A tenant can be found by its slug.',
   'globalLookup.slug': 'Tenant slug',
   'globalLookup.search': 'Search',
   'globalLookup.notFound': 'No tenant with that slug.',
   'globalLookup.open': 'Open tenant',
 
-  'alertsIncidents.notBuilt.body':
-    'No persisted alert record exists anywhere in this build. A control-band signal is logged and counted (ControlPlaneAlertPort v1) and nothing else — there is no store to list, filter, or route from.',
+  'alertsIncidents.notBuilt.body': 'Alerts are logged but not stored yet, so there is nothing to list or route.',
 
   'tenantIdentity.title': 'Identity & realm',
-  'tenantIdentity.lead': 'This tenant’s Keycloak organization link (ADR 0009).',
+  'tenantIdentity.lead': 'This tenant’s link to its sign-in organization.',
   'tenantIdentity.organization.title': 'Keycloak organization',
   'tenantIdentity.organization.id': 'Organization id',
   'tenantIdentity.status': 'Tenant status',
   'tenantIdentity.notLinked': 'No Keycloak organization has been linked to this tenant yet.',
-  'tenantIdentity.gap':
-    'Staff client, courier client, and break-glass configuration are fixed at deploy time and are not modeled as a queryable, per-tenant entity — they are not shown here. Drift findings between HorecaOS and Keycloak appear in the Audit log, not on this screen.',
+  'tenantIdentity.gap': 'Staff and courier sign-in settings are fixed at deployment and are not shown here. Differences found between HorecaOS and the sign-in service appear in the Audit log.',
 
   'configurationPolicy.title': 'Configuration & policy',
-  'configurationPolicy.lead': 'Resolve any configuration key at any scope, and see why it resolved that way (ADR 0030).',
+  'configurationPolicy.lead': 'Resolve any setting at any level, and see where its value came from.',
   'configurationPolicy.picker.title': 'Resolve a key',
   'configurationPolicy.picker.key': 'Key',
   'configurationPolicy.picker.keyPlaceholder': 'Choose a key…',
@@ -505,10 +500,8 @@ export const en = {
   'configurationPolicy.write.notSettableAtScope':
     'This key cannot be set at this scope. It is settable at: {scopes}.',
   'configurationPolicy.write.scopeBanner': 'You are about to set {code} at {scope}.',
-  'configurationPolicy.write.note.trackRetentionFloor':
-    'A production start refuses to boot if any stored value for this key breaches the ADR 0045 floor (settlement period plus dispute window). This write takes effect immediately; only a future start is at risk.',
-  'configurationPolicy.write.note.auditRetention':
-    'This is one of the two platform-only audit retention defaults ADR 0027 and ADR 0029 mark provisional pending legal sign-off. Lowering it shortens how long AuditPartitionArchiver protects evidence before archival.',
+  'configurationPolicy.write.note.trackRetentionFloor': 'The platform refuses to start if a stored value for this setting is shorter than the settlement period plus the dispute window. The change applies at once; only a later restart is at risk.',
+  'configurationPolicy.write.note.auditRetention': 'One of two audit retention defaults still awaiting legal sign-off. Lowering it shortens how long audit evidence is protected before it is archived.',
   'configurationPolicy.write.explicitNull': 'Explicit null (deliberately unset here)',
   'configurationPolicy.write.value': 'Value',
   'configurationPolicy.write.invalidValue': "Enter a value matching this key's type.",
@@ -520,26 +513,23 @@ export const en = {
     'Saved. The result above now shows what the platform resolves after this write.',
 
   'contractsVersions.title': 'Contracts & versions',
-  'contractsVersions.lead': 'The ADR 0032 event/schema contract registry: every event this build may publish.',
-  'contractsVersions.gap': 'Adapter versions, deprecations, and consumer compatibility are not modeled anywhere in this build and are not shown here.',
+  'contractsVersions.lead': 'Every event this build can publish, with its schema version.',
+  'contractsVersions.gap': 'Adapter versions and deprecations are not recorded yet.',
   'contractsVersions.column.event': 'Event',
   'contractsVersions.column.module': 'Producing module',
   'contractsVersions.column.topic': 'Topic',
   'contractsVersions.column.retention': 'Retention',
   'contractsVersions.column.classification': 'Classification',
 
-  'sandboxContractTests.notBuilt.body':
-    'No recorded-fixture replay harness exists in this build. ADR 0007’s provider contract testing half stays unbuilt; POS sync runs compare a live provider catalogue against HorecaOS, which is a different question from replaying a recorded fixture against an adapter in isolation.',
+  'sandboxContractTests.notBuilt.body': 'Replaying recorded provider traffic against an adapter before rollout is not built yet.',
 
-  'webhookDeliveries.notBuilt.body':
-    'No inbound or outbound webhook delivery record is persisted anywhere in this build. Telegram’s webhook is received and processed inline; there is no delivery history to list or redeliver from, and HorecaOS pushes no webhooks of its own to providers.',
+  'webhookDeliveries.notBuilt.body': 'Webhooks are handled as they arrive; no delivery history is kept yet.',
 
-  'errorTaxonomy.notBuilt.body':
-    'No single registry maps a raw provider failure to an operator-legible cause and fix. What exists are three narrower, unrelated vocabularies for different purposes — retry classification, transport-level provider codes, and aggregator order-rejection codes — and none of them is this row’s cause-and-fix mapping.',
+  'errorTaxonomy.notBuilt.body': 'A shared map from provider errors to their causes and fixes is not built yet.',
 
   'planCatalog.title': 'Plan catalog',
-  'planCatalog.lead': 'Every activated plan version: price, billing period, and its entitlement lines (ADR 0021).',
-  'planCatalog.gap': '6/12-month term discounts, trials, and an activation deposit are not modeled as distinct fields anywhere in this build — billing period is the one term tracked.',
+  'planCatalog.lead': 'Every live plan version: price, billing period and what it includes.',
+  'planCatalog.gap': 'Term discounts, trials and activation deposits are not recorded yet; the billing period is.',
   'planCatalog.empty': 'No activated plan versions yet.',
   'planCatalog.column.plan': 'Plan',
   'planCatalog.column.price': 'Price',
@@ -549,31 +539,26 @@ export const en = {
   'planCatalog.hideEntitlements': 'Hide entitlements',
   'planCatalog.noEntitlements': 'This version carries no entitlement lines.',
 
-  'moduleCatalog.notBuilt.body':
-    'There is no "module" concept anywhere in the commercial domain — plans, plan versions, plan entitlements, subscriptions, and metered usage are modeled, never an independently sellable module with its own per-brand/per-branch/per-kiosk/per-courier billing unit.',
+  'moduleCatalog.notBuilt.body': 'Modules sold separately from plans are not built yet.',
 
   'usageMetering.title': 'Metering & usage',
-  'usageMetering.lead': 'Counted units per entitlement key and period for one tenant, measured against what was adjusted by hand (ADR 0021).',
+  'usageMetering.lead': 'What one tenant used, per entitlement and period, next to any manual adjustments.',
   'usageMetering.empty': 'No metered usage recorded for this tenant.',
   'usageMetering.column.period': 'Period',
   'usageMetering.column.measured': 'Measured',
   'usageMetering.column.adjusted': 'Adjusted',
   'usageMetering.column.consumed': 'Consumed',
 
-  'invoicesWallet.notBuilt.body':
-    'No invoice or prepaid wallet ledger is modeled anywhere in this build. Usage metering carries the measured and adjusted quantities a bill would be defended with, but nothing turns that into a subscription invoice, a top-up, a balance, or a credit-expiry row.',
+  'invoicesWallet.notBuilt.body': 'Invoices, the prepaid wallet and top-ups are not built yet. Usage is metered and shown under Metering & usage.',
 
-  'residencyHosting.notBuilt.body':
-    'A tenant carries only a default currency and timezone — no country or hosting-region assignment exists in the schema, confirmed by the tenant directory’s own server-side note. The platform-wide half of this row (which countries HorecaOS markets to) is real and already shown at Reference data; the missing half is the per-tenant assignment this row is actually about.',
+  'residencyHosting.notBuilt.body': 'A tenant has no country or hosting region yet. The countries the platform supports are listed under Reference data.',
 
-  'piiClassification.notBuilt.body':
-    'ADR 0029’s field classification is real internal machinery that decides what the platform encrypts, but it is not a queryable registry — there is no retention-schedule table, no export-egress audit log, and no DSAR/erasure workflow anywhere in this build.',
+  'piiClassification.notBuilt.body': 'Personal data is encrypted by classification, but retention schedules, export records and erasure requests are not built yet.',
 
-  'platformApprovals.notBuilt.body':
-    'The maker-checker queue itself is real and already reachable from Staff & roles for IAM grants. Residency change, bulk export, and retention override — the three actions this row names — do not exist anywhere in this codebase to raise an approval request, so there is nothing this screen could show that 7.1 does not already show identically.',
+  'platformApprovals.notBuilt.body': 'Second-signature approvals for staff access are under Staff & roles. Residency changes, bulk exports and retention overrides are not built yet.',
 
   'accessDebugger.title': 'Effective access debugger',
-  'accessDebugger.lead': 'What a named principal may do, and why — the same decision the server itself makes on every request (ADR 0003 + ADR 0025).',
+  'accessDebugger.lead': 'What a person or service may do, and why — the same decision the server makes on every request.',
   'accessDebugger.subject': 'Subject',
   'accessDebugger.tenantId': 'Tenant id (optional)',
   'accessDebugger.brandId': 'Brand id (optional)',
@@ -590,14 +575,12 @@ export const en = {
   'accessDebugger.column.role': 'Role',
   'accessDebugger.column.capabilities': 'Capabilities',
 
-  'businessTypes.notBuilt.body':
-    'There is no BusinessType anywhere in the tenancy schema or domain code — the tenant directory’s own server-side note says so directly. A tenant carries no business-type assignment today, so there is nothing to browse and no defaults to show.',
+  'businessTypes.notBuilt.body': 'Business types are not built yet: no tenant has one.',
 
-  'notificationProviders.notBuilt.body':
-    'There is no platform-wide SMS gateway or sender-alias registry to browse, and no provider-side template moderation state — the notification template controller’s own documentation says ADR 0020’s full approval workflow is deferred. Both halves this row needs are unbuilt.',
+  'notificationProviders.notBuilt.body': 'The SMS gateway registry and template approval are not built yet.',
 
   'policyDefaults.title': 'Policy defaults',
-  'policyDefaults.lead': 'Platform-level defaults a tenant may see and inherit (ADR 0030).',
+  'policyDefaults.lead': 'Platform-level defaults that tenants see and inherit.',
   'policyDefaults.empty': 'No tenant-visible configuration keys are declared.',
   'policyDefaults.column.key': 'Key',
   'policyDefaults.column.default': 'Default',
@@ -605,7 +588,7 @@ export const en = {
   'policyDefaults.column.description': 'Description',
 
   'idMappingExplorer.title': 'ID mapping explorer',
-  'idMappingExplorer.lead': 'The legacy-to-target identity crosswalk for one migration scope (ADR 0024).',
+  'idMappingExplorer.lead': 'How legacy identifiers map to HorecaOS ones, for one migration scope.',
   'idMappingExplorer.scopeId': 'Scope id',
   'idMappingExplorer.entityType': 'Entity type',
   'idMappingExplorer.search': 'Search',
@@ -616,7 +599,7 @@ export const en = {
   'idMappingExplorer.column.created': 'Recorded',
 
   'dualRunComparison.title': 'Dual-run comparison',
-  'dualRunComparison.lead': 'Legacy vs. HorecaOS output, rule by rule, for one reconciliation run (ADR 0024).',
+  'dualRunComparison.lead': 'Legacy output next to HorecaOS output, rule by rule, for one reconciliation run.',
   'dualRunComparison.runId': 'Run id',
   'dualRunComparison.search': 'Search',
   'dualRunComparison.empty': 'No reconciliation results recorded for this run.',
@@ -628,7 +611,7 @@ export const en = {
   'dualRunComparison.column.status': 'Status',
 
   'cutoverChecklist.title': 'Cutover checklist',
-  'cutoverChecklist.lead': 'Go/no-go per capability scope, read from each scope’s own state (ADR 0024).',
+  'cutoverChecklist.lead': 'Go or no-go for each migration scope, from the scope’s own state.',
   'cutoverChecklist.scopes.title': 'Scopes',
   'cutoverChecklist.column.readiness': 'Readiness',
   'cutoverChecklist.readiness.go': 'Go',
@@ -637,7 +620,7 @@ export const en = {
 
   'tenantIssueQueue.title': 'Tenant issue queue',
   'tenantIssueQueue.lead': 'Open problems for one tenant, with linked evidence.',
-  'tenantIssueQueue.gap': 'Expired credentials are not shown: nothing in this build declares an expiry threshold for a rotated secret, and inventing one here would show a judgement nobody made.',
+  'tenantIssueQueue.gap': 'Expiring credentials are not shown: no expiry rule for credentials exists yet.',
   'tenantIssueQueue.empty': 'No open issues for this tenant.',
   'tenantIssueQueue.deadLetters.title': 'Dead-lettered events',
   'tenantIssueQueue.deadLetters.empty': 'No dead-lettered events for this tenant.',
