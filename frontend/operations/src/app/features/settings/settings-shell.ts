@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { SETTINGS_NAVIGATION } from './settings-nav';
+import { FeatureFlags } from '../../core/feature-flags';
+import { visibleSettings } from './settings-nav';
 
 /**
  * The Settings section's own shell: a grouped left rail (§Navigation) beside
@@ -28,9 +29,11 @@ import { SETTINGS_NAVIGATION } from './settings-nav';
 })
 export class SettingsShell {
   protected readonly location = inject(CurrentLocation);
-  protected readonly groups = SETTINGS_NAVIGATION;
+  private readonly flags = inject(FeatureFlags);
+  protected readonly groups = computed(() => visibleSettings((flag) => this.flags.isOn(flag)));
 
   constructor() {
+    void this.flags.ensureLoaded();
     void this.location.ensureLoaded();
   }
 }

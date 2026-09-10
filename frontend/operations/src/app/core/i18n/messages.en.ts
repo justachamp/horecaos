@@ -50,6 +50,17 @@ export const messagesEn = {
   'support.banner.until': 'until {time}',
   'support.banner.none': 'No open support session here; screens will refuse until one is opened',
   'support.banner.leave': 'Leave',
+  'settings.supportVisits.lead': 'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
+  'settings.supportVisits.loading': 'Loading visits…',
+  'settings.supportVisits.denied': 'Only the account’s owner and administrators can see support visits.',
+  'settings.supportVisits.empty': 'Nobody from HorecaOS support has entered your account.',
+  'settings.supportVisits.openUntil': 'In progress, until {time}',
+  'settings.supportVisits.endedAt': 'Ended {time}',
+  'settings.supportVisits.lapsedAt': 'Ran out at {time}',
+  'settings.supportVisits.end': 'End this visit',
+  'settings.supportVisits.reason': 'Why you are ending it',
+  'settings.supportVisits.confirmEnd': 'End now',
+  'settings.supportVisits.ended': 'Visit ended; their access is gone.',
   'shell.late.aria': '{count} orders are late. Open the late queue.',
   'shell.openOrders.aria': '{count} open orders',
   'shell.account.signOut': 'Sign out',
@@ -2491,8 +2502,10 @@ export const messagesEn = {
   // ---------------------------------------------------------------- settings 10.11 (wave 45)
   'settings.nav.group.privacy': 'Privacy',
   'settings.nav.dataPrivacy': 'Data & privacy',
+  'settings.nav.supportVisits': 'HorecaOS support visits',
   'settings.home.description.dataPrivacy':
     'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
+  'settings.home.description.supportVisits': 'Who from HorecaOS support entered your account, when and why',
   'settings.dataPrivacy.title': 'Data & privacy',
   'settings.dataPrivacy.lead':
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',

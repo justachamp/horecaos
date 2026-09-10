@@ -301,6 +301,15 @@ export const routes: Routes = [
               ),
           },
           {
+            // ADR 0081 / 0082: HorecaOS support visits, shown while the
+            // `feature.support_visits` flag is on for this tenant.
+            path: 'support-visits',
+            loadComponent: () =>
+              import('./features/settings/support-visits/support-visits-page').then(
+                (m) => m.SupportVisitsPage,
+              ),
+          },
+          {
             // 10.12 Terms of service (ADR 0067): also tenant-scoped, with its
             // own brand picker rather than `CurrentLocation` — see
             // `terms-page.ts`'s own doc for why.

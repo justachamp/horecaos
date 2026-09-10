@@ -1,0 +1,120 @@
+<h1 class="q-title">{{ i18n.t('nav.featureFlags') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('featureFlags.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+<ng-template #confirmForm>
+  <div class="confirm">
+    <input
+      class="q-body-sm"
+      name="flagReason"
+      [placeholder]="i18n.t('common.reason')"
+      [value]="reason()"
+      (input)="reason.set($any($event.target).value)"
+    />
+    <button type="button" class="confirmChange" [disabled]="busy() || reason().trim().length === 0" (click)="confirm()">
+      {{ i18n.t('featureFlags.confirm') }}
+    </button>
+    <button type="button" class="secondary" (click)="pending.set(null)">{{ i18n.t('common.cancel') }}</button>
+  </div>
+</ng-template>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (flags().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('featureFlags.empty') }}</p>
+} @else {
+  @for (flag of flags(); track flag.code) {
+    <section class="panel flag" [attr.data-flag]="flag.code">
+      <header class="flagHead">
+        <div>
+          <h2 class="q-subhead">{{ title(flag) }}</h2>
+          <p class="q-caption muted q-tnum">{{ flag.code }}</p>
+        </div>
+        <span class="chip q-caption" [class.on]="platformOn(flag)">{{ summary(flag) }}</span>
+      </header>
+      <p class="q-body-sm muted">{{ description(flag) }}</p>
+
+      <div class="row">
+        <span class="q-body-sm">
+          {{ i18n.t('featureFlags.platform') }}:
+          <strong>{{ i18n.t(platformOn(flag) ? 'featureFlags.tenant.on' : 'featureFlags.tenant.off') }}</strong>
+        </span>
+        <button
+          type="button"
+          class="secondary platformToggle"
+          (click)="ask({ kind: 'platform', flag: flag, value: !platformOn(flag) })"
+        >
+          {{ i18n.t(platformOn(flag) ? 'featureFlags.platform.turnOff' : 'featureFlags.platform.turnOn') }}
+        </button>
+      </div>
+      @if (isPending(flag, null)) {
+        <ng-container *ngTemplateOutlet="confirmForm" />
+      }
+
+      <h3 class="q-body-sm strong">{{ i18n.t('featureFlags.tenants.title') }}</h3>
+      @if (flag.tenants.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('featureFlags.tenants.none') }}</p>
+      } @else {
+        <ul class="tenants">
+          @for (setting of flag.tenants; track setting.tenantId) {
+            <li class="q-body-sm">
+              <span class="name">{{ tenantName(setting) }}</span>
+              <span class="chip q-caption" [class.on]="setting.value === true">{{ settingLabel(setting) }}</span>
+              @if (setting.value !== true) {
+                <button type="button" class="secondary" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: true, version: setting.version })">
+                  {{ i18n.t('featureFlags.tenant.turnOn') }}
+                </button>
+              }
+              @if (setting.value !== false) {
+                <button type="button" class="secondary" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: false, version: setting.version })">
+                  {{ i18n.t('featureFlags.tenant.holdBack') }}
+                </button>
+              }
+              @if (setting.value !== null) {
+                <button type="button" class="secondary handBack" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: null, version: setting.version })">
+                  {{ i18n.t('featureFlags.tenant.handBack') }}
+                </button>
+              }
+            </li>
+            @if (isPending(flag, setting.tenantId)) {
+              <li><ng-container *ngTemplateOutlet="confirmForm" /></li>
+            }
+          }
+        </ul>
+      }
+
+      <button type="button" class="secondary addToggle" (click)="openAdd(flag)">
+        {{ addingTo() === flag.code ? i18n.t('common.cancel') : i18n.t('featureFlags.add') }}
+      </button>
+      @if (addingTo() === flag.code) {
+        <div class="add">
+          <app-tenant-picker [value]="addTenantId()" (tenantChange)="addTenantId.set($event)" />
+          <label class="q-body-sm choice">
+            <input type="radio" [name]="'addValue-' + flag.code" [checked]="addValue()" (change)="addValue.set(true)" />
+            {{ i18n.t('featureFlags.tenant.turnOn') }}
+          </label>
+          <label class="q-body-sm choice">
+            <input type="radio" [name]="'addValue-' + flag.code" [checked]="!addValue()" (change)="addValue.set(false)" />
+            {{ i18n.t('featureFlags.tenant.holdBack') }}
+          </label>
+          <button type="button" class="secondary addAsk" [disabled]="addTenantId() === ''" (click)="askAdd(flag)">
+            {{ i18n.t('featureFlags.add.next') }}
+          </button>
+        </div>
+        @if (pending(); as change) {
+          @if (change.kind === 'tenant' && change.flag.code === flag.code && !isListed(flag, change.tenantId)) {
+            <ng-container *ngTemplateOutlet="confirmForm" />
+          }
+        }
+      }
+    </section>
+  }
+}

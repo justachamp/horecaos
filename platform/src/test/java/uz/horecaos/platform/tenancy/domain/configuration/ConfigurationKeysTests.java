@@ -24,6 +24,29 @@ class ConfigurationKeysTests {
     }
 
     @Test
+    void everyFeatureFlagIsOffByDefaultAndRolledOutFromThePlatformOrPerTenant() {
+        assertThat(ConfigurationKeys.featureFlags()).isNotEmpty();
+        assertThat(ConfigurationKeys.all())
+                .filteredOn(key -> key.code().startsWith(ConfigurationKeys.FEATURE_PREFIX))
+                .as("the feature namespace holds flags and nothing else")
+                .allSatisfy(key -> {
+                    assertThat(key.valueType()).isEqualTo(Boolean.class);
+                    assertThat(key.defaultValue())
+                            .as("%s: a flag nobody has turned on is off", key.code())
+                            .isEqualTo(false);
+                    assertThat(key.settableScopes())
+                            .as("%s: on for everyone, or per tenant", key.code())
+                            .containsExactlyInAnyOrder(
+                                    uz.horecaos.platform.iam.api.ResourceScope.ScopeType.PLATFORM,
+                                    uz.horecaos.platform.iam.api.ResourceScope.ScopeType.TENANT);
+                    assertThat(key.tenantVisible()).isTrue();
+                    assertThat(key.explicitNullTerminates())
+                            .as("%s: clearing a tenant's override hands it back to the platform value", key.code())
+                            .isFalse();
+                });
+    }
+
+    @Test
     void anUnknownKeyIsRejected() {
         assertThatThrownBy(() -> ConfigurationKeys.require("ordering.not_a_real_key"))
                 .isInstanceOf(ConfigurationKeys.UnknownConfigurationKeyException.class)

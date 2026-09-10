@@ -251,6 +251,22 @@ public final class ConfigurationKeys {
                     + "first is unconfigured or does not accept the message.")
             .build();
 
+    /**
+     * ADR 0082: whether a tenant's operations app shows its administrators the
+     * HorecaOS support visits to their account (ADR 0081), and lets them end
+     * one. Off until turned on: the page is new, and the first tenants to see
+     * it are chosen rather than everyone at once.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_SUPPORT_VISITS = ConfigurationKey.of(
+                    "feature.support_visits", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Shows a tenant's administrators the HorecaOS support visits to their "
+                    + "account in the operations app, and lets them end one.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             QUOTE_TTL_SECONDS,
@@ -261,7 +277,8 @@ public final class ConfigurationKeys {
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
-            CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER));
+            CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
+            FEATURE_SUPPORT_VISITS));
 
     private ConfigurationKeys() {}
 
@@ -278,6 +295,22 @@ public final class ConfigurationKeys {
     public static Collection<ConfigurationKey<?>> all() {
         return BY_CODE.values();
     }
+
+    /**
+     * ADR 0082: the feature flags — every boolean key in the {@code feature.}
+     * namespace, settable at the platform and per tenant, off by default.
+     */
+    @SuppressWarnings("unchecked")
+    public static List<ConfigurationKey<Boolean>> featureFlags() {
+        return BY_CODE.values().stream()
+                .filter(key -> key.code().startsWith(FEATURE_PREFIX) && key.valueType() == Boolean.class)
+                .map(key -> (ConfigurationKey<Boolean>) key)
+                .sorted(java.util.Comparator.comparing(ConfigurationKey::code))
+                .toList();
+    }
+
+    /** The namespace a feature flag's code starts with. */
+    public static final String FEATURE_PREFIX = "feature.";
 
     public static Optional<ConfigurationKey<?>> find(String code) {
         return Optional.ofNullable(BY_CODE.get(code));

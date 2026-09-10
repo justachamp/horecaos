@@ -15,7 +15,7 @@
       </div>
     }
 
-    @for (group of groups; track group.label) {
+    @for (group of groups(); track group.label) {
       <div class="settings__group">
         <h2 class="settings__group-label q-caption">{{ group.label | t }}</h2>
         @for (item of group.items; track item.path) {

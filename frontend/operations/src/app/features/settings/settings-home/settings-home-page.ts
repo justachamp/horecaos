@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { TPipe } from '../../../core/i18n/t.pipe';
-import { SETTINGS_NAVIGATION } from '../settings-nav';
+import { FeatureFlags } from '../../../core/feature-flags';
+import { visibleSettings } from '../settings-nav';
 
 /**
  * 10.0 Settings home — `docs/operations-spec/settings.md` §10.0.
@@ -25,5 +26,10 @@ import { SETTINGS_NAVIGATION } from '../settings-nav';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SettingsHomePage {
-  protected readonly groups = SETTINGS_NAVIGATION;
+  private readonly flags = inject(FeatureFlags);
+  constructor() {
+    void this.flags.ensureLoaded();
+  }
+
+  protected readonly groups = computed(() => visibleSettings((flag) => this.flags.isOn(flag)));
 }
