@@ -223,6 +223,18 @@ public class NotificationEligibilityService {
             return suppress(row, reason, now);
         }
 
+        // ADR 0091: a wording its SMS gateway has not approved, or has refused,
+        // is not sent. The gateway would refuse it anyway; withholding it here
+        // records why instead of a provider error per customer.
+        if (TemplateProviderReviewService.withheld(version.providerReview())) {
+            return suppress(
+                    row,
+                    TemplateProviderReviewService.REJECTED.equals(version.providerReview())
+                            ? SuppressionReason.TEMPLATE_REFUSED_BY_PROVIDER
+                            : SuppressionReason.TEMPLATE_AWAITING_PROVIDER,
+                    now);
+        }
+
         // The gate. Only the classes that legally need a decision ask for one, and
         // absence of a decision is withheld rather than permitted — "we never
         // asked" and "they said yes" are the two states a default-true would merge.

@@ -33,6 +33,15 @@ public enum SuppressionReason {
     CHANNEL_NOT_AVAILABLE,
 
     /**
+     * ADR 0091: the SMS wording is waiting for its gateway to approve it, and
+     * a text the operator has not approved would be refused at the gateway.
+     */
+    TEMPLATE_AWAITING_PROVIDER,
+
+    /** ADR 0091: the SMS gateway refused this wording; a new version is needed. */
+    TEMPLATE_REFUSED_BY_PROVIDER,
+
+    /**
      * ADR 0044/0059: the ADR 0044 campaign this message belongs to is no longer
      * {@code SENDING} — paused by the block-rate guard, halted, or cancelled —
      * by the time this row reached the front of the queue. Checked at

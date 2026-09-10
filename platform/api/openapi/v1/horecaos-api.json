@@ -4867,6 +4867,52 @@
         },
         "type" : "object"
       },
+      "DataClassView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "mayLeaveTheDatabase" : {
+            "type" : "boolean"
+          },
+          "requiresEncryption" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "DataProtection" : {
+        "properties" : {
+          "classes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DataClassView"
+            },
+            "type" : "array"
+          },
+          "egressLast30Days" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EgressCount"
+            },
+            "type" : "array"
+          },
+          "encryptedColumns" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EncryptedColumn"
+            },
+            "type" : "array"
+          },
+          "erasure" : {
+            "$ref" : "#/components/schemas/Erasure"
+          },
+          "retention" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetentionRule"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "DateOfBirthRequest" : {
         "properties" : {
           "dateOfBirth" : {
@@ -5711,6 +5757,32 @@
         },
         "type" : "object"
       },
+      "EgressCount" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "EncryptedColumn" : {
+        "properties" : {
+          "column" : {
+            "type" : "string"
+          },
+          "schema" : {
+            "type" : "string"
+          },
+          "table" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EndPolicyRequest" : {
         "properties" : {
           "effectiveAt" : {
@@ -5871,6 +5943,29 @@
           "targetId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Erasure" : {
+        "properties" : {
+          "cancelled" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "completed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pending" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "waiting" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PendingErasure"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -6511,6 +6606,23 @@
           }
         },
         "required" : [ "appliesTo", "benefit", "idempotencyKey", "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "Gateway" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "production" : {
+            "type" : "boolean"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "GrantControllerReasonRequest" : {
@@ -8587,6 +8699,23 @@
           },
           "note" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "NotificationProviders" : {
+        "properties" : {
+          "gateways" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Gateway"
+            },
+            "type" : "array"
+          },
+          "senders" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Sender"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -10864,6 +10993,29 @@
             "type" : "string"
           },
           "thresholdDescription" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PendingErasure" : {
+        "properties" : {
+          "daysWaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "type" : "string"
+          },
+          "requestedVia" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -13716,6 +13868,20 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "RetentionRule" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "enforcedBy" : {
+            "type" : "string"
+          },
+          "keptFor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RetryRequest" : {
         "properties" : {
           "reason" : {
@@ -13910,6 +14076,31 @@
           }
         },
         "required" : [ "differenceId", "outcome" ],
+        "type" : "object"
+      },
+      "ReviewRequest" : {
+        "properties" : {
+          "providerNote" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reference" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "state" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "state" ],
         "type" : "object"
       },
       "ReviseLocationRequest" : {
@@ -14708,6 +14899,38 @@
           }
         },
         "required" : [ "body" ],
+        "type" : "object"
+      },
+      "Sender" : {
+        "properties" : {
+          "brandSenders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "environmentCode" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "sender" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ServiceStateRequest" : {
@@ -16604,6 +16827,53 @@
         },
         "type" : "object"
       },
+      "TemplateReviewView" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "providerNote" : {
+            "type" : "string"
+          },
+          "providerReview" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "updatedBy" : {
+            "type" : "string"
+          },
+          "versionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "versionNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "TemplateView" : {
         "properties" : {
           "code" : {
@@ -17931,7 +18201,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "responses" : {
           "200" : {
             "content" : {
@@ -18072,6 +18342,26 @@
         "tags" : [ "Configuration" ]
       }
     },
+    "/api/v1/control-plane/data-protection" : {
+      "get" : {
+        "description" : "Data classes, every encrypted column, retention rules and the jobs that enforce them, erasure requests, and reveals and exports of the last 30 days.",
+        "operationId" : "overview",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataProtection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How the platform treats personal data",
+        "tags" : [ "Data protection" ]
+      }
+    },
     "/api/v1/control-plane/device-enrolments" : {
       "post" : {
         "description" : "Called by the device itself, before it holds any credential. Returns a deviceCode for the device to poll with and a short userCode for a person to read off the screen and approve from the operations console.",
@@ -18133,7 +18423,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_30",
+        "operationId" : "list_31",
         "responses" : {
           "200" : {
             "content" : {
@@ -18379,7 +18669,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_29",
+        "operationId" : "list_30",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -18969,9 +19259,29 @@
         "tags" : [ "Commercial modules" ]
       }
     },
+    "/api/v1/control-plane/notification-providers" : {
+      "get" : {
+        "description" : "Approved notification endpoints, and each notification installation with its sender name and how many brands send under a different one.",
+        "operationId" : "registry",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationProviders"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Messaging gateways and the tenants sending through them",
+        "tags" : [ "Platform integration administration" ]
+      }
+    },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_28",
+        "operationId" : "list_29",
         "responses" : {
           "200" : {
             "content" : {
@@ -19292,6 +19602,47 @@
         },
         "summary" : "The caller's support sessions that are still open",
         "tags" : [ "Support sessions" ]
+      }
+    },
+    "/api/v1/control-plane/template-reviews" : {
+      "get" : {
+        "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
+        "operationId" : "list_28",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "state",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "maximum" : 500,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TemplateReviewView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "SMS wordings and where each stands with its gateway",
+        "tags" : [ "Template moderation" ]
       }
     },
     "/api/v1/control-plane/tenant-health" : {
@@ -25985,6 +26336,46 @@
         },
         "summary" : "Suspend a tenant",
         "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/template-versions/{versionId}/provider-review" : {
+      "post" : {
+        "description" : "PENDING withholds it from sending until the answer is recorded; APPROVED needs the provider's reference and REJECTED what it objected to. NOT_REQUIRED sends as before.",
+        "operationId" : "record",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "versionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record where an SMS wording stands with its gateway",
+        "tags" : [ "Template moderation" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/usage" : {
@@ -45166,6 +45557,9 @@
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"
   }, {
+    "description" : "ADR 0091: SMS wordings waiting on their gateway's approval",
+    "name" : "Template moderation"
+  }, {
     "description" : "Which system may write a capability, at a resolved scope",
     "name" : "Migration ownership"
   }, {
@@ -45222,6 +45616,9 @@
   }, {
     "description" : "Balances, manual adjustments, and liability",
     "name" : "Loyalty operations"
+  }, {
+    "description" : "ADR 0092: how the platform treats personal data",
+    "name" : "Data protection"
   }, {
     "description" : "Conversation list, history, and takeover/return/close actions",
     "name" : "Operator inbox"

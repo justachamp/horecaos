@@ -102,7 +102,7 @@ public class JdbcTemplateStore {
         return jdbc.sql("""
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
-                       status, approved_by, activated_at
+                       status, approved_by, activated_at, provider_review
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
@@ -119,7 +119,7 @@ public class JdbcTemplateStore {
         return jdbc.sql("""
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
-                       status, approved_by, activated_at
+                       status, approved_by, activated_at, provider_review
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber
@@ -303,7 +303,8 @@ public class JdbcTemplateStore {
                 row.getString("content_hash"),
                 row.getString("status"),
                 row.getString("approved_by"),
-                activatedAt == null ? null : activatedAt.toInstant());
+                activatedAt == null ? null : activatedAt.toInstant(),
+                row.getString("provider_review"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -344,5 +345,6 @@ public class JdbcTemplateStore {
             String contentHash,
             String status,
             @Nullable String approvedBy,
-            @Nullable Instant activatedAt) {}
+            @Nullable Instant activatedAt,
+            String providerReview) {}
 }

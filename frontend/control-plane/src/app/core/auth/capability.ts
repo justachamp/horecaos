@@ -50,6 +50,8 @@ export type Capability =
   // §3) -- not the tenant self-service connect/rotate flow, which ADR 0065's
   // 2026-09-02 amendment moved to the operations app's Settings section.
   | 'INTEGRATION_INSTALLATION_MANAGE'
+  | 'NOTIFICATION_READ'
+  | 'NOTIFICATION_TEMPLATE_ACTIVATE'
   | 'INTEGRATION_FAILURE_READ'
   | 'INTEGRATION_FAILURE_RETRY'
   | 'INTEGRATION_FAILURE_RESOLVE'

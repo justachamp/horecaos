@@ -1,0 +1,79 @@
+.section {
+  margin-top: 28px;
+}
+
+.gateways {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.gateway {
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filters {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter.active {
+  border-color: var(--q-primary);
+  box-shadow: inset 0 0 0 1px var(--q-primary);
+}
+
+.reviews {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review {
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review[data-state='PENDING'] {
+  box-shadow: inset 3px 0 0 var(--q-warning, #f1c21b);
+}
+
+.review[data-state='REJECTED'] {
+  box-shadow: inset 3px 0 0 var(--q-error-text);
+}
+
+.reviewHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  white-space: nowrap;
+}
+
+.body {
+  white-space: pre-wrap;
+  font-family: var(--q-font-mono, ui-monospace, Menlo, monospace);
+}
+
+.recordToggle {
+  align-self: flex-start;
+}
