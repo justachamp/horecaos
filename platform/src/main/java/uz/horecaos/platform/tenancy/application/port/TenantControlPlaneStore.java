@@ -102,6 +102,26 @@ public interface TenantControlPlaneStore {
     /** Persists the brand's current status (activate/suspend/archive). */
     void updateBrandStatus(Brand brand);
 
+    /** Whether a brand of this tenant other than {@code brand} already holds its code or slug. */
+    boolean brandCodeOrSlugTakenByAnother(Brand brand);
+
+    /**
+     * Persists a revised brand's code, slug and name, provided nothing has
+     * written it since it was read.
+     *
+     * @return false when the stored version is no longer {@link Brand#version()}
+     */
+    boolean updateBrandIdentity(Brand brand);
+
+    /**
+     * Deletes a brand, provided nothing has written it since it was read.
+     *
+     * @return false when the stored version is no longer {@link Brand#version()}
+     * @throws uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException
+     *         when another record still refers to it
+     */
+    boolean deleteBrand(Brand brand);
+
     boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug);
 
     void insertLocation(Location location);
@@ -116,6 +136,27 @@ public interface TenantControlPlaneStore {
 
     /** Persists the location's current status (activate/suspend/archive). */
     void updateLocationStatus(Location location);
+
+    /** Whether a location of the same brand other than {@code location} already holds its code or slug. */
+    boolean locationCodeOrSlugTakenByAnother(Location location);
+
+    /**
+     * Persists a revised location's code, slug, name and timezone, provided
+     * nothing has written it since it was read. The place is not touched; see
+     * {@link #updateLocationPlace}.
+     *
+     * @return false when the stored version is no longer {@link Location#version()}
+     */
+    boolean updateLocationIdentity(Location location);
+
+    /**
+     * Deletes a location, provided nothing has written it since it was read.
+     *
+     * @return false when the stored version is no longer {@link Location#version()}
+     * @throws uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException
+     *         when another record still refers to it
+     */
+    boolean deleteLocation(Location location);
 
     List<Location> findLocations(Brand brand);
 }

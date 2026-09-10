@@ -755,6 +755,9 @@ services:
     command: ["agent", "-config=/openbao/config/agent.hcl"]
     environment:
       BAO_ADDR: http://openbao:8200
+      # agent.hcl builds its one secret path from this, so it must match the
+      # platform's own HORECAOS_ENVIRONMENT above -- same variable, same default.
+      HORECAOS_ENVIRONMENT: ${HORECAOS_ENVIRONMENT:-production}
       TZ: Asia/Tashkent
     secrets:
       - openbao-role-id

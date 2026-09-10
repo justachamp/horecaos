@@ -3,6 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { BrandView, LocationView, TenantsApi } from './tenants-api';
 
 interface BrandRow {
@@ -10,6 +11,23 @@ interface BrandRow {
   readonly locations: readonly LocationView[];
   readonly locationsLoaded: boolean;
 }
+
+type Editing =
+  | { readonly kind: 'brand'; readonly brand: BrandView }
+  | { readonly kind: 'location'; readonly location: LocationView };
+
+/**
+ * The reasons the platform gives for refusing a delete, each with its own
+ * sentence. A map rather than a key built from the reason, so a reason with no
+ * translation is a compile error, not a raw key on screen.
+ */
+const DELETE_REASON_MESSAGES = {
+  NOT_DRAFT: 'tenantBrands.delete.reason.NOT_DRAFT',
+  HAS_LOCATIONS: 'tenantBrands.delete.reason.HAS_LOCATIONS',
+  HAS_ACCESS_GRANTS: 'tenantBrands.delete.reason.HAS_ACCESS_GRANTS',
+  STILL_REFERENCED: 'tenantBrands.delete.reason.STILL_REFERENCED',
+} as const satisfies Record<string, MessageKey>;
+type DeleteReason = keyof typeof DELETE_REASON_MESSAGES;
 
 /**
  * IA 2.3 Brands & locations -- the ownership tree, and provisioning on the
@@ -21,6 +39,14 @@ interface BrandRow {
  * tenancy schema -- currency and timezone are set once, tenant-wide, at
  * creation, and there is no business-type column on either `Tenant` or
  * `Brand`. This screen does not invent fields the API cannot save.
+ *
+ * Correcting and deleting follow the platform's rules rather than restating
+ * them: the name can always change, the code, slug and a location's timezone
+ * only while the unit is DRAFT, and only a DRAFT that nothing refers to can be
+ * deleted. The screen greys out what the server would refuse, and when it
+ * refuses anyway -- someone else's change, a record elsewhere still pointing
+ * at the unit -- says why in the operator's language, from the refusal's
+ * `reason` rather than its English `detail`.
  */
 @Component({
   selector: 'app-tenant-brands',
@@ -52,6 +78,17 @@ export class TenantBrands {
   protected readonly locationName = signal('');
   protected readonly locationTimezone = signal('Asia/Tashkent');
   protected readonly locationSubmitting = signal(false);
+
+  protected readonly editing = signal<Editing | null>(null);
+  protected readonly editCode = signal('');
+  protected readonly editSlug = signal('');
+  protected readonly editName = signal('');
+  protected readonly editTimezone = signal('');
+  protected readonly editSubmitting = signal(false);
+
+  /** The brand or location whose Delete has been pressed once and awaits confirmation. */
+  protected readonly confirmingDelete = signal<string | null>(null);
+  protected readonly deleting = signal(false);
 
   constructor() {
     void this.load();
@@ -208,5 +245,158 @@ export class TenantBrands {
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));
     }
+  }
+
+  protected openEditBrand(brand: BrandView): void {
+    this.editing.set({ kind: 'brand', brand });
+    this.editCode.set(brand.code);
+    this.editSlug.set(brand.slug);
+    this.editName.set(brand.displayName);
+    this.editTimezone.set('');
+    this.actionError.set(null);
+    this.confirmingDelete.set(null);
+  }
+
+  protected openEditLocation(location: LocationView): void {
+    this.editing.set({ kind: 'location', location });
+    this.editCode.set(location.code);
+    this.editSlug.set(location.slug);
+    this.editName.set(location.displayName);
+    this.editTimezone.set(location.timezone);
+    this.actionError.set(null);
+    this.confirmingDelete.set(null);
+  }
+
+  protected closeEdit(): void {
+    this.editing.set(null);
+  }
+
+  /** Code, slug and timezone are fixed once the unit has left DRAFT; the name never is. */
+  protected identityLocked(): boolean {
+    const editing = this.editing();
+    if (editing === null) {
+      return false;
+    }
+    const status = editing.kind === 'brand' ? editing.brand.status : editing.location.status;
+    return status !== 'DRAFT';
+  }
+
+  protected canSubmitEdit(): boolean {
+    const editing = this.editing();
+    return (
+      editing !== null &&
+      !this.editSubmitting() &&
+      this.editCode().trim().length > 0 &&
+      this.editSlug().trim().length > 0 &&
+      this.editName().trim().length > 0 &&
+      (editing.kind === 'brand' || this.editTimezone().trim().length > 0)
+    );
+  }
+
+  protected async submitEdit(event: Event): Promise<void> {
+    event.preventDefault();
+    const editing = this.editing();
+    if (editing === null || !this.canSubmitEdit()) {
+      return;
+    }
+    this.editSubmitting.set(true);
+    this.actionError.set(null);
+    try {
+      if (editing.kind === 'brand') {
+        const revised = await this.tenantsApi.reviseBrand(this.tenantId, editing.brand, {
+          code: this.editCode().trim(),
+          slug: this.editSlug().trim(),
+          displayName: this.editName().trim(),
+        });
+        this.rows.update((rows) =>
+          rows.map((row) => (row.brand.id === revised.id ? { ...row, brand: revised } : row)),
+        );
+      } else {
+        const revised = await this.tenantsApi.reviseLocation(this.tenantId, editing.location, {
+          code: this.editCode().trim(),
+          slug: this.editSlug().trim(),
+          displayName: this.editName().trim(),
+          timezone: this.editTimezone().trim(),
+        });
+        this.replaceLocation(revised.brandId, revised.id, revised);
+      }
+      this.editing.set(null);
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.editSubmitting.set(false);
+    }
+  }
+
+  protected askDelete(id: string): void {
+    this.confirmingDelete.set(id);
+    this.actionError.set(null);
+  }
+
+  protected cancelDelete(): void {
+    this.confirmingDelete.set(null);
+  }
+
+  protected async deleteBrand(brand: BrandView): Promise<void> {
+    this.deleting.set(true);
+    this.actionError.set(null);
+    try {
+      await this.tenantsApi.deleteBrand(this.tenantId, brand);
+      this.rows.update((rows) => rows.filter((row) => row.brand.id !== brand.id));
+    } catch (error) {
+      this.actionError.set(this.describeDeleteRefusal(error as ApiError));
+    } finally {
+      this.confirmingDelete.set(null);
+      this.deleting.set(false);
+    }
+  }
+
+  protected async deleteLocation(location: LocationView): Promise<void> {
+    this.deleting.set(true);
+    this.actionError.set(null);
+    try {
+      await this.tenantsApi.deleteLocation(this.tenantId, location);
+      this.rows.update((rows) =>
+        rows.map((row) =>
+          row.brand.id === location.brandId
+            ? { ...row, locations: row.locations.filter((candidate) => candidate.id !== location.id) }
+            : row,
+        ),
+      );
+    } catch (error) {
+      this.actionError.set(this.describeDeleteRefusal(error as ApiError));
+    } finally {
+      this.confirmingDelete.set(null);
+      this.deleting.set(false);
+    }
+  }
+
+  /**
+   * A refused delete names its reason as a problem property. Anything else --
+   * a stale version, a lost connection -- gets the ordinary sentence for its code.
+   */
+  private describeDeleteRefusal(error: ApiError): string {
+    const reason = error.problem['reason'];
+    if (error.code !== 'RESOURCE_CONFLICT' || typeof reason !== 'string' || !(reason in DELETE_REASON_MESSAGES)) {
+      return this.i18n.describe(error);
+    }
+    const sentence = this.i18n.t(DELETE_REASON_MESSAGES[reason as DeleteReason]);
+    const referencedBy = error.problem['referencedBy'];
+    return typeof referencedBy === 'string'
+      ? `${sentence} ${this.i18n.t('tenantBrands.delete.referencedBy', { table: referencedBy })}`
+      : sentence;
+  }
+
+  private replaceLocation(brandId: string, locationId: string, replacement: LocationView): void {
+    this.rows.update((rows) =>
+      rows.map((row) =>
+        row.brand.id === brandId
+          ? {
+              ...row,
+              locations: row.locations.map((location) => (location.id === locationId ? replacement : location)),
+            }
+          : row,
+      ),
+    );
   }
 }

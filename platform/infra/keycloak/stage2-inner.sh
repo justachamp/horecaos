@@ -22,7 +22,8 @@ IFS= read -r TMP_PASSWORD
 
 K=http://keycloak:8080
 REALM=horecaos
-KV="${BAO_ADDR:?ops has no BAO_ADDR}/v1/horecaos/data/production/identity_admin/keycloak"
+# The environment segment the driver read from the host's env file.
+KV="${BAO_ADDR:?ops has no BAO_ADDR}/v1/horecaos/data/${HORECAOS_ENVIRONMENT:?the driver passes HORECAOS_ENVIRONMENT}/identity_admin/keycloak"
 
 say() { printf '  %s\n' "$*"; }
 die() { printf '!! %s\n' "$*" >&2; exit 1; }

@@ -126,6 +126,26 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A brand was created under a tenant."),
             new EventContract(
+                    "BrandRevised",
+                    1,
+                    "tenancy",
+                    TENANCY_EVENTS_TOPIC,
+                    "brandId",
+                    "events/tenancy.events/BrandRevised.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A brand's name, or while it was a draft its code or slug, was corrected."),
+            new EventContract(
+                    "BrandDeleted",
+                    1,
+                    "tenancy",
+                    TENANCY_EVENTS_TOPIC,
+                    "brandId",
+                    "events/tenancy.events/BrandDeleted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A draft brand that nothing referred to was deleted."),
+            new EventContract(
                     "LocationCreated",
                     1,
                     "tenancy",
@@ -135,6 +155,26 @@ public final class EventCatalog {
                     Retention.BUSINESS_FACT,
                     Classification.INTERNAL,
                     "A location was created under a brand."),
+            new EventContract(
+                    "LocationRevised",
+                    1,
+                    "tenancy",
+                    TENANCY_EVENTS_TOPIC,
+                    "locationId",
+                    "events/tenancy.events/LocationRevised.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A location's name, or while it was a draft its code, slug or timezone, was corrected."),
+            new EventContract(
+                    "LocationDeleted",
+                    1,
+                    "tenancy",
+                    TENANCY_EVENTS_TOPIC,
+                    "locationId",
+                    "events/tenancy.events/LocationDeleted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A draft location that nothing referred to was deleted."),
             // ADR 0008's onboarding facts. All five key on the tenant rather than
             // the run, because onboarding order is tenant-scoped: a consumer must
             // not see an activation before the start that produced it.

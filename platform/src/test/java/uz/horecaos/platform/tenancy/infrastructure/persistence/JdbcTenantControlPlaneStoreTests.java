@@ -21,6 +21,7 @@ import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
@@ -438,6 +439,135 @@ class JdbcTenantControlPlaneStoreTests {
         assertThat(row.defaultCurrency()).isEqualTo("UZS");
         assertThat(row.status()).isEqualTo(uz.horecaos.platform.tenancy.domain.TenantStatus.PROVISIONING);
         assertThat(row.createdAt()).isNotNull();
+    }
+
+    /**
+     * ADR 0031's version guard, in the one place it can actually hold: the
+     * UPDATE's own WHERE. A service that compared versions and then wrote
+     * unconditionally would let the second of two concurrent corrections
+     * overwrite the first, having checked a version that was already stale by
+     * the time the row was written.
+     */
+    @Test
+    void aRevisionIsWrittenOnlyAtTheVersionItWasReadAt() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120400", "tenant-revise");
+        store.insertTenant(tenant);
+        BrandId brandId = new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120401"));
+        store.insertBrand(Brand.draft(brandId, tenant.id(), "BRAND_R", new Slug("brand-r"), "Brand R"));
+
+        Brand first = store.findBrand(tenant.id(), brandId).orElseThrow();
+        Brand second = store.findBrand(tenant.id(), brandId).orElseThrow();
+        assertThat(first.version()).isZero();
+
+        first.revise("BRAND_R", new Slug("brand-r"), "Brand R, corrected");
+        assertThat(store.updateBrandIdentity(first)).isTrue();
+
+        second.revise("BRAND_R", new Slug("brand-r"), "Brand R, overwritten");
+        assertThat(store.updateBrandIdentity(second))
+                .as("the second writer read version 0, and the row is at 1 now")
+                .isFalse();
+
+        Brand stored = store.findBrand(tenant.id(), brandId).orElseThrow();
+        assertThat(stored.displayName()).isEqualTo("Brand R, corrected");
+        assertThat(stored.version()).isEqualTo(1);
+    }
+
+    /**
+     * Every foreign key into brands and locations is NO ACTION, so the database
+     * is the complete answer to "is anything still using this" — and the refusal
+     * has to say what, or an operator is left guessing which of ninety-odd
+     * tables to go and look in. Both a same-schema reference (a brand's own
+     * locations) and one from another module's schema (an order counter) are
+     * checked, because PostgreSQL names only the table and the parse must not
+     * depend on which schema it lives in.
+     */
+    @Test
+    void aDeleteTheDatabaseRefusesNamesWhatStillRefersToItAndRemovesNothing() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120410", "tenant-delete");
+        store.insertTenant(tenant);
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120411")),
+                tenant.id(),
+                "BRAND_D",
+                new Slug("brand-d"),
+                "Brand D");
+        store.insertBrand(brand);
+        LocationId locationId = new LocationId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120412"));
+        store.insertLocation(Location.draft(
+                locationId,
+                tenant.id(),
+                brand.id(),
+                "LOCATION_D",
+                new Slug("location-d"),
+                "Location D",
+                ZoneId.of("Asia/Tashkent")));
+
+        assertThatThrownBy(() -> store.deleteBrand(
+                        store.findBrand(tenant.id(), brand.id()).orElseThrow()))
+                .isInstanceOfSatisfying(OperatingUnitNotDeletableException.class, refused -> {
+                    assertThat(refused.reason()).isEqualTo(OperatingUnitNotDeletableException.Reason.STILL_REFERENCED);
+                    assertThat(refused.referencedBy()).isEqualTo("locations");
+                });
+
+        jdbc.sql("""
+                INSERT INTO ordering.order_number_counters (tenant_id, location_id, business_date)
+                VALUES (:tenantId, :locationId, DATE '2026-09-10')
+                """)
+                .param("tenantId", tenant.id().value())
+                .param("locationId", locationId.value())
+                .update();
+        Location location = store.findLocations(brand).getFirst();
+        assertThatThrownBy(() -> store.deleteLocation(location))
+                .isInstanceOfSatisfying(OperatingUnitNotDeletableException.class, refused -> {
+                    assertThat(refused.reason()).isEqualTo(OperatingUnitNotDeletableException.Reason.STILL_REFERENCED);
+                    assertThat(refused.referencedBy()).isEqualTo("order_number_counters");
+                    assertThat(refused.getMessage())
+                            .as("the table, never the key values PostgreSQL's detail line carries")
+                            .doesNotContain(locationId.value().toString());
+                });
+
+        assertThat(store.findBrand(tenant.id(), brand.id())).isPresent();
+        assertThat(store.findLocations(brand)).hasSize(1);
+    }
+
+    @Test
+    void aDeleteAtAStaleVersionRemovesNothing() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120420", "tenant-stale");
+        store.insertTenant(tenant);
+        BrandId brandId = new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120421"));
+        store.insertBrand(Brand.draft(brandId, tenant.id(), "BRAND_S", new Slug("brand-s"), "Brand S"));
+        Brand readEarlier = store.findBrand(tenant.id(), brandId).orElseThrow();
+
+        Brand revised = store.findBrand(tenant.id(), brandId).orElseThrow();
+        revised.revise("BRAND_S", new Slug("brand-s"), "Brand S, renamed");
+        store.updateBrandIdentity(revised);
+
+        assertThat(store.deleteBrand(readEarlier))
+                .as("deleting what someone else has since changed would delete a version nobody saw")
+                .isFalse();
+        assertThat(store.findBrand(tenant.id(), brandId)).isPresent();
+    }
+
+    @Test
+    void aDraftNothingRefersToIsDeleted() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120430", "tenant-gone");
+        store.insertTenant(tenant);
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120431")),
+                tenant.id(),
+                "BRAND_G",
+                new Slug("brand-g"),
+                "Brand G");
+        store.insertBrand(brand);
+        LocationId locationId = new LocationId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120432"));
+        store.insertLocation(Location.draft(
+                locationId, tenant.id(), brand.id(), "LOC_G", new Slug("loc-g"), "Loc G", ZoneId.of("Asia/Tashkent")));
+
+        assertThat(store.deleteLocation(store.findLocations(brand).getFirst())).isTrue();
+        assertThat(store.deleteBrand(store.findBrand(tenant.id(), brand.id()).orElseThrow()))
+                .isTrue();
+
+        assertThat(store.findBrand(tenant.id(), brand.id())).isEmpty();
     }
 
     private static Tenant tenant(String id, String slug) {

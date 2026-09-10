@@ -170,7 +170,8 @@ class OnboardingFullRunIntegrationTests {
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
                 systemActor,
                 transactions,
-                organizationProvisioner);
+                organizationProvisioner,
+                scope -> 0);
         service = new OnboardingService(
                 jdbc,
                 transactions,

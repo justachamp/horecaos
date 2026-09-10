@@ -13,7 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -21,6 +24,7 @@ import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
@@ -217,7 +221,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     @Override
     public Optional<Brand> findBrand(TenantId tenantId, BrandId brandId) {
         return jdbc.sql("""
-                        SELECT id, tenant_id, code, slug, display_name, status
+                        SELECT id, tenant_id, code, slug, display_name, status, version
                         FROM tenant.brands
                         WHERE tenant_id = :tenantId AND id = :brandId
                         """)
@@ -230,7 +234,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     @Override
     public List<Brand> findBrands(TenantId tenantId) {
         return jdbc.sql("""
-                        SELECT id, tenant_id, code, slug, display_name, status
+                        SELECT id, tenant_id, code, slug, display_name, status, version
                         FROM tenant.brands
                         WHERE tenant_id = :tenantId
                         ORDER BY display_name, id
@@ -266,6 +270,57 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("tenantId", brand.tenantId().value())
                 .param("status", brand.status().name())
                 .update();
+    }
+
+    @Override
+    public boolean brandCodeOrSlugTakenByAnother(Brand brand) {
+        return jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM tenant.brands
+                            WHERE tenant_id = :tenantId AND id <> :id AND (code = :code OR slug = :slug)
+                        )
+                        """)
+                .param("tenantId", brand.tenantId().value())
+                .param("id", brand.id().value())
+                .param("code", brand.code())
+                .param("slug", brand.slug().value())
+                .query(Boolean.class)
+                .single();
+    }
+
+    @Override
+    public boolean updateBrandIdentity(Brand brand) {
+        return jdbc.sql("""
+                        UPDATE tenant.brands
+                        SET code = :code, slug = :slug, display_name = :displayName,
+                            updated_at = now(), version = version + 1
+                        WHERE id = :id AND tenant_id = :tenantId AND version = :version
+                        """)
+                        .param("id", brand.id().value())
+                        .param("tenantId", brand.tenantId().value())
+                        .param("version", brand.version())
+                        .param("code", brand.code())
+                        .param("slug", brand.slug().value())
+                        .param("displayName", brand.displayName())
+                        .update()
+                == 1;
+    }
+
+    @Override
+    public boolean deleteBrand(Brand brand) {
+        try {
+            return jdbc.sql("""
+                            DELETE FROM tenant.brands
+                            WHERE id = :id AND tenant_id = :tenantId AND version = :version
+                            """)
+                            .param("id", brand.id().value())
+                            .param("tenantId", brand.tenantId().value())
+                            .param("version", brand.version())
+                            .update()
+                    == 1;
+        } catch (DataIntegrityViolationException refused) {
+            throw refusedDelete(refused, "brand");
+        }
     }
 
     @Override
@@ -353,6 +408,103 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .update();
     }
 
+    @Override
+    public boolean locationCodeOrSlugTakenByAnother(Location location) {
+        return jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM tenant.locations
+                            WHERE tenant_id = :tenantId
+                              AND brand_id = :brandId
+                              AND id <> :id
+                              AND (code = :code OR slug = :slug)
+                        )
+                        """)
+                .param("tenantId", location.tenantId().value())
+                .param("brandId", location.brandId().value())
+                .param("id", location.id().value())
+                .param("code", location.code())
+                .param("slug", location.slug().value())
+                .query(Boolean.class)
+                .single();
+    }
+
+    @Override
+    public boolean updateLocationIdentity(Location location) {
+        return jdbc.sql("""
+                        UPDATE tenant.locations
+                        SET code = :code, slug = :slug, display_name = :displayName, timezone = :timezone,
+                            updated_at = now(), version = version + 1
+                        WHERE id = :id AND tenant_id = :tenantId AND version = :version
+                        """)
+                        .param("id", location.id().value())
+                        .param("tenantId", location.tenantId().value())
+                        .param("version", location.version())
+                        .param("code", location.code())
+                        .param("slug", location.slug().value())
+                        .param("displayName", location.displayName())
+                        .param("timezone", location.timezone().getId())
+                        .update()
+                == 1;
+    }
+
+    @Override
+    public boolean deleteLocation(Location location) {
+        try {
+            return jdbc.sql("""
+                            DELETE FROM tenant.locations
+                            WHERE id = :id AND tenant_id = :tenantId AND version = :version
+                            """)
+                            .param("id", location.id().value())
+                            .param("tenantId", location.tenantId().value())
+                            .param("version", location.version())
+                            .update()
+                    == 1;
+        } catch (DataIntegrityViolationException refused) {
+            throw refusedDelete(refused, "location");
+        }
+    }
+
+    /**
+     * PostgreSQL's name for the table whose rows still refer to the one being
+     * deleted, from the first line of a foreign-key refusal.
+     */
+    private static final Pattern REFERENCING_TABLE =
+            Pattern.compile("violates foreign key constraint \"[^\"]+\" on table \"([a-z0-9_]+)\"");
+
+    /**
+     * Turns a delete the database refused into the reason a screen can show.
+     *
+     * <p>Every foreign key into {@code tenant.brands} and {@code tenant.locations}
+     * is {@code NO ACTION} — ninety-two of them on 2026-09-10 — so the database
+     * refuses a delete while anything at all still refers to the row, and never
+     * removes anything along with it. That makes it the one complete answer to
+     * "is this still used", where a list kept here would go stale the day a
+     * module added a table.
+     *
+     * <p>The table is read from the message because the driver's typed error is
+     * not on this module's compile classpath. Only the table name is taken: the
+     * message's detail line carries key values, and those stay in the log. When
+     * the message is not in the expected shape the refusal is still reported,
+     * only unnamed.
+     */
+    private static RuntimeException refusedDelete(DataIntegrityViolationException refused, String what) {
+        Throwable cause = refused;
+        while (cause != null && !(cause instanceof SQLException)) {
+            cause = cause.getCause();
+        }
+        if (!(cause instanceof SQLException sql) || !"23503".equals(sql.getSQLState())) {
+            return refused;
+        }
+        Matcher matched = REFERENCING_TABLE.matcher(String.valueOf(sql.getMessage()));
+        String table = matched.find() ? matched.group(1) : null;
+        return new OperatingUnitNotDeletableException(
+                OperatingUnitNotDeletableException.Reason.STILL_REFERENCED,
+                table,
+                table == null
+                        ? "This %s is still referred to by another record".formatted(what)
+                        : "This %s is still referred to from %s".formatted(what, table));
+    }
+
     /**
      * The place columns, shared by the insert and the update so the two cannot
      * disagree about what a null means.
@@ -375,7 +527,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     @Override
     public List<Location> findLocations(Brand brand) {
         return jdbc.sql("""
-                        SELECT id, tenant_id, brand_id, code, slug, display_name, timezone, status,
+                        SELECT id, tenant_id, brand_id, code, slug, display_name, timezone, status, version,
                                latitude, longitude, coordinate_source,
                                address_line, district, city, landmark, contact_phone
                         FROM tenant.locations
@@ -419,7 +571,8 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 resultSet.getString("code"),
                 new Slug(resultSet.getString("slug")),
                 resultSet.getString("display_name"),
-                OperatingUnitStatus.valueOf(resultSet.getString("status")));
+                OperatingUnitStatus.valueOf(resultSet.getString("status")),
+                resultSet.getLong("version"));
     }
 
     private static Location mapLocation(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -432,7 +585,8 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 resultSet.getString("display_name"),
                 ZoneId.of(resultSet.getString("timezone")),
                 OperatingUnitStatus.valueOf(resultSet.getString("status")),
-                mapPlace(resultSet));
+                mapPlace(resultSet),
+                resultSet.getLong("version"));
     }
 
     /**

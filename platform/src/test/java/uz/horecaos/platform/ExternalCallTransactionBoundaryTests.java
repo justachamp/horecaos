@@ -457,7 +457,8 @@ class ExternalCallTransactionBoundaryTests {
                     recorder,
                     currentActor,
                     transactions,
-                    provisioner);
+                    provisioner,
+                    scope -> 0);
         }
 
         @Bean

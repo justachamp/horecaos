@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/LocationDeleted.v1.schema.json",
+  "title": "LocationDeleted v1 payload",
+  "description": "Emitted after a draft location is deleted. Only a location that never left DRAFT and that nothing referred to can be, so a consumer may drop any projection of it. Carries no personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locationId", "brandId", "code"],
+  "properties": {
+    "locationId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "code": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" }
+  }
+}

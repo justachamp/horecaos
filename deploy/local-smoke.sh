@@ -221,9 +221,14 @@ bao_run() {
 say "Enabling the horecaos KV v2 mount, policies, and the platform AppRole"
 bao_run bao secrets enable -path=horecaos -version=2 kv >>"${LOG_FILE}" 2>&1 || true
 
+# The environment segment the stack itself reads, from the same env file, and
+# the policies rendered with it exactly as a real host renders them.
+ENVIRONMENT="$(sed -n 's/^HORECAOS_ENVIRONMENT=//p' "${ENV_FILE}" | tail -1 | tr -d "\"' ")"
+ENVIRONMENT="${ENVIRONMENT:-production}"
 for policy in horecaos-platform horecaos-deploy; do
-    compose cp "${DEPLOY_DIR}/infra/openbao/policies/${policy}.hcl" "openbao:/tmp/${policy}.hcl" >>"${LOG_FILE}" 2>&1
-    bao_run bao policy write "${policy}" "/tmp/${policy}.hcl" >>"${LOG_FILE}" 2>&1
+    { printf '%s\n' "${ROOT_TOKEN}"; sed "s/@ENVIRONMENT@/${ENVIRONMENT}/g" "${DEPLOY_DIR}/infra/openbao/policies/${policy}.hcl"; } \
+        | compose exec -T openbao sh -c 'IFS= read -r BAO_TOKEN; export BAO_TOKEN; bao policy write "$1" -' _ "${policy}" \
+        >>"${LOG_FILE}" 2>&1
 done
 
 bao_run bao auth enable approle >>"${LOG_FILE}" 2>&1 || true
@@ -251,7 +256,7 @@ MINIO_ROOT_PW="$(rand)"
 HANDOVER_PEPPER="smoke-test-handover-pepper-not-for-any-other-use"
 KEK="smoke-test-key-encryption-key-not-for-any-other-use"
 
-put() { bao_run bao kv put "horecaos/production/$1" "value=$2" >>"${LOG_FILE}" 2>&1; }
+put() { bao_run bao kv put "horecaos/${ENVIRONMENT}/$1" "value=$2" >>"${LOG_FILE}" 2>&1; }
 
 put database/platform/migrator-password  "${DB_MIGRATOR_PW}"
 put database/platform/app-password       "${DB_APP_PW}"

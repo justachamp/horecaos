@@ -246,6 +246,19 @@ public class OnboardingService implements OnboardingHealthQuery {
      * <p>The steps that end here rather than in a handler — activation, and a
      * step with no registered handler — are released inside this transaction,
      * because neither involves anything outside the database.
+     *
+     * <p>Only {@code PENDING} is taken, and nothing at all from a run with a
+     * failed required step. {@code FAILED} means a person must look —
+     * {@link OnboardingStepHandler.StepResult.Outcome#FAILED} says so, and
+     * {@link #resume} is how they say they have. Until 2026-09-10 this took
+     * {@code FAILED} alongside {@code PENDING}, and a failed step is released
+     * due at once, so every scheduler tick ran it again: a validation step on
+     * the first pre-production tenant had 416 attempts seven minutes after its
+     * run failed, and an exhausted retry went straight past
+     * {@link #MAXIMUM_ATTEMPTS}. The run is halted rather than merely the step
+     * skipped, because skipping would run later steps past a failure they may
+     * depend on — which the loop, by always taking the failed step first,
+     * happened to prevent.
      */
     private Claim claimNextStep(UUID runId, Instant now) {
         Optional<DueStep> due = jdbc.sql("""
@@ -253,8 +266,13 @@ public class OnboardingService implements OnboardingHealthQuery {
                        s.input_snapshot::text AS input
                   FROM tenant.onboarding_steps s
                  WHERE s.run_id = :runId
-                   AND s.status IN ('PENDING', 'FAILED')
+                   AND s.status = 'PENDING'
                    AND s.available_at <= :now
+                   AND NOT EXISTS (
+                       SELECT 1 FROM tenant.onboarding_steps failed
+                        WHERE failed.run_id = s.run_id
+                          AND failed.required
+                          AND failed.status = 'FAILED')
                  ORDER BY s.sequence_number
                  FOR UPDATE SKIP LOCKED
                  LIMIT 1
@@ -282,7 +300,7 @@ public class OnboardingService implements OnboardingHealthQuery {
                    SET status = 'RUNNING', claim_token = :token, claimed_at = :now,
                        attempt_count = attempt_count + 1, started_at = coalesce(started_at, :now),
                        updated_at = :now
-                 WHERE id = :id AND status IN ('PENDING', 'FAILED')
+                 WHERE id = :id AND status = 'PENDING'
                 """)
                 .param("id", step.id())
                 .param("token", claimToken)
@@ -350,11 +368,11 @@ public class OnboardingService implements OnboardingHealthQuery {
         return jdbc.sql("""
                 SELECT r.id
                   FROM tenant.onboarding_runs r
-                 WHERE r.status NOT IN ('ACTIVE', 'CANCELLED', 'READY')
+                 WHERE r.status NOT IN ('ACTIVE', 'CANCELLED', 'READY', 'FAILED')
                    AND EXISTS (
                        SELECT 1 FROM tenant.onboarding_steps s
                         WHERE s.run_id = r.id
-                          AND s.status IN ('PENDING', 'FAILED')
+                          AND s.status = 'PENDING'
                           AND s.available_at <= :now)
                  ORDER BY r.id
                  FOR UPDATE OF r SKIP LOCKED

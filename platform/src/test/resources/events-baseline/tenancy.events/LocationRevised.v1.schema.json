@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/LocationRevised.v1.schema.json",
+  "title": "LocationRevised v1 payload",
+  "description": "Emitted after a location's name, or while it was a draft its code, slug or timezone, is corrected. Carries the whole identity after the change, not a diff. Carries no personal data; the address is deliberately absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locationId", "brandId", "code", "slug", "displayName", "timezone", "status"],
+  "properties": {
+    "locationId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "code": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+    "slug": { "type": "string", "maxLength": 63 },
+    "displayName": { "type": "string", "maxLength": 255 },
+    "timezone": { "type": "string", "maxLength": 64 },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]
+    }
+  }
+}

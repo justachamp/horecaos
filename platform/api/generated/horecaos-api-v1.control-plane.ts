@@ -244,6 +244,7 @@ export interface BrandView {
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   tenantId?: string;
+  version?: number;
 }
 
 export interface CandidateView {
@@ -977,6 +978,7 @@ export interface LocationView {
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   tenantId?: string;
   timezone?: string;
+  version?: number;
 }
 
 export interface MediaRelationView {
@@ -1527,6 +1529,19 @@ export interface ReviewDecisionRequest {
   outcome: "APPROVED" | "REJECTED" | "DEFERRED";
 }
 
+export interface ReviseLocationRequest {
+  code: string;
+  displayName: string;
+  slug: string;
+  timezone: string;
+}
+
+export interface ReviseOperatingUnitRequest {
+  code: string;
+  displayName: string;
+  slug: string;
+}
+
 export interface RoleDescriptor {
   capabilities?: Array<string>;
   code?: string;
@@ -1991,6 +2006,8 @@ export interface Operations {
   "detail_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/audit-events/{eventId}"; request: { parameters: { path: { eventId: string; tenantId: string } } }; responses: { "200": AuditEventDetail } };
   "getBrands": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
   "createBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } }; body: CreateOperatingUnitRequest }; responses: { "200": BrandView } };
+  "deleteBrand": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "reviseBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: ReviseOperatingUnitRequest }; responses: { "200": BrandView } };
   "activateBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
   "catalogs": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CatalogSummaryResponse> } };
   "createCatalog": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCatalogRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
@@ -2028,6 +2045,8 @@ export interface Operations {
   "simulate": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { at?: string; currency: string; lat: number; locationId: string; lon: number; subtotalMinor?: number } } }; responses: { "200": SimulationView } };
   "getLocations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
   "createLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateLocationRequest }; responses: { "200": LocationView } };
+  "deleteLocation": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "reviseLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ReviseLocationRequest }; responses: { "200": LocationView } };
   "activateLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/activate"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "describeLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/place"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DescribeLocationRequest }; responses: { "200": LocationView } };
   "listPriceBooks": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PriceBookSummaryResponse> } };

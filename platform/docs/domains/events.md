@@ -65,7 +65,11 @@ minute would deliver stale screen-refresh instructions after a reconnect.
 |---|---|---|---|---|
 | `TenantCreated` | 1 | `tenantId` | [`TenantCreated.v1`](../../src/main/resources/events/tenancy.events/TenantCreated.v1.schema.json) | `tenantId`, slug, legal/display names, default currency/timezone, status, customer identity mode |
 | `BrandCreated` | 1 | `brandId` | [`BrandCreated.v1`](../../src/main/resources/events/tenancy.events/BrandCreated.v1.schema.json) | `brandId`, code, slug, display name, status |
+| `BrandRevised` | 1 | `brandId` | [`BrandRevised.v1`](../../src/main/resources/events/tenancy.events/BrandRevised.v1.schema.json) | `brandId`, code, slug, display name, status — the whole identity after the change |
+| `BrandDeleted` | 1 | `brandId` | [`BrandDeleted.v1`](../../src/main/resources/events/tenancy.events/BrandDeleted.v1.schema.json) | `brandId`, code |
 | `LocationCreated` | 1 | `locationId` | [`LocationCreated.v1`](../../src/main/resources/events/tenancy.events/LocationCreated.v1.schema.json) | `locationId`, `brandId`, code, slug, display name, timezone, status |
+| `LocationRevised` | 1 | `locationId` | [`LocationRevised.v1`](../../src/main/resources/events/tenancy.events/LocationRevised.v1.schema.json) | `locationId`, `brandId`, code, slug, display name, timezone, status — the whole identity after the change |
+| `LocationDeleted` | 1 | `locationId` | [`LocationDeleted.v1`](../../src/main/resources/events/tenancy.events/LocationDeleted.v1.schema.json) | `locationId`, `brandId`, code |
 | `TenantOnboardingStarted` | 1 | `tenantId` | [`TenantOnboardingStarted.v1`](../../src/main/resources/events/tenancy.events/TenantOnboardingStarted.v1.schema.json) | `tenantId`, `runId`, `templateId`, template version |
 | `TenantOnboardingStepCompleted` | 1 | `tenantId` | [`TenantOnboardingStepCompleted.v1`](../../src/main/resources/events/tenancy.events/TenantOnboardingStepCompleted.v1.schema.json) | `tenantId`, `runId`, step key, step version, attempt count |
 | `TenantOnboardingFailed` | 1 | `tenantId` | [`TenantOnboardingFailed.v1`](../../src/main/resources/events/tenancy.events/TenantOnboardingFailed.v1.schema.json) | `tenantId`, `runId`, step key, error code |
@@ -92,6 +96,11 @@ crossing itself is a fact a consumer was not already told.
 
 `LocationCreated` deliberately omits the location address. Events carry
 identifiers; a consumer needing more calls an authorized API.
+
+`BrandDeleted` and `LocationDeleted` exist only for units that never left
+`DRAFT` and that no other record referred to — the platform refuses anything
+else — so a consumer holding a projection of one may drop it outright. A unit
+that has been active is never deleted.
 
 These events are business facts emitted only after the corresponding creation
 use case succeeds. Keycloak organization linking is intentionally not part of

@@ -44,7 +44,7 @@ auto_auth {
       # mounts it from a host tmpfs: RAM, root-only, gone on reboot. The
       # deploy script mints a fresh secret-id on every deploy, so its useful life
       # is one release cycle, and the policy behind it grants read-only access to
-      # production secrets and nothing else. It cannot write, cannot list other
+      # this environment's secrets and nothing else. It cannot write, cannot list other
       # environments, and cannot unseal.
       remove_secret_id_file_after_reading = false
     }
@@ -69,8 +69,11 @@ template {
   perms                = "0640"
   error_on_missing_key = true
 
+  # The environment segment comes from HORECAOS_ENVIRONMENT, which compose gives
+  # this container, so the one file reads whichever store it runs against --
+  # checked against a real OpenBao 2.4.1 agent with `staging` and `production`.
   contents = <<-EOT
-  HORECAOS_DB_PASSWORD={{ with secret "horecaos/data/production/database/platform/app-password" }}{{ .Data.data.value }}{{ end }}
+  HORECAOS_DB_PASSWORD={{ with secret (printf "horecaos/data/%s/database/platform/app-password" (env "HORECAOS_ENVIRONMENT")) }}{{ .Data.data.value }}{{ end }}
   EOT
 }
 

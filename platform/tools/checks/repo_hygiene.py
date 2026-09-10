@@ -503,9 +503,41 @@ def check_deploy_copies_match() -> None:
            f"Copy from {src}/ into deploy/infra/, never the other way round.")
 
 
+def check_deploy_environment_segment() -> None:
+    """Deploy: nothing in deploy/ names an OpenBao environment segment outright.
+
+    HORECAOS_ENVIRONMENT is what lets one compose file and one image read
+    `horecaos/production/*` on one host and `horecaos/staging/*` on another.
+    Until 2026-09-10 the platform followed it and nothing else did: every
+    policy, the agent's template and session-start.sh said `production`, so a
+    host set to `staging` could not have read one secret. The policies now
+    carry @ENVIRONMENT@, rendered when they are loaded, and everything else
+    reads the variable.
+    """
+    deploy = ROOT.parent / "deploy"
+    literal = re.compile(r"horecaos/(?:data/|metadata/)?(?:production|staging)/")
+    files = sorted(
+        [*deploy.glob("infra/openbao/**/*.hcl"), *deploy.glob("*.sh"), *deploy.glob("systemd/*"),
+         ROOT / "infra" / "keycloak" / "stage2-inner.sh"])
+    problems = []
+    for f in files:
+        for number, line in enumerate(f.read_text().splitlines(), start=1):
+            if literal.search(line) and not line.lstrip().startswith("#"):
+                problems.append(f"{f.relative_to(ROOT.parent)}:{number} names an environment outright")
+    for policy in sorted(deploy.glob("infra/openbao/policies/*.hcl")):
+        if "@ENVIRONMENT@" not in policy.read_text():
+            problems.append(f"{policy.relative_to(ROOT.parent)} has no @ENVIRONMENT@ -- which store does it scope?")
+    agent = deploy / "infra" / "openbao" / "agent.hcl"
+    if 'env "HORECAOS_ENVIRONMENT"' not in agent.read_text():
+        problems.append("deploy/infra/openbao/agent.hcl does not build its secret path from HORECAOS_ENVIRONMENT")
+    result("deploy: the OpenBao environment segment follows HORECAOS_ENVIRONMENT", problems,
+           "Use @ENVIRONMENT@ in a policy, ${ENVIRONMENT} in a script, (env \"HORECAOS_ENVIRONMENT\") in the agent.")
+
+
 CHECKS = [
     check_storefront_api_routing,
     check_deploy_copies_match,
+    check_deploy_environment_segment,
     check_unique_versions,
     check_grants,
     check_timestamptz,

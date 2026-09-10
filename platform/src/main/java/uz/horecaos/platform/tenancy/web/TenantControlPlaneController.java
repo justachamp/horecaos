@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -14,6 +15,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,9 +37,12 @@ import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.Create
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateTenantCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.DescribeLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseBrandCommand;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.TenantView;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -214,6 +219,44 @@ public class TenantControlPlaneController {
         return service.activateBrand(new TenantId(tenantId), new BrandId(brandId));
     }
 
+    @PutMapping("/{tenantId}/brands/{brandId}")
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Correct a brand",
+            description = "The whole editable identity, as a form holds it. The display name can be "
+                    + "corrected at any time; the code and slug only while the brand is DRAFT, because "
+                    + "the storefront is addressed by the slug and operators, exports and onboarding "
+                    + "name a brand by its code once it is live. Requires If-Match.")
+    ResponseEntity<BrandView> reviseBrand(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody ReviseOperatingUnitRequest request,
+            HttpServletRequest http) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        BrandView brand = service.reviseBrand(
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                expected,
+                new ReviseBrandCommand(request.code(), request.slug(), request.displayName()));
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(brand.version()))
+                .body(brand);
+    }
+
+    @DeleteMapping("/{tenantId}/brands/{brandId}")
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Delete a draft brand",
+            description = "For setting a tenant up: only a brand that never left DRAFT, owns no "
+                    + "locations, has no staff access scoped to it, and that nothing else refers to. "
+                    + "Nothing is ever deleted along with it. A refusal is 409 RESOURCE_CONFLICT with "
+                    + "a `reason` of NOT_DRAFT, HAS_LOCATIONS, HAS_ACCESS_GRANTS or STILL_REFERENCED, "
+                    + "and for the last a `referencedBy` table where it is known. Requires If-Match.")
+    ResponseEntity<Void> deleteBrand(@PathVariable UUID tenantId, @PathVariable UUID brandId, HttpServletRequest http) {
+        service.deleteBrand(new TenantId(tenantId), new BrandId(brandId), AggregateVersion.requireIfMatch(http));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{tenantId}/brands/{brandId}/locations")
     @RequiresCapability(value = Capability.LOCATION_WRITE, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Create a location owned by exactly one brand")
@@ -281,6 +324,53 @@ public class TenantControlPlaneController {
         return service.activateLocation(new TenantId(tenantId), new BrandId(brandId), new LocationId(locationId));
     }
 
+    @PutMapping("/{tenantId}/brands/{brandId}/locations/{locationId}")
+    @RequiresCapability(value = Capability.LOCATION_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Correct a location",
+            description = "The whole editable identity, as a form holds it. The display name can be "
+                    + "corrected at any time; the code, slug and timezone only while the location is "
+                    + "DRAFT — schedules, business days and order numbering are computed in its "
+                    + "timezone. The address and point are the place endpoint's. Requires If-Match.")
+    ResponseEntity<LocationView> reviseLocation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody ReviseLocationRequest request,
+            HttpServletRequest http) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        LocationView location = service.reviseLocation(
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                new LocationId(locationId),
+                expected,
+                new ReviseLocationCommand(request.code(), request.slug(), request.displayName(), request.timezone()));
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(location.version()))
+                .body(location);
+    }
+
+    @DeleteMapping("/{tenantId}/brands/{brandId}/locations/{locationId}")
+    @RequiresCapability(value = Capability.LOCATION_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Delete a draft location",
+            description = "Only a location that never left DRAFT, has no staff access scoped to it, "
+                    + "and that nothing else refers to — a legal entity assignment, a sales channel, "
+                    + "a menu offering. Nothing is ever deleted along with it. Refusals are as for a "
+                    + "brand, less HAS_LOCATIONS. Requires If-Match.")
+    ResponseEntity<Void> deleteLocation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            HttpServletRequest http) {
+        service.deleteLocation(
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                new LocationId(locationId),
+                AggregateVersion.requireIfMatch(http));
+        return ResponseEntity.noContent().build();
+    }
+
     /**
      * @param landmark ориентир
      * @param coordinateSource omit to let the platform infer it: a supplied point
@@ -335,6 +425,29 @@ public class TenantControlPlaneController {
             String slug,
 
             @NotBlank @Size(max = 200) String displayName) {}
+
+    /** The same rules as creation; which fields may actually change depends on the brand's status. */
+    record ReviseOperatingUnitRequest(
+            @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+            String code,
+
+            @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+            String slug,
+
+            @NotBlank @Size(max = 200) String displayName) {}
+
+    /** The same rules as creation; which fields may actually change depends on the location's status. */
+    record ReviseLocationRequest(
+            @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+            String code,
+
+            @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+            String slug,
+
+            @NotBlank @Size(max = 200) String displayName,
+
+            @NotBlank @Size(max = 63) @Schema(example = "Asia/Tashkent")
+            String timezone) {}
 
     record CreateLocationRequest(
             @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")

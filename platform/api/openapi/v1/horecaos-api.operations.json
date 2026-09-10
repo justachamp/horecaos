@@ -1232,6 +1232,10 @@
           "tenantId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -4334,6 +4338,10 @@
           },
           "timezone" : {
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"

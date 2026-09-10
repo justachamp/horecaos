@@ -9,13 +9,18 @@
 # It can read the startup secrets and issue an AppRole secret-id. It cannot write
 # secrets, cannot change policy, cannot unseal, and cannot generate a root token:
 # those need three unseal shares, which are not on the machine.
+#
+# @ENVIRONMENT@ is HORECAOS_ENVIRONMENT, filled in by whatever loads this file
+# -- the runbook, keycloak-stage2.sh, unattended-boot.sh, local-smoke.sh -- so
+# one file serves every environment's store. Loaded without rendering, it grants
+# a path nothing uses: it fails closed, never open.
 
 # Reading the four startup passwords, to write them onto the deploy tmpfs.
-path "horecaos/data/production/*" {
+path "horecaos/data/@ENVIRONMENT@/*" {
   capabilities = ["read"]
 }
 
-path "horecaos/metadata/production/*" {
+path "horecaos/metadata/@ENVIRONMENT@/*" {
   capabilities = ["read", "list"]
 }
 

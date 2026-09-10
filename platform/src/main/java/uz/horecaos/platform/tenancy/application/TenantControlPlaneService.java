@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.LinkedHashMap;
@@ -24,12 +25,17 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.grants.ScopedGrantDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
+import uz.horecaos.platform.tenancy.api.BrandDeleted;
 import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.BrandRevised;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.LocationCreated;
+import uz.horecaos.platform.tenancy.api.LocationDeleted;
 import uz.horecaos.platform.tenancy.api.LocationId;
+import uz.horecaos.platform.tenancy.api.LocationRevised;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
@@ -59,6 +65,7 @@ public class TenantControlPlaneService {
     private final CurrentActor currentActor;
     private final TransactionTemplate transactions;
     private final OrganizationProvisioner organizationProvisioner;
+    private final ScopedGrantDirectory scopedGrants;
 
     // Public rather than package-private: uz.horecaos.platform.tenancy.application.onboarding
     // (a subpackage of this same module) needs to construct this in
@@ -83,7 +90,8 @@ public class TenantControlPlaneService {
             AuditRecorder audit,
             CurrentActor currentActor,
             TransactionTemplate transactions,
-            OrganizationProvisioner organizationProvisioner) {
+            OrganizationProvisioner organizationProvisioner,
+            ScopedGrantDirectory scopedGrants) {
         this.store = store;
         this.accessPolicy = accessPolicy;
         this.suspensions = suspensions;
@@ -93,6 +101,7 @@ public class TenantControlPlaneService {
         this.currentActor = currentActor;
         this.transactions = transactions;
         this.organizationProvisioner = organizationProvisioner;
+        this.scopedGrants = scopedGrants;
     }
 
     /**
@@ -479,7 +488,98 @@ public class TenantControlPlaneService {
                 brandId.value(),
                 "Control-plane brand activation",
                 Map.of("status", brand.status().name()));
-        return toView(brand);
+        // Re-read: the status write moved the stored version on, and a view
+        // carrying the old one would make the next correction fail as stale.
+        return toView(requireBrand(tenantId, brandId));
+    }
+
+    /**
+     * Corrects a brand's name, and while it is a draft its code and slug.
+     *
+     * <p>Brand scope, like activation: correcting a brand is work on that
+     * brand. The expected version is the caller's {@code If-Match} (ADR 0031),
+     * so two people fixing the same brand at once cannot silently overwrite
+     * each other.
+     */
+    @Transactional
+    public BrandView reviseBrand(TenantId tenantId, BrandId brandId, long expectedVersion, ReviseBrandCommand command) {
+        Objects.requireNonNull(command, "Revise brand command is required");
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.BRAND_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        requireVersion(expectedVersion, brand.version());
+
+        Map<String, Object> before = identityOf(brand.code(), brand.slug(), brand.displayName(), null);
+        brand.revise(command.code(), new Slug(command.slug()), command.displayName());
+        if (store.brandCodeOrSlugTakenByAnother(brand)) {
+            throw new TenantResourceConflictException("Brand code or slug is already in use for this tenant");
+        }
+        if (!store.updateBrandIdentity(brand)) {
+            throw staleBrand(tenantId, brandId, expectedVersion);
+        }
+        events.publishEvent(new BrandRevised(
+                UUID.randomUUID(),
+                tenantId,
+                brandId,
+                clock.instant(),
+                brand.code(),
+                brand.slug().value(),
+                brand.displayName(),
+                brand.status().name()));
+        recordAudit(
+                "brand.revised",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Brand",
+                brandId.value(),
+                "Control-plane brand correction",
+                Map.of("before", before, "after", identityOf(brand.code(), brand.slug(), brand.displayName(), null)));
+        return toView(requireBrand(tenantId, brandId));
+    }
+
+    /**
+     * Deletes a brand that never left {@code DRAFT} and that nothing refers to.
+     *
+     * <p>Brand scope, like correcting and activating it: the brand's own
+     * manager may take back a draft made by mistake. Each refusal says what to
+     * do instead —
+     * delete its locations first, revoke the access scoped to it, or remove
+     * whatever the database names as still referring to it — and nothing is
+     * ever removed along with it; see {@link OperatingUnitNotDeletableException}.
+     */
+    @Transactional
+    public void deleteBrand(TenantId tenantId, BrandId brandId, long expectedVersion) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.BRAND_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        requireVersion(expectedVersion, brand.version());
+
+        if (!brand.deletable()) {
+            throw new OperatingUnitNotDeletableException(
+                    OperatingUnitNotDeletableException.Reason.NOT_DRAFT,
+                    null,
+                    "Only a DRAFT brand can be deleted, and this one is " + brand.status());
+        }
+        int locations = store.findLocations(brand).size();
+        if (locations > 0) {
+            throw new OperatingUnitNotDeletableException(
+                    OperatingUnitNotDeletableException.Reason.HAS_LOCATIONS,
+                    null,
+                    "This brand still has %d location(s); delete them first".formatted(locations));
+        }
+        requireNoScopedGrants(ResourceScope.brand(tenantId.value(), brandId.value()), "brand");
+        if (!store.deleteBrand(brand)) {
+            throw staleBrand(tenantId, brandId, expectedVersion);
+        }
+        events.publishEvent(new BrandDeleted(UUID.randomUUID(), tenantId, brandId, clock.instant(), brand.code()));
+        recordAudit(
+                "brand.deleted",
+                ResourceScope.tenant(tenantId.value()),
+                "Brand",
+                brandId.value(),
+                "Control-plane deletion of a draft brand",
+                identityOf(brand.code(), brand.slug(), brand.displayName(), null));
     }
 
     @Transactional(readOnly = true)
@@ -519,7 +619,7 @@ public class TenantControlPlaneService {
                 command.code(),
                 new Slug(command.slug()),
                 command.displayName(),
-                ZoneId.of(command.timezone()));
+                zone(command.timezone()));
         if (store.locationCodeOrSlugExists(brand, location.code(), location.slug())) {
             throw new TenantResourceConflictException("Location code or slug is already in use for this brand");
         }
@@ -633,7 +733,109 @@ public class TenantControlPlaneService {
                 locationId.value(),
                 "Control-plane location activation",
                 Map.of("status", location.status().name()));
-        return toView(location);
+        // Re-read, for the reason activateBrand gives.
+        return toView(requireLocation(brand, locationId));
+    }
+
+    /**
+     * Corrects a location's name, and while it is a draft its code, slug and
+     * timezone. The address and point are {@link #describeLocation}'s, and are
+     * not touched here.
+     */
+    @Transactional
+    public LocationView reviseLocation(
+            TenantId tenantId,
+            BrandId brandId,
+            LocationId locationId,
+            long expectedVersion,
+            ReviseLocationCommand command) {
+        Objects.requireNonNull(command, "Revise location command is required");
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.LOCATION_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        Location location = requireLocation(brand, locationId);
+        requireVersion(expectedVersion, location.version());
+
+        Map<String, Object> before = identityOf(
+                location.code(),
+                location.slug(),
+                location.displayName(),
+                location.timezone().getId());
+        location.revise(command.code(), new Slug(command.slug()), command.displayName(), zone(command.timezone()));
+        if (store.locationCodeOrSlugTakenByAnother(location)) {
+            throw new TenantResourceConflictException("Location code or slug is already in use for this brand");
+        }
+        if (!store.updateLocationIdentity(location)) {
+            throw staleLocation(brand, locationId, expectedVersion);
+        }
+        events.publishEvent(new LocationRevised(
+                UUID.randomUUID(),
+                tenantId,
+                brandId,
+                locationId,
+                clock.instant(),
+                location.code(),
+                location.slug().value(),
+                location.displayName(),
+                location.timezone().getId(),
+                location.status().name()));
+        recordAudit(
+                "location.revised",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Location",
+                locationId.value(),
+                "Control-plane location correction",
+                Map.of(
+                        "before",
+                        before,
+                        "after",
+                        identityOf(
+                                location.code(),
+                                location.slug(),
+                                location.displayName(),
+                                location.timezone().getId())));
+        return toView(requireLocation(brand, locationId));
+    }
+
+    /**
+     * Deletes a location that never left {@code DRAFT} and that nothing refers
+     * to. Brand scope, like creation; {@link #deleteBrand} describes the
+     * refusals, less the one about locations.
+     */
+    @Transactional
+    public void deleteLocation(TenantId tenantId, BrandId brandId, LocationId locationId, long expectedVersion) {
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.LOCATION_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+        Location location = requireLocation(brand, locationId);
+        requireVersion(expectedVersion, location.version());
+
+        if (!location.deletable()) {
+            throw new OperatingUnitNotDeletableException(
+                    OperatingUnitNotDeletableException.Reason.NOT_DRAFT,
+                    null,
+                    "Only a DRAFT location can be deleted, and this one is " + location.status());
+        }
+        requireNoScopedGrants(
+                ResourceScope.location(tenantId.value(), brandId.value(), locationId.value()), "location");
+        if (!store.deleteLocation(location)) {
+            throw staleLocation(brand, locationId, expectedVersion);
+        }
+        events.publishEvent(new LocationDeleted(
+                UUID.randomUUID(), tenantId, brandId, locationId, clock.instant(), location.code()));
+        recordAudit(
+                "location.deleted",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Location",
+                locationId.value(),
+                "Control-plane deletion of a draft location",
+                identityOf(
+                        location.code(),
+                        location.slug(),
+                        location.displayName(),
+                        location.timezone().getId()));
     }
 
     @Transactional(readOnly = true)
@@ -675,6 +877,74 @@ public class TenantControlPlaneService {
                 .orElseThrow(() -> new TenantResourceNotFoundException("Brand was not found in this tenant"));
     }
 
+    private Location requireLocation(Brand brand, LocationId locationId) {
+        Objects.requireNonNull(locationId, "Location ID is required");
+        return store.findLocations(brand).stream()
+                .filter(candidate -> candidate.id().equals(locationId))
+                .findFirst()
+                .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
+    }
+
+    private static void requireVersion(long expected, long actual) {
+        if (expected != actual) {
+            throw new TenantResourceStaleException(expected, actual);
+        }
+    }
+
+    /**
+     * The write lost a race after the version check passed: somebody changed or
+     * deleted the row in between. Re-read to say which.
+     */
+    private RuntimeException staleBrand(TenantId tenantId, BrandId brandId, long expected) {
+        return store.findBrand(tenantId, brandId)
+                .<RuntimeException>map(current -> new TenantResourceStaleException(expected, current.version()))
+                .orElseGet(() -> new TenantResourceNotFoundException("Brand was not found in this tenant"));
+    }
+
+    private RuntimeException staleLocation(Brand brand, LocationId locationId, long expected) {
+        return store.findLocations(brand).stream()
+                .filter(candidate -> candidate.id().equals(locationId))
+                .findFirst()
+                .<RuntimeException>map(current -> new TenantResourceStaleException(expected, current.version()))
+                .orElseGet(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
+    }
+
+    private void requireNoScopedGrants(ResourceScope scope, String what) {
+        int grants = scopedGrants.activeGrantsScopedTo(scope);
+        if (grants > 0) {
+            throw new OperatingUnitNotDeletableException(
+                    OperatingUnitNotDeletableException.Reason.HAS_ACCESS_GRANTS,
+                    null,
+                    "%d staff grant(s) are scoped to this %s; revoke them first".formatted(grants, what));
+        }
+    }
+
+    /**
+     * An IANA zone, or a refusal a caller can act on. {@link ZoneId#of} throws
+     * {@link DateTimeException}, which no handler maps, so a mistyped
+     * {@code Asia/Tashkentt} used to come back as a 500 rather than a 400.
+     */
+    private static ZoneId zone(String timezone) {
+        try {
+            return ZoneId.of(Objects.requireNonNull(timezone, "Timezone is required"));
+        } catch (DateTimeException unknown) {
+            throw new IllegalArgumentException("Unknown timezone: " + timezone, unknown);
+        }
+    }
+
+    /** What an audit entry records of a unit's identity; names and codes, never an address. */
+    private static Map<String, Object> identityOf(
+            String code, Slug slug, String displayName, @Nullable String timezone) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("code", code);
+        identity.put("slug", slug.value());
+        identity.put("displayName", displayName);
+        if (timezone != null) {
+            identity.put("timezone", timezone);
+        }
+        return identity;
+    }
+
     private static TenantView toView(Tenant tenant, CustomerIdentityMode identityMode) {
         return new TenantView(
                 tenant.id().value(),
@@ -695,7 +965,8 @@ public class TenantControlPlaneService {
                 brand.code(),
                 brand.slug().value(),
                 brand.displayName(),
-                brand.status());
+                brand.status(),
+                brand.version());
     }
 
     private static LocationView toView(Location location) {
@@ -715,7 +986,8 @@ public class TenantControlPlaneService {
                 location.place().contactPhone(),
                 location.place().point().map(GeoPoint::latitude).orElse(null),
                 location.place().point().map(GeoPoint::longitude).orElse(null),
-                location.place().coordinateSource());
+                location.place().coordinateSource(),
+                location.version());
     }
 
     public record CreateTenantCommand(
@@ -733,7 +1005,13 @@ public class TenantControlPlaneService {
 
     public record CreateBrandCommand(String code, String slug, String displayName) {}
 
+    /** The whole editable identity, as a form holds it; see {@link Brand#revise} for what may change when. */
+    public record ReviseBrandCommand(String code, String slug, String displayName) {}
+
     public record CreateLocationCommand(String code, String slug, String displayName, String timezone) {}
+
+    /** The whole editable identity, as a form holds it; see {@link Location#revise} for what may change when. */
+    public record ReviseLocationCommand(String code, String slug, String displayName, String timezone) {}
 
     public record TenantView(
             UUID id,
@@ -763,8 +1041,15 @@ public class TenantControlPlaneService {
             TenantStatus status,
             java.time.Instant createdAt) {}
 
+    /** @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031) */
     public record BrandView(
-            UUID id, UUID tenantId, String code, String slug, String displayName, OperatingUnitStatus status) {}
+            UUID id,
+            UUID tenantId,
+            String code,
+            String slug,
+            String displayName,
+            OperatingUnitStatus status,
+            long version) {}
 
     /**
      * Where a branch is, as a caller states it.
@@ -800,6 +1085,7 @@ public class TenantControlPlaneService {
         }
     }
 
+    /** @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031) */
     public record LocationView(
             UUID id,
             UUID tenantId,
@@ -816,5 +1102,6 @@ public class TenantControlPlaneService {
             @Nullable String contactPhone,
             @Nullable Double latitude,
             @Nullable Double longitude,
-            CoordinateSource coordinateSource) {}
+            CoordinateSource coordinateSource,
+            long version) {}
 }

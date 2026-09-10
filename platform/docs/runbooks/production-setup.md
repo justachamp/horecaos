@@ -271,11 +271,13 @@ export BAO_TOKEN=<the root token from init, typed once, this session only>
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   exec -e BAO_TOKEN openbao bao secrets enable -path=horecaos -version=2 kv
 
+# The policy files name the environment as @ENVIRONMENT@; render it from the
+# same env file the stack reads. A policy loaded unrendered grants nothing.
+HORECAOS_ENVIRONMENT="$(sed -n 's/^HORECAOS_ENVIRONMENT=//p' /etc/horecaos/production.env)"
 for policy in horecaos-platform horecaos-deploy; do
-  docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-    cp "deploy/infra/openbao/policies/${policy}.hcl" "openbao:/tmp/${policy}.hcl"
-  docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-    exec -e BAO_TOKEN openbao bao policy write "${policy}" "/tmp/${policy}.hcl"
+  sed "s/@ENVIRONMENT@/${HORECAOS_ENVIRONMENT:-production}/g" "deploy/infra/openbao/policies/${policy}.hcl" \
+    | docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+        exec -T -e BAO_TOKEN openbao bao policy write "${policy}" -
 done
 
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
@@ -1040,10 +1042,13 @@ Differences from everything above:
   application resolve secret references against that path instead of
   `horecaos/production/*` — a staging AppRole physically cannot read a
   production secret even pointed at the same OpenBao instance, because the
-  policy only grants `horecaos/staging/*`; provision a parallel
-  `horecaos-staging`/`horecaos-staging-deploy` policy pair, copied from
-  `deploy/infra/openbao/policies/` with `production` replaced by `staging`,
-  rather than reusing the production ones).
+  policy only grants `horecaos/staging/*`). Nothing is copied or edited by
+  hand for this: the policy files carry `@ENVIRONMENT@`, which the loader
+  above, `keycloak-stage2.sh` and `unattended-boot.sh` fill in from the env
+  file; the OpenBao agent builds its one secret path from the same variable;
+  and `session-start.sh` reads its four startup secrets from it. Until
+  2026-09-10 the policies and the agent said `production` outright, so a host
+  set to `staging` could not have read a single secret.
 - **Section 4 (First boot) and 5:** identical procedure. Onboard a
   dedicated staging tenant (never the production pilot's ids), typically
   re-created by [`tools/proving-run`](proving-run.md) on every release

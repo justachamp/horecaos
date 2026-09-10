@@ -52,6 +52,15 @@ bao_as() {
 
 is_unsealed() { compose exec -T openbao bao status 2>/dev/null | grep -qE '^Sealed +false'; }
 
+# The token on stdin's first line and the rendered policy after it: one pipe,
+# nothing written to disk, nothing in argv. @ENVIRONMENT@ becomes this host's
+# HORECAOS_ENVIRONMENT, so one policy file serves every environment.
+write_policy() {
+    local tok="$1" name="$2" file="$3"
+    { printf '%s\n' "${tok}"; sed "s/@ENVIRONMENT@/${ENVIRONMENT}/g" "${file}"; } \
+        | compose exec -T openbao sh -c 'IFS= read -r BAO_TOKEN; export BAO_TOKEN; bao policy write "$1" -' _ "${name}"
+}
+
 read_root_token() {
     printf 'OpenBao root token (hidden): '; read -r -s ROOT; printf '\n'
     [ -n "${ROOT}" ] || die "No token given."
@@ -92,6 +101,13 @@ enrol() {
         [ -f "${f}" ] || die "Missing ${f}."
     done
     command -v systemd-creds >/dev/null || die "No systemd-creds on this host."
+    # The OpenBao environment segment, read from the file compose reads, so this
+    # script and the stack cannot disagree about which store they are in. The
+    # default is compose's own.
+    ENVIRONMENT="$(sed -n 's/^HORECAOS_ENVIRONMENT=//p' "${ENV_FILE}" | tail -1 | tr -d "\"' ")"
+    ENVIRONMENT="${ENVIRONMENT:-production}"
+    [[ "${ENVIRONMENT}" =~ ^[a-z][a-z0-9-]{0,30}$ ]] \
+        || die "HORECAOS_ENVIRONMENT in ${ENV_FILE} is not a plain lower-case name."
     # No TPM, no enrolment. A key sealed with the host key alone would open
     # from a copy of the disk, which is the one thing this is built to prevent.
     systemd-analyze has-tpm2 >/dev/null 2>&1 \
@@ -127,9 +143,7 @@ WHAT
     unset share earlier
 
     say "Writing the horecaos-boot policy and recreating its role"
-    docker cp "${POLICY_FILE}" "$(compose ps -q openbao):/tmp/horecaos-boot.hcl"
-    bao_as "${ROOT}" bao policy write horecaos-boot /tmp/horecaos-boot.hcl >/dev/null
-    compose exec -T openbao rm -f /tmp/horecaos-boot.hcl
+    write_policy "${ROOT}" horecaos-boot "${POLICY_FILE}" >/dev/null
     # Deleted first so that every secret-id issued by an earlier enrolment dies
     # with the old role: rotating is re-enrolling, and nothing is left behind.
     bao_as "${ROOT}" bao delete "${ROLE}" >/dev/null 2>&1 || true
@@ -151,7 +165,7 @@ WHAT
     token="$(systemd-creds decrypt --name=horecaos-boot-secret-id "${CREDSTORE}/horecaos-boot-secret-id" - \
         | compose exec -T openbao sh -c 'bao write -field=token auth/approle/login role_id="$1" secret_id=-' \
             _ "${role_id}")" || die "The sealed boot credential was refused. Nothing is enabled."
-    bao_as "${token}" bao kv get -field=value horecaos/production/database/keycloak/password >/dev/null \
+    bao_as "${token}" bao kv get -field=value "horecaos/${ENVIRONMENT}/database/keycloak/password" >/dev/null \
         || die "The boot credential logged in but cannot read a startup secret. Nothing is enabled."
     bao_as "${token}" bao token revoke -self >/dev/null 2>&1 || true
     unset token role_id
@@ -195,12 +209,19 @@ PROVE
 
 status() {
     [ "$(id -u)" -eq 0 ] || die "Run with sudo."
-    local enabled result
-    # is-enabled exits non-zero for "disabled" too, so its output is kept and
-    # only an empty answer means the unit is not installed at all.
-    enabled="$(systemctl is-enabled horecaos-boot.service 2>/dev/null)" || true
-    result="$(systemctl show -p Result --value horecaos-boot.service 2>/dev/null)" || true
-    printf 'horecaos-boot.service: %s; last run: %s\n' "${enabled:-not installed}" "${result:-none}"
+    local enabled result exited
+    if [ ! -f "${UNIT_DIR}/horecaos-boot.service" ]; then
+        printf 'horecaos-boot.service: not installed -- this host is not enrolled\n'
+    else
+        # is-enabled exits non-zero for "disabled" too, so its output is kept.
+        enabled="$(systemctl is-enabled horecaos-boot.service 2>/dev/null)" || true
+        # `show` answers Result=success for a unit that has never run at all, so
+        # the result is only reported once there is an exit to report on.
+        exited="$(systemctl show -p ExecMainExitTimestampMonotonic --value horecaos-boot.service 2>/dev/null)" || true
+        result="$(systemctl show -p Result --value horecaos-boot.service 2>/dev/null)" || true
+        if [ -z "${exited}" ] || [ "${exited}" = 0 ]; then result="not run since this boot"; fi
+        printf 'horecaos-boot.service: %s; last run: %s\n' "${enabled:-unknown}" "${result:-unknown}"
+    fi
     for name in "${CREDENTIALS[@]}"; do
         if [ -f "${CREDSTORE}/${name}" ]; then printf '  %-26s sealed\n' "${name}"
         else printf '  %-26s missing\n' "${name}"; fi

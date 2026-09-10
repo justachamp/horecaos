@@ -14,7 +14,11 @@ import java.util.UUID;
 public sealed interface TenancyEvent
         permits TenantCreated,
                 BrandCreated,
+                BrandRevised,
+                BrandDeleted,
                 LocationCreated,
+                LocationRevised,
+                LocationDeleted,
                 TenantOnboardingStarted,
                 TenantOnboardingStepCompleted,
                 TenantOnboardingFailed,
