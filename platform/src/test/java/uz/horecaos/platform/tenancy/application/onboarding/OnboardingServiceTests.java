@@ -697,6 +697,70 @@ class OnboardingServiceTests {
     }
 
     /**
+     * A step that reports {@code FAILED} has told the workflow a person must
+     * look, and nothing but {@link OnboardingService#resume} may run it again.
+     *
+     * <p>Until 2026-09-10 the scheduler did: a failed step was released due
+     * immediately and the claim query took {@code FAILED} alongside
+     * {@code PENDING}, so every tick ran it another batch's worth of times. The
+     * first tenant on pre-production had 416 attempts on a validation step
+     * seven minutes after its run failed. Driven through the scheduler because
+     * that is where the loop lived; {@link #drain(UUID)} hid it by giving up
+     * after sixty iterations and asserting only the final status.
+     */
+    @Test
+    void theSchedulerNeverRunsAFailedStepAgain() {
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
+        UUID runId = startRun();
+        OnboardingScheduler scheduler = schedulerWithBatchSize(5);
+
+        for (int tick = 0; tick < 20; tick++) {
+            scheduler.drive();
+            clock.advance(java.time.Duration.ofSeconds(5));
+        }
+
+        assertThat(runStatus(runId)).isEqualTo("FAILED");
+        assertThat(attempts(runId, "BRANDS_AND_LOCATIONS_VALIDATE"))
+                .as("a permanent failure is attempted once, then waits for a person")
+                .isEqualTo(1);
+        assertThat(service.dueRuns(5))
+                .as("a failed run is not due; only resume makes it due again")
+                .isEmpty();
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM tenant.onboarding_steps later
+                  JOIN tenant.onboarding_steps failed
+                    ON failed.run_id = later.run_id AND failed.step_key = 'BRANDS_AND_LOCATIONS_VALIDATE'
+                 WHERE later.run_id = :runId
+                   AND later.sequence_number > failed.sequence_number
+                   AND later.attempt_count > 0
+                """).param("runId", runId).query(Long.class).single())
+                .as("nor does the run step past it -- a later step may need what the failed one was for")
+                .isZero();
+    }
+
+    /**
+     * {@link OnboardingService#MAXIMUM_ATTEMPTS} bounds a step that keeps
+     * failing transiently. It bounded nothing while an exhausted step, released
+     * as {@code FAILED}, was claimable again on the next tick.
+     */
+    @Test
+    void anExhaustedRetryStopsAtTheMaximum() {
+        provisioner.failNextMembership = true;
+        UUID runId = startRun();
+        OnboardingScheduler scheduler = schedulerWithBatchSize(5);
+
+        for (int tick = 0; tick < 60; tick++) {
+            scheduler.drive();
+            clock.advance(java.time.Duration.ofMinutes(1));
+        }
+
+        assertThat(runStatus(runId)).isEqualTo("FAILED");
+        assertThat(attempts(runId, "TENANT_OWNER_LINK_OR_INVITE")).isEqualTo(OnboardingService.MAXIMUM_ATTEMPTS);
+    }
+
+    /**
      * The gauge the ADR 0023 probe reads, under the name the probe reads it by.
      *
      * <p>The scheduler is kept in a field rather than a local because Micrometer
@@ -761,6 +825,17 @@ class OnboardingServiceTests {
         return jdbc.sql("SELECT status FROM tenant.tenants WHERE id = :id")
                 .param("id", TENANT)
                 .query(String.class)
+                .single();
+    }
+
+    private int attempts(UUID runId, String stepKey) {
+        return jdbc.sql("""
+                SELECT attempt_count FROM tenant.onboarding_steps
+                 WHERE run_id = :runId AND step_key = :stepKey
+                """)
+                .param("runId", runId)
+                .param("stepKey", stepKey)
+                .query(Integer.class)
                 .single();
     }
 
