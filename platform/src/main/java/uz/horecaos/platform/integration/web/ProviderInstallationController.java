@@ -530,6 +530,37 @@ public class ProviderInstallationController {
         };
     }
 
+    /**
+     * An installation's bindings, newest first, every status.
+     *
+     * <p>Activation and suspension take a binding's id, and nothing returned
+     * one except the call that created it, so a binding made yesterday could
+     * not be found to be suspended today. Scoped by tenant and installation
+     * both: a binding id from another tenant is simply absent.
+     */
+    @GetMapping("/{installationId}/bindings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(summary = "List an installation's bindings")
+    List<BindingView> bindings(@PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return jdbc.sql("""
+                SELECT b.id, b.brand_id, b.location_id, b.status, b.priority, b.effective_from, b.effective_until
+                  FROM integration.bindings b
+                 WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
+                 ORDER BY b.created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query((rs, n) -> new BindingView(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getObject("location_id", UUID.class),
+                        rs.getString("status"),
+                        rs.getInt("priority"),
+                        rs.getObject("effective_from", OffsetDateTime.class),
+                        rs.getObject("effective_until", OffsetDateTime.class)))
+                .list();
+    }
+
     @PostMapping("/{installationId}/bindings/{bindingId}/activate")
     @RequiresCapability(value = Capability.INTEGRATION_BINDING_ACTIVATE, mutating = true)
     @Operation(
@@ -845,6 +876,16 @@ public class ProviderInstallationController {
 
     private record InstallationActivationGate(
             String status, String connectionStatus, boolean hasUnverifiedCapability) {}
+
+    /** Where an installation applies: a brand, or one location of it. */
+    public record BindingView(
+            UUID id,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            String status,
+            int priority,
+            OffsetDateTime effectiveFrom,
+            @Nullable OffsetDateTime effectiveUntil) {}
 
     /** Never carries a secret value, only its reference. */
     public record InstallationView(

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.migration.application;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,9 @@ public interface MigrationRunStore {
      * follows would then be arithmetic about a run that never happened.
      */
     Optional<RunRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey);
+
+    /** This scope's runs, most recently started first, capped at {@code limit}. */
+    List<RunRow> listForScope(UUID tenantId, UUID scopeId, int limit);
 
     /** The live run of this type on this scope, per {@code ux_run_active_per_scope}. */
     Optional<RunRow> findActive(UUID tenantId, UUID scopeId, RunType runType);

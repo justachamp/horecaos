@@ -180,6 +180,32 @@ class FailureOperationsServiceTests {
         assertThat(operations.findInboxFailure("never-saw-it", eventId, TENANT)).isEmpty();
     }
 
+    /**
+     * Without this there was no way to find an inbox failure at all unless you
+     * already knew which consumer to ask about.
+     */
+    @Test
+    void theInboxWorklistSpansEveryConsumerAndNamesEach() {
+        UUID shared = deadLetteredInboxMessage(CONSUMER);
+        deadLetteredInboxMessage("other-consumer", shared);
+        UUID retried = deadLetteredInboxMessage("third-consumer");
+        operations.retryInboxMessage("third-consumer", retried, OPERATOR, "handler fixed");
+
+        var worklist = operations.listInboxFailuresAcrossConsumers(null, "DEAD_LETTER", 50);
+
+        assertThat(worklist)
+                .extracting(FailureOperationsService.InboxFailureSummary::consumerName)
+                .as("both consumers' copies of the one event, each its own row; the retried one gone")
+                .containsExactlyInAnyOrder(CONSUMER, "other-consumer");
+        assertThat(worklist).allSatisfy(row -> assertThat(row.id()).isEqualTo(shared));
+        assertThat(operations.listInboxFailuresAcrossConsumers(null, "RETRY_PENDING", 50))
+                .extracting(FailureOperationsService.InboxFailureSummary::consumerName)
+                .containsExactly("third-consumer");
+        assertThat(operations.listInboxFailuresAcrossConsumers(OTHER_TENANT, "DEAD_LETTER", 50))
+                .as("narrowed to a tenant, another tenant's failures are not there")
+                .isEmpty();
+    }
+
     @Test
     void neitherProjectionCarriesThePayload() {
         // Structural rather than serialisation-level, so it survives a change of

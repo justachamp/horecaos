@@ -78,3 +78,155 @@
   cursor: default;
   color: var(--q-ink-subtle);
 }
+
+.rowButton {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.rowButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manageRow td {
+  background: var(--q-surface-1, var(--q-canvas));
+}
+
+.check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.check p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.subTitle {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.bindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bindings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bindings input {
+  border: 1px solid var(--q-hairline);
+  padding: 6px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  min-width: 240px;
+}
+
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.installToggle {
+  margin-top: 16px;
+}
+
+.installForm {
+  margin-top: 12px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.installForm input,
+.installForm select,
+.manageBlock input:not([type='checkbox']),
+.manageBlock select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+  align-self: flex-start;
+}
+
+.manageBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--q-hairline);
+  margin-top: 12px;
+  padding-top: 4px;
+}
+
+.manageBlock p {
+  margin: 0;
+}
+
+.manageBlock .rowButton {
+  align-self: flex-start;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline input {
+  flex: 1 1 220px;
+}
+
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.capability {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

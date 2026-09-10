@@ -28,6 +28,7 @@ import uz.horecaos.platform.migration.application.MigrationRunStore.RunRow;
 import uz.horecaos.platform.migration.domain.RunStatus;
 import uz.horecaos.platform.migration.domain.RunType;
 import uz.horecaos.platform.web.api.AggregateVersion;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -96,6 +97,23 @@ public class MigrationRunController {
         return ResponseEntity.created(location)
                 .eTag(AggregateVersion.toETag(run.version()))
                 .body(RunView.of(run));
+    }
+
+    /**
+     * A scope's runs, most recently started first.
+     *
+     * <p>Capped at {@code limit} rather than paged: a scope sees a handful of
+     * runs over its life, and this is the list an operator opens to find the
+     * one to read or end.
+     */
+    @GetMapping("/scopes/{scopeId}/runs")
+    @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
+    @Operation(summary = "List a scope's runs, newest first")
+    Page<RunView> listForScope(
+            @PathVariable UUID scopeId, @RequestParam UUID tenantId, @RequestParam(required = false) Integer limit) {
+        return Page.last(runs.listForScope(tenantId, scopeId, Page.limitOrDefault(limit)).stream()
+                .map(RunView::of)
+                .toList());
     }
 
     @GetMapping("/runs/{runId}")

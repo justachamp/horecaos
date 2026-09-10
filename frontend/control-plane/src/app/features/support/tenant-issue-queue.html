@@ -2,11 +2,14 @@
 <p class="q-body-sm lead">{{ i18n.t('tenantIssueQueue.lead') }}</p>
 <p class="q-caption notice">{{ i18n.t('tenantIssueQueue.gap') }}</p>
 
-<form class="picker" (submit)="search($event)">
-  <label class="q-caption">{{ i18n.t('entitlements.tenantId') }}</label>
-  <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
-  <button type="submit" [disabled]="tenantId().trim().length === 0">{{ i18n.t('entitlements.load') }}</button>
-</form>
+<app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
 
 @if (loading()) {
   <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
@@ -16,6 +19,142 @@
   @if (issueCount === 0) {
     <p class="q-body-sm state">{{ i18n.t('tenantIssueQueue.empty') }}</p>
   } @else {
+    <section class="panel posExports">
+      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.pos.title') }} ({{ posExports().length }})</h2>
+      @if (posExports().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.pos.empty') }}</p>
+      } @else {
+        <p class="q-caption muted">{{ i18n.t('tenantIssueQueue.pos.lead') }}</p>
+        <div class="scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('fiscalization.column.order') }}</th>
+                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.venue') }}</th>
+                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.sent') }}</th>
+                <th class="q-caption">{{ i18n.t('fiscalization.column.attempts') }}</th>
+                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.stateColumn') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of posExports(); track row.exportId) {
+                <tr>
+                  <td class="q-body-sm q-tnum">{{ row.orderId }}</td>
+                  <td class="q-body-sm q-tnum">{{ row.venue }}</td>
+                  <td class="q-body-sm">{{ i18n.dateTime(asDate(row.requestedAt)) }}</td>
+                  <td class="q-body-sm q-tnum">{{ row.attemptCount }}</td>
+                  <td class="q-body-sm">{{ i18n.t(stateKey(row.state)) }}</td>
+                  <td class="q-body-sm">
+                    @if (session.has('POS_EXPORT_RESOLVE')) {
+                      @if (row.state === 'UNCERTAIN') {
+                        <button type="button" class="secondary askPos" [disabled]="busy()" (click)="askPos(row)">
+                          {{ i18n.t('tenantIssueQueue.pos.ask') }}
+                        </button>
+                      } @else {
+                        <button type="button" class="secondary decideToggle" (click)="openDecision(row)">
+                          {{ deciding() === row.exportId ? i18n.t('common.cancel') : i18n.t('tenantIssueQueue.pos.decide') }}
+                        </button>
+                      }
+                    }
+                  </td>
+                </tr>
+                @if (deciding() === row.exportId) {
+                  <tr class="decisionRow">
+                    <td colspan="6">
+                      <div class="decision">
+                        @if (candidates().length === 0) {
+                          <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.pos.noCandidates') }}</p>
+                        } @else {
+                          <p class="q-caption muted">{{ i18n.t('tenantIssueQueue.pos.candidatesLead') }}</p>
+                          <table class="innerTable candidates">
+                            <thead>
+                              <tr>
+                                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.posOrder') }}</th>
+                                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.evidence') }}</th>
+                                <th class="q-caption"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (candidate of candidates(); track candidate.externalOrderId) {
+                                <tr [class.ours]="candidate.correlationEchoed">
+                                  <td class="q-body-sm q-tnum">
+                                    {{ candidate.externalOrderId }}
+                                    @if (candidate.externalStatus) {
+                                      <span class="muted">· {{ candidate.externalStatus }}</span>
+                                    }
+                                  </td>
+                                  <td class="q-body-sm">
+                                    @if (candidate.correlationEchoed) {
+                                      <strong>{{ i18n.t('tenantIssueQueue.pos.match.reference') }}</strong>
+                                    } @else {
+                                      {{ i18n.t('tenantIssueQueue.pos.resembles') }}:
+                                      @if (candidate.phoneMatches) { {{ i18n.t('tenantIssueQueue.pos.match.phone') }} }
+                                      @if (candidate.fingerprintMatches) { · {{ i18n.t('tenantIssueQueue.pos.match.basket') }} }
+                                      @if (candidate.timeDeltaSeconds !== null) {
+                                        · {{ i18n.t('tenantIssueQueue.pos.match.time', { seconds: candidate.timeDeltaSeconds }) }}
+                                      }
+                                    }
+                                  </td>
+                                  <td class="q-body-sm">
+                                    <button
+                                      type="button"
+                                      class="secondary useCandidate"
+                                      (click)="decision.set('LANDED'); landedAs.set(candidate.externalOrderId)"
+                                    >
+                                      {{ i18n.t('tenantIssueQueue.pos.thisOne') }}
+                                    </button>
+                                  </td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        }
+
+                        <fieldset class="choices">
+                          <legend class="q-caption">{{ i18n.t('tenantIssueQueue.pos.whatHappened') }}</legend>
+                          @for (option of decisions; track option) {
+                            <label class="q-body-sm choice">
+                              <input
+                                type="radio"
+                                name="decision"
+                                [value]="option"
+                                [checked]="decision() === option"
+                                (change)="decision.set(option)"
+                              />
+                              {{ i18n.t(decisionKey(option)) }}
+                            </label>
+                          }
+                        </fieldset>
+                        @if (decision() === 'LANDED') {
+                          <label class="field">
+                            <span class="q-caption">{{ i18n.t('tenantIssueQueue.pos.landedAs') }}</span>
+                            <input class="q-body-sm q-tnum" name="landedAs" [value]="landedAs()" (input)="landedAs.set($any($event.target).value)" />
+                          </label>
+                        }
+                        <div class="inlineForm">
+                          <input
+                            class="q-body-sm"
+                            name="decisionReason"
+                            [placeholder]="i18n.t('common.reason')"
+                            [value]="reason()"
+                            (input)="reason.set($any($event.target).value)"
+                          />
+                          <button type="button" class="confirmDecision" [disabled]="!canDecide()" (click)="decide(row)">
+                            {{ i18n.t('tenantIssueQueue.pos.confirm') }}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
     <section class="panel">
       <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.deadLetters.title') }} ({{ deadLetters().length }})</h2>
       @if (deadLetters().length === 0) {
@@ -31,12 +170,12 @@
             </tr>
           </thead>
           <tbody>
-            @for (event of deadLetters(); track event.eventId) {
+            @for (event of deadLetters(); track event.id) {
               <tr>
-                <td class="q-body-sm q-tnum">{{ event.eventId }}</td>
+                <td class="q-body-sm q-tnum">{{ event.id }}</td>
                 <td class="q-body-sm">{{ event.eventType ?? '—' }}</td>
                 <td class="q-body-sm q-tnum">{{ event.attemptCount }}</td>
-                <td class="q-body-sm muted">{{ event.lastErrorCode ?? '—' }}</td>
+                <td class="q-body-sm muted">{{ event.errorCode ?? '—' }}</td>
               </tr>
             }
           </tbody>

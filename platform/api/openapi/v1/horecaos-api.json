@@ -1561,6 +1561,38 @@
         "required" : [ "fulfillmentMode", "scheduleId" ],
         "type" : "object"
       },
+      "BindingView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "effectiveFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BlacklistStatusResponse" : {
         "properties" : {
           "active" : {
@@ -2745,6 +2777,12 @@
       },
       "CommercialControlPlaneControllerSubscriptionResponse" : {
         "properties" : {
+          "allowedNext" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "currentPeriodEnd" : {
             "type" : "string"
           },
@@ -5430,6 +5468,26 @@
         },
         "type" : "object"
       },
+      "EntitlementKeyResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "counted" : {
+            "type" : "boolean"
+          },
+          "defaultMode" : {
+            "type" : "string"
+          },
+          "resetPeriod" : {
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EntitlementLine" : {
         "properties" : {
           "enabled" : {
@@ -6479,6 +6537,38 @@
           },
           "updatedAt" : {
             "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "InboxFailureSummary" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "consumerName" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -9614,11 +9704,39 @@
         },
         "type" : "object"
       },
+      "PageInboxFailureSummary" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InboxFailureSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageInstallationView" : {
         "properties" : {
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/InstallationView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageMigrationRunView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MigrationRunView"
             },
             "type" : "array"
           },
@@ -9703,6 +9821,34 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/ProductSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageProgramView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProgramView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageQuarantineItemView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/QuarantineItemView"
             },
             "type" : "array"
           },
@@ -10291,6 +10437,70 @@
             "type" : "string"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PlanResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "planId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "versions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlanVersionDetail"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlanVersionDetail" : {
+        "properties" : {
+          "activatedAt" : {
+            "type" : "string"
+          },
+          "approvedBy" : {
+            "type" : "string"
+          },
+          "billingPeriod" : {
+            "type" : "string"
+          },
+          "createdBy" : {
+            "type" : "string"
+          },
+          "entitlements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EntitlementLine"
+            },
+            "type" : "array"
+          },
+          "planVersionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "price" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "termsReference" : {
+            "type" : "string"
+          },
+          "versionNumber" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -11108,6 +11318,26 @@
               "$ref" : "#/components/schemas/ConnectField"
             },
             "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ProviderEnvironmentView" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "production" : {
+            "type" : "boolean"
           },
           "providerType" : {
             "type" : "string"
@@ -13577,6 +13807,13 @@
           "locationId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "nextStates" : {
+            "items" : {
+              "enum" : [ "DISCOVERY", "MAPPING_APPROVED", "BACKFILLING", "CATCHING_UP", "SHADOW_READING", "CANARY", "CUTOVER_READY", "TARGET_OWNED", "ROLLBACK_WINDOW", "LEGACY_READ_ONLY", "RETIRED", "PAUSED", "BLOCKED_RECONCILIATION", "ROLLING_BACK" ],
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "programId" : {
             "format" : "uuid",
@@ -16429,7 +16666,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_28",
+        "operationId" : "list_29",
         "responses" : {
           "200" : {
             "content" : {
@@ -16631,7 +16868,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_27",
+        "operationId" : "list_28",
         "responses" : {
           "200" : {
             "content" : {
@@ -16708,7 +16945,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_19",
+        "operationId" : "list_20",
         "responses" : {
           "200" : {
             "content" : {
@@ -16832,6 +17069,51 @@
         },
         "summary" : "Every provider installation, across every tenant",
         "tags" : [ "Platform integration administration" ]
+      }
+    },
+    "/api/v1/control-plane/integration/failures/inbox" : {
+      "get" : {
+        "description" : "One worklist for the inbox side, each row naming the consumer whose copy failed; an event appears once per consumer that failed it. Retry and resolve stay per consumer. The payload is never returned.",
+        "operationId" : "inboxFailuresAcrossConsumers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "DEAD_LETTER",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInboxFailureSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List failed inbox messages across every consumer",
+        "tags" : [ "Integration failures" ]
       }
     },
     "/api/v1/control-plane/integration/failures/inbox/{consumerName}" : {
@@ -17184,7 +17466,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_26",
+        "operationId" : "list_27",
         "responses" : {
           "200" : {
             "content" : {
@@ -17296,6 +17578,29 @@
         },
         "summary" : "Declared capabilities per wired POS adapter",
         "tags" : [ "POS capability matrix" ]
+      }
+    },
+    "/api/v1/control-plane/provider-environments" : {
+      "get" : {
+        "description" : "An installation names one of these by code; nobody types a URL. The host itself is not returned: choosing an endpoint needs its name, its provider and whether it is live, not where it points.",
+        "operationId" : "providerEnvironments",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderEnvironmentView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The approved provider endpoints an installation may use",
+        "tags" : [ "Platform integration administration" ]
       }
     },
     "/api/v1/control-plane/providers" : {
@@ -17468,7 +17773,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_18",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19314,7 +19619,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_25",
+        "operationId" : "list_26",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19408,7 +19713,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20813,7 +21118,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_16",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21138,7 +21443,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_15",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21302,7 +21607,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21438,6 +21743,43 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "get" : {
+        "operationId" : "bindings_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List an installation's bindings",
+        "tags" : [ "Provider integrations" ]
+      },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
         "operationId" : "bind_3",
@@ -21812,7 +22154,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22423,7 +22765,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23121,7 +23463,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it.",
-        "operationId" : "list_11",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24207,7 +24549,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_22",
+        "operationId" : "list_23",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24275,7 +24617,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_24",
+        "operationId" : "list_25",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24577,7 +24919,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26125,7 +26467,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26524,7 +26866,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_23",
+        "operationId" : "list_24",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26679,7 +27021,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -28087,7 +28429,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -28223,6 +28565,43 @@
       }
     },
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/bindings" : {
+      "get" : {
+        "operationId" : "bindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List an installation's bindings",
+        "tags" : [ "Provider integrations" ]
+      },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
         "operationId" : "bind",
@@ -28597,7 +28976,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -28998,7 +29377,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -30132,6 +30511,29 @@
         "tags" : [ "Partner API" ]
       }
     },
+    "/api/v1/platform-admin/commercial/entitlement-keys" : {
+      "get" : {
+        "description" : "A counted key takes a limit and a feature takes on or off; a key not listed here is refused.",
+        "operationId" : "entitlementKeys",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EntitlementKeyResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The entitlement keys a plan version or override may name",
+        "tags" : [ "Commercial administration" ]
+      }
+    },
     "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation" : {
       "post" : {
         "description" : "Irreversible: the version and its entitlements become immutable at the database. Refused when the approver is the version's author.",
@@ -30165,6 +30567,27 @@
       }
     },
     "/api/v1/platform-admin/commercial/plans" : {
+      "get" : {
+        "description" : "The authoring view. Each draft names its author, because the person who activates it must be somebody else. The price list tenants read stays live versions only.",
+        "operationId" : "plans",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlanResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every plan with every version, drafts included",
+        "tags" : [ "Commercial administration" ]
+      },
       "post" : {
         "operationId" : "createPlan",
         "requestBody" : {
@@ -30472,6 +30895,41 @@
       }
     },
     "/api/v1/platform-admin/migration/programs" : {
+      "get" : {
+        "operationId" : "list_5",
+        "parameters" : [ {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageProgramView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List migration programs, by name",
+        "tags" : [ "Migration programs" ]
+      },
       "post" : {
         "description" : "The program pins the approved mapping and quarantine policy version it executes, so a later revision cannot retroactively change what an already-running migration was allowed to do.",
         "operationId" : "create_2",
@@ -31103,6 +31561,50 @@
         "tags" : [ "Migration quarantine" ]
       }
     },
+    "/api/v1/platform-admin/migration/scopes/{scopeId}/quarantine-items" : {
+      "get" : {
+        "operationId" : "openItems",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "scopeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageQuarantineItemView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A scope's open quarantine items, oldest first",
+        "tags" : [ "Migration quarantine" ]
+      }
+    },
     "/api/v1/platform-admin/migration/scopes/{scopeId}/resumptions" : {
       "post" : {
         "operationId" : "resume_2",
@@ -31211,6 +31713,48 @@
       }
     },
     "/api/v1/platform-admin/migration/scopes/{scopeId}/runs" : {
+      "get" : {
+        "operationId" : "listForScope",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "scopeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageMigrationRunView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a scope's runs, newest first",
+        "tags" : [ "Migration runs" ]
+      },
       "post" : {
         "description" : "A new run of a type that already has a live one is refused rather than queued, and the refusal names the run that is already going.",
         "operationId" : "start_1",
@@ -35468,7 +36012,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_21",
+        "operationId" : "list_22",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40639,7 +41183,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_20",
+        "operationId" : "list_21",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",

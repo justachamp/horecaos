@@ -39,17 +39,64 @@
         <tbody>
           @for (step of view.steps; track step.stepKey) {
             <tr>
-              <td class="q-body-sm">{{ step.stepKey }}</td>
+              <td class="q-body-sm">
+                {{ stepName(step.stepKey) }}
+                <span class="q-caption muted stepKey">{{ step.stepKey }}</span>
+              </td>
               <td class="q-body-sm">{{ step.phase }}</td>
               <td class="q-body-sm">
                 <span class="pill" [class]="'pill-' + step.status">{{ step.status }}</span>
               </td>
               <td class="q-body-sm">{{ step.required ? i18n.t('onboarding.required.yes') : i18n.t('onboarding.required.no') }}</td>
-              <td class="q-body-sm muted">{{ step.detail ?? step.errorCode ?? '' }}</td>
+              <td class="q-body-sm">
+                @if (hint(step.errorCode); as h) {
+                  <span>{{ i18n.t(h.key) }}</span>
+                  @if (h.link) {
+                    <a class="hintLink" [routerLink]="hintRoute(h.link)">{{ i18n.t('onboarding.hint.open') }} →</a>
+                  }
+                }
+                @if (step.detail ?? step.errorCode; as raw) {
+                  <span class="q-caption muted raw">{{ raw }}</span>
+                }
+              </td>
             </tr>
           }
         </tbody>
       </table>
+    </section>
+
+    <section class="panel">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.validate.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('onboarding.validate.lead') }}</p>
+      <button type="button" class="q-body-sm validateButton" [disabled]="validating()" (click)="validate()">
+        {{ validating() ? i18n.t('onboarding.validate.submitting') : i18n.t('onboarding.validate.submit') }}
+      </button>
+      @if (validation(); as result) {
+        @if (result.allPassed) {
+          <p class="q-body-sm success">{{ i18n.t('onboarding.validate.allPassed') }}</p>
+        }
+        <ul class="checks">
+          @for (check of result.checks; track check.stepKey) {
+            <li class="q-body-sm" [class.failed]="!check.passed">
+              <span class="pill" [class]="check.passed ? 'pill-COMPLETED' : 'pill-FAILED'">
+                {{ check.passed ? i18n.t('onboarding.validate.passed') : i18n.t('onboarding.validate.failed') }}
+              </span>
+              <span>{{ stepName(check.stepKey) }}</span>
+              @if (!check.passed) {
+                @if (hint(check.errorCode); as h) {
+                  <span class="muted">— {{ i18n.t(h.key) }}</span>
+                  @if (h.link) {
+                    <a class="hintLink" [routerLink]="hintRoute(h.link)">{{ i18n.t('onboarding.hint.open') }} →</a>
+                  }
+                }
+                @if (check.detail ?? check.errorCode; as raw) {
+                  <span class="q-caption muted raw">{{ raw }}</span>
+                }
+              }
+            </li>
+          }
+        </ul>
+      }
     </section>
 
     <section class="panel">
@@ -103,10 +150,37 @@
         }
       }
     </section>
-  } @else {
+
+    @if (canCancel(view)) {
+      <section class="panel">
+        <h2 class="q-subhead">{{ i18n.t('onboarding.cancel.title') }}</h2>
+        <p class="q-body-sm muted">{{ i18n.t('onboarding.cancel.lead') }}</p>
+        <form class="inlineForm" (submit)="cancel($event)">
+          <input
+            class="q-body-sm"
+            type="text"
+            name="cancelReason"
+            [placeholder]="i18n.t('onboarding.reason.placeholder')"
+            [value]="cancelReason()"
+            (input)="cancelReason.set($any($event.target).value)"
+          />
+          <button type="submit" class="danger" [disabled]="cancelling() || cancelReason().trim().length === 0">
+            {{ cancelling() ? i18n.t('onboarding.cancel.submitting') : i18n.t('onboarding.cancel.submit') }}
+          </button>
+        </form>
+      </section>
+    }
+  }
+
+  @if (canStartNew(run())) {
     <section class="panel">
       <h2 class="q-subhead">{{ i18n.t('onboarding.start.title') }}</h2>
       <p class="q-body-sm muted">{{ i18n.t('onboarding.start.lead') }}</p>
+      @if (defaultTemplate(); as template) {
+        <p class="q-body-sm muted">
+          {{ i18n.t('onboarding.template.label', { code: template.code, version: template.version, count: template.requiredSteps.length }) }}
+        </p>
+      }
       <form class="inlineForm" (submit)="startRun($event)">
         <input
           class="q-body-sm"

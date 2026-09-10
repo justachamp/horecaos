@@ -195,3 +195,9 @@
   background: var(--q-hairline);
   cursor: not-allowed;
 }
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}

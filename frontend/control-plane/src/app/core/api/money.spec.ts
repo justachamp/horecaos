@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UnknownCurrencyError, formatAmount, groupDigits } from './money';
+import { UnknownCurrencyError, formatAmount, groupDigits, parseAmount } from './money';
 
 /**
  * The regression this file exists for is the first test.
@@ -60,5 +60,30 @@ describe('signs and separators', () => {
 describe('an unknown currency', () => {
   it('throws rather than guessing a scale', () => {
     expect(() => formatAmount({ amountMinor: 100, currency: 'JPY' })).toThrow(UnknownCurrencyError);
+  });
+});
+
+describe('an amount typed into a form', () => {
+  it('stores a UZS price as the whole som typed, never times a hundred', () => {
+    expect(parseAmount('9 000 000', 'UZS')).toBe(9_000_000);
+    expect(parseAmount('84000', 'UZS')).toBe(84_000);
+  });
+
+  it('reads either decimal separator at the currency’s own scale', () => {
+    expect(parseAmount('12,50', 'USD')).toBe(1250);
+    expect(parseAmount('12.5', 'USD')).toBe(1250);
+    expect(parseAmount('12', 'USD')).toBe(1200);
+  });
+
+  it('refuses what it cannot read exactly rather than rounding it', () => {
+    expect(parseAmount('1,5', 'UZS')).toBeNull();
+    expect(parseAmount('12,505', 'USD')).toBeNull();
+    expect(parseAmount('-3', 'UZS')).toBeNull();
+    expect(parseAmount('', 'UZS')).toBeNull();
+  });
+
+  it('reads back exactly what the formatter shows', () => {
+    const shown = formatAmount({ amountMinor: 125075, currency: 'USD' });
+    expect(parseAmount(shown, 'USD')).toBe(125075);
   });
 });

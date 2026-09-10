@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { Money } from '../../core/api/money';
 
-/** CommercialControlPlaneController.EntitlementSnapshotResponse (read side, ADR 0021). */
+/** Everything a tenant is entitled to, with where each value came from. */
 export interface EntitlementSnapshot {
   readonly tenantId: string;
   readonly subscriptionId: string | null;
@@ -16,35 +16,29 @@ export interface EntitlementSnapshot {
 export interface ResolvedEntitlement {
   readonly entitlementKey: string;
   readonly limit: number | null;
-  readonly enabled: boolean;
+  readonly enabled: boolean | null;
   readonly declaredMode: string;
   readonly effectiveMode: string;
-  readonly resetPeriod: string | null;
-  readonly overageUnitPrice: { readonly amountMinor: number; readonly currency: string } | null;
+  readonly resetPeriod: string;
+  readonly overageUnitPrice: Money | null;
   readonly source: string;
 }
 
+/** A tenant's live subscription, with the statuses the server allows next. */
 export interface SubscriptionView {
-  readonly id: string;
-  readonly tenantId: string;
+  readonly subscriptionId: string;
   readonly planVersionId: string;
   readonly status: string;
-  readonly startedAt: string;
+  readonly startAt: string;
+  readonly trialEndAt: string | null;
+  readonly currentPeriodStart: string;
+  readonly currentPeriodEnd: string;
+  readonly suspensionReason: string | null;
+  readonly version: number;
+  readonly allowedNext: readonly string[];
 }
 
-export interface UsageView {
-  readonly tenantId: string;
-  readonly period: string;
-  readonly counters: Readonly<Record<string, number>>;
-}
-
-export interface PlanView {
-  readonly id: string;
-  readonly name: string;
-  readonly status: string;
-}
-
-/** CommercialControlPlaneController.EntitlementLine. */
+/** One line of a plan version: the limit, the boundary behaviour, the overage rate. */
 export interface PlanEntitlementLineView {
   readonly entitlementKey: string;
   readonly limit: number | null;
@@ -55,12 +49,7 @@ export interface PlanEntitlementLineView {
   readonly overageUnitPrice: Money | null;
 }
 
-/**
- * CommercialControlPlaneController.PlanVersionResponse -- what `GET
- * /control-plane/plans` actually returns (IA 5.1 Plan catalog). Kept
- * separate from {@link PlanView}/{@link listPlans}, which mirror a different,
- * narrower shape nothing in this build's screens has ever called.
- */
+/** A live plan version as the price list shows it. */
 export interface PlanVersionView {
   readonly planVersionId: string;
   readonly planCode: string;
@@ -70,7 +59,66 @@ export interface PlanVersionView {
   readonly entitlements: readonly PlanEntitlementLineView[];
 }
 
-/** CommercialControlPlaneController.UsageResponse (IA 5.4 Metering & usage). */
+/** A version in the authoring view: drafts included, with who drafted and who approved. */
+export interface PlanVersionDetail {
+  readonly planVersionId: string;
+  readonly versionNumber: number;
+  readonly price: Money;
+  readonly billingPeriod: string;
+  readonly status: string;
+  readonly termsReference: string | null;
+  readonly createdBy: string;
+  readonly approvedBy: string | null;
+  readonly activatedAt: string | null;
+  readonly entitlements: readonly PlanEntitlementLineView[];
+}
+
+/** A plan and every version of it, newest first. */
+export interface PlanDetail {
+  readonly planId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly status: string;
+  readonly versions: readonly PlanVersionDetail[];
+}
+
+/** An entitlement key a plan or override may name: counted (a limit) or a feature (on/off). */
+export interface EntitlementKeyView {
+  readonly code: string;
+  readonly counted: boolean;
+  readonly unit: string;
+  readonly defaultMode: string;
+  readonly resetPeriod: string;
+}
+
+/** One entitlement line of a draft, as sent. */
+export interface EntitlementLineRequest {
+  readonly entitlementKey: string;
+  readonly limit?: number;
+  readonly enabled?: boolean;
+  readonly enforcementMode: string;
+  readonly resetPeriod: string;
+  readonly overageUnitPriceMinor?: number;
+}
+
+export interface DraftVersionRequest {
+  readonly currency: string;
+  readonly priceMinor: number;
+  readonly billingPeriod: string;
+  readonly termsReference?: string;
+  readonly entitlements: readonly EntitlementLineRequest[];
+  readonly reason: string;
+}
+
+export interface TransitionRequest {
+  readonly status: string;
+  readonly expectedVersion: number;
+  readonly suspensionReason?: string;
+  readonly cancelAt?: string;
+  readonly reason: string;
+}
+
+/** One metered period, measured and adjusted quantities kept apart. */
 export interface UsagePeriodView {
   readonly entitlementKey: string;
   readonly periodKey: string;
@@ -83,15 +131,21 @@ export interface UsagePeriodView {
   readonly lastEventAt: string | null;
 }
 
+/** A cached usage total that disagreed with the ledger when recomputed. */
+export interface UsageDivergence {
+  readonly entitlementKey: string;
+  readonly periodKey: string;
+  readonly stored: number | null;
+  readonly recomputed: number;
+}
+
+export const BILLING_PERIODS = ['MONTHLY', 'QUARTERLY', 'YEARLY', 'NONE'] as const;
+export const ENFORCEMENT_MODES = ['METER_ONLY', 'SOFT', 'HARD', 'DISABLED'] as const;
+
 /**
- * Reads over `CommercialControlPlaneController` (ADR 0021) -- entitlements,
- * subscription, usage, and the activated plan catalogue -- shared by IA 2.2's
- * quick-view panel and IA 5.3's own screen so the two never diverge on the
- * shape of the same object.
- *
- * Writes (subscribe/transition/override/adjust, `CommercialAdminController`)
- * are declared in `entitlements.ts` itself, next to the one screen that
- * performs them, rather than duplicated here.
+ * Plans, subscriptions, entitlements and usage. Reads that tenants may also
+ * see live under `/control-plane`; everything only HorecaOS staff may do,
+ * and the authoring reads behind it, live under `/platform-admin/commercial`.
  */
 @Injectable({ providedIn: 'root' })
 export class CommerceApi {
@@ -103,6 +157,7 @@ export class CommerceApi {
     );
   }
 
+  /** The live subscription, or null when the tenant has none. */
   async getSubscription(tenantId: string): Promise<SubscriptionView | null> {
     try {
       return await firstValueFrom(
@@ -116,37 +171,54 @@ export class CommerceApi {
     }
   }
 
-  async getUsage(tenantId: string): Promise<UsageView | null> {
-    try {
-      return await firstValueFrom(
-        this.api.get<UsageView>(`/api/v1/control-plane/tenants/${tenantId}/usage`),
-      );
-    } catch (error) {
-      if ((error as { code?: string }).code === 'RESOURCE_NOT_FOUND') {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  async listPlans(): Promise<PlanView[]> {
-    return firstValueFrom(this.api.get<PlanView[]>('/api/v1/control-plane/plans'));
-  }
-
-  /** IA 5.1 Plan catalog -- the activated plan versions themselves, correctly typed. */
+  /** The price list: live plan versions only. */
   async listPlanCatalogue(): Promise<PlanVersionView[]> {
     return firstValueFrom(this.api.get<PlanVersionView[]>('/api/v1/control-plane/plans'));
   }
 
-  /** IA 5.4 Metering & usage -- every metered period for a tenant, correctly typed as the array the server returns. */
+  /** Every metered period for a tenant. */
   async listUsage(tenantId: string): Promise<UsagePeriodView[]> {
     return firstValueFrom(
       this.api.get<UsagePeriodView[]>(`/api/v1/control-plane/tenants/${tenantId}/usage`),
     );
   }
 
-  // ------------------------------------------------------- platform-admin writes
-  // CommercialAdminController -- every declaration is PLATFORM scope, ADR 0021.
+  // ------------------------------------------------------- platform-admin
+
+  /** Every plan with every version, drafts included. */
+  async listPlansWithDrafts(): Promise<PlanDetail[]> {
+    return firstValueFrom(this.api.get<PlanDetail[]>('/api/v1/platform-admin/commercial/plans'));
+  }
+
+  async entitlementKeys(): Promise<EntitlementKeyView[]> {
+    return firstValueFrom(
+      this.api.get<EntitlementKeyView[]>('/api/v1/platform-admin/commercial/entitlement-keys'),
+    );
+  }
+
+  async createPlan(code: string, name: string, reason: string): Promise<{ planId: string }> {
+    return firstValueFrom(
+      this.api.post<{ planId: string }>('/api/v1/platform-admin/commercial/plans', { code, name, reason }),
+    );
+  }
+
+  async draftVersion(planId: string, request: DraftVersionRequest): Promise<{ planVersionId: string }> {
+    return firstValueFrom(
+      this.api.post<{ planVersionId: string }>(
+        `/api/v1/platform-admin/commercial/plans/${planId}/versions`,
+        request,
+      ),
+    );
+  }
+
+  /** Irreversible, and refused when the approver drafted the version. */
+  async activateVersion(planVersionId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/platform-admin/commercial/plan-versions/${planVersionId}/activation`, {
+        reason,
+      }),
+    );
+  }
 
   async startSubscription(
     tenantId: string,
@@ -158,6 +230,15 @@ export class CommerceApi {
       this.api.post<{ subscriptionId: string }>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/subscriptions`,
         { planVersionId, trialDays, reason },
+      ),
+    );
+  }
+
+  async transitionSubscription(tenantId: string, request: TransitionRequest): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/subscription-transitions`,
+        request,
       ),
     );
   }
@@ -196,6 +277,16 @@ export class CommerceApi {
       this.api.post<{ adjustmentId: string }>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/usage-adjustments`,
         request,
+      ),
+    );
+  }
+
+  /** Recomputes every cached total from the ledger; answers the periods that disagreed. */
+  async rebuildUsage(tenantId: string): Promise<UsageDivergence[]> {
+    return firstValueFrom(
+      this.api.post<UsageDivergence[]>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/usage-rebuilds`,
+        {},
       ),
     );
   }

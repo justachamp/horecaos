@@ -85,6 +85,28 @@ public class MigrationProgramController {
                 .body(ProgramView.of(program));
     }
 
+    /**
+     * A page of every program, in name order.
+     *
+     * <p>Before this, a console found a program by registering it again under
+     * the same name, which works only while the name is typed exactly; a typo
+     * registered a second program.
+     */
+    @GetMapping
+    @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
+    @Operation(summary = "List migration programs, by name")
+    Page<ProgramView> list(
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page") String cursor,
+            @RequestParam(required = false) Integer limit) {
+
+        int pageSize = Page.limitOrDefault(limit);
+        List<ProgramRow> rows = programs.listPrograms(cursor, pageSize);
+        List<ProgramView> items = rows.stream().map(ProgramView::of).toList();
+        String nextCursor =
+                items.size() < pageSize ? null : rows.get(rows.size() - 1).name();
+        return new Page<>(items, nextCursor);
+    }
+
     @GetMapping("/{programId}")
     @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
     @Operation(summary = "Get a migration program")

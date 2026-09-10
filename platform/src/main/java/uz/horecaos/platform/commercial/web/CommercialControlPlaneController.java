@@ -160,7 +160,7 @@ public class CommercialControlPlaneController {
         }
     }
 
-    /** A subscription as the console shows it. */
+    /** A subscription as the console shows it, with the statuses it may move to next. */
     public record SubscriptionResponse(
             UUID subscriptionId,
             UUID planVersionId,
@@ -170,7 +170,8 @@ public class CommercialControlPlaneController {
             String currentPeriodStart,
             String currentPeriodEnd,
             @Nullable String suspensionReason,
-            long version) {
+            long version,
+            List<String> allowedNext) {
 
         static SubscriptionResponse of(Subscription subscription) {
             return new SubscriptionResponse(
@@ -182,7 +183,12 @@ public class CommercialControlPlaneController {
                     subscription.currentPeriodStart().toString(),
                     subscription.currentPeriodEnd().toString(),
                     subscription.suspensionReason(),
-                    subscription.version());
+                    subscription.version(),
+                    // The lifecycle stays here; a console that copied it would drift from it.
+                    subscription.status().allowedNext().stream()
+                            .map(Enum::name)
+                            .sorted()
+                            .toList());
         }
 
         private static @Nullable String text(java.time.@Nullable Instant instant) {

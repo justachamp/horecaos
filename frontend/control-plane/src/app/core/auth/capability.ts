@@ -23,6 +23,8 @@ export type Capability =
   | 'LEGAL_ENTITY_READ'
   | 'LEGAL_ENTITY_MANAGE'
   | 'COMMERCIAL_PLAN_READ'
+  | 'COMMERCIAL_PLAN_MANAGE'
+  | 'COMMERCIAL_PLAN_ACTIVATE'
   | 'COMMERCIAL_SUBSCRIPTION_MANAGE'
   | 'COMMERCIAL_OVERRIDE_APPROVE'
   | 'COMMERCIAL_USAGE_READ'
@@ -33,6 +35,12 @@ export type Capability =
   | 'IAM_GRANT_MANAGE'
   | 'APPROVAL_DECIDE'
   | 'MIGRATION_READ'
+  | 'POS_EXPORT_READ'
+  | 'POS_EXPORT_RESOLVE'
+  | 'MIGRATION_SCOPE_MANAGE'
+  | 'MIGRATION_RUN_EXECUTE'
+  | 'MIGRATION_CUTOVER_APPROVE'
+  | 'MIGRATION_QUARANTINE_RESOLVE'
   // The platform's own, cross-tenant view of providers and installations (IA
   // §3) -- not the tenant self-service connect/rotate flow, which ADR 0065's
   // 2026-09-02 amendment moved to the operations app's Settings section.

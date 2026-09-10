@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -278,6 +279,13 @@ public class QuarantineService {
     public int openCount(UUID tenantId, UUID scopeId) {
         access.requireOperator();
         return quarantine.openCount(tenantId, scopeId);
+    }
+
+    /** The oldest open items of this scope, at most {@code limit} of them: the worklist to settle from. */
+    @Transactional(readOnly = true)
+    public List<QuarantineItemRow> listOpen(UUID tenantId, UUID scopeId, int limit) {
+        access.requireOperator();
+        return quarantine.listOpen(tenantId, scopeId, Math.clamp(limit, 1, 200));
     }
 
     /**

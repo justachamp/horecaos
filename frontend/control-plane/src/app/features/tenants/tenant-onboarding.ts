@@ -1,13 +1,64 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { OnboardingRunView, TenantsApi } from './tenants-api';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { OnboardingRunView, OnboardingTemplateView, TenantsApi, ValidationOutcome } from './tenants-api';
+
+/** Where each failure is fixed, when it is fixed in this console. */
+type HintLink = 'brands' | 'legal-entities' | 'identity' | 'installations';
 
 /**
- * IA 2.5 Onboarding -- the resumable run (ADR 0008): steps, blockers,
- * resume, and activate.
+ * What an operator does about each failure code a step can report, in their
+ * language. Codes the platform adds later fall back to the server's own
+ * detail, which is still shown underneath every hint because it names the
+ * specifics -- which location, which payment method.
+ */
+const HINTS: Readonly<Record<string, { readonly key: MessageKey; readonly link?: HintLink }>> = {
+  AWAITING_ORGANIZATION: { key: 'onboarding.hint.AWAITING_ORGANIZATION' },
+  IDENTITY_DRIFT: { key: 'onboarding.hint.IDENTITY_DRIFT', link: 'identity' },
+  ITEM_NOT_AVAILABLE_TO_SELL: { key: 'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL' },
+  MEDIA_NOT_AVAILABLE: { key: 'onboarding.hint.MEDIA_NOT_AVAILABLE' },
+  NO_AVAILABLE_ITEM: { key: 'onboarding.hint.NO_AVAILABLE_ITEM' },
+  NO_BRAND: { key: 'onboarding.hint.NO_BRAND', link: 'brands' },
+  NO_CHANNEL: { key: 'onboarding.hint.NO_CHANNEL' },
+  NO_DELIVERY_TARIFF: { key: 'onboarding.hint.NO_DELIVERY_TARIFF' },
+  NO_DELIVERY_ZONE: { key: 'onboarding.hint.NO_DELIVERY_ZONE' },
+  NO_FULFILLMENT_MODE: { key: 'onboarding.hint.NO_FULFILLMENT_MODE' },
+  NO_LEGAL_ENTITY: { key: 'onboarding.hint.NO_LEGAL_ENTITY', link: 'legal-entities' },
+  NO_LOCATION: { key: 'onboarding.hint.NO_LOCATION', link: 'brands' },
+  NO_MERCHANT_BINDING: { key: 'onboarding.hint.NO_MERCHANT_BINDING' },
+  NO_PUBLISHED_MENU: { key: 'onboarding.hint.NO_PUBLISHED_MENU' },
+  OWNER_NOT_SUPPLIED: { key: 'onboarding.hint.OWNER_NOT_SUPPLIED' },
+  POS_BINDING_UNHEALTHY: { key: 'onboarding.hint.POS_BINDING_UNHEALTHY', link: 'installations' },
+  QUOTE_REFUSED: { key: 'onboarding.hint.QUOTE_REFUSED' },
+  SERVICEABILITY_UNAVAILABLE: { key: 'onboarding.hint.SERVICEABILITY_UNAVAILABLE' },
+  TENANT_MISSING: { key: 'onboarding.hint.TENANT_MISSING' },
+  TRANSIENT_INFRASTRUCTURE: { key: 'onboarding.hint.TRANSIENT_INFRASTRUCTURE' },
+};
+
+const STEP_NAMES: ReadonlySet<string> = new Set([
+  'KEYCLOAK_ORGANIZATION_RECONCILE',
+  'TENANT_OWNER_LINK_OR_INVITE',
+  'DEFAULT_CONFIGURATION_APPLY',
+  'BRANDS_AND_LOCATIONS_VALIDATE',
+  'PAYMENT_CONFIGURATION_VALIDATE',
+  'DELIVERY_CONFIGURATION_VALIDATE',
+  'POS_BINDINGS_VALIDATE',
+  'CATALOG_READINESS_VALIDATE',
+  'MEDIA_READINESS_VALIDATE',
+  'FRONTEND_DOMAIN_VALIDATE',
+  'ACTIVATION_SMOKE_TEST',
+  'TENANT_ACTIVATE',
+]);
+
+/** A run in these states has ended; a new one may be started over it. */
+const ENDED = new Set(['CANCELLED', 'FAILED']);
+
+/**
+ * IA 2.5 Onboarding -- the resumable run: steps, blockers, what to do about
+ * each, a dry-run check, resume, cancel, and activate.
  *
  * The real step catalogue (`OnboardingStep`, 12 steps from
  * `KEYCLOAK_ORGANIZATION_RECONCILE` through `TENANT_ACTIVATE`) is shown as
@@ -26,6 +77,7 @@ import { OnboardingRunView, TenantsApi } from './tenants-api';
 @Component({
   selector: 'app-tenant-onboarding',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   templateUrl: './tenant-onboarding.html',
   styleUrl: './tenant-onboarding.css',
 })
@@ -53,6 +105,11 @@ export class TenantOnboarding {
   protected readonly activating = signal(false);
   protected readonly activationOutcomeKey = signal<string | null>(null);
   protected readonly pendingApprovalId = signal<string | null>(null);
+  protected readonly validation = signal<ValidationOutcome | null>(null);
+  protected readonly validating = signal(false);
+  protected readonly cancelReason = signal('');
+  protected readonly cancelling = signal(false);
+  protected readonly defaultTemplate = signal<OnboardingTemplateView | null>(null);
 
   constructor() {
     void this.load();
@@ -70,6 +127,70 @@ export class TenantOnboarding {
     } finally {
       this.loading.set(false);
     }
+    try {
+      this.defaultTemplate.set(await this.tenantsApi.defaultOnboardingTemplate());
+    } catch {
+      // Reading templates needs platform scope; without it the start panel
+      // simply does not name the template.
+      this.defaultTemplate.set(null);
+    }
+  }
+
+  protected stepName(stepKey: string): string {
+    return STEP_NAMES.has(stepKey) ? this.i18n.t(`onboarding.step.${stepKey}` as MessageKey) : stepKey;
+  }
+
+  protected hint(errorCode: string | null): { readonly key: MessageKey; readonly link?: HintLink } | null {
+    return errorCode === null ? null : (HINTS[errorCode] ?? null);
+  }
+
+  protected hintRoute(link: HintLink): readonly string[] {
+    return link === 'installations' ? ['/providers', 'installations'] : ['/tenants', this.tenantId, link];
+  }
+
+  /** A run that has ended can be replaced by a fresh one; one in flight cannot. */
+  protected canStartNew(view: OnboardingRunView | null): boolean {
+    return view === null || ENDED.has(view.run.status);
+  }
+
+  protected canCancel(view: OnboardingRunView): boolean {
+    return !ENDED.has(view.run.status) && view.run.status !== 'ACTIVE';
+  }
+
+  protected async validate(): Promise<void> {
+    const runId = this.runId();
+    if (runId === null || this.validating()) {
+      return;
+    }
+    this.validating.set(true);
+    this.actionError.set(null);
+    try {
+      this.validation.set(await this.tenantsApi.validateOnboarding(this.tenantId, runId));
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.validating.set(false);
+    }
+  }
+
+  protected async cancel(event: Event): Promise<void> {
+    event.preventDefault();
+    const runId = this.runId();
+    if (runId === null || this.cancelReason().trim().length === 0 || this.cancelling()) {
+      return;
+    }
+    this.cancelling.set(true);
+    this.actionError.set(null);
+    try {
+      await this.tenantsApi.cancelOnboarding(this.tenantId, runId, this.cancelReason().trim());
+      this.cancelReason.set('');
+      this.validation.set(null);
+      await this.reloadRun();
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.cancelling.set(false);
+    }
   }
 
   protected async startRun(event: Event): Promise<void> {
@@ -82,6 +203,7 @@ export class TenantOnboarding {
         this.ownerEmail().trim() || undefined,
       );
       this.runId.set(runId);
+      this.validation.set(null);
       await this.reloadRun();
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));

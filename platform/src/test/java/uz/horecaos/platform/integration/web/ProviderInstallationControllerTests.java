@@ -203,6 +203,27 @@ class ProviderInstallationControllerTests {
         assertThat(status(binding)).isEqualTo("SUSPENDED");
     }
 
+    /**
+     * Activating or suspending a binding takes its id, and nothing listed one
+     * before; this is what an operator finds it by.
+     */
+    @Test
+    void anInstallationsBindingsAreListedAndOnlyItsOwn() {
+        UUID first = installation("sms-one");
+        UUID second = installation("sms-two");
+        UUID mine = binding(first);
+        binding(second);
+
+        assertThat(controller.bindings(TENANT, first)).singleElement().satisfies(view -> {
+            assertThat(view.id()).isEqualTo(mine);
+            assertThat(view.brandId()).isEqualTo(BRAND);
+            assertThat(view.status()).isEqualTo("SUSPENDED");
+        });
+        assertThat(controller.bindings(UUID.randomUUID(), first))
+                .as("the same installation id under another tenant is simply absent")
+                .isEmpty();
+    }
+
     private UUID installation(String code) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments

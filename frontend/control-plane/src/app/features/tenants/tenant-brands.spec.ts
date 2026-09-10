@@ -56,6 +56,7 @@ class FakeTenantsApi {
   readonly reviseLocation = vi.fn<(...args: unknown[]) => Promise<LocationView>>();
   readonly deleteBrand = vi.fn<(...args: unknown[]) => Promise<void>>();
   readonly deleteLocation = vi.fn<(...args: unknown[]) => Promise<void>>();
+  readonly describeLocation = vi.fn<(...args: unknown[]) => Promise<LocationView>>();
   readonly activateBrand = vi.fn();
   readonly activateLocation = vi.fn();
   readonly createBrand = vi.fn();
@@ -212,6 +213,48 @@ describe('TenantBrands', () => {
     expect(text).toContain(ru['tenantBrands.delete.reason.STILL_REFERENCED']);
     expect(text).toContain('location_fiscal_assignments');
     expect(text).toContain('Chilonzor');
+  });
+
+  it('records a location’s place, sending a point as an operator’s pin', async () => {
+    await createWith([brand()], [location()]);
+    api.describeLocation.mockResolvedValue(location({ addressLine: 'Bunyodkor 1', city: 'Tashkent', latitude: 41.28, longitude: 69.2 }));
+
+    buttons(ru['tenantBrands.place.action'])[0].click();
+    await settle();
+    type('addressLine', 'Bunyodkor 1');
+    type('city', 'Tashkent');
+    type('latitude', '41.28');
+    type('longitude', '69.2');
+    await settle();
+    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.describeLocation).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.objectContaining({ id: 'location-1' }),
+      expect.objectContaining({ addressLine: 'Bunyodkor 1', city: 'Tashkent', latitude: 41.28, longitude: 69.2, coordinateSource: 'OPERATOR_PIN' }),
+    );
+    expect(fixture.nativeElement.textContent).toContain('Bunyodkor 1, Tashkent');
+  });
+
+  it('refuses half a point, and a phone number that is not one, before asking the server', async () => {
+    await createWith([brand()], [location()]);
+
+    buttons(ru['tenantBrands.place.action'])[0].click();
+    await settle();
+    type('latitude', '41.28');
+    await settle();
+    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+    expect(fixture.nativeElement.textContent).toContain(ru['tenantBrands.place.pairError']);
+
+    type('latitude', '');
+    type('contactPhone', '998712000000');
+    await settle();
+    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+    expect(fixture.nativeElement.textContent).toContain(ru['tenantBrands.place.phoneError']);
+    expect(api.describeLocation).not.toHaveBeenCalled();
   });
 
   it('falls back to the ordinary sentence for a refusal that carries no reason', async () => {

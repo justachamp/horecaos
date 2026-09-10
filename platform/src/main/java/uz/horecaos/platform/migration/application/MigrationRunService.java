@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -396,6 +397,13 @@ public class MigrationRunService {
     public RunRow get(UUID tenantId, UUID runId) {
         access.requireOperator();
         return requireRun(tenantId, runId);
+    }
+
+    /** This scope's runs, most recently started first, at most {@code limit} of them. */
+    @Transactional(readOnly = true)
+    public List<RunRow> listForScope(UUID tenantId, UUID scopeId, int limit) {
+        access.requireOperator();
+        return runs.listForScope(tenantId, scopeId, Math.clamp(limit, 1, 200));
     }
 
     /**

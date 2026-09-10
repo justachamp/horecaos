@@ -182,6 +182,43 @@ class CommercialPlatformTests {
     }
 
     @Test
+    void theAuthoringCatalogueShowsDraftsWithTheirAuthorAndThePriceListDoesNot() {
+        UUID liveVersionId = activateNetworkPlan();
+        UUID networkId = jdbc.sql("SELECT plan_id FROM commercial.plan_versions WHERE id = :id")
+                .param("id", liveVersionId)
+                .query(UUID.class)
+                .single();
+        UUID draftId = draftNetworkVersion(networkId);
+        UUID emptyPlanId =
+                plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null), "registered, not priced", "corr");
+
+        List<PlanCatalogService.PlanHistory> catalogue = plans.catalogueWithDrafts();
+
+        assertThat(catalogue)
+                .as("a plan registered but never drafted is still a plan somebody has to finish")
+                .extracting(PlanCatalogService.PlanHistory::planId)
+                .containsExactly(emptyPlanId, networkId);
+        assertThat(catalogue.get(0).versions()).isEmpty();
+
+        List<PlanVersion> network = catalogue.get(1).versions();
+        assertThat(network)
+                .as("newest first, the draft beside the version it would replace")
+                .extracting(PlanVersion::id)
+                .containsExactly(draftId, liveVersionId);
+        assertThat(network.get(0).status()).isEqualTo("DRAFT");
+        assertThat(network.get(0).createdBy())
+                .as("the approver has to be able to see who drafted it, to know it is not them")
+                .isEqualTo(AUTHOR);
+        assertThat(network.get(0).approvedBy()).isNull();
+        assertThat(network.get(1).approvedBy()).isEqualTo(APPROVER);
+
+        assertThat(plans.activeVersions())
+                .as("the price list tenants read still never shows a draft")
+                .extracting(PlanVersion::id)
+                .containsExactly(liveVersionId);
+    }
+
+    @Test
     void anUnknownEntitlementKeyFailsPlanActivation() {
         UUID planId = plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null), "the price list", "corr");
 

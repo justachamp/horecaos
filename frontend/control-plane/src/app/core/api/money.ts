@@ -87,3 +87,29 @@ export function addMoney(a: Money, b: Money): Money {
   }
   return { amountMinor: a.amountMinor + b.amountMinor, currency: a.currency };
 }
+
+/** The currencies a price may be entered in: the ones with a declared scale. */
+export const ENTRY_CURRENCIES: readonly string[] = Object.keys(DISPLAY_DECIMALS);
+
+/**
+ * Reads an amount typed the way the screen shows it -- `9 000 000`, `12,50` or
+ * `12.50` -- into stored minor units. Null when it is not a non-negative
+ * amount with at most the currency's own decimal places.
+ *
+ * The inverse of {@link formatAmount}, from the same table: `9 000 000` typed
+ * against UZS is stored as 9000000 and never multiplied by a hundred.
+ */
+export function parseAmount(text: string, currency: string): number | null {
+  const decimals = DISPLAY_DECIMALS[currency];
+  if (decimals === undefined) {
+    throw new UnknownCurrencyError(currency);
+  }
+  const compact = text.replace(/\s/g, '').replace(',', '.');
+  const pattern = decimals === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`);
+  if (!pattern.test(compact)) {
+    return null;
+  }
+  const [whole, fraction = ''] = compact.split('.');
+  const minor = Number(whole) * 10 ** decimals + Number(fraction.padEnd(decimals, '0') || '0');
+  return Number.isSafeInteger(minor) ? minor : null;
+}

@@ -1,19 +1,29 @@
 <h1 class="q-title">{{ i18n.t('dualRunComparison.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('dualRunComparison.lead') }}</p>
 
-<form class="pickerForm" (submit)="search($event)">
-  <label class="field">
-    <span class="q-caption">{{ i18n.t('dualRunComparison.runId') }}</span>
-    <input class="q-body-sm" type="text" [value]="runId()" (input)="runId.set($any($event.target).value)" required />
-  </label>
-  <label class="field">
-    <span class="q-caption">{{ i18n.t('entitlements.tenantId') }}</span>
-    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" required />
-  </label>
-  <button type="submit" class="primary" [disabled]="!canSearch()">
-    {{ loading() ? i18n.t('tenants.loading') : i18n.t('dualRunComparison.search') }}
-  </button>
-</form>
+<app-migration-scope-picker (scopeChange)="chooseScope($event)" />
+
+@if (scope()) {
+  <form class="pickerForm" (submit)="search($event)">
+    @if (runs().length === 0) {
+      <p class="q-body-sm state">{{ i18n.t('dualRunComparison.noRuns') }}</p>
+    } @else {
+      <label class="field">
+        <span class="q-caption">{{ i18n.t('dualRunComparison.run') }}</span>
+        <select class="q-body-sm" name="run" (change)="runId.set($any($event.target).value)">
+          @for (run of runs(); track run.id) {
+            <option [value]="run.id" [selected]="run.id === runId()">
+              {{ i18n.dateTime(asDate(run.startedAt)) }} · {{ i18n.t(runStatusKey(run.status)) }}
+            </option>
+          }
+        </select>
+      </label>
+      <button type="submit" class="primary" [disabled]="!canSearch()">
+        {{ loading() ? i18n.t('tenants.loading') : i18n.t('dualRunComparison.search') }}
+      </button>
+    }
+  </form>
+}
 
 @if (loadError(); as message) {
   <p class="q-body-sm error">{{ message }}</p>

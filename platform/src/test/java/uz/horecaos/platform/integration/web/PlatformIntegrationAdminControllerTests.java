@@ -101,6 +101,32 @@ class PlatformIntegrationAdminControllerTests {
                 .isNotEqualTo(firstPage.items().getFirst().id());
     }
 
+    @Test
+    void providerEnvironmentsNamesEachApprovedEndpointWithoutItsHost() {
+        installation(tenant("envs", "Env Tenant"), "PAYME", "Payme");
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments
+                    (code, provider_category, provider_type, base_url, is_production, egress_allowlist, notes)
+                VALUES ('payme-live', 'PAYMENT', 'PAYME', 'https://checkout.paycom.uz', true,
+                        'checkout.paycom.uz', 'The live merchant API')
+                """).update();
+
+        var environments = controller.providerEnvironments();
+
+        assertThat(environments)
+                .as("live before sandbox within a provider, so the likelier choice comes first")
+                .extracting(PlatformIntegrationAdminController.ProviderEnvironmentView::code)
+                .containsExactly("payme-live", "sandbox-PAYME");
+        assertThat(environments.getFirst().production()).isTrue();
+        assertThat(environments.getFirst().category()).isEqualTo("PAYMENT");
+        assertThat(environments.getFirst().notes()).isEqualTo("The live merchant API");
+        assertThat(java.util.Arrays.stream(
+                                PlatformIntegrationAdminController.ProviderEnvironmentView.class.getRecordComponents())
+                        .map(java.lang.reflect.RecordComponent::getName))
+                .as("choosing an endpoint needs its name, not where it points")
+                .doesNotContain("baseUrl", "egressAllowlist");
+    }
+
     private UUID tenant(String slug, String name) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""

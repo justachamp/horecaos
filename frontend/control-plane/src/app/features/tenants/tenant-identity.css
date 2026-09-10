@@ -47,3 +47,36 @@
   color: var(--q-ink-subtle);
   max-width: 640px;
 }
+
+.linkForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.linkForm button {
+  align-self: flex-start;
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.error {
+  color: var(--q-error-text);
+}

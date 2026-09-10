@@ -59,3 +59,121 @@
   color: var(--q-ink-subtle);
   cursor: default;
 }
+
+.filter {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queue {
+  margin-top: 28px;
+}
+
+.count {
+  color: var(--q-ink-subtle);
+  font-size: 14px;
+  margin-left: 6px;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.id {
+  display: block;
+  margin-top: 2px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actions button,
+.actForm button {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.actForm button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.openRow td {
+  background: var(--q-surface-1, var(--q-canvas));
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.detail dt,
+.lastErrorLabel {
+  color: var(--q-ink-subtle);
+}
+
+.detail dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.lastErrorLabel {
+  margin: 12px 0 4px;
+}
+
+.lastError {
+  font-family: var(--q-font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.actForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input,
+.field select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.notice {
+  margin-top: 12px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-error-text);
+}

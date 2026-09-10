@@ -103,3 +103,57 @@
   color: var(--q-error-text);
   border-color: var(--q-error);
 }
+
+.error {
+  color: var(--q-error-text);
+}
+
+.pill-PROVISIONING {
+  color: var(--q-warning-text);
+  border-color: var(--q-warning);
+}
+
+.statusForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+}
+
+.formActions button,
+.statusAction {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+/* Suspending a tenant stops their business, so it reads as the one dangerous control here. */
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.formActions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

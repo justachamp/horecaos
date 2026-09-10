@@ -1,32 +1,41 @@
-import { KeyValuePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { Colleagues } from '../../shared/colleagues';
+import { TenantDirectory } from '../../shared/tenant-directory';
+import { TenantPicker } from '../../shared/tenant-picker';
 import {
   CommerceApi,
   EntitlementSnapshot,
+  PlanDetail,
+  ResolvedEntitlement,
   SubscriptionView,
-  UsageView,
 } from './commerce-api';
 
+/** A live plan version a tenant can be put on, named the way the price list names it. */
+interface PlanChoice {
+  readonly planVersionId: string;
+  readonly label: string;
+}
+
 /**
- * IA 5.3 Entitlements -- what each tenant is entitled to, its grants, module
- * locks, and overrides (ADR 0021's entitlement state, the
- * `permission x entitlement x business type` composition).
+ * IA 5.3 Entitlements -- one tenant's subscription and everything it is
+ * entitled to, with where each value came from.
  *
- * Cross-tenant by nature, unlike most IA §2 screens: a tenant id is typed or
- * arrives via `?tenantId=` from IA 2.2's own "Open in Entitlements" link,
- * because there is no single browsable list of subscriptions here (only a
- * per-tenant read).
+ * Staff put a tenant on a plan, move its subscription through the lifecycle
+ * (the server says which moves are allowed from where it is now), and grant
+ * time-bounded overrides. Every one of those asks for a reason, and an
+ * override also names the colleague who approved it.
  */
 @Component({
   selector: 'app-entitlements',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [KeyValuePipe],
+  imports: [TenantPicker, RouterLink],
   templateUrl: './entitlements.html',
   styleUrl: './entitlements.css',
 })
@@ -34,26 +43,71 @@ export class Entitlements {
   protected readonly i18n = inject(I18nService);
   protected readonly asDate = asDate;
   private readonly commerceApi = inject(CommerceApi);
+  private readonly colleagues = inject(Colleagues);
   private readonly route = inject(ActivatedRoute);
   protected readonly session = inject(SessionContextService);
 
-  protected readonly tenantId = signal(this.route.snapshot.queryParamMap.get('tenantId') ?? '');
+  private readonly directory = inject(TenantDirectory);
+  /** From a `?tenantId=` link first, else the tenant chosen last on any screen. */
+  protected readonly tenantId = signal(
+    this.route.snapshot.queryParamMap.get('tenantId') ?? this.directory.selected(),
+  );
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
   protected readonly snapshot = signal<EntitlementSnapshot | null>(null);
   protected readonly subscription = signal<SubscriptionView | null>(null);
-  protected readonly usage = signal<UsageView | null>(null);
+  protected readonly plans = signal<readonly PlanDetail[]>([]);
+  protected readonly approvers = signal<readonly string[]>([]);
+
+  protected readonly busy = signal(false);
+  protected readonly actionError = signal<string | null>(null);
+  protected readonly actionMessage = signal<string | null>(null);
+
+  protected readonly startPlan = signal('');
+  protected readonly startTrialDays = signal('');
+  protected readonly startReason = signal('');
+
+  protected readonly nextStatus = signal('');
+  protected readonly suspensionReason = signal('');
+  protected readonly cancelAt = signal('');
+  protected readonly transitionReason = signal('');
 
   protected readonly overrideKey = signal('');
   protected readonly overrideLimit = signal('');
+  protected readonly overrideEnabled = signal(true);
   protected readonly overrideValidUntil = signal('');
   protected readonly overrideApprovedBy = signal('');
-  protected readonly overrideSubmitting = signal(false);
-  protected readonly overrideMessage = signal<string | null>(null);
+  protected readonly overrideReason = signal('');
+
+  /** Live versions only: a tenant is never put on a draft. */
+  protected readonly planChoices = computed<readonly PlanChoice[]>(() =>
+    this.plans().flatMap((plan) =>
+      plan.versions
+        .filter((version) => version.status === 'ACTIVE')
+        .map((version) => ({
+          planVersionId: version.planVersionId,
+          label: `${plan.name} v${version.versionNumber} · ${this.i18n.money(version.price)}`,
+        })),
+    ),
+  );
+
+  protected readonly overrideTarget = computed<ResolvedEntitlement | null>(
+    () => this.snapshot()?.entitlements.find((line) => line.entitlementKey === this.overrideKey()) ?? null,
+  );
 
   constructor() {
     if (this.tenantId().length > 0) {
+      void this.load();
+    }
+  }
+
+  /** A tenant chosen in the picker: shown at once, nothing to press. */
+  protected chooseTenant(tenantId: string): void {
+    this.tenantId.set(tenantId);
+    this.actionMessage.set(null);
+    this.actionError.set(null);
+    if (tenantId.length > 0) {
       void this.load();
     }
   }
@@ -66,14 +120,20 @@ export class Entitlements {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      const [snapshot, subscription, usage] = await Promise.all([
+      const [snapshot, subscription] = await Promise.all([
         this.commerceApi.getEntitlements(tenantId),
         this.commerceApi.getSubscription(tenantId),
-        this.commerceApi.getUsage(tenantId),
       ]);
       this.snapshot.set(snapshot);
       this.subscription.set(subscription);
-      this.usage.set(usage);
+      this.nextStatus.set('');
+      if (this.plans().length === 0) {
+        // Names the plan a subscription is on; the screen still works without it.
+        this.plans.set(await this.commerceApi.listPlansWithDrafts().catch(() => []));
+      }
+      if (this.approvers().length === 0 && this.session.has('COMMERCIAL_OVERRIDE_APPROVE')) {
+        this.approvers.set(await this.colleagues.others());
+      }
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
@@ -81,38 +141,164 @@ export class Entitlements {
     }
   }
 
-  protected canSubmitOverride(): boolean {
+  protected planName(planVersionId: string): string {
+    for (const plan of this.plans()) {
+      const version = plan.versions.find((candidate) => candidate.planVersionId === planVersionId);
+      if (version) {
+        return `${plan.name} v${version.versionNumber}`;
+      }
+    }
+    return planVersionId;
+  }
+
+  protected statusKey(status: string): MessageKey {
+    return `commerce.subscription.${status}` as MessageKey;
+  }
+
+  protected modeKey(mode: string): MessageKey {
+    return `commerce.mode.${mode}` as MessageKey;
+  }
+
+  protected sourceKey(source: string): MessageKey {
+    return `commerce.source.${source}` as MessageKey;
+  }
+
+  protected value(line: ResolvedEntitlement): string {
+    if (line.enabled !== null) {
+      return this.i18n.t(line.enabled ? 'commerce.on' : 'commerce.off');
+    }
+    return line.limit === null ? this.i18n.t('commerce.unlimited') : String(line.limit);
+  }
+
+  // ------------------------------------------------------------ subscribe
+
+  protected canStart(): boolean {
+    const trial = this.startTrialDays().trim();
     return (
-      !this.overrideSubmitting() &&
-      this.overrideKey().trim().length > 0 &&
-      this.overrideValidUntil().trim().length > 0 &&
-      this.overrideApprovedBy().trim().length > 0
+      !this.busy() &&
+      this.startPlan().length > 0 &&
+      (trial.length === 0 || /^\d{1,3}$/.test(trial)) &&
+      this.startReason().trim().length > 0
+    );
+  }
+
+  protected async start(event: Event): Promise<void> {
+    event.preventDefault();
+    if (!this.canStart()) {
+      return;
+    }
+    const trial = this.startTrialDays().trim();
+    await this.run(async () => {
+      await this.commerceApi.startSubscription(
+        this.tenantId(),
+        this.startPlan(),
+        this.startReason().trim(),
+        trial.length > 0 ? Number(trial) : undefined,
+      );
+      this.startPlan.set('');
+      this.startTrialDays.set('');
+      this.startReason.set('');
+      return this.i18n.t('entitlements.start.done');
+    });
+  }
+
+  // ------------------------------------------------------------ transition
+
+  /** Expiring and terminating end the subscription; only a new one restarts it. */
+  protected isTerminal(status: string): boolean {
+    return status === 'EXPIRED' || status === 'TERMINATED';
+  }
+
+  protected canTransition(): boolean {
+    const next = this.nextStatus();
+    return (
+      !this.busy() &&
+      next.length > 0 &&
+      this.transitionReason().trim().length > 0 &&
+      (next !== 'SUSPENDED' || this.suspensionReason().trim().length > 0) &&
+      (next !== 'CANCELLATION_SCHEDULED' || this.cancelAt().length > 0)
+    );
+  }
+
+  protected async transition(event: Event): Promise<void> {
+    event.preventDefault();
+    const live = this.subscription();
+    if (!this.canTransition() || live === null) {
+      return;
+    }
+    const next = this.nextStatus();
+    await this.run(async () => {
+      await this.commerceApi.transitionSubscription(this.tenantId(), {
+        status: next,
+        // The version read with the subscription: a colleague's move in between is refused, not overwritten.
+        expectedVersion: live.version,
+        suspensionReason: next === 'SUSPENDED' ? this.suspensionReason().trim() : undefined,
+        cancelAt: next === 'CANCELLATION_SCHEDULED' ? new Date(this.cancelAt()).toISOString() : undefined,
+        reason: this.transitionReason().trim(),
+      });
+      this.suspensionReason.set('');
+      this.cancelAt.set('');
+      this.transitionReason.set('');
+      return this.i18n.t('entitlements.transition.done', { status: this.i18n.t(this.statusKey(next)) });
+    });
+  }
+
+  // ------------------------------------------------------------ override
+
+  protected canOverride(): boolean {
+    const target = this.overrideTarget();
+    if (target === null || this.busy()) {
+      return false;
+    }
+    const counted = target.enabled === null;
+    return (
+      (!counted || /^\d+$/.test(this.overrideLimit().trim())) &&
+      this.overrideValidUntil().length > 0 &&
+      this.overrideApprovedBy().trim().length > 0 &&
+      this.overrideReason().trim().length > 0
     );
   }
 
   protected async submitOverride(event: Event): Promise<void> {
     event.preventDefault();
-    if (!this.canSubmitOverride()) {
+    const target = this.overrideTarget();
+    if (!this.canOverride() || target === null) {
       return;
     }
-    this.overrideSubmitting.set(true);
-    this.overrideMessage.set(null);
-    try {
-      const limit = this.overrideLimit().trim();
-      await this.commerceApi.grantOverride(this.tenantId().trim(), {
-        entitlementKey: this.overrideKey().trim(),
-        limit: limit.length > 0 ? Number(limit) : undefined,
-        enabled: limit.length === 0 ? true : undefined,
+    const counted = target.enabled === null;
+    await this.run(async () => {
+      await this.commerceApi.grantOverride(this.tenantId(), {
+        entitlementKey: target.entitlementKey,
+        limit: counted ? Number(this.overrideLimit().trim()) : undefined,
+        enabled: counted ? undefined : this.overrideEnabled(),
         validUntil: new Date(this.overrideValidUntil()).toISOString(),
         approvedBy: this.overrideApprovedBy().trim(),
-        reason: this.i18n.t('entitlements.override.reason'),
+        reason: this.overrideReason().trim(),
       });
-      this.overrideMessage.set(this.i18n.t('entitlements.override.success'));
+      this.overrideKey.set('');
+      this.overrideLimit.set('');
+      this.overrideValidUntil.set('');
+      this.overrideReason.set('');
+      return this.i18n.t('entitlements.override.success');
+    });
+  }
+
+  /** Runs one write, then re-reads the tenant so the screen shows what the server now holds. */
+  private async run(write: () => Promise<string>): Promise<void> {
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.actionMessage.set(null);
+    try {
+      const message = await write();
       await this.load();
+      this.actionMessage.set(message);
     } catch (error) {
-      this.overrideMessage.set(this.i18n.describe(error as ApiError));
+      this.actionError.set(this.i18n.describe(error as ApiError));
+      if ((error as ApiError).code === 'STALE_VERSION') {
+        await this.load();
+      }
     } finally {
-      this.overrideSubmitting.set(false);
+      this.busy.set(false);
     }
   }
 }

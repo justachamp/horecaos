@@ -2,12 +2,31 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
+import { APP_CONFIG } from '../../core/config/app-config';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { LegalEntityView, TenantsApi } from './tenants-api';
+import {
+  BrandView,
+  LegalEntityView,
+  LocationFiscalAssignmentView,
+  LocationView,
+  TenantsApi,
+} from './tenants-api';
+
+/** A location as the assign form offers it: under its brand, never as a bare id. */
+interface PickableLocation {
+  readonly brand: BrandView;
+  readonly location: LocationView;
+}
 
 /**
  * IA 2.4 Legal entities & tax identities -- the INN/legal-entity registry
- * behind branches, and which entity each branch fiscalizes under (ADR 0038).
+ * behind branches, and which entity each branch fiscalizes under.
+ *
+ * The assign form offers the tenant's own locations, grouped by brand. It used
+ * to ask for a brand id and a location id typed by hand, which nobody setting
+ * up a tenant has to hand; the section below the registry shows where each
+ * location stands, because "which entity does this branch sell as" is the
+ * question an operator arrives with -- usually from a failed onboarding step.
  */
 @Component({
   selector: 'app-tenant-legal-entities',
@@ -19,6 +38,7 @@ export class TenantLegalEntities {
   protected readonly i18n = inject(I18nService);
   private readonly tenantsApi = inject(TenantsApi);
   private readonly route = inject(ActivatedRoute);
+  private readonly config = inject(APP_CONFIG);
 
   protected readonly tenantId = this.route.snapshot.paramMap.get('tenantId')!;
 
@@ -35,8 +55,15 @@ export class TenantLegalEntities {
   protected readonly vatRegistered = signal(false);
 
   protected readonly assigningEntityId = signal<string | null>(null);
-  protected readonly assignBrandId = signal('');
-  protected readonly assignLocationId = signal('');
+  /** `brandId/locationId`, as the location picker's value. */
+  protected readonly assignLocationKey = signal('');
+  protected readonly assignDone = signal<string | null>(null);
+
+  protected readonly locations = signal<readonly PickableLocation[]>([]);
+  /** Every location's assignments, most recent first, keyed by location id. */
+  protected readonly assignments = signal<ReadonlyMap<string, readonly LocationFiscalAssignmentView[]>>(new Map());
+  protected readonly historyOpen = signal<string | null>(null);
+  protected readonly detailsOpen = signal<string | null>(null);
   protected readonly assignEffectiveFrom = signal('');
   protected readonly assignSubmitting = signal(false);
 
@@ -48,12 +75,59 @@ export class TenantLegalEntities {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      this.entities.set(await this.tenantsApi.getLegalEntities(this.tenantId));
+      const [entities, brands] = await Promise.all([
+        this.tenantsApi.getLegalEntities(this.tenantId),
+        this.tenantsApi.getBrands(this.tenantId),
+      ]);
+      this.entities.set(entities);
+      const perBrand = await Promise.all(
+        brands.map(async (brand) =>
+          (await this.tenantsApi.getLocations(this.tenantId, brand.id)).map((location) => ({ brand, location })),
+        ),
+      );
+      this.locations.set(perBrand.flat());
+      await Promise.all(this.locations().map((pick) => this.loadAssignments(pick)));
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async loadAssignments(pick: PickableLocation): Promise<void> {
+    const history = await this.tenantsApi.getLocationAssignments(this.tenantId, pick.brand.id, pick.location.id);
+    this.assignments.update((current) => new Map(current).set(pick.location.id, history));
+  }
+
+  /** Today in the console's timezone, as the yyyy-mm-dd a date input takes. */
+  private today(): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: this.config.displayTimeZone }).format(new Date());
+  }
+
+  /** The assignment in force today, if any: started, and not yet ended. */
+  protected currentAssignment(locationId: string): LocationFiscalAssignmentView | null {
+    const today = this.today();
+    return (
+      (this.assignments().get(locationId) ?? []).find(
+        (a) => a.effectiveFrom <= today && (a.effectiveUntil === null || a.effectiveUntil > today),
+      ) ?? null
+    );
+  }
+
+  protected history(locationId: string): readonly LocationFiscalAssignmentView[] {
+    return this.assignments().get(locationId) ?? [];
+  }
+
+  protected entity(entityId: string): LegalEntityView | undefined {
+    return this.entities().find((e) => e.id === entityId);
+  }
+
+  protected toggleHistory(locationId: string): void {
+    this.historyOpen.update((open) => (open === locationId ? null : locationId));
+  }
+
+  protected toggleDetails(entityId: string): void {
+    this.detailsOpen.update((open) => (open === entityId ? null : entityId));
   }
 
   protected openRegister(): void {
@@ -113,6 +187,9 @@ export class TenantLegalEntities {
 
   protected openAssign(entityId: string): void {
     this.assigningEntityId.set(entityId);
+    this.assignLocationKey.set('');
+    this.assignEffectiveFrom.set(this.today());
+    this.assignDone.set(null);
     this.actionError.set(null);
   }
 
@@ -123,8 +200,7 @@ export class TenantLegalEntities {
   protected canSubmitAssign(): boolean {
     return (
       !this.assignSubmitting() &&
-      this.assignBrandId().trim().length > 0 &&
-      this.assignLocationId().trim().length > 0 &&
+      this.assignLocationKey().length > 0 &&
       this.assignEffectiveFrom().trim().length > 0
     );
   }
@@ -137,16 +213,22 @@ export class TenantLegalEntities {
     }
     this.assignSubmitting.set(true);
     this.actionError.set(null);
+    const pick = this.locations().find(
+      (candidate) => `${candidate.brand.id}/${candidate.location.id}` === this.assignLocationKey(),
+    );
+    if (pick === undefined) {
+      return;
+    }
     try {
       await this.tenantsApi.assignLegalEntity(this.tenantId, entityId, {
-        brandId: this.assignBrandId().trim(),
-        locationId: this.assignLocationId().trim(),
+        brandId: pick.brand.id,
+        locationId: pick.location.id,
         effectiveFrom: this.assignEffectiveFrom().trim(),
       });
       this.assigningEntityId.set(null);
-      this.assignBrandId.set('');
-      this.assignLocationId.set('');
-      this.assignEffectiveFrom.set('');
+      this.assignLocationKey.set('');
+      this.assignDone.set(this.i18n.t('legalEntities.assign.done'));
+      await this.loadAssignments(pick);
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));
     } finally {

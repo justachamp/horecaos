@@ -120,3 +120,45 @@
   color: var(--q-ink-subtle);
   cursor: default;
 }
+
+.stepKey,
+.raw {
+  display: block;
+  margin-top: 2px;
+}
+
+.hintLink {
+  margin-left: 6px;
+  color: var(--q-primary);
+  text-decoration: none;
+}
+
+.validateButton {
+  border: 1px solid var(--q-hairline);
+  background: none;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--q-ink);
+  margin-top: 8px;
+}
+
+.checks {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.danger {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}

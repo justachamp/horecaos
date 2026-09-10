@@ -85,6 +85,22 @@ export interface LocationView {
   readonly version: number;
 }
 
+/**
+ * Where a location is and how to reach it, sent whole: moving a pin while
+ * leaving a contradicting address behind it is the mistake a partial update
+ * would allow. Omit `coordinateSource` to let the platform infer it.
+ */
+export interface DescribeLocationRequest {
+  readonly addressLine: string | null;
+  readonly district: string | null;
+  readonly city: string | null;
+  readonly landmark: string | null;
+  readonly contactPhone: string | null;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly coordinateSource?: 'OPERATOR_PIN';
+}
+
 export interface CreateLocationRequest {
   readonly code: string;
   readonly slug: string;
@@ -165,6 +181,27 @@ export interface OnboardingRunView {
   readonly outstandingRequired: readonly string[];
 }
 
+/** OnboardingService.ValidationOutcome: every read-only check, run now. Nothing is written. */
+export interface ValidationOutcome {
+  readonly allPassed: boolean;
+  readonly checks: readonly {
+    readonly stepKey: string;
+    readonly passed: boolean;
+    readonly errorCode: string | null;
+    readonly detail: string | null;
+  }[];
+}
+
+/** OnboardingTemplateService.TemplateView. */
+export interface OnboardingTemplateView {
+  readonly id: string;
+  readonly code: string;
+  readonly version: number;
+  readonly status: string;
+  readonly description: string;
+  readonly requiredSteps: readonly string[];
+}
+
 /** OnboardingService.ActivationOutcome. */
 export interface ActivationOutcome {
   readonly activated: boolean;
@@ -198,6 +235,32 @@ export class TenantsApi {
 
   async getTenant(tenantId: string): Promise<TenantView> {
     return firstValueFrom(this.api.get<TenantView>(`/api/v1/control-plane/tenants/${tenantId}`));
+  }
+
+  /** Platform admins only. A tenant's link is permanent: a different organization is refused. */
+  async linkKeycloakOrganization(tenantId: string, organizationId: string): Promise<TenantView> {
+    return firstValueFrom(
+      this.api.put<TenantView>(`/api/v1/control-plane/tenants/${tenantId}/identity/keycloak-organization`, {
+        organizationId,
+      }),
+    );
+  }
+
+  /**
+   * Platform admins only. Narrows everyone at the tenant to read-only access
+   * and disables its sign-in organization; the reason goes to the audit log.
+   */
+  async suspendTenant(tenantId: string, reason: string): Promise<TenantView> {
+    return firstValueFrom(
+      this.api.post<TenantView>(`/api/v1/control-plane/tenants/${tenantId}/suspend`, { reason }),
+    );
+  }
+
+  /** Platform admins only; only a SUSPENDED tenant can be reactivated. */
+  async reactivateTenant(tenantId: string, reason: string): Promise<TenantView> {
+    return firstValueFrom(
+      this.api.post<TenantView>(`/api/v1/control-plane/tenants/${tenantId}/reactivate`, { reason }),
+    );
   }
 
   async getBrands(tenantId: string): Promise<BrandView[]> {
@@ -282,6 +345,19 @@ export class TenantsApi {
     );
   }
 
+  async describeLocation(
+    tenantId: string,
+    location: Pick<LocationView, 'id' | 'brandId'>,
+    request: DescribeLocationRequest,
+  ): Promise<LocationView> {
+    return firstValueFrom(
+      this.api.put<LocationView>(
+        `/api/v1/control-plane/tenants/${tenantId}/brands/${location.brandId}/locations/${location.id}/place`,
+        request,
+      ),
+    );
+  }
+
   async deleteLocation(
     tenantId: string,
     location: Pick<LocationView, 'id' | 'brandId' | 'version'>,
@@ -300,6 +376,19 @@ export class TenantsApi {
       this.api.post<LocationView>(
         `/api/v1/control-plane/tenants/${tenantId}/brands/${brandId}/locations/${locationId}/activate`,
         {},
+      ),
+    );
+  }
+
+  /** Most recent first; an open-ended one (no `effectiveUntil`) is the current seller. */
+  async getLocationAssignments(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+  ): Promise<LocationFiscalAssignmentView[]> {
+    return firstValueFrom(
+      this.api.get<LocationFiscalAssignmentView[]>(
+        `/api/v1/control-plane/tenants/${tenantId}/legal-entities/brands/${brandId}/locations/${locationId}/assignments`,
       ),
     );
   }
@@ -390,6 +479,29 @@ export class TenantsApi {
         { reason },
       ),
     );
+  }
+
+  /** A fresh idempotency key per call, so every press is a fresh answer rather than a replay. */
+  async validateOnboarding(tenantId: string, runId: string): Promise<ValidationOutcome> {
+    return firstValueFrom(
+      this.api.post<ValidationOutcome>(
+        `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs/${runId}/validate`,
+        {},
+      ),
+    );
+  }
+
+  /** Refused once the run is ACTIVE or FAILED: a failed run is resumed, never abandoned. */
+  async cancelOnboarding(tenantId: string, runId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<unknown>(`/api/v1/control-plane/tenants/${tenantId}/onboarding-runs/${runId}/cancel`, {
+        reason,
+      }),
+    );
+  }
+
+  async defaultOnboardingTemplate(): Promise<OnboardingTemplateView> {
+    return firstValueFrom(this.api.get<OnboardingTemplateView>('/api/v1/control-plane/onboarding-templates/default'));
   }
 
   async activateOnboarding(

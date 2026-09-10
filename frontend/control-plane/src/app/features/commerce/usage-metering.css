@@ -4,35 +4,6 @@
   max-width: 640px;
 }
 
-.picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.picker input {
-  border: 1px solid var(--q-hairline);
-  padding: 8px;
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  min-width: 280px;
-}
-
-.picker button {
-  border: none;
-  background: var(--q-primary);
-  color: var(--q-inverse-ink);
-  padding: 8px 16px;
-  cursor: pointer;
-}
-
-.picker button:disabled {
-  background: var(--q-hairline);
-  color: var(--q-ink-subtle);
-  cursor: default;
-}
-
 .state {
   margin-top: 24px;
   color: var(--q-ink-muted);
@@ -40,6 +11,38 @@
 
 .state.error {
   color: var(--q-error-text);
+}
+
+.state.ok {
+  color: var(--q-success-text);
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.toolbar {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.warning {
+  margin-top: 12px;
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+  padding: 8px 12px;
+}
+
+.warning p,
+.warning ul {
+  margin: 0;
+}
+
+.scroll {
+  overflow-x: auto;
 }
 
 .table {
@@ -65,4 +68,69 @@
 .table th {
   color: var(--q-ink-subtle);
   font-weight: 400;
+}
+
+.table .num {
+  text-align: right;
+}
+
+.adjustForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adjustForm p {
+  margin: 0;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineForm input {
+  flex: 1 1 280px;
+}
+
+input,
+select {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+button {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+  padding: 6px 12px;
+}
+
+button:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
 }
