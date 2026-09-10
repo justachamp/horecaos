@@ -57,108 +57,21 @@
 	}
 }
 
-{$HORECAOS_API_ORIGIN} {
-	tls {$HORECAOS_TLS_MODE}
-
-	encode zstd gzip
-
-	handle /actuator/health/readiness {
-		reverse_proxy platform-app:8080
-	}
-
-	handle /actuator/health/customer {
-		reverse_proxy platform-app:8080
-	}
-
-	handle /actuator/* {
-		respond 404
-	}
-
-	# -------------------------------------------------------------------
-	# ADR 0023's open reverse-proxy checklist item: the Payme allowlist,
-	# body caps, and per-binding/per-IP rate limits. `handle` blocks are
-	# mutually exclusive and tried in the order written (Caddy's own
-	# semantics), so the most specific paths have to come before the
-	# catch-all at the bottom.
-	# -------------------------------------------------------------------
-
-	# Payme's fifteen published source addresses, defence in depth and never
-	# the only check (ADR 0013, ADR 0023) — PaymeEndpointSecurity's own
-	# comment names the same addresses and the same caveat. This is
-	# CONFIGURATION, not a hard-coded list: HORECAOS_PAYME_ALLOWED_IPS must
-	# be set to Payme's real, currently-published addresses by whoever
-	# operates this file. It is deliberately NOT defaulted to those
-	# addresses here, because a value invented by this change and never
-	# checked against Payme's own current publication is worse than no
-	# allowlist at all — it would look configured while quietly being wrong.
+(storefront_api) {
+	# Every route the storefront app calls, shared by BOTH origins that serve
+	# it: the API origin, and the storefront's own origin, which the app calls
+	# same-origin at /api/v1 (the API origin refuses cross-origin calls from
+	# the storefront). Defined once so the rate limits below cannot drift
+	# between the two. Every route is a NAMED matcher on purpose: Caddy
+	# re-sorts handle blocks that use a single path matcher by specificity,
+	# while named-matcher blocks keep the order written -- so a catch-all
+	# written as `handle /api/v1/storefront/*` could be sorted ahead of the
+	# rate-limited groups and route around every one of them.
 	#
-	# deploy/compose.production.yml defaults this variable to 0.0.0.0/32 — a
-	# reserved, non-routable address nothing ever calls from — specifically
-	# so that an unset allowlist FAILS CLOSED: every Payme callback is
-	# rejected 403 until the real list is supplied, rather than the
-	# allowlist silently matching everything (open) or the edge refusing to
-	# start at all (which would take down the storefront, auth, and every
-	# other origin over one payment provider's address list). A 403 on every
-	# Payme call is loud — Payme's own dashboard shows it immediately — and
-	# is the correct failure direction for a check that exists to keep this
-	# endpoint from being the whole of its own authentication.
-	@payme_not_allowed not remote_ip {$HORECAOS_PAYME_ALLOWED_IPS}
-
-	handle /providers/payme/* {
-		# 64 KiB, matching PaymeMerchantApiController.MAX_REQUEST_BYTES
-		# exactly. The controller already refuses a body past this size; the
-		# proxy enforcing the same ceiling means an oversized body is
-		# dropped before it is streamed to the JVM at all.
-		request_body {
-			max_size 65536
-		}
-
-		# Keyed by the exact path, which already contains the {binding}
-		# segment — ADR 0023 asks for per-binding limits so one
-		# misconfigured or looping cashbox cannot exhaust the endpoint's
-		# capacity for every other tenant sharing it. 60/minute is generous
-		# headroom over one restaurant's real transaction volume at its
-		# busiest and still bounds a retry storm.
-		rate_limit {
-			zone payme_by_binding {
-				key {http.request.uri.path}
-				events 60
-				window 1m
-			}
-		}
-
-		respond @payme_not_allowed 403
-
-		import platform_app_upstream
-	}
-
-	# Click publishes no source-address list (ADR 0023), so it gets no
-	# allowlist and its MD5 signature, verified before any database access,
-	# is the whole of its authentication — unchanged by this file.
-	@click_callbacks path /providers/click/*/prepare /providers/click/*/complete
-
-	handle @click_callbacks {
-		# Same ceiling and the same reasoning as Payme's: both are small
-		# fixed-shape provider callbacks with no legitimate reason to be
-		# large, and ClickShopApiController never reads past what an
-		# ordinary prepare/complete call needs.
-		request_body {
-			max_size 65536
-		}
-
-		# Per-binding, same reasoning as Payme's zone above — the path
-		# carries {bindingRef}, so keying on it isolates one cashbox's retry
-		# storm from every other tenant's.
-		rate_limit {
-			zone click_by_binding {
-				key {http.request.uri.path}
-				events 60
-				window 1m
-			}
-		}
-
-		import platform_app_upstream
-	}
+	# Rate-limit counters are per origin: a client using both origins gets
+	# each budget twice. Accepted -- the storefront app uses only its own
+	# origin, so the second budget is available only to something that is
+	# not the storefront, and every limit here still bounds it.
 
 	# The storefront's pre-account browse surface (ADR 0016): the published
 	# menu, its pictures, pickup locations, FAQ, social links, terms, and
@@ -328,6 +241,126 @@
 		import platform_app_upstream
 	}
 
+	# The rest of the storefront surface -- cart, checkout, orders and the
+	# signed-in customer's own records -- authenticated by the customer
+	# session rather than rate-limited per path, with the same body cap the
+	# API origin's own catch-all applies. Named, and last, so it can only
+	# match what none of the groups above claimed.
+	@storefront_rest path /api/v1/storefront/*
+	handle @storefront_rest {
+		request_body {
+			max_size 2097152
+		}
+
+		import platform_app_upstream
+	}
+}
+
+{$HORECAOS_API_ORIGIN} {
+	tls {$HORECAOS_TLS_MODE}
+
+	encode zstd gzip
+
+	handle /actuator/health/readiness {
+		reverse_proxy platform-app:8080
+	}
+
+	handle /actuator/health/customer {
+		reverse_proxy platform-app:8080
+	}
+
+	handle /actuator/* {
+		respond 404
+	}
+
+	# -------------------------------------------------------------------
+	# ADR 0023's open reverse-proxy checklist item: the Payme allowlist,
+	# body caps, and per-binding/per-IP rate limits. `handle` blocks are
+	# mutually exclusive and tried in the order written (Caddy's own
+	# semantics), so the most specific paths have to come before the
+	# catch-all at the bottom.
+	# -------------------------------------------------------------------
+
+	# Payme's fifteen published source addresses, defence in depth and never
+	# the only check (ADR 0013, ADR 0023) — PaymeEndpointSecurity's own
+	# comment names the same addresses and the same caveat. This is
+	# CONFIGURATION, not a hard-coded list: HORECAOS_PAYME_ALLOWED_IPS must
+	# be set to Payme's real, currently-published addresses by whoever
+	# operates this file. It is deliberately NOT defaulted to those
+	# addresses here, because a value invented by this change and never
+	# checked against Payme's own current publication is worse than no
+	# allowlist at all — it would look configured while quietly being wrong.
+	#
+	# deploy/compose.production.yml defaults this variable to 0.0.0.0/32 — a
+	# reserved, non-routable address nothing ever calls from — specifically
+	# so that an unset allowlist FAILS CLOSED: every Payme callback is
+	# rejected 403 until the real list is supplied, rather than the
+	# allowlist silently matching everything (open) or the edge refusing to
+	# start at all (which would take down the storefront, auth, and every
+	# other origin over one payment provider's address list). A 403 on every
+	# Payme call is loud — Payme's own dashboard shows it immediately — and
+	# is the correct failure direction for a check that exists to keep this
+	# endpoint from being the whole of its own authentication.
+	@payme_not_allowed not remote_ip {$HORECAOS_PAYME_ALLOWED_IPS}
+
+	handle /providers/payme/* {
+		# 64 KiB, matching PaymeMerchantApiController.MAX_REQUEST_BYTES
+		# exactly. The controller already refuses a body past this size; the
+		# proxy enforcing the same ceiling means an oversized body is
+		# dropped before it is streamed to the JVM at all.
+		request_body {
+			max_size 65536
+		}
+
+		# Keyed by the exact path, which already contains the {binding}
+		# segment — ADR 0023 asks for per-binding limits so one
+		# misconfigured or looping cashbox cannot exhaust the endpoint's
+		# capacity for every other tenant sharing it. 60/minute is generous
+		# headroom over one restaurant's real transaction volume at its
+		# busiest and still bounds a retry storm.
+		rate_limit {
+			zone payme_by_binding {
+				key {http.request.uri.path}
+				events 60
+				window 1m
+			}
+		}
+
+		respond @payme_not_allowed 403
+
+		import platform_app_upstream
+	}
+
+	# Click publishes no source-address list (ADR 0023), so it gets no
+	# allowlist and its MD5 signature, verified before any database access,
+	# is the whole of its authentication — unchanged by this file.
+	@click_callbacks path /providers/click/*/prepare /providers/click/*/complete
+
+	handle @click_callbacks {
+		# Same ceiling and the same reasoning as Payme's: both are small
+		# fixed-shape provider callbacks with no legitimate reason to be
+		# large, and ClickShopApiController never reads past what an
+		# ordinary prepare/complete call needs.
+		request_body {
+			max_size 65536
+		}
+
+		# Per-binding, same reasoning as Payme's zone above — the path
+		# carries {bindingRef}, so keying on it isolates one cashbox's retry
+		# storm from every other tenant's.
+		rate_limit {
+			zone click_by_binding {
+				key {http.request.uri.path}
+				events 60
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	import storefront_api
+
 	# ADR 0062's staff sign-in: a credential-guessing target the same way
 	# the customer identity endpoints are, gated here as a coarse backstop
 	# in front of Keycloak's own credential check. 10/minute/IP is comfortable
@@ -476,7 +509,25 @@
 
 	encode zstd gzip
 
-	reverse_proxy storefront-web:80
+	# The storefront calls its API same-origin, at /api/v1. Without this
+	# block every such call reached storefront-web, whose nginx answers any
+	# unknown path with index.html -- a 200 carrying HTML where the app
+	# expected JSON -- so the storefront could never load a menu under this
+	# file, and the failure looked like success at every HTTP layer.
+	import storefront_api
+
+	# Every OTHER API path is refused here, deliberately: control-plane,
+	# operations, provider callbacks and actuator belong to the API origin
+	# alone, and must not become reachable through the storefront's. A 404,
+	# not the SPA fallback, so a wrong path fails loudly instead of as HTML.
+	@api_elsewhere path /api/*
+	handle @api_elsewhere {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy storefront-web:80
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
