@@ -177,6 +177,42 @@ public class FailureOperationsService {
                 .list();
     }
 
+    /**
+     * Failed inbox messages across every consumer, as one worklist.
+     *
+     * <p>The per-consumer list needs a consumer's name, and nothing over HTTP
+     * said which consumers exist -- the handler registry knows, the API did
+     * not -- so a console could reach the outbox's failures and never the
+     * inbox's. One event appears once for each consumer that failed it, which
+     * is the point: each copy carries its own attempts and its own decision.
+     * The payload is absent, as it is from every projection here.
+     */
+    public List<InboxFailureSummary> listInboxFailuresAcrossConsumers(
+            @Nullable UUID tenantId, String status, int limit) {
+        return jdbc.sql("""
+                SELECT consumer_name, event_id AS id, tenant_id, event_type, status, attempt_count,
+                       last_error_code AS error_code, last_error
+                  FROM integration.inbox_messages
+                 WHERE status = :status
+                   AND (:tenantId::uuid IS NULL OR tenant_id = :tenantId)
+                 ORDER BY dead_lettered_at DESC NULLS LAST, received_at DESC
+                 LIMIT :limit
+                """)
+                .param("status", status)
+                .param("tenantId", tenantId)
+                .param("limit", limit)
+                .query((rs, n) -> new InboxFailureSummary(
+                        rs.getString("consumer_name"),
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("event_type"),
+                        rs.getString("status"),
+                        rs.getInt("attempt_count"),
+                        rs.getString("error_code"),
+                        rs.getString("last_error")))
+                .list();
+    }
+
     public List<FailureSummary> listInboxFailures(String consumerName, UUID tenantId, String status, int limit) {
         return jdbc.sql("""
                 SELECT event_id AS id, tenant_id, event_type, status, attempt_count,
@@ -693,6 +729,17 @@ public class FailureOperationsService {
     }
 
     /** A redacted view of failed work, safe to return to operations. */
+    /** {@link FailureSummary} with the consumer whose copy of the event failed. */
+    public record InboxFailureSummary(
+            String consumerName,
+            UUID id,
+            UUID tenantId,
+            String eventType,
+            String status,
+            int attemptCount,
+            String errorCode,
+            String lastError) {}
+
     public record FailureSummary(
             UUID id,
             UUID tenantId,

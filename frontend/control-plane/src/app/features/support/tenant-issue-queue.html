@@ -27,12 +27,12 @@
             </tr>
           </thead>
           <tbody>
-            @for (event of deadLetters(); track event.eventId) {
+            @for (event of deadLetters(); track event.id) {
               <tr>
-                <td class="q-body-sm q-tnum">{{ event.eventId }}</td>
+                <td class="q-body-sm q-tnum">{{ event.id }}</td>
                 <td class="q-body-sm">{{ event.eventType ?? '—' }}</td>
                 <td class="q-body-sm q-tnum">{{ event.attemptCount }}</td>
-                <td class="q-body-sm muted">{{ event.lastErrorCode ?? '—' }}</td>
+                <td class="q-body-sm muted">{{ event.errorCode ?? '—' }}</td>
               </tr>
             }
           </tbody>

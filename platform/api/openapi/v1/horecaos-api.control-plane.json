@@ -2848,6 +2848,38 @@
         },
         "type" : "object"
       },
+      "InboxFailureSummary" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "consumerName" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "InstallRequest" : {
         "properties" : {
           "category" : {
@@ -3708,6 +3740,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/FailureSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageInboxFailureSummary" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InboxFailureSummary"
             },
             "type" : "array"
           },
@@ -6709,6 +6755,51 @@
         },
         "summary" : "Every provider installation, across every tenant",
         "tags" : [ "Platform integration administration" ]
+      }
+    },
+    "/api/v1/control-plane/integration/failures/inbox" : {
+      "get" : {
+        "description" : "One worklist for the inbox side, each row naming the consumer whose copy failed; an event appears once per consumer that failed it. Retry and resolve stay per consumer. The payload is never returned.",
+        "operationId" : "inboxFailuresAcrossConsumers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "tenantId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "DEAD_LETTER",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInboxFailureSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List failed inbox messages across every consumer",
+        "tags" : [ "Integration failures" ]
       }
     },
     "/api/v1/control-plane/integration/failures/inbox/{consumerName}" : {

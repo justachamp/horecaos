@@ -18,9 +18,9 @@
         <p class="q-body-sm muted">{{ i18n.t('messageFlow.pending.empty') }}</p>
       } @else {
         <ul class="list">
-          @for (event of pending(); track event.eventId) {
+          @for (event of pending(); track event.id) {
             <li class="q-body-sm">
-              <span class="q-tnum">{{ event.eventId }}</span>
+              <span class="q-tnum">{{ event.id }}</span>
               <span class="muted">{{ event.eventType }}</span>
             </li>
           }
@@ -35,10 +35,10 @@
         <p class="q-body-sm muted">{{ i18n.t('messageFlow.deadLetter.empty') }}</p>
       } @else {
         <ul class="list">
-          @for (event of deadLettered(); track event.eventId) {
+          @for (event of deadLettered(); track event.id) {
             <li class="q-body-sm">
-              <span class="q-tnum">{{ event.eventId }}</span>
-              <span class="muted">{{ event.lastErrorCode }}</span>
+              <span class="q-tnum">{{ event.id }}</span>
+              <span class="muted">{{ event.errorCode }}</span>
             </li>
           }
         </ul>

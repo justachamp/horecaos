@@ -894,6 +894,17 @@ export interface InboxFailureDetail {
   updatedAt?: string;
 }
 
+export interface InboxFailureSummary {
+  attemptCount?: number;
+  consumerName?: string;
+  errorCode?: string;
+  eventType?: string;
+  id?: string;
+  lastError?: string;
+  status?: string;
+  tenantId?: string;
+}
+
 export interface InstallRequest {
   category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "OTHER";
   displayName: string;
@@ -1167,6 +1178,11 @@ export interface PageExportView {
 
 export interface PageFailureSummary {
   items?: Array<FailureSummary>;
+  nextCursor?: string;
+}
+
+export interface PageInboxFailureSummary {
+  items?: Array<InboxFailureSummary>;
   nextCursor?: string;
 }
 
@@ -1977,6 +1993,7 @@ export interface Operations {
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
   "installations": { method: "GET"; path: "/api/v1/control-plane/installations"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PagePlatformInstallationView } };
+  "inboxFailuresAcrossConsumers": { method: "GET"; path: "/api/v1/control-plane/integration/failures/inbox"; request: { parameters: { query: { limit?: number; status?: string; tenantId?: string } } }; responses: { "200": PageInboxFailureSummary } };
   "inboxFailures": { method: "GET"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}"; request: { parameters: { path: { consumerName: string }; query: { limit?: number; status?: string; tenantId?: string } } }; responses: { "200": PageFailureSummary } };
   "inboxFailure": { method: "GET"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}/{eventId}"; request: { parameters: { path: { consumerName: string; eventId: string }; query: { tenantId?: string } } }; responses: { "200": InboxFailureDetail } };
   "resolveInbox": { method: "POST"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}/{eventId}/resolve"; request: { parameters: { path: { consumerName: string; eventId: string } }; body: FailureOperationsControllerResolveRequest }; responses: { "200": {  } } };

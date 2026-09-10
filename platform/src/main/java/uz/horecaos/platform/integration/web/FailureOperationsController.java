@@ -62,6 +62,21 @@ public class FailureOperationsController {
         return Page.last(failures);
     }
 
+    @GetMapping("/inbox")
+    @RequiresCapability(value = Capability.INTEGRATION_FAILURE_READ, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "List failed inbox messages across every consumer",
+            description = "One worklist for the inbox side, each row naming the consumer whose copy "
+                    + "failed; an event appears once per consumer that failed it. Retry and resolve "
+                    + "stay per consumer. The payload is never returned.")
+    Page<FailureOperationsService.InboxFailureSummary> inboxFailuresAcrossConsumers(
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(defaultValue = "DEAD_LETTER") String status,
+            @RequestParam(required = false) Integer limit) {
+
+        return Page.last(operations.listInboxFailuresAcrossConsumers(tenantId, status, Page.limitOrDefault(limit)));
+    }
+
     @GetMapping("/inbox/{consumerName}")
     @RequiresCapability(value = Capability.INTEGRATION_FAILURE_READ, scope = ScopeType.PLATFORM)
     @Operation(summary = "List failed inbox messages for one consumer")
