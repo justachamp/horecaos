@@ -96,3 +96,11 @@
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.scopeNote {
+  margin-top: 12px;
+}

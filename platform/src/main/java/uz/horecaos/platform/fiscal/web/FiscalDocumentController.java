@@ -264,7 +264,7 @@ public class FiscalDocumentController {
      *                    Whether, not what: the identifiers themselves are ADR 0029
      *                    evidence and are not a worklist's business
      */
-    record BlockedDocumentResponse(
+    public record BlockedDocumentResponse(
             UUID documentId,
             UUID orderId,
             UUID legalEntityId,
@@ -281,7 +281,7 @@ public class FiscalDocumentController {
             @Nullable Instant reportingDeadlineAt,
             @Nullable Instant blockedAt) {
 
-        static BlockedDocumentResponse of(FiscalDocumentRow row) {
+        public static BlockedDocumentResponse of(FiscalDocumentRow row) {
             return new BlockedDocumentResponse(
                     row.id(),
                     row.orderId(),

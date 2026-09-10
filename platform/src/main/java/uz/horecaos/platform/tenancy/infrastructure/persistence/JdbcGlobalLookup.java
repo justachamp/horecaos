@@ -136,7 +136,7 @@ public class JdbcGlobalLookup {
                 """, id);
         probe(hits, EntityType.FISCAL_DOCUMENT, MatchedOn.ID, """
                 SELECT f.id, f.tenant_id, t.display_name AS tenant_name, f.document_type || ' · ' || f.status AS label
-                  FROM payments.fiscal_documents f JOIN tenant.tenants t ON t.id = f.tenant_id WHERE f.id = :id
+                  FROM fiscal.fiscal_documents f JOIN tenant.tenants t ON t.id = f.tenant_id WHERE f.id = :id
                 """, id);
         return hits;
     }

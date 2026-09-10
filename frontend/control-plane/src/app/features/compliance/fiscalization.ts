@@ -8,18 +8,21 @@ import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
 import { BlockedDocumentResponse, FiscalApi } from './fiscal-api';
 
+/** A blocked receipt and, on the cross-tenant board, whose it is. */
+interface Row {
+  readonly tenantId: string;
+  readonly tenantName: string | null;
+  readonly document: BlockedDocumentResponse;
+}
+
 /**
- * IA 6.1 Fiscalization operations -- fiscal receipt failures with an
- * operator-visible retry path (ADR 0038; the IA row's own note that "HorecaOS
- * has no ADR for it" is stale -- ADR 0038 covers the whole document
- * lifecycle, built in wave 8/V0039).
+ * IA 6.1 Fiscalization operations -- fiscal receipts waiting on a person,
+ * across every tenant or for one, with a retry.
  *
- * One tenant at a time: `FiscalDocumentController` has no cross-tenant
- * aggregate (see `fiscal-api.ts`'s own note), so this is the same
- * tenant-picker pattern IA 5.3 uses, not the single always-on board the IA
- * prose imagines. Bulk retry is client-orchestrated -- selecting several rows
- * and calling the same per-document retry endpoint for each -- because the
- * mutation itself already exists and is well-tested; only the picking is new.
+ * With no tenant chosen the board shows every tenant's blocked receipts,
+ * longest-waiting first, each naming its tenant; choosing one narrows it and
+ * shows that tenant's warning, if any. Retrying several at once calls the
+ * same per-receipt retry for each, in its own tenant.
  */
 @Component({
   selector: 'app-fiscalization',
@@ -41,38 +44,41 @@ export class Fiscalization {
   );
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly worklist = signal<readonly BlockedDocumentResponse[]>([]);
+  protected readonly worklist = signal<readonly Row[]>([]);
   protected readonly warning = signal<string | null>(null);
   protected readonly selected = signal<ReadonlySet<string>>(new Set());
   protected readonly retrying = signal(false);
   protected readonly actionMessage = signal<string | null>(null);
 
   constructor() {
-    if (this.tenantId().length > 0) {
-      void this.load();
-    }
+    void this.load();
   }
 
-  /** A tenant chosen in the picker: shown at once, nothing to press. */
+  /** A tenant chosen in the picker, or none for every tenant: shown at once, nothing to press. */
   protected chooseTenant(tenantId: string): void {
     this.tenantId.set(tenantId);
-    if (tenantId.length > 0) {
-      void this.load();
-    }
+    void this.load();
+  }
+
+  protected allTenants(): boolean {
+    return this.tenantId().trim().length === 0;
   }
 
   protected async load(): Promise<void> {
     const tenantId = this.tenantId().trim();
-    if (tenantId.length === 0) {
-      return;
-    }
     this.loading.set(true);
     this.loadError.set(null);
     this.selected.set(new Set());
     try {
-      const result = await this.api.blocked(tenantId);
-      this.worklist.set(result.documents);
-      this.warning.set(result.warning);
+      if (tenantId.length === 0) {
+        const rows = await this.api.blockedAcrossTenants();
+        this.worklist.set(rows.map((row) => ({ tenantId: row.tenantId, tenantName: row.tenantName, document: row.document })));
+        this.warning.set(null);
+      } else {
+        const result = await this.api.blocked(tenantId);
+        this.worklist.set(result.documents.map((document) => ({ tenantId, tenantName: null, document })));
+        this.warning.set(result.warning);
+      }
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
@@ -93,16 +99,15 @@ export class Fiscalization {
   }
 
   protected async retrySelected(): Promise<void> {
-    const tenantId = this.tenantId().trim();
-    const targets = this.worklist().filter((document) => this.selected().has(document.documentId));
-    if (tenantId.length === 0 || targets.length === 0) {
+    const targets = this.worklist().filter((row) => this.selected().has(row.document.documentId));
+    if (targets.length === 0) {
       return;
     }
     this.retrying.set(true);
     this.actionMessage.set(null);
     let succeeded = 0;
     let failed = 0;
-    for (const document of targets) {
+    for (const { tenantId, document } of targets) {
       try {
         await this.api.retry(
           tenantId,

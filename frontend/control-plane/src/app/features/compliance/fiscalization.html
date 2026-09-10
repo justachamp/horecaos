@@ -15,10 +15,11 @@
     <p class="q-body-sm success">{{ message }}</p>
   }
 
+  @if (allTenants()) {
+    <p class="q-caption muted scopeNote">{{ i18n.t('fiscalization.allTenants') }}</p>
+  }
   @if (worklist().length === 0) {
-    @if (tenantId().length > 0) {
-      <p class="q-body-sm state">{{ i18n.t('fiscalization.empty') }}</p>
-    }
+    <p class="q-body-sm state">{{ i18n.t(allTenants() ? 'fiscalization.emptyEverywhere' : 'fiscalization.empty') }}</p>
   } @else {
     <div class="toolbar">
       <button type="button" [disabled]="selected().size === 0 || retrying()" (click)="retrySelected()">
@@ -30,6 +31,9 @@
       <thead>
         <tr>
           <th></th>
+          @if (allTenants()) {
+            <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+          }
           <th class="q-caption">{{ i18n.t('fiscalization.column.order') }}</th>
           <th class="q-caption">{{ i18n.t('fiscalization.column.type') }}</th>
           <th class="q-caption">{{ i18n.t('fiscalization.column.reason') }}</th>
@@ -38,7 +42,8 @@
         </tr>
       </thead>
       <tbody>
-        @for (document of worklist(); track document.documentId) {
+        @for (row of worklist(); track row.document.documentId) {
+          @let document = row.document;
           <tr>
             <td>
               <input
@@ -47,6 +52,9 @@
                 (change)="toggle(document.documentId)"
               />
             </td>
+            @if (allTenants()) {
+              <td class="q-body-sm">{{ row.tenantName }}</td>
+            }
             <td class="q-body-sm q-tnum">{{ document.orderId }}</td>
             <td class="q-body-sm">{{ document.documentType }}</td>
             <td class="q-body-sm">{{ document.reasonCode }}</td>
