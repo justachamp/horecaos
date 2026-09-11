@@ -1,7 +1,20 @@
 # ADR 0099: A new tenant can be onboarded with a sample menu it did not write
 
 - Decision status: Proposed
-- Implementation status: Not started
+- Implementation status: Built — `SAMPLE_MENU_PUBLISH` exists as decided:
+  optional, `CONFIGURING`, sequence 4, materialised `SKIPPED`/`NOT_REQUESTED`
+  when a run did not ask for it. The handler is
+  `OrderingOnboardingStepHandlers.SampleMenuPublish`, over
+  `catalog.api.SampleMenuPort`, `pricing.api.SampleMenuPricingPort` and
+  `inventory.api.StockListingPort`; the control plane's start panel carries
+  the checkbox, default on. A tenant that authored nothing reaches
+  `CATALOG_READINESS_VALIDATE` and `ACTIVATION_SMOKE_TEST` `COMPLETED` and its
+  menu is readable through the anonymous storefront query — asserted, not
+  assumed, in `SampleMenuPublishStepTests`. What does **not** exist is any way
+  to remove the sample: this record scopes that out, and the tenant publishing
+  its own catalog to the same channel is still the only thing that retires it.
+  The sample covers the tenant's first brand only, so a tenant with two brands
+  still fails catalogue readiness on the second.
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11 ("while onboarding a new tenant ask whether to create a sample menu and publish it to see that all works on our side, later tenant can make their own menu when they fully ready"); Ayubkhon Abbosov (platform owner) decides
@@ -217,15 +230,19 @@ a sample published over it.
 Each of the three ports is idempotent on its own, because a step can die between
 any two of them:
 
-- `SampleMenuPort.installDraft` looks for `catalog.catalogs` by `(tenant_id,
+- `SampleMenuPort.installSample` looks for `catalog.catalogs` by `(tenant_id,
   brand_id, 'SAMPLE-MENU')` and returns what it finds, creating only what is
   missing. Products, categories and offerings are likewise looked up by code
-  before being created.
+  before being created. It takes no locale: the locale catalog validation
+  requires a name in is catalog's own configuration
+  (`horecaos.catalog.default-locale`), and a caller that passed the owner's
+  language instead would author a menu that then failed to publish with
+  `MISSING_TRANSLATION`.
 - `SampleMenuPricingPort.priceSample` asks its own `VariantPricingLookup` which
   of the variants already have an active price and returns without writing when
   all of them do.
 - `StockListingPort.ensureListed` finds the stock item before creating one.
-- `SampleMenuPort.publish` returns the active publication when one already
+- `SampleMenuPort.publishSample` returns the active publication when one already
   exists for this catalog and channel, rather than snapshotting a second.
 
 A second run for the same tenant therefore finds the sample catalog, adds
@@ -246,6 +263,7 @@ Ids and counts only. No item names, no prices, nothing about a person.
 | Code | Outcome | Meaning |
 |---|---|---|
 | `NO_BRAND` | `FAILED` | The tenant has no brand to hang a menu on. Resumable: create a brand, resume the run |
+| `NO_CHANNEL` | `FAILED` | The tenant has no `STOREFRONT` channel to publish to. Named as `ACTIVATION_SMOKE_TEST` names the same gap. Checked before anything is written, because `CatalogPublicationService.publish` throws for an unregistered channel and a thrown handler becomes `RETRY` — which would retry a permanent condition forever |
 | `NO_LOCATION` | `FAILED` | The brand has no location, so nothing can offer the menu |
 | `SAMPLE_MENU_REJECTED` | `FAILED` | The publication came back `REJECTED`; the detail names the blocker codes |
 | `TRANSIENT_INFRASTRUCTURE` | `RETRY` | Anything thrown; `OnboardingService` already maps a thrown handler to this |
@@ -284,16 +302,16 @@ stop a run reaching `READY`.
 
 ## Implementation checklist
 
-- [ ] `OnboardingStep.SAMPLE_MENU_PUBLISH` and the renumbering.
-- [ ] `sampleMenu` on the start request, in the input snapshot, in the audit fact.
-- [ ] `SKIPPED` materialisation in `OnboardingService.startRun`.
-- [ ] `catalog.api.SampleMenuPort` and its service, with the content.
-- [ ] `pricing.api.SampleMenuPricingPort` and its adapter.
-- [ ] `inventory.api.StockListingPort` and its adapter.
-- [ ] The handler in `ordering.application.onboarding`.
-- [ ] The event schema's enum value.
-- [ ] The control plane's checkbox, step name, and hints in three catalogues.
-- [ ] Tests, including the storefront read.
+- [x] `OnboardingStep.SAMPLE_MENU_PUBLISH` and the renumbering.
+- [x] `sampleMenu` on the start request, in the input snapshot, in the audit fact.
+- [x] `SKIPPED` materialisation in `OnboardingService.startRun`.
+- [x] `catalog.api.SampleMenuPort` and its service, with the content.
+- [x] `pricing.api.SampleMenuPricingPort` and its adapter.
+- [x] `inventory.api.StockListingPort` and its adapter.
+- [x] The handler in `ordering.application.onboarding`.
+- [x] The event schema's enum value.
+- [x] The control plane's checkbox, step name, and hints in three catalogues.
+- [x] Tests, including the storefront read.
 
 ## Exit criteria
 
