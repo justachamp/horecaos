@@ -79,8 +79,17 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'retry' | 'form' | 'done';
             }}</a>
           }
           @case ('done') {
-            <h1 class="q-title heading">{{ i18n.t('resetPassword.done.title') }}</h1>
-            <p class="q-body muted">{{ i18n.t('resetPassword.done.body') }}</p>
+            @if (sessionsEnded()) {
+              <h1 class="q-title heading">{{ i18n.t('resetPassword.done.title') }}</h1>
+              <p class="q-body muted">{{ i18n.t('resetPassword.done.body') }}</p>
+            } @else {
+              <h1 class="q-title heading">
+                {{ i18n.t('resetPassword.doneSessionsNotEnded.title') }}
+              </h1>
+              <p class="q-body warning" role="alert">
+                {{ i18n.t('resetPassword.doneSessionsNotEnded.body') }}
+              </p>
+            }
             <a class="q-body link" routerLink="/login">{{ i18n.t('resetPassword.toSignIn') }}</a>
           }
           @case ('form') {
@@ -225,6 +234,14 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'retry' | 'form' | 'done';
       border-radius: var(--q-radius);
     }
 
+    .warning {
+      margin: 8px 0 0;
+      color: var(--q-error-text);
+      background: var(--q-error-tint);
+      padding: 8px 12px;
+      border-radius: var(--q-radius);
+    }
+
     .submit {
       margin-top: 24px;
       height: 40px;
@@ -259,6 +276,16 @@ export class ResetPasswordPage implements OnInit {
   protected readonly confirm = signal('');
   protected readonly busy = signal(false);
   protected readonly errorKey = signal<MessageKey | null>(null);
+
+  /**
+   * What the platform said about the revocation, not what this page assumes.
+   *
+   * Starts `false` and is set from the response before the card is shown, so
+   * that the reassuring sentence has to be earned. The other default reads
+   * better and fails the wrong way: a path that forgot to set this would go on
+   * telling somebody every other session is gone.
+   */
+  protected readonly sessionsEnded = signal(false);
 
   protected readonly mismatch = computed(
     () => this.confirm().length > 0 && this.confirm() !== this.password(),
@@ -334,7 +361,14 @@ export class ResetPasswordPage implements OnInit {
     this.busy.set(true);
     this.errorKey.set(null);
     try {
-      await this.resets.accept(this.token, this.password());
+      const acceptance = await this.resets.accept(this.token, this.password());
+      // Read, never assumed. Keycloak can accept the password and refuse the
+      // revocation; the reset is complete either way, and the person reading
+      // this card is the only one present who can do anything about the
+      // difference — sign the other devices out, or tell somebody. A card that
+      // says every other session has ended while somebody's offline token
+      // keeps working is the outcome ADR 0098 calls worse than not revoking.
+      this.sessionsEnded.set(acceptance.sessionsEnded);
       // The account's sessions were just revoked at Keycloak, but this tab may
       // have restored one at boot — `provideAppInitializer` redeems whatever
       // refresh token sessionStorage holds on every route, this one included —

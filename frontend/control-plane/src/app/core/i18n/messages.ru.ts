@@ -233,6 +233,9 @@ export const ru: Messages = {
   'resetPassword.submitting': 'Сохраняем…',
   'resetPassword.done.title': 'Пароль сохранён',
   'resetPassword.done.body': 'Все остальные сеансы завершены. Войдите с новым паролем.',
+  'resetPassword.doneSessionsNotEnded.title': 'Пароль сохранён, но другие сеансы ещё активны',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Новый пароль работает. Завершить остальные сеансы не удалось — выйдите из аккаунта на всех других устройствах, а если это невозможно, обратитесь в поддержку.',
   'resetPassword.invalid.title': 'Эта ссылка недействительна',
   'resetPassword.invalid.body':
     'Возможно, ею уже воспользовались или её заменил новый запрос. Запросите новую.',

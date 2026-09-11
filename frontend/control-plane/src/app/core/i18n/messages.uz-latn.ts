@@ -235,6 +235,9 @@ export const uzLatn: Messages = {
   'resetPassword.submitting': 'Saqlanmoqda…',
   'resetPassword.done.title': 'Parol saqlandi',
   'resetPassword.done.body': 'Barcha boshqa seanslar yakunlandi. Yangi parol bilan kiring.',
+  'resetPassword.doneSessionsNotEnded.title': 'Parol saqlandi, lekin boshqa seanslar hali ochiq',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Yangi parol ishlaydi. Boshqa seanslarni yakunlab bo‘lmadi — barcha boshqa qurilmalarda hisobdan chiqing, agar imkoni bo‘lmasa, qo‘llab-quvvatlash xizmatiga murojaat qiling.',
   'resetPassword.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
   'resetPassword.invalid.body':
     'Ehtimol, undan foydalanilgan yoki yangi so‘rov uni almashtirgan. Yangisini so‘rang.',

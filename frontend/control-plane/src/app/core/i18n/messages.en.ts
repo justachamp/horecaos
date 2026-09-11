@@ -246,6 +246,10 @@ export const en = {
   'resetPassword.submitting': 'Saving…',
   'resetPassword.done.title': 'Your password is set',
   'resetPassword.done.body': 'Every other session has been ended. Sign in with your new password.',
+  'resetPassword.doneSessionsNotEnded.title':
+    'Your password is set, but other sessions are still open',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Your new password works. We could not end your other sessions — sign out on every other device you are signed in on, and contact support if you cannot.',
   'resetPassword.invalid.title': 'This link cannot be used',
   'resetPassword.invalid.body':
     'It may already have been used, or a newer request replaced it. Ask for a new one.',

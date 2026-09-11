@@ -7,7 +7,7 @@ import { Auth } from '../../core/auth/auth';
 import { I18n } from '../../core/i18n/i18n';
 import { messagesEn } from '../../core/i18n/messages.en';
 import { messagesRu } from '../../core/i18n/messages.ru';
-import { PasswordResetsApi, ResetInspection } from './password-resets-api';
+import { PasswordResetAcceptance, PasswordResetsApi, ResetInspection } from './password-resets-api';
 import { ResetPasswordPage } from './reset-password-page';
 
 const TOKEN = 'k8Qm2v1Xo9-pL3sW7yZ0aB4cD6eF8gH1iJ2kL3mN4oP';
@@ -22,7 +22,7 @@ const INSPECTION: ResetInspection = {
 class FakeResets {
   readonly request = vi.fn();
   readonly inspect = vi.fn<(token: string) => Promise<ResetInspection>>();
-  readonly accept = vi.fn<(token: string, password: string) => Promise<void>>();
+  readonly accept = vi.fn<(token: string, password: string) => Promise<PasswordResetAcceptance>>();
 }
 
 /** Only the one method the page may call: `logout()` would revoke whoever else's session this till holds. */
@@ -129,7 +129,7 @@ describe('ResetPasswordPage', () => {
    */
   it('sends only the token and the password, then ends this tab and confirms', async () => {
     resets.inspect.mockResolvedValue(INSPECTION);
-    resets.accept.mockResolvedValue(undefined);
+    resets.accept.mockResolvedValue({ sessionsEnded: true });
     await open(`token=${TOKEN}`);
 
     fill();
@@ -146,6 +146,36 @@ describe('ResetPasswordPage', () => {
     expect(text()).toContain(messagesEn['resetPassword.done.body']);
     expect(text()).toContain(messagesEn['resetPassword.toSignIn']);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The reset succeeded and the revocation did not.
+   *
+   * Keycloak can take the password and refuse the logout, and the platform
+   * answers 200 either way because the password really did change — telling
+   * the operator it failed would send them to retry a link that no longer
+   * exists. What must not happen is this card asserting that every other
+   * session has ended. On a shared till that sentence is the difference
+   * between an operator who signs their other devices out and one who walks
+   * away while a dismissed employee's offline token keeps minting access
+   * tokens; the `sessions_not_ended` audit fact reaches an operator days
+   * later, and the person who could act on it is standing here now.
+   */
+  it('says so when the password was set and the other sessions could not be ended', async () => {
+    resets.inspect.mockResolvedValue(INSPECTION);
+    resets.accept.mockResolvedValue({ sessionsEnded: false });
+    await open(`token=${TOKEN}`);
+
+    fill();
+    await submit();
+
+    expect(text()).toContain(messagesEn['resetPassword.doneSessionsNotEnded.body']);
+    expect(text()).not.toContain(messagesEn['resetPassword.done.body']);
+    // Still a success: the password is set, so the form is gone and the way
+    // back to sign in is offered rather than a retry of a spent link.
+    expect(submitButton()).toBeNull();
+    expect(text()).toContain(messagesEn['resetPassword.toSignIn']);
+    expect(auth.forgetLocalSession).toHaveBeenCalled();
   });
 
   it('names the password rule the identity provider refused, and keeps the form', async () => {

@@ -27,6 +27,20 @@ export interface ResetInspection {
   readonly locale: 'uz' | 'ru' | 'en' | (string & {});
 }
 
+/**
+ * `StaffPasswordResetController.PasswordResetAcceptance`.
+ *
+ * The password is set — that is what a success means here. What it does not
+ * mean is that the account's other sessions are gone: Keycloak can refuse the
+ * revocation while accepting the password, and the reset is complete either
+ * way. So the page must read this rather than assert the happy sentence, and
+ * the operator standing at the till is the only person present who could act
+ * on its being false.
+ */
+export interface PasswordResetAcceptance {
+  readonly sessionsEnded: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PasswordResetsApi {
   private readonly api = inject(ApiClient);
@@ -54,9 +68,9 @@ export class PasswordResetsApi {
     );
   }
 
-  accept(token: string, password: string): Promise<void> {
+  accept(token: string, password: string): Promise<PasswordResetAcceptance> {
     return firstValueFrom(
-      this.api.post<{ token: string; password: string }, void>(
+      this.api.post<{ token: string; password: string }, PasswordResetAcceptance>(
         ACCEPT_PATH,
         command({ token, password }),
       ),
