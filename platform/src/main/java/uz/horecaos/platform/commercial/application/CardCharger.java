@@ -57,6 +57,27 @@ public interface CardCharger {
             String currency,
             String idempotencyKey);
 
+    /**
+     * Asks what the provider currently believes happened to a previously
+     * asked attempt, without charging anything.
+     *
+     * <p>The only caller is {@code WalletService.settleOneCardRemainder},
+     * and only for an attempt {@code beginCardAttempt} is about to retry
+     * under its own id rather than mint a fresh one — one left {@code
+     * PENDING} by an earlier, unanswered {@link #charge} call, or one a
+     * racing settlement pass for the same tenant already committed. Asking
+     * first is what makes the retry a reconciliation rather than a second
+     * charge: a provider that is sure the attempt already succeeded is
+     * recorded without calling {@link #charge} again, and anything else —
+     * declined, or simply unknown — is answered by {@link #charge} itself,
+     * replayed under the same {@code idempotencyKey}, which a provider that
+     * honours keys must treat as the same attempt rather than a new one.
+     *
+     * @param idempotencyKey the id of the {@code commercial.card_charge_attempts}
+     *                       row this attempt was first asked under
+     */
+    StatusOutcome status(String idempotencyKey);
+
     /** What an attempted card charge did. */
     sealed interface Outcome permits Outcome.Succeeded, Outcome.Failed, Outcome.NotConfigured {
 
@@ -68,5 +89,22 @@ public interface CardCharger {
 
         /** No merchant account exists yet; the remainder stays due, exactly like INVOICE. */
         record NotConfigured() implements Outcome {}
+    }
+
+    /**
+     * What the provider currently believes about a previously asked attempt,
+     * with only the two arms {@link #status} exists to distinguish: sure it
+     * already succeeded, or anything else. A decline and a genuinely unknown
+     * answer are the same arm here because they lead to the same action —
+     * replay {@link #charge} under the same key — and a provider is free to
+     * tell them apart on that call the way {@link Outcome} already does.
+     */
+    sealed interface StatusOutcome permits StatusOutcome.Succeeded, StatusOutcome.NotSucceeded {
+
+        /** The provider is sure this attempt already succeeded; {@code providerReference} is its own reference. */
+        record Succeeded(String providerReference) implements StatusOutcome {}
+
+        /** Declined, unknown, or no merchant account: safe to replay {@link #charge} under the same key. */
+        record NotSucceeded() implements StatusOutcome {}
     }
 }

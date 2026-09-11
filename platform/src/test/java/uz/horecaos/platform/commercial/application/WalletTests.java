@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -1745,6 +1747,99 @@ class WalletTests {
     }
 
     @Test
+    void anUnansweredAttemptIsRetriedUnderTheSameIdempotencyKeyOnTheNextPass() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:pilot-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        walletChargingWith(new ThrowingCharger()).settleCardRemainders(PILOT);
+        assertThat(attemptOutcomes()).containsExactly("PENDING:unsettled");
+        String firstAttemptId = pendingAttemptId();
+
+        // The next pass -- any of the six endpoints that call
+        // settleCardRemainders after their own commit would trigger this one
+        // -- finds the same statement still due, since nothing was ever
+        // recorded against the attempt the first pass left behind.
+        RecordingCharger retried = new RecordingCharger(new CardCharger.Outcome.Succeeded("CLICK-RETRY"));
+        walletChargingWith(retried).settleCardRemainders(PILOT);
+
+        assertThat(retried.statusChecks)
+                .as("asked about before being charged again, so a provider sure it already succeeded is "
+                        + "recorded without a second charge")
+                .containsExactly(firstAttemptId);
+        assertThat(retried.charges)
+                .as("declined-by-nobody-yet is answered by charging again, but under the attempt already on "
+                        + "file, never a fresh one: a provider that honours idempotency keys would otherwise "
+                        + "see an unrelated new charge and debit the card a second time for one statement")
+                .singleElement()
+                .satisfies(charge -> assertThat(charge.idempotencyKey()).isEqualTo(firstAttemptId));
+        assertThat(cardChargeAttemptRowCount())
+                .as("one row throughout -- retried, never duplicated")
+                .isEqualTo(1L);
+        assertThat(attemptOutcomes()).containsExactly("SUCCEEDED:settled");
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+    }
+
+    @Test
+    void aProviderStatusOfSucceededForAPendingAttemptRecordsMoneyWithoutASecondCharge() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:pilot-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        UUID september = inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"))
+                .statementId();
+
+        walletChargingWith(new ThrowingCharger()).settleCardRemainders(PILOT);
+        assertThat(attemptOutcomes()).containsExactly("PENDING:unsettled");
+        String firstAttemptId = pendingAttemptId();
+
+        // The provider, asked about the same attempt on the next pass, is
+        // sure it already succeeded -- a genuine reconciliation, distinct
+        // from a decline or a still-unknown answer, either of which would
+        // instead replay charge() under the same key.
+        StatusOnlySucceedsCharger reconciling = new StatusOnlySucceedsCharger("CLICK-RECONCILED");
+        walletChargingWith(reconciling).settleCardRemainders(PILOT);
+
+        assertThat(attemptOutcomes())
+                .as("resolved without a second charge -- StatusOnlySucceedsCharger fails the test outright "
+                        + "if charge() is ever called")
+                .containsExactly("SUCCEEDED:settled");
+        assertThat(chargeAttemptFor(september))
+                .as("the same row settled, not a new attempt succeeding in its place")
+                .isEqualTo(firstAttemptId);
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+        assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
+        assertThat(wallet.ledger(PILOT, null, 10))
+                .filteredOn(entry -> WalletEntry.TOP_UP.equals(entry.entryType()))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.externalReference()).isEqualTo("CLICK-RECONCILED"));
+        assertThat(auditedActions()).contains("commercial.wallet.card_charged");
+    }
+
+    @Test
+    void aSecondPendingAttemptForTheSameStatementIsRefusedByTheIndex() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:pilot-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        UUID september = inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"))
+                .statementId();
+
+        insertPendingAttempt(Ids.newId(), september, MONTHLY);
+
+        assertThatThrownBy(() -> insertPendingAttempt(Ids.newId(), september, MONTHLY))
+                .as("V0222's partial unique index on (tenant_id, statement_id) WHERE outcome = 'PENDING' is "
+                        + "the guarantee of last resort against two unresolved attempts for one statement "
+                        + "existing at once, regardless of what any application code does or fails to do")
+                .isInstanceOf(DuplicateKeyException.class);
+        assertThat(cardChargeAttemptRowCount())
+                .as("the refused row was never written")
+                .isEqualTo(1L);
+    }
+
+    @Test
     void theCardIsNeverAskedFromInsideSomebodyElsesTransaction() {
         startOnPlan(START, MONTHLY);
         inTxDo(() ->
@@ -1799,14 +1894,26 @@ class WalletTests {
         };
     }
 
-    /** A charger that records what it was asked and answers what the test told it to. */
+    /**
+     * A charger that records what it was asked and answers what the test told
+     * it to -- {@code NotSucceeded} to {@code status()} by default, since
+     * every attempt in the tests that use only this constructor is fresh and
+     * {@code status()} is never called for one.
+     */
     private static final class RecordingCharger implements CardCharger {
 
         private final List<Charge> charges = new ArrayList<>();
-        private final Outcome answer;
+        private final List<String> statusChecks = new ArrayList<>();
+        private final Outcome chargeAnswer;
+        private final StatusOutcome statusAnswer;
 
-        RecordingCharger(Outcome answer) {
-            this.answer = answer;
+        RecordingCharger(Outcome chargeAnswer) {
+            this(chargeAnswer, new StatusOutcome.NotSucceeded());
+        }
+
+        RecordingCharger(Outcome chargeAnswer, StatusOutcome statusAnswer) {
+            this.chargeAnswer = chargeAnswer;
+            this.statusAnswer = statusAnswer;
         }
 
         @Override
@@ -1817,7 +1924,13 @@ class WalletTests {
                 String currency,
                 String idempotencyKey) {
             charges.add(new Charge(tenantId, cardTokenReference, amountMinor, currency, idempotencyKey));
-            return answer;
+            return chargeAnswer;
+        }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            statusChecks.add(idempotencyKey);
+            return statusAnswer;
         }
 
         private record Charge(
@@ -1826,6 +1939,35 @@ class WalletTests {
                 long amountMinor,
                 String currency,
                 String idempotencyKey) {}
+    }
+
+    /**
+     * A charger that reports a PENDING attempt as already succeeded, and
+     * fails the test outright if {@code charge()} is called at all -- the
+     * shape a reconciliation that skips a redundant charge has to have.
+     */
+    private static final class StatusOnlySucceedsCharger implements CardCharger {
+
+        private final String providerReference;
+
+        StatusOnlySucceedsCharger(String providerReference) {
+            this.providerReference = providerReference;
+        }
+
+        @Override
+        public Outcome charge(
+                UUID tenantId,
+                @Nullable String cardTokenReference,
+                long amountMinor,
+                String currency,
+                String idempotencyKey) {
+            throw new AssertionError("charge() must not be called: status() already reported this attempt succeeded");
+        }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            return new StatusOutcome.Succeeded(providerReference);
+        }
     }
 
     /**
@@ -1854,12 +1996,22 @@ class WalletTests {
             attemptWasCommitted = pendingAttemptIsVisibleToAnotherSession(idempotencyKey);
             return answer;
         }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            throw new AssertionError("this test never leaves an attempt to reconcile");
+        }
     }
 
     /** A provider adapter that fails the way a timeout does: no answer at all. */
     private final class ThrowingCharger implements CardCharger {
 
         private boolean attemptWasCommitted;
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            throw new IllegalStateException("the provider did not answer");
+        }
 
         @Override
         public Outcome charge(
@@ -2159,6 +2311,41 @@ class WalletTests {
         return jdbc.sql("SELECT count(*) FROM commercial.card_charge_attempts WHERE outcome = 'PENDING'")
                 .query(Long.class)
                 .single();
+    }
+
+    /** The one PENDING attempt this tenant has on file; fails if there is none, or more than one. */
+    private String pendingAttemptId() {
+        return jdbc.sql("""
+                        SELECT id::text FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :id AND outcome = 'PENDING'
+                        """).param("id", PILOT).query(String.class).single();
+    }
+
+    /** Every card attempt this tenant has on file, settled or not. */
+    private long cardChargeAttemptRowCount() {
+        return jdbc.sql("SELECT count(*) FROM commercial.card_charge_attempts WHERE tenant_id = :id")
+                .param("id", PILOT)
+                .query(Long.class)
+                .single();
+    }
+
+    /**
+     * Inserts a PENDING attempt directly, bypassing {@code WalletService}
+     * entirely -- for asserting what the schema itself refuses (V0222), not
+     * what the application code happens to prevent.
+     */
+    private void insertPendingAttempt(UUID attemptId, UUID statementId, long amountMinor) {
+        jdbc.sql("""
+                        INSERT INTO commercial.card_charge_attempts (
+                            id, tenant_id, statement_id, amount_minor, currency, outcome, attempted_at)
+                        VALUES (:id, :tenant, :statement, :amount, 'UZS', 'PENDING', :now)
+                        """)
+                .param("id", attemptId)
+                .param("tenant", PILOT)
+                .param("statement", statementId)
+                .param("amount", amountMinor)
+                .param("now", OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
+                .update();
     }
 
     /** Raises a proposal and returns the approval request it is waiting on. */

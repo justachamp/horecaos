@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,6 +39,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
+import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.Subscription;
@@ -313,6 +316,69 @@ class WalletConcurrencyTests {
                 .isGreaterThan(readerFinished.get());
     }
 
+    @Test
+    void twoSettlementPassesForTheSameTenantProduceOnePendingAttemptAndOneProviderCall() {
+        startOnPlan();
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:pilot-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        UUID september = inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"))
+                .statementId();
+        assertThat(statementPayment("2026-09").dueMinor()).isEqualTo(MONTHLY);
+
+        // Two settlement passes for this tenant, exactly as two of the six
+        // endpoints that call settleCardRemainders(tenantId) after their own
+        // commit would if they landed close together. Neither runs inside a
+        // transaction of its own -- settleCardRemainders refuses that -- so
+        // the barrier only starts them together; wallet.lockBilling's FOR
+        // UPDATE is what actually serialises the two beginCardAttempt calls,
+        // and GatedCharger is what proves the second one, finding the first's
+        // attempt already on file, asks the provider about it instead of
+        // opening a second one under a key of its own.
+        GatedCharger charger = new GatedCharger(new CardCharger.Outcome.Succeeded("CLICK-RACE"));
+        WalletService racing = walletChargingWith(charger);
+        CyclicBarrier gate = new CyclicBarrier(2);
+        try (ExecutorService threads = Executors.newFixedThreadPool(2)) {
+            List<Future<?>> passes = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                passes.add(threads.submit(() -> {
+                    trip(gate);
+                    racing.settleCardRemainders(PILOT);
+                }));
+            }
+            for (Future<?> pass : passes) {
+                pass.get(60, TimeUnit.SECONDS);
+            }
+        } catch (Exception failed) {
+            throw new IllegalStateException("a racing settlement pass never finished", failed);
+        }
+
+        assertThat(charger.charges)
+                .as("the attempt found already PENDING is asked about, not charged again while the first "
+                        + "call's answer can instead be learned -- GatedCharger's status() waits for a "
+                        + "concurrent charge() to conclude and mirrors it, exactly as a real provider "
+                        + "answering both calls under the same key would")
+                .hasSize(1);
+        assertThat(cardChargeAttemptRows(september))
+                .as("one statement, one attempt, however many settlement passes asked -- never a second "
+                        + "row for the same remainder")
+                .isEqualTo(1L);
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+        assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
+        assertThat(walletEntryCount(WalletEntry.TOP_UP))
+                .as("one charge, told to two racing passes, is still one deposit into the ledger -- not one "
+                        + "per pass that asked")
+                .isEqualTo(1L);
+        assertThat(walletEntryCount(WalletEntry.STATEMENT_PAYMENT)).isEqualTo(1L);
+        assertThat(auditedActions())
+                .as("one card actually charged, audited once -- not twice for the two passes that asked "
+                        + "about it, and never as a surplus: the second pass's report of the same attempt "
+                        + "is recognised as the same attempt, not money the statement no longer owed")
+                .filteredOn("commercial.wallet.card_charged"::equals)
+                .hasSize(1);
+        assertThat(auditedActions()).doesNotContain("commercial.wallet.card_charge_surplus_refused");
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private static void trip(CyclicBarrier gate) {
@@ -498,6 +564,99 @@ class WalletConcurrencyTests {
                 .param("kind", moneyKind)
                 .query(Long.class)
                 .single();
+    }
+
+    /** The same wallet, with a card charger wired: the port exists, only the merchant account does not. */
+    private WalletService walletChargingWith(CardCharger charger) {
+        return new WalletService(
+                new JdbcWalletStore(jdbc),
+                new JdbcSubscriptionStore(jdbc),
+                new JdbcCardChargeAttemptStore(jdbc),
+                approvals,
+                charger,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                new SimpleMeterRegistry(),
+                transactions,
+                clock);
+    }
+
+    /** How many attempts this statement has on file, settled or not -- never more than one at a time (V0222). */
+    private long cardChargeAttemptRows(UUID statementId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :id AND statement_id = :statement
+                        """)
+                .param("id", PILOT)
+                .param("statement", statementId)
+                .query(Long.class)
+                .single();
+    }
+
+    private long walletEntryCount(String entryType) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM commercial.wallet_entries WHERE tenant_id = :id AND entry_type = :type
+                        """)
+                .param("id", PILOT)
+                .param("type", entryType)
+                .query(Long.class)
+                .single();
+    }
+
+    private List<String> auditedActions() {
+        return jdbc.sql("""
+                        SELECT action_code FROM audit.audit_events
+                         WHERE action_code LIKE 'commercial.wallet.%'
+                         ORDER BY occurred_at, action_code
+                        """).query(String.class).list();
+    }
+
+    /**
+     * A charger that answers a canned outcome to {@code charge()}, and makes
+     * {@code status()} wait for a concurrent {@code charge()} call to
+     * conclude and then mirror its answer -- exactly what a real provider
+     * does for two calls under the same idempotency key, one asking to
+     * charge and one only asking what happened. Proves that the settlement
+     * pass which finds an attempt already PENDING learns the first call's
+     * answer instead of dialing the provider a second time.
+     */
+    private static final class GatedCharger implements CardCharger {
+
+        private final Outcome answer;
+        private final List<String> charges = new CopyOnWriteArrayList<>();
+        private final List<String> statusChecks = new CopyOnWriteArrayList<>();
+        private final CountDownLatch charged = new CountDownLatch(1);
+
+        GatedCharger(Outcome answer) {
+            this.answer = answer;
+        }
+
+        @Override
+        public Outcome charge(
+                UUID tenantId,
+                @Nullable String cardTokenReference,
+                long amountMinor,
+                String currency,
+                String idempotencyKey) {
+            charges.add(idempotencyKey);
+            charged.countDown();
+            return answer;
+        }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            statusChecks.add(idempotencyKey);
+            try {
+                if (!charged.await(30, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("the concurrent charge() never completed");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted while waiting for a concurrent charge()", interrupted);
+            }
+            return answer instanceof Outcome.Succeeded succeeded
+                    ? new StatusOutcome.Succeeded(succeeded.providerReference())
+                    : new StatusOutcome.NotSucceeded();
+        }
     }
 
     /** A clock a test moves forward; set before any worker thread starts, and read from several. */

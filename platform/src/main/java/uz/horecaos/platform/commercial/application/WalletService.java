@@ -985,8 +985,18 @@ public class WalletService {
      * together with the money. Dropping the billing lock around the call is
      * the real cost, so the second transaction takes it again and re-reads
      * what the statement still owes — a transfer that arrived meanwhile keeps
-     * its payment, and the surplus stays the tenant's paid balance rather than
-     * over-paying the statement.
+     * its payment, and a card charge for more than that leaves owed is a
+     * surplus this method refuses to credit as paid balance: it is the shape
+     * a card genuinely charged twice takes at this table, so it is audited
+     * for finance to reconcile by hand instead (ADR 0095, V0222).
+     *
+     * <p>Never a fresh id for a statement with an unresolved attempt already
+     * on file (ADR 0095, V0222): {@code beginCardAttempt} reuses it, and this
+     * method asks the provider about it, once, before charging under it
+     * again — a provider timeout or a settlement pass racing this one for
+     * the same tenant used to each be free to open their own attempt and
+     * their own key for the same remainder, and a provider honouring keys
+     * genuinely charged the card twice.
      *
      * <p>Every outcome is answered for, and the four are told apart. A decline
      * used to collapse into the same silent {@code return 0} as "no merchant
@@ -1033,11 +1043,36 @@ public class WalletService {
     }
 
     private long settleOneCardRemainder(UUID tenantId, UUID statementId) {
-        CardAttempt attempt = Objects.requireNonNull(
-                        unitOfWork.execute(status -> beginCardAttempt(tenantId, statementId)))
-                .orElse(null);
+        CardAttempt attempt = beginOrReuseCardAttempt(tenantId, statementId);
         if (attempt == null) {
             return 0;
+        }
+        if (attempt.reused()) {
+            // Not fresh: either a previous pass never learned the provider's
+            // answer, or a settlement pass racing this one already committed
+            // it. Ask before charging again — the whole point of reusing the
+            // id is that a retry under it is a replay, never a new charge, but
+            // asking first means a provider that is sure it already succeeded
+            // is recorded without being asked to act on the same key twice.
+            CardCharger.StatusOutcome status;
+            try {
+                status = cardCharger.status(attempt.attemptId().toString());
+            } catch (RuntimeException unanswered) {
+                log.warn(
+                        "Asking about a pending card charge for statement {} of tenant {} was never answered; "
+                                + "replaying the charge under the same key",
+                        statementId,
+                        tenantId);
+                log.debug("The card charger threw", unanswered);
+                status = new CardCharger.StatusOutcome.NotSucceeded();
+            }
+            if (status instanceof CardCharger.StatusOutcome.Succeeded succeeded) {
+                return Objects.requireNonNull(unitOfWork.execute(txStatus -> recordCardOutcome(
+                        tenantId, attempt, new CardCharger.Outcome.Succeeded(succeeded.providerReference()))));
+            }
+            // Declined, unknown, or no merchant account: fall through and
+            // replay the charge under the same idempotency key exactly as a
+            // fresh attempt would be charged, below.
         }
         CardCharger.Outcome outcome;
         try {
@@ -1051,9 +1086,9 @@ public class WalletService {
             // The row is already committed and stays PENDING, which is exactly
             // what PENDING means: we asked and never learned the answer. The
             // money may or may not have left the card, so nothing is written to
-            // the ledger and nothing is recorded as declined — a reconciler
-            // settles this row against the provider before the remainder is
-            // asked for again. Never the token and never the amount beside the
+            // the ledger and nothing is recorded as declined — the next pass
+            // reuses this same attempt and its key rather than asking again
+            // under a new one. Never the token and never the amount beside the
             // tenant's name (ADR 0028, ADR 0029).
             log.warn("A card charge for statement {} of tenant {} was never answered", statementId, tenantId);
             log.debug("The card charger threw", unanswered);
@@ -1064,6 +1099,30 @@ public class WalletService {
     }
 
     /**
+     * Opens (or reuses) the attempt for this statement, each half in its own
+     * committed transaction, the way {@link #settleOneCardRemainder} already
+     * keeps the provider call outside either.
+     *
+     * <p>A concurrent caller for the same tenant can win the race {@link
+     * #beginCardAttempt}'s insert loses (V0222's unique index is what makes
+     * that a refusal rather than a second row): PostgreSQL aborts the
+     * transaction that lost outright on a unique violation, so nothing
+     * further can be read back through it. The winner's row is read back in
+     * a transaction of its own instead, once {@link #beginCardAttempt}'s has
+     * finished rolling back.
+     */
+    private @Nullable CardAttempt beginOrReuseCardAttempt(UUID tenantId, UUID statementId) {
+        try {
+            return Objects.requireNonNull(unitOfWork.execute(status -> beginCardAttempt(tenantId, statementId)))
+                    .orElse(null);
+        } catch (DuplicateKeyException raced) {
+            return Objects.requireNonNull(
+                            unitOfWork.execute(status -> reuseCardAttemptAfterRace(tenantId, statementId, raced)))
+                    .orElse(null);
+        }
+    }
+
+    /**
      * Opens one attempt and commits it, before anything is asked of a provider.
      *
      * <p>One attempt, one row, and the row's id is the key the provider is
@@ -1071,6 +1130,13 @@ public class WalletService {
      * passes. Null when there is nothing to charge after all: the tenant is no
      * longer on CARD, or the statement was paid while this pass was being set
      * up.
+     *
+     * <p><strong>Never a second key for a statement still unresolved.</strong>
+     * A statement with an existing PENDING attempt gets that attempt back,
+     * not a new one (ADR 0095, V0222): {@link #beginOrReuseCardAttempt}
+     * decides whether it is safe to ask the provider about it again. A
+     * {@link DuplicateKeyException} out of the insert below is left to
+     * propagate rather than caught here — see {@link #beginOrReuseCardAttempt}.
      */
     private Optional<CardAttempt> beginCardAttempt(UUID tenantId, UUID statementId) {
         Instant now = clock.instant();
@@ -1083,6 +1149,11 @@ public class WalletService {
         if (statement == null || statement.dueMinor() <= 0) {
             return Optional.empty();
         }
+        Optional<JdbcCardChargeAttemptStore.PendingAttempt> pending = attempts.findPending(tenantId, statementId);
+        if (pending.isPresent()) {
+            return Optional.of(
+                    reusedAttempt(pending.get(), statementId, statement.number(), billing.cardTokenReference()));
+        }
         UUID attemptId = Ids.newId();
         attempts.begin(attemptId, tenantId, statementId, statement.dueMinor(), currency, now);
         return Optional.of(new CardAttempt(
@@ -1091,14 +1162,62 @@ public class WalletService {
                 statement.number(),
                 statement.dueMinor(),
                 currency,
-                billing.cardTokenReference()));
+                billing.cardTokenReference(),
+                false));
     }
 
-    /** Records what the provider answered, together with the money, as one transaction. */
+    /**
+     * Reads back the attempt a concurrent caller committed for this
+     * statement while this one's own insert was racing it and lost — in a
+     * transaction of its own, since the one that lost is already aborted and
+     * cannot be read through (see {@link #beginOrReuseCardAttempt}).
+     */
+    private Optional<CardAttempt> reuseCardAttemptAfterRace(
+            UUID tenantId, UUID statementId, DuplicateKeyException raced) {
+        TenantBilling billing = wallet.lockBilling(tenantId, clock.instant());
+        StatementPayment statement = openStatement(tenantId, wallet.currencyOf(tenantId), statementId);
+        JdbcCardChargeAttemptStore.PendingAttempt winner =
+                attempts.findPending(tenantId, statementId).orElseThrow(() -> raced);
+        String statementNumber = statement == null ? winner.id().toString() : statement.number();
+        return Optional.of(reusedAttempt(winner, statementId, statementNumber, billing.cardTokenReference()));
+    }
+
+    private static CardAttempt reusedAttempt(
+            JdbcCardChargeAttemptStore.PendingAttempt pending,
+            UUID statementId,
+            String statementNumber,
+            @Nullable String cardTokenReference) {
+        return new CardAttempt(
+                pending.id(),
+                statementId,
+                statementNumber,
+                pending.amountMinor(),
+                pending.currency(),
+                cardTokenReference,
+                true);
+    }
+
+    /**
+     * Records what the provider answered, together with the money, as one
+     * transaction.
+     *
+     * <p><strong>Idempotent in the attempt, not only in the money.</strong>
+     * {@link JdbcCardChargeAttemptStore#settle} only ever resolves a row once
+     * — {@code WHERE outcome = 'PENDING'} — so when a reused attempt
+     * (V0222) was asked about, or charged, by two racing settlement passes
+     * and both were told the same answer, only the first to reach here
+     * writes anything. The second's {@code settle} affects no row and this
+     * method stops before any ledger entry or audit fact, for any outcome:
+     * two truthful reports of the one thing that happened are still one
+     * thing that happened.
+     */
     private long recordCardOutcome(UUID tenantId, CardAttempt attempt, CardCharger.Outcome outcome) {
         Instant now = clock.instant();
         switch (outcome) {
             case CardCharger.Outcome.Failed failed -> {
+                if (!attempts.settle(attempt.attemptId(), "FAILED", failed.reason(), now)) {
+                    return 0;
+                }
                 // The tenant id and the statement, never the token and never the
                 // amount beside a tenant's name (ADR 0028, ADR 0029). The reason
                 // is the provider's own code, which is what an operator asked
@@ -1119,46 +1238,98 @@ public class WalletService {
                         .correlatedBy(attempt.statementId().toString())
                         .occurredAt(now)
                         .build());
-                attempts.settle(attempt.attemptId(), "FAILED", failed.reason(), now);
                 countCardCharge("failed");
                 return 0;
             }
             case CardCharger.Outcome.NotConfigured ignored -> {
+                if (!attempts.settle(attempt.attemptId(), "NOT_CONFIGURED", null, now)) {
+                    return 0;
+                }
                 // The expected answer until a merchant agreement exists, so it is
                 // counted and not logged: a WARN per CARD tenant per statement
                 // would drown the decline it has to be told apart from.
-                attempts.settle(attempt.attemptId(), "NOT_CONFIGURED", null, now);
                 countCardCharge("not_configured");
                 return 0;
             }
             case CardCharger.Outcome.Succeeded succeeded -> {
                 wallet.lockBilling(tenantId, now);
-                attempts.settle(attempt.attemptId(), "SUCCEEDED", succeeded.providerReference(), now);
+                if (!attempts.settle(attempt.attemptId(), "SUCCEEDED", succeeded.providerReference(), now)) {
+                    // A racing settlement pass for this tenant already recorded
+                    // this exact attempt: both asked under the same key, as ADR
+                    // 0095 says a retry may, and both were told it succeeded.
+                    // That is one charge, told twice, not two charges.
+                    log.debug(
+                            "A card charge for statement {} of tenant {} was already recorded by a racing "
+                                    + "settlement pass",
+                            attempt.statementNumber(),
+                            tenantId);
+                    return 0;
+                }
                 countCardCharge("succeeded");
+                // What the statement still owes, re-read under the lock this
+                // pass had to let go of around the provider call, and clamped
+                // before anything is written — never after. A transfer that
+                // arrived meanwhile has already paid part of it, and money the
+                // statement no longer owes is never quietly credited as extra
+                // paid balance: that is the one shape a card charged twice
+                // would take at this table, so a surplus is refused here and
+                // audited instead, for finance to reconcile against the
+                // provider by hand.
+                StatementPayment statement = openStatement(tenantId, attempt.currency(), attempt.statementId());
+                long owed = statement == null ? 0 : Math.max(statement.dueMinor(), 0);
+                long applied = Math.min(attempt.amountMinor(), owed);
+                if (applied < attempt.amountMinor()) {
+                    long surplus = attempt.amountMinor() - applied;
+                    log.warn(
+                            "A card charge for statement {} of tenant {} succeeded for {} but only {} was still "
+                                    + "owed; the surplus of {} is refused, not credited, and needs reconciling "
+                                    + "against the provider by hand",
+                            attempt.statementNumber(),
+                            tenantId,
+                            attempt.amountMinor(),
+                            applied,
+                            surplus);
+                    audit.record(AuditFact.of("commercial.wallet.card_charge_surplus_refused", AuditClass.BUSINESS)
+                            .by(ActorRef.systemJob("wallet-settlement"))
+                            .at(ResourceScope.tenant(tenantId))
+                            .target("commercial.statement", attempt.statementId())
+                            .outcome(AuditFact.Outcome.REJECTED)
+                            .because("the card charge succeeded for more than the statement still owed")
+                            .changed(Map.of(
+                                    "amountMinor",
+                                    attempt.amountMinor(),
+                                    "appliedMinor",
+                                    applied,
+                                    "providerReference",
+                                    succeeded.providerReference()))
+                            .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                            .correlatedBy(attempt.statementId().toString())
+                            .occurredAt(now)
+                            .build());
+                }
+                if (applied <= 0) {
+                    return 0;
+                }
                 audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
                         .by(ActorRef.systemJob("wallet-settlement"))
                         .at(ResourceScope.tenant(tenantId))
                         .target("commercial.statement", attempt.statementId())
                         .because("the statement's remainder was charged to the tenant's card")
-                        .changed(Map.of(
-                                "amountMinor",
-                                attempt.amountMinor(),
-                                "providerReference",
-                                succeeded.providerReference()))
+                        .changed(Map.of("amountMinor", applied, "providerReference", succeeded.providerReference()))
                         .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                         .correlatedBy(attempt.statementId().toString())
                         .occurredAt(now)
                         .build());
-                // The money that really left the card, at its face value: the
-                // provider's own reference is what proves the charge happened,
-                // and V0211's unique index on it is what stops a retry
-                // crediting it twice.
+                // The money actually credited, never more than the statement
+                // still owed: the provider's own reference is what proves the
+                // charge happened, and V0211's unique index on it is what
+                // stops a retry crediting it twice.
                 appendMoneyIn(new WalletEntry(
                         Ids.newId(),
                         tenantId,
                         WalletEntry.PAID,
                         WalletEntry.TOP_UP,
-                        attempt.amountMinor(),
+                        applied,
                         attempt.currency(),
                         null,
                         null,
@@ -1170,16 +1341,6 @@ public class WalletService {
                         null,
                         null,
                         now));
-                // What the statement still owes, re-read under the lock this
-                // pass had to let go of around the provider call. A transfer
-                // that arrived meanwhile has already paid part of it, and
-                // paying a statement past its total is money taken against a
-                // debt already settled; the surplus stays the tenant's.
-                StatementPayment statement = openStatement(tenantId, attempt.currency(), attempt.statementId());
-                long applied = statement == null ? 0 : Math.min(attempt.amountMinor(), statement.dueMinor());
-                if (applied <= 0) {
-                    return 0;
-                }
                 wallet.append(new WalletEntry(
                         Ids.newId(),
                         tenantId,
@@ -1209,14 +1370,25 @@ public class WalletService {
                 .orElse(null);
     }
 
-    /** One attempt about to be made, as the transaction that committed it left it. */
+    /**
+     * One attempt about to be made, as the transaction that committed it
+     * left it.
+     *
+     * @param reused whether this attempt already existed before this call —
+     *               found on file for the statement, or discovered by a
+     *               losing race on the insert below — rather than minted
+     *               fresh here. A reused attempt's id is not new (ADR 0095,
+     *               V0222): the caller asks the provider about it before
+     *               charging again under the same key
+     */
     private record CardAttempt(
             UUID attemptId,
             UUID statementId,
             String statementNumber,
             long amountMinor,
             String currency,
-            @Nullable String cardTokenReference) {}
+            @Nullable String cardTokenReference,
+            boolean reused) {}
 
     private void countCardCharge(String outcome) {
         Counter.builder(CARD_CHARGE_METRIC)

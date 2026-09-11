@@ -24,4 +24,10 @@ public class NotConfiguredCardCharger implements CardCharger {
             String idempotencyKey) {
         return new Outcome.NotConfigured();
     }
+
+    /** No merchant account means no way to ask, which is exactly {@link StatusOutcome.NotSucceeded}'s meaning. */
+    @Override
+    public StatusOutcome status(String idempotencyKey) {
+        return new StatusOutcome.NotSucceeded();
+    }
 }

@@ -3,6 +3,7 @@ package uz.horecaos.platform.commercial.infrastructure.persistence;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -51,14 +52,44 @@ public class JdbcCardChargeAttemptStore {
     }
 
     /**
+     * The unresolved attempt already on file for this exact statement, if
+     * one exists (ADR 0095, V0222).
+     *
+     * <p>Called under {@code wallet.lockBilling}, which serialises callers
+     * for one tenant, so two attempts for the same tenant cannot both reach
+     * this query believing it empty and then both insert — {@link #begin}'s
+     * caller either sees the winner here, or wins the insert itself and the
+     * loser hits V0222's unique index instead. Either way, one PENDING
+     * attempt per statement is the most that ever exists.
+     */
+    public Optional<PendingAttempt> findPending(UUID tenantId, UUID statementId) {
+        return jdbc.sql("""
+                        SELECT id, amount_minor, currency
+                          FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :tenantId AND statement_id = :statementId AND outcome = 'PENDING'
+                        """)
+                .param("tenantId", tenantId)
+                .param("statementId", statementId)
+                .query((row, number) -> new PendingAttempt(
+                        row.getObject("id", UUID.class), row.getLong("amount_minor"), row.getString("currency")))
+                .optional();
+    }
+
+    /**
      * Records what the provider answered.
      *
      * @param providerDetail the provider's own reference on a success or its
      *                       reason code on a decline; never a token and never a
      *                       card number (ADR 0028)
+     * @return whether this call is the one that resolved the attempt —
+     *         {@code false} means a racing settlement pass already settled
+     *         it (V0222 lets at most one attempt be PENDING per statement,
+     *         but two callers can each hold a reference to the same one and
+     *         both ask the provider), so the caller must record nothing a
+     *         second time for it
      */
-    public void settle(UUID attemptId, String outcome, @Nullable String providerDetail, Instant now) {
-        jdbc.sql("""
+    public boolean settle(UUID attemptId, String outcome, @Nullable String providerDetail, Instant now) {
+        int rows = jdbc.sql("""
                         UPDATE commercial.card_charge_attempts
                            SET outcome = :outcome, provider_detail = :detail, settled_at = :now
                          WHERE id = :id AND outcome = 'PENDING'
@@ -68,7 +99,11 @@ public class JdbcCardChargeAttemptStore {
                 .param("detail", providerDetail)
                 .param("now", utc(now))
                 .update();
+        return rows > 0;
     }
+
+    /** An unresolved attempt already on file, as {@link #begin} left it. */
+    public record PendingAttempt(UUID id, long amountMinor, String currency) {}
 
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
