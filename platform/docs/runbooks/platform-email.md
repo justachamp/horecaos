@@ -2,12 +2,31 @@
 
 **Last executed:** never — pre-prod runs without mail until a provider is chosen.
 
-The platform sends its own email over SMTP submission (ADR 0097). Today that
-is one message: a tenant owner's invitation to set up their account. Without
-mail configured nothing breaks — invitations wait, and the control plane's
-onboarding screen says "Email is not configured on this deployment yet". The
-moment the settings below are in place, every waiting invitation goes out on
-the relay's next pass (every 30 seconds).
+The platform sends its own email over SMTP submission (ADR 0097). Two messages
+ride these settings, and there is nothing to configure for the second one:
+
+- a tenant owner's invitation to set up their account (ADR 0097);
+- a staff member's password reset, asked for from either console's sign-in
+  page (ADR 0098).
+
+One host, one sender address, one password — the reset relay uses the same
+`PlatformMailer` the invitation relay does, so the moment mail works for one it
+works for both.
+
+Without mail configured nothing breaks — invitations wait, and the control
+plane's onboarding screen says "Email is not configured on this deployment
+yet". The moment the settings below are in place, every waiting invitation goes
+out on the relay's next pass (every 30 seconds).
+
+Password resets wait too, and this is the one place the two differ in a way
+that matters to an operator: a reset says nothing on any screen. The request
+page answers "if the account exists, an email is on its way" whether or not
+mail is configured, because it answers that to everyone (ADR 0098 refuses to
+let the page become a directory of who has an account). So a deployment with no
+mail settings looks, to the staff member, exactly like a deployment where they
+mistyped their user name. A queued reset also expires after 60 minutes rather
+than an invitation's 72 hours, so resets asked for before mail is turned on are
+generally dead by the time it is; the staff member asks again.
 
 ## What only the owner can do
 
@@ -68,6 +87,15 @@ HORECAOS_MAIL_SMTP_USERNAME=<the SMTP user name>
 HORECAOS_MAIL_SMTP_PASSWORD_REF=horecaos:production:provider_notification:platform:smtp
 ```
 
+Both console origins must also be set, because each emailed link points back at
+the console it was asked from — a control-plane operator sent to the operations
+console would land somewhere they may have no access to:
+
+```bash
+HORECAOS_OPERATIONS_ORIGIN=https://ops.horecaos.uz
+HORECAOS_CONTROL_PLANE_ORIGIN=https://console.horecaos.uz
+```
+
 The sender address must be on the verified domain. Then recreate the
 application so it reads the new environment:
 
@@ -81,6 +109,13 @@ In the control plane, open a tenant's onboarding screen. A waiting invitation
 turns to **Sent** within a minute. To test end to end, start onboarding for a
 test tenant with an address you read, open the email, set a password, and you
 land signed in on the operations console.
+
+For the reset, use **Forgot password?** on either console's sign-in page with
+an account whose address you read. The link works for 60 minutes and once.
+Setting a password there ends every other session that account holds, so a
+second browser you left signed in is signed out within a request or two —
+which is the check worth doing, because it is the half of the feature a
+screenshot cannot show.
 
 ## When it does not send
 
@@ -96,3 +131,15 @@ The onboarding screen names the reason:
 
 A link works for 72 hours and once. **Send again** makes a new link and the
 old one stops working at once.
+
+A password reset has no such screen and no **Send again**: nothing in either
+console reports whether one was sent, deliberately, because a screen that did
+would answer the question the endpoint refuses to. When a staff member says a
+reset never arrived, the reasons are the table above — read the application log
+for `Password reset relay:` lines, which carry counts and an error code and
+never an address — plus two of their own: the account has no email address in
+Keycloak at all, and the login they typed matched no account (or matched more
+than one, which the platform treats as no match rather than guessing whose
+password to reset). Both are answered by looking the account up in Keycloak.
+A reset asked for again replaces the one before it, so there is never more than
+one live link per account and telling somebody to "just ask again" is safe.
