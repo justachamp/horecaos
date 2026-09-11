@@ -161,7 +161,7 @@ public class CommercialWalletController {
                     + "Needs a second signature: the first call answers AWAITING_APPROVAL, and the identical "
                     + "call again after a different person approves it applies the correction.")
     public ResponseEntity<WalletChangeResponse> proposeAdjustment(
-            @PathVariable UUID tenantId, @Valid @RequestBody AdjustmentRequest body) {
+            @PathVariable UUID tenantId, @Valid @RequestBody WalletAdjustmentRequest body) {
         WalletChangeOutcome outcome = wallet.proposeAdjustment(
                 tenantId,
                 body.moneyKind(),
@@ -180,7 +180,7 @@ public class CommercialWalletController {
             description = "Needs a second signature, the same way a correction does. Spent bonus-first, the "
                     + "grant expiring soonest first, when a statement is paid.")
     public ResponseEntity<WalletChangeResponse> proposeBonusGrant(
-            @PathVariable UUID tenantId, @Valid @RequestBody BonusGrantRequest body) {
+            @PathVariable UUID tenantId, @Valid @RequestBody WalletBonusGrantRequest body) {
         WalletChangeOutcome outcome = wallet.proposeBonusGrant(
                 tenantId, body.amountMinor(), parseInstant(body.expiresAt()), actor(), body.reason(), correlationId());
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
@@ -193,7 +193,7 @@ public class CommercialWalletController {
             description = "Needs a second signature. Refused when it would take the paid balance below zero. "
                     + "Bonus money is never refunded — it lapses, and it was never the tenant's to begin with.")
     public ResponseEntity<WalletChangeResponse> proposeRefund(
-            @PathVariable UUID tenantId, @Valid @RequestBody RefundRequest body) {
+            @PathVariable UUID tenantId, @Valid @RequestBody WalletRefundRequest body) {
         WalletChangeOutcome outcome = wallet.proposeRefund(
                 tenantId, body.amountMinor(), body.payoutReference(), actor(), body.reason(), correlationId());
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
@@ -209,7 +209,7 @@ public class CommercialWalletController {
                     + "automatically once a merchant account exists — until then a CARD tenant's remainder "
                     + "stays due, exactly like INVOICE. Staff-changeable with a reason; audited.")
     public ResponseEntity<Void> setPaymentMethod(
-            @PathVariable UUID tenantId, @Valid @RequestBody PaymentMethodRequest body) {
+            @PathVariable UUID tenantId, @Valid @RequestBody WalletPaymentMethodRequest body) {
         PaymentMethod method;
         try {
             method = PaymentMethod.valueOf(body.paymentMethod());
@@ -331,23 +331,23 @@ public class CommercialWalletController {
             @NotBlank @Size(max = 1000) String reason) {}
 
     /** {@code grantId} names the bonus grant corrected; required for BONUS and refused for PAID. */
-    public record AdjustmentRequest(
+    public record WalletAdjustmentRequest(
             @NotBlank String moneyKind,
             @Nullable UUID grantId,
             long amountMinor,
             @NotBlank @Size(max = 1000) String reason) {}
 
-    public record BonusGrantRequest(
+    public record WalletBonusGrantRequest(
             @Min(1) long amountMinor,
             @NotNull @Size(max = 40) String expiresAt,
             @NotBlank @Size(max = 1000) String reason) {}
 
-    public record RefundRequest(
+    public record WalletRefundRequest(
             @Min(1) long amountMinor,
             @NotBlank @Size(max = 128) String payoutReference,
             @NotBlank @Size(max = 1000) String reason) {}
 
-    public record PaymentMethodRequest(
+    public record WalletPaymentMethodRequest(
             @NotBlank String paymentMethod,
             @Nullable @Size(max = 128) String cardTokenReference,
             @NotBlank @Size(max = 1000) String reason) {}
