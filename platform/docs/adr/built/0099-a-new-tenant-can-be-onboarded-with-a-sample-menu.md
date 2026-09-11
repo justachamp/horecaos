@@ -7,14 +7,20 @@
   `OrderingOnboardingStepHandlers.SampleMenuPublish`, over
   `catalog.api.SampleMenuPort`, `pricing.api.SampleMenuPricingPort` and
   `inventory.api.StockListingPort`; the control plane's start panel carries
-  the checkbox, default on. A tenant that authored nothing reaches
+  the checkbox, default on for a tenant's first run and off for a restart over
+  an ended one. A tenant that authored nothing reaches
   `CATALOG_READINESS_VALIDATE` and `ACTIVATION_SMOKE_TEST` `COMPLETED` and its
   menu is readable through the anonymous storefront query — asserted, not
-  assumed, in `SampleMenuPublishStepTests`. What does **not** exist is any way
-  to remove the sample: this record scopes that out, and the tenant publishing
-  its own catalog to the same channel is still the only thing that retires it.
-  The sample covers the tenant's first brand only, so a tenant with two brands
-  still fails catalogue readiness on the second.
+  assumed, in `SampleMenuPublishStepTests` and, run end to end through the real
+  workflow, in `OnboardingFullRunIntegrationTests`. Two limits are real and
+  deliberate: the sample is **UZS-only** (a tenant trading in anything else is
+  refused `SAMPLE_MENU_UNSUPPORTED_CURRENCY`, because nothing converts its
+  hard-coded som amounts), and there is still no way to **remove** the sample —
+  this record scopes that out, and the tenant publishing its own catalog to the
+  same channel is the only thing that retires the publication, while the brand's
+  `UZ` tax profile the step wrote stays live. The sample covers the tenant's
+  first brand only, so a tenant with two brands still fails catalogue readiness
+  on the second.
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11 ("while onboarding a new tenant ask whether to create a sample menu and publish it to see that all works on our side, later tenant can make their own menu when they fully ready"); Ayubkhon Abbosov (platform owner) decides
@@ -61,8 +67,9 @@ Starting an onboarding run takes a boolean, `sampleMenu`. When it is true, one
 new step — `SAMPLE_MENU_PUBLISH`, sequence 4, `CONFIGURING`, immediately after
 `DEFAULT_CONFIGURATION_APPLY` and before every validation — creates a clearly
 marked sample menu for the tenant's first brand, prices it in the tenant's own
-currency, stocks it at every location the tenant has, and publishes it to the
-`STOREFRONT` channel. `CATALOG_READINESS_VALIDATE` and `ACTIVATION_SMOKE_TEST`
+currency (which the step requires to be `UZS`, because the amounts are som and
+nothing converts them — see the specification), stocks it at every location the
+tenant has, and publishes it to the `STOREFRONT` channel. `CATALOG_READINESS_VALIDATE` and `ACTIVATION_SMOKE_TEST`
 then pass with nobody having authored anything.
 
 The step is **not** `requiredInV1`, and a run that did not ask for it still
@@ -107,6 +114,8 @@ The step records ids and counts in `result_snapshot` and nothing else.
 | Put the handler in `catalog`, with `pricing` and `inventory` implementing ports that `catalog` declares (the `VariantPricingLookup` pattern) | Works for `pricing`, which already depends on `catalog`. For `inventory` it adds a new `inventory -> catalog` edge that exists for nothing but this one step, and it puts an orchestration that ends in a publication inside the module whose publication it is — the sequencing (draft, price, stock, publish) is not catalog's business | `inventory` acquires a real reason to depend on `catalog` for something else |
 | Materialise `SAMPLE_MENU_PUBLISH` only when the run asked for it | Cheaper, and wrong for the reason ADR 0008 already gives about blocked steps: a missing row and a declined option are indistinguishable to every reader of the run | Never |
 | Make the step `requiredInV1` when `sampleMenu` is true | `required` is a property of the step catalogue, not of one run, and `outstandingRequiredSteps` is what gates `READY`. A failed sample menu would then block activation for a tenant that has since authored a real menu — punishing the tenant for having accepted help | The step catalogue becomes per-template data rather than an enum |
+| Convert the sample's som amounts into the tenant's currency, or scale them by the currency's ISO 4217 exponent | There is no rate to convert at, and scaling by the exponent is a no-op for the two markets it would be meant to fix — `UZS`, `KZT` and `GEL` all report two fraction digits, while this platform stores whole som. That is the exact reasoning both money modules document as having shipped a 100× bug. Refusing a currency the sample is not authored in is honest; a converted menu is a wrong menu nobody would notice | A per-market price-and-rate table exists, which is when `KZ` or `GE` actually onboards |
+| Re-assert every sample offering `AVAILABLE` on every attempt, as first built | It undid an operator's own decision with no audit fact and nothing in the run record to say so, and it disagreed with the sibling stock port, which had always refused to re-list a sold-out item. Creating only what is missing keeps the reason the re-assert existed (a location added between two runs) and drops the part that overwrote somebody | Never |
 | Default `sampleMenu` to true on the server when the field is absent | A caller that predates this field — `tools/seed-horecaos-tenant`, `tools/proving-run`, any integration — would silently start creating sample catalogs in tenants that already have real menus. Absent means false; the console is what defaults the checkbox to on | Never |
 
 ## Consequences
@@ -155,7 +164,52 @@ The step records ids and counts in `result_snapshot` and nothing else.
   higher priority wins; a tenant that activates its own book at priority 0 will
   be refused by `tiesWithALivePriceBook` and told to give one a higher priority.
   That refusal is correct and it is also a surprise a tenant that never asked for
-  a price book may not expect.
+  a price book may not expect. **It runs in the other direction too**, which is
+  the direction the step actually meets: a tenant that already had a live
+  `BRAND`-scope book at priority 0 — which is what the API writes when a create
+  request simply omits `priority` — makes the *sample's* activation the one
+  refused, and the step fails `SAMPLE_PRICING_REFUSED` rather than retrying a
+  permanent condition five times.
+- **The tax profile outlives the sample.** This step is the only thing on the
+  platform that creates one, and nothing retires it: when the tenant publishes
+  its own catalog the sample publication is retired automatically, but the
+  brand-scoped `UZ`/`INCLUSIVE`/1200 profile stays live and every later quote for
+  that brand extracts tax at that rate. For a UZS tenant — the only kind this
+  step now serves — that rate is Uzbekistan's standard VAT and is what the
+  tenant would have had to set anyway; the surprise is that it was set *for*
+  them, permanently, and that no console screen offers to change it (the API's
+  `PUT .../tax-profiles/{jurisdictionCode}` is the only way). The jurisdiction is
+  the literal `UZ` because `QuoteService.DEFAULT_JURISDICTION` is the only
+  jurisdiction any quote resolves against; a non-UZ market needs `QuoteService`
+  changed, not this step.
+- **A failed optional step is invisible to the stall alert.** ADR 0008's
+  stalled-run gauge and ADR 0058's stuck-run listing now count only `required`
+  steps, which is what makes their own prose ("a required step has exhausted its
+  attempts") true of their SQL. Before this step every row but `TENANT_ACTIVATE`
+  was required, so the clause was invisible; `SAMPLE_MENU_PUBLISH` is the first
+  step that can be `FAILED` on a run that is nonetheless `READY` and correct, and
+  without the clause one such tenant pins a platform-wide maximum forever and
+  masks every genuine stall behind it. What that gives up, deliberately: a failed
+  or permanently-pending sample menu raises nothing, and the run-detail view in
+  the control plane is the only place an operator learns about it. That is the
+  right trade — the alert answers "has onboarding stopped", and a
+  declined-or-broken offer has not stopped it — but it is a decision, not a side
+  effect, which is why it is written here.
+- **`resume` refuses a run that has finished.** A `FAILED` optional step can sit
+  on a `READY` run, and reopening it there would flip the row to `PENDING`, erase
+  the failure the operator was looking at, and report work that nothing would
+  ever do — `dueRuns` excludes a `READY` run and `refreshRunStatus` cannot pull
+  one back, because a non-required failure is invisible to it. `resume` now
+  refuses with a conflict instead, saying so. The cost is that a sample menu that
+  failed on a run which has since reached `READY` cannot be retried at all; the
+  tenant authors its own menu, which is what it was going to do anyway.
+- **The console's checkbox defaults off for a restart.** The start panel is also
+  shown over a `CANCELLED` or `FAILED` run, and a tenant on its second run has
+  usually spent the time in between authoring something. The server's own decline
+  only sees a *published* menu, so a draft the owner is mid-way through is
+  invisible to it — default-on there would publish a sample over a tenant that is
+  nearly ready, silently. Default-on stands for a tenant's first run, which is
+  what the decision above is about.
 
 ### Accepted trade-offs
 
@@ -208,12 +262,26 @@ depend on clock resolution — and every location that brand has:
 | Categories | 4: `SAMPLE-MAINS`, `SAMPLE-SHASHLIK`, `SAMPLE-STARTERS`, `SAMPLE-DRINKS` |
 | Products | 10, each with one default variant, SKU = product code |
 | Locales | `uz`, `ru`, `en` on every category and product; no media of any kind |
-| Prices | the tenant's `default_currency`, minor units, from the table below |
+| Prices | the amounts below, in the tenant's `default_currency` — **which must be `UZS`**, see below |
 | Price book | name `Sample menu prices`, `BRAND` scope, priority 0, activated |
-| Tax profile | `UZ`, `INCLUSIVE`, 1200 basis points, only when the brand has none |
-| Offerings | `AVAILABLE` for `PICKUP` and `DELIVERY` at every location |
+| Tax profile | `UZ`, `INCLUSIVE`, 1200 basis points, only when the brand has none. It outlives the sample — see Consequences |
+| Offerings | `AVAILABLE` for `PICKUP` and `DELIVERY` at every location that has no offering for that variant yet; an existing row is never overwritten |
 | Stock | one `BINARY` `inventory.stock_items` row per variant per location, which starts available |
 | Publication | `STOREFRONT`, `PUBLISHED` |
+
+**The sample is UZS-only.** The amounts are whole som copied from
+`tools/seed-data/horecaos-tenant.json`, at the platform's UZS exponent of zero —
+not ISO 4217's two, which both frontend money modules deliberately refuse to use
+because that reasoning already shipped a 100× bug. Nothing converts them, so a
+tenant trading in one of the platform's other declared markets (`KZ`/`KZT`,
+`GE`/`GEL`) would get plov at 38 000 of its own currency — wrong by an exchange
+rate, published on the anonymous storefront, as the platform's own proof that
+the tenant works. Rather than convert badly the step refuses: a tenant whose
+`default_currency` is not `UZS` fails with `SAMPLE_MENU_UNSUPPORTED_CURRENCY`
+and nothing at all is written. The same refusal is what keeps the hard-coded
+Uzbek VAT rate off a tenant it does not describe. A per-market price-and-rate
+table is the way to lift this, and it is worth writing when `KZ` or `GE`
+actually onboards — not before, because nobody knows those prices today.
 
 The ten items are the ten from `tools/seed-data/horecaos-tenant.json` that need
 no image to read as a menu: plov, lagman, manti, lamb/beef/chicken shashlik,
@@ -248,14 +316,34 @@ any two of them:
 A second run for the same tenant therefore finds the sample catalog, adds
 nothing, and completes.
 
+Both ports that touch state an operator can change share one rule, stated here
+because the two drifted apart while it was unwritten: **an existing offering row
+and an existing stock item are operator state the installer never overwrites;
+only missing rows are created.** `StockListingPort.ensureListed` already refused
+to re-list a deliberately sold-out item ("re-listing it would silently put a
+dish back on that a kitchen had taken off"); offerings did not, and re-asserted
+`AVAILABLE` and the full fulfilment-mode set over whatever was there. They now
+agree: `installSample` inserts an offering with `ON CONFLICT DO NOTHING` on the
+natural key, so a sample dish an operator set `UNAVAILABLE` or `HIDDEN` stays
+that way through every later attempt and every later run — while a location
+added to the brand between two runs still starts offering the sample, which is
+what the re-assert was for. The conflict target is the natural key rather than a
+read-then-write on purpose: `offeringsForLocation` filters `status <> 'HIDDEN'`
+in SQL, so a read would see a hidden row as absent and re-create it `AVAILABLE`.
+
 ### Result snapshot
 
 ```json
 {"catalogId": "...", "catalogCode": "SAMPLE-MENU", "publicationId": "...",
  "priceBookId": "...", "categories": 4, "products": 10, "variants": 10,
- "locations": 2, "stockItemsListed": 20, "pricesSet": 10,
+ "locations": 2, "offeringsCreated": 20, "stockItemsListed": 20, "pricesSet": 10,
  "channel": "STOREFRONT", "created": true}
 ```
+
+`offeringsCreated` sits beside `stockItemsListed` for the same reason: both
+ports create only what is missing, so a record that said nothing about them
+could not tell "there was nothing to do" from "something was overwritten". Both
+read zero on a retry that found everything already there.
 
 Ids and counts only. No item names, no prices, nothing about a person.
 `priceBookId` is absent rather than null when the tenant's own prices already
@@ -269,10 +357,16 @@ to do and nothing else: `{"channel": "STOREFRONT", "created": false, "reason":
 | Code | Outcome | Meaning |
 |---|---|---|
 | `NO_BRAND` | `FAILED` | The tenant has no brand to hang a menu on. Resumable: create a brand, resume the run |
-| `NO_CHANNEL` | `FAILED` | The tenant has no `STOREFRONT` channel to publish to. Named as `ACTIVATION_SMOKE_TEST` names the same gap. Checked before anything is written, because `CatalogPublicationService.publish` throws for an unregistered channel and a thrown handler becomes `RETRY` — which would retry a permanent condition forever |
+| `NO_CHANNEL` | `FAILED` | The tenant has no **active** `STOREFRONT` channel to publish to. `channel.isEmpty() \|\| !channel.sellable()`, the same predicate `ACTIVATION_SMOKE_TEST` applies, because a channel row still exists after it is archived and `publish` throws for an archived one. Checked before anything is written, because a thrown handler becomes `RETRY` — which would retry a permanent condition forever |
 | `NO_LOCATION` | `FAILED` | The brand has no location, so nothing can offer the menu |
-| `SAMPLE_MENU_REJECTED` | `FAILED` | The publication came back `REJECTED`; the detail names the blocker codes |
+| `SAMPLE_MENU_UNSUPPORTED_CURRENCY` | `FAILED` | The tenant's `default_currency` is not `UZS`, which is the only currency the sample's amounts are authored in. Checked before anything is written. Not resumable by resuming: it needs a per-market price table, or a tenant that trades in som |
+| `SAMPLE_PRICING_REFUSED` | `FAILED` | Pricing refused the sample book permanently — in practice the tenant's own `BRAND`-scope book is live at priority 0 and ties with the sample's. The detail is the refusal's own message. Resumable: give one of the two books a higher priority, or end the other's window, then resume. Distinguished from a thrown handler on purpose: an optimistic-locking failure from two writers racing is transient and keeps its `RETRY` |
 | `TRANSIENT_INFRASTRUCTURE` | `RETRY` | Anything thrown; `OnboardingService` already maps a thrown handler to this |
+
+A `FAILED` sample menu does not halt the run: the step is not `required`, so
+`claimNextStep` steps past it and `refreshRunStatus` still reaches `READY`.
+That is the whole point of it being optional, and it is asserted rather than
+assumed — see Testing.
 
 ### Control plane
 
@@ -294,17 +388,67 @@ the existing hint table.
 - `OnboardingService.startRun` materialises the step `PENDING` when asked and
   `SKIPPED` when not, and a `SKIPPED` step is never claimed and never blocks
   `READY`.
-- The control-plane spec: the checkbox defaults on and its value reaches the
-  start call.
+- A run that asked for a sample menu and whose sample step **failed** still
+  drains to `READY`, with a later step `COMPLETED` — the assertion that pins
+  `claimNextStep`'s `failed.required`, without which the run silently stalls at
+  step 5 while still reporting `PROVISIONING`. And the same run, reached the way
+  production reaches it: the handler throws until `MAXIMUM_ATTEMPTS` is spent.
+- The rollback story, both halves: a `SAMPLE_MENU_PUBLISH` row whose handler is
+  absent is released `BLOCKED` and the run still reaches `READY`; and a
+  `step_key` this binary has no enum constant for is released `BLOCKED` rather
+  than throwing in the claim's row mapper.
+- The stall alert: a run whose optional sample menu failed reports a stalled age
+  of zero two hours later, and the ADR 0058 stuck-run listing does not name it —
+  the mirror of `aRunThatFailedItsRequiredStepIsStalled`.
+- `resume` refuses such a run and leaves the failed step `FAILED`.
+- The whole run, once: `sampleMenu: true` on a tenant that authored nothing,
+  driven start-to-`READY` by the real `OnboardingService` with the real
+  handlers, ending with the storefront menu readable in Russian and priced.
+- An operator's `HIDDEN` or `UNAVAILABLE` offering survives a second attempt,
+  and a location added between two runs gets its offerings.
+- Each locale's names are asserted against that locale's own prefix, in the
+  catalog rows and in the storefront read — an assertion satisfied by any of
+  the three prefixes cannot see Uzbek text under the `ru` key.
+- A tenant trading in `KZT` is refused, and nothing is written; and the price
+  book carries the currency the port was given, asserted on the port because the
+  step refuses every currency but one.
+- A tenant whose own price book is live at priority 0 fails
+  `SAMPLE_PRICING_REFUSED` rather than retrying.
+- The control-plane spec: the checkbox defaults on for a first run, off for a
+  restart, and its value reaches the start call.
+- Every `OnboardingStep` appears in `TenantOnboardingStepCompleted.v1`'s
+  `stepKey` enum — the compatibility gate only catches removed values, so a
+  misspelled or forgotten addition had nothing checking it.
 
 ## Rollout and rollback
 
 No migration and no schema change, so there is nothing to roll back in the
-database. Rollback is reverting the code: runs already started keep their
-materialised rows, and a `SAMPLE_MENU_PUBLISH` row with no registered handler is
-released `BLOCKED` by `claimNextStep`, which is the existing behaviour for any
-step whose handler is absent. The step is optional, so a `BLOCKED` row does not
-stop a run reaching `READY`.
+database. Rollback is reverting the code — and reverting the code removes
+`OnboardingStep.SAMPLE_MENU_PUBLISH` along with the handler, which is the part
+the obvious story gets wrong. A binary whose enum has no constant for a key
+cannot classify the row at all: `claimNextStep` used to resolve the key with
+`valueOf` inside the row mapper, before the handler registry was ever consulted,
+so the "no registered handler is released `BLOCKED`" path was unreachable and
+the run froze on the row instead — a warning every tick, five steps short of
+activation, on every replica.
+
+As of this record, `claimNextStep` resolves the key with `OnboardingStep.find`
+and releases an unknown one `BLOCKED`/`CAPABILITY_ABSENT` exactly as it releases
+one whose handler is missing, so the next such rollback is safe by construction.
+That tolerance ships in this wave, not in the wave being rolled back to, so
+**this** rollback still needs the outstanding rows retired by hand first:
+
+```sql
+UPDATE tenant.onboarding_steps
+   SET status = 'SKIPPED', last_error_code = 'NOT_REQUESTED',
+       claim_token = NULL, claimed_at = NULL, updated_at = now()
+ WHERE step_key = 'SAMPLE_MENU_PUBLISH' AND status IN ('PENDING', 'RUNNING');
+```
+
+`SKIPPED` rather than `BLOCKED`, so the row is never claimed again and — being
+optional — never gates `READY`, which is the same end state a declined sample
+menu already has. Completed rows are left alone: they describe work that really
+happened.
 
 ## Implementation checklist
 
