@@ -188,6 +188,11 @@ describe('OwnerInvitations', () => {
     );
     expect(api.ownerInvitations).toHaveBeenCalledTimes(2);
     expect(fixture.nativeElement.querySelector('.resendForm')).toBeNull();
+    // The row goes back to QUEUED, which is resendable, so the confirmation has
+    // to live beside the button rather than in place of it.
+    const after = fixture.nativeElement.querySelectorAll('tbody tr')[0] as HTMLElement;
+    expect(after.querySelector('.success')?.textContent).toContain(ru['ownerInvitations.resent']);
+    expect(after.querySelector('.actions button')).not.toBeNull();
   });
 
   it('will not resend without a reason', async () => {

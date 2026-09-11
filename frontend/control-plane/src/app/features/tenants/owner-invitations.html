@@ -71,12 +71,13 @@
             }
           </td>
           <td class="q-body-sm actions">
+            @if (resent() === row.tenantId) {
+              <span class="success">{{ i18n.t('ownerInvitations.resent') }}</span>
+            }
             @if (canResend(row)) {
               <button type="button" class="q-body-sm link" (click)="openResend(row.tenantId)">
                 {{ i18n.t('onboarding.invitation.resend') }}
               </button>
-            } @else if (resent() === row.tenantId) {
-              <span class="success">{{ i18n.t('ownerInvitations.resent') }}</span>
             }
           </td>
         </tr>
