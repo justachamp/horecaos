@@ -69,6 +69,53 @@ public record Cursor(String sortKey, String filterHash) {
         return Optional.of(new Cursor(parts[0], parts[1]));
     }
 
+    /**
+     * Encodes a cursor with no signature (ADR 0102).
+     *
+     * <p>The interim form, for the lists that page today while the platform has
+     * no {@link CursorSigner} bean. {@code AuditController},
+     * {@code FailureOperationsController}, the migration console and the tenant
+     * directory each carry a raw identifier as their cursor for the same reason;
+     * this at least keeps the filter set pinned, which a raw identifier cannot.
+     *
+     * <p>What the missing signature gives up is narrow and worth stating: a
+     * hand-edited token cannot be told from a minted one, so a caller can hand
+     * itself an incoherent window. What it does <strong>not</strong> give up is
+     * scope — no cursor in this codebase carries a tenant, a brand or a
+     * location, because those come from the path and the ADR 0025 capability
+     * check on every request, so an edited cursor reaches nothing its holder
+     * could not already read.
+     */
+    public String encodeUnsigned() {
+        return ENCODER.encodeToString((sortKey + SEPARATOR + filterHash).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Decodes a cursor minted by {@link #encodeUnsigned()}.
+     *
+     * @return the cursor, or empty when it is malformed or was issued for a
+     *         different filter set — the caller answers both the same way,
+     *         because "this token is not usable here" is the whole of what a
+     *         client can act on
+     */
+    public static Optional<Cursor> decodeUnsigned(@Nullable String encoded, String expectedFilterHash) {
+        if (encoded == null || encoded.isBlank()) {
+            return Optional.empty();
+        }
+        String decoded;
+        try {
+            decoded = new String(DECODER.decode(encoded), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException malformed) {
+            return Optional.empty();
+        }
+
+        String[] parts = decoded.split("\\" + SEPARATOR, 2);
+        if (parts.length != 2 || !parts[1].equals(expectedFilterHash)) {
+            return Optional.empty();
+        }
+        return Optional.of(new Cursor(parts[0], parts[1]));
+    }
+
     /** Signs and verifies cursor payloads. */
     public interface CursorSigner {
 

@@ -580,6 +580,20 @@ public class JdbcOrderStore {
      *                   no single location to ask about (ADR 0058)
      */
     public OrderCountsRow counts(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
+        return counts(tenantId, brandId, locationId, null, null);
+    }
+
+    /**
+     * The same aggregate over a period (ADR 0102).
+     *
+     * <p>The period is the board's, so a tab badge and the tab's own list count
+     * the same population. Half-open — {@code >= from}, {@code < to} — so two
+     * adjacent periods neither double-count an order nor drop one, which a
+     * closed upper bound does on the microsecond boundary that PostgreSQL
+     * actually stores.
+     */
+    public OrderCountsRow counts(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, @Nullable Instant from, @Nullable Instant to) {
         return jdbc.sql("""
                 SELECT
                     count(*) FILTER (WHERE status IN ('RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'))
@@ -596,10 +610,14 @@ public class JdbcOrderStore {
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND (:locationId::uuid IS NULL OR location_id = :locationId)
+                  AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
+                  AND (CAST(:to AS timestamptz) IS NULL OR created_at < CAST(:to AS timestamptz))
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
+                .param("from", utcOrNull(from))
+                .param("to", utcOrNull(to))
                 .query((row, number) -> new OrderCountsRow(
                         row.getLong("new_orders"),
                         row.getLong("awaiting_approval"),
@@ -694,23 +712,168 @@ public class JdbcOrderStore {
         return updated > 0;
     }
 
-    /** The operations list for one location, newest first. */
-    public List<OrderRow> listForLocation(
-            UUID tenantId, UUID brandId, UUID locationId, List<String> statuses, int limit) {
-        return jdbc.sql(SELECT_ORDER + """
-                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
-                   AND (:statusFilterEmpty OR status = ANY(:statuses))
-                 ORDER BY created_at DESC
-                 LIMIT :limit
+    /**
+     * The operations board for one location, newest first, one page (ADR 0102).
+     *
+     * <p>Every predicate orders.md §2.4 names is in the statement rather than in
+     * a stream after it. That is not a performance preference: a filter applied
+     * after the page has been cut returns fewer rows than the page size and the
+     * caller cannot tell "no more orders" from "none of this page matched", so
+     * paging and client-side filtering cannot both be correct.
+     *
+     * <p>Three of the predicates leave the {@code ordering} schema —
+     * {@code fulfillment.shipments}, {@code payments.payment_intents},
+     * {@code ordering.order_external_references} — which ADR 0102 permits for
+     * this read model and for nothing else in the module. Each carries
+     * {@code tenant_id} as well as the order id: an order id alone would be
+     * enough given the foreign keys, and writing the tenant into every one of
+     * them is what makes a cross-tenant row unreachable by inspection rather
+     * than by trusting a constraint three tables away.
+     *
+     * <p>Keyset on {@code (created_at, id)} and never an offset, for the reason
+     * {@link #listForCustomer} states: an operations list changes while it is
+     * being paged, and an offset silently skips the order that moved.
+     *
+     * @param beforeCreatedAt the previous page's last order's instant, or null
+     *                        to start at the newest
+     */
+    public List<OrderBoardRow> listForLocation(
+            OrderListQuery query, @Nullable Instant beforeCreatedAt, @Nullable UUID beforeId, int limit) {
+
+        return jdbc.sql("SELECT " + ORDER_COLUMNS + """
+                        ,
+                               (SELECT CASE
+                                         WHEN bool_or(p.status = 'MANUAL_ACTION_REQUIRED')
+                                              THEN 'MANUAL_ACTION_REQUIRED'
+                                         WHEN bool_or(p.status = 'FAILED_RETRYABLE')
+                                              THEN 'FAILED_RETRYABLE'
+                                       END
+                                  FROM ordering.order_process_states p
+                                 WHERE p.tenant_id = orders.tenant_id AND p.order_id = orders.id
+                                   AND p.status IN ('MANUAL_ACTION_REQUIRED', 'FAILED_RETRYABLE'))
+                               AS process_attention
+                        FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                          AND (:statusFilterEmpty OR status = ANY(:statuses))
+                          AND (CAST(:from AS timestamptz) IS NULL
+                               OR created_at >= CAST(:from AS timestamptz))
+                          AND (CAST(:to AS timestamptz) IS NULL
+                               OR created_at < CAST(:to AS timestamptz))
+                          AND (CAST(:channelCode AS varchar) IS NULL
+                               OR channel_code_snapshot = CAST(:channelCode AS varchar))
+                          AND (CAST(:fulfillmentMode AS varchar) IS NULL
+                               OR fulfillment_mode = CAST(:fulfillmentMode AS varchar))
+                          AND (CAST(:createdByActorId AS varchar) IS NULL
+                               OR created_by_actor_id = CAST(:createdByActorId AS varchar))
+                          AND (CAST(:courierId AS uuid) IS NULL OR EXISTS (
+                                  SELECT 1 FROM fulfillment.shipments s
+                                   WHERE s.tenant_id = orders.tenant_id AND s.order_id = orders.id
+                                     AND s.courier_id = CAST(:courierId AS uuid)))
+                          AND (CAST(:paymentMethodCode AS varchar) IS NULL OR EXISTS (
+                                  SELECT 1 FROM payments.payment_intents i
+                                   WHERE i.tenant_id = orders.tenant_id AND i.order_id = orders.id
+                                     AND i.payment_method_code = CAST(:paymentMethodCode AS varchar)))
+                          AND (CAST(:reference AS varchar) IS NULL OR EXISTS (
+                                  SELECT 1 FROM ordering.order_external_references r
+                                   WHERE r.tenant_id = orders.tenant_id AND r.order_id = orders.id
+                                     AND r.reference_value_normalised = CAST(:reference AS varchar)))
+                          AND (:unbounded
+                               OR (created_at, id)
+                                  < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
+                        ORDER BY created_at DESC, id DESC
+                        LIMIT :limit
+                        """)
+                .param("tenantId", query.tenantId())
+                .param("brandId", query.brandId())
+                .param("locationId", query.locationId())
+                .param("statusFilterEmpty", query.statuses().isEmpty())
+                .param("statuses", query.statuses().toArray(String[]::new))
+                .param("from", utcOrNull(query.from()))
+                .param("to", utcOrNull(query.to()))
+                .param("channelCode", query.channelCode())
+                .param("fulfillmentMode", query.fulfillmentMode())
+                .param("createdByActorId", query.createdByActorId())
+                .param(
+                        "courierId",
+                        query.courierId() == null ? null : query.courierId().toString())
+                .param("paymentMethodCode", query.paymentMethodCode())
+                .param("reference", query.normalisedReference())
+                .param("unbounded", beforeCreatedAt == null)
+                // Cast in the statement rather than typed here, so the null a
+                // first page sends is a typed null the row comparison can be
+                // planned against instead of an untyped one the driver guesses.
+                .param("beforeCreatedAt", utcOrNull(beforeCreatedAt))
+                .param("beforeId", beforeId == null ? null : beforeId.toString())
+                .param("limit", limit)
+                .query((row, number) -> new OrderBoardRow(mapOrder(row, number), row.getString("process_attention")))
+                .list();
+    }
+
+    private static @Nullable OffsetDateTime utcOrNull(@Nullable Instant instant) {
+        return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+    }
+
+    /**
+     * Where a board cursor points, resolved inside the caller's own scope.
+     *
+     * <p>The cursor names an order the caller received in the page it is
+     * continuing, and this read applies the same tenant, brand and location
+     * predicates the page itself does — which is the whole of its safety, the
+     * same way {@link #customerOrderCursor} is safe. A cursor naming another
+     * location's or another tenant's order resolves to nothing rather than
+     * moving the window into it, and the caller is told the cursor is unusable
+     * in exactly the same words as one that was never an order at all.
+     *
+     * <p>The instant is read here rather than carried in the cursor so that the
+     * keyset position cannot be chosen by the client. An order's
+     * {@code created_at} never changes, so this answers the same value for the
+     * life of the order.
+     */
+    public Optional<Instant> locationOrderCursor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT created_at FROM ordering.orders
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND location_id = :locationId AND id = :orderId
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("statusFilterEmpty", statuses.isEmpty())
-                .param("statuses", statuses.toArray(String[]::new))
-                .param("limit", limit)
-                .query(JdbcOrderStore::mapOrder)
-                .list();
+                .param("orderId", orderId)
+                .query((row, number) ->
+                        row.getObject("created_at", OffsetDateTime.class).toInstant())
+                .optional();
+    }
+
+    /**
+     * The form partner references are stored and matched in: uppercase, with
+     * whitespace, hyphens and one leading {@code #} removed.
+     *
+     * <p>The same rule as {@code partner.domain.ExternalReference#normalise},
+     * restated for the third time because that type is internal to its module —
+     * {@code tenancy…JdbcGlobalLookup#partnerForm} is the second, and says the
+     * same thing. {@code OrderBoardQueryTests} holds this copy to that one's
+     * answers, which is the only thing keeping three implementations of one rule
+     * honest.
+     *
+     * @return the normalised form, or null when nothing searchable remains —
+     *         a search for {@code "#"} or {@code " - "} must not become a search
+     *         for the empty string, which would match every reference or none
+     *         depending on the collation
+     */
+    public static @Nullable String normalisedExternalReference(String raw) {
+        String stripped = raw.strip();
+        if (stripped.startsWith("#")) {
+            stripped = stripped.substring(1);
+        }
+        StringBuilder normalised = new StringBuilder(stripped.length());
+        for (int index = 0; index < stripped.length(); index++) {
+            char character = stripped.charAt(index);
+            if (!Character.isWhitespace(character) && character != '-') {
+                normalised.append(Character.toUpperCase(character));
+            }
+        }
+        String result = normalised.toString().toUpperCase(java.util.Locale.ROOT);
+        return result.isEmpty() ? null : result;
     }
 
     /**
@@ -1320,22 +1483,32 @@ public class JdbcOrderStore {
                 == 1;
     }
 
-    private static final String SELECT_ORDER = """
-            SELECT id, public_order_number, tenant_id, brand_id, location_id, channel_id,
-                   channel_code_snapshot, customer_account_id, guest_reference_hash,
-                   fulfillment_mode, acceptance_mode_snapshot, acceptance_policy_id,
-                   acceptance_policy_version, approval_channel_snapshot,
-                   approval_timeout_action_snapshot, approval_deadline_at, status,
-                   payment_status_projection, fulfillment_status_projection, currency,
-                   subtotal_minor, tax_minor, discount_minor, fee_minor, total_minor,
-                   pricing_quote_id, pricing_context_hash, catalog_publication_id, cart_id,
-                   idempotency_key, promised_at, promise_basis, promise_prep_minutes,
-                   promise_travel_minutes, version, created_at, confirmed_at, closed_at,
-                   current_revision, created_by_actor_type, created_by_actor_id,
-                   accepted_by_actor_type, accepted_by_actor_id, accepted_at,
-                   callback_requested, callback_resolved_at, callback_resolved_by,
-                   cash_tendered_expected_minor, kitchen_note
-            FROM ordering.orders""";
+    /**
+     * Every column {@link #mapOrder} reads, unqualified.
+     *
+     * <p>Split out of {@link #SELECT_ORDER} so the board query can put a derived
+     * column beside them without restating the list. Unqualified on purpose: the
+     * board query leaves {@code ordering.orders} unaliased, so {@code orders.x}
+     * still names it from inside a correlated subquery and these names still
+     * resolve at the top level.
+     */
+    private static final String ORDER_COLUMNS = """
+            id, public_order_number, tenant_id, brand_id, location_id, channel_id,
+            channel_code_snapshot, customer_account_id, guest_reference_hash,
+            fulfillment_mode, acceptance_mode_snapshot, acceptance_policy_id,
+            acceptance_policy_version, approval_channel_snapshot,
+            approval_timeout_action_snapshot, approval_deadline_at, status,
+            payment_status_projection, fulfillment_status_projection, currency,
+            subtotal_minor, tax_minor, discount_minor, fee_minor, total_minor,
+            pricing_quote_id, pricing_context_hash, catalog_publication_id, cart_id,
+            idempotency_key, promised_at, promise_basis, promise_prep_minutes,
+            promise_travel_minutes, version, created_at, confirmed_at, closed_at,
+            current_revision, created_by_actor_type, created_by_actor_id,
+            accepted_by_actor_type, accepted_by_actor_id, accepted_at,
+            callback_requested, callback_resolved_at, callback_resolved_by,
+            cash_tendered_expected_minor, kitchen_note""";
+
+    private static final String SELECT_ORDER = "SELECT " + ORDER_COLUMNS + "\nFROM ordering.orders";
 
     /**
      * Rebuilds the promise from its four columns.
@@ -1604,6 +1777,103 @@ public class JdbcOrderStore {
             @Nullable String callbackResolvedBy,
             Long cashTenderedExpectedMinor,
             String kitchenNote) {}
+
+    /**
+     * One board row: the order, and the one thing about it that is not on the
+     * order row (ADR 0102).
+     *
+     * <p>A pair rather than a widened {@link OrderRow}, because {@code OrderRow}
+     * is the order as the table holds it and is read by thirty other callers
+     * that have no business acquiring a derived field. The derivation lives
+     * beside the row, not inside it.
+     *
+     * @param processAttention {@code MANUAL_ACTION_REQUIRED} when any of this
+     *                         order's processes needs an operator,
+     *                         {@code FAILED_RETRYABLE} when one has failed and
+     *                         will be retried, null when neither. The worse of
+     *                         the two wins, decided here rather than by whoever
+     *                         renders it
+     */
+    public record OrderBoardRow(OrderRow order, @Nullable String processAttention) {}
+
+    /**
+     * The order board's filter set (ADR 0102, orders.md §2.4).
+     *
+     * <p>A record rather than eleven parameters, so that {@link #fingerprint()}
+     * can be derived from the same value the query is built from. A cursor
+     * pinned to a hash computed separately from the filters is a cursor that
+     * stops matching the moment somebody adds a filter and forgets the hash —
+     * and the failure is an incoherent page, not an error.
+     *
+     * @param statuses     empty means every status, not none
+     * @param from         inclusive lower bound on {@code created_at}
+     * @param to           exclusive upper bound on {@code created_at}
+     * @param reference    the operator's raw search text; normalised once, here,
+     *                     so the fingerprint and the predicate agree on the form
+     */
+    public record OrderListQuery(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> statuses,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            @Nullable String channelCode,
+            @Nullable String fulfillmentMode,
+            @Nullable UUID courierId,
+            @Nullable String paymentMethodCode,
+            @Nullable String createdByActorId,
+            @Nullable String reference) {
+
+        /** ASCII unit separator: not producible by any parameter of this query. */
+        private static final String FINGERPRINT_SEPARATOR = "\u001f";
+
+        public OrderListQuery {
+            statuses = List.copyOf(statuses);
+        }
+
+        /**
+         * The reference as {@code reference_value_normalised} holds it, or null
+         * when the search text carries nothing searchable.
+         */
+        public @Nullable String normalisedReference() {
+            return reference == null ? null : normalisedExternalReference(reference);
+        }
+
+        /**
+         * A canonical rendering of everything that narrows the result set.
+         *
+         * <p>The location scope is part of it: a cursor minted against one
+         * location must not continue a page at another, and the fingerprint is
+         * the only place that can be stated once for every filter at once.
+         * Statuses are sorted, because {@code ?status=NEW&status=READY} and
+         * {@code ?status=READY&status=NEW} are the same query and must produce
+         * the same cursor.
+         *
+         * <p>Joined on the ASCII unit separator, which no parameter of this
+         * query can contain. A plain concatenation would let two different
+         * filter sets render identically — a channel code of {@code "AB"}
+         * beside no fulfilment mode, and a channel code of {@code "A"} beside
+         * a mode of {@code "B"} — and telling those two apart is the whole
+         * job of the hash.
+         */
+        public String fingerprint() {
+            return String.join(
+                    FINGERPRINT_SEPARATOR,
+                    tenantId.toString(),
+                    brandId.toString(),
+                    locationId.toString(),
+                    String.join(",", statuses.stream().sorted().toList()),
+                    String.valueOf(from),
+                    String.valueOf(to),
+                    String.valueOf(channelCode),
+                    String.valueOf(fulfillmentMode),
+                    String.valueOf(courierId),
+                    String.valueOf(paymentMethodCode),
+                    String.valueOf(createdByActorId),
+                    String.valueOf(normalisedReference()));
+        }
+    }
 
     /**
      * The order's customer snapshot, still encrypted (ADR 0029).
