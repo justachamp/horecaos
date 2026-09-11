@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -145,6 +147,7 @@ class ModulesStatementsAndArrearsTests {
                 new NotConfiguredCardCharger(),
                 audit,
                 new SimpleMeterRegistry(),
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
                 clock);
 
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -16,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
@@ -101,8 +104,14 @@ public class WalletService {
     private final CardCharger cardCharger;
     private final AuditRecorder audit;
     private final MeterRegistry meters;
+    private final TransactionTemplate unitOfWork;
     private final Clock clock;
 
+    // The template is for the one method that calls a provider. Its database
+    // work has to be two committed transactions with the provider call between
+    // them, and @Transactional cannot express that from inside a single bean --
+    // a method calling its own annotated method skips the proxy entirely. Same
+    // shape, and for the same reason, as PaymentAttemptService.
     public WalletService(
             JdbcWalletStore wallet,
             JdbcSubscriptionStore subscriptions,
@@ -111,6 +120,7 @@ public class WalletService {
             CardCharger cardCharger,
             AuditRecorder audit,
             MeterRegistry meters,
+            TransactionTemplate unitOfWork,
             Clock clock) {
         this.wallet = wallet;
         this.subscriptions = subscriptions;
@@ -118,6 +128,7 @@ public class WalletService {
         this.approvals = approvals;
         this.cardCharger = cardCharger;
         this.audit = audit;
+        this.unitOfWork = unitOfWork;
         this.meters = meters;
         this.clock = clock;
     }
@@ -238,28 +249,34 @@ public class WalletService {
      * takes money in in its own currency only, for the same reason it pays out
      * in its own currency only (ADR 0095): there is no rate here at which one
      * could become the other, and crediting a foreign face value would record
-     * four cents' worth of som for a five-hundred-dollar receipt. A deposit on
-     * a plan version sold in a second currency is therefore invoiced, exactly
-     * as that version's statements are.
+     * four cents' worth of som for a five-hundred-dollar receipt.
+     *
+     * <p>Nothing could collect such a deposit — the statement carries no
+     * deposit line any more, so there is no invoice for it either — which is
+     * why {@code SubscriptionService.start} refuses to sell a second-currency
+     * version that carries one. The check below is what stands between a
+     * mis-pointed subscription and a face value recorded in the wrong money;
+     * today only a plan-version migration that does not exist yet could reach
+     * it.
      */
     @Transactional
     public UUID recordDeposit(
             UUID tenantId, String bankReference, ActorRef actor, String reason, String correlationId) {
         requireReference(bankReference, "A deposit carries the bank's reference");
         wallet.lockBilling(tenantId, clock.instant());
-        long due = subscriptions.liveDepositDue(tenantId);
+        // The obligation, its amount and its currency in one locked statement.
+        // Three statements let a concurrent terminate-and-start commit between
+        // them, and the deposit then cleared an obligation it never read.
+        JdbcSubscriptionStore.DepositObligation obligation = subscriptions
+                .lockLiveDepositObligation(tenantId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
+        long due = obligation.depositDueMinor();
         if (due <= 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "The tenant has no activation deposit due");
         }
-        Subscription live = subscriptions
-                .findLive(tenantId)
-                .orElseThrow(
-                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
         String walletCurrency = wallet.currencyOf(tenantId);
-        String depositCurrency = subscriptions
-                .livePlanCurrency(tenantId)
-                .orElseThrow(
-                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
+        String depositCurrency = obligation.currency();
         if (!depositCurrency.equals(walletCurrency)) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
@@ -282,7 +299,7 @@ public class WalletService {
                 null,
                 // The obligation this money clears, recorded on the row that
                 // clears it. A reversal re-arms this subscription and no other.
-                live.id(),
+                obligation.subscriptionId(),
                 null,
                 bankReference,
                 reason,
@@ -290,14 +307,28 @@ public class WalletService {
                 null,
                 null,
                 now));
-        subscriptions.clearDepositDue(tenantId, live.id());
+        if (!subscriptions.clearDepositDue(tenantId, obligation.subscriptionId(), due)) {
+            throw new IllegalStateException("The obligation read a moment ago under this lock is no longer "
+                    + "%d on subscription %s".formatted(due, obligation.subscriptionId()));
+        }
 
         audit.record(AuditFact.of("commercial.wallet.deposit_recorded", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("amountMinor", due))
+                // deposit_due_minor is not money, so the ledger cannot
+                // reconstruct the obligation this cleared. Which subscription,
+                // and from what to what, exactly as the reversal records it.
+                .changed(Map.of(
+                        "amountMinor",
+                        due,
+                        "subscriptionId",
+                        obligation.subscriptionId().toString(),
+                        "depositDueFromMinor",
+                        due,
+                        "depositDueToMinor",
+                        0L))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -795,13 +826,22 @@ public class WalletService {
      * A downward adjustment or a refund only ever removes money, so neither
      * calls this.
      *
-     * @return how much this pass paid across every statement, in the
-     *         tenant's billing currency's minor units
+     * <p><strong>The wallet only.</strong> What a statement still owes after
+     * this pass is collected from the tenant's card by
+     * {@link #settleCardRemainders}, which is deliberately not part of this
+     * transaction: it asks a provider we do not control, and a provider call
+     * inside the transaction that recorded an operator's bank transfer means a
+     * provider timeout rolls that transfer back. The statement's remaining due
+     * is the source of truth, so a pass that does not happen is simply picked
+     * up by the next one.
+     *
+     * @return how much this pass paid across every statement out of the
+     *         wallet, in the tenant's billing currency's minor units
      */
     @Transactional
     public long applyAvailableFunds(UUID tenantId) {
         Instant now = clock.instant();
-        TenantBilling billing = wallet.lockBilling(tenantId, now);
+        wallet.lockBilling(tenantId, now);
         String currency = wallet.currencyOf(tenantId);
         List<StatementPayment> open = wallet.openStatementsOldestFirst(tenantId, currency);
         if (open.isEmpty()) {
@@ -874,9 +914,6 @@ public class WalletService {
                 remainingDue -= draw;
                 totalPaid += draw;
             }
-            if (remainingDue > 0) {
-                totalPaid += attemptCardCharge(tenantId, billing, statement, remainingDue, currency, now);
-            }
         }
         return totalPaid;
     }
@@ -924,47 +961,143 @@ public class WalletService {
     }
 
     /**
-     * Charges a CARD tenant's stored card for what a statement still owes
-     * after bonus and paid money (ADR 0095, item 8). {@code NotConfigured} —
-     * the only answer today, with no merchant account — leaves the
-     * remainder due, exactly like {@code INVOICE}.
+     * Charges a CARD tenant's stored card for whatever its open statements
+     * still owe after bonus and paid money (ADR 0095, item 8), between two
+     * committed transactions rather than inside one. {@code NotConfigured} —
+     * the only answer today, with no merchant account — leaves the remainder
+     * due, exactly like {@code INVOICE}.
      *
-     * <p>Every outcome is answered for, and the three are told apart. A
-     * decline used to collapse into the same silent {@code return 0} as "no
-     * merchant account yet": the provider's reason was read by nobody, no
-     * audit fact was written and no counter moved, so a card that declined
-     * every month surfaced only weeks later as an arrears case with no cause
-     * attached, and a provider outage looked like many unrelated tenants going
-     * quietly into arrears. The shape here is {@code OwnerInvitationRelay}'s
-     * for {@code MailOutcome}: name each arm, keep the reason code, and hold
-     * the expected answer apart from the real failure.
+     * <p><strong>Why this is not part of {@link #applyAvailableFunds}.</strong>
+     * It was, and that put a call to a third party inside the transaction that
+     * had just recorded an operator's bank transfer. A provider timeout there
+     * rolls the transfer back: the tenant's money is uncredited, the statement
+     * ages into arrears and the operator sees a 500 with no row on file. The
+     * attempt row went with it, so the one artefact V0214 exists to leave
+     * behind — a committed {@code PENDING} key meaning "we asked and never
+     * learned the answer" — could never survive the failure it was written
+     * for. And it held a pooled connection, and the tenant's billing row lock,
+     * across an uncontrolled network wait, which is the property {@code
+     * ExternalCallTransactionBoundaryTests} enforces for every other provider
+     * call in the platform.
+     *
+     * <p>So: one transaction opens the attempt and commits, the provider is
+     * asked with nothing held, and a second transaction records the answer
+     * together with the money. Dropping the billing lock around the call is
+     * the real cost, so the second transaction takes it again and re-reads
+     * what the statement still owes — a transfer that arrived meanwhile keeps
+     * its payment, and the surplus stays the tenant's paid balance rather than
+     * over-paying the statement.
+     *
+     * <p>Every outcome is answered for, and the four are told apart. A decline
+     * used to collapse into the same silent {@code return 0} as "no merchant
+     * account yet": the provider's reason was read by nobody, no audit fact was
+     * written and no counter moved, so a card that declined every month
+     * surfaced only weeks later as an arrears case with no cause attached, and
+     * a provider outage looked like many unrelated tenants going quietly into
+     * arrears. The shape here is {@code OwnerInvitationRelay}'s for {@code
+     * MailOutcome}: name each arm, keep the reason code, and hold the expected
+     * answer apart from the real failure.
      *
      * <p>Deliberately no control-plane incident per decline: one decline is a
      * normal collections event, and an alert per tenant per month is noise
      * that teaches operators to ignore the class. The systemic signal is the
      * counter's failure rate; the per-tenant conversation stays with {@code
      * CommercialArrearsReviewSweeper} (ADR 0089).
+     *
+     * @return how much of the statements' remainders the card actually paid
      */
-    private long attemptCardCharge(
-            UUID tenantId,
-            TenantBilling billing,
-            StatementPayment statement,
-            long amountMinor,
-            String currency,
-            Instant now) {
-        if (billing.paymentMethod() != PaymentMethod.CARD) {
+    public long settleCardRemainders(UUID tenantId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "settleCardRemainders asks a provider HorecaOS does not control, so it runs between "
+                            + "two committed transactions and never inside a caller's. Call it once the "
+                            + "unit of work that recorded the money has committed.");
+        }
+        List<UUID> open = Objects.requireNonNull(unitOfWork.execute(status -> openCardStatements(tenantId)));
+        long charged = 0;
+        for (UUID statementId : open) {
+            charged += settleOneCardRemainder(tenantId, statementId);
+        }
+        return charged;
+    }
+
+    /** The open statements a CARD tenant still owes something on, oldest first; empty for anyone else. */
+    private List<UUID> openCardStatements(UUID tenantId) {
+        if (billing(tenantId).paymentMethod() != PaymentMethod.CARD) {
+            return List.of();
+        }
+        return wallet.openStatementsOldestFirst(tenantId, wallet.currencyOf(tenantId)).stream()
+                .filter(statement -> statement.dueMinor() > 0)
+                .map(StatementPayment::statementId)
+                .toList();
+    }
+
+    private long settleOneCardRemainder(UUID tenantId, UUID statementId) {
+        CardAttempt attempt = Objects.requireNonNull(
+                        unitOfWork.execute(status -> beginCardAttempt(tenantId, statementId)))
+                .orElse(null);
+        if (attempt == null) {
             return 0;
         }
-        // One attempt, one row, and the row's id is the key the provider is
-        // handed. Written before the call, so the key is durable before
-        // anything can be charged under it.
+        CardCharger.Outcome outcome;
+        try {
+            outcome = cardCharger.charge(
+                    tenantId,
+                    attempt.cardTokenReference(),
+                    attempt.amountMinor(),
+                    attempt.currency(),
+                    attempt.attemptId().toString());
+        } catch (RuntimeException unanswered) {
+            // The row is already committed and stays PENDING, which is exactly
+            // what PENDING means: we asked and never learned the answer. The
+            // money may or may not have left the card, so nothing is written to
+            // the ledger and nothing is recorded as declined — a reconciler
+            // settles this row against the provider before the remainder is
+            // asked for again. Never the token and never the amount beside the
+            // tenant's name (ADR 0028, ADR 0029).
+            log.warn("A card charge for statement {} of tenant {} was never answered", statementId, tenantId);
+            log.debug("The card charger threw", unanswered);
+            countCardCharge("unanswered");
+            return 0;
+        }
+        return Objects.requireNonNull(unitOfWork.execute(status -> recordCardOutcome(tenantId, attempt, outcome)));
+    }
+
+    /**
+     * Opens one attempt and commits it, before anything is asked of a provider.
+     *
+     * <p>One attempt, one row, and the row's id is the key the provider is
+     * handed — never the statement id, whose amount changes between settlement
+     * passes. Null when there is nothing to charge after all: the tenant is no
+     * longer on CARD, or the statement was paid while this pass was being set
+     * up.
+     */
+    private Optional<CardAttempt> beginCardAttempt(UUID tenantId, UUID statementId) {
+        Instant now = clock.instant();
+        TenantBilling billing = wallet.lockBilling(tenantId, now);
+        if (billing.paymentMethod() != PaymentMethod.CARD) {
+            return Optional.empty();
+        }
+        String currency = wallet.currencyOf(tenantId);
+        StatementPayment statement = openStatement(tenantId, currency, statementId);
+        if (statement == null || statement.dueMinor() <= 0) {
+            return Optional.empty();
+        }
         UUID attemptId = Ids.newId();
-        attempts.begin(attemptId, tenantId, statement.statementId(), amountMinor, currency, now);
-        CardCharger.Outcome outcome =
-                cardCharger.charge(tenantId, billing.cardTokenReference(), amountMinor, currency, attemptId.toString());
-        CardCharger.Outcome.Succeeded succeeded;
+        attempts.begin(attemptId, tenantId, statementId, statement.dueMinor(), currency, now);
+        return Optional.of(new CardAttempt(
+                attemptId,
+                statementId,
+                statement.number(),
+                statement.dueMinor(),
+                currency,
+                billing.cardTokenReference()));
+    }
+
+    /** Records what the provider answered, together with the money, as one transaction. */
+    private long recordCardOutcome(UUID tenantId, CardAttempt attempt, CardCharger.Outcome outcome) {
+        Instant now = clock.instant();
         switch (outcome) {
-            case CardCharger.Outcome.Succeeded success -> succeeded = success;
             case CardCharger.Outcome.Failed failed -> {
                 // The tenant id and the statement, never the token and never the
                 // amount beside a tenant's name (ADR 0028, ADR 0029). The reason
@@ -972,21 +1105,21 @@ public class WalletService {
                 // "why is this in arrears" actually needs.
                 log.warn(
                         "A card charge for statement {} of tenant {} was declined: {}",
-                        statement.number(),
+                        attempt.statementNumber(),
                         tenantId,
                         failed.reason());
                 audit.record(AuditFact.of("commercial.wallet.card_charge_declined", AuditClass.BUSINESS)
                         .by(ActorRef.systemJob("wallet-settlement"))
                         .at(ResourceScope.tenant(tenantId))
-                        .target("commercial.statement", statement.statementId())
+                        .target("commercial.statement", attempt.statementId())
                         .outcome(AuditFact.Outcome.REJECTED)
                         .because("the card charge was declined by the provider")
                         .changed(Map.of("reason", failed.reason()))
                         .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
-                        .correlatedBy(statement.statementId().toString())
+                        .correlatedBy(attempt.statementId().toString())
                         .occurredAt(now)
                         .build());
-                attempts.settle(attemptId, "FAILED", failed.reason(), now);
+                attempts.settle(attempt.attemptId(), "FAILED", failed.reason(), now);
                 countCardCharge("failed");
                 return 0;
             }
@@ -994,59 +1127,96 @@ public class WalletService {
                 // The expected answer until a merchant agreement exists, so it is
                 // counted and not logged: a WARN per CARD tenant per statement
                 // would drown the decline it has to be told apart from.
-                attempts.settle(attemptId, "NOT_CONFIGURED", null, now);
+                attempts.settle(attempt.attemptId(), "NOT_CONFIGURED", null, now);
                 countCardCharge("not_configured");
                 return 0;
             }
+            case CardCharger.Outcome.Succeeded succeeded -> {
+                wallet.lockBilling(tenantId, now);
+                attempts.settle(attempt.attemptId(), "SUCCEEDED", succeeded.providerReference(), now);
+                countCardCharge("succeeded");
+                audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
+                        .by(ActorRef.systemJob("wallet-settlement"))
+                        .at(ResourceScope.tenant(tenantId))
+                        .target("commercial.statement", attempt.statementId())
+                        .because("the statement's remainder was charged to the tenant's card")
+                        .changed(Map.of(
+                                "amountMinor",
+                                attempt.amountMinor(),
+                                "providerReference",
+                                succeeded.providerReference()))
+                        .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                        .correlatedBy(attempt.statementId().toString())
+                        .occurredAt(now)
+                        .build());
+                // The money that really left the card, at its face value: the
+                // provider's own reference is what proves the charge happened,
+                // and V0211's unique index on it is what stops a retry
+                // crediting it twice.
+                appendMoneyIn(new WalletEntry(
+                        Ids.newId(),
+                        tenantId,
+                        WalletEntry.PAID,
+                        WalletEntry.TOP_UP,
+                        attempt.amountMinor(),
+                        attempt.currency(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        succeeded.providerReference(),
+                        "card charge for statement %s".formatted(attempt.statementNumber()),
+                        SYSTEM_CARD_CHARGER,
+                        null,
+                        null,
+                        now));
+                // What the statement still owes, re-read under the lock this
+                // pass had to let go of around the provider call. A transfer
+                // that arrived meanwhile has already paid part of it, and
+                // paying a statement past its total is money taken against a
+                // debt already settled; the surplus stays the tenant's.
+                StatementPayment statement = openStatement(tenantId, attempt.currency(), attempt.statementId());
+                long applied = statement == null ? 0 : Math.min(attempt.amountMinor(), statement.dueMinor());
+                if (applied <= 0) {
+                    return 0;
+                }
+                wallet.append(new WalletEntry(
+                        Ids.newId(),
+                        tenantId,
+                        WalletEntry.PAID,
+                        WalletEntry.STATEMENT_PAYMENT,
+                        -applied,
+                        attempt.currency(),
+                        attempt.statementId(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        "statement %s paid by card".formatted(attempt.statementNumber()),
+                        SYSTEM_CARD_CHARGER,
+                        null,
+                        null,
+                        now));
+                return applied;
+            }
         }
-        attempts.settle(attemptId, "SUCCEEDED", succeeded.providerReference(), now);
-        countCardCharge("succeeded");
-        audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
-                .by(ActorRef.systemJob("wallet-settlement"))
-                .at(ResourceScope.tenant(tenantId))
-                .target("commercial.statement", statement.statementId())
-                .because("the statement's remainder was charged to the tenant's card")
-                .changed(Map.of("amountMinor", amountMinor, "providerReference", succeeded.providerReference()))
-                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
-                .correlatedBy(statement.statementId().toString())
-                .occurredAt(now)
-                .build());
-        appendMoneyIn(new WalletEntry(
-                Ids.newId(),
-                tenantId,
-                WalletEntry.PAID,
-                WalletEntry.TOP_UP,
-                amountMinor,
-                currency,
-                null,
-                null,
-                null,
-                null,
-                succeeded.providerReference(),
-                "card charge for statement %s".formatted(statement.number()),
-                SYSTEM_CARD_CHARGER,
-                null,
-                null,
-                now));
-        wallet.append(new WalletEntry(
-                Ids.newId(),
-                tenantId,
-                WalletEntry.PAID,
-                WalletEntry.STATEMENT_PAYMENT,
-                -amountMinor,
-                currency,
-                statement.statementId(),
-                null,
-                null,
-                null,
-                null,
-                "statement %s paid by card".formatted(statement.number()),
-                SYSTEM_CARD_CHARGER,
-                null,
-                null,
-                now));
-        return amountMinor;
     }
+
+    private @Nullable StatementPayment openStatement(UUID tenantId, String currency, UUID statementId) {
+        return wallet.openStatementsOldestFirst(tenantId, currency).stream()
+                .filter(statement -> statement.statementId().equals(statementId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** One attempt about to be made, as the transaction that committed it left it. */
+    private record CardAttempt(
+            UUID attemptId,
+            UUID statementId,
+            String statementNumber,
+            long amountMinor,
+            String currency,
+            @Nullable String cardTokenReference) {}
 
     private void countCardCharge(String outcome) {
         Counter.builder(CARD_CHARGE_METRIC)

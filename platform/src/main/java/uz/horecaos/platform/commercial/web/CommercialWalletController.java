@@ -143,6 +143,11 @@ public class CommercialWalletController {
             @PathVariable UUID tenantId, @Valid @RequestBody RecordTransferRequest body) {
         UUID id = wallet.recordTransfer(
                 tenantId, body.amountMinor(), body.bankReference(), actor(), body.reason(), correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(new WalletEntryRecorded(id));
     }
 
@@ -156,6 +161,11 @@ public class CommercialWalletController {
     public ResponseEntity<WalletEntryRecorded> recordDeposit(
             @PathVariable UUID tenantId, @Valid @RequestBody RecordDepositRequest body) {
         UUID id = wallet.recordDeposit(tenantId, body.bankReference(), actor(), body.reason(), correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(new WalletEntryRecorded(id));
     }
 
@@ -179,6 +189,11 @@ public class CommercialWalletController {
                 actor(),
                 body.reason(),
                 correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
     }
 
@@ -192,6 +207,11 @@ public class CommercialWalletController {
             @PathVariable UUID tenantId, @Valid @RequestBody WalletBonusGrantRequest body) {
         WalletChangeOutcome outcome = wallet.proposeBonusGrant(
                 tenantId, body.amountMinor(), parseInstant(body.expiresAt()), actor(), body.reason(), correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
     }
 

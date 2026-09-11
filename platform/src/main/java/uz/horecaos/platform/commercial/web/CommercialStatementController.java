@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.commercial.application.StatementService;
+import uz.horecaos.platform.commercial.application.WalletService;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.StatementLine;
 import uz.horecaos.platform.iam.api.Capability;
@@ -43,10 +44,19 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CommercialStatementController {
 
     private final StatementService statements;
+
+    /**
+     * Only to collect what a statement still owes from a card, once the
+     * statement's own transaction has committed -- see {@link
+     * WalletService#settleCardRemainders}.
+     */
+    private final WalletService wallet;
+
     private final CurrentActor currentActor;
 
-    public CommercialStatementController(StatementService statements, CurrentActor currentActor) {
+    public CommercialStatementController(StatementService statements, WalletService wallet, CurrentActor currentActor) {
         this.statements = statements;
+        this.wallet = wallet;
         this.currentActor = currentActor;
     }
 
@@ -110,6 +120,11 @@ public class CommercialStatementController {
             @PathVariable UUID tenantId, @Valid @RequestBody StatementIssueRequest body) {
         StatementService.IssuedRef issued =
                 statements.issue(tenantId, body.periodKey(), actor(), body.reason(), correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(new StatementIssued(issued.statementId(), issued.number()));
     }
 
@@ -121,6 +136,11 @@ public class CommercialStatementController {
     public ResponseEntity<Void> voidStatement(
             @PathVariable UUID tenantId, @PathVariable UUID statementId, @Valid @RequestBody ReasonRequest body) {
         statements.voidStatement(tenantId, statementId, actor(), body.reason(), correlationId());
+        // Once the money is committed, and never inside its transaction: the
+        // card provider is a third party, and asking it from inside the unit of
+        // work that recorded this money would let a provider timeout roll that
+        // money back (ADR 0095).
+        wallet.settleCardRemainders(tenantId);
         return ResponseEntity.noContent().build();
     }
 

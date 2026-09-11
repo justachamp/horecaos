@@ -18,8 +18,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -37,6 +39,8 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
 import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
+import uz.horecaos.platform.commercial.domain.Subscription;
+import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
 import uz.horecaos.platform.commercial.infrastructure.NotConfiguredCardCharger;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
@@ -161,6 +165,7 @@ class WalletConcurrencyTests {
                 new NotConfiguredCardCharger(),
                 audit,
                 new SimpleMeterRegistry(),
+                transactions,
                 clock);
         EntitlementQueryService entitlements = new EntitlementQueryService(
                 subscriptionStore,
@@ -230,7 +235,164 @@ class WalletConcurrencyTests {
                 .isEqualTo(ledgerSum(WalletEntry.PAID));
     }
 
+    @Test
+    void aDepositRecordedWhileTheTenantChangesPlansNeverErasesAnObligationItDidNotRead() {
+        clock.set(START);
+        UUID planA = activePlan("BASIC", 500_000);
+        UUID planB = activePlan("LARGE", 5_000_000);
+        UUID onPlanA = inTx(() -> subscriptions.start(PILOT, planA, null, MAKER, "the pilot", "corr"));
+        assertThat(depositDue(onPlanA)).isEqualTo(500_000);
+
+        // One operator records the deposit while another moves the tenant onto
+        // a plan whose activation deposit is ten times larger. recordDeposit
+        // used to read the amount, the subscription and the currency in three
+        // separate statements, and the billing lock it holds serialises wallet
+        // writers and not subscription lifecycle -- so plan A's 500 000 could
+        // be read and then written onto plan B's row as a clear to zero.
+        bothAtOnce(() -> wallet.recordDeposit(PILOT, "MT103-DEP", MAKER, "the activation deposit", "corr"), () -> {
+            terminate();
+            return subscriptions.start(PILOT, planB, null, MAKER, "the bigger plan", "corr");
+        });
+
+        UUID onPlanB = subscriptionOn(planB);
+        assertThat(onPlanB)
+                .as("the plan change is the half of the race that must always land")
+                .isNotNull();
+        assertThat(obligationsAndWhatPaidThem())
+                .as("whichever order the two landed in, every obligation is still either owed or paid by "
+                        + "a deposit of exactly its size. Plan B's 4 500 000 going missing with nothing "
+                        + "anywhere to show it -- no deposit line on any statement, and a ledger that "
+                        + "records money rather than obligations -- is what this asserts against")
+                .containsExactlyInAnyOrder(onPlanA + ":500000", onPlanB + ":5000000");
+    }
+
+    @Test
+    void readingTheObligationHoldsItUntilTheDepositIsRecorded() throws Exception {
+        clock.set(START);
+        UUID onPlanA = inTx(() -> subscriptions.start(PILOT, activePlan("BASIC", 500_000), null, MAKER, "pilot", "c"));
+        JdbcSubscriptionStore store = new JdbcSubscriptionStore(jdbc);
+        CyclicBarrier gate = new CyclicBarrier(2);
+        AtomicLong readerFinished = new AtomicLong();
+        AtomicLong terminatorReturned = new AtomicLong();
+
+        try (ExecutorService threads = Executors.newFixedThreadPool(2)) {
+            Future<?> reader = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                assertThat(store.lockLiveDepositObligation(PILOT)).isPresent();
+                trip(gate);
+                // Long enough that a terminator which did not have to wait
+                // would have returned well inside it.
+                sleepFor(500);
+                readerFinished.set(System.nanoTime());
+            }));
+            Future<?> terminator = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                trip(gate);
+                Subscription live = store.findById(PILOT, onPlanA).orElseThrow();
+                assertThat(store.transition(
+                                PILOT,
+                                onPlanA,
+                                live.status(),
+                                SubscriptionStatus.TERMINATED,
+                                live.version(),
+                                null,
+                                null,
+                                null,
+                                clock.instant(),
+                                clock.instant()))
+                        .isTrue();
+                terminatorReturned.set(System.nanoTime());
+            }));
+            reader.get(60, TimeUnit.SECONDS);
+            terminator.get(60, TimeUnit.SECONDS);
+        }
+
+        assertThat(terminatorReturned.get())
+                .as("the billing lock recordDeposit holds does not serialise subscription lifecycle -- "
+                        + "neither start nor transition takes it -- so the obligation's own row is what "
+                        + "has to be held. Without FOR UPDATE the terminate lands between the read and "
+                        + "the clear, and the deposit clears an obligation it never read")
+                .isGreaterThan(readerFinished.get());
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private static void trip(CyclicBarrier gate) {
+        try {
+            gate.await(30, TimeUnit.SECONDS);
+        } catch (Exception interrupted) {
+            throw new IllegalStateException("the gate never opened", interrupted);
+        }
+    }
+
+    private static void sleepFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while holding the obligation", interrupted);
+        }
+    }
+
+    /** Every subscription's obligation plus the deposits that cleared it, which must equal what it sold. */
+    private List<String> obligationsAndWhatPaidThem() {
+        return jdbc.sql("""
+                        SELECT s.id::text || ':'
+                                 || (s.deposit_due_minor + COALESCE(SUM(w.amount_minor), 0))::text
+                          FROM commercial.subscriptions s
+                          LEFT JOIN commercial.wallet_entries w
+                                 ON w.subscription_id = s.id AND w.tenant_id = s.tenant_id
+                                AND w.entry_type = 'DEPOSIT'
+                         WHERE s.tenant_id = :id
+                         GROUP BY s.id, s.deposit_due_minor
+                        """).param("id", PILOT).query(String.class).list();
+    }
+
+    private @Nullable UUID subscriptionOn(UUID planVersionId) {
+        return jdbc.sql("SELECT id FROM commercial.subscriptions WHERE tenant_id = :id AND plan_version_id = :version")
+                .param("id", PILOT)
+                .param("version", planVersionId)
+                .query(UUID.class)
+                .optional()
+                .orElse(null);
+    }
+
+    private long depositDue(UUID subscriptionId) {
+        return jdbc.sql("SELECT deposit_due_minor FROM commercial.subscriptions WHERE id = :id")
+                .param("id", subscriptionId)
+                .query(Long.class)
+                .single();
+    }
+
+    /** Ends the live subscription, the way a plan change does. */
+    private void terminate() {
+        Subscription live =
+                subscriptions.live(PILOT).orElseThrow(() -> new AssertionError("No live subscription to terminate"));
+        subscriptions.transition(
+                PILOT,
+                SubscriptionStatus.TERMINATED,
+                live.version(),
+                null,
+                null,
+                MAKER,
+                "the tenant moved to another plan",
+                "corr");
+    }
+
+    private UUID activePlan(String planCode, long activationDepositMinor) {
+        UUID planId = inTx(() -> plans.createPlan(planCode, planCode, MAKER, "the price list", "corr"));
+        UUID versionId = inTx(() -> plans.draftVersion(
+                planId,
+                "UZS",
+                MONTHLY,
+                "MONTHLY",
+                null,
+                Map.of(),
+                new PlanTerms(null, activationDepositMinor, Map.of()),
+                MAKER,
+                "the 2026 prices",
+                "corr"));
+        inTxDo(() -> plans.activate(versionId, CHECKER, "signed off", "corr"));
+        return versionId;
+    }
 
     /**
      * Runs both pieces of work on their own threads, each in its own

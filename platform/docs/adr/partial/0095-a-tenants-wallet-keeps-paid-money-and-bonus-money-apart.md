@@ -131,6 +131,19 @@ As built on 2026-09-11.
   `ck_subscription_deposit_due >= 0` as the floor. The audit fact carries the
   subscription and the obligation's from/to, because that move is the one fact
   the ledger cannot reconstruct.
+- **Recording a deposit reads the obligation once, under a row lock.**
+  `recordDeposit` asks for the live subscription's id, its `deposit_due_minor`
+  and its plan version's currency in one `SELECT ... FOR UPDATE OF s`, and
+  clears it with a conditional subtraction that names the amount it read. Three
+  separate statements let a concurrent terminate-and-start commit between them
+  — the billing lock serialises wallet writers and not subscription lifecycle,
+  since neither `start` nor `transition` takes it — so the amount came from
+  plan A and the id from plan B, and the clear wrote plan B's obligation to
+  zero against a five-hundred-thousand deposit. That is the same erasure the
+  reversal was written to end, relocated into the recording. The clear now
+  fails loudly rather than silently, and the `deposit_recorded` audit fact
+  carries the subscription and the obligation's from/to, exactly as
+  `deposit_reversed` does.
 - **Four eyes on the row itself.** `ck_wallet_entry_four_eyes` refuses a row
   whose `approved_by` equals its `recorded_by`, as every other money table in
   this schema does (V0033, V0201). The approval model already forbids a maker
@@ -255,9 +268,19 @@ As built on 2026-09-11.
   because `deposit_due_minor` is copied verbatim from the plan version and
   carries no currency of its own. Crediting 50 000 minor USD into a UZS wallet
   would record four cents' worth of som for a five-hundred-dollar receipt and
-  mark the deposit settled. The subscription itself is not refused: a
-  second-currency plan version is a legitimate configuration whose deposit,
-  like its statements, is collected by invoice.
+  mark the deposit settled.
+- **A second-currency plan version may be sold, but not with an activation
+  deposit.** The version itself stays a legitimate configuration, invoiced in
+  its own currency exactly as its statements are. Its deposit is the one thing
+  that could then be collected by nothing at all: the wallet refuses the face
+  value, and the statement no longer carries a `DEPOSIT` line for any version,
+  so `deposit_due_minor` would stand for the life of the subscription with no
+  path back to zero — visible in the control plane, chaseable only out of band,
+  and mendable only by hand-written SQL. `SubscriptionService.start` therefore
+  refuses to put a tenant on a version whose currency is not the tenant's while
+  that version sells an activation deposit, naming both currencies. An earlier
+  draft of this record said such a deposit was "collected by invoice"; nothing
+  implemented that, and nothing now claims it.
 - Neither money kind goes below zero: a refund is refused above the paid
   balance, and a correction above the paid balance or above the grant's
   remainder. Both are checked under the billing lock and before the approval is
@@ -290,6 +313,29 @@ As built on 2026-09-11.
   rate an alert rule can see rather than many tenants going quietly into
   arrears. No incident is raised per decline: that conversation belongs to
   `CommercialArrearsReviewSweeper` (ADR 0089).
+- **The card is asked between two committed transactions, never inside one.**
+  `applyAvailableFunds` draws bonus and paid money and nothing else;
+  `WalletService.settleCardRemainders(tenantId)` collects what is left, and the
+  controller calls it once the unit of work that recorded the money has
+  committed. Inside the money transaction — where it used to live — a provider
+  timeout rolled back the operator's just-recorded bank transfer, the tenant's
+  money went uncredited and the operator saw a 500 with no row on file; the
+  `PENDING` attempt row went with it, so the one state V0214 exists to leave
+  behind could never survive the failure it was written for; and a pooled
+  connection and the tenant's billing row lock were held across an uncontrolled
+  network wait, which is the property `ExternalCallTransactionBoundaryTests`
+  enforces everywhere else. So: transaction one locks billing, re-reads what is
+  owed and commits the `PENDING` attempt; the provider is asked with nothing
+  held; transaction two takes the lock again, re-reads what the statement still
+  owes, settles the attempt and writes the `TOP_UP` and the
+  `STATEMENT_PAYMENT`. Re-reading is the price of letting the lock go: a
+  transfer that arrived meanwhile keeps its payment and the surplus stays the
+  tenant's paid balance, rather than paying a statement past its total. An
+  adapter that throws rather than answering leaves the attempt committed and
+  `PENDING` — "we asked and never learned the answer" — writes nothing to the
+  ledger, and counts `outcome=unanswered`. Calling `settleCardRemainders`
+  inside a caller's transaction throws: the rule is enforced rather than
+  remembered.
 - The expiry sweep catches per candidate, not only per pass. The candidate
   query orders by expiry, so one grant that keeps throwing would sit at the
   head of every later batch and hold every later expiry behind it, in every
@@ -338,14 +384,37 @@ As built on 2026-09-11.
   A proposed change answers that nothing has moved and links to Approvals,
   where a row carrying no tenant is decided through the platform route — and
   names, on the row itself, the tenant whose account it moves and the signed
-  amount, with a link to that tenant. The queue's lead says the queue carries
-  money decisions rather than only residency and activation paperwork, and
-  every action code and ledger entry type has a label in all three catalogues.
-  Both keys are built by string concatenation and cast, which defeats the
-  keyof-typeof completeness check the written-out keys get, so both call sites
-  fall back to the raw code rather than to the empty string: `I18nService.t`
-  has no per-key English fallback by design, and a blank cell on a decision
-  that removes paid money is the worst of the three outcomes.
+  amount, with a link to that tenant.
+- **The queue renders the whole subject, not two keys of it.** Beneath the
+  amount the row lists every remaining component the signature covers — the
+  money kind and the entry type through the same catalogues the wallet screen
+  uses, a bonus grant's own `expiresAt` as a date, `grantId`,
+  `depositEntryId`, `subscriptionId` and `payoutReference` verbatim — and a
+  component nobody has labelled appears under its raw key. Rendering only
+  `amountMinor` and `currency` made a correction of real, refundable paid money
+  and one of promotional credit that lapses with a named grant read
+  identically, at the same amount under the same action label; and it dropped a
+  grant's expiry, which is half of what is being given away. A component the
+  signature covers and the console hides is the exact failure V0212 exists to
+  close. The maker's `reason` is still withheld at every `sign()` call site, so
+  the renderer stays a projection of what the backend chose to disclose.
+- **An undeclared currency is rendered, not thrown on.** Tenant currency is any
+  three letters the platform accepts, and the market list already declares KZT
+  and GEL, neither of which has a display scale in the console. The formatter
+  threw on one, which truncated the queue at that row — and the queue is served
+  oldest first, so one such tenant hid every newer platform decision and took
+  the four-eyes control down with it. The amount now falls back to stored minor
+  units, labelled as unscaled: guessing a scale is the bug the money formatter
+  exists to prevent, and reading an unscaled figure as scaled misstates by a
+  hundredfold what somebody is about to sign.
+- The queue's lead says the queue carries money decisions rather than only
+  residency and activation paperwork, and every action code and ledger entry
+  type has a label in all three catalogues. Both keys are built by string
+  concatenation and cast, which defeats the keyof-typeof completeness check the
+  written-out keys get, so both call sites fall back to the raw code rather
+  than to the empty string: `I18nService.t` has no per-key English fallback by
+  design, and a blank cell on a decision that removes paid money is the worst
+  of the three outcomes.
 
 ## Rollout and rollback
 
@@ -366,7 +435,16 @@ them. Rolling back leaves the ledger in place and unread.
 - [x] A deposit names the subscription it cleared; a reversal re-arms that one
       or refuses, additively and in its own currency
 - [x] A platform approval carries its subject, and every lifecycle fact names
-      the tenant
+      the tenant — including the refusal, which writes no wallet entry to be
+      found by
+- [x] The approvals queue renders every component of that subject, in any
+      currency a tenant may hold
+- [x] Recording a deposit reads the obligation once under a row lock and clears
+      only what it read
+- [x] A second-currency plan version is refused at the door while it sells an
+      activation deposit
+- [x] The card provider is asked between two committed transactions, with the
+      attempt key durable before anything can be charged under it
 
 ## Exit criteria
 
