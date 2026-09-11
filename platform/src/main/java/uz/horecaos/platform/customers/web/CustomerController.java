@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
+import uz.horecaos.platform.customers.application.CustomerEligibility;
 import uz.horecaos.platform.customers.application.CustomerErasureService;
 import uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
@@ -72,6 +73,7 @@ public class CustomerController {
     private final CustomerIdentityService identity;
     private final CustomerProfileService profiles;
     private final ConsentService consent;
+    private final CustomerEligibility eligibility;
     private final CustomerListQueryService lists;
     private final CustomerBlacklistService blacklist;
     private final CustomerErasureService erasure;
@@ -82,6 +84,7 @@ public class CustomerController {
             CustomerIdentityService identity,
             CustomerProfileService profiles,
             ConsentService consent,
+            CustomerEligibility eligibility,
             CustomerListQueryService lists,
             CustomerBlacklistService blacklist,
             CustomerErasureService erasure,
@@ -92,6 +95,7 @@ public class CustomerController {
         this.identity = identity;
         this.profiles = profiles;
         this.consent = consent;
+        this.eligibility = eligibility;
         this.lists = lists;
         this.blacklist = blacklist;
         this.erasure = erasure;
@@ -155,6 +159,63 @@ public class CustomerController {
                 tenantId, accountId, purpose, ActorRef.user(currentActor.get().subject(), null)));
     }
 
+    @PutMapping("/{accountId}/contact-points/{contactPointId}")
+    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a contact point's value",
+            description = "In place: the fix for a mistyped number, which used to be reachable "
+                    + "only by adding a second, correct contact point and leaving the wrong one "
+                    + "standing. The kind (phone or email) is not accepted here — it stays "
+                    + "whatever this contact point already is. Verification resets: whatever "
+                    + "proved the old value proves nothing about the new one.")
+    public ResponseEntity<Void> updateContact(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID accountId,
+            @PathVariable UUID contactPointId,
+            @Valid @RequestBody UpdateContactRequest request) {
+        try {
+            profiles.updateContactPoint(tenantId, accountId, contactPointId, request.value());
+        } catch (CustomerProfileService.ContactPointNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such contact point");
+        } catch (IllegalArgumentException rejected) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, rejected.getMessage());
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{accountId}/contact-points/{contactPointId}")
+    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @Operation(
+            summary = "Remove a contact point added by mistake",
+            description = "Tombstoned in place, never physically deleted — a delivery endpoint "
+                    + "elsewhere may still reference this id. It stops counting anywhere: not in "
+                    + "the profile's contact summaries, not in a reveal, and not as a verified "
+                    + "endpoint for marketing eligibility.")
+    public ResponseEntity<Void> removeContact(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @PathVariable UUID contactPointId) {
+        try {
+            profiles.removeContactPoint(tenantId, accountId, contactPointId);
+        } catch (CustomerProfileService.ContactPointNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such contact point");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{accountId}/contact-points/{contactPointId}/set-primary")
+    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @Operation(
+            summary = "Make this the account's primary contact of its kind",
+            description = "Demotes whichever contact point of the same kind held that place.")
+    public ResponseEntity<Void> setPrimaryContact(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @PathVariable UUID contactPointId) {
+        try {
+            profiles.setPrimaryContactPoint(tenantId, accountId, contactPointId);
+        } catch (CustomerProfileService.ContactPointNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such contact point");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{accountId}/addresses")
     @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
     @Operation(
@@ -216,6 +277,26 @@ public class CustomerController {
     @Operation(summary = "The full consent history", description = "What a subject-access request produces.")
     public ResponseEntity<List<?>> consentHistory(@PathVariable UUID tenantId, @PathVariable UUID accountId) {
         return ResponseEntity.ok(consent.history(tenantId, accountId));
+    }
+
+    @GetMapping("/{accountId}/eligibility")
+    @RequiresCapability(Capability.CUSTOMER_READ)
+    @Operation(
+            summary = "Whether this customer may be reached for a purpose and channel, right now",
+            description = "A yes/no and, on no, one reason — CONSENT_WITHHELD or "
+                    + "NO_VERIFIED_ENDPOINT. Never a contact value, so CUSTOMER_READ is enough; "
+                    + "see CustomerEligibility's own doc for why this does not reuse "
+                    + "marketing.MarketingEligibility.")
+    public ResponseEntity<EligibilityResponse> eligibility(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID accountId,
+            @RequestParam UUID brandId,
+            @RequestParam @NotBlank String purpose,
+            @RequestParam @NotBlank String channel) {
+        CustomerEligibility.Answer answer = eligibility.answer(tenantId, accountId, brandId, purpose, channel);
+        return ResponseEntity.ok(new EligibilityResponse(
+                answer.eligible(),
+                answer.refusalReason() == null ? null : answer.refusalReason().name()));
     }
 
     // -------------------------------------------------------------- §5.1 the grid
@@ -655,6 +736,14 @@ public class CustomerController {
             @NotNull ContactType type,
             @NotBlank @Size(max = 320) String value,
             boolean primary) {}
+
+    /** No {@code type}: correcting a value never recategorises the contact point — see {@link #updateContact}. */
+    public record UpdateContactRequest(
+            @NotBlank @Size(max = 320) String value) {}
+
+    /** {@code GET .../eligibility}: a yes/no, and on no, why — never a contact value. */
+    public record EligibilityResponse(
+            boolean eligible, @Nullable String refusalReason) {}
 
     /**
      * A new address to add to the customer's book.

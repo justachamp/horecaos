@@ -5850,6 +5850,17 @@
         },
         "type" : "object"
       },
+      "EligibilityResponse" : {
+        "properties" : {
+          "eligible" : {
+            "type" : "boolean"
+          },
+          "refusalReason" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EncryptedColumn" : {
         "properties" : {
           "column" : {
@@ -17921,6 +17932,17 @@
           }
         },
         "required" : [ "requireClerkApproval" ],
+        "type" : "object"
+      },
+      "UpdateContactRequest" : {
+        "properties" : {
+          "value" : {
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "value" ],
         "type" : "object"
       },
       "UploadRequest" : {
@@ -44484,6 +44506,128 @@
         "tags" : [ "Customers" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points/{contactPointId}" : {
+      "delete" : {
+        "description" : "Tombstoned in place, never physically deleted — a delivery endpoint elsewhere may still reference this id. It stops counting anywhere: not in the profile's contact summaries, not in a reveal, and not as a verified endpoint for marketing eligibility.",
+        "operationId" : "removeContact",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "contactPointId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a contact point added by mistake",
+        "tags" : [ "Customers" ]
+      },
+      "put" : {
+        "description" : "In place: the fix for a mistyped number, which used to be reachable only by adding a second, correct contact point and leaving the wrong one standing. The kind (phone or email) is not accepted here — it stays whatever this contact point already is. Verification resets: whatever proved the old value proves nothing about the new one.",
+        "operationId" : "updateContact",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "contactPointId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateContactRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a contact point's value",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points/{contactPointId}/set-primary" : {
+      "post" : {
+        "description" : "Demotes whichever contact point of the same kind held that place.",
+        "operationId" : "setPrimaryContact",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "contactPointId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make this the account's primary contact of its kind",
+        "tags" : [ "Customers" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/date-of-birth" : {
       "get" : {
         "description" : "Requires a stated purpose, recorded as an audit fact.",
@@ -44564,6 +44708,67 @@
           }
         },
         "summary" : "Set or clear the date of birth",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/eligibility" : {
+      "get" : {
+        "description" : "A yes/no and, on no, one reason — CONSENT_WITHHELD or NO_VERIFIED_ENDPOINT. Never a contact value, so CUSTOMER_READ is enough; see CustomerEligibility's own doc for why this does not reuse marketing.MarketingEligibility.",
+        "operationId" : "eligibility",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EligibilityResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this customer may be reached for a purpose and channel, right now",
         "tags" : [ "Customers" ]
       }
     },

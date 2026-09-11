@@ -22,6 +22,25 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcCustomerStore {
 
+    /**
+     * A {@code normalized_hash} no real lookup hash can ever produce, used to
+     * mark a contact point an operator removed.
+     *
+     * <p>{@link #removeContactPoint} is an {@code UPDATE}, never a {@code
+     * DELETE} — matching {@link #eraseContactPoint}'s own doc: the application
+     * role holds no {@code DELETE} grant on this table (V0017), and {@code
+     * notifications.recipient_endpoints} carries a plain foreign key to this
+     * table's {@code id} (V0026) that a physical delete would violate the
+     * moment any delivery still referenced the row. A real lookup hash is a
+     * 43-character URL-safe base64 {@code HmacSHA256} digest ({@code
+     * EnvelopeFieldProtection#lookupHash}), so this short, lowercase literal
+     * can never collide with one, and {@link #contactPoints} and {@link
+     * #contactPoint} filter it out — the row stays for {@code
+     * notifications.recipient_endpoints} and for an account-wide erasure to
+     * still reach later, but drops out of every ordinary read.
+     */
+    private static final String REMOVED_CONTACT_HASH = "removed";
+
     private final JdbcClient jdbc;
 
     public JdbcCustomerStore(JdbcClient jdbc) {
@@ -325,10 +344,12 @@ public class JdbcCustomerStore {
                 SELECT id, type, encrypted_value, normalized_hash, verification_status, is_primary
                 FROM customer.contact_points
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND normalized_hash <> :removedHash
                 ORDER BY is_primary DESC, created_at
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
+                .param("removedHash", REMOVED_CONTACT_HASH)
                 .query(JdbcCustomerStore::contactPointRow)
                 .list();
     }
@@ -344,12 +365,119 @@ public class JdbcCustomerStore {
         return jdbc.sql("""
                 SELECT id, type, encrypted_value, normalized_hash, verification_status, is_primary
                 FROM customer.contact_points
-                WHERE tenant_id = :tenantId AND id = :id
+                WHERE tenant_id = :tenantId AND id = :id AND normalized_hash <> :removedHash
                 """)
                 .param("tenantId", tenantId)
                 .param("id", contactPointId)
+                .param("removedHash", REMOVED_CONTACT_HASH)
                 .query(JdbcCustomerStore::contactPointRow)
                 .optional();
+    }
+
+    /**
+     * Overwrites one contact point's value in place — correcting a mistyped
+     * number, never adding a shadowing second row.
+     *
+     * <p>Resets verification: the value just changed, so whatever OTP proved
+     * the old one proves nothing about the new one, and {@code
+     * marketing.MarketingEligibility}'s {@code NO_VERIFIED_ENDPOINT} check must
+     * see this contact as unverified again until it is reverified.
+     *
+     * @return how many rows were updated; zero when this id is not this
+     *         account's own contact point
+     */
+    public int updateContactPoint(
+            UUID tenantId,
+            UUID accountId,
+            UUID contactPointId,
+            String normalizedHash,
+            String encryptedValue,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.contact_points
+                SET encrypted_value = :encrypted, normalized_hash = :hash,
+                    verification_status = 'UNVERIFIED', verified_at = NULL, updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("id", contactPointId)
+                .param("encrypted", encryptedValue)
+                .param("hash", normalizedHash)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * Removes a contact point an operator added by mistake — see {@link
+     * #REMOVED_CONTACT_HASH}'s own doc for why this is an {@code UPDATE}
+     * rather than a {@code DELETE}, and what removal means here.
+     *
+     * <p>A fresh random value, not a re-hash of a fixed marker — {@code
+     * CustomerErasureService#anonymize} gives the same reason: a deterministic
+     * hash of a constant would let a lookup confirm "these two removed rows
+     * both used to hold a phone number" even with the ciphertext gone.
+     *
+     * @return how many rows were removed; zero when this id is not this
+     *         account's own contact point, or was already removed
+     */
+    public int removeContactPoint(
+            UUID tenantId, UUID accountId, UUID contactPointId, String tombstonedValue, Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.contact_points
+                SET encrypted_value = :encrypted, normalized_hash = :removedHash,
+                    verification_status = 'UNVERIFIED', verified_at = NULL,
+                    is_primary = false, updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND id = :id
+                  AND normalized_hash <> :removedHash
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("id", contactPointId)
+                .param("encrypted", tombstonedValue)
+                .param("removedHash", REMOVED_CONTACT_HASH)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * Makes one contact point this account's primary of its kind, demoting
+     * whichever one held that place.
+     *
+     * <p>Two statements, in this order and not the reverse: {@code
+     * ux_contact_point_primary} allows at most one {@code is_primary} row per
+     * account per type, and Postgres checks a plain (non-deferrable) unique
+     * index at the end of each statement — promoting the new row first would
+     * leave two rows {@code is_primary} at once and fail right there. The
+     * caller is expected to have already confirmed {@code contactPointId} is
+     * this account's own contact point of {@code type}; this method does not
+     * check again, so calling it for an id that does not exist silently
+     * demotes the old primary and promotes nothing.
+     */
+    public void setPrimaryContactPoint(UUID tenantId, UUID accountId, UUID contactPointId, String type, Instant now) {
+        OffsetDateTime ts = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+        jdbc.sql("""
+                UPDATE customer.contact_points
+                SET is_primary = false, updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND type = :type AND is_primary = true AND id <> :id
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("type", type)
+                .param("id", contactPointId)
+                .param("now", ts)
+                .update();
+        jdbc.sql("""
+                UPDATE customer.contact_points
+                SET is_primary = true, updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("id", contactPointId)
+                .param("now", ts)
+                .update();
     }
 
     /** The language the customer chose, if they chose one. */

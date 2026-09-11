@@ -1845,6 +1845,11 @@ export interface EgressCount {
   count?: number;
 }
 
+export interface EligibilityResponse {
+  eligible?: boolean;
+  refusalReason?: string;
+}
+
 export interface EncryptedColumn {
   column?: string;
   schema?: string;
@@ -5714,6 +5719,10 @@ export interface UpdateCloposSettingsRequest {
   requireClerkApproval: boolean;
 }
 
+export interface UpdateContactRequest {
+  value: string;
+}
+
 export interface UploadRequest {
   contentType: string;
   filename?: string;
@@ -6441,8 +6450,12 @@ export interface Operations {
   "recordConsent": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/consent-decisions"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: ConsentRequest }; responses: { "200": CustomerControllerIdResponse } };
   "contacts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": Array<RevealedContact> } };
   "addContact": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: AddContactRequest }; responses: { "200": CustomerControllerIdResponse } };
+  "removeContact": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points/{contactPointId}"; request: { parameters: { path: { accountId: string; contactPointId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "updateContact": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points/{contactPointId}"; request: { parameters: { path: { accountId: string; contactPointId: string; tenantId: string } }; body: UpdateContactRequest }; responses: { "200": unknown } };
+  "setPrimaryContact": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points/{contactPointId}/set-primary"; request: { parameters: { path: { accountId: string; contactPointId: string; tenantId: string } } }; responses: { "200": unknown } };
   "revealDateOfBirth": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/date-of-birth"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": DateOfBirthResponse } };
   "setDateOfBirth": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/date-of-birth"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: DateOfBirthRequest }; responses: { "200": unknown } };
+  "eligibility": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/eligibility"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { brandId: string; channel: string; purpose: string } } }; responses: { "200": EligibilityResponse } };
   "erasureRequests": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<CustomerControllerErasureRequestResponse> } };
   "requestErasure": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": CustomerControllerErasureRequestResponse } };
   "cancelErasure": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests/{requestId}/cancel"; request: { parameters: { path: { accountId: string; requestId: string; tenantId: string } } }; responses: { "200": CustomerControllerErasureRequestResponse } };
