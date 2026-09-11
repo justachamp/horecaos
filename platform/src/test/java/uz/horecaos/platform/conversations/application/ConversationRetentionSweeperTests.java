@@ -40,10 +40,18 @@ class ConversationRetentionSweeperTests {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
+    /** A login role holding only the application's grants; a role is cluster-wide, so the name is this suite's own. */
+    private static final String APP_PROBE = "retention_sweep_probe_app";
+
+    private static final String APP_PROBE_PASSWORD = "retention-sweep-probe-app";
+
     private static TestDatabase.Handle db;
+    private static JdbcClient asApplication;
 
     private JdbcClient jdbc;
     private MutableClock clock;
+    private FieldProtection protection;
+    private ObjectMapper objectMapper;
     private ConversationMessageStore messages;
     private ConversationRepository conversations;
     private FlowRunRepository runs;
@@ -58,12 +66,29 @@ class ConversationRetentionSweeperTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the retention sweep test");
         db = TestDatabase.migrated();
+
+        JdbcClient owner = JdbcClient.create(db.dataSource());
+        owner.sql("DROP ROLE IF EXISTS " + APP_PROBE).update();
+        owner.sql("CREATE ROLE " + APP_PROBE + " LOGIN PASSWORD '" + APP_PROBE_PASSWORD + "'")
+                .update();
+        owner.sql("ALTER ROLE " + APP_PROBE + " NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT")
+                .update();
+        owner.sql("GRANT " + TestDatabase.APPLICATION_ROLE + " TO " + APP_PROBE).update();
+        asApplication = JdbcClient.create(db.dataSourceAs(APP_PROBE, APP_PROBE_PASSWORD));
     }
 
+    /** The database first, then the role: a role with a dependency in a live database cannot be dropped. */
     @AfterAll
     static void stopDatabase() {
-        if (db != null) {
-            db.close();
+        if (db == null) {
+            return;
+        }
+        db.close();
+        try {
+            TestDatabase.onCluster("DROP ROLE IF EXISTS " + APP_PROBE);
+        } catch (RuntimeException leftover) {
+            System.err.println("ConversationRetentionSweeperTests: " + APP_PROBE + " outlived the suite ("
+                    + leftover.getMessage() + ")");
         }
     }
 
@@ -74,10 +99,10 @@ class ConversationRetentionSweeperTests {
         truncate();
 
         clock = new MutableClock(T0);
-        ObjectMapper objectMapper = JsonMapper.builder().build();
+        objectMapper = JsonMapper.builder().build();
         SecretResolver secrets = new EnvironmentSecretResolver(
                 Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get, clock);
-        FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
+        protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
 
         messages = new ConversationMessageStore(jdbc, clock, protection);
         conversations = new ConversationRepository(jdbc, clock);
@@ -211,6 +236,90 @@ class ConversationRetentionSweeperTests {
         // gone by the second pass, regardless of which two the first claimed.
         assertThat(messageExists(first) || messageExists(second) || messageExists(third))
                 .isFalse();
+    }
+
+    /**
+     * Every other test here connects as the database owner, and PostgreSQL
+     * checks no privilege for the owner — so this suite stayed green while
+     * production refused the sweep on every tick with "permission denied for
+     * table conversation_messages". The message pass locked its batch with
+     * {@code FOR UPDATE}, a row lock needs UPDATE, and the application role
+     * holds none on that table. This runs both passes exactly as the deployed
+     * application does, through a login role holding only
+     * {@code horecaos_application}; put the row lock back and it fails here.
+     */
+    @Test
+    @DisplayName("both passes run under the application role, not only under the owner")
+    void bothPassesRunAsTheApplicationRole() {
+        assertThat(asApplication
+                        .sql("SELECT has_table_privilege('conversations.conversation_messages', 'UPDATE')")
+                        .query(Boolean.class)
+                        .single())
+                .as("the probe must lack exactly the privilege the row lock needed, or this proves nothing")
+                .isFalse();
+
+        ConversationMessageStore appMessages = new ConversationMessageStore(asApplication, clock, protection);
+        ConversationRetentionSweeper appSweeper = new ConversationRetentionSweeper(
+                new ConversationRetentionService(
+                        appMessages,
+                        new ConversationRepository(asApplication, clock),
+                        new FlowRunRepository(asApplication, clock, protection, objectMapper)),
+                clock,
+                500);
+
+        UUID closedId = insertConversation("CLOSED", 1);
+        UUID flowRunId = insertAbandonedFlowRun(closedId, insertFlowDocument());
+        UUID closedMessage = appMessages
+                .record(tenantId, closedId, Direction.INBOUND, null, "Bye")
+                .id();
+        UUID idleId = insertConversation("IDLE", 1);
+        UUID idleMessage = appMessages
+                .record(tenantId, idleId, Direction.INBOUND, null, "Hello")
+                .id();
+        clock.advance(Duration.ofDays(40));
+
+        var result = appSweeper.runOnce();
+
+        assertThat(result.deletedMessages()).isEqualTo(2);
+        assertThat(result.deletedConversations()).isEqualTo(1);
+        assertThat(messageExists(closedMessage) || messageExists(idleMessage)).isFalse();
+        assertThat(conversationExists(closedId)).isFalse();
+        assertThat(flowRunExists(flowRunId)).isFalse();
+        assertThat(conversationExists(idleId)).isTrue();
+    }
+
+    /**
+     * What {@code SKIP LOCKED} gave a second replica, kept without the row
+     * lock: while one sweep holds the retention lock, another deletes nothing
+     * and does not wait for it, and once the first is done the next tick
+     * sweeps normally.
+     */
+    @Test
+    @DisplayName("a second replica skips its tick while another sweep holds the lock")
+    void aSecondReplicaSkipsWhileAnotherSweeps() throws Exception {
+        UUID conversationId = insertConversation("IDLE", 1);
+        UUID message = messages.record(tenantId, conversationId, Direction.INBOUND, null, "Hello")
+                .id();
+        clock.advance(Duration.ofDays(40));
+
+        try (java.sql.Connection otherReplica = db.dataSource().getConnection()) {
+            otherReplica.setAutoCommit(false);
+            try (java.sql.PreparedStatement hold =
+                    otherReplica.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))")) {
+                hold.setString(1, ConversationMessageStore.RETENTION_SWEEP_LOCK);
+                hold.execute();
+            }
+
+            assertThat(sweeper.runOnce().deletedMessages())
+                    .as("the lock is held elsewhere, so this replica leaves the batch alone")
+                    .isZero();
+            assertThat(messageExists(message)).isTrue();
+
+            otherReplica.rollback();
+        }
+
+        assertThat(sweeper.runOnce().deletedMessages()).isEqualTo(1);
+        assertThat(messageExists(message)).isFalse();
     }
 
     // ------------------------------------------------------------- fixtures

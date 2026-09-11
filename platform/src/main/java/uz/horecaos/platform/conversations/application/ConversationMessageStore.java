@@ -29,6 +29,13 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 @Repository
 class ConversationMessageStore {
 
+    /**
+     * The advisory lock one retention sweep holds while it deletes — a name,
+     * hashed by PostgreSQL, rather than a row. Package-visible so the sweep's
+     * own test can hold it the way a second replica would.
+     */
+    static final String RETENTION_SWEEP_LOCK = "conversations.retention-sweep";
+
     static final String TABLE = "conversations.conversation_messages";
     static final String BODY_COLUMN = "body_protected";
 
@@ -151,17 +158,39 @@ class ConversationMessageStore {
      * retention_months} — the ADR 0029 gap V0108's own comment named:
      * "enforcement... is a named ADR 0029 gap, not built by this stage."
      *
-     * <p>Batch-limited and lock-skipping, the same discipline {@code
-     * JdbcCampaignStore#claimBatch} and {@code JdbcNotificationStore#claimDue}
-     * already use for a bounded, concurrency-safe scan: {@code FOR UPDATE OF m
-     * SKIP LOCKED} names only the message row to lock, not the conversation it
-     * joins against, so this sweep never contends with an ordinary write to an
-     * unrelated conversation.
+     * <p>Batch-limited, and one sweep at a time across every replica — but
+     * without a row lock. This used to claim its batch with {@code FOR UPDATE OF
+     * m SKIP LOCKED}, the {@code JdbcCampaignStore#claimBatch} shape, and every
+     * row lock needs UPDATE on what it locks. The application role holds
+     * SELECT, INSERT and DELETE on the message table and no UPDATE, deliberately:
+     * a message is a customer's own words and nothing in this platform rewrites
+     * one. So in production the sweep answered "permission denied for table
+     * conversation_messages" on every tick, while every test — connected as the
+     * database owner, which PostgreSQL checks nothing for — stayed green.
+     *
+     * <p>Granting UPDATE to make a lock legal would hand the application the
+     * power to edit message history in order to delete it. Instead the sweep
+     * takes a transaction-scoped advisory lock first, the {@code
+     * JdbcPosLiveAvailabilityStore#replace} tool, in its {@code try} form: a
+     * replica that finds another one mid-sweep deletes nothing this tick, which
+     * is what {@code SKIP LOCKED} gave the loser before, and the lock needs no
+     * table privilege at all. Messages are only ever inserted and deleted, so
+     * the only contender for these rows is another sweep, and that is exactly
+     * what the lock excludes. It holds for as long as the caller's transaction —
+     * {@code ConversationRetentionService#deleteExpiredMessages} — does.
      *
      * @return how many messages were deleted this call — never content, only
      *         the count, per this sweep's own logging discipline
      */
     int deleteExpired(Instant now, int batchSize) {
+        boolean thisSweepHoldsTheLock =
+                Boolean.TRUE.equals(jdbc.sql("SELECT pg_try_advisory_xact_lock(hashtext(:sweep))")
+                        .param("sweep", RETENTION_SWEEP_LOCK)
+                        .query(Boolean.class)
+                        .single());
+        if (!thisSweepHoldsTheLock) {
+            return 0;
+        }
         return jdbc.sql("""
                 WITH doomed AS (
                     SELECT m.id
@@ -171,7 +200,6 @@ class ConversationMessageStore {
                      WHERE m.occurred_at < (CAST(:now AS timestamptz) - (c.retention_months * INTERVAL '1 month'))
                      ORDER BY m.occurred_at
                      LIMIT :batchSize
-                     FOR UPDATE OF m SKIP LOCKED
                 )
                 DELETE FROM conversations.conversation_messages m
                  USING doomed
