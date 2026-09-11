@@ -123,6 +123,13 @@ public final class ApprovalParameters {
      * the whole guarantee: what the approvals console renders is derived from
      * the components the signature covers, so a maker cannot get one thing
      * signed and execute another.
+     *
+     * <p>Two things the signature covers are deliberately not in the subject: a
+     * component named to {@link Builder#withholding(String...)}, which is prose
+     * ADR 0029 keeps off a console, and a covered component whose value is null,
+     * whose absence from the subject reads as the absence it is. Everything else
+     * covered is shown, and a name that would be hashed twice and shown once is
+     * refused outright.
      */
     public record Signed(String hash, ApprovalSubject subject) {}
 
@@ -158,12 +165,38 @@ public final class ApprovalParameters {
          *
          * <p>For the part of the intended action the command does not carry — the
          * remedy type, which is the entry point rather than a field.
+         *
+         * <p>Refuses a name the command already declares. {@link #walk} appends
+         * the command's components and then the extras, so a collision hashes two
+         * segments while {@link #show} writes both under one key and keeps the
+         * later one: the signature would cover two values and the console would
+         * render one, which is the single divergence this class's contract does
+         * not otherwise close. The call sites sit one field away from it —
+         * {@code proposeRefund} and {@code proposeBonusGrant} both add a {@code
+         * moneyKind} their sibling {@code AdjustmentCommand} declares as a
+         * component.
+         *
+         * <p>Refuses a re-supply on {@code containsKey} rather than on the old
+         * {@code put(...) != null}, which could not see a first value of null: a
+         * nullable segment supplied twice collapsed into one, silently, and
+         * {@code PlatformGrantService} pushes a nullable role code and validity
+         * through here.
          */
         public Builder and(String name, @Nullable Object value) {
             Objects.requireNonNull(name, "A segment name is required");
-            if (extra.put(name, value) != null) {
+            if (extra.containsKey(name)) {
                 throw new IllegalArgumentException("Segment " + name + " was supplied twice");
             }
+            if (command != null && declares(recordType(command), name)) {
+                throw new IllegalArgumentException(
+                        ("%s already has a component named %s; an added segment that shadows one is hashed "
+                                        + "twice and shown once. The components are %s")
+                                .formatted(
+                                        recordType(command).getSimpleName(),
+                                        name,
+                                        coveredComponents(recordType(command))));
+            }
+            extra.put(name, value);
             return this;
         }
 
@@ -279,21 +312,39 @@ public final class ApprovalParameters {
             return digest(material.toString());
         }
 
+        /**
+         * Projects one hashed segment into what the checker is shown.
+         *
+         * <p>A segment whose canonical form is null is hashed (as length
+         * {@code -1}) and not shown: an absent grant id reads as absence, which
+         * is the one covered-but-unshown case kept on purpose.
+         *
+         * <p>Two segments under one name is not that case. {@link #and} refuses
+         * it at the only door that exists today — a record cannot declare a
+         * component twice, and {@link #walk} has one caller — so nothing
+         * reachable trips the check below, and no test can make it. It is here
+         * so that a second caller of {@code walk}, or a builder that grows a
+         * third source of segments, cannot reintroduce hashed-twice-shown-once
+         * in silence; the cost is one comparison the map already performs.
+         */
         private void show(@Nullable Map<String, String> display, String name, @Nullable Object value) {
             if (display == null || withheld == null || withheld.contains(name)) {
                 return;
             }
             String rendered = canonical(name, value);
-            if (rendered != null) {
-                display.put(name, rendered);
+            if (rendered != null && display.put(name, rendered) != null) {
+                throw new IllegalStateException(
+                        "Two hashed segments are named " + name + "; the console would show one of them");
             }
         }
 
         private boolean isKnownSegment(String name) {
-            return extra.containsKey(name)
-                    || (command != null
-                            && Arrays.stream(recordType(command).getRecordComponents())
-                                    .anyMatch(component -> component.getName().equals(name)));
+            return extra.containsKey(name) || (command != null && declares(recordType(command), name));
+        }
+
+        private static boolean declares(Class<? extends Record> type, String name) {
+            return Arrays.stream(type.getRecordComponents())
+                    .anyMatch(component -> component.getName().equals(name));
         }
 
         private List<String> knownSegments() {

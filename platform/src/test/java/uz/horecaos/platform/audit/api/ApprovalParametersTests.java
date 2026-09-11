@@ -247,6 +247,117 @@ class ApprovalParametersTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void aSegmentSuppliedTwiceIsStillAMistakeWhenTheFirstValueIsNull() {
+        assertThatThrownBy(() -> ApprovalParameters.none().and("roleCode", null).and("roleCode", "ADMIN"))
+                .as("the duplicate guard used to read put(...) != null, which cannot see a first null: two "
+                        + "supplied segments collapsed into one and hashed as though only the second was "
+                        + "ever given. PlatformGrantService pushes a nullable role code through here")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("supplied twice");
+    }
+
+    @Test
+    void anAddedSegmentMayNotShadowAComponentTheCommandAlreadyDeclares() {
+        assertThatThrownBy(() -> ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .and("currency", "USD"))
+                .as("walk() appends the components and then the extras, so a collision hashes two segments "
+                        + "while show() keeps one of them: the signature would cover both values and the "
+                        + "checker's console would render one. Every sibling guard refuses this class of "
+                        + "mistake loudly and this one did not")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already has a component named currency")
+                .hasMessageContaining("amountMinor");
+    }
+
+    // --------------------------------------------- sign(): the hash and what is shown
+
+    @Test
+    void signRefusesUntilItIsToldWhatIsWithheld() {
+        assertThatThrownBy(() -> ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .about("tenantId")
+                        .sign())
+                .as("silence about what is withheld is how a maker's prose reaches a console")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("withholding");
+    }
+
+    @Test
+    void withholdingSomethingNothingHashesSaysNothingAndIsRefused() {
+        assertThatThrownBy(() -> ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .withholding("nosuch")
+                        .sign())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nosuch")
+                .hasMessageContaining("providerReference");
+    }
+
+    @Test
+    void aRequestCannotBeAboutAComponentTheSignatureDoesNotBind() {
+        assertThatThrownBy(() -> ApprovalParameters.of(command())
+                        .excluding("idempotencyKey", "tenantId")
+                        .withholding()
+                        .about("tenantId")
+                        .sign())
+                .as("a subject the signature does not bind is a label, not evidence")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("excluded from the hash");
+    }
+
+    @Test
+    void aWithheldComponentStaysInsideTheDigestAndOffTheConsole() {
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command())
+                .excluding("idempotencyKey")
+                .withholding("providerReference")
+                .about("tenantId")
+                .sign();
+
+        assertThat(signed.subject().detail())
+                .as("what is withheld is withheld from the checker, not from the signature")
+                .doesNotContainKey("providerReference")
+                .containsEntry("amountMinor", "500000")
+                .containsEntry("currency", "UZS")
+                .containsEntry("channel", "PROVIDER_CONSOLE");
+        assertThat(signed.subject().tenantId()).isEqualTo(TENANT);
+
+        assertThat(signed.hash())
+                .as("withholding is the mirror of excluding one step later: it changes what is shown and "
+                        + "never what is bound, so a refactor that 'simplified' it into excluding() would "
+                        + "narrow the digest with every other assertion here still green")
+                .isEqualTo(ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .withholding()
+                        .about("tenantId")
+                        .sign()
+                        .hash());
+        assertThat(signed.hash())
+                .as("and it is the same digest hash() alone produces")
+                .isEqualTo(ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .hash());
+    }
+
+    @Test
+    void whatIsShownIsWhatIsHashed() {
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command())
+                .excluding("idempotencyKey")
+                .and("remedyType", "ORDER_REFUND")
+                .withholding()
+                .about("tenantId")
+                .sign();
+
+        assertThat(signed.subject().detail().keySet())
+                .as("one pass over the material builds both, so the console cannot hold a component the "
+                        + "signature misses or miss one the signature holds")
+                .containsExactlyElementsOf(java.util.stream.Stream.concat(
+                                ApprovalParameters.coveredComponents(Command.class, "idempotencyKey").stream(),
+                                java.util.stream.Stream.of("remedyType"))
+                        .toList());
+    }
+
     private static Command command() {
         return new Command(
                 TENANT,
