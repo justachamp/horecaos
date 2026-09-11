@@ -185,7 +185,7 @@
         </div>
         <div class="balance method">
           <span class="q-caption muted">{{ i18n.t('wallet.method') }}</span>
-          <strong class="q-subhead methodName">{{ i18n.t(methodKey(balances.paymentMethod)) }}</strong>
+          <strong class="q-subhead methodName">{{ methodLabel(balances.paymentMethod) }}</strong>
           <span class="q-caption muted">{{ i18n.t('wallet.method.hint') }}</span>
         </div>
       </div>
@@ -284,7 +284,7 @@
               -->
               <select class="q-body-sm" name="paymentMethod" [value]="method()" (change)="method.set($any($event.target).value)">
                 @for (option of methods; track option) {
-                  <option [value]="option" [selected]="option === method()">{{ i18n.t(methodKey(option)) }}</option>
+                  <option [value]="option" [selected]="option === method()">{{ methodLabel(option) }}</option>
                 }
               </select>
               @if (method() === 'CARD') {
@@ -347,7 +347,7 @@
                 <tr [attr.data-entry]="entry.entryType">
                   <td class="q-body-sm">{{ i18n.dateTime(asDate(entry.createdAt)) }}</td>
                   <td class="q-body-sm">
-                    {{ i18n.t(entryKey(entry.entryType)) }}
+                    {{ entryLabel(entry.entryType) }}
                     <span class="chip" [class.bonus]="entry.moneyKind === 'BONUS'">{{ i18n.t(entry.moneyKind === 'BONUS' ? 'wallet.kind.BONUS' : 'wallet.kind.PAID') }}</span>
                     <div class="q-caption muted">{{ entry.reason }}</div>
                   </td>

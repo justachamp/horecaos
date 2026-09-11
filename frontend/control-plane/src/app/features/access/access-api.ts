@@ -64,6 +64,20 @@ export interface PendingApprovalResponse {
   readonly requestedAt: string;
   readonly expiresAt: string;
   readonly mayDecide: boolean;
+  /**
+   * Whose account a decision HorecaOS raised concerns, or null where the row's
+   * own tenant already says so. A PLATFORM-scope row deliberately carries no
+   * tenant of its own -- that is what keeps it out of the tenant's worklist --
+   * so this is the only field on it that identifies the account (ADR 0095).
+   */
+  readonly subjectTenantId: string | null;
+  readonly subjectTenantName: string | null;
+  /**
+   * What is proposed, in the canonical form the parameters hash covers: entry
+   * type, money kind, signed amount in minor units, currency, and the grant or
+   * reference where one applies. Never the maker's prose (ADR 0029).
+   */
+  readonly subject: Readonly<Record<string, string>>;
 }
 
 /** CapabilityRegistryController.CapabilityDescriptor. */
@@ -173,7 +187,9 @@ export class AccessApi {
   /** Takes effect at once: the cached grant is evicted rather than left to expire. */
   async revokeTenantGrant(tenantId: string, grantId: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.delete<unknown>(`/api/v1/control-plane/tenants/${tenantId}/grants/${grantId}`, { reason }),
+      this.api.delete<unknown>(`/api/v1/control-plane/tenants/${tenantId}/grants/${grantId}`, {
+        reason,
+      }),
     );
   }
 
@@ -241,7 +257,12 @@ export class AccessApi {
       this.api.getPage<AuditEventView>(
         `/api/v1/control-plane/tenants/${tenantId}/audit-events`,
         { cursor, limit: 50 },
-        { query: { actionCode: filters.actionCode || undefined, outcome: filters.outcome || undefined } },
+        {
+          query: {
+            actionCode: filters.actionCode || undefined,
+            outcome: filters.outcome || undefined,
+          },
+        },
       ),
     );
   }
@@ -249,7 +270,9 @@ export class AccessApi {
   /** The full record, change document included. The read is itself audited server-side. */
   async auditEvent(tenantId: string, eventId: string): Promise<AuditEventDetail> {
     return firstValueFrom(
-      this.api.get<AuditEventDetail>(`/api/v1/control-plane/tenants/${tenantId}/audit-events/${eventId}`),
+      this.api.get<AuditEventDetail>(
+        `/api/v1/control-plane/tenants/${tenantId}/audit-events/${eventId}`,
+      ),
     );
   }
 

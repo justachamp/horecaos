@@ -6,7 +6,7 @@ import { parseAmount, parseSignedAmount } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { MessageKey } from '../../core/i18n/messages.en';
+import { MessageKey, en } from '../../core/i18n/messages.en';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
 import {
@@ -251,7 +251,9 @@ export class InvoicesWallet {
 
   /** Whether the previewed month already has a standing statement. */
   protected alreadyIssued(): boolean {
-    return this.issued().some((statement) => statement.status === 'ISSUED' && statement.periodKey === this.periodKey());
+    return this.issued().some(
+      (statement) => statement.status === 'ISSUED' && statement.periodKey === this.periodKey(),
+    );
   }
 
   protected canIssue(statement: StatementView): boolean {
@@ -271,7 +273,11 @@ export class InvoicesWallet {
       return;
     }
     await this.run(async () => {
-      const issued = await this.api.issueStatement(this.tenantId(), this.periodKey(), this.issueReason().trim());
+      const issued = await this.api.issueStatement(
+        this.tenantId(),
+        this.periodKey(),
+        this.issueReason().trim(),
+      );
       this.issueReason.set('');
       return this.i18n.t('statements.issue.done', { number: issued.number });
     });
@@ -330,12 +336,26 @@ export class InvoicesWallet {
 
   // ------------------------------------------------------ wallet actions
 
-  protected entryKey(entryType: string): MessageKey {
-    return `wallet.entry.${entryType}` as MessageKey;
+  /**
+   * The label for a ledger entry type, or the raw type when no catalogue has
+   * one.
+   *
+   * The key is built from the value and cast, which defeats the keyof-typeof
+   * completeness check every written-out key gets: DEPOSIT_REVERSAL shipped
+   * with no label in any of the three catalogues, and the row for the one entry
+   * that takes paid money back rendered a blank type with only a negative
+   * amount and the maker's free text to identify it. `I18nService.t` has no
+   * per-key English fallback by design (messages.ru.ts says why), so an
+   * unlabelled type shows itself rather than nothing.
+   */
+  protected entryLabel(entryType: string): string {
+    const key = `wallet.entry.${entryType}`;
+    return key in en ? this.i18n.t(key as MessageKey) : entryType;
   }
 
-  protected methodKey(method: string): MessageKey {
-    return `wallet.method.${method}` as MessageKey;
+  protected methodLabel(method: string): string {
+    const key = `wallet.method.${method}`;
+    return key in en ? this.i18n.t(key as MessageKey) : method;
   }
 
   /** What this statement has been paid and what is still due, or null while the wallet has not loaded. */
@@ -510,7 +530,7 @@ export class InvoicesWallet {
         reason: this.reason().trim(),
       });
       this.closeForm();
-      return this.i18n.t('wallet.method.done', { method: this.i18n.t(this.methodKey(method)) });
+      return this.i18n.t('wallet.method.done', { method: this.methodLabel(method) });
     });
   }
 
