@@ -424,6 +424,15 @@
             }
           </select>
         </label>
+        <label class="q-body-sm sampleMenu">
+          <input
+            type="checkbox"
+            name="sampleMenu"
+            [checked]="sampleMenu()"
+            (change)="sampleMenu.set($any($event.target).checked)"
+          />
+          {{ i18n.t('onboarding.start.sampleMenu') }}
+        </label>
         <button type="submit" [disabled]="starting()">
           {{
             starting() ? i18n.t('onboarding.start.submitting') : i18n.t('onboarding.start.submit')

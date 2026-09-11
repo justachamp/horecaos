@@ -1372,6 +1372,7 @@ export interface OnboardingControllerStartRequest {
   ownerEmail?: string;
   ownerLocale?: string;
   ownerSubjectId?: string;
+  sampleMenu?: boolean;
   templateId?: string;
 }
 

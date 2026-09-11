@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The onboarding step catalogue (ADR 0008).
  *
- * <p>All twelve now have handlers except {@code TENANT_ACTIVATE}, which is
+ * <p>Every step now has a handler except {@code TENANT_ACTIVATE}, which is
  * never blocked in the first place — it waits on a platform administrator, not
  * a missing capability. The seven that used to stay materialised {@code
  * BLOCKED} — because a template that silently skips a check is
@@ -29,17 +29,26 @@ public enum OnboardingStep {
     KEYCLOAK_ORGANIZATION_RECONCILE(1, Phase.PROVISIONING, true, null),
     TENANT_OWNER_LINK_OR_INVITE(2, Phase.PROVISIONING, true, null),
     DEFAULT_CONFIGURATION_APPLY(3, Phase.CONFIGURING, true, null),
-    BRANDS_AND_LOCATIONS_VALIDATE(4, Phase.VALIDATING, true, null),
 
-    PAYMENT_CONFIGURATION_VALIDATE(5, Phase.VALIDATING, true, null),
-    DELIVERY_CONFIGURATION_VALIDATE(6, Phase.VALIDATING, true, null),
-    POS_BINDINGS_VALIDATE(7, Phase.VALIDATING, true, null),
-    CATALOG_READINESS_VALIDATE(8, Phase.VALIDATING, true, null),
-    MEDIA_READINESS_VALIDATE(9, Phase.VALIDATING, true, null),
-    FRONTEND_DOMAIN_VALIDATE(10, Phase.VALIDATING, true, null),
-    ACTIVATION_SMOKE_TEST(11, Phase.VALIDATING, true, null),
+    /**
+     * The one optional step (ADR 0099). Asked for when the run is started, and
+     * materialised {@code SKIPPED} rather than omitted when it was not — a run
+     * whose step list is simply missing a step cannot tell its reader that the
+     * choice was ever offered.
+     */
+    SAMPLE_MENU_PUBLISH(4, Phase.CONFIGURING, false, null),
 
-    TENANT_ACTIVATE(12, Phase.ACTIVATING, true, null);
+    BRANDS_AND_LOCATIONS_VALIDATE(5, Phase.VALIDATING, true, null),
+
+    PAYMENT_CONFIGURATION_VALIDATE(6, Phase.VALIDATING, true, null),
+    DELIVERY_CONFIGURATION_VALIDATE(7, Phase.VALIDATING, true, null),
+    POS_BINDINGS_VALIDATE(8, Phase.VALIDATING, true, null),
+    CATALOG_READINESS_VALIDATE(9, Phase.VALIDATING, true, null),
+    MEDIA_READINESS_VALIDATE(10, Phase.VALIDATING, true, null),
+    FRONTEND_DOMAIN_VALIDATE(11, Phase.VALIDATING, true, null),
+    ACTIVATION_SMOKE_TEST(12, Phase.VALIDATING, true, null),
+
+    TENANT_ACTIVATE(13, Phase.ACTIVATING, true, null);
 
     /** Phases a run moves through; a step belongs to exactly one. */
     public enum Phase {
@@ -71,9 +80,16 @@ public enum OnboardingStep {
 
     /**
      * Required for activation in template v1. Every step but {@code
-     * TENANT_ACTIVATE} itself (which is a decision, not a check) is required
-     * as of 2026-08-30: identity, structure, and every readiness validation
-     * that now has a real handler behind it.
+     * TENANT_ACTIVATE} itself (which is a decision, not a check) and {@code
+     * SAMPLE_MENU_PUBLISH} (which is an offer, not a check) is required as of
+     * 2026-08-30: identity, structure, and every readiness validation that now
+     * has a real handler behind it.
+     *
+     * <p>This is a property of the step catalogue, not of one run. A sample
+     * menu a tenant asked for and that then failed must not block activation
+     * for a tenant that has since authored a real menu — {@code
+     * outstandingRequiredSteps} is what gates {@code READY}, and it counts only
+     * required steps.
      */
     public boolean requiredInV1() {
         return requiredInV1;

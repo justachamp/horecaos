@@ -133,11 +133,20 @@ public class OnboardingService implements OnboardingHealthQuery {
         // measured across two clocks — harmless on one host, meaningless in a
         // test, and exactly the kind of thing that makes an alert unarguable
         // only until someone argues with it.
+        // ADR 0099: the one step a run chooses. Read once rather than per step,
+        // because the answer is the run's, not any step's.
+        boolean sampleMenu = OnboardingInputs.sampleMenuRequested(input);
+
         for (OnboardingStep step : OnboardingStep.values()) {
             // A blocked step is created in that state rather than omitted. A
             // template that silently skips a check reads exactly like one that
-            // passed it, which is the confusion this avoids.
-            String status = step.isBlocked() ? "BLOCKED" : "PENDING";
+            // passed it, which is the confusion this avoids — and the same
+            // argument is why a declined sample menu (ADR 0099) is materialised
+            // SKIPPED here rather than left out. SKIPPED is never claimed by
+            // claimNextStep, which takes only PENDING, and never blocks READY,
+            // because outstandingRequiredSteps counts only required steps.
+            boolean declined = step == OnboardingStep.SAMPLE_MENU_PUBLISH && !sampleMenu;
+            String status = step.isBlocked() ? "BLOCKED" : declined ? "SKIPPED" : "PENDING";
 
             jdbc.sql("""
                     INSERT INTO tenant.onboarding_steps
@@ -157,12 +166,20 @@ public class OnboardingService implements OnboardingHealthQuery {
                     .param("status", status)
                     .param("required", step.requiredInV1())
                     .param("input", toJson(input))
-                    .param("errorCode", step.isBlocked() ? "CAPABILITY_ABSENT" : null)
+                    .param("errorCode", step.isBlocked() ? "CAPABILITY_ABSENT" : declined ? "NOT_REQUESTED" : null)
+                    // No detail for a declined step: NOT_REQUESTED is a code the
+                    // console translates, and an English sentence beside it would
+                    // be a second, untranslated copy of the hint a Russian
+                    // operator is already reading. The blocked branch keeps its
+                    // sentence because CAPABILITY_ABSENT names an ADR, not a
+                    // translatable fact.
                     .param(
                             "error",
-                            step.blockedUntil()
-                                    .map("Blocked until %s ships"::formatted)
-                                    .orElse(null))
+                            declined
+                                    ? null
+                                    : step.blockedUntil()
+                                            .map("Blocked until %s ships"::formatted)
+                                            .orElse(null))
                     .param("now", at(now))
                     .update();
         }
@@ -172,6 +189,10 @@ public class OnboardingService implements OnboardingHealthQuery {
                 .at(ResourceScope.tenant(tenantId))
                 .target("OnboardingRun", runId)
                 .because("Tenant onboarding")
+                // ADR 0099: the one choice the caller made when starting the run,
+                // so "who asked for a sample menu in this tenant" is answerable
+                // from the audit trail rather than only from a step's status.
+                .changed(Map.of("sampleMenu", sampleMenu))
                 .correlatedBy(runId.toString())
                 .occurredAt(now)
                 .build());
@@ -223,7 +244,7 @@ public class OnboardingService implements OnboardingHealthQuery {
             result = handler.execute(new OnboardingStepHandler.StepContext(
                     runId, step.tenantId(), inputFor(step), step.externalReference(), step.attemptCount() + 1));
         } catch (RuntimeException failure) {
-            log.warn("Onboarding step {} threw", step.step(), failure);
+            log.warn("Onboarding step {} threw", step.resolved(), failure);
             result = OnboardingStepHandler.StepResult.retry(
                     "TRANSIENT_INFRASTRUCTURE", failure.getClass().getSimpleName());
         }
@@ -262,7 +283,7 @@ public class OnboardingService implements OnboardingHealthQuery {
      */
     private Claim claimNextStep(UUID runId, Instant now) {
         Optional<DueStep> due = jdbc.sql("""
-                SELECT s.id, s.tenant_id, s.step_key, s.attempt_count, s.external_reference,
+                SELECT s.id, s.tenant_id, s.step_key, s.required, s.attempt_count, s.external_reference,
                        s.input_snapshot::text AS input
                   FROM tenant.onboarding_steps s
                  WHERE s.run_id = :runId
@@ -279,13 +300,25 @@ public class OnboardingService implements OnboardingHealthQuery {
                 """)
                 .param("runId", runId)
                 .param("now", at(now))
-                .query((rs, n) -> new DueStep(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        OnboardingStep.valueOf(rs.getString("step_key")),
-                        rs.getInt("attempt_count"),
-                        rs.getString("external_reference"),
-                        rs.getString("input")))
+                .query((rs, n) -> {
+                    // find rather than valueOf: an unknown key is released below
+                    // — FAILED when required, BLOCKED when not — and throwing
+                    // here, inside the row mapper, before the claim and before any
+                    // handler lookup, would instead freeze the run on every tick
+                    // with nothing but a scheduler warning. `required` is read
+                    // here and nowhere later, because that release is the one
+                    // decision taken without a resolved step to ask.
+                    String key = rs.getString("step_key");
+                    return new DueStep(
+                            rs.getObject("id", UUID.class),
+                            rs.getObject("tenant_id", UUID.class),
+                            key,
+                            OnboardingStep.find(key).orElse(null),
+                            rs.getBoolean("required"),
+                            rs.getInt("attempt_count"),
+                            rs.getString("external_reference"),
+                            rs.getString("input"));
+                })
                 .optional();
 
         if (due.isEmpty()) {
@@ -311,10 +344,45 @@ public class OnboardingService implements OnboardingHealthQuery {
             return Claim.none();
         }
 
+        // A key this binary has no constant for — a step materialised by a newer
+        // replica, or by the binary a rollback reverted from. Ordered before
+        // every comparison below, all of which need a resolved step, and placed
+        // after the claim so release's own claim-token predicate holds.
+        //
+        // An optional one is released BLOCKED, exactly as a missing handler is:
+        // terminal for the step, never claimed again, and no gate on READY.
+        //
+        // A required one is released FAILED instead, because BLOCKED for a
+        // required row is a terminal state nothing recovers from and nothing
+        // reports: outstandingRequiredSteps still counts it, so refreshRunStatus
+        // pins the run at PROVISIONING and activate answers READINESS_INCOMPLETE
+        // forever, while the stalled gauge and the ADR 0058 listing both read
+        // only PENDING and FAILED and so never name it. FAILED is the state the
+        // rest of this class already knows how to handle: the run turns FAILED
+        // and publishes TenantOnboardingFailed, both stall signals see it,
+        // claimNextStep's own `failed.required` clause halts the run at the
+        // unknown step rather than draining it to one step short of READY, and
+        // resume reopens it — so the moment a binary that knows the key is in
+        // place, an operator recovers the run where it stands. Releasing it
+        // PENDING instead would be worse than either: release writes updated_at,
+        // so a re-release loop keeps the row permanently young, invisible to
+        // both stall signals, while attempt_count climbs without bound.
+        if (step.step() == null) {
+            release(
+                    step.id(),
+                    claimToken,
+                    step.required() ? "FAILED" : "BLOCKED",
+                    "CAPABILITY_ABSENT",
+                    "This binary does not know step " + step.stepKey(),
+                    now,
+                    Duration.ZERO);
+            return Claim.handled();
+        }
+
         // TENANT_ACTIVATE is never executed by a worker. It waits for a platform
         // administrator, because ADR 0008 puts the go-live decision with someone
         // who has seen the readiness evidence.
-        if (step.step() == OnboardingStep.TENANT_ACTIVATE) {
+        if (step.resolved() == OnboardingStep.TENANT_ACTIVATE) {
             release(
                     step.id(),
                     claimToken,
@@ -327,7 +395,7 @@ public class OnboardingService implements OnboardingHealthQuery {
             return Claim.none();
         }
 
-        OnboardingStepHandler handler = handlers.get(step.step());
+        OnboardingStepHandler handler = handlers.get(step.resolved());
         if (handler == null) {
             release(
                     step.id(),
@@ -413,7 +481,25 @@ public class OnboardingService implements OnboardingHealthQuery {
         return reclaimed;
     }
 
-    /** Resumes a failed run. Never resets a completed step. */
+    /**
+     * Resumes a failed run. Never resets a completed step.
+     *
+     * <p>Scoped to runs the scheduler can still drive — {@link #dueRuns(int)}'s
+     * own exclusion list minus {@code FAILED}, which is what resume is for.
+     * Without that scope a {@code FAILED} optional step on a run that already
+     * reached {@code READY} (ADR 0099's {@code SAMPLE_MENU_PUBLISH} is the first
+     * step that can be both) was flipped to {@code PENDING} and reported
+     * reopened, while nothing would ever claim it: {@code dueRuns} excludes a
+     * {@code READY} run, and {@code refreshRunStatus} will not pull one back
+     * because a non-required failure is invisible to it. The operator was told
+     * the step was reopened, the red row turned yellow, and the step never ran.
+     *
+     * @throws ResumeNotPermittedException when the run has finished and its
+     *                                     failed steps could not be reopened,
+     *                                     rather than returning a zero that
+     *                                     reads like the no-op resume of a run
+     *                                     with nothing failed
+     */
     @Transactional
     public int resume(UUID runId, ActorRef actor, String reason) {
         int reopened = jdbc.sql("""
@@ -421,10 +507,26 @@ public class OnboardingService implements OnboardingHealthQuery {
                    SET status = 'PENDING', available_at = :now, attempt_count = 0,
                        claim_token = NULL, claimed_at = NULL, updated_at = :now
                  WHERE run_id = :runId AND status = 'FAILED'
+                   AND EXISTS (SELECT 1 FROM tenant.onboarding_runs r
+                                WHERE r.id = :runId
+                                  AND r.status NOT IN ('ACTIVE', 'CANCELLED', 'READY'))
                 """)
                 .param("runId", runId)
                 .param("now", at(clock.instant()))
                 .update();
+
+        if (reopened == 0) {
+            boolean unreachable = Boolean.TRUE.equals(
+                    jdbc.sql("""
+                            SELECT EXISTS (SELECT 1 FROM tenant.onboarding_steps
+                                            WHERE run_id = :runId AND status = 'FAILED')
+                            """).param("runId", runId).query(Boolean.class).single());
+            if (unreachable) {
+                throw new ResumeNotPermittedException(
+                        "Onboarding run %s has already finished; a step that failed on it cannot be re-run"
+                                .formatted(runId));
+            }
+        }
 
         jdbc.sql("""
                 UPDATE tenant.onboarding_runs
@@ -553,7 +655,16 @@ public class OnboardingService implements OnboardingHealthQuery {
 
         List<ValidationResult> results = new ArrayList<>();
         for (StepRow row : rows) {
-            OnboardingStep step = OnboardingStep.valueOf(row.stepKey());
+            // find rather than valueOf, for the reason claimNextStep uses it: a
+            // key this binary does not know belongs in the report as unresolvable,
+            // not thrown out of a dry run that names every other step's answer.
+            Optional<OnboardingStep> known = OnboardingStep.find(row.stepKey());
+            if (known.isEmpty()) {
+                results.add(new ValidationResult(
+                        row.stepKey(), false, "CAPABILITY_ABSENT", "This binary does not know step " + row.stepKey()));
+                continue;
+            }
+            OnboardingStep step = known.get();
             OnboardingStepHandler handler = handlers.get(step);
             OnboardingStepHandler.StepResult outcome;
             if (handler == null) {
@@ -767,10 +878,10 @@ public class OnboardingService implements OnboardingHealthQuery {
                     log.warn(
                             "Onboarding step {} completed after its claim was reclaimed; "
                                     + "the result is discarded and the step will run again",
-                            step.step());
+                            step.resolved());
                     return;
                 }
-                propagate(runId, step.step(), result.result());
+                propagate(runId, step.resolved(), result.result());
 
                 // After the compare-and-set, never before it. A step whose claim
                 // was reclaimed returns above without a fact, because publishing
@@ -780,8 +891,8 @@ public class OnboardingService implements OnboardingHealthQuery {
                         UUID.randomUUID(),
                         new TenantId(step.tenantId()),
                         runId,
-                        step.step().name(),
-                        stepVersionOf(step.step()),
+                        step.resolved().name(),
+                        stepVersionOf(step.resolved()),
                         step.attemptCount() + 1,
                         now));
             }
@@ -1010,10 +1121,48 @@ public class OnboardingService implements OnboardingHealthQuery {
         }
     }
 
+    /**
+     * {@link #resume} refused: the run has reached {@code READY}, {@code ACTIVE}
+     * or {@code CANCELLED}, so nothing would claim a step it reopened.
+     */
+    public static final class ResumeNotPermittedException extends RuntimeException {
+        public ResumeNotPermittedException(String message) {
+            super(message);
+        }
+    }
+
     private record FailedStep(String stepKey, String errorCode) {}
 
+    /**
+     * One claimable row, with its key kept as written.
+     *
+     * @param stepKey the raw {@code step_key}, which may name a step this binary
+     *                does not know — a rolled-back or older replica reading rows
+     *                a newer one materialised (ADR 0099's rollback note)
+     * @param step    the resolved step, null exactly when {@link #stepKey} is a
+     *                key this binary's {@link OnboardingStep} has no constant for
+     */
     private record DueStep(
-            UUID id, UUID tenantId, OnboardingStep step, int attemptCount, String externalReference, String input) {}
+            UUID id,
+            UUID tenantId,
+            String stepKey,
+            @Nullable OnboardingStep step,
+            boolean required,
+            int attemptCount,
+            String externalReference,
+            String input) {
+
+        /**
+         * The resolved step. Non-null on every path that reaches a handler:
+         * {@link Claim}'s own invariant is that a handler exists only for a step
+         * this binary knows, and an unknown key is released — {@code FAILED} when
+         * {@link #required}, {@code BLOCKED} when not — inside the claim
+         * transaction before any handler is looked up.
+         */
+        OnboardingStep resolved() {
+            return Objects.requireNonNull(step, "A step only reaches a handler once its key has resolved");
+        }
+    }
 
     /** One row of {@code tenant.onboarding_steps}, read for {@link #validate} without claiming anything. */
     private record StepRow(
