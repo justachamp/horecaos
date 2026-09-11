@@ -177,3 +177,108 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+/* ---------------------------------------------------------------- ADR 0101 */
+
+.zone-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zone-detail__facts {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--q-ink-muted);
+}
+
+.zone-detail__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.zone-detail__section h3 {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.zone-detail__section-head button,
+.zone-detail__branches button,
+.zone-versions button {
+  padding: 2px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.zone-detail__section-head button:disabled,
+.zone-detail__branches button:disabled,
+.zone-versions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.zone-detail__branches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zone-detail__branches li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 480px;
+}
+
+.zone-versions {
+  width: 100%;
+  max-width: 720px;
+  border-collapse: collapse;
+}
+
+.zone-versions th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+}
+
+.zone-versions td {
+  padding: 4px 8px;
+  font-size: 13px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+/* A free geozone is a DELIVERY zone whose tariff resolves to zero (ADR 0037);
+   this marker is the only place the console says so, so it is legible rather
+   than decorative. */
+.status-badge--free {
+  margin-left: 6px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 14px;
+  background: var(--q-canvas);
+  color: inherit;
+}
+
+.dialog__problems {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--q-error-text);
+}
