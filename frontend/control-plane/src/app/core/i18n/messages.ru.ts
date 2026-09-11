@@ -567,7 +567,7 @@ export const ru: Messages = {
     'Новые запуски идут по шаблону {code}, версия {version}: обязательных шагов — {count}.',
   'onboarding.start.ownerLocale': 'Язык приглашения',
   'onboarding.start.sampleMenu':
-    'Создать и опубликовать образец меню, чтобы убедиться, что всё работает; арендатор заменит его позже',
+    'Создать и опубликовать образец меню, чтобы убедиться, что всё работает; клиент заменит его позже',
   'onboarding.invitation.title': 'Приглашение владельца',
   'onboarding.invitation.state.QUEUED': 'Ожидает отправки',
   'onboarding.invitation.state.SENT': 'Отправлено',

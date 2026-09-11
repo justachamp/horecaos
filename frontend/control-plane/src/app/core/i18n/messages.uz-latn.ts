@@ -572,7 +572,7 @@ export const uzLatn: Messages = {
     'Yangi jarayonlar {code} shabloni, {version}-versiya bo‘yicha boradi: {count} ta majburiy qadam.',
   'onboarding.start.ownerLocale': 'Taklifnoma tili',
   'onboarding.start.sampleMenu':
-    'Hammasi ishlayotganini tekshirish uchun namuna menyu yaratib e’lon qilinsin; ijarachi keyinroq uni almashtiradi',
+    'Hammasi ishlayotganini tekshirish uchun namuna menyu yaratib e’lon qilinsin; mijoz keyinroq uni almashtiradi',
   'onboarding.invitation.title': 'Egaga taklifnoma',
   'onboarding.invitation.state.QUEUED': 'Yuborilishini kutmoqda',
   'onboarding.invitation.state.SENT': 'Yuborildi',
