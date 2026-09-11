@@ -1448,6 +1448,35 @@ export interface OverrideRequest {
   validUntil: string;
 }
 
+export interface OwnerInvitationEventView {
+  actor?: string;
+  actorType?: string;
+  attempt?: number;
+  locale?: string;
+  occurredAt?: string;
+  outcomeCode?: string;
+  reason?: string;
+  type?: string;
+}
+
+export interface OwnerInvitationOverviewRow {
+  acceptedAt?: string;
+  attempts?: number;
+  emailMasked?: string;
+  expiresAt?: string;
+  lastErrorCode?: string;
+  locale?: string;
+  openedAt?: string;
+  queuedAt?: string;
+  recipient?: string;
+  sentAt?: string;
+  state?: string;
+  tenantId?: string;
+  tenantName?: string;
+  tenantSlug?: string;
+  tenantStatus?: string;
+}
+
 export interface OwnerInvitationResendRequest {
   locale?: string;
   reason: string;
@@ -1462,8 +1491,10 @@ export interface OwnerInvitationView {
   locale?: string;
   openedAt?: string;
   queuedAt?: string;
+  recipient?: string;
   sentAt?: string;
   state?: string;
+  timeline?: Array<OwnerInvitationEventView>;
 }
 
 export interface OwnershipView {
@@ -2635,7 +2666,7 @@ export interface Operations {
   "resolution": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
   "lookup": { method: "POST"; path: "/api/v1/control-plane/customer-lookups"; request: { parameters: Record<string, never>; body: PlatformCustomerLookupControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResult } };
-  "overview": { method: "GET"; path: "/api/v1/control-plane/data-protection"; request: { parameters: Record<string, never> }; responses: { "200": DataProtection } };
+  "overview_1": { method: "GET"; path: "/api/v1/control-plane/data-protection"; request: { parameters: Record<string, never> }; responses: { "200": DataProtection } };
   "begin": { method: "POST"; path: "/api/v1/control-plane/device-enrolments"; request: { parameters: Record<string, never>; body: BeginRequest }; responses: { "200": BeginResponse } };
   "poll": { method: "POST"; path: "/api/v1/control-plane/device-enrolments/{deviceCode}/poll"; request: { parameters: { path: { deviceCode: string } } }; responses: { "200": PollResponse } };
   "list_15": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
@@ -2666,6 +2697,7 @@ export interface Operations {
   "list_13": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
   "currentDefault": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/default"; request: { parameters: Record<string, never> }; responses: { "200": TemplateView } };
   "get_6": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
+  "overview": { method: "GET"; path: "/api/v1/control-plane/owner-invitations"; request: { parameters: { query: { state?: "QUEUED" | "SENT" | "ACCEPTED" | "NOT_NEEDED" | "FAILED" | "EXPIRED" | "NONE" | "OUTSTANDING" } } }; responses: { "200": Array<OwnerInvitationOverviewRow> } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
   "health_1": { method: "GET"; path: "/api/v1/control-plane/platform-health"; request: { parameters: Record<string, never> }; responses: { "200": PlatformHealth } };
   "matrix": { method: "GET"; path: "/api/v1/control-plane/pos-capability-matrix"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterCapabilities> } };

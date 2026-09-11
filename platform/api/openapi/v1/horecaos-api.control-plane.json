@@ -4572,6 +4572,88 @@
         "required" : [ "approvedBy", "entitlementKey", "reason", "validUntil" ],
         "type" : "object"
       },
+      "OwnerInvitationEventView" : {
+        "properties" : {
+          "actor" : {
+            "type" : "string"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "attempt" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "type" : "string"
+          },
+          "outcomeCode" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OwnerInvitationOverviewRow" : {
+        "properties" : {
+          "acceptedAt" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "emailMasked" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "lastErrorCode" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "openedAt" : {
+            "type" : "string"
+          },
+          "queuedAt" : {
+            "type" : "string"
+          },
+          "recipient" : {
+            "type" : "string"
+          },
+          "sentAt" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          },
+          "tenantSlug" : {
+            "type" : "string"
+          },
+          "tenantStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OwnerInvitationResendRequest" : {
         "properties" : {
           "locale" : {
@@ -4615,11 +4697,20 @@
           "queuedAt" : {
             "type" : "string"
           },
+          "recipient" : {
+            "type" : "string"
+          },
           "sentAt" : {
             "type" : "string"
           },
           "state" : {
             "type" : "string"
+          },
+          "timeline" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OwnerInvitationEventView"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -8552,7 +8643,7 @@
     "/api/v1/control-plane/data-protection" : {
       "get" : {
         "description" : "Data classes, every encrypted column, retention rules and the jobs that enforce them, erasure requests, and reveals and exports of the last 30 days.",
-        "operationId" : "overview",
+        "operationId" : "overview_1",
         "responses" : {
           "200" : {
             "content" : {
@@ -9554,6 +9645,40 @@
         },
         "summary" : "One onboarding template version",
         "tags" : [ "Onboarding templates" ]
+      }
+    },
+    "/api/v1/control-plane/owner-invitations" : {
+      "get" : {
+        "description" : "The cross-tenant view of onboarding's last mile: which owners have not set up an account, what was sent to them and what came of it. A tenant whose owner was linked but never invited is listed in state NONE -- that is the case a list built from the invitation table alone would miss. Archived tenants are left out. At most 200 rows.",
+        "operationId" : "overview",
+        "parameters" : [ {
+          "description" : "One state, NONE, or OUTSTANDING for everything not yet accepted",
+          "in" : "query",
+          "name" : "state",
+          "required" : false,
+          "schema" : {
+            "description" : "One state, NONE, or OUTSTANDING for everything not yet accepted",
+            "enum" : [ "QUEUED", "SENT", "ACCEPTED", "NOT_NEEDED", "FAILED", "EXPIRED", "NONE", "OUTSTANDING" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/OwnerInvitationOverviewRow"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every tenant's owner invitation",
+        "tags" : [ "Tenant onboarding" ]
       }
     },
     "/api/v1/control-plane/plans" : {
@@ -15376,7 +15501,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/owner-invitation" : {
       "get" : {
-        "description" : "Queued, sent, opened, accepted, not needed, failed or expired, with when and why. The address is masked.",
+        "description" : "Queued, sent, opened, accepted, not needed, failed or expired, with when and why, and the timeline of every queue, send attempt, open, accept and resend. The recipient is shown in full to a caller holding tenant.onboarding.manage here, and masked to everyone else.",
         "operationId" : "view",
         "parameters" : [ {
           "in" : "path",
@@ -15399,7 +15524,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "The tenant owner's invitation",
+        "summary" : "The tenant owner's invitation, and its history",
         "tags" : [ "Tenant onboarding" ]
       }
     },
@@ -18534,6 +18659,9 @@
     "description" : "ADR 0038 legal entities and their location assignments",
     "name" : "SaaS control plane"
   }, {
+    "description" : "Owner invitation state, history, overview and resend (ADR 0097, ADR 0100)",
+    "name" : "Tenant onboarding"
+  }, {
     "description" : "ADR 0083: find an identifier across tenants",
     "name" : "Global lookup"
   }, {
@@ -18614,9 +18742,6 @@
   }, {
     "description" : "ADR 0086: failure categories and their live counts",
     "name" : "Failure taxonomy"
-  }, {
-    "description" : "Owner invitation state and resend (ADR 0097)",
-    "name" : "Tenant onboarding"
   }, {
     "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
     "name" : "Order acceptance policy"

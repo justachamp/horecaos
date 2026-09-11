@@ -1,7 +1,7 @@
 # ADR 0100: The control plane sees every owner invitation
 
 - Decision status: Proposed
-- Implementation status: Not started — proposed with this record; nothing built yet
+- Implementation status: Built — V0215's `tenant.owner_invitation_events` written by `OwnerInvitationService` and `OwnerInvitationRelay` at every queue, send attempt, open, accept and resend; `JdbcOwnerInvitationEventStore` reads it; `OwnerInvitationView` carries `recipient` and `timeline`; `GET /api/v1/control-plane/owner-invitations` lists every unarchived tenant with an invitation or a linked owner, filterable, including the never-invited tenant as `NONE`; the recipient is read live from Keycloak and revealed only to `TENANT_ONBOARDING_MANAGE`, one `tenant.owner_invitation.recipient_revealed` fact per screen load; the control plane has the `/tenants/invitations` screen with its rail entry, the timeline on the onboarding panel and the owner column on the tenant directory. Covered by `OwnerInvitationFlowTests`, `OwnerInvitationOverviewTests`, `OwnerInvitationControllerEndpointTests` and the three Angular specs. No retention job trims the events table
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
@@ -233,14 +233,22 @@ nothing else references.
 
 ## Implementation checklist
 
-- [ ] V0215: the events table, and the `(tenant_id, id)` unique on invitations
-- [ ] The service and the relay write an event wherever they change state
-- [ ] `OwnerInvitationView` gains `recipient` and `timeline`, additively
-- [ ] The overview query, endpoint and its capability check
-- [ ] The recipient reveal, with its audit fact
-- [ ] Control plane: the timeline on the panel, the overview screen and its
+- [x] V0215: the events table, and the `(tenant_id, id)` unique on invitations
+- [x] The service and the relay write an event wherever they change state
+- [x] `OwnerInvitationView` gains `recipient` and `timeline`, additively
+- [x] The overview query, endpoint and its capability check
+- [x] The recipient reveal, with its audit fact
+- [x] Control plane: the timeline on the panel, the overview screen and its
       rail entry, the directory's owner column
-- [ ] Tests: history, overview, reveal, and the three Angular specs
+- [x] Tests: history, overview, reveal, and the three Angular specs
+
+One thing the record said and the build did not do: the attempt number is
+one-based, not zero-based. The relay claims a row by incrementing `attempts`
+before it tries, so the row it holds already carries the number of the attempt
+about to be made, and a history that renumbered it would disagree with the
+`attempts` count on the panel beside it. Zero is what an event that is not a
+send attempt carries -- a queue, a resend -- which is what the column means
+now.
 
 ## Exit criteria
 
