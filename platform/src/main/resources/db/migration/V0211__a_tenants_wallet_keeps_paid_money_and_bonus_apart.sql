@@ -12,11 +12,16 @@ CREATE TABLE commercial.wallet_entries (
     entry_type varchar(20) NOT NULL,
     amount_minor bigint NOT NULL,
     currency char(3) NOT NULL,
-    -- The statement a STATEMENT_PAYMENT entry pays down. Null for every other type.
+    -- The statement a STATEMENT_PAYMENT entry pays down, or that a
+    -- STATEMENT_REVERSAL gives back when the statement is voided. Null for
+    -- every other type.
     statement_id uuid,
     -- For a BONUS_GRANT entry, this is null: the row's own id is the grant.
-    -- For a STATEMENT_PAYMENT or BONUS_EXPIRY entry drawing on a grant, this
-    -- names the BONUS_GRANT entry it draws down.
+    -- Every other bonus entry names the grant it moves, so a grant's remainder
+    -- is the sum of the entries naming it and the bonus balance is the sum of
+    -- every grant's remainder. That is why a BONUS ADJUSTMENT names one too: a
+    -- bonus that belonged to no grant could never be spent (a statement draws
+    -- grant by grant) and would never lapse.
     grant_id uuid,
     -- A BONUS_GRANT entry's own lapse date. Null on every other type.
     expires_at timestamptz,
@@ -40,33 +45,38 @@ CREATE TABLE commercial.wallet_entries (
         REFERENCES commercial.wallet_entries (tenant_id, id),
     CONSTRAINT ck_wallet_entry_money_kind CHECK (money_kind IN ('PAID', 'BONUS')),
     CONSTRAINT ck_wallet_entry_type CHECK (entry_type IN (
-        'TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'BONUS_EXPIRY', 'STATEMENT_PAYMENT', 'ADJUSTMENT', 'REFUND')),
+        'TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'BONUS_EXPIRY', 'STATEMENT_PAYMENT',
+        'STATEMENT_REVERSAL', 'ADJUSTMENT', 'REFUND')),
     CONSTRAINT ck_wallet_entry_amount CHECK (amount_minor <> 0),
     CONSTRAINT ck_wallet_entry_currency CHECK (currency ~ '^[A-Z]{3}$'),
     -- Money in (TOP_UP, DEPOSIT) is always PAID; a refund is always PAID
     -- money leaving; a bonus grant and its expiry are always BONUS. A
-    -- statement payment or a correction can be either kind.
+    -- statement payment, the reversal of one, or a correction can be either
+    -- kind.
     CONSTRAINT ck_wallet_entry_kind_for_type CHECK (
         (entry_type IN ('TOP_UP', 'DEPOSIT', 'REFUND') AND money_kind = 'PAID')
         OR (entry_type IN ('BONUS_GRANT', 'BONUS_EXPIRY') AND money_kind = 'BONUS')
-        OR (entry_type IN ('STATEMENT_PAYMENT', 'ADJUSTMENT'))
+        OR (entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL', 'ADJUSTMENT'))
     ),
     CONSTRAINT ck_wallet_entry_statement_ref CHECK (
-        (entry_type = 'STATEMENT_PAYMENT') = (statement_id IS NOT NULL)
+        (entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL')) = (statement_id IS NOT NULL)
     ),
+    -- Every bonus entry but the grant itself names the grant it moves.
     CONSTRAINT ck_wallet_entry_grant_ref CHECK (
         (grant_id IS NOT NULL) = (
             entry_type = 'BONUS_EXPIRY'
-            OR (entry_type = 'STATEMENT_PAYMENT' AND money_kind = 'BONUS')
+            OR (money_kind = 'BONUS'
+                AND entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL', 'ADJUSTMENT'))
         )
     ),
     CONSTRAINT ck_wallet_entry_expiry CHECK (
         (entry_type = 'BONUS_GRANT') = (expires_at IS NOT NULL)
     ),
     -- Money in is a positive entry; a statement payment, an expiry and a
-    -- refund always take money away.
+    -- refund always take money away. Voiding a statement gives back what it
+    -- drew, which is money in again.
     CONSTRAINT ck_wallet_entry_sign CHECK (
-        (entry_type IN ('TOP_UP', 'DEPOSIT', 'BONUS_GRANT') AND amount_minor > 0)
+        (entry_type IN ('TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'STATEMENT_REVERSAL') AND amount_minor > 0)
         OR (entry_type IN ('STATEMENT_PAYMENT', 'BONUS_EXPIRY', 'REFUND') AND amount_minor < 0)
         OR (entry_type = 'ADJUSTMENT')
     ),

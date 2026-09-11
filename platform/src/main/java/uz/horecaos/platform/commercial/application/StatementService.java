@@ -275,6 +275,12 @@ public class StatementService {
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
+
+        // ADR 0095: the statement was paid from the wallet when it was issued,
+        // and it no longer stands. What it drew goes back to the grant or the
+        // balance it came from, and is then free to pay whatever else is open.
+        wallet.reverseStatementPayments(tenantId, statementId, String.valueOf(statement.number()));
+        wallet.applyAvailableFunds(tenantId);
     }
 
     /** The id and number an issued statement was filed under. */

@@ -9,4 +9,10 @@ import java.util.UUID;
  * here is stored on {@code commercial.statements} itself.
  */
 public record StatementPayment(
-        UUID statementId, String number, String periodKey, long totalMinor, long paidMinor, long dueMinor) {}
+        UUID statementId,
+        String number,
+        String periodKey,
+        String currency,
+        long totalMinor,
+        long paidMinor,
+        long dueMinor) {}

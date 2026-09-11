@@ -101,7 +101,8 @@ class ModulesStatementsAndArrearsTests {
         jdbc.sql("""
                 TRUNCATE TABLE commercial.usage_aggregates, commercial.usage_adjustments,
                     commercial.usage_events, commercial.entitlement_overrides,
-                    commercial.subscriptions, commercial.statement_lines, commercial.statements,
+                    commercial.subscriptions, commercial.wallet_entries, commercial.tenant_billing,
+                    commercial.statement_lines, commercial.statements,
                     commercial.tenant_modules, commercial.modules
                 """).update();
         jdbc.sql("TRUNCATE TABLE commercial.plan_entitlements, commercial.plan_versions, commercial.plans CASCADE")

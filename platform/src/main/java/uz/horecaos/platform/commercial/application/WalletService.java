@@ -234,15 +234,48 @@ public class WalletService {
 
     // --------------------------------------------------- manual changes: two people
 
-    /** A correction to a tenant's wallet, of either money kind, up or down (ADR 0095, item 4). */
+    /**
+     * A correction to a tenant's wallet, of either money kind, up or down (ADR
+     * 0095, item 4).
+     *
+     * <p>A correction of bonus money names the grant it corrects, and cannot
+     * take that grant's remainder below zero; a correction of paid money names
+     * no grant and cannot take the paid balance below zero. The grant is not a
+     * formality: bonus money is spent grant by grant and lapses with the grant
+     * it belongs to, so a bonus entry belonging to no grant would be a balance
+     * no statement could ever draw on and no expiry could ever reach.
+     */
     @Transactional
     public WalletChangeOutcome proposeAdjustment(
-            UUID tenantId, String moneyKind, long amountMinor, ActorRef actor, String reason, String correlationId) {
+            UUID tenantId,
+            String moneyKind,
+            @Nullable UUID grantId,
+            long amountMinor,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
         requireMoneyKind(moneyKind);
         if (amountMinor == 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment must move a nonzero amount");
         }
-        AdjustmentCommand command = new AdjustmentCommand(tenantId, moneyKind, amountMinor, reason);
+        boolean bonus = WalletEntry.BONUS.equals(moneyKind);
+        if (bonus == (grantId == null)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    bonus
+                            ? "A correction of bonus money names the grant it corrects"
+                            : "A correction of paid money names no grant");
+        }
+        if (grantId != null) {
+            BonusGrantBalance grant = wallet.findGrant(tenantId, grantId)
+                    .orElseThrow(() ->
+                            new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "That tenant has no such bonus grant"));
+            if (!grant.expiresAt().isAfter(clock.instant())) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "That bonus grant has lapsed; grant a new one instead");
+            }
+        }
+        AdjustmentCommand command = new AdjustmentCommand(tenantId, moneyKind, grantId, amountMinor, reason);
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_ADJUSTMENT.code(),
                 ApprovalParameters.of(command).excluding().hash(),
@@ -257,6 +290,15 @@ public class WalletService {
         }
 
         wallet.lockBilling(tenantId, clock.instant());
+        // Under the lock, and before the signature is spent: a refusal here
+        // leaves the approval unspent for a retry once the money is there.
+        long available = grantId == null ? wallet.paidBalance(tenantId) : wallet.grantRemaining(tenantId, grantId);
+        if (available + amountMinor < 0) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Only %d is there to correct; a correction cannot take a balance below zero".formatted(available),
+                    Map.of("availableMinor", available));
+        }
         approval.consume();
         Instant now = clock.instant();
         UUID id = Ids.newId();
@@ -269,12 +311,12 @@ public class WalletService {
                 amountMinor,
                 wallet.currencyOf(tenantId),
                 null,
-                null,
+                grantId,
                 null,
                 null,
                 reason,
                 subject(actor),
-                approvedByOf(approval, actor),
+                approvedBy(approval),
                 requestId,
                 now));
 
@@ -339,7 +381,7 @@ public class WalletService {
                 null,
                 reason,
                 subject(actor),
-                approvedByOf(approval, actor),
+                approvedBy(approval),
                 requestId,
                 appliedAt));
 
@@ -420,7 +462,7 @@ public class WalletService {
                 payoutReference,
                 reason,
                 subject(actor),
-                approvedByOf(approval, actor),
+                approvedBy(approval),
                 requestId,
                 now));
 
@@ -491,12 +533,12 @@ public class WalletService {
     public long applyAvailableFunds(UUID tenantId) {
         Instant now = clock.instant();
         TenantBilling billing = wallet.lockBilling(tenantId, now);
-        List<StatementPayment> open = wallet.openStatementsOldestFirst(tenantId);
+        String currency = wallet.currencyOf(tenantId);
+        List<StatementPayment> open = wallet.openStatementsOldestFirst(tenantId, currency);
         if (open.isEmpty()) {
             return 0;
         }
 
-        String currency = wallet.currencyOf(tenantId);
         List<BonusGrantBalance> grants = wallet.liveGrants(tenantId, now);
         Map<UUID, Long> remainingByGrant = new LinkedHashMap<>();
         for (BonusGrantBalance grant : grants) {
@@ -566,6 +608,47 @@ public class WalletService {
             }
         }
         return totalPaid;
+    }
+
+    /**
+     * Gives back what a voided statement drew from the wallet (ADR 0088 voids
+     * a wrong statement and issues again; ADR 0095 pays one at issue).
+     *
+     * <p>Without this the money would be spent against a statement that no
+     * longer stands: bonus drawn from a grant that can never be credited back,
+     * paid money the tenant would have to transfer twice. The ledger is never
+     * reopened, so each draw is given back by the opposite entry naming the
+     * same statement — and the same grant, for bonus money — leaving both the
+     * draw and its reversal on the record. Idempotent: a statement whose draws
+     * are already reversed has nothing left to give back.
+     *
+     * @return how much this gave back
+     */
+    @Transactional
+    public long reverseStatementPayments(UUID tenantId, UUID statementId, String statementNumber) {
+        Instant now = clock.instant();
+        wallet.lockBilling(tenantId, now);
+        long returned = 0;
+        for (JdbcWalletStore.StatementDraw draw : wallet.unreversedDraws(tenantId, statementId)) {
+            wallet.append(new WalletEntry(
+                    Ids.newId(),
+                    tenantId,
+                    draw.moneyKind(),
+                    WalletEntry.STATEMENT_REVERSAL,
+                    draw.drawnMinor(),
+                    draw.currency(),
+                    statementId,
+                    draw.grantId(),
+                    null,
+                    null,
+                    "statement %s was voided; what it drew is given back".formatted(statementNumber),
+                    SYSTEM_SETTLEMENT,
+                    null,
+                    null,
+                    now));
+            returned += draw.drawnMinor();
+        }
+        return returned;
     }
 
     /**
@@ -700,15 +783,22 @@ public class WalletService {
     }
 
     /**
-     * Who gave the second signature. {@code WALLET_ADJUSTMENT}, {@code
-     * WALLET_BONUS_GRANT} and {@code WALLET_REFUND} are all seeded
-     * fail-closed (V0211), so {@code approval} is always {@code Approved}
-     * here in practice; the requester's own subject is a defensive fallback
-     * for the shape {@link ApprovalOutcome.NotRequired} would otherwise need,
-     * never a path a live policy can reach.
+     * Who gave the second signature.
+     *
+     * <p>{@code WALLET_ADJUSTMENT}, {@code WALLET_BONUS_GRANT} and {@code
+     * WALLET_REFUND} are all fail-closed and seeded at platform scope (V0211),
+     * so the only outcome that reaches here is {@code Approved}. The other one
+     * {@code mayProceed()} admits is {@code NotRequired}, which would mean
+     * somebody removed the policy — and an entry written on one signature is
+     * exactly what ADR 0095 item 4 refuses, so this refuses it too rather than
+     * writing the requester's own name into {@code approved_by}.
      */
-    private static String approvedByOf(ApprovalOutcome approval, ActorRef requester) {
-        return approval instanceof ApprovalOutcome.Approved approved ? approved.approvedBy() : subject(requester);
+    private static String approvedBy(ApprovalOutcome approval) {
+        if (approval instanceof ApprovalOutcome.Approved approved) {
+            return approved.approvedBy();
+        }
+        throw new ApiException(
+                ErrorCode.APPROVAL_POLICY_REQUIRED, "A wallet change moves nothing without a second person's approval");
     }
 
     private static void requireMoneyKind(String moneyKind) {
@@ -723,7 +813,8 @@ public class WalletService {
 
     // ------------------------------------------------------------- approval hashes
 
-    private record AdjustmentCommand(UUID tenantId, String moneyKind, long amountMinor, String reason) {}
+    private record AdjustmentCommand(
+            UUID tenantId, String moneyKind, @Nullable UUID grantId, long amountMinor, String reason) {}
 
     private record BonusGrantCommand(UUID tenantId, long amountMinor, Instant expiresAt, String reason) {}
 

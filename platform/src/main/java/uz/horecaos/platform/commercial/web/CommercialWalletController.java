@@ -117,9 +117,8 @@ public class CommercialWalletController {
             description = "Derived from the ledger; issued statements carry no payment columns of their own "
                     + "(ADR 0088, ADR 0095). Newest month first.")
     public ResponseEntity<List<StatementPaymentView>> statementPayments(@PathVariable UUID tenantId) {
-        WalletBalances balances = wallet.balances(tenantId);
         return ResponseEntity.ok(wallet.statementPayments(tenantId).stream()
-                .map(payment -> StatementPaymentView.of(payment, balances.currency()))
+                .map(StatementPaymentView::of)
                 .toList());
     }
 
@@ -157,13 +156,20 @@ public class CommercialWalletController {
     @RequiresCapability(value = Capability.COMMERCIAL_WALLET_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(
             summary = "Propose a correction to the tenant's wallet",
-            description = "Either money kind, up or down. Needs a second signature: the first call answers "
-                    + "AWAITING_APPROVAL, and the identical call again after a different person approves it "
-                    + "applies the correction.")
+            description = "Either money kind, up or down; a correction of bonus money names the grant it "
+                    + "corrects, and one of paid money names none. Neither may take a balance below zero. "
+                    + "Needs a second signature: the first call answers AWAITING_APPROVAL, and the identical "
+                    + "call again after a different person approves it applies the correction.")
     public ResponseEntity<WalletChangeResponse> proposeAdjustment(
             @PathVariable UUID tenantId, @Valid @RequestBody AdjustmentRequest body) {
         WalletChangeOutcome outcome = wallet.proposeAdjustment(
-                tenantId, body.moneyKind(), body.amountMinor(), actor(), body.reason(), correlationId());
+                tenantId,
+                body.moneyKind(),
+                body.grantId(),
+                body.amountMinor(),
+                actor(),
+                body.reason(),
+                correlationId());
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
     }
 
@@ -289,14 +295,14 @@ public class CommercialWalletController {
 
     public record StatementPaymentView(
             UUID statementId, String number, String periodKey, ApiMoney total, ApiMoney paid, ApiMoney due) {
-        static StatementPaymentView of(StatementPayment payment, String currency) {
+        static StatementPaymentView of(StatementPayment payment) {
             return new StatementPaymentView(
                     payment.statementId(),
                     payment.number(),
                     payment.periodKey(),
-                    ApiMoney.of(payment.totalMinor(), currency),
-                    ApiMoney.of(payment.paidMinor(), currency),
-                    ApiMoney.of(payment.dueMinor(), currency));
+                    ApiMoney.of(payment.totalMinor(), payment.currency()),
+                    ApiMoney.of(payment.paidMinor(), payment.currency()),
+                    ApiMoney.of(payment.dueMinor(), payment.currency()));
         }
     }
 
@@ -324,8 +330,10 @@ public class CommercialWalletController {
             @NotBlank @Size(max = 128) String bankReference,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /** {@code grantId} names the bonus grant corrected; required for BONUS and refused for PAID. */
     public record AdjustmentRequest(
             @NotBlank String moneyKind,
+            @Nullable UUID grantId,
             long amountMinor,
             @NotBlank @Size(max = 1000) String reason) {}
 

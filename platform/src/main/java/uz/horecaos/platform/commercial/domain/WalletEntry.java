@@ -39,6 +39,15 @@ public record WalletEntry(
     public static final String BONUS_GRANT = "BONUS_GRANT";
     public static final String BONUS_EXPIRY = "BONUS_EXPIRY";
     public static final String STATEMENT_PAYMENT = "STATEMENT_PAYMENT";
+
+    /**
+     * What a voided statement gives back (ADR 0088 voids one and issues
+     * again). The ledger is never reopened, so a draw is undone by the
+     * opposite entry naming the same statement — and the same grant, when the
+     * draw was bonus money — not by removing the one that made it.
+     */
+    public static final String STATEMENT_REVERSAL = "STATEMENT_REVERSAL";
+
     public static final String ADJUSTMENT = "ADJUSTMENT";
     public static final String REFUND = "REFUND";
 }

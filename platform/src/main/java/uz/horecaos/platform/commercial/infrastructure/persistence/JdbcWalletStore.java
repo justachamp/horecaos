@@ -209,36 +209,53 @@ public class JdbcWalletStore {
 
     /** Every ISSUED statement's paid and due amounts, newest month first. */
     public List<StatementPayment> statementPayments(UUID tenantId) {
-        return statementPayments(tenantId, false);
+        return statementPayments(tenantId, null);
     }
 
-    /** ISSUED statements still owing something, oldest first — the order later money pays them in. */
-    public List<StatementPayment> openStatementsOldestFirst(UUID tenantId) {
-        return statementPayments(tenantId, true);
+    /**
+     * ISSUED statements still owing something, in {@code currency}, oldest
+     * first — the order later money pays them in.
+     *
+     * <p>The currency is the wallet's, and a statement in another one is not a
+     * candidate: a wallet holds one currency (the tenant's billing currency),
+     * so there is no rate at which its money could settle a statement priced
+     * in another. A plan version sold in a second currency therefore leaves
+     * its statements to be collected by invoice rather than paid at an
+     * invented rate.
+     */
+    public List<StatementPayment> openStatementsOldestFirst(UUID tenantId, String currency) {
+        return statementPayments(tenantId, currency);
     }
 
-    private List<StatementPayment> statementPayments(UUID tenantId, boolean openOnly) {
+    private List<StatementPayment> statementPayments(UUID tenantId, @Nullable String openInCurrency) {
         String sql = """
-                SELECT s.id, s.number, s.period_key, s.total_minor,
+                SELECT s.id, s.number, s.period_key, s.currency, s.total_minor,
                        COALESCE(-SUM(w.amount_minor), 0) AS paid_minor
                   FROM commercial.statements s
                   LEFT JOIN commercial.wallet_entries w
-                    ON w.tenant_id = s.tenant_id AND w.statement_id = s.id AND w.entry_type = 'STATEMENT_PAYMENT'
+                    ON w.tenant_id = s.tenant_id AND w.statement_id = s.id
+                   AND w.entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL')
                  WHERE s.tenant_id = :tenantId AND s.status = 'ISSUED'
-                 GROUP BY s.id, s.number, s.period_key, s.total_minor
                 """
-                + (openOnly
-                        ? " HAVING s.total_minor > COALESCE(-SUM(w.amount_minor), 0) ORDER BY s.period_key ASC"
-                        : " ORDER BY s.period_key DESC");
-        return jdbc.sql(sql)
-                .param("tenantId", tenantId)
-                .query((row, number) -> {
+                + (openInCurrency == null ? "" : " AND s.currency = :currency")
+                + """
+                 GROUP BY s.id, s.number, s.period_key, s.currency, s.total_minor
+                """
+                + (openInCurrency == null
+                        ? " ORDER BY s.period_key DESC"
+                        : " HAVING s.total_minor > COALESCE(-SUM(w.amount_minor), 0) ORDER BY s.period_key ASC");
+        var query = jdbc.sql(sql).param("tenantId", tenantId);
+        if (openInCurrency != null) {
+            query = query.param("currency", openInCurrency);
+        }
+        return query.query((row, number) -> {
                     long total = row.getLong("total_minor");
                     long paid = row.getLong("paid_minor");
                     return new StatementPayment(
                             row.getObject("id", UUID.class),
                             row.getString("number"),
                             row.getString("period_key"),
+                            row.getString("currency"),
                             total,
                             paid,
                             total - paid);
@@ -247,18 +264,20 @@ public class JdbcWalletStore {
     }
 
     /**
-     * Expired bonus grants that have never had a lapse entry written for them,
-     * across every tenant, oldest expiry first.
+     * Expired bonus grants with something left to lapse, across every tenant,
+     * oldest expiry first.
      *
-     * <p>A grant fully drawn down before it expired is skipped forever once its
-     * remainder reaches zero and its own lapse is written elsewhere — see
-     * {@link #grantRemaining} and {@code WalletService.expireGrantIfDue}, which
-     * recomputes the remainder under the tenant's billing lock before deciding
-     * whether there is anything left to lapse. A grant whose remainder was
-     * already zero the moment it expired has no lapse entry to write (an entry
-     * of amount zero is refused at the database) and is rescanned on every
-     * pass; accepted rather than tracked separately, since the candidate set
-     * stays small relative to the ledger.
+     * <p>The condition is the remainder, not "has no lapse entry yet". Those
+     * two look interchangeable and are not: a grant already lapsed to zero is
+     * excluded by either, but a grant whose remainder came back — a statement
+     * it had paid was voided after it expired, so the draw was given back to
+     * it — is a candidate again under this condition and would be invisible
+     * forever under the other, leaving bonus money that can neither be spent
+     * (a statement draws on live grants only) nor lapse. It also keeps a
+     * fully spent grant from sitting in every batch it can only be skipped in.
+     * The remainder is recomputed under the tenant's billing lock before
+     * anything is written — see {@code WalletService.expireGrantIfDue} — so
+     * this query decides what to look at, never what to write.
      */
     public List<ExpiredGrantRef> expiredGrantCandidates(Instant now, int batchSize) {
         return jdbc.sql("""
@@ -266,9 +285,9 @@ public class JdbcWalletStore {
                           FROM commercial.wallet_entries g
                          WHERE entry_type = 'BONUS_GRANT'
                            AND expires_at <= :now
-                           AND NOT EXISTS (
-                               SELECT 1 FROM commercial.wallet_entries e
-                                WHERE e.grant_id = g.id AND e.entry_type = 'BONUS_EXPIRY')
+                           AND g.amount_minor + COALESCE((
+                                   SELECT SUM(d.amount_minor) FROM commercial.wallet_entries d
+                                    WHERE d.tenant_id = g.tenant_id AND d.grant_id = g.id), 0) > 0
                          ORDER BY expires_at ASC
                          LIMIT :batchSize
                         """)
@@ -281,24 +300,75 @@ public class JdbcWalletStore {
                 .list();
     }
 
-    /** One bonus grant's unspent remainder right now, whatever its expiry. */
+    /** One bonus grant's unspent remainder right now, whatever its expiry; zero when there is no such grant. */
     public long grantRemaining(UUID tenantId, UUID grantId) {
-        Long total = jdbc.sql("""
-                        SELECT amount_minor + COALESCE((
-                                   SELECT SUM(amount_minor) FROM commercial.wallet_entries
-                                    WHERE tenant_id = :tenantId AND grant_id = :grantId), 0)
-                          FROM commercial.wallet_entries
-                         WHERE tenant_id = :tenantId AND id = :grantId AND entry_type = 'BONUS_GRANT'
+        return findGrant(tenantId, grantId)
+                .map(BonusGrantBalance::remainingMinor)
+                .orElse(0L);
+    }
+
+    /**
+     * One of the tenant's bonus grants with its remainder, expired or not.
+     *
+     * <p>Empty when the id names no {@code BONUS_GRANT} entry of this tenant's
+     * — which is what a caller adjusting a grant needs to tell apart from a
+     * grant that exists and is spent, since one is a mistyped id and the other
+     * is a correction with nothing left to take.
+     */
+    public Optional<BonusGrantBalance> findGrant(UUID tenantId, UUID grantId) {
+        return jdbc.sql("""
+                        SELECT g.id, g.amount_minor AS granted_minor, g.currency, g.expires_at, g.reason,
+                               g.amount_minor + COALESCE((
+                                   SELECT SUM(w.amount_minor) FROM commercial.wallet_entries w
+                                    WHERE w.tenant_id = :tenantId AND w.grant_id = g.id), 0) AS remaining_minor
+                          FROM commercial.wallet_entries g
+                         WHERE g.tenant_id = :tenantId AND g.id = :grantId AND g.entry_type = 'BONUS_GRANT'
                         """)
                 .param("tenantId", tenantId)
                 .param("grantId", grantId)
-                .query(Long.class)
-                .single();
-        return total == null ? 0 : total;
+                .query((row, number) -> new BonusGrantBalance(
+                        row.getObject("id", UUID.class),
+                        row.getLong("granted_minor"),
+                        row.getLong("remaining_minor"),
+                        row.getString("currency"),
+                        Objects.requireNonNull(instant(row, "expires_at"), "a grant always has an expiry"),
+                        row.getString("reason")))
+                .optional();
+    }
+
+    /**
+     * What one statement drew from the wallet and has not had given back:
+     * one row per money kind and, for bonus money, per grant.
+     *
+     * <p>Read when a statement is voided, so each draw can be given back to
+     * the exact grant or balance it came from (ADR 0095). A statement whose
+     * draws have already been reversed sums to zero on every row and yields
+     * nothing, which is what makes voiding idempotent against the ledger.
+     */
+    public List<StatementDraw> unreversedDraws(UUID tenantId, UUID statementId) {
+        return jdbc.sql("""
+                        SELECT money_kind, grant_id, -SUM(amount_minor) AS drawn_minor, MIN(currency) AS currency
+                          FROM commercial.wallet_entries
+                         WHERE tenant_id = :tenantId AND statement_id = :statementId
+                           AND entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL')
+                         GROUP BY money_kind, grant_id
+                        HAVING -SUM(amount_minor) > 0
+                        """)
+                .param("tenantId", tenantId)
+                .param("statementId", statementId)
+                .query((row, number) -> new StatementDraw(
+                        row.getString("money_kind"),
+                        row.getObject("grant_id", UUID.class),
+                        row.getLong("drawn_minor"),
+                        row.getString("currency")))
+                .list();
     }
 
     /** A candidate for the bonus expiry sweep: which grant, in which tenant, in what currency. */
     public record ExpiredGrantRef(UUID tenantId, UUID grantId, String currency) {}
+
+    /** One statement's outstanding draw on one money kind, and on one grant when that kind is bonus. */
+    public record StatementDraw(String moneyKind, @Nullable UUID grantId, long drawnMinor, String currency) {}
 
     /** The tenant's total live PAID balance. */
     public long paidBalance(UUID tenantId) {
