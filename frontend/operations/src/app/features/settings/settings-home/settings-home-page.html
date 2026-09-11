@@ -1,9 +1,61 @@
 <h1 class="q-title">{{ 'settings.home.title' | t }}</h1>
 <p class="q-body-sm lead">{{ 'settings.home.lead' | t }}</p>
 
-<div class="notice q-body-sm">{{ 'settings.home.readinessNotBuilt' | t }}</div>
+<section class="readiness">
+  <h2 class="q-subhead">{{ 'settings.home.readiness.title' | t }}</h2>
+  @switch (readinessState()) {
+    @case ('loading') {
+      <p class="q-body-sm muted">{{ 'settings.home.readiness.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm muted">{{ 'settings.home.readiness.denied' | t }}</p>
+    }
+    @case ('noRun') {
+      <p class="q-body-sm muted">{{ 'settings.home.readiness.noRun' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error">{{ readinessErrorText() }}</p>
+    }
+    @case ('ready') {
+      @if (findings().length === 0) {
+        <p class="readiness__clear q-body-sm">{{ 'settings.home.readiness.allClear' | t }}</p>
+      } @else {
+        <ul class="readiness__list">
+          @for (
+            finding of findings();
+            track finding.stepKey + (finding.locationId ?? '') + (finding.errorCode ?? '')
+          ) {
+            <li class="readiness__row q-body-sm">
+              @if (readinessLink(finding); as link) {
+                <a [routerLink]="link">{{ readinessMessage(finding) }}</a>
+              } @else {
+                <span>{{ readinessMessage(finding) }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+</section>
 
-@for (group of groups(); track group.label) {
+<label class="search">
+  <span class="q-caption search__label">{{ 'settings.home.search.label' | t }}</span>
+  <input
+    #searchInput
+    class="q-body-sm search__input"
+    type="search"
+    [value]="query()"
+    [placeholder]="'settings.home.search.placeholder' | t"
+    (input)="onSearchInput($any($event.target).value)"
+  />
+</label>
+
+@if (filteredGroups().length === 0) {
+  <p class="q-body-sm muted">{{ 'settings.home.search.empty' | t: { query: query() } }}</p>
+}
+
+@for (group of filteredGroups(); track group.label) {
   <section class="group">
     <h2 class="q-subhead">{{ group.label | t }}</h2>
     <div class="group__items">
