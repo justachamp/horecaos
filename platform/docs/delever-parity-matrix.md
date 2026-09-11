@@ -539,7 +539,7 @@ Delever's Settings section is the tenant-level control plane for a restaurant br
 | ◐ | Aggregator partner registry (Агрегатор / Partners) | A Settings page (route /home/settings/aggregator, described in the v2 route map as 'Partners — configure aggregator partners, when enabled') where the tenant registers aggregator partners that will push orders… | admin |
 | ○ | Branch tags (Теги филиалов) | A tag vocabulary for grouping and labelling locations; tags are assigned on the branch form and used for internal grouping. Documentation page exists but is empty. | admin |
 | ○ | Review settings (Настройки отзывов) | A dedicated settings tab under Orders for parameters governing customer feedback collection. The documentation page is a stub with no content. | admin |
-| ○ | Free geozone (Бесплатная геозона) | A separate geozone layer listed under Company settings in the v1 tree, alongside branch geozones and delivery zones. Screencast-only, no prose. | admin |
+| ○ | Free geozone (Бесплатная геозона) | A separate geozone layer listed under Company settings in the v1 tree, alongside branch geozones and delivery zones. Screencast-only, no prose. *(Reworded 2026-09-11: HorecaOS does not mirror the layer. A free geozone here is a DELIVERY zone whose tariff resolves to zero, shown as free — `fulfillment/domain/zone/ZoneRole.java`, «a 'free geozone' is not a third role», and [ADR 0037](adr/partial/0037-delivery-zones-tariffs-and-fee-resolution.md), which refuses a third geometry layer.)* | admin |
 | ○ | Product comment presets (Комментарий к продуктам) | A vocabulary of quick preset comments/wishes customers or operators can attach to a dish instead of free-typing. Documentation page is a stub. | admin |
 
 **Open questions this section raises**
