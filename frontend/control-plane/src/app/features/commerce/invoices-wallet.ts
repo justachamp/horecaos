@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { asDate } from '../../core/api/dates';
-import { parseAmount } from '../../core/api/money';
+import { parseAmount, parseSignedAmount } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -87,6 +87,14 @@ export class InvoicesWallet {
   protected readonly methods = PAYMENT_METHODS;
   protected readonly wallet = signal<WalletOverviewView | null>(null);
   protected readonly ledger = signal<readonly WalletEntryView[]>([]);
+  /**
+   * Where the ledger's next page starts, or null when the whole ledger is on
+   * screen. The server answers one page of fifty; a tenant a year in has more
+   * than that, and the balances beside the table are sums over every entry, so
+   * a reader who cannot reach the rest cannot add the table up and get them.
+   */
+  protected readonly ledgerCursor = signal<string | null>(null);
+  protected readonly loadingMoreLedger = signal(false);
   protected readonly grants = signal<readonly BonusGrantView[]>([]);
   protected readonly payments = signal<readonly StatementPaymentView[]>([]);
   protected readonly walletError = signal<string | null>(null);
@@ -108,6 +116,17 @@ export class InvoicesWallet {
   protected readonly typedAmount = computed(() => {
     const currency = this.currency();
     return currency === null ? null : parseAmount(this.amount().trim(), currency);
+  });
+
+  /**
+   * The same field read as a signed amount, for the one form that may take
+   * money away (ADR 0095, item 4) and whose placeholder says so. A transfer, a
+   * grant and a refund all add money and go on reading {@link typedAmount},
+   * where a minus sign stays a typing mistake.
+   */
+  protected readonly signedAmount = computed(() => {
+    const currency = this.currency();
+    return currency === null ? null : parseSignedAmount(this.amount(), currency);
   });
 
   constructor() {
@@ -167,6 +186,7 @@ export class InvoicesWallet {
       ]);
       this.wallet.set(wallet);
       this.ledger.set(ledger.items);
+      this.ledgerCursor.set(ledger.nextCursor);
       this.grants.set(grants);
       this.payments.set(payments);
       this.method.set(wallet.paymentMethod);
@@ -174,9 +194,35 @@ export class InvoicesWallet {
     } catch (error) {
       this.wallet.set(null);
       this.ledger.set([]);
+      this.ledgerCursor.set(null);
       this.grants.set([]);
       this.payments.set([]);
       this.walletError.set(this.i18n.describe(error as ApiError));
+    }
+  }
+
+  /**
+   * The next page of the ledger, appended. A failure is shown rather than
+   * swallowed: a button that does nothing would leave the reader thinking they
+   * had seen the whole ledger when they had not. It is reported as an action
+   * error and not as `walletError`, which the panel reads as "nothing loaded"
+   * and replaces the balances, the grants and the rows already on screen with
+   * one sentence -- too much to throw away because a second page failed.
+   */
+  protected async loadMoreLedger(): Promise<void> {
+    const cursor = this.ledgerCursor();
+    if (cursor === null || this.loadingMoreLedger()) {
+      return;
+    }
+    this.loadingMoreLedger.set(true);
+    try {
+      const page = await this.api.walletLedger(this.tenantId(), cursor);
+      this.ledger.update((entries) => [...entries, ...page.items]);
+      this.ledgerCursor.set(page.nextCursor);
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.loadingMoreLedger.set(false);
     }
   }
 
@@ -347,9 +393,11 @@ export class InvoicesWallet {
       case 'deposit':
         return this.reference().trim().length > 0;
       case 'adjustment':
+        // `!== 0` is what refuses a bare minus and "-0": a sign with no amount
+        // behind it moves nothing, and the server refuses zero as well.
         return (
-          this.typedAmount() !== null &&
-          this.typedAmount() !== 0 &&
+          this.signedAmount() !== null &&
+          this.signedAmount() !== 0 &&
           (this.moneyKind() === 'PAID' || this.grantId().length > 0)
         );
       case 'grant':
@@ -395,7 +443,7 @@ export class InvoicesWallet {
 
   protected async proposeAdjustment(event: Event): Promise<void> {
     event.preventDefault();
-    const amountMinor = this.typedAmount();
+    const amountMinor = this.signedAmount();
     if (amountMinor === null || !this.canSubmit('adjustment')) {
       return;
     }

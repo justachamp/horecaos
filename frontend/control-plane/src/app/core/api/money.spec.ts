@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UnknownCurrencyError, formatAmount, groupDigits, parseAmount } from './money';
+import { UnknownCurrencyError, formatAmount, groupDigits, parseAmount, parseSignedAmount } from './money';
 
 /**
  * The regression this file exists for is the first test.
@@ -85,5 +85,52 @@ describe('an amount typed into a form', () => {
   it('reads back exactly what the formatter shows', () => {
     const shown = formatAmount({ amountMinor: 125075, currency: 'USD' });
     expect(parseAmount(shown, 'USD')).toBe(125075);
+  });
+});
+
+/**
+ * A wallet correction is the one amount a form may type downwards (ADR 0095,
+ * item 4), and the field's own placeholder asks for the minus sign. Every
+ * other form reads a price, so the sign stays refused there — the test above
+ * pins `parseAmount('-3', 'UZS')` as null and this one must not change it.
+ */
+describe('an amount that may take money away', () => {
+  it('reads a minus the same whichever sign was typed', () => {
+    expect(parseSignedAmount('-5 000 000', 'UZS')).toBe(-5_000_000);
+    // U+2212, which is what the ledger shows and therefore what an operator
+    // pastes back in to reverse an entry.
+    expect(parseSignedAmount('−5 000 000', 'UZS')).toBe(-5_000_000);
+    expect(parseSignedAmount('-1 250,75', 'USD')).toBe(-125075);
+  });
+
+  it('reads an unsigned amount exactly as the unsigned reader does', () => {
+    expect(parseSignedAmount('9 000 000', 'UZS')).toBe(parseAmount('9 000 000', 'UZS'));
+    expect(parseSignedAmount('12.5', 'USD')).toBe(1250);
+  });
+
+  it('reads back what the formatter shows, sign and all', () => {
+    const shown = formatAmount({ amountMinor: -3_200_000, currency: 'UZS' });
+    expect(parseSignedAmount(shown, 'UZS')).toBe(-3_200_000);
+  });
+
+  it('refuses a sign that is not one amount', () => {
+    expect(parseSignedAmount('--5', 'UZS')).toBeNull();
+    expect(parseSignedAmount('−−5', 'UZS')).toBeNull();
+    expect(parseSignedAmount('-', 'UZS')).toBeNull();
+    expect(parseSignedAmount('+5', 'UZS')).toBeNull();
+    expect(parseSignedAmount('-1,5', 'UZS')).toBeNull();
+  });
+
+  it('reads “-0” as zero, which the caller refuses rather than the reader', () => {
+    // A minus with nothing behind it is a statement of intent, not an amount;
+    // the wallet form's own `!== 0` guard is what keeps the button disabled.
+    // Compared with `===` on purpose: the value is negative zero, and `toBe`
+    // is `Object.is`, which tells the two zeroes apart where `!== 0` does not.
+    expect(parseSignedAmount('-0', 'UZS') === 0).toBe(true);
+  });
+
+  it('leaves the unsigned reader refusing a sign, which is what prices rely on', () => {
+    expect(parseAmount('-3', 'UZS')).toBeNull();
+    expect(parseAmount('−3', 'UZS')).toBeNull();
   });
 });

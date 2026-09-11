@@ -122,3 +122,22 @@ tr.void td {
   background: var(--q-info-tint, var(--q-warning-tint));
   color: var(--q-info-text, var(--q-warning-text));
 }
+
+/* The ledger's next page, the same control the tenant directory offers. */
+.loadMore {
+  margin-top: 12px;
+  background: none;
+  border: 1px solid var(--q-hairline);
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.loadMore:disabled {
+  cursor: default;
+  color: var(--q-ink-subtle);
+}
+
+.ledgerNote {
+  margin-top: 8px;
+}

@@ -27,6 +27,16 @@
         <dd class="q-body-sm">{{ i18n.day(asDate(sub.startAt)) }}</dd>
         <dt class="q-caption">{{ i18n.t('entitlements.start.term') }}</dt>
         <dd class="q-body-sm term">{{ sub.termMonths > 1 ? i18n.t('entitlements.subscription.termMonths', { months: sub.termMonths }) : i18n.t('entitlements.start.monthToMonth') }}</dd>
+        @if (activationDepositDue(); as deposit) {
+          <!--
+            Money that is owed, on the screen that says what the tenant is on.
+            Before this it was stored and read by nothing: staff pressed "Record
+            the activation deposit" on the wallet screen without being told
+            whether one was due, or for how much.
+          -->
+          <dt class="q-caption">{{ i18n.t('entitlements.subscription.depositDue') }}</dt>
+          <dd class="q-body-sm q-tnum depositDue">{{ i18n.money(deposit) }}</dd>
+        }
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.period') }}</dt>
         <dd class="q-body-sm">{{ i18n.day(asDate(sub.currentPeriodStart)) }} – {{ i18n.day(asDate(sub.currentPeriodEnd)) }}</dd>
         @if (sub.trialEndAt; as trialEnd) {

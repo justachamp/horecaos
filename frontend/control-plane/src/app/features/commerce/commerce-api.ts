@@ -37,6 +37,13 @@ export interface SubscriptionView {
   readonly version: number;
   readonly allowedNext: readonly string[];
   readonly termMonths: number;
+  /**
+   * What this subscription still owes as its activation deposit (ADR 0093),
+   * zero once it is paid or when the plan version sold none. Minor units of
+   * the plan version's currency, which the subscription does not carry: read
+   * the currency from the version this subscription is on.
+   */
+  readonly activationDepositDueMinor: number;
 }
 
 /** One line of a plan version: the limit, the boundary behaviour, the overage rate. */
@@ -228,7 +235,14 @@ export interface StatementView {
 /** A tenant's two balances and how it is collected (ADR 0095). */
 export interface WalletOverviewView {
   readonly paidBalance: Money;
+  /**
+   * The ledger's sum of every BONUS entry. A grant past its expiry date is
+   * still in it until the hourly sweep writes the entry that lapses it, so
+   * this can stand briefly above what a statement could draw on.
+   */
   readonly bonusBalance: Money;
+  /** What the live grants have left between them: the bonus money a statement can actually spend. */
+  readonly bonusSpendableBalance: Money;
   readonly paymentMethod: 'INVOICE' | 'WALLET' | 'CARD' | (string & {});
   readonly cardTokenReference: string | null;
 }

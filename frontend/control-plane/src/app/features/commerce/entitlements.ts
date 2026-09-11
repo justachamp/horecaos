@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { asDate } from '../../core/api/dates';
+import { Money } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -111,6 +112,27 @@ export class Entitlements {
         .flatMap((plan) => plan.versions)
         .find((candidate) => candidate.planVersionId === this.startPlan())?.terms.trialDays ?? null,
   );
+
+  /**
+   * What the live subscription still owes as its activation deposit (ADR 0093),
+   * or null when it owes nothing.
+   *
+   * The subscription carries the amount in minor units alone, because the
+   * deposit is priced by the plan version and not by the subscription; the
+   * currency therefore comes from the version's own price. Null as well when
+   * the price list did not load, since a bare number is not money and this
+   * screen already shows such a reader the plan as an id rather than a name.
+   */
+  protected readonly activationDepositDue = computed<Money | null>(() => {
+    const live = this.subscription();
+    if (live === null || live.activationDepositDueMinor === 0) {
+      return null;
+    }
+    const currency = this.plans()
+      .flatMap((plan) => plan.versions)
+      .find((candidate) => candidate.planVersionId === live.planVersionId)?.price.currency;
+    return currency === undefined ? null : { amountMinor: live.activationDepositDueMinor, currency };
+  });
 
   protected readonly overrideTarget = computed<ResolvedEntitlement | null>(
     () => this.snapshot()?.entitlements.find((line) => line.entitlementKey === this.overrideKey()) ?? null,

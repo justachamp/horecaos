@@ -113,3 +113,29 @@ export function parseAmount(text: string, currency: string): number | null {
   const minor = Number(whole) * 10 ** decimals + Number(fraction.padEnd(decimals, '0') || '0');
   return Number.isSafeInteger(minor) ? minor : null;
 }
+
+/**
+ * Reads an amount that may be negative -- a wallet correction taking money
+ * away (ADR 0095, item 4) -- into signed minor units.
+ *
+ * Separate from {@link parseAmount} rather than an option on it, because every
+ * other form that reads an amount is reading a price, an overage rate or a
+ * deposit, and for those a minus sign is a typing mistake that must stay
+ * refused. Only the field whose own placeholder asks for a sign reads one.
+ *
+ * Both signs {@link formatAmount} could have produced are accepted: the U+2212
+ * it actually emits, so an operator may copy a figure straight out of the
+ * ledger to reverse it, and the ASCII hyphen their keyboard gives them. The
+ * magnitude is still {@link parseAmount}'s, so `--5`, `+5` and a bare sign are
+ * all null. `-0` reads as 0, which is a sign of intent rather than an amount,
+ * so a caller's own refusal of zero is still the thing that stops it.
+ */
+export function parseSignedAmount(text: string, currency: string): number | null {
+  const signed = text.trim().replace('−', '-');
+  const negative = signed.startsWith('-');
+  const magnitude = parseAmount(negative ? signed.slice(1) : signed, currency);
+  if (magnitude === null) {
+    return null;
+  }
+  return negative ? -magnitude : magnitude;
+}

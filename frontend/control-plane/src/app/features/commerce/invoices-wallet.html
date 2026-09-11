@@ -170,7 +170,17 @@
         </div>
         <div class="balance bonusBalance">
           <span class="q-caption muted">{{ i18n.t('wallet.bonus') }}</span>
-          <strong class="q-subhead q-tnum">{{ i18n.money(balances.bonusBalance) }}</strong>
+          <!--
+            The spendable figure leads, because it is the one a statement can
+            actually draw on. The ledger sum follows only while the two differ,
+            which is the window between a grant's expiry date and the sweep that
+            writes its lapse; repeating the same number twice the rest of the
+            time would be noise in a tile read at a glance.
+          -->
+          <strong class="q-subhead q-tnum">{{ i18n.money(balances.bonusSpendableBalance) }}</strong>
+          @if (balances.bonusSpendableBalance.amountMinor !== balances.bonusBalance.amountMinor) {
+            <span class="q-caption muted bonusLedger">{{ i18n.t('wallet.bonus.inLedger', { amount: i18n.money(balances.bonusBalance) }) }}</span>
+          }
           <span class="q-caption muted">{{ i18n.t('wallet.bonus.hint') }}</span>
         </div>
         <div class="balance method">
@@ -223,9 +233,14 @@
                 @if (grants().length === 0) {
                   <span class="q-caption muted noGrants">{{ i18n.t('wallet.adjustment.noGrant') }}</span>
                 } @else {
+                  <!--
+                    The same [selected], for the same reason. This one happens to
+                    agree today only because opening the form pins grantId to the
+                    first grant, which is an accident rather than a rule.
+                  -->
                   <select class="q-body-sm" name="grantId" [value]="grantId()" (change)="grantId.set($any($event.target).value)">
                     @for (grant of grants(); track grant.grantId) {
-                      <option [value]="grant.grantId">{{ i18n.money(grant.remaining) }} · {{ i18n.day(asDate(grant.expiresAt)) }}</option>
+                      <option [value]="grant.grantId" [selected]="grant.grantId === grantId()">{{ i18n.money(grant.remaining) }} · {{ i18n.day(asDate(grant.expiresAt)) }}</option>
                     }
                   </select>
                 }
@@ -259,9 +274,17 @@
           @case ('method') {
             <form class="walletForm methodForm" (submit)="changePaymentMethod($event)">
               <p class="q-caption muted">{{ i18n.t('wallet.method.note') }}</p>
+              <!--
+                [selected] on each option, not [value] on the select alone: an
+                option list built by @for is materialised after the select's own
+                bindings run, so an assignment to a select with no options yet is
+                discarded and every tenant reads as the first one. That showed
+                INVOICE for a CARD tenant, and an untouched submit then re-sent
+                CARD while the banner named it as the change just made.
+              -->
               <select class="q-body-sm" name="paymentMethod" [value]="method()" (change)="method.set($any($event.target).value)">
                 @for (option of methods; track option) {
-                  <option [value]="option">{{ i18n.t(methodKey(option)) }}</option>
+                  <option [value]="option" [selected]="option === method()">{{ i18n.t(methodKey(option)) }}</option>
                 }
               </select>
               @if (method() === 'CARD') {
@@ -341,7 +364,19 @@
             </tbody>
           </table>
         </div>
-        <p class="q-caption muted">{{ i18n.t('wallet.ledger.appendOnly') }}</p>
+        @if (ledgerCursor() !== null) {
+          <button type="button" class="q-body-sm loadMore" [disabled]="loadingMoreLedger()" (click)="loadMoreLedger()">
+            {{ loadingMoreLedger() ? i18n.t('tenants.loadingMore') : i18n.t('tenants.loadMore') }}
+          </button>
+        }
+        <!--
+          The caption may not claim the balances are the sum of these rows while
+          rows are missing: the balances are sums over the whole ledger, and the
+          table is one page of it until the reader asks for the rest.
+        -->
+        <p class="q-caption muted ledgerNote">
+          {{ ledgerCursor() === null ? i18n.t('wallet.ledger.appendOnly') : i18n.t('wallet.ledger.appendOnlyTruncated', { count: ledger().length }) }}
+        </p>
       }
     } @else {
       <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
