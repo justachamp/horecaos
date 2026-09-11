@@ -33,6 +33,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
@@ -40,6 +41,7 @@ import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
 import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
+import uz.horecaos.platform.ordering.application.OrderCountsPeriod;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
@@ -91,6 +93,7 @@ public class OperationsOrderController {
     private final OperatorOrderingService operatorOrdering;
     private final OperatorCustomerLookupService customerLookup;
     private final OrderBulkActionService bulkActions;
+    private final LiveBoardQueryService liveBoard;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
@@ -104,7 +107,8 @@ public class OperationsOrderController {
             OrderCallProvenanceService callProvenance,
             OperatorOrderingService operatorOrdering,
             OperatorCustomerLookupService customerLookup,
-            OrderBulkActionService bulkActions) {
+            OrderBulkActionService bulkActions,
+            LiveBoardQueryService liveBoard) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -116,6 +120,7 @@ public class OperationsOrderController {
         this.operatorOrdering = operatorOrdering;
         this.customerLookup = customerLookup;
         this.bulkActions = bulkActions;
+        this.liveBoard = liveBoard;
     }
 
     @GetMapping
@@ -247,17 +252,26 @@ public class OperationsOrderController {
     @GetMapping("/counts")
     @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
     @Operation(
-            summary = "The board's tab badges, one call",
+            summary = "The board's tab badges and the live board's mixes, one call",
             description = "orders.md §2.3: each tab shows a live count computed before the tab's "
                     + "own filters apply, and until ADR 0045's COUNTERS signal exists this is what "
                     + "computes them. One aggregate over the location's orders, scoped identically "
                     + "to the list above. Внимание's live severity queue (late orders, stuck "
                     + "processes) is not among these — it is derived per render from the promise "
                     + "and the clock, never stored, so a count of it would be wrong five seconds "
-                    + "after being cached.")
+                    + "after being cached. `period` cuts completed, cancelled and total to the "
+                    + "tenant's own business day (ADR 0043), never to UTC midnight; it defaults to "
+                    + "ALL_TIME, which is what this endpoint answered before the parameter existed. "
+                    + "The two mixes are exact server-side aggregates over the in-progress orders "
+                    + "and sum to totalNonTerminal.")
     public ResponseEntity<OrderCountsResponse> counts(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
-        return ResponseEntity.ok(OrderCountsResponse.of(orderQuery.counts(tenantId, brandId, locationId)));
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(defaultValue = "ALL_TIME") OrderCountsPeriod period) {
+
+        var board = liveBoard.forLocation(tenantId, brandId, locationId, period);
+        return ResponseEntity.ok(OrderCountsResponse.of(board, period));
     }
 
     @GetMapping("/drafts")
@@ -1544,7 +1558,22 @@ public class OperationsOrderController {
 
     public record PhoneRevealResponse(@Nullable String phone) {}
 
-    /** {@code GET .../orders/counts}: the board's tab badges (orders.md §2.3). */
+    /**
+     * {@code GET .../orders/counts}: the board's tab badges (orders.md §2.3) and
+     * the live board's two mixes (IA 0.1a, 0.1b).
+     *
+     * <p>The nine counters stay flat and keep their names, because the order
+     * board's tab bar reads them by name and this wave has no business changing
+     * that contract. What is new sits beside them: the period the three
+     * historical counters were cut to, and the two exact mixes that replace the
+     * console's truncated client-side count.
+     *
+     * @param periodFrom inclusive, null when {@code period} is {@code ALL_TIME}
+     * @param periodTo   exclusive, null when {@code period} is {@code ALL_TIME}
+     * @param sourceMix  by sales channel, largest first. Channel codes are tenant
+     *                   content and are never translation keys
+     * @param typeMix    by fulfilment mode, largest first
+     */
     public record OrderCountsResponse(
             long newOrders,
             long awaitingApproval,
@@ -1554,9 +1583,15 @@ public class OperationsOrderController {
             long completed,
             long cancelled,
             long totalNonTerminal,
-            long total) {
+            long total,
+            String period,
+            @Nullable Instant periodFrom,
+            @Nullable Instant periodTo,
+            List<OrderMixSliceResponse> sourceMix,
+            List<OrderMixSliceResponse> typeMix) {
 
-        static OrderCountsResponse of(JdbcOrderStore.OrderCountsRow row) {
+        static OrderCountsResponse of(LiveBoardQueryService.LocationLiveBoard board, OrderCountsPeriod period) {
+            JdbcOrderStore.OrderCountsRow row = board.counts();
             return new OrderCountsResponse(
                     row.newOrders(),
                     row.awaitingApproval(),
@@ -1566,7 +1601,30 @@ public class OperationsOrderController {
                     row.completed(),
                     row.cancelled(),
                     row.totalNonTerminal(),
-                    row.total());
+                    row.total(),
+                    period.name(),
+                    board.window().from(),
+                    board.window().to(),
+                    OrderMixSliceResponse.of(board.mix(), JdbcOrderStore.MixSliceRow.CHANNEL),
+                    OrderMixSliceResponse.of(board.mix(), JdbcOrderStore.MixSliceRow.FULFILLMENT_MODE));
+        }
+    }
+
+    /**
+     * One bar of a live-board mix (IA 0.1b).
+     *
+     * @param key    the sales-channel code as snapshotted onto the order, or the
+     *               fulfilment mode — a value, never a translation key
+     * @param orders how many in-progress orders carry it. Exact: the aggregate
+     *               behind it has no page and therefore no silent ceiling
+     */
+    public record OrderMixSliceResponse(String key, long orders) {
+
+        static List<OrderMixSliceResponse> of(List<JdbcOrderStore.MixSliceRow> rows, String dimension) {
+            return rows.stream()
+                    .filter(row -> dimension.equals(row.dimension()))
+                    .map(row -> new OrderMixSliceResponse(row.key(), row.orders()))
+                    .toList();
         }
     }
 
