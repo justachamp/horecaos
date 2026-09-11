@@ -222,6 +222,25 @@ export class TenantOnboarding {
     return instant === null ? '' : this.i18n.dateTime(new Date(instant));
   }
 
+  /**
+   * The address whole when the server sent it -- which it does only for
+   * `TENANT_ONBOARDING_MANAGE`, recording the reveal (ADR 0100) -- and ADR
+   * 0097's mask otherwise. Never both: a mask shown beside the real address
+   * would be noise, and the real address is the one being checked against
+   * what was typed at onboarding.
+   */
+  protected recipientOf(view: OwnerInvitationView): string | null {
+    return view.recipient ?? view.emailMasked;
+  }
+
+  protected eventKey(type: string): MessageKey {
+    return `onboarding.invitation.event.${type}` as MessageKey;
+  }
+
+  protected actorKey(actorType: string): MessageKey {
+    return `onboarding.invitation.actor.${actorType}` as MessageKey;
+  }
+
   protected async resendInvitation(event: Event): Promise<void> {
     event.preventDefault();
     const reason = this.resendReason().trim();

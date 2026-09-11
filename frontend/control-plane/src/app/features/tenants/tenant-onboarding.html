@@ -218,8 +218,13 @@
         <span class="pill" [class]="'pill pill-' + invite.state">{{
           i18n.t($any('onboarding.invitation.state.' + invite.state))
         }}</span>
-        @if (invite.emailMasked; as email) {
-          <span class="muted q-tnum">{{ email }}</span>
+        @if (recipientOf(invite); as email) {
+          <span
+            class="q-tnum recipient"
+            [class.muted]="invite.recipient === null"
+            [attr.data-whole]="invite.recipient !== null"
+            >{{ email }}</span
+          >
         }
       </p>
       <dl class="q-body-sm invitationFacts">
@@ -244,6 +249,40 @@
       </dl>
       @if (invitationHint(invite); as hint) {
         <p class="q-body-sm pending invitationHint">{{ i18n.t(hint) }}</p>
+      }
+
+      <!--
+        The history (ADR 0100). The facts above are the invitation's current
+        position and a resend rewrites them; this list is what actually
+        happened, and a resend does not touch it.
+      -->
+      <h3 class="q-caption timelineTitle">{{ i18n.t('onboarding.invitation.timeline') }}</h3>
+      @if (invite.timeline.length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('onboarding.invitation.timelineEmpty') }}</p>
+      } @else {
+        <ol class="q-body-sm timeline">
+          @for (event of invite.timeline; track event.occurredAt + event.type + event.attempt) {
+            <li [attr.data-event]="event.type">
+              <span class="q-tnum when">{{ when(event.occurredAt) }}</span>
+              <span class="what">{{ i18n.t(eventKey(event.type)) }}</span>
+              @if (event.attempt > 0) {
+                <span class="muted q-caption">{{
+                  i18n.t('onboarding.invitation.attempt', { number: event.attempt })
+                }}</span>
+              }
+              @if (event.outcomeCode; as code) {
+                <span class="pending q-caption">{{ code }}</span>
+              }
+              <span class="muted q-caption who">{{ i18n.t(actorKey(event.actorType)) }}</span>
+              @if (event.actor; as actor) {
+                <span class="muted q-caption q-tnum">{{ actor }}</span>
+              }
+              @if (event.reason; as reason) {
+                <span class="q-caption reason">{{ reason }}</span>
+              }
+            </li>
+          }
+        </ol>
       }
       @if (invite.state !== 'ACCEPTED' && invite.state !== 'NOT_NEEDED') {
         <form class="inlineForm resendForm" (submit)="resendInvitation($event)">

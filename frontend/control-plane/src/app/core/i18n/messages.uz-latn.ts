@@ -19,6 +19,7 @@ export const uzLatn: Messages = {
 
   'nav.group.tenants': 'Mijozlar',
   'nav.tenants': 'Mijozlar',
+  'nav.ownerInvitations': 'Egalar taklifnomalari',
   'nav.configurationPolicy': 'Konfiguratsiya va siyosat',
 
   'nav.group.providers': 'Provayderlar',
@@ -40,7 +41,8 @@ export const uzLatn: Messages = {
   'nav.moduleCatalog': 'Modullar katalogi',
   'nav.usageMetering': 'Foydalanishni hisoblash',
   'nav.invoicesWallet': 'Hisob-fakturalar va hamyon',
-  'piiClassification.lead': 'Platforma shaxsiy ma’lumotlar bilan qanday ishlaydi: har bir sinf nimani talab qiladi, har bir tur qancha saqlanadi va qaysi vazifa o‘chiradi, mijozlarning o‘chirish so‘rovlari, ma’lumotlar qanchalik tez-tez ochilgan yoki eksport qilingan, va shifrlangan holda saqlanadigan barcha ustunlar. Bu yerda birorta mijoz nomlanmaydi.',
+  'piiClassification.lead':
+    'Platforma shaxsiy ma’lumotlar bilan qanday ishlaydi: har bir sinf nimani talab qiladi, har bir tur qancha saqlanadi va qaysi vazifa o‘chiradi, mijozlarning o‘chirish so‘rovlari, ma’lumotlar qanchalik tez-tez ochilgan yoki eksport qilingan, va shifrlangan holda saqlanadigan barcha ustunlar. Bu yerda birorta mijoz nomlanmaydi.',
   'piiClassification.classes': 'Ma’lumot sinflari',
   'piiClassification.encrypted': 'shifrlangan saqlanadi',
   'piiClassification.plain': 'o‘z holicha saqlanadi',
@@ -51,13 +53,15 @@ export const uzLatn: Messages = {
   'piiClassification.column.keptFor': 'Muddat',
   'piiClassification.column.enforcedBy': 'O‘chiradi',
   'piiClassification.erasure': 'Ma’lumotlarni o‘chirish so‘rovlari',
-  'piiClassification.erasureCounts': '{pending} kutmoqda · {completed} bajarilgan · {cancelled} qaytarib olingan',
+  'piiClassification.erasureCounts':
+    '{pending} kutmoqda · {completed} bajarilgan · {cancelled} qaytarib olingan',
   'piiClassification.daysWaiting': '{days} kun kutmoqda',
   'piiClassification.via.STOREFRONT': 'mijoz so‘ragan',
   'piiClassification.via.OPERATIONS': 'xodim rasmiylashtirgan',
   'piiClassification.egress': 'So‘nggi 30 kunda ochilgan yoki eksport qilingan',
   'piiClassification.egressNone': 'Hech narsa ochilmagan va eksport qilinmagan.',
-  'piiClassification.egressNote': 'Har biri shaxsiy ma’lumotni ko‘rgan yoki olib chiqqan odam; sababi audit jurnalida yozilgan.',
+  'piiClassification.egressNote':
+    'Har biri shaxsiy ma’lumotni ko‘rgan yoki olib chiqqan odam; sababi audit jurnalida yozilgan.',
   'piiClassification.columns': 'Shifrlangan ustunlar ({count})',
   'piiClassification.class.PUBLIC': 'Ochiq',
   'piiClassification.class.INTERNAL': 'Ichki',
@@ -73,11 +77,13 @@ export const uzLatn: Messages = {
   'piiClassification.rule.CUSTOMER_ACCOUNTS': 'Mijoz hisoblari',
   'piiClassification.rule.ABANDONED_CARTS': 'Buyurtmaga aylanmagan savatlar',
   'piiClassification.rule.COURIER_APPLICANTS': 'Hech kim tekshirmagan kuryer arizalari',
-  'notificationProviders.lead': 'Platforma yubora oladigan xabar shlyuzlari, har bir mijoz qaysi nom bilan yuborishi va har bir SMS matnining shlyuzdagi holati. Shlyuzni kutayotgan yoki rad etilgan matn yuborilmaydi.',
+  'notificationProviders.lead':
+    'Platforma yubora oladigan xabar shlyuzlari, har bir mijoz qaysi nom bilan yuborishi va har bir SMS matnining shlyuzdagi holati. Shlyuzni kutayotgan yoki rad etilgan matn yuborilmaydi.',
   'notificationProviders.gateways': 'Shlyuzlar',
   'notificationProviders.live': 'jonli',
   'notificationProviders.test': 'sinov',
-  'notificationProviders.moderates': 'matnlarni moderatsiya qiladi: yangi SMS matnlari uning roziligini kutadi',
+  'notificationProviders.moderates':
+    'matnlarni moderatsiya qiladi: yangi SMS matnlari uning roziligini kutadi',
   'notificationProviders.noGateways': 'Tasdiqlangan shlyuz yo‘q.',
   'notificationProviders.senders': 'Kim qaysi nom bilan yuboradi',
   'notificationProviders.noSenders': 'Hech bir mijozda xabar shlyuzi ulanmagan.',
@@ -86,7 +92,8 @@ export const uzLatn: Messages = {
   'notificationProviders.column.status': 'Holat',
   'notificationProviders.brandSenders': '{count} brendda o‘ziniki',
   'notificationProviders.reviews': 'SMS matnlari',
-  'notificationProviders.reviewsNote': 'Shlyuz tasdiqlashi kerak bo‘lsa, matnni kutilmoqda deb belgilang, so‘ng javobni kiriting. Ungacha u yuborilmaydi.',
+  'notificationProviders.reviewsNote':
+    'Shlyuz tasdiqlashi kerak bo‘lsa, matnni kutilmoqda deb belgilang, so‘ng javobni kiriting. Ungacha u yuborilmaydi.',
   'notificationProviders.allWordings': 'Hammasi',
   'notificationProviders.noReviews': 'Bu holatda SMS matni yo‘q.',
   'notificationProviders.record': 'Shlyuz javobini kiritish',
@@ -98,19 +105,23 @@ export const uzLatn: Messages = {
   'notificationProviders.review.APPROVED': 'Shlyuz tasdiqlagan',
   'notificationProviders.review.REJECTED': 'Shlyuz rad etgan',
   'notificationProviders.review.NOT_REQUIRED': 'Tasdiq kerak emas',
-  'residency.lead': 'Har bir mijoz qayerda ishlaydi. Mamlakat boshlang‘ich valyuta va vaqt mintaqasini belgilaydi; mijozni boshqa mamlakatga o‘tkazish ikkinchi imzoni talab qiladi.',
+  'residency.lead':
+    'Har bir mijoz qayerda ishlaydi. Mamlakat boshlang‘ich valyuta va vaqt mintaqasini belgilaydi; mijozni boshqa mamlakatga o‘tkazish ikkinchi imzoni talab qiladi.',
   'residency.hosting': 'Barcha mijozlar ma’lumotlari {country}da saqlanadi.',
-  'residency.hostingNote': 'Saqlash joyi mijozga bog‘liq emas: boshqa mamlakatdagi mijoz ham shu yerda saqlanadi.',
+  'residency.hostingNote':
+    'Saqlash joyi mijozga bog‘liq emas: boshqa mamlakatdagi mijoz ham shu yerda saqlanadi.',
   'residency.tenantCount': '{count} mijoz',
   'residency.column.timezone': 'Vaqt mintaqasi',
   'residency.change.open': 'Mamlakatni o‘zgartirish',
   'residency.change.choose': 'Mamlakatni tanlang',
   'residency.change.submit': 'O‘zgartirishni so‘rash',
-  'residency.change.note': 'Ikkinchi kishi uni «Tasdiqlar» bo‘limida tasdiqlaydi; so‘ng o‘zgarishni qo‘llash uchun shu yerda yana so‘rang. Valyuta va vaqt mintaqasi o‘zgarmaydi.',
+  'residency.change.note':
+    'Ikkinchi kishi uni «Tasdiqlar» bo‘limida tasdiqlaydi; so‘ng o‘zgarishni qo‘llash uchun shu yerda yana so‘rang. Valyuta va vaqt mintaqasi o‘zgarmaydi.',
   'residency.change.awaiting': '{tenant}ni {country}ga o‘tkazish uchun ikkinchi imzo kutilmoqda.',
   'residency.change.done': '{tenant} endi {country}da ishlaydi.',
   'residency.change.declined': '{tenant}ni {country}ga o‘tkazish rad etildi.',
-  'platformApprovals.lead': 'Istalgan mijozdagi ikkinchi imzoni kutayotgan platforma qarorlari: mijoz mamlakatini o‘zgartirish va siyosat talab qilsa, mijozni faollashtirish.',
+  'platformApprovals.lead':
+    'Istalgan mijozdagi ikkinchi imzoni kutayotgan platforma qarorlari: mijoz mamlakatini o‘zgartirish va siyosat talab qilsa, mijozni faollashtirish.',
   'platformApprovals.empty': 'Ikkinchi imzoni kutayotgan narsa yo‘q.',
   'platformApprovals.column.action': 'Qaror',
   'platformApprovals.column.asked': 'Kim so‘radi',
@@ -122,9 +133,12 @@ export const uzLatn: Messages = {
   'platformApprovals.notYours': 'Siz so‘ragansiz; boshqa kishi hal qiladi',
   'platformApprovals.approved': '{tenant} uchun tasdiqlandi. So‘ragan kishi davom etishi mumkin.',
   'platformApprovals.declined': '{tenant} uchun rad etildi.',
-  'platformApprovals.gap': 'Ommaviy eksport va saqlash muddatini o‘zgartirish hali platformada harakat sifatida yo‘q, shuning uchun ular bu yerda yo‘q. Xodimlar kirishini tasdiqlash «Xodimlar va rollar» bo‘limida.',
-  'businessTypes.lead': 'Platforma xizmat ko‘rsatadigan biznes turlari, har biri buyurtmani odatda qanday topshiradi va qaysi mijozlar qaysi turga kiradi. Tur yoziladi va ko‘rsatiladi, lekin o‘zi hech narsani yoqmaydi yoki o‘chirmaydi.',
-  'businessTypes.note': 'Ulash barcha turlar uchun standart shablondan foydalanadi; mijoz nima qila olishini rollar va tarif hal qiladi.',
+  'platformApprovals.gap':
+    'Ommaviy eksport va saqlash muddatini o‘zgartirish hali platformada harakat sifatida yo‘q, shuning uchun ular bu yerda yo‘q. Xodimlar kirishini tasdiqlash «Xodimlar va rollar» bo‘limida.',
+  'businessTypes.lead':
+    'Platforma xizmat ko‘rsatadigan biznes turlari, har biri buyurtmani odatda qanday topshiradi va qaysi mijozlar qaysi turga kiradi. Tur yoziladi va ko‘rsatiladi, lekin o‘zi hech narsani yoqmaydi yoki o‘chirmaydi.',
+  'businessTypes.note':
+    'Ulash barcha turlar uchun standart shablondan foydalanadi; mijoz nima qila olishini rollar va tarif hal qiladi.',
   'businessTypes.kitchen': 'oshxona ekrani',
   'businessTypes.noKitchen': 'oshxona ekranisiz',
   'businessTypes.handover.DELIVERY': 'yetkazib berish',
@@ -205,7 +219,8 @@ export const uzLatn: Messages = {
   'state.notBuilt.body': 'Bu bo‘limning hozircha ekrani yo‘q.',
 
   'overview.title': 'Platforma salomatligi',
-  'overview.lead': 'Barcha mijozlar bo‘yicha mijozlar, buyurtmalar, fiskal cheklar va navbatlar — ochilgan paytda hisoblangan.',
+  'overview.lead':
+    'Barcha mijozlar bo‘yicha mijozlar, buyurtmalar, fiskal cheklar va navbatlar — ochilgan paytda hisoblangan.',
   'overview.tenants.title': 'Mijozlar',
   'overview.tenants.active': 'faol',
   'overview.tenants.provisioning': 'tayyorlanmoqda',
@@ -276,22 +291,27 @@ export const uzLatn: Messages = {
   'tenantDetail.action.identity': 'Identifikatsiya va realm',
   'tenantDetail.action.impersonation': 'Yordam sessiyasi',
   'support.title': 'Yordam sessiyalari',
-  'support.lead': 'Mijozning operatsion ilovasiga belgilangan vaqtga va ko‘rsatilgan sabab bilan kirish. Kirish muddatda o‘zi tugaydi; mijoz har bir tashrifni o‘z jurnalida ko‘radi va uni tugatishi mumkin.',
+  'support.lead':
+    'Mijozning operatsion ilovasiga belgilangan vaqtga va ko‘rsatilgan sabab bilan kirish. Kirish muddatda o‘zi tugaydi; mijoz har bir tashrifni o‘z jurnalida ko‘radi va uni tugatishi mumkin.',
   'support.current.title': 'Ochiq sessiyangiz',
   'support.openOperations': 'Mijozning operatsion ilovasini ochish →',
-  'support.noOperationsUrl': 'Operatsion ilova manzili berilmagan; uni ?supportTenant={tenantId} bilan oching.',
+  'support.noOperationsUrl':
+    'Operatsion ilova manzili berilmagan; uni ?supportTenant={tenantId} bilan oching.',
   'support.end': 'Sessiyani tugatish',
   'support.open.title': 'Yordam sessiyasini ochish',
   'support.open.access': 'Kirish',
   'support.access.VIEW': 'Faqat ko‘rish',
-  'support.access.VIEW.hint': 'buyurtmalar, menyu, sozlamalar va nosozliklarni ko‘rish; hech narsani o‘zgartirmaslik',
+  'support.access.VIEW.hint':
+    'buyurtmalar, menyu, sozlamalar va nosozliklarni ko‘rish; hech narsani o‘zgartirmaslik',
   'support.access.ASSIST': 'Ishda yordam',
-  'support.access.ASSIST.hint': 'shuningdek buyurtmalarni surish, o‘zgartirish va bekor qilish, stop-list, filialni yopish, kassa eksportlarini hal qilish; hech qachon qaytarishlar, xaridor ma’lumotlari va kirish huquqlari emas',
+  'support.access.ASSIST.hint':
+    'shuningdek buyurtmalarni surish, o‘zgartirish va bekor qilish, stop-list, filialni yopish, kassa eksportlarini hal qilish; hech qachon qaytarishlar, xaridor ma’lumotlari va kirish huquqlari emas',
   'support.open.length': 'Qancha vaqtga',
   'support.open.minutes': '{minutes} daq',
   'support.open.reason': 'Sabab (mijoz buni ko‘radi)',
   'support.open.ticket': 'Murojaat raqami (ixtiyoriy)',
-  'support.open.hint': 'O‘z hisobingiz ishlatiladi; qilgan hamma ishingiz sizning nomingiz bilan yoziladi.',
+  'support.open.hint':
+    'O‘z hisobingiz ishlatiladi; qilgan hamma ishingiz sizning nomingiz bilan yoziladi.',
   'support.open.submit': 'Sessiyani ochish',
   'support.opened': 'Sessiya ochildi. Operatsion ilovani quyidagi havola orqali oching.',
   'support.ended': 'Sessiya tugadi; kirish yo‘q.',
@@ -303,7 +323,8 @@ export const uzLatn: Messages = {
   'support.state.open': '{time} gacha ochiq',
   'support.state.ended': '{time} da tugatdi: {who}',
   'support.state.lapsed': '{time} da muddati tugadi',
-  'featureFlags.lead': 'Bosqichma-bosqich yoqilayotgan funksiyalar va kimga. Bayroq yoqilmaguncha o‘chiq: hamma uchun yoki tanlangan mijozlar uchun; hamma uchun yoqilganidan mijozni chetda qoldirish mumkin.',
+  'featureFlags.lead':
+    'Bosqichma-bosqich yoqilayotgan funksiyalar va kimga. Bayroq yoqilmaguncha o‘chiq: hamma uchun yoki tanlangan mijozlar uchun; hamma uchun yoqilganidan mijozni chetda qoldirish mumkin.',
   'featureFlags.empty': 'Bu yig‘mada funksiya bayroqlari e’lon qilinmagan.',
   'featureFlags.summary.nobody': 'Hamma joyda o‘chiq',
   'featureFlags.summary.some': '{count} mijozda yoqilgan',
@@ -325,7 +346,8 @@ export const uzLatn: Messages = {
   'featureFlags.confirm': 'Saqlash',
   'featureFlags.saved': 'Saqlandi. O‘zgarish mijozning keyingi so‘rovidan amal qiladi.',
   'featureFlags.flag.supportVisits': 'Yordam tashriflari sahifasi',
-  'featureFlags.flag.supportVisits.description': 'Mijoz administratorlariga operatsion ilovada HorecaOS yordamining barcha tashriflarini ko‘rsatadi va tashrifni tugatishga imkon beradi.',
+  'featureFlags.flag.supportVisits.description':
+    'Mijoz administratorlariga operatsion ilovada HorecaOS yordamining barcha tashriflarini ko‘rsatadi va tashrifni tugatishga imkon beradi.',
 
   'tenantDetail.facts.title': 'Mijoz ma’lumotlari',
   'tenantDetail.facts.status': 'Holati',
@@ -336,9 +358,11 @@ export const uzLatn: Messages = {
   'tenantDetail.facts.keycloakUnlinked': 'Bog‘lanmagan',
   'tenantDetail.status.title': 'Mijoz faoliyati',
   'tenantDetail.status.suspend': 'Mijozni to‘xtatib turish',
-  'tenantDetail.status.suspendLead': 'Qayta faollashtirilgunga qadar mijozning barcha xodimlari faqat o‘qish huquqini saqlaydi, kirish tashkiloti o‘chiriladi. Hech narsa o‘chirib tashlanmaydi.',
+  'tenantDetail.status.suspendLead':
+    'Qayta faollashtirilgunga qadar mijozning barcha xodimlari faqat o‘qish huquqini saqlaydi, kirish tashkiloti o‘chiriladi. Hech narsa o‘chirib tashlanmaydi.',
   'tenantDetail.status.reactivate': 'Mijozni qayta faollashtirish',
-  'tenantDetail.status.reactivateLead': 'Barcha xodimlarning ruxsatini to‘xtatib turishdan oldingi holatiga qaytaradi.',
+  'tenantDetail.status.reactivateLead':
+    'Barcha xodimlarning ruxsatini to‘xtatib turishdan oldingi holatiga qaytaradi.',
   'tenantDetail.status.reason': 'Sabab, audit jurnaliga yoziladi',
   'tenantDetail.status.confirmSuspend': 'To‘xtatib turish',
   'tenantDetail.status.confirmReactivate': 'Qayta faollashtirish',
@@ -380,24 +404,30 @@ export const uzLatn: Messages = {
   'tenantBrands.edit.action': 'Tahrirlash',
   'tenantBrands.edit.brandTitle': 'Brendni tahrirlash',
   'tenantBrands.edit.locationTitle': 'Joyni tahrirlash',
-  'tenantBrands.edit.brandLocked': 'Brend faol bo‘lgan, shuning uchun kodi va slagi o‘zgarmaydi. Ko‘rsatiladigan nomini o‘zgartirish mumkin.',
-  'tenantBrands.edit.locationLocked': 'Joy faol bo‘lgan, shuning uchun kodi, slagi va vaqt mintaqasi o‘zgarmaydi. Ko‘rsatiladigan nomini o‘zgartirish mumkin.',
+  'tenantBrands.edit.brandLocked':
+    'Brend faol bo‘lgan, shuning uchun kodi va slagi o‘zgarmaydi. Ko‘rsatiladigan nomini o‘zgartirish mumkin.',
+  'tenantBrands.edit.locationLocked':
+    'Joy faol bo‘lgan, shuning uchun kodi, slagi va vaqt mintaqasi o‘zgarmaydi. Ko‘rsatiladigan nomini o‘zgartirish mumkin.',
   'tenantBrands.edit.save': 'Saqlash',
   'tenantBrands.edit.saving': 'Saqlanmoqda…',
   'tenantBrands.delete.action': 'O‘chirish',
   'tenantBrands.delete.confirm': 'Butunlay o‘chirish',
   'tenantBrands.delete.cancel': 'Bekor qilish',
   'tenantBrands.delete.hasLocationsHint': 'Avval uning joylarini o‘chiring.',
-  'tenantBrands.delete.reason.NOT_DRAFT': 'Faqat qoralamani o‘chirish mumkin. Bu faol bo‘lgan va uning tarixi saqlanadi.',
+  'tenantBrands.delete.reason.NOT_DRAFT':
+    'Faqat qoralamani o‘chirish mumkin. Bu faol bo‘lgan va uning tarixi saqlanadi.',
   'tenantBrands.delete.reason.HAS_LOCATIONS': 'Brendda hali joylar bor. Avval ularni o‘chiring.',
-  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS': 'Xodimlarda hali unga ruxsat bor. Avval bu ruxsatni bekor qiling.',
-  'tenantBrands.delete.reason.STILL_REFERENCED': 'Unga hali boshqa ma’lumotlar bog‘langan — masalan, yuridik shaxs biriktiruvi, savdo kanali yoki menyu. Avval ularni olib tashlang.',
+  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS':
+    'Xodimlarda hali unga ruxsat bor. Avval bu ruxsatni bekor qiling.',
+  'tenantBrands.delete.reason.STILL_REFERENCED':
+    'Unga hali boshqa ma’lumotlar bog‘langan — masalan, yuridik shaxs biriktiruvi, savdo kanali yoki menyu. Avval ularni olib tashlang.',
   'tenantBrands.delete.referencedBy': '(Havola manbai: {table})',
   'tenantBrands.column.address': 'Manzil',
   'tenantBrands.place.notSet': 'Kiritilmagan',
   'tenantBrands.place.action': 'Manzil',
   'tenantBrands.place.title': 'Joy qayerda joylashgan',
-  'tenantBrands.place.lead': 'Yetkazib berish va kuryerlar xaritadagi belgi bo‘yicha yo‘naltiriladi — uni xotiradan emas, xaritadan qo‘ying.',
+  'tenantBrands.place.lead':
+    'Yetkazib berish va kuryerlar xaritadagi belgi bo‘yicha yo‘naltiriladi — uni xotiradan emas, xaritadan qo‘ying.',
   'tenantBrands.place.addressLine': 'Ko‘cha manzili',
   'tenantBrands.place.district': 'Tuman',
   'tenantBrands.place.city': 'Shahar',
@@ -405,12 +435,15 @@ export const uzLatn: Messages = {
   'tenantBrands.place.contactPhone': 'Aloqa telefoni, masalan +998712000000',
   'tenantBrands.place.latitude': 'Kenglik',
   'tenantBrands.place.longitude': 'Uzunlik',
-  'tenantBrands.place.pairError': 'Kenglik va uzunlikni birga kiriting yoki ikkalasini ham bo‘sh qoldiring.',
+  'tenantBrands.place.pairError':
+    'Kenglik va uzunlikni birga kiriting yoki ikkalasini ham bo‘sh qoldiring.',
   'tenantBrands.place.rangeError': 'Kenglik -90 dan 90 gacha, uzunlik -180 dan 180 gacha bo‘ladi.',
-  'tenantBrands.place.phoneError': 'Telefon raqami + va mamlakat kodi bilan boshlanadi, keyin 7–14 ta raqam.',
+  'tenantBrands.place.phoneError':
+    'Telefon raqami + va mamlakat kodi bilan boshlanadi, keyin 7–14 ta raqam.',
 
   'legalEntities.title': 'Yuridik shaxslar va soliq rekvizitlari',
-  'legalEntities.lead': 'Filiallar ortidagi INN reyestri va har birini qaysi shaxs fiskallashtirishi.',
+  'legalEntities.lead':
+    'Filiallar ortidagi INN reyestri va har birini qaysi shaxs fiskallashtirishi.',
   'legalEntities.empty': 'Hozircha yuridik shaxslar ro‘yxatdan o‘tmagan.',
   'legalEntities.column.name': 'Yuridik shaxs',
   'legalEntities.column.tin': 'INN',
@@ -427,14 +460,17 @@ export const uzLatn: Messages = {
   'legalEntities.register.vatRegistered': 'QQS to‘lovchisi',
   'legalEntities.assign.action': 'Filialga biriktirish',
   'legalEntities.assign.title': 'Filial sotuvchisini tayinlash',
-  'legalEntities.assign.lead': 'Filialning joriy tayinlanishi (agar bo‘lsa) yangisi boshlanadigan sanada yopiladi.',
+  'legalEntities.assign.lead':
+    'Filialning joriy tayinlanishi (agar bo‘lsa) yangisi boshlanadigan sanada yopiladi.',
   'legalEntities.assign.effectiveFrom': 'Amal qilish sanasi',
   'legalEntities.assign.location': 'Joy',
   'legalEntities.assign.chooseLocation': 'Joyni tanlang',
-  'legalEntities.assign.noLocations': 'Mijozda hozircha joylar yo‘q. Avval «Brendlar va joylar» bo‘limida joy yarating.',
+  'legalEntities.assign.noLocations':
+    'Mijozda hozircha joylar yo‘q. Avval «Brendlar va joylar» bo‘limida joy yarating.',
   'legalEntities.assign.done': 'Biriktirildi.',
   'legalEntities.locations.title': 'Har bir joy qaysi yuridik shaxs nomidan fiskallashtiradi',
-  'legalEntities.locations.lead': 'Joy faol yuridik shaxs biriktirilgandan keyingina naqdsiz to‘lov qabul qiladi.',
+  'legalEntities.locations.lead':
+    'Joy faol yuridik shaxs biriktirilgandan keyingina naqdsiz to‘lov qabul qiladi.',
   'legalEntities.locations.column.location': 'Joy',
   'legalEntities.locations.column.entity': 'Yuridik shaxs',
   'legalEntities.locations.column.since': 'Qachondan',
@@ -477,39 +513,60 @@ export const uzLatn: Messages = {
   'onboarding.step.FRONTEND_DOMAIN_VALIDATE': 'Vitrina manzili',
   'onboarding.step.ACTIVATION_SMOKE_TEST': 'Sinov buyurtmasi',
   'onboarding.step.TENANT_ACTIVATE': 'Ishga tushirish',
-  'onboarding.hint.AWAITING_ORGANIZATION': 'Kirish tashkiloti yaratilishi kutilmoqda. Qayta urinish o‘zi bajariladi.',
-  'onboarding.hint.IDENTITY_DRIFT': 'Kirish xizmatida bu mijozga mos kelmaydigan tashkilot bor. Uni o‘sha yerda tuzatish kerak; nima farq qilishi quyida ko‘rsatilgan.',
-  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL': 'Menyu elementini joyda sotib bo‘lmaydi. Menyu qayerda taklif qilinishini operatsion ilovada tekshiring.',
-  'onboarding.hint.MEDIA_NOT_AVAILABLE': 'Menyu rasmlari hozircha mavjud emas. Yuklamalarni operatsion ilovada tekshiring.',
-  'onboarding.hint.NO_AVAILABLE_ITEM': 'Menyuda hozircha sotiladigan narsa yo‘q. Operatsion ilovada kamida bitta mavjud elementli menyuni e’lon qiling.',
+  'onboarding.hint.AWAITING_ORGANIZATION':
+    'Kirish tashkiloti yaratilishi kutilmoqda. Qayta urinish o‘zi bajariladi.',
+  'onboarding.hint.IDENTITY_DRIFT':
+    'Kirish xizmatida bu mijozga mos kelmaydigan tashkilot bor. Uni o‘sha yerda tuzatish kerak; nima farq qilishi quyida ko‘rsatilgan.',
+  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL':
+    'Menyu elementini joyda sotib bo‘lmaydi. Menyu qayerda taklif qilinishini operatsion ilovada tekshiring.',
+  'onboarding.hint.MEDIA_NOT_AVAILABLE':
+    'Menyu rasmlari hozircha mavjud emas. Yuklamalarni operatsion ilovada tekshiring.',
+  'onboarding.hint.NO_AVAILABLE_ITEM':
+    'Menyuda hozircha sotiladigan narsa yo‘q. Operatsion ilovada kamida bitta mavjud elementli menyuni e’lon qiling.',
   'onboarding.hint.NO_BRAND': 'Mijozda brend yo‘q. Uni «Brendlar va joylar» bo‘limida yarating.',
   'onboarding.hint.NO_CHANNEL': 'Faol savdo kanali yo‘q. Uni operatsion ilovada sozlang.',
-  'onboarding.hint.NO_DELIVERY_TARIFF': 'Yetkazib berishda tarif yo‘q. Uni operatsion ilovada qo‘shing.',
-  'onboarding.hint.NO_DELIVERY_ZONE': 'Yetkazib berishda hudud yo‘q. Uni operatsion ilovada chizing.',
-  'onboarding.hint.NO_FULFILLMENT_MODE': 'Savdo kanali olib ketish ham, yetkazib berish ham taklif qilmaydi. Buyurtmalarni berish usulini operatsion ilovada tanlang.',
-  'onboarding.hint.NO_LEGAL_ENTITY': 'Joyda faol yuridik shaxs yo‘q. Uni «Yuridik shaxslar» bo‘limida biriktiring.',
-  'onboarding.hint.NO_LOCATION': 'Hech bir brendda joy yo‘q. Uni «Brendlar va joylar» bo‘limida yarating.',
-  'onboarding.hint.NO_MERCHANT_BINDING': 'Karta yoki hamyon orqali to‘lov ortida merchant hisobi yo‘q. Shu yuridik shaxs uchun to‘lov provayderini ulang.',
-  'onboarding.hint.NO_PUBLISHED_MENU': 'E’lon qilingan menyu yo‘q. Uni operatsion ilovada e’lon qiling.',
-  'onboarding.hint.OWNER_NOT_SUPPLIED': 'Ega ko‘rsatilmagan. Bu jarayonni bekor qiling va egasining email manzili bilan yangisini boshlang.',
-  'onboarding.hint.POS_BINDING_UNHEALTHY': 'POS ulanishi ishlamayapti. Uni «Ulanishlar» bo‘limida tekshiring.',
-  'onboarding.hint.QUOTE_REFUSED': 'Sinov buyurtmasi narxini hisoblab bo‘lmadi. Menyu narxlarini operatsion ilovada tekshiring.',
-  'onboarding.hint.SERVICEABILITY_UNAVAILABLE': 'Yetkazib berish qamrovini hozir tekshirib bo‘lmadi. Qayta urinish o‘zi bajariladi.',
+  'onboarding.hint.NO_DELIVERY_TARIFF':
+    'Yetkazib berishda tarif yo‘q. Uni operatsion ilovada qo‘shing.',
+  'onboarding.hint.NO_DELIVERY_ZONE':
+    'Yetkazib berishda hudud yo‘q. Uni operatsion ilovada chizing.',
+  'onboarding.hint.NO_FULFILLMENT_MODE':
+    'Savdo kanali olib ketish ham, yetkazib berish ham taklif qilmaydi. Buyurtmalarni berish usulini operatsion ilovada tanlang.',
+  'onboarding.hint.NO_LEGAL_ENTITY':
+    'Joyda faol yuridik shaxs yo‘q. Uni «Yuridik shaxslar» bo‘limida biriktiring.',
+  'onboarding.hint.NO_LOCATION':
+    'Hech bir brendda joy yo‘q. Uni «Brendlar va joylar» bo‘limida yarating.',
+  'onboarding.hint.NO_MERCHANT_BINDING':
+    'Karta yoki hamyon orqali to‘lov ortida merchant hisobi yo‘q. Shu yuridik shaxs uchun to‘lov provayderini ulang.',
+  'onboarding.hint.NO_PUBLISHED_MENU':
+    'E’lon qilingan menyu yo‘q. Uni operatsion ilovada e’lon qiling.',
+  'onboarding.hint.OWNER_NOT_SUPPLIED':
+    'Ega ko‘rsatilmagan. Bu jarayonni bekor qiling va egasining email manzili bilan yangisini boshlang.',
+  'onboarding.hint.POS_BINDING_UNHEALTHY':
+    'POS ulanishi ishlamayapti. Uni «Ulanishlar» bo‘limida tekshiring.',
+  'onboarding.hint.QUOTE_REFUSED':
+    'Sinov buyurtmasi narxini hisoblab bo‘lmadi. Menyu narxlarini operatsion ilovada tekshiring.',
+  'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
+    'Yetkazib berish qamrovini hozir tekshirib bo‘lmadi. Qayta urinish o‘zi bajariladi.',
   'onboarding.hint.TENANT_MISSING': 'Mijoz yozuvi topilmadi.',
-  'onboarding.hint.TRANSIENT_INFRASTRUCTURE': 'Vaqtinchalik nosozlik. Qayta urinish o‘zi bajariladi.',
+  'onboarding.hint.TRANSIENT_INFRASTRUCTURE':
+    'Vaqtinchalik nosozlik. Qayta urinish o‘zi bajariladi.',
   'onboarding.hint.open': 'Ochish',
   'onboarding.validate.title': 'Hozir tekshirish',
-  'onboarding.validate.lead': 'Mijozning hozirgi holati bo‘yicha barcha tayyorlik tekshiruvlarini jarayonni o‘zgartirmasdan bajaradi. Biror narsani tuzatgandan keyin, davom ettirishdan oldin foydalaning.',
+  'onboarding.validate.lead':
+    'Mijozning hozirgi holati bo‘yicha barcha tayyorlik tekshiruvlarini jarayonni o‘zgartirmasdan bajaradi. Biror narsani tuzatgandan keyin, davom ettirishdan oldin foydalaning.',
   'onboarding.validate.submit': 'Tekshirish',
   'onboarding.validate.submitting': 'Tekshirilmoqda…',
-  'onboarding.validate.allPassed': 'Barcha tekshiruvlar o‘tdi. Buni qayd etish uchun jarayonni davom ettiring.',
+  'onboarding.validate.allPassed':
+    'Barcha tekshiruvlar o‘tdi. Buni qayd etish uchun jarayonni davom ettiring.',
   'onboarding.validate.passed': 'O‘tdi',
   'onboarding.validate.failed': 'O‘tmadi',
   'onboarding.cancel.title': 'Jarayonni bekor qilish',
-  'onboarding.cancel.lead': 'Jarayonni butunlay to‘xtatadi; keyin yangisini boshlash mumkin. Allaqachon sozlangan narsalar bekor qilinmaydi.',
+  'onboarding.cancel.lead':
+    'Jarayonni butunlay to‘xtatadi; keyin yangisini boshlash mumkin. Allaqachon sozlangan narsalar bekor qilinmaydi.',
   'onboarding.cancel.submit': 'Bekor qilish',
   'onboarding.cancel.submitting': 'Bekor qilinmoqda…',
-  'onboarding.template.label': 'Yangi jarayonlar {code} shabloni, {version}-versiya bo‘yicha boradi: {count} ta majburiy qadam.',
+  'onboarding.template.label':
+    'Yangi jarayonlar {code} shabloni, {version}-versiya bo‘yicha boradi: {count} ta majburiy qadam.',
   'onboarding.start.ownerLocale': 'Taklifnoma tili',
   'onboarding.invitation.title': 'Egaga taklifnoma',
   'onboarding.invitation.state.QUEUED': 'Yuborilishini kutmoqda',
@@ -529,58 +586,126 @@ export const uzLatn: Messages = {
   'onboarding.invitation.locale.ru': 'Ruscha',
   'onboarding.invitation.locale.en': 'Inglizcha',
   'onboarding.invitation.resend': 'Qayta yuborish',
-  'onboarding.invitation.none': 'Egasining hisobi taklifnomalar paydo bo‘lishidan oldin bog‘langan, shuning uchun xat yuborilmagan. Parol o‘rnatishi uchun taklifnoma yuboring.',
+  'onboarding.invitation.none':
+    'Egasining hisobi taklifnomalar paydo bo‘lishidan oldin bog‘langan, shuning uchun xat yuborilmagan. Parol o‘rnatishi uchun taklifnoma yuboring.',
   'onboarding.invitation.send': 'Taklifnoma yuborish',
   'onboarding.invitation.resending': 'Yuborilmoqda…',
-  'onboarding.invitation.resent': 'Yangi havola bilan yana navbatga qo‘yildi. Oldingi havola endi ishlamaydi.',
-  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Bu muhitda pochta hali sozlanmagan. Sozlanishi bilan taklifnoma yuboriladi.',
-  'onboarding.invitation.hint.SMTP_UNAVAILABLE': 'Pochta serveri javob bermadi. Avtomatik qayta urinib ko‘riladi.',
-  'onboarding.invitation.hint.SMTP_AUTHENTICATION': 'Pochta serveri platforma ma’lumotlarini rad etdi. Maxfiy ma’lumotlar omboridagi SMTP parolini tekshiring.',
-  'onboarding.invitation.hint.SMTP_SECRET_MISSING': 'Ko‘rsatilgan havola bo‘yicha maxfiy ma’lumotlar omborida SMTP paroli yo‘q.',
-  'onboarding.invitation.hint.ADDRESS_REJECTED': 'Ega manzili rad etildi. Uni kirish xizmatida tuzating va qayta yuboring.',
-  'onboarding.invitation.hint.ADDRESS_INVALID': 'Ega manzili noto‘g‘ri. Uni kirish xizmatida tuzating va qayta yuboring.',
-  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING': 'Egasining hisobi kirish xizmatida endi mavjud emas.',
-  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE': 'Kirish xizmati javob bermadi. Avtomatik qayta urinib ko‘riladi.',
+  'onboarding.invitation.resent':
+    'Yangi havola bilan yana navbatga qo‘yildi. Oldingi havola endi ishlamaydi.',
+  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED':
+    'Bu muhitda pochta hali sozlanmagan. Sozlanishi bilan taklifnoma yuboriladi.',
+  'onboarding.invitation.hint.SMTP_UNAVAILABLE':
+    'Pochta serveri javob bermadi. Avtomatik qayta urinib ko‘riladi.',
+  'onboarding.invitation.hint.SMTP_AUTHENTICATION':
+    'Pochta serveri platforma ma’lumotlarini rad etdi. Maxfiy ma’lumotlar omboridagi SMTP parolini tekshiring.',
+  'onboarding.invitation.hint.SMTP_SECRET_MISSING':
+    'Ko‘rsatilgan havola bo‘yicha maxfiy ma’lumotlar omborida SMTP paroli yo‘q.',
+  'onboarding.invitation.hint.ADDRESS_REJECTED':
+    'Ega manzili rad etildi. Uni kirish xizmatida tuzating va qayta yuboring.',
+  'onboarding.invitation.hint.ADDRESS_INVALID':
+    'Ega manzili noto‘g‘ri. Uni kirish xizmatida tuzating va qayta yuboring.',
+  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING':
+    'Egasining hisobi kirish xizmatida endi mavjud emas.',
+  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE':
+    'Kirish xizmati javob bermadi. Avtomatik qayta urinib ko‘riladi.',
   'onboarding.invitation.hint.EXPIRED': 'Havoladan 72 soat ichida foydalanilmadi. Qayta yuboring.',
-  'onboarding.hint.OWNER_EMAIL_UNREADABLE': 'Ega emailini bu ijarachi uchun ochib bo‘lmadi. Ega emaili bilan yangi jarayonni boshlang.',
-  'onboarding.template.suggested': '«{type}» uchun taklif: {code} shabloni shu biznes turini ko‘rsatadi.',
-  'onboarding.template.fallback': 'Hozircha «{type}» turini ko‘rsatadigan shablon yo‘q, shuning uchun yangi jarayonlar {code} shabloni bo‘yicha boradi.',
+
+  // IA 2.9 Egalar taklifnomalari — barcha mijozlar bo'yicha ulanishning so'nggi bosqichi (ADR 0100).
+  'ownerInvitations.title': 'Egalar taklifnomalari',
+  'ownerInvitations.lead':
+    "Egasi hali hisob yaratmagan barcha mijozlar va ularga nima yuborilgani. Taklifnomalar paydo bo'lishidan oldin egasi biriktirilgan mijoz taklif qilinmagan deb ko'rsatiladi.",
+  'ownerInvitations.loading': 'Taklifnomalar yuklanmoqda…',
+  'ownerInvitations.empty': "Bu filtrga mos mijoz yo'q.",
+  'ownerInvitations.outstanding': 'Egasi hali kutilmoqda: {count}.',
+  'ownerInvitations.resent': 'Qayta yuborildi.',
+  'ownerInvitations.cancel': 'Bekor qilish',
+  'ownerInvitations.filter.OUTSTANDING': 'Hali kutilmoqda',
+  'ownerInvitations.filter.ALL': 'Hammasi',
+  'ownerInvitations.filter.NONE': 'Taklif qilinmagan',
+  'ownerInvitations.filter.FAILED': 'Yetkazilmadi',
+  'ownerInvitations.filter.EXPIRED': 'Havola muddati tugagan',
+  'ownerInvitations.filter.QUEUED': 'Yuborish kutilmoqda',
+  'ownerInvitations.filter.SENT': 'Yuborilgan',
+  'ownerInvitations.filter.ACCEPTED': 'Qabul qilingan',
+  'ownerInvitations.state.NONE': 'Taklif qilinmagan',
+  'ownerInvitations.column.tenant': 'Mijoz',
+  'ownerInvitations.column.recipient': 'Kimga yuborilgan',
+  'ownerInvitations.column.state': 'Holat',
+  'ownerInvitations.column.sentAt': 'Yuborilgan',
+  'ownerInvitations.column.openedAt': 'Ochilgan',
+  'ownerInvitations.column.acceptedAt': 'Hisob yaratilgan',
+  'ownerInvitations.column.attempts': 'Urinishlar',
+  'ownerInvitations.column.lastError': "So'nggi xato",
+  'onboarding.invitation.recipient': 'Kimga yuborilgan',
+  'onboarding.invitation.timeline': 'Tarix',
+  'onboarding.invitation.timelineEmpty':
+    "Bu taklifnoma tarixdan oldinroq, shuning uchun unga oid yozuv yo'q.",
+  'onboarding.invitation.attempt': '{number}-urinish',
+  'onboarding.invitation.event.QUEUED': "Navbatga qo'yildi",
+  'onboarding.invitation.event.RESENT': 'Qayta yuborildi',
+  'onboarding.invitation.event.SENT': 'Xat yuborildi',
+  'onboarding.invitation.event.SEND_DEFERRED': 'Yetkazish kechiktirildi',
+  'onboarding.invitation.event.SEND_FAILED': "Yetkazish to'xtatildi",
+  'onboarding.invitation.event.OPENED': 'Havola ochildi',
+  'onboarding.invitation.event.ACCEPTED': 'Hisob yaratildi',
+  'onboarding.invitation.event.NOT_NEEDED': 'Parol allaqachon bor edi',
+  'onboarding.invitation.actor.SYSTEM_JOB': 'platforma',
+  'onboarding.invitation.actor.USER': 'operator',
+  'onboarding.invitation.actor.OWNER': 'egasi',
+  'tenants.column.owner': 'Egasi',
+  'tenants.owner.waiting': 'Yaratilmagan',
+  'tenants.owner.ready': 'Yaratilgan',
+  'tenants.owner.notNeeded': 'Talab qilinmaydi',
+  'tenants.owner.none': 'Egasi yo‘q',
+  'onboarding.hint.OWNER_EMAIL_UNREADABLE':
+    'Ega emailini bu mijoz uchun ochib bo‘lmadi. Ega emaili bilan yangi jarayonni boshlang.',
+  'onboarding.template.suggested':
+    '«{type}» uchun taklif: {code} shabloni shu biznes turini ko‘rsatadi.',
+  'onboarding.template.fallback':
+    'Hozircha «{type}» turini ko‘rsatadigan shablon yo‘q, shuning uchun yangi jarayonlar {code} shabloni bo‘yicha boradi.',
   'onboarding.template.choose': 'Shablon',
   'onboarding.required.yes': 'Ha',
   'onboarding.required.no': 'Yo‘q',
   'onboarding.reason.placeholder': 'Sabab (majburiy)',
   'onboarding.resume.title': 'Davom ettirish',
-  'onboarding.resume.lead': 'Muvaffaqiyatsiz qadamlarni qayta ochadi. Tugallangan qadamlar hech qachon tiklanmaydi.',
+  'onboarding.resume.lead':
+    'Muvaffaqiyatsiz qadamlarni qayta ochadi. Tugallangan qadamlar hech qachon tiklanmaydi.',
   'onboarding.resume.submit': 'Davom ettirish',
   'onboarding.resume.submitting': 'Davom ettirilmoqda…',
   'onboarding.resume.result': '{count} ta qadam qayta ochildi.',
   'onboarding.activate.title': 'Faollashtirish',
-  'onboarding.activate.lead': 'Barcha majburiy qadamlar tugashi va, siyosat talab qilsa, platformaning ikkinchi imzosi kerak.',
+  'onboarding.activate.lead':
+    'Barcha majburiy qadamlar tugashi va, siyosat talab qilsa, platformaning ikkinchi imzosi kerak.',
   'onboarding.activate.submit': 'Mijozni faollashtirish',
   'onboarding.activate.submitting': 'Faollashtirilmoqda…',
   'onboarding.activate.outcome.activated': 'Mijoz endi faol.',
-  'onboarding.activate.outcome.awaitingApproval': 'Ikkinchi imzo kutilmoqda. Platforma administratori bu so‘rovni «Xodimlar va rollar»da hal qilishi kerak.',
-  'onboarding.activate.outcome.notReady': 'Hali tayyor emas — yuqoridagi tugallanmagan qadamlarga qarang.',
+  'onboarding.activate.outcome.awaitingApproval':
+    'Ikkinchi imzo kutilmoqda. Platforma administratori bu so‘rovni «Xodimlar va rollar»da hal qilishi kerak.',
+  'onboarding.activate.outcome.notReady':
+    'Hali tayyor emas — yuqoridagi tugallanmagan qadamlarga qarang.',
   'onboarding.start.title': 'Ulashni boshlash',
-  'onboarding.start.lead': 'Quyida ko‘rsatilgan shablonni ishga tushiradi. Hozircha hech kimni taklif qilmaslik uchun emailni bo‘sh qoldiring.',
+  'onboarding.start.lead':
+    'Quyida ko‘rsatilgan shablonni ishga tushiradi. Hozircha hech kimni taklif qilmaslik uchun emailni bo‘sh qoldiring.',
   'onboarding.start.ownerEmail': 'Egasining emaili (ixtiyoriy)',
   'onboarding.start.submit': 'Boshlash',
   'onboarding.start.submitting': 'Boshlanmoqda…',
 
-
   'providerRegistry.title': 'Provayderlar reyestri',
-  'providerRegistry.lead': 'Ushbu build e’lon qilgan barcha adapterlar va ularga kerakli ulanish maydonlari.',
+  'providerRegistry.lead':
+    'Ushbu build e’lon qilgan barcha adapterlar va ularga kerakli ulanish maydonlari.',
   'providerRegistry.column.provider': 'Provayder',
   'providerRegistry.column.category': 'Toifa',
   'providerRegistry.column.fields': 'Ulanish maydonlari',
-  'providerRegistry.note': 'Kahrabo rangdagi maydonlar — hisob ma’lumotlari: ular bir marta kiritiladi va boshqa hech qachon ko‘rsatilmaydi.',
+  'providerRegistry.note':
+    'Kahrabo rangdagi maydonlar — hisob ma’lumotlari: ular bir marta kiritiladi va boshqa hech qachon ko‘rsatilmaydi.',
 
   'capabilityMatrix.title': 'Imkoniyatlar matritsasi',
   'capabilityMatrix.lead': 'Har bir ulangan POS adapter qaysi imkoniyatlarni e’lon qiladi.',
   'capabilityMatrix.empty': 'Ushbu buildda hech qanday POS adapter ulanmagan.',
 
   'installationsExplorer.title': 'Ulanishlar sharhi',
-  'installationsExplorer.lead': 'Mijozlardagi barcha provayder ulanishlari: mijozga provayder ulash, joyga bog‘lash, aloqani tekshirish, kirish ma’lumotini almashtirish.',
+  'installationsExplorer.lead':
+    'Mijozlardagi barcha provayder ulanishlari: mijozga provayder ulash, joyga bog‘lash, aloqani tekshirish, kirish ma’lumotini almashtirish.',
   'installationsExplorer.empty': 'Hozircha ulanishlar yo‘q.',
   'installationsExplorer.column.tenant': 'Mijoz',
   'installationsExplorer.column.provider': 'Provayder',
@@ -594,7 +719,8 @@ export const uzLatn: Messages = {
   'installationsExplorer.check.action': 'Ulanishni tekshirish',
   'installationsExplorer.check.working': 'Tekshirilmoqda…',
   'installationsExplorer.check.result': 'Ulanish: {status}.',
-  'installationsExplorer.check.lead': 'Restoranning o‘z hisob ma’lumotlari bilan provayder javob berishini va nimalar qila olishini tekshiradi. Bog‘lanishni faqat muvaffaqiyatli tekshiruvdan keyin faollashtirish mumkin.',
+  'installationsExplorer.check.lead':
+    'Restoranning o‘z hisob ma’lumotlari bilan provayder javob berishini va nimalar qila olishini tekshiradi. Bog‘lanishni faqat muvaffaqiyatli tekshiruvdan keyin faollashtirish mumkin.',
   'installationsExplorer.bindings.title': 'Qayerda ishlatiladi',
   'installationsExplorer.bindings.empty': 'Hozircha hech bir brend yoki joyga bog‘lanmagan.',
   'installationsExplorer.bindings.wholeBrand': 'butun brend',
@@ -602,7 +728,8 @@ export const uzLatn: Messages = {
   'installationsExplorer.bindings.activate': 'Faollashtirish',
   'installationsExplorer.bindings.reason': 'Sabab, audit jurnaliga yoziladi',
   'installationsExplorer.bindings.confirm': 'Tasdiqlash',
-  'installationsExplorer.bindings.suspendLead': 'Qayta faollashtirilgunga qadar bu joy buyurtmalari qo‘lda ishlash jarayoniga o‘tadi. Hech narsa o‘chirilmaydi.',
+  'installationsExplorer.bindings.suspendLead':
+    'Qayta faollashtirilgunga qadar bu joy buyurtmalari qo‘lda ishlash jarayoniga o‘tadi. Hech narsa o‘chirilmaydi.',
   'installationsExplorer.bindings.changed': 'Bajarildi.',
   'installationsExplorer.bindings.noChange': 'O‘zgarish yo‘q — ehtimol, allaqachon shu holatda.',
   'installationsExplorer.install.open': 'Mijozga provayder ulash',
@@ -613,13 +740,16 @@ export const uzLatn: Messages = {
   'installationsExplorer.install.displayName': 'Xodimlarga ko‘rinadigan nom',
   'installationsExplorer.install.credential': 'Kirish ma’lumoti (ixtiyoriy)',
   'installationsExplorer.install.credentialNamed': 'Kirish ma’lumoti: {field} (ixtiyoriy)',
-  'installationsExplorer.install.credentialHint': 'Maxfiy ma’lumotlar omboriga bir marta yuboriladi va boshqa hech qayerda ko‘rsatilmaydi.',
+  'installationsExplorer.install.credentialHint':
+    'Maxfiy ma’lumotlar omboriga bir marta yuboriladi va boshqa hech qayerda ko‘rsatilmaydi.',
   'installationsExplorer.install.account': 'Provayderdagi hisob (ixtiyoriy)',
   'installationsExplorer.install.submit': 'Ulash',
-  'installationsExplorer.install.done': '{tenant} uchun ulandi. Uni brend yoki filialga bog‘lang, aloqani tekshiring, so‘ng bog‘lanishni faollashtiring.',
+  'installationsExplorer.install.done':
+    '{tenant} uchun ulandi. Uni brend yoki filialga bog‘lang, aloqani tekshiring, so‘ng bog‘lanishni faollashtiring.',
   'installationsExplorer.bind.title': 'Brend yoki filialga bog‘lash',
   'installationsExplorer.bind.chooseBrand': 'Brendni tanlang',
-  'installationsExplorer.bind.hint': 'Bog‘lanish to‘xtatilgan holda yaratiladi; to‘g‘ri joyga ishora qilishiga ishonch hosil qilgach, uni faollashtiring.',
+  'installationsExplorer.bind.hint':
+    'Bog‘lanish to‘xtatilgan holda yaratiladi; to‘g‘ri joyga ishora qilishiga ishonch hosil qilgach, uni faollashtiring.',
   'installationsExplorer.bind.submit': 'Bog‘lash',
   'installationsExplorer.bind.done': 'Bog‘landi; faollashtirilgunga qadar to‘xtatilgan.',
   'installationsExplorer.rotate.title': 'Kirish ma’lumotini almashtirish',
@@ -627,14 +757,17 @@ export const uzLatn: Messages = {
   'installationsExplorer.rotate.submit': 'Almashtirish',
   'installationsExplorer.rotate.done': 'Kirish ma’lumoti almashtirildi.',
   'installationsExplorer.clopos.clerk': 'Har bir buyurtmani kassada kassir qabul qiladi',
-  'installationsExplorer.clopos.hint': 'O‘chirilgan bo‘lsa, buyurtmalar avtomatik qabul qilinadi va to‘g‘ridan-to‘g‘ri oshxonaga boradi.',
+  'installationsExplorer.clopos.hint':
+    'O‘chirilgan bo‘lsa, buyurtmalar avtomatik qabul qilinadi va to‘g‘ridan-to‘g‘ri oshxonaga boradi.',
   'installationsExplorer.clopos.saved': 'Sozlama saqlandi.',
 
   'messageFlow.title': 'Xabarlar oqimi',
   'messageFlow.lead': 'Barcha mijozlar bo‘yicha har bir navbatda nima va qancha vaqt kutmoqda.',
-  'messageFlow.gap': 'Brokerdagi qotib qolgan bo‘limlar bu yerda emas, monitoring tizimida ko‘rinadi.',
+  'messageFlow.gap':
+    'Brokerdagi qotib qolgan bo‘limlar bu yerda emas, monitoring tizimida ko‘rinadi.',
   'messageFlow.outbox.title': 'E’lon qilinishini kutmoqda',
-  'messageFlow.outbox.note': 'Platforma hali yubormagan hodisalar, mavzular bo‘yicha. Qizil — o‘n besh daqiqa va undan ko‘p.',
+  'messageFlow.outbox.note':
+    'Platforma hali yubormagan hodisalar, mavzular bo‘yicha. Qizil — o‘n besh daqiqa va undan ko‘p.',
   'messageFlow.inbox.title': 'Qayta ishlanishini kutmoqda',
   'messageFlow.inbox.note': 'Iste’molchi hali ishlamagan xabarlar, iste’molchilar bo‘yicha.',
   'messageFlow.empty': 'Hech narsa kutmayapti.',
@@ -646,7 +779,8 @@ export const uzLatn: Messages = {
   'messageFlow.deadLetters.open': 'Xatolar navbatini ochish →',
 
   'deadLetters.title': 'Yetkazilmagan xabarlar',
-  'deadLetters.lead': 'Barcha qayta urinishlardan keyin ham muvaffaqiyatsiz bo‘lgan xabarlar: platforma e’lon qila olmagan va qayta ishlovchi qayta ishlay olmagan hodisalar. Har birini sabab ko‘rsatib qayta yuboring yoki yoping.',
+  'deadLetters.lead':
+    'Barcha qayta urinishlardan keyin ham muvaffaqiyatsiz bo‘lgan xabarlar: platforma e’lon qila olmagan va qayta ishlovchi qayta ishlay olmagan hodisalar. Har birini sabab ko‘rsatib qayta yuboring yoki yoping.',
   'deadLetters.empty': 'Yetkazilmagan hodisalar yo‘q.',
   'deadLetters.column.event': 'Hodisa',
   'deadLetters.column.type': 'Turi',
@@ -678,7 +812,8 @@ export const uzLatn: Messages = {
   'deadLetters.category.PAYLOAD_INVALID': 'Xabarning o‘zi noto‘g‘ri',
   'deadLetters.category.DOMAIN_REJECTED': 'Biznes qoidasi bilan rad etilgan',
   'deadLetters.category.AUTHORIZATION_REJECTED': 'Ruxsat yo‘qligi sababli rad etilgan',
-  'deadLetters.category.UNCERTAIN_EXTERNAL_OUTCOME': 'Provayder amalni bajarganmi yoki yo‘qmi, noma’lum',
+  'deadLetters.category.UNCERTAIN_EXTERNAL_OUTCOME':
+    'Provayder amalni bajarganmi yoki yo‘qmi, noma’lum',
   'deadLetters.category.UNKNOWN': 'Noma’lum',
   'deadLetters.detail.topic': 'Topik',
   'deadLetters.detail.about': 'Nima haqida',
@@ -689,11 +824,14 @@ export const uzLatn: Messages = {
   'deadLetters.detail.resolved': 'Yopgan',
 
   'entitlements.title': 'Tarif huquqlari',
-  'entitlements.lead': 'Bitta mijozning obunasi va u haqli bo‘lgan hamma narsa — har bir qiymat qayerdan kelgani bilan.',
+  'entitlements.lead':
+    'Bitta mijozning obunasi va u haqli bo‘lgan hamma narsa — har bir qiymat qayerdan kelgani bilan.',
   'tenantPicker.label': 'Mijoz',
   'tenantPicker.placeholder': 'Mijozni tanlang',
-  'tenantPicker.failed': 'Mijozlar ro‘yxatini yuklab bo‘lmadi. Qayta urinish uchun sahifani yangilang.',
-  'alertsIncidents.lead': 'Platformaning har bir ogohlantirishi hal qilinmaguncha saqlanadi. Ochiq ogohlantirish qayta kelsa, yangi qator emas, hisoblagich oshadi.',
+  'tenantPicker.failed':
+    'Mijozlar ro‘yxatini yuklab bo‘lmadi. Qayta urinish uchun sahifani yangilang.',
+  'alertsIncidents.lead':
+    'Platformaning har bir ogohlantirishi hal qilinmaguncha saqlanadi. Ochiq ogohlantirish qayta kelsa, yangi qator emas, hisoblagich oshadi.',
   'alertsIncidents.showResolved': 'Yopilganlarini ko‘rsatish',
   'alertsIncidents.empty': 'Ochiq hodisalar yo‘q.',
   'alertsIncidents.class.CONTROL_BAND_ESCALATED': 'Platforma ko‘rsatkichi chegaradan chiqdi',
@@ -709,12 +847,14 @@ export const uzLatn: Messages = {
   'alertsIncidents.resolve': 'Yopish',
   'alertsIncidents.ackNote': 'Nima qilyapsiz',
   'alertsIncidents.resolveNote': 'Nima qilindi',
-  'webhookDeliveries.lead': 'To‘lov provayderlarining HorecaOS’ga har bir chaqiruvi, yangisi yuqorida: imzo to‘g‘rimi, nima javob berdik va to‘lovga mos keldimi.',
+  'webhookDeliveries.lead':
+    'To‘lov provayderlarining HorecaOS’ga har bir chaqiruvi, yangisi yuqorida: imzo to‘g‘rimi, nima javob berdik va to‘lovga mos keldimi.',
   'webhookDeliveries.provider': 'Provayder',
   'webhookDeliveries.allProviders': 'Barcha provayderlar',
   'webhookDeliveries.invalidOnly': 'Faqat imzosi noto‘g‘rilar',
   'webhookDeliveries.empty': 'Chaqiruvlar qayd etilmagan.',
-  'webhookDeliveries.invalidWarning': 'Ulardan {count} tasining imzosi noto‘g‘ri: kimdir sinayapti yoki bir tomon kalitni almashtirmagan.',
+  'webhookDeliveries.invalidWarning':
+    'Ulardan {count} tasining imzosi noto‘g‘ri: kimdir sinayapti yoki bir tomon kalitni almashtirmagan.',
   'webhookDeliveries.column.received': 'Qabul qilingan',
   'webhookDeliveries.column.call': 'Chaqiruv',
   'webhookDeliveries.column.reference': 'Provayderdagi raqam',
@@ -723,7 +863,8 @@ export const uzLatn: Messages = {
   'webhookDeliveries.signature.valid': 'To‘g‘ri',
   'webhookDeliveries.signature.invalid': 'Noto‘g‘ri',
   'webhookDeliveries.unmatched': 'mos to‘lov yo‘q',
-  'errorTaxonomy.lead': 'Barcha nosozliklar tasniflanadigan toifalar: har biri nimani anglatadi, nima qilish kerak va hozir har birida nechta xabar bor.',
+  'errorTaxonomy.lead':
+    'Barcha nosozliklar tasniflanadigan toifalar: har biri nimani anglatadi, nima qilish kerak va hozir har birida nechta xabar bor.',
   'errorTaxonomy.retried': 'o‘zi qayta uriniladi',
   'errorTaxonomy.notRetried': 'odam kerak',
   'errorTaxonomy.reconcileFirst': 'avval provayderni tekshirish',
@@ -731,36 +872,55 @@ export const uzLatn: Messages = {
   'errorTaxonomy.counts': '{dead} odamni kutmoqda · {waiting} qayta urinilmoqda',
   'errorTaxonomy.openDeadLetters': 'ochish',
   'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.name': 'Infratuzilmamizdagi uzilish',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning': 'Taym-aut yoki broker yoki ma’lumotlar bazasi qisqa vaqt ishlamagan.',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action': 'Takrorlanmasa, hech narsa: platforma o‘zi qayta urinadi.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning':
+    'Taym-aut yoki broker yoki ma’lumotlar bazasi qisqa vaqt ishlamagan.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action':
+    'Takrorlanmasa, hech narsa: platforma o‘zi qayta urinadi.',
   'errorTaxonomy.TRANSIENT_PROVIDER.name': 'Provayder vaqtincha ishlamayapti',
-  'errorTaxonomy.TRANSIENT_PROVIDER.meaning': 'Provayder 429 yoki 5xx qaytardi yoki vaqtincha o‘chirilgan.',
-  'errorTaxonomy.TRANSIENT_PROVIDER.action': 'Kutish — qayta urinadi. Cho‘zilsa, provayder holatini tekshirish.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.meaning':
+    'Provayder 429 yoki 5xx qaytardi yoki vaqtincha o‘chirilgan.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.action':
+    'Kutish — qayta urinadi. Cho‘zilsa, provayder holatini tekshirish.',
   'errorTaxonomy.CONTRACT_UNSUPPORTED.name': 'Tushunarsiz xabar',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning': 'Bu yig‘maga noma’lum hodisa turi yoki versiyasi. Qayta urinish yordam bermaydi.',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.action': 'Uni biladigan versiyani joylash va qayta urinish; yoki bizniki bo‘lmasa yopish.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning':
+    'Bu yig‘maga noma’lum hodisa turi yoki versiyasi. Qayta urinish yordam bermaydi.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.action':
+    'Uni biladigan versiyani joylash va qayta urinish; yoki bizniki bo‘lmasa yopish.',
   'errorTaxonomy.PAYLOAD_INVALID.name': 'Buzilgan xabar',
-  'errorTaxonomy.PAYLOAD_INVALID.meaning': 'Majburiy ma’lumot yo‘q yoki o‘sha xabar boshqa tarkib bilan kelgan.',
-  'errorTaxonomy.PAYLOAD_INVALID.action': 'Yuboruvchini topib tuzatish; bu xabarni sabab bilan yopish.',
+  'errorTaxonomy.PAYLOAD_INVALID.meaning':
+    'Majburiy ma’lumot yo‘q yoki o‘sha xabar boshqa tarkib bilan kelgan.',
+  'errorTaxonomy.PAYLOAD_INVALID.action':
+    'Yuboruvchini topib tuzatish; bu xabarni sabab bilan yopish.',
   'errorTaxonomy.DOMAIN_REJECTED.name': 'Qoidalar bo‘yicha rad etilgan',
-  'errorTaxonomy.DOMAIN_REJECTED.meaning': 'U qoidani buzardi yoki o‘zgartiradigan narsa allaqachon o‘zgargan.',
-  'errorTaxonomy.DOMAIN_REJECTED.action': 'Odatda qayta qilish shart emas: xatoni o‘qib, xulosa bilan yopish.',
+  'errorTaxonomy.DOMAIN_REJECTED.meaning':
+    'U qoidani buzardi yoki o‘zgartiradigan narsa allaqachon o‘zgargan.',
+  'errorTaxonomy.DOMAIN_REJECTED.action':
+    'Odatda qayta qilish shart emas: xatoni o‘qib, xulosa bilan yopish.',
   'errorTaxonomy.AUTHORIZATION_REJECTED.name': 'Rad etildi: noto‘g‘ri mijoz yoki kirish',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning': 'Xabar huquqi bo‘lmagan mijoz, joy yoki xizmat hisobini ko‘rsatgan.',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.action': 'Xavfsizlik masalasi deb qarash: qayta urinishdan oldin sababini aniqlash.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning':
+    'Xabar huquqi bo‘lmagan mijoz, joy yoki xizmat hisobini ko‘rsatgan.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.action':
+    'Xavfsizlik masalasi deb qarash: qayta urinishdan oldin sababini aniqlash.',
   'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.name': 'Provayder bajargan bo‘lishi mumkin',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning': 'Provayder qabul qilgan bo‘lishi mumkin; ko‘r-ko‘rona takror pulni ikki marta yechishi mumkin.',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action': 'Avval provayderda tekshirish, so‘ng dalil bilan qayta urinish yoki yopish.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning':
+    'Provayder qabul qilgan bo‘lishi mumkin; ko‘r-ko‘rona takror pulni ikki marta yechishi mumkin.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action':
+    'Avval provayderda tekshirish, so‘ng dalil bilan qayta urinish yoki yopish.',
   'errorTaxonomy.UNKNOWN.name': 'Tasniflanmagan',
-  'errorTaxonomy.UNKNOWN.meaning': 'Sabab platforma ishonch bilan tasniflaydigan turlarga kirmaydi.',
-  'errorTaxonomy.UNKNOWN.action': 'Xato matnini o‘qish; qonuniyat bo‘lsa, unga alohida toifa kerak.',
-  'sandbox.lead': 'Restoran unga bog‘liq bo‘lishidan oldin adapterni provayderning sinov manzilida tekshiring: sinov muhitiga ulangan barcha ulanishlar va jonli ulanishdagi kabi aloqa tekshiruvi.',
+  'errorTaxonomy.UNKNOWN.meaning':
+    'Sabab platforma ishonch bilan tasniflaydigan turlarga kirmaydi.',
+  'errorTaxonomy.UNKNOWN.action':
+    'Xato matnini o‘qish; qonuniyat bo‘lsa, unga alohida toifa kerak.',
+  'sandbox.lead':
+    'Restoran unga bog‘liq bo‘lishidan oldin adapterni provayderning sinov manzilida tekshiring: sinov muhitiga ulangan barcha ulanishlar va jonli ulanishdagi kabi aloqa tekshiruvi.',
   'sandbox.environments.title': 'Sinov manzillari',
   'sandbox.environments.empty': 'Hech bir provayderning tasdiqlangan sinov manzili yo‘q.',
   'sandbox.installations.title': 'Sinov muhitidagi ulanishlar',
-  'sandbox.installations.empty': 'Sinov manzillariga hech narsa ulanmagan. Sinov mijozi uchun «Ulanishlar» bo‘limida ulang.',
+  'sandbox.installations.empty':
+    'Sinov manzillariga hech narsa ulanmagan. Sinov mijozi uchun «Ulanishlar» bo‘limida ulang.',
   'sandbox.column.endpoint': 'Manzil',
-  'sandbox.contractNote': 'Yozib olingan provayder trafigini har bir adapter orqali o‘tkazish shartnoma testlariga kiradi va har bir yig‘mada bajariladi.',
+  'sandbox.contractNote':
+    'Yozib olingan provayder trafigini har bir adapter orqali o‘tkazish shartnoma testlariga kiradi va har bir yig‘mada bajariladi.',
   'common.reason': 'Sabab, audit jurnaliga yoziladi',
   'common.cancel': 'Bekor qilish',
   'common.chooseColleague': 'Hamkasbni tanlang',
@@ -804,7 +964,8 @@ export const uzLatn: Messages = {
   'entitlements.column.mode': 'Rejim',
   'entitlements.column.source': 'Manba',
   'entitlements.override.title': 'Vaqtinchalik istisno berish',
-  'entitlements.override.lead': 'Tarifni o‘zgartirmasdan, bu mijoz uchun bitta huquqni belgilangan sanagacha o‘zgartiradi. Har bir istisno muddati tugaydi.',
+  'entitlements.override.lead':
+    'Tarifni o‘zgartirmasdan, bu mijoz uchun bitta huquqni belgilangan sanagacha o‘zgartiradi. Har bir istisno muddati tugaydi.',
   'entitlements.override.key': 'Huquq kaliti',
   'entitlements.override.limit': 'Yangi chegara',
   'entitlements.override.validUntil': 'Amal qilish muddati',
@@ -821,24 +982,29 @@ export const uzLatn: Messages = {
   'entitlements.start.trialDays': 'Sinov kunlari (ixtiyoriy)',
   'entitlements.start.submit': 'Obunani boshlash',
   'entitlements.start.done': 'Obuna boshlandi.',
-  'entitlements.start.noPlans': 'Mijozni ulash uchun amaldagi tarif versiyasi yo‘q. Avval uni tariflar katalogida faollashtiring.',
+  'entitlements.start.noPlans':
+    'Mijozni ulash uchun amaldagi tarif versiyasi yo‘q. Avval uni tariflar katalogida faollashtiring.',
   'entitlements.transition.title': 'Holatni o‘zgartirish',
   'entitlements.transition.to': 'Yangi holat',
   'entitlements.transition.choose': 'Holatni tanlang',
-  'entitlements.transition.suspendHint': 'Obuna to‘xtatilganda mijoz tarif hisoblaydigan narsalardan hech birini qo‘sha olmaydi. Hech narsa o‘chirilmaydi.',
+  'entitlements.transition.suspendHint':
+    'Obuna to‘xtatilganda mijoz tarif hisoblaydigan narsalardan hech birini qo‘sha olmaydi. Hech narsa o‘chirilmaydi.',
   'entitlements.transition.suspensionReason': 'To‘xtatish sababi (obunada ko‘rinadi)',
   'entitlements.transition.cancelAt': 'Tugash sanasi',
-  'entitlements.transition.terminalWarning': 'Bu obunani butunlay tugatadi. Davom ettirish uchun yangi obuna boshlash kerak.',
+  'entitlements.transition.terminalWarning':
+    'Bu obunani butunlay tugatadi. Davom ettirish uchun yangi obuna boshlash kerak.',
   'entitlements.transition.submit': 'Holatni o‘zgartirish',
   'entitlements.transition.done': 'Obuna holati: {status}.',
-  'entitlements.transition.ended': 'Bu obuna tugagan. Mijozni yana tarifga ulash uchun yangisini boshlang.',
+  'entitlements.transition.ended':
+    'Bu obuna tugagan. Mijozni yana tarifga ulash uchun yangisini boshlang.',
   'entitlements.planSays': 'tarif bo‘yicha: {mode}',
   'entitlements.usage.open': 'Bu mijozning foydalanishini ochish →',
   'entitlements.override.chooseKey': 'Huquqni tanlang',
   'entitlements.override.feature': 'Funksiya',
 
   'fiscalization.title': 'Fiskalizatsiya',
-  'fiscalization.lead': 'Bitta mijoz uchun fiskal chek xatolari va auditda qayd etiladigan qayta urinish.',
+  'fiscalization.lead':
+    'Bitta mijoz uchun fiskal chek xatolari va auditda qayd etiladigan qayta urinish.',
   'fiscalization.empty': 'Bu mijoz uchun hech narsa bloklanmagan.',
   'fiscalization.allTenants': 'Barcha mijozlar. Ro‘yxatni toraytirish uchun mijozni tanlang.',
   'fiscalization.emptyEverywhere': 'Hech bir chek hech qayerda odamni kutmayapti.',
@@ -853,8 +1019,10 @@ export const uzLatn: Messages = {
   'fiscalization.retry.result': 'Muvaffaqiyatli: {succeeded}, muvaffaqiyatsiz: {failed}.',
 
   'fiscalReference.title': 'Fiskal ma’lumotnoma',
-  'fiscalReference.lead': 'Import qilingan ИКПУ/MXIK mahsulot tasnifi ma’lumotnomasi, kod yoki nom bo‘yicha qidiruv.',
-  'fiscalReference.notLoaded': 'Rasmiy ИКПУ/MXIK ro‘yxati hali import qilinmagan. Bu amalga oshgunicha qidiruv hech narsa topmaydi.',
+  'fiscalReference.lead':
+    'Import qilingan ИКПУ/MXIK mahsulot tasnifi ma’lumotnomasi, kod yoki nom bo‘yicha qidiruv.',
+  'fiscalReference.notLoaded':
+    'Rasmiy ИКПУ/MXIK ro‘yxati hali import qilinmagan. Bu amalga oshgunicha qidiruv hech narsa topmaydi.',
   'fiscalReference.query': 'Qidiruv',
   'fiscalReference.empty': 'Mos kelmadi.',
   'fiscalReference.column.code': 'Kod',
@@ -863,7 +1031,8 @@ export const uzLatn: Messages = {
   'fiscalReference.column.packages': 'Standart qadoqlar',
 
   'staff.title': 'Xodimlar va rollar',
-  'staff.lead': 'HorecaOS xodimlari, rollar va mijozlarga biriktirish — shuningdek ikkinchi administrator kutilayotgan huquq yoki faollashtirish bo‘yicha qaror qabul qiladigan navbat.',
+  'staff.lead':
+    'HorecaOS xodimlari, rollar va mijozlarga biriktirish — shuningdek ikkinchi administrator kutilayotgan huquq yoki faollashtirish bo‘yicha qaror qabul qiladigan navbat.',
   'staff.platformGrants.title': 'Platforma darajasidagi huquqlar',
   'staff.platformGrants.empty': 'Hozircha platforma darajasidagi huquqlar yo‘q.',
   'staff.column.principal': 'Subyekt',
@@ -876,7 +1045,8 @@ export const uzLatn: Messages = {
   'staff.grant.role': 'Rol kodi',
   'staff.grant.action': 'Berish',
   'staff.grant.outcome.granted': 'Berildi.',
-  'staff.grant.outcome.awaitingApproval': 'Ikkinchi imzo kutilmoqda — bu huquq siyosat bilan tartibga solinadi.',
+  'staff.grant.outcome.awaitingApproval':
+    'Ikkinchi imzo kutilmoqda — bu huquq siyosat bilan tartibga solinadi.',
   'staff.tenantGrant.title': 'Mijoz doirasida rol berish',
   'staff.tenantGrant.lead': 'Subyektni bitta mijoz, brend yoki joy bilan cheklaydi.',
   'staff.tenantGrant.success': 'Berildi.',
@@ -896,14 +1066,16 @@ export const uzLatn: Messages = {
   'staff.grant.location': 'Joy',
   'staff.grant.chooseLocation': 'Joyni tanlang',
   'staff.approvals.title': 'Kutilayotgan qarorlar',
-  'staff.approvals.lead': 'Bitta mijoz uchun ikkinchi imzoni kutayotgan narsalar, jumladan ulashni faollashtirish.',
+  'staff.approvals.lead':
+    'Bitta mijoz uchun ikkinchi imzoni kutayotgan narsalar, jumladan ulashni faollashtirish.',
   'staff.approvals.decisionReason': 'Qaror sababi (tasdiqlash yoki rad etish uchun majburiy)',
   'staff.approvals.column.action': 'Amal',
   'staff.approvals.column.threshold': 'Chegara',
   'staff.approvals.column.requestedBy': 'So‘ragan',
   'staff.approvals.approve': 'Tasdiqlash',
   'staff.approvals.decline': 'Rad etish',
-  'staff.approvals.cannotDecideOwn': 'Buni siz so‘ragansiz — qarorni boshqa kishi qabul qilishi kerak.',
+  'staff.approvals.cannotDecideOwn':
+    'Buni siz so‘ragansiz — qarorni boshqa kishi qabul qilishi kerak.',
   'staff.approvals.empty': 'Bu mijoz uchun hech narsa qaror kutmayapti.',
 
   'capabilityRegistry.title': 'Huquqlar reyestri',
@@ -914,7 +1086,8 @@ export const uzLatn: Messages = {
   'capabilityRegistry.column.action': 'Amal',
 
   'secrets.title': 'Maxfiy ma’lumotlar',
-  'secrets.lead': 'Mijozlar bo‘yicha provayder hisob ma’lumotlari va ular oxirgi marta qachon yangilangani. Qiymatlar hech qachon ko‘rsatilmaydi.',
+  'secrets.lead':
+    'Mijozlar bo‘yicha provayder hisob ma’lumotlari va ular oxirgi marta qachon yangilangani. Qiymatlar hech qachon ko‘rsatilmaydi.',
   'secrets.empty': 'Hozircha ulanishlar yo‘q.',
   'secrets.column.credential': 'Hisob ma’lumoti',
   'secrets.column.rotated': 'Oxirgi yangilanish',
@@ -922,7 +1095,8 @@ export const uzLatn: Messages = {
   'secrets.notSet': 'O‘rnatilmagan',
 
   'auditLog.title': 'Audit jurnali',
-  'auditLog.lead': 'Bitta mijoz uchun platforma amallari, shu jumladan inson bo‘lmagan ishtirokchilar.',
+  'auditLog.lead':
+    'Bitta mijoz uchun platforma amallari, shu jumladan inson bo‘lmagan ishtirokchilar.',
   'auditLog.empty': 'Bu mijoz uchun audit hodisalari yo‘q.',
   'auditLog.column.when': 'Qachon',
   'auditLog.column.action': 'Amal',
@@ -952,16 +1126,17 @@ export const uzLatn: Messages = {
   'auditLog.detail.change': 'Nima o‘zgardi',
   'auditLog.detail.noChange': 'O‘zgarishlar hujjati yozilmagan.',
 
-
   'referenceData.title': 'Ma’lumotnoma',
-  'referenceData.lead': 'Platforma ishlaydigan mamlakatlar, konsollar tillari, har bir mamlakat bayramlari va buyurtmalar hisoblanadigan vaqt oraliqlari.',
+  'referenceData.lead':
+    'Platforma ishlaydigan mamlakatlar, konsollar tillari, har bir mamlakat bayramlari va buyurtmalar hisoblanadigan vaqt oraliqlari.',
   'referenceData.countries': 'Davlatlar',
   'referenceData.column.country': 'Davlat',
   'referenceData.column.currency': 'Standart valyuta',
   'referenceData.column.timezone': 'Standart vaqt mintaqasi',
   'referenceData.locales': 'Tillar',
   'referenceData.holidays': 'Bayram kunlari',
-  'referenceData.holidaysNote': 'Belgilangan sanalar har yili takrorlanadi. Oy taqvimi bo‘yicha o‘zgaradigan bayramlar, masalan Ramazon va Qurbon hayit, e’lon qilingach o‘sha yil uchun kiritiladi.',
+  'referenceData.holidaysNote':
+    'Belgilangan sanalar har yili takrorlanadi. Oy taqvimi bo‘yicha o‘zgaradigan bayramlar, masalan Ramazon va Qurbon hayit, e’lon qilingach o‘sha yil uchun kiritiladi.',
   'referenceData.holiday.add': 'Bayram qo‘shish',
   'referenceData.holiday.name': 'Nomi',
   'referenceData.holiday.everyYear': 'har yili',
@@ -969,12 +1144,14 @@ export const uzLatn: Messages = {
   'referenceData.holiday.remove': 'O‘chirish',
   'referenceData.holiday.none': 'Bayramlar kiritilmagan.',
   'referenceData.sla': 'Buyurtma vaqti oraliqlari',
-  'referenceData.slaNote': 'Har bir buyurtma berilgandan topshirilgunicha shu oraliqlardan biriga tushadi. Oraliqlar reliz bo‘yicha belgilangan ({version}-to‘plam), shuning uchun o‘tgan grafiklar ma’nosini yo‘qotmaydi.',
+  'referenceData.slaNote':
+    'Har bir buyurtma berilgandan topshirilgunicha shu oraliqlardan biriga tushadi. Oraliqlar reliz bo‘yicha belgilangan ({version}-to‘plam), shuning uchun o‘tgan grafiklar ma’nosini yo‘qotmaydi.',
   'referenceData.bucket.range': '{from} dan {to} daqiqagacha',
   'referenceData.bucket.over': '{from} daqiqa va undan ko‘p',
 
   'migrationRuns.title': 'Migratsiya jarayonlari',
-  'migrationRuns.lead': 'Mijozlarni eski tizimdan ko‘chirish. Dastur qamrovlardan iborat — har biri bitta mijoz, brend yoki filial va bitta funksiya — va har bir qamrov eski tizim chiqarilgunga qadar bir xil yo‘ldan o‘tadi.',
+  'migrationRuns.lead':
+    'Mijozlarni eski tizimdan ko‘chirish. Dastur qamrovlardan iborat — har biri bitta mijoz, brend yoki filial va bitta funksiya — va har bir qamrov eski tizim chiqarilgunga qadar bir xil yo‘ldan o‘tadi.',
   'migrationRuns.program.name': 'Dastur nomi',
   'migrationRuns.program.source': 'Manba muhiti',
   'migrationRuns.program.target': 'Maqsad muhiti',
@@ -1016,7 +1193,8 @@ export const uzLatn: Messages = {
   'migrationRuns.move.done': 'Qamrov o‘tkazildi: {state}.',
   'migrationRuns.move.resume': 'Davom ettirish',
   'migrationRuns.move.resumed': 'Qamrov to‘xtagan joyidan davom ettirildi.',
-  'migrationRuns.move.rollbackWarning': 'Orqaga qaytarish yozuvni eski tizimga qaytaradi. HorecaOS nusxasi saqlanadi va yangilanishda davom etadi.',
+  'migrationRuns.move.rollbackWarning':
+    'Orqaga qaytarish yozuvni eski tizimga qaytaradi. HorecaOS nusxasi saqlanadi va yangilanishda davom etadi.',
   'migrationRuns.move.toCutover': 'Tayyor: o‘tish haqidagi qaror — nazorat ro‘yxatida →',
   'migrationRuns.runs.title': 'Ishga tushirishlar',
   'migrationRuns.runs.empty': 'Bu qamrov bo‘yicha hali ishga tushirishlar yo‘q.',
@@ -1031,7 +1209,8 @@ export const uzLatn: Messages = {
   'migrationRuns.run.start': 'Ishga tushirish',
   'migrationRuns.run.finish': 'Yakunlash',
   'migrationRuns.run.finishSubmit': 'Ishga tushirishni yakunlash',
-  'migrationRuns.run.finishHint': 'Shundan so‘ng ko‘rsatkichlar qat’iylashadi; tuzatish — yangi «Tuzatish» ishga tushirishi.',
+  'migrationRuns.run.finishHint':
+    'Shundan so‘ng ko‘rsatkichlar qat’iylashadi; tuzatish — yangi «Tuzatish» ishga tushirishi.',
   'migrationRuns.run.checksum': 'Natijaning SHA-256 (ixtiyoriy)',
   'migrationRuns.run.finished': 'Ishga tushirish yakunlandi: {status}.',
   'migrationRuns.quarantine.title': 'Qaror uchun chetga olingan',
@@ -1087,12 +1266,16 @@ export const uzLatn: Messages = {
   'migration.resolution.ACCEPTED_NOT_MIGRATABLE': 'Ko‘chirib bo‘lmaydi deb qabul qilindi',
 
   'globalLookup.title': 'Global qidiruv',
-  'globalLookup.lead': 'Har qanday identifikatorni kiriting — u nima va kimniki ekanini barcha mijozlar bo‘yicha toping.',
+  'globalLookup.lead':
+    'Har qanday identifikatorni kiriting — u nima va kimniki ekanini barcha mijozlar bo‘yicha toping.',
   'globalLookup.search': 'Qidirish',
-  'globalLookup.placeholder': 'Id, buyurtma raqami, kuryer kodi, provayderdagi raqam yoki mijoz nomi',
-  'globalLookup.hint': 'Mijoz nomlaridan tashqari mosliklar aniq. Xaridorlar va kuryerlar faqat id bo‘yicha ko‘rsatiladi; batafsil — mijoz sahifasida.',
+  'globalLookup.placeholder':
+    'Id, buyurtma raqami, kuryer kodi, provayderdagi raqam yoki mijoz nomi',
+  'globalLookup.hint':
+    'Mijoz nomlaridan tashqari mosliklar aniq. Xaridorlar va kuryerlar faqat id bo‘yicha ko‘rsatiladi; batafsil — mijoz sahifasida.',
   'globalLookup.phone.title': 'Mijozni telefon bo‘yicha topish',
-  'globalLookup.phone.lead': 'Qaysi mijozlarda bu raqam xaridor sifatida bor. Javob — mijoz va hisob raqami, ism emas; qidiruv sababingiz bilan yoziladi.',
+  'globalLookup.phone.lead':
+    'Qaysi mijozlarda bu raqam xaridor sifatida bor. Javob — mijoz va hisob raqami, ism emas; qidiruv sababingiz bilan yoziladi.',
   'globalLookup.phone.number': 'Telefon raqami',
   'globalLookup.phone.none': 'Hech bir mijozda bu raqam yo‘q ({tenants} ta tekshirildi).',
   'globalLookup.phone.account': 'hisob {id}',
@@ -1120,7 +1303,6 @@ export const uzLatn: Messages = {
   'globalLookup.matched.PARTNER_REFERENCE': 'Hamkordagi buyurtma raqami',
   'globalLookup.notFound': 'Aniq mos keladigan narsa yo‘q.',
 
-
   'tenantIdentity.title': 'Identifikatsiya va realm',
   'tenantIdentity.lead': 'Ushbu mijozning kirish tashkilotiga ulanishi.',
   'tenantIdentity.organization.title': 'Keycloak tashkiloti',
@@ -1128,15 +1310,18 @@ export const uzLatn: Messages = {
   'tenantIdentity.status': 'Mijoz holati',
   'tenantIdentity.notLinked': 'Bu mijozga hali Keycloak tashkiloti ulanmagan.',
   'tenantIdentity.link.title': 'Mavjud tashkilotni ulash',
-  'tenantIdentity.link.lead': 'Odatda tashkilotni ulanish jarayoni yaratadi va ulaydi. Uni qo‘lda faqat kirish xizmatida allaqachon mavjud bo‘lsa ulang — keyin ulanishni o‘zgartirib bo‘lmaydi.',
+  'tenantIdentity.link.lead':
+    'Odatda tashkilotni ulanish jarayoni yaratadi va ulaydi. Uni qo‘lda faqat kirish xizmatida allaqachon mavjud bo‘lsa ulang — keyin ulanishni o‘zgartirib bo‘lmaydi.',
   'tenantIdentity.link.organizationId': 'Kirish xizmatidagi tashkilot identifikatori',
   'tenantIdentity.link.submit': 'Ulash',
   'tenantIdentity.link.submitting': 'Ulanmoqda…',
   'tenantIdentity.link.done': 'Ulandi.',
-  'tenantIdentity.gap': 'Xodimlar va kuryerlar kirish sozlamalari joylashtirishda belgilanadi va bu yerda ko‘rsatilmaydi. HorecaOS va kirish xizmati o‘rtasidagi farqlar audit jurnalida ko‘rinadi.',
+  'tenantIdentity.gap':
+    'Xodimlar va kuryerlar kirish sozlamalari joylashtirishda belgilanadi va bu yerda ko‘rsatilmaydi. HorecaOS va kirish xizmati o‘rtasidagi farqlar audit jurnalida ko‘rinadi.',
 
   'configurationPolicy.title': 'Konfiguratsiya va siyosat',
-  'configurationPolicy.lead': 'Har qanday sozlamani har qanday darajada hisoblang va qiymat qayerdan kelganini ko‘ring.',
+  'configurationPolicy.lead':
+    'Har qanday sozlamani har qanday darajada hisoblang va qiymat qayerdan kelganini ko‘ring.',
   'configurationPolicy.picker.title': 'Kalitni hisoblash',
   'configurationPolicy.picker.key': 'Kalit',
   'configurationPolicy.picker.keyPlaceholder': 'Kalitni tanlang…',
@@ -1166,9 +1351,12 @@ export const uzLatn: Messages = {
     'Bu kalit ro‘yxatga olingan, ammo ushbu build hali uning saqlangan qiymatini hech qayerda o‘qimaydi. Bu yerda yozish qayd etiladi va audit qilinadi, lekin ishlayotgan xatti-harakatni o‘zgartirmaydi, shuning uchun bu ekran uni faqat o‘qish uchun ko‘rsatadi.',
   'configurationPolicy.write.notSettableAtScope':
     'Bu kalitni shu darajada belgilab bo‘lmaydi. Belgilash mumkin bo‘lgan darajalar: {scopes}.',
-  'configurationPolicy.write.scopeBanner': 'Siz {code} kalitini {scope} darajasida belgilamoqchisiz.',
-  'configurationPolicy.write.note.trackRetentionFloor': 'Agar bu sozlamaning saqlangan qiymati hisob-kitob davri va nizolar oynasi yig‘indisidan qisqa bo‘lsa, platforma ishga tushmaydi. O‘zgarish darhol kuchga kiradi; faqat keyingi qayta ishga tushirish xavf ostida.',
-  'configurationPolicy.write.note.auditRetention': 'Huquqiy tasdiq kutilayotgan ikkita audit saqlash muddatidan biri. Uni kamaytirish dalillar arxivlanishdan oldin himoyalanadigan vaqtni qisqartiradi.',
+  'configurationPolicy.write.scopeBanner':
+    'Siz {code} kalitini {scope} darajasida belgilamoqchisiz.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'Agar bu sozlamaning saqlangan qiymati hisob-kitob davri va nizolar oynasi yig‘indisidan qisqa bo‘lsa, platforma ishga tushmaydi. O‘zgarish darhol kuchga kiradi; faqat keyingi qayta ishga tushirish xavf ostida.',
+  'configurationPolicy.write.note.auditRetention':
+    'Huquqiy tasdiq kutilayotgan ikkita audit saqlash muddatidan biri. Uni kamaytirish dalillar arxivlanishdan oldin himoyalanadigan vaqtni qisqartiradi.',
   'configurationPolicy.write.explicitNull': 'Aniq null (shu yerda ataylab belgilanmagan)',
   'configurationPolicy.write.value': 'Qiymat',
   'configurationPolicy.write.invalidValue': 'Ushbu kalit turiga mos qiymat kiriting.',
@@ -1180,8 +1368,10 @@ export const uzLatn: Messages = {
     'Saqlandi. Yuqoridagi natija endi platforma ushbu yozuvdan keyin nimani hisoblashini ko‘rsatadi.',
 
   'contractsVersions.title': 'Shartnomalar va versiyalar',
-  'contractsVersions.lead': 'Har bir provayder ulanishlari qaysi adapter versiyasida ishlaydi va bu yig‘ma e’lon qila oladigan barcha hodisalar sxema versiyasi bilan.',
-  'contractsVersions.gap': 'Eskirgan versiyalar ko‘rsatilmagan: hali birorta adapter chiqarilmagan.',
+  'contractsVersions.lead':
+    'Har bir provayder ulanishlari qaysi adapter versiyasida ishlaydi va bu yig‘ma e’lon qila oladigan barcha hodisalar sxema versiyasi bilan.',
+  'contractsVersions.gap':
+    'Eskirgan versiyalar ko‘rsatilmagan: hali birorta adapter chiqarilmagan.',
   'contractsVersions.column.event': 'Hodisa',
   'contractsVersions.column.module': 'Ishlab chiqaruvchi modul',
   'contractsVersions.column.topic': 'Mavzu (topic)',
@@ -1196,11 +1386,9 @@ export const uzLatn: Messages = {
   'contractsVersions.adapters.unchecked': 'hali tekshirilmagan',
   'contractsVersions.events.title': 'Hodisa shartnomalari',
 
-
-
-
   'planCatalog.title': 'Tariflar katalogi',
-  'planCatalog.lead': 'Barcha tariflar va ularning barcha versiyalari. Qoralama uni muallifdan boshqa kishi faollashtirgandagina kuchga kiradi; amaldagi versiya boshqa o‘zgarmaydi.',
+  'planCatalog.lead':
+    'Barcha tariflar va ularning barcha versiyalari. Qoralama uni muallifdan boshqa kishi faollashtirgandagina kuchga kiradi; amaldagi versiya boshqa o‘zgarmaydi.',
   'planCatalog.empty': 'Hali tariflar ro‘yxatga olinmagan.',
   'planCatalog.column.price': 'Narx',
   'planCatalog.column.billingPeriod': 'To‘lov davri',
@@ -1217,12 +1405,14 @@ export const uzLatn: Messages = {
   'planCatalog.draft.trialDays': 'Sinov kunlari',
   'planCatalog.draft.deposit': 'Ulanish depoziti',
   'planCatalog.draft.discount': '{months} oylik muddat, chegirma %',
-  'planCatalog.draft.termsInvalid': 'Sinov — 1 dan 90 kungacha, depozit — summa, muddat chegirmasi — 0,01 dan 50 % gacha, faqat oylik tarif uchun.',
+  'planCatalog.draft.termsInvalid':
+    'Sinov — 1 dan 90 kungacha, depozit — summa, muddat chegirmasi — 0,01 dan 50 % gacha, faqat oylik tarif uchun.',
   'entitlements.start.term': 'Muddat',
   'entitlements.start.monthToMonth': 'Oyma-oy',
   'entitlements.start.termOption': '{months} oy, {percent}% chegirma',
   'entitlements.subscription.termMonths': '{months} oy',
-  'moduleCatalog.lead': 'Tariflardan alohida sotiladigan modullar, har biri o‘z birligida: mijoz, brend, filial, dona (masalan, kiosk) yoki bir martalik. Modul tarifda yo‘q funksiyalarni yoqishi mumkin. Bir kishi tuzadi, boshqasi sotuvga chiqaradi, shundan keyin narx o‘zgarmaydi.',
+  'moduleCatalog.lead':
+    'Tariflardan alohida sotiladigan modullar, har biri o‘z birligida: mijoz, brend, filial, dona (masalan, kiosk) yoki bir martalik. Modul tarifda yo‘q funksiyalarni yoqishi mumkin. Bir kishi tuzadi, boshqasi sotuvga chiqaradi, shundan keyin narx o‘zgarmaydi.',
   'moduleCatalog.empty': 'Hali modullar yo‘q.',
   'moduleCatalog.draft.open': 'Modul tuzish',
   'moduleCatalog.draft.title': 'Yangi modul',
@@ -1264,7 +1454,8 @@ export const uzLatn: Messages = {
   'moduleCatalog.tenant.quantity': 'Nechta',
   'moduleCatalog.tenant.add': 'Ulash',
   'moduleCatalog.tenant.added': '{code} ulandi.',
-  'statements.lead': 'Mijoz bir oy uchun tarif va modullar bo‘yicha qancha qarzdor, soliqsiz: tarif, har bir modul o‘z birligida va tarifga kirganidan ortiq foydalanish. Istalgan oyni oldindan ko‘rish mumkin; oy tugagach chiqariladi va buxgalteriyaga eksport qilinadi. Noto‘g‘ri hisob bekor qilinib, qayta chiqariladi.',
+  'statements.lead':
+    'Mijoz bir oy uchun tarif va modullar bo‘yicha qancha qarzdor, soliqsiz: tarif, har bir modul o‘z birligida va tarifga kirganidan ortiq foydalanish. Istalgan oyni oldindan ko‘rish mumkin; oy tugagach chiqariladi va buxgalteriyaga eksport qilinadi. Noto‘g‘ri hisob bekor qilinib, qayta chiqariladi.',
   'statements.preview.title': 'Oyni oldindan ko‘rish',
   'statements.preview.month': 'Oy',
   'statements.preview.nothing': 'Bu oy uchun hisoblanadigan narsa yo‘q.',
@@ -1285,7 +1476,8 @@ export const uzLatn: Messages = {
   'statements.status.ISSUED': 'Chiqarilgan',
   'statements.status.VOID': 'Bekor qilingan',
   'statements.issue.notEnded': 'Oy hali tugamagan; tugagach chiqarish mumkin.',
-  'statements.issue.already': 'Bu oy uchun hisob allaqachon bor. Yangisini chiqarish uchun uni bekor qiling.',
+  'statements.issue.already':
+    'Bu oy uchun hisob allaqachon bor. Yangisini chiqarish uchun uni bekor qiling.',
   'statements.issue.submit': '{month} uchun hisobni chiqarish',
   'statements.issue.done': '{number} hisobi chiqarildi.',
   'statements.issued.title': 'Chiqarilgan hisoblar',
@@ -1295,12 +1487,16 @@ export const uzLatn: Messages = {
   'statements.void.submit': 'Hisobni bekor qilish',
   'statements.void.done': '{number} hisobi bekor qilindi.',
   'statements.wallet.title': 'Oldindan to‘langan hamyon',
-  'statements.wallet.body': 'Qilinmagan. Mijozlar HorecaOS’ga qanday to‘lashi va oldindan to‘lov qanday soliqqa tortilishi hali hal qilinmagan, shuning uchun balans, to‘ldirish va kredit muddati yo‘q.',
-  'dunning.lead': 'To‘lovni kechiktirayotgan yoki to‘xtatilgan barcha mijozlar, qancha vaqtdan beri va har bir bosqich nimani cheklaydi. Mijoz o‘z-o‘zidan hech qayerga o‘tmaydi: ikki hafta kechikishdan so‘ng hodisa odamdan qaror qabul qilishni so‘raydi.',
+  'statements.wallet.body':
+    'Qilinmagan. Mijozlar HorecaOS’ga qanday to‘lashi va oldindan to‘lov qanday soliqqa tortilishi hali hal qilinmagan, shuning uchun balans, to‘ldirish va kredit muddati yo‘q.',
+  'dunning.lead':
+    'To‘lovni kechiktirayotgan yoki to‘xtatilgan barcha mijozlar, qancha vaqtdan beri va har bir bosqich nimani cheklaydi. Mijoz o‘z-o‘zidan hech qayerga o‘tmaydi: ikki hafta kechikishdan so‘ng hodisa odamdan qaror qabul qilishni so‘raydi.',
   'dunning.stage.planApplies': 'Tarif va modullardagi hamma narsa ishlaydi.',
   'dunning.stage.planLapses': 'Tarif va modullar amal qilmaydi; funksiyalar standartga qaytadi.',
-  'dunning.stage.additionsBlocked': 'Hech narsa qo‘shib bo‘lmaydi: filial, mahsulot yoki foydalanuvchi. Hech narsa o‘chirilmaydi.',
-  'dunning.review': 'Ikki hafta kechikkan mijoz «Ogohlantirishlar»da hodisa yaratadi va kechikish davom etsa, har ikki haftada yana.',
+  'dunning.stage.additionsBlocked':
+    'Hech narsa qo‘shib bo‘lmaydi: filial, mahsulot yoki foydalanuvchi. Hech narsa o‘chirilmaydi.',
+  'dunning.review':
+    'Ikki hafta kechikkan mijoz «Ogohlantirishlar»da hodisa yaratadi va kechikish davom etsa, har ikki haftada yana.',
   'dunning.empty': 'Kechiktirayotgan mijozlar yo‘q.',
   'dunning.column.stage': 'Bosqich',
   'dunning.column.plan': 'Tarif',
@@ -1322,31 +1518,39 @@ export const uzLatn: Messages = {
   'planCatalog.register.cancel': 'Bekor qilish',
   'planCatalog.register.title': 'Yangi tarif',
   'planCatalog.register.code': 'Kod',
-  'planCatalog.register.codeHint': 'Katta lotin harflari, raqamlar va pastki chiziq, masalan NETWORK. Keyin o‘zgartirib bo‘lmaydi.',
+  'planCatalog.register.codeHint':
+    'Katta lotin harflari, raqamlar va pastki chiziq, masalan NETWORK. Keyin o‘zgartirib bo‘lmaydi.',
   'planCatalog.register.name': 'Nomi',
   'planCatalog.register.submit': 'Ro‘yxatga olish',
-  'planCatalog.register.done': '{code} tarifi ro‘yxatga olindi. Quyida uning birinchi versiyasini tuzing.',
+  'planCatalog.register.done':
+    '{code} tarifi ro‘yxatga olindi. Quyida uning birinchi versiyasini tuzing.',
   'planCatalog.draft.open': 'Yangi versiya tuzish',
   'planCatalog.draft.cancel': 'Yopish',
-  'planCatalog.draft.prefilled': 'v{version} asosida to‘ldirildi. Faqat farqlarni o‘zgartiring; v{version} o‘zi o‘zgarmaydi.',
+  'planCatalog.draft.prefilled':
+    'v{version} asosida to‘ldirildi. Faqat farqlarni o‘zgartiring; v{version} o‘zi o‘zgarmaydi.',
   'planCatalog.draft.first': 'Tarifning birinchi versiyasi.',
   'planCatalog.draft.currency': 'Valyuta',
-  'planCatalog.draft.priceInvalid': 'Narxni butun son sifatida kiriting, kasr qismi faqat u bor valyutalarda.',
+  'planCatalog.draft.priceInvalid':
+    'Narxni butun son sifatida kiriting, kasr qismi faqat u bor valyutalarda.',
   'planCatalog.draft.include': 'Kiritish',
   'planCatalog.draft.feature': 'funksiya',
   'planCatalog.draft.noOverage': 'yo‘q',
-  'planCatalog.draft.linesHint': 'Kiritilmagan kalit hech narsani rad etmaydigan xavfsiz standart qiymatni oladi.',
+  'planCatalog.draft.linesHint':
+    'Kiritilmagan kalit hech narsani rad etmaydigan xavfsiz standart qiymatni oladi.',
   'planCatalog.draft.submit': 'Qoralamani saqlash',
-  'planCatalog.draft.done': '{code} uchun yangi qoralama saqlandi. Uni siz emas, boshqa xodim faollashtirishi kerak.',
+  'planCatalog.draft.done':
+    '{code} uchun yangi qoralama saqlandi. Uni siz emas, boshqa xodim faollashtirishi kerak.',
   'planCatalog.activate.open': 'Faollashtirish…',
-  'planCatalog.activate.warning': 'Faollashtirishni bekor qilib bo‘lmaydi. Bu versiyaning narxi va huquqlari qat’iylashadi va uni mijozlarga taklif qilish mumkin bo‘ladi.',
-  'planCatalog.activate.ownDraft': 'Bu versiyani siz tuzgansiz, shuning uchun uni boshqa xodim faollashtirishi kerak.',
+  'planCatalog.activate.warning':
+    'Faollashtirishni bekor qilib bo‘lmaydi. Bu versiyaning narxi va huquqlari qat’iylashadi va uni mijozlarga taklif qilish mumkin bo‘ladi.',
+  'planCatalog.activate.ownDraft':
+    'Bu versiyani siz tuzgansiz, shuning uchun uni boshqa xodim faollashtirishi kerak.',
   'planCatalog.activate.confirm': 'v{version} ni faollashtirish',
   'planCatalog.activate.done': '{code} v{version} kuchga kirdi.',
 
-
   'usageMetering.title': 'Foydalanishni hisoblash',
-  'usageMetering.lead': 'Bitta mijoz har bir huquq va davr bo‘yicha qancha foydalangani. Raqam tuzatish qo‘shish orqali to‘g‘rilanadi, o‘lchangan qiymat tahrirlanmaydi.',
+  'usageMetering.lead':
+    'Bitta mijoz har bir huquq va davr bo‘yicha qancha foydalangani. Raqam tuzatish qo‘shish orqali to‘g‘rilanadi, o‘lchangan qiymat tahrirlanmaydi.',
   'usageMetering.empty': 'Bu mijoz uchun hisoblangan foydalanish qayd etilmagan.',
   'usageMetering.column.period': 'Davr',
   'usageMetering.column.measured': 'O‘lchangan',
@@ -1355,20 +1559,19 @@ export const uzLatn: Messages = {
   'usageMetering.rebuild.action': 'Jami qiymatlarni jurnal bo‘yicha qayta hisoblash',
   'usageMetering.rebuild.hint': 'Istalgan vaqtda xavfsiz: qayd etilgan harakatlar o‘zgarmaydi.',
   'usageMetering.rebuild.clean': 'Barcha jami qiymatlar jurnalga mos keldi.',
-  'usageMetering.rebuild.diverged': 'Jurnalga mos kelmagan va tuzatilgan jami qiymatlar: {count}. Sababini aniqlash kerak:',
+  'usageMetering.rebuild.diverged':
+    'Jurnalga mos kelmagan va tuzatilgan jami qiymatlar: {count}. Sababini aniqlash kerak:',
   'usageMetering.adjust.open': 'Tuzatish',
-  'usageMetering.adjust.lead': 'Sabab va ikkinchi ism bilan ishorali tuzatish qo‘shadi. O‘lchangan qiymat o‘zgarmaydi.',
+  'usageMetering.adjust.lead':
+    'Sabab va ikkinchi ism bilan ishorali tuzatish qo‘shadi. O‘lchangan qiymat o‘zgarmaydi.',
   'usageMetering.adjust.delta': 'O‘zgarish (masalan, -3 yoki 5)',
   'usageMetering.adjust.source': 'Asos havolasi (ixtiyoriy)',
   'usageMetering.adjust.submit': 'Tuzatishni yozish',
   'usageMetering.adjust.done': 'Tuzatish yozildi.',
 
-
-
-
-
   'accessDebugger.title': 'Kirish huquqini tekshirish',
-  'accessDebugger.lead': 'Inson yoki xizmat nima qila olishi va nima uchun — server har bir so‘rovda qabul qiladigan xuddi shu qaror.',
+  'accessDebugger.lead':
+    'Inson yoki xizmat nima qila olishi va nima uchun — server har bir so‘rovda qabul qiladigan xuddi shu qaror.',
   'accessDebugger.subject': 'Subyekt',
   'accessDebugger.tenantId': 'Mijoz identifikatori (ixtiyoriy)',
   'accessDebugger.brandId': 'Brend identifikatori (ixtiyoriy)',
@@ -1385,10 +1588,9 @@ export const uzLatn: Messages = {
   'accessDebugger.column.role': 'Rol',
   'accessDebugger.column.capabilities': 'Huquqlar',
 
-
-
   'policyDefaults.title': 'Siyosat standart qiymatlari',
-  'policyDefaults.lead': 'Mijozlar ko‘radigan va meros qilib oladigan platforma standart qiymatlari.',
+  'policyDefaults.lead':
+    'Mijozlar ko‘radigan va meros qilib oladigan platforma standart qiymatlari.',
   'policyDefaults.empty': 'Mijozga ko‘rinadigan konfiguratsiya kalitlari e’lon qilinmagan.',
   'policyDefaults.column.key': 'Kalit',
   'policyDefaults.column.default': 'Standart qiymat',
@@ -1396,7 +1598,8 @@ export const uzLatn: Messages = {
   'policyDefaults.column.description': 'Tavsif',
 
   'idMappingExplorer.title': 'ID moslashtirish',
-  'idMappingExplorer.lead': 'Bitta migratsiya doirasi uchun eski tizim identifikatorlari HorecaOS identifikatorlariga qanday mos kelishi.',
+  'idMappingExplorer.lead':
+    'Bitta migratsiya doirasi uchun eski tizim identifikatorlari HorecaOS identifikatorlariga qanday mos kelishi.',
   'idMappingExplorer.entityType': 'Obyekt turi',
   'idMappingExplorer.search': 'Qidirish',
   'idMappingExplorer.empty': 'Bu doira va obyekt turi uchun moslashtirishlar qayd etilmagan.',
@@ -1406,7 +1609,8 @@ export const uzLatn: Messages = {
   'idMappingExplorer.column.created': 'Qayd etilgan',
 
   'dualRunComparison.title': 'Parallel ishga tushirishlarni solishtirish',
-  'dualRunComparison.lead': 'Eski tizim natijalari HorecaOS natijalari bilan yonma-yon, qoida bo‘yicha, bitta moslashtirish jarayoni uchun.',
+  'dualRunComparison.lead':
+    'Eski tizim natijalari HorecaOS natijalari bilan yonma-yon, qoida bo‘yicha, bitta moslashtirish jarayoni uchun.',
   'dualRunComparison.search': 'Qidirish',
   'dualRunComparison.empty': 'Bu jarayon uchun moslashtirish natijalari qayd etilmagan.',
   'dualRunComparison.column.rule': 'Qoida',
@@ -1419,16 +1623,19 @@ export const uzLatn: Messages = {
   'dualRunComparison.noRuns': 'Bu qamrovda hali solishtirish ishga tushirishlari yo‘q.',
 
   'cutoverChecklist.title': 'O‘tish nazorat ro‘yxati',
-  'cutoverChecklist.lead': 'Dasturning har bir qamrovi tayyorligi va qarorning o‘zi: tasdiqlash, rad etish yoki orqaga qaytarish.',
+  'cutoverChecklist.lead':
+    'Dasturning har bir qamrovi tayyorligi va qarorning o‘zi: tasdiqlash, rad etish yoki orqaga qaytarish.',
   'cutoverChecklist.scopes.title': 'Doiralar',
   'cutoverChecklist.column.readiness': 'Tayyorlik',
   'cutoverChecklist.readiness.go': 'Tayyor',
   'cutoverChecklist.readiness.blocked': 'Bloklangan',
   'cutoverChecklist.readiness.pending': 'Jarayonda',
   'cutoverChecklist.decide': 'Qaror qabul qilish…',
-  'cutoverChecklist.decideLead': 'Tasdiqlaganingizda bu qamrov yozuvi HorecaOS’ga o‘tadi. Tekshiruvlar shu lahzada qayta bajariladi.',
+  'cutoverChecklist.decideLead':
+    'Tasdiqlaganingizda bu qamrov yozuvi HorecaOS’ga o‘tadi. Tekshiruvlar shu lahzada qayta bajariladi.',
   'cutoverChecklist.requestedBy': 'So‘ragan',
-  'cutoverChecklist.requestedByHint': 'Bu oynani so‘ragan hamkasb, siz emas: siz qaror qabul qiluvchi sifatida yozilasiz.',
+  'cutoverChecklist.requestedByHint':
+    'Bu oynani so‘ragan hamkasb, siz emas: siz qaror qabul qiluvchi sifatida yozilasiz.',
   'cutoverChecklist.evidence': 'Qaror nimaga asoslanadi',
   'cutoverChecklist.evidenceKey': 'Nomi',
   'cutoverChecklist.evidenceValue': 'Qiymat',
@@ -1439,18 +1646,22 @@ export const uzLatn: Messages = {
   'cutoverChecklist.approved': '{tenant} uchun o‘tish tasdiqlandi.',
   'cutoverChecklist.refused': '{tenant} uchun o‘tish rad etildi; qamrov o‘z joyida qoladi.',
   'cutoverChecklist.rollback': 'Orqaga qaytarish…',
-  'cutoverChecklist.rollbackWarning': 'Orqaga qaytarish yozuvni eski tizimga qaytaradi. HorecaOS nusxasi saqlanadi va yangilanishda davom etadi.',
+  'cutoverChecklist.rollbackWarning':
+    'Orqaga qaytarish yozuvni eski tizimga qaytaradi. HorecaOS nusxasi saqlanadi va yangilanishda davom etadi.',
   'cutoverChecklist.rollbackConfirm': 'Orqaga qaytarish',
   'cutoverChecklist.rolledBack': '{tenant} uchun orqaga qaytarildi: yozuv yana eski tizimda.',
 
   'tenantIssueQueue.title': 'Mijoz muammolari navbati',
-  'tenantIssueQueue.lead': 'Bitta mijozning ochiq muammolari — dalillar va, imkon bo‘lsa, ularni yopadigan qaror bilan.',
+  'tenantIssueQueue.lead':
+    'Bitta mijozning ochiq muammolari — dalillar va, imkon bo‘lsa, ularni yopadigan qaror bilan.',
   'tenantIssueQueue.credentials.title': 'Almashtirish vaqti kelgan hisob ma’lumotlari',
-  'tenantIssueQueue.credentials.rule': 'Provayderlar amal qilish muddatini aytmaydi, shuning uchun {days} kun almashtirilmagan hisob ma’lumotlari almashtirilishi kerak.',
+  'tenantIssueQueue.credentials.rule':
+    'Provayderlar amal qilish muddatini aytmaydi, shuning uchun {days} kun almashtirilmagan hisob ma’lumotlari almashtirilishi kerak.',
   'tenantIssueQueue.credentials.empty': 'Barcha hisob ma’lumotlari yaqinda almashtirilgan.',
   'tenantIssueQueue.credentials.rotated': 'oxirgi marta {days} kun oldin almashtirilgan',
   'tenantIssueQueue.credentials.never': 'almashtirilmagan, {days} kun oldin o‘rnatilgan',
-  'tenantIssueQueue.credentials.replace': 'Hisob ma’lumotlarini «Ulanishlar» bo‘limida almashtirish',
+  'tenantIssueQueue.credentials.replace':
+    'Hisob ma’lumotlarini «Ulanishlar» bo‘limida almashtirish',
   'tenantIssueQueue.empty': 'Bu mijoz uchun ochiq muammolar yo‘q.',
   'tenantIssueQueue.deadLetters.title': 'Yetkazilmagan hodisalar',
   'tenantIssueQueue.deadLetters.empty': 'Bu mijoz uchun yetkazilmagan hodisalar yo‘q.',
@@ -1460,18 +1671,22 @@ export const uzLatn: Messages = {
   'tenantIssueQueue.fiscal.fullScreen': '«Fiskalizatsiya» bo‘limida ochish →',
   'tenantIssueQueue.pos.title': 'Kassa bo‘yicha qaror kutayotgan buyurtmalar',
   'tenantIssueQueue.pos.empty': 'HorecaOS va kassa o‘rtasida qolib ketgan buyurtmalar yo‘q.',
-  'tenantIssueQueue.pos.lead': 'Buyurtma kassaga yuborilgan, lekin javob kelmadi. Avval kassadan so‘rang; u javob bera olmasa, topilganlar asosida qaror qiling.',
+  'tenantIssueQueue.pos.lead':
+    'Buyurtma kassaga yuborilgan, lekin javob kelmadi. Avval kassadan so‘rang; u javob bera olmasa, topilganlar asosida qaror qiling.',
   'tenantIssueQueue.pos.venue': 'Kassadagi nuqta',
   'tenantIssueQueue.pos.sent': 'Yuborilgan',
   'tenantIssueQueue.pos.stateColumn': 'Holat',
   'tenantIssueQueue.pos.state.UNCERTAIN': 'Kassadan hali so‘ralmagan',
   'tenantIssueQueue.pos.state.AWAITING_OPERATOR': 'Qaror kerak',
   'tenantIssueQueue.pos.ask': 'Kassadan so‘rash',
-  'tenantIssueQueue.pos.asked': 'Kassa o‘qildi. Buyurtma tanilgan bo‘lsa, eksport yopildi; aks holda u qaror kutmoqda.',
-  'tenantIssueQueue.pos.askFailed': 'Kassani o‘qib bo‘lmadi: {detail}. Keyinroq urinib ko‘ring; buyurtma qayta yuborilmadi.',
+  'tenantIssueQueue.pos.asked':
+    'Kassa o‘qildi. Buyurtma tanilgan bo‘lsa, eksport yopildi; aks holda u qaror kutmoqda.',
+  'tenantIssueQueue.pos.askFailed':
+    'Kassani o‘qib bo‘lmadi: {detail}. Keyinroq urinib ko‘ring; buyurtma qayta yuborilmadi.',
   'tenantIssueQueue.pos.decide': 'Qaror qilish…',
   'tenantIssueQueue.pos.noCandidates': 'Kassada bunga o‘xshash buyurtma yo‘q.',
-  'tenantIssueQueue.pos.candidatesLead': 'Kassadagi bunga o‘xshash buyurtmalar. Faqat mos HorecaOS havolasi uning bizniki ekanini isbotlaydi.',
+  'tenantIssueQueue.pos.candidatesLead':
+    'Kassadagi bunga o‘xshash buyurtmalar. Faqat mos HorecaOS havolasi uning bizniki ekanini isbotlaydi.',
   'tenantIssueQueue.pos.posOrder': 'Kassadagi buyurtma',
   'tenantIssueQueue.pos.evidence': 'Nega bizniki bo‘lishi mumkin',
   'tenantIssueQueue.pos.match.reference': 'Bizning havolamiz bor: bu bizning buyurtma',
@@ -1501,9 +1716,12 @@ export const uzLatn: Messages = {
   'error.TENANT_ACCESS_DENIED': 'Bu mijozga ruxsatingiz yo‘q.',
   'error.RESOURCE_NOT_FOUND': 'Bu endi mavjud emas.',
   'error.RESOURCE_CONFLICT': 'Bu allaqachon saqlangan ma’lumotga zid keladi.',
-  'error.STALE_VERSION': 'Siz tahrirlayotgan vaqtda kimdir buni o‘zgartirdi. Yangilab, qayta urinib ko‘ring.',
-  'error.IDEMPOTENCY_KEY_REUSED': 'Bu eski qayta urinish kaliti bilan yuborilgan boshqa so‘rovga o‘xshaydi.',
-  'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'Xuddi shu so‘rov hali bajarilmoqda. U ikki marta qo‘llanmaydi.',
+  'error.STALE_VERSION':
+    'Siz tahrirlayotgan vaqtda kimdir buni o‘zgartirdi. Yangilab, qayta urinib ko‘ring.',
+  'error.IDEMPOTENCY_KEY_REUSED':
+    'Bu eski qayta urinish kaliti bilan yuborilgan boshqa so‘rovga o‘xshaydi.',
+  'error.IDEMPOTENCY_KEY_IN_PROGRESS':
+    'Xuddi shu so‘rov hali bajarilmoqda. U ikki marta qo‘llanmaydi.',
   'error.PRICE_CHANGED': 'Ekran ochiq turganda narx o‘zgardi. Tekshirib, qayta tasdiqlang.',
   'error.UNSUPPORTED_MEDIA_TYPE': 'Bunday fayl turi qabul qilinmaydi.',
   'error.RATE_LIMIT_EXCEEDED': 'So‘rovlar juda ko‘p. Biroz kutib, qayta urinib ko‘ring.',
@@ -1512,7 +1730,8 @@ export const uzLatn: Messages = {
   'error.INTERNAL_ERROR': 'Platforma tomonida xatolik yuz berdi. U qayd etildi.',
   'error.NETWORK_UNREACHABLE': 'Platformaga ulanib bo‘lmadi.',
   'error.UNRECOGNISED_ERROR_RESPONSE': 'Platforma bu panel tushunmaydigan javob qaytardi.',
-  'error.SECOND_APPROVER_REQUIRED': 'Qayd etildi. Platformaning ikkinchi administratori tasdiqlashi kerak — so‘rov «Xodimlar va rollar» bo‘limida kutmoqda.',
+  'error.SECOND_APPROVER_REQUIRED':
+    'Qayd etildi. Platformaning ikkinchi administratori tasdiqlashi kerak — so‘rov «Xodimlar va rollar» bo‘limida kutmoqda.',
   'error.APPROVAL_POLICY_REQUIRED': 'Bu harakat uchun avval tasdiqlash siyosati sozlanishi kerak.',
   'error.UNPROCESSABLE_STATE': 'Hozirgi holatda buni bajarib bo‘lmaydi.',
   'error.SESSION_EXPIRED': 'Sessiya muddati tugadi. Qaytadan kiring.',

@@ -48,6 +48,26 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/tenants/tenant-directory').then((m) => m.TenantDirectory),
       },
+      // Both of these come before `tenants/:tenantId`, or the router reads
+      // "invitations" and "configuration" as tenant identifiers and neither
+      // screen is ever reached. `declares every path before the parameterised
+      // one that would swallow it` in app.routes.spec.ts enforces this for
+      // every pair of siblings, in this array and in any nested one — a
+      // parameterised path is a victim there too, so `tenants/:tenantId/:x`
+      // declared above `tenants/:tenantId/onboarding` fails it — and a
+      // companion spec keeps `**` last, since it swallows whatever follows it.
+      {
+        path: 'tenants/invitations',
+        canActivate: [requiresCapability('TENANT_ONBOARDING_MANAGE')],
+        loadComponent: () =>
+          import('./features/tenants/owner-invitations').then((m) => m.OwnerInvitations),
+      },
+      {
+        path: 'tenants/configuration',
+        canActivate: [requiresCapability('PLATFORM_ADMIN')],
+        loadComponent: () =>
+          import('./features/tenants/configuration-policy').then((m) => m.ConfigurationPolicy),
+      },
       {
         path: 'tenants/:tenantId',
         canActivate: [requiresCapability('TENANT_READ')],
@@ -56,8 +76,7 @@ export const routes: Routes = [
       {
         path: 'tenants/:tenantId/brands',
         canActivate: [requiresCapability('BRAND_READ')],
-        loadComponent: () =>
-          import('./features/tenants/tenant-brands').then((m) => m.TenantBrands),
+        loadComponent: () => import('./features/tenants/tenant-brands').then((m) => m.TenantBrands),
       },
       {
         path: 'tenants/:tenantId/legal-entities',
@@ -83,12 +102,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/tenants/tenant-impersonation').then((m) => m.TenantImpersonation),
       },
-      {
-        path: 'tenants/configuration',
-        canActivate: [requiresCapability('PLATFORM_ADMIN')],
-        loadComponent: () =>
-          import('./features/tenants/configuration-policy').then((m) => m.ConfigurationPolicy),
-      },
 
       // IA §3 Providers
       {
@@ -107,7 +120,9 @@ export const routes: Routes = [
         path: 'providers/installations',
         canActivate: [requiresCapability('INTEGRATION_INSTALLATION_MANAGE')],
         loadComponent: () =>
-          import('./features/providers/installations-explorer').then((m) => m.InstallationsExplorer),
+          import('./features/providers/installations-explorer').then(
+            (m) => m.InstallationsExplorer,
+          ),
       },
       {
         path: 'providers/contracts',
@@ -152,14 +167,12 @@ export const routes: Routes = [
       {
         path: 'commerce/entitlements',
         canActivate: [requiresCapability('COMMERCIAL_PLAN_READ')],
-        loadComponent: () =>
-          import('./features/commerce/entitlements').then((m) => m.Entitlements),
+        loadComponent: () => import('./features/commerce/entitlements').then((m) => m.Entitlements),
       },
       {
         path: 'commerce/plans',
         canActivate: [requiresCapability('COMMERCIAL_PLAN_READ')],
-        loadComponent: () =>
-          import('./features/commerce/plan-catalog').then((m) => m.PlanCatalog),
+        loadComponent: () => import('./features/commerce/plan-catalog').then((m) => m.PlanCatalog),
       },
       {
         path: 'commerce/modules',
@@ -269,7 +282,9 @@ export const routes: Routes = [
         path: 'platform-config/notification-providers',
         canActivate: [requiresCapability('PLATFORM_ADMIN')],
         loadComponent: () =>
-          import('./features/platform-config/notification-providers').then((m) => m.NotificationProviders),
+          import('./features/platform-config/notification-providers').then(
+            (m) => m.NotificationProviders,
+          ),
       },
       {
         path: 'platform-config/policy-defaults',
@@ -308,8 +323,7 @@ export const routes: Routes = [
       {
         path: 'support/lookup',
         canActivate: [requiresCapability('TENANT_READ')],
-        loadComponent: () =>
-          import('./features/support/global-lookup').then((m) => m.GlobalLookup),
+        loadComponent: () => import('./features/support/global-lookup').then((m) => m.GlobalLookup),
       },
       {
         path: 'support/issue-queue',

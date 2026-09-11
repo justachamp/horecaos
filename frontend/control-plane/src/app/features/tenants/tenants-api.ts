@@ -233,15 +233,100 @@ export interface OnboardingTemplateSuggestion {
 /** The language an owner's invitation is written in. */
 export type InvitationLocale = 'uz' | 'ru' | 'en';
 
-/** OwnerInvitationService.OwnerInvitationView (ADR 0097). The address is masked by the server. */
+/** Where an invitation stands. `NONE` is not stored: it is a tenant nobody has invited yet. */
+export type OwnerInvitationState =
+  'QUEUED' | 'SENT' | 'ACCEPTED' | 'NOT_NEEDED' | 'FAILED' | 'EXPIRED' | 'NONE' | (string & {});
+
+/** What the overview may be filtered to; `OUTSTANDING` is everything not yet settled. */
+export type OwnerInvitationFilter = OwnerInvitationState | 'OUTSTANDING' | '';
+
+/**
+ * Where one tenant's owner stands, with no recipient in it
+ * (OwnerInvitationService.OwnerStateView, ADR 0100).
+ *
+ * `NO_OWNER` is the state the overview cannot express, because a tenant with
+ * nobody linked or invited is nobody's work and is left out of it entirely.
+ * A screen that marks tenants has to be able to say it, or absence reads as
+ * an owner who is fine.
+ */
+export interface OwnerStateView {
+  readonly tenantId: string;
+  readonly state: OwnerInvitationState | 'NO_OWNER';
+}
+
+/**
+ * One thing that happened to an invitation
+ * (OwnerInvitationService.OwnerInvitationEventView, ADR 0100).
+ *
+ * `actor` is a sign-in subject or a job name -- never a display name and never
+ * an address; the server stores none of the latter two on these rows.
+ */
+export interface OwnerInvitationEventView {
+  readonly type:
+    | 'QUEUED'
+    | 'RESENT'
+    | 'SENT'
+    | 'SEND_DEFERRED'
+    | 'SEND_FAILED'
+    | 'OPENED'
+    | 'ACCEPTED'
+    | 'NOT_NEEDED'
+    | (string & {});
+  /** The send attempt it belongs to, counted from one; zero on a queue or a resend. */
+  readonly attempt: number;
+  readonly locale: InvitationLocale | (string & {}) | null;
+  readonly outcomeCode: string | null;
+  readonly actorType: 'SYSTEM_JOB' | 'USER' | 'OWNER' | (string & {});
+  readonly actor: string | null;
+  readonly reason: string | null;
+  readonly occurredAt: string;
+}
+
+/**
+ * OwnerInvitationService.OwnerInvitationView (ADR 0097, ADR 0100).
+ *
+ * `recipient` is the address whole, and the server sends it only to a caller
+ * holding `TENANT_ONBOARDING_MANAGE` here -- the capability that typed it into
+ * onboarding -- recording a reveal when it does. `emailMasked` is what every
+ * other caller gets. Never show one when the other is present: the whole
+ * address is the one an operator checks against what they typed.
+ */
 export interface OwnerInvitationView {
-  readonly state:
-    'QUEUED' | 'SENT' | 'ACCEPTED' | 'NOT_NEEDED' | 'FAILED' | 'EXPIRED' | (string & {});
+  readonly state: OwnerInvitationState;
+  readonly recipient: string | null;
   readonly emailMasked: string | null;
   readonly locale: InvitationLocale | (string & {});
   readonly attempts: number;
   readonly lastErrorCode: string | null;
   readonly queuedAt: string;
+  readonly sentAt: string | null;
+  readonly openedAt: string | null;
+  readonly acceptedAt: string | null;
+  readonly expiresAt: string | null;
+  /** Oldest first. Empty for an invitation that predates ADR 0100. */
+  readonly timeline: readonly OwnerInvitationEventView[];
+}
+
+/**
+ * One tenant on the cross-tenant overview
+ * (OwnerInvitationService.OwnerInvitationOverviewRow, ADR 0100).
+ *
+ * A tenant whose owner was linked but never invited is here in state `NONE`
+ * with every time absent -- the case a list built from invitations alone
+ * would not have.
+ */
+export interface OwnerInvitationOverviewRow {
+  readonly tenantId: string;
+  readonly tenantSlug: string;
+  readonly tenantName: string;
+  readonly tenantStatus: TenantStatus | (string & {});
+  readonly state: OwnerInvitationState;
+  readonly recipient: string | null;
+  readonly emailMasked: string | null;
+  readonly locale: InvitationLocale | (string & {}) | null;
+  readonly attempts: number;
+  readonly lastErrorCode: string | null;
+  readonly queuedAt: string | null;
   readonly sentAt: string | null;
   readonly openedAt: string | null;
   readonly acceptedAt: string | null;
@@ -535,6 +620,36 @@ export class TenantsApi {
       }
       throw error;
     }
+  }
+
+  /**
+   * Every tenant whose owner has an invitation or is waiting for one (ADR
+   * 0100), most urgent first. `TENANT_ONBOARDING_MANAGE` at platform scope.
+   */
+  async ownerInvitations(
+    state?: OwnerInvitationFilter,
+  ): Promise<readonly OwnerInvitationOverviewRow[]> {
+    const query = state === undefined || state === '' ? '' : `?state=${encodeURIComponent(state)}`;
+    return firstValueFrom(
+      this.api.get<readonly OwnerInvitationOverviewRow[]>(
+        `/api/v1/control-plane/owner-invitations${query}`,
+      ),
+    );
+  }
+
+  /**
+   * Where every unarchived tenant's owner stands, and nothing else (ADR 0100).
+   * `TENANT_ONBOARDING_MANAGE` at platform scope, like the overview.
+   *
+   * Not the overview with its recipients dropped: a separate projection that
+   * resolves none, so no owner's address is read from the identity provider,
+   * none crosses the wire to a screen that renders a marker, and no reveal is
+   * recorded against the operator who opened a tenant list.
+   */
+  async ownerStates(): Promise<readonly OwnerStateView[]> {
+    return firstValueFrom(
+      this.api.get<readonly OwnerStateView[]>('/api/v1/control-plane/owner-invitations/waiting'),
+    );
   }
 
   /** Sends it again with a new link; the one already sent stops working. */
