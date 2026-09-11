@@ -557,32 +557,44 @@ describe('TenantOnboarding', () => {
     );
   });
 
-  it('explains a sample menu the catalogue refused to publish', async () => {
-    await createWith({
-      run: {
-        id: 'run-4',
-        status: 'FAILED',
-        currentPhase: 'CONFIGURING',
-        startedBy: 'admin@test',
-        lastError: null,
-      },
-      steps: [
-        {
-          stepKey: 'SAMPLE_MENU_PUBLISH',
-          phase: 'CONFIGURING',
-          status: 'FAILED',
-          required: false,
-          attemptCount: 1,
-          errorCode: 'SAMPLE_MENU_REJECTED',
-          detail: 'VARIANT_HAS_NO_ACTIVE_PRICE',
-          externalReference: null,
-        },
-      ],
-      outstandingRequired: [],
-    });
+  // Every way the sample menu step can refuse, and the hint is the only place
+  // the console says what to do about it. A code wired into HINTS but never
+  // rendered is indistinguishable from one missing: key parity across the
+  // catalogues proves the string exists, not that an operator ever sees it.
+  const SAMPLE_REFUSALS = [
+    { errorCode: 'SAMPLE_MENU_REJECTED', detail: 'VARIANT_HAS_NO_ACTIVE_PRICE' },
+    { errorCode: 'SAMPLE_MENU_UNSUPPORTED_CURRENCY', detail: 'KZT' },
+    { errorCode: 'SAMPLE_PRICING_REFUSED', detail: 'PRICE_BOOK_PRIORITY_CONFLICT' },
+  ] as const;
 
-    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.hint.SAMPLE_MENU_REJECTED']);
-    // The server's own detail is still shown, because it names the specifics.
-    expect(fixture.nativeElement.textContent).toContain('VARIANT_HAS_NO_ACTIVE_PRICE');
-  });
+  for (const { errorCode, detail } of SAMPLE_REFUSALS) {
+    it(`explains a sample menu that failed ${errorCode}`, async () => {
+      await createWith({
+        run: {
+          id: 'run-4',
+          status: 'FAILED',
+          currentPhase: 'CONFIGURING',
+          startedBy: 'admin@test',
+          lastError: null,
+        },
+        steps: [
+          {
+            stepKey: 'SAMPLE_MENU_PUBLISH',
+            phase: 'CONFIGURING',
+            status: 'FAILED',
+            required: false,
+            attemptCount: 1,
+            errorCode,
+            detail,
+            externalReference: null,
+          },
+        ],
+        outstandingRequired: [],
+      });
+
+      expect(fixture.nativeElement.textContent).toContain(ru[`onboarding.hint.${errorCode}`]);
+      // The server's own detail is still shown, because it names the specifics.
+      expect(fixture.nativeElement.textContent).toContain(detail);
+    });
+  }
 });
