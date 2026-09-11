@@ -959,6 +959,7 @@ export interface CommercialControlPlaneControllerResolvedEntitlement {
 }
 
 export interface CommercialControlPlaneControllerSubscriptionResponse {
+  activationDepositDueMinor?: number;
   allowedNext?: Array<string>;
   currentPeriodEnd?: string;
   currentPeriodStart?: string;
@@ -5808,6 +5809,11 @@ export interface WalletChangeResponse {
   status?: string;
 }
 
+export interface WalletDepositReversalRequest {
+  depositEntryId: string;
+  reason: string;
+}
+
 export interface WalletEntryRecorded {
   entryId?: string;
 }
@@ -5829,6 +5835,7 @@ export interface WalletEntryView {
 
 export interface WalletOverviewView {
   bonusBalance?: ApiMoney;
+  bonusSpendableBalance?: ApiMoney;
   cardTokenReference?: string;
   paidBalance?: ApiMoney;
   paymentMethod?: string;
@@ -5906,6 +5913,7 @@ export interface Operations {
   "adapterVersions": { method: "GET"; path: "/api/v1/control-plane/adapter-versions"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterVersionView> } };
   "raiseControlBandEscalation": { method: "POST"; path: "/api/v1/control-plane/alerts/control-band-escalations"; request: { parameters: Record<string, never>; body: ControlBandEscalationRequest }; responses: { "200": unknown } };
   "platformPending": { method: "GET"; path: "/api/v1/control-plane/approval-requests"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<PlatformPendingApprovalResponse> } };
+  "platformDecide": { method: "POST"; path: "/api/v1/control-plane/approval-requests/{requestId}/decision"; request: { parameters: { path: { requestId: string } }; body: ApprovalRequestControllerDecisionRequest }; responses: { "200": ApprovalRequestControllerDecisionResponse } };
   "board_1": { method: "GET"; path: "/api/v1/control-plane/arrears"; request: { parameters: Record<string, never> }; responses: { "200": ArrearsBoardView } };
   "signInControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
@@ -6294,6 +6302,7 @@ export interface Operations {
   "proposeAdjustment": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/adjustments"; request: { parameters: { path: { tenantId: string } }; body: WalletAdjustmentRequest }; responses: { "200": WalletChangeResponse } };
   "proposeBonusGrant": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/bonus-grants"; request: { parameters: { path: { tenantId: string } }; body: WalletBonusGrantRequest }; responses: { "200": WalletChangeResponse } };
   "recordDeposit": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/deposit"; request: { parameters: { path: { tenantId: string } }; body: RecordDepositRequest }; responses: { "200": WalletEntryRecorded } };
+  "proposeDepositReversal": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/deposit-reversals"; request: { parameters: { path: { tenantId: string } }; body: WalletDepositReversalRequest }; responses: { "200": WalletChangeResponse } };
   "setPaymentMethod": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/payment-method"; request: { parameters: { path: { tenantId: string } }; body: WalletPaymentMethodRequest }; responses: { "200": unknown } };
   "proposeRefund": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/refunds"; request: { parameters: { path: { tenantId: string } }; body: WalletRefundRequest }; responses: { "200": WalletChangeResponse } };
   "recordTransfer": { method: "POST"; path: "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/transfers"; request: { parameters: { path: { tenantId: string } }; body: RecordTransferRequest }; responses: { "200": WalletEntryRecorded } };

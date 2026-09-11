@@ -45,12 +45,16 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * {@code CommercialStatementController}'s reads under {@code
  * commercial.usage.read}. Every write is HorecaOS staff's alone, under
  * {@code commercial.wallet.manage}: recording a transfer or a deposit is one
- * person's audited act; an adjustment, a bonus grant and a refund are
- * proposed under the same capability and wait for a <em>different</em>
- * holder of it to approve them through the ADR 0027 approval console — the
- * first call answers {@code AWAITING_APPROVAL}, and the identical call again
- * after approval performs the change, exactly as {@code
- * TenantProfileController#changeCountry} does for a change of country.
+ * person's audited act; an adjustment, a bonus grant, a refund and the
+ * reversal of a deposit recorded against the wrong tenant are proposed under
+ * the same capability and wait for a <em>different</em> holder of it to
+ * approve them through the ADR 0027 approval console — the first call answers
+ * {@code AWAITING_APPROVAL}, and the identical call again after approval
+ * performs the change, exactly as {@code
+ * TenantProfileController#changeCountry} does for a change of country. Those
+ * requests are raised at {@code PLATFORM} scope: they are HorecaOS's own
+ * decisions about a tenant's account, so they wait on the platform approvals
+ * queue rather than in the tenant's own worklist (ADR 0095).
  */
 @RestController
 @Tag(
@@ -72,13 +76,18 @@ public class CommercialWalletController {
     @RequiresCapability(value = Capability.COMMERCIAL_WALLET_READ, scope = ScopeType.TENANT)
     @Operation(
             summary = "A tenant's wallet: both balances and its payment method",
-            description = "Each balance is the SUM of the tenant's own ledger entries; no balance is stored.")
+            description = "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. "
+                    + "bonusSpendableBalance is the part of the bonus balance a statement could draw on now — "
+                    + "the sum of the live grants' remainders. It is lower than bonusBalance between a grant's "
+                    + "expiry and the hourly sweep that lapses it, and after a voided statement hands a draw "
+                    + "back to a grant that has already expired.")
     public ResponseEntity<WalletOverviewView> overview(@PathVariable UUID tenantId) {
         WalletBalances balances = wallet.balances(tenantId);
         TenantBilling billing = wallet.billing(tenantId);
         return ResponseEntity.ok(new WalletOverviewView(
                 ApiMoney.of(balances.paidMinor(), balances.currency()),
                 ApiMoney.of(balances.bonusMinor(), balances.currency()),
+                ApiMoney.of(wallet.spendableBonusMinor(tenantId), balances.currency()),
                 billing.paymentMethod().name(),
                 billing.cardTokenReference()));
     }
@@ -199,6 +208,22 @@ public class CommercialWalletController {
         return ResponseEntity.ok(WalletChangeResponse.of(outcome));
     }
 
+    @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/deposit-reversals")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Propose taking back an activation deposit recorded against the wrong tenant",
+            description = "Takes the paid money back and makes the deposit due again, in one transaction. "
+                    + "Needs a second signature. A plain correction would remove the money and leave the "
+                    + "obligation cleared, so the tenant's real deposit could never be recorded or billed "
+                    + "again. Refused when the paid balance will not carry it — void the statements the "
+                    + "deposit paid first, which gives the money back.")
+    public ResponseEntity<WalletChangeResponse> proposeDepositReversal(
+            @PathVariable UUID tenantId, @Valid @RequestBody WalletDepositReversalRequest body) {
+        WalletChangeOutcome outcome =
+                wallet.proposeDepositReversal(tenantId, body.depositEntryId(), actor(), body.reason(), correlationId());
+        return ResponseEntity.ok(WalletChangeResponse.of(outcome));
+    }
+
     // ---------------------------------------------------------- payment method
 
     @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/payment-method")
@@ -245,9 +270,14 @@ public class CommercialWalletController {
 
     // --------------------------------------------------------------- wire records
 
+    /**
+     * @param bonusBalance          the ledger's own SUM of BONUS entries, which has no clock in it
+     * @param bonusSpendableBalance what a statement could draw on right now: the live grants' remainders
+     */
     public record WalletOverviewView(
             ApiMoney paidBalance,
             ApiMoney bonusBalance,
+            ApiMoney bonusSpendableBalance,
             String paymentMethod,
             @Nullable String cardTokenReference) {}
 
@@ -345,6 +375,11 @@ public class CommercialWalletController {
     public record WalletRefundRequest(
             @Min(1) long amountMinor,
             @NotBlank @Size(max = 128) String payoutReference,
+            @NotBlank @Size(max = 1000) String reason) {}
+
+    /** {@code depositEntryId} names the DEPOSIT ledger entry this takes back. */
+    public record WalletDepositReversalRequest(
+            @NotNull UUID depositEntryId,
             @NotBlank @Size(max = 1000) String reason) {}
 
     public record WalletPaymentMethodRequest(

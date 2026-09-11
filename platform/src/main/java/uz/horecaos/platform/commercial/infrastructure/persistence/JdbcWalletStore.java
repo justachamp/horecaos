@@ -207,6 +207,29 @@ public class JdbcWalletStore {
                 .toList();
     }
 
+    /**
+     * One of the tenant's own entries of a given type, by id.
+     *
+     * <p>Constrained on the tenant as well as the id, so an entry id typed
+     * against the wrong tenant is not-found rather than readable, and on the
+     * type so a caller that means "the deposit this reversal takes back"
+     * cannot be handed a top-up or a statement payment instead.
+     */
+    public Optional<WalletEntry> findEntryOfType(UUID tenantId, UUID entryId, String entryType) {
+        return jdbc.sql("""
+                        SELECT id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
+                               grant_id, expires_at, external_reference, reason, recorded_by, approved_by,
+                               approval_request_id, created_at
+                          FROM commercial.wallet_entries
+                         WHERE tenant_id = :tenantId AND id = :entryId AND entry_type = :entryType
+                        """)
+                .param("tenantId", tenantId)
+                .param("entryId", entryId)
+                .param("entryType", entryType)
+                .query(JdbcWalletStore::entry)
+                .optional();
+    }
+
     /** Every ISSUED statement's paid and due amounts, newest month first. */
     public List<StatementPayment> statementPayments(UUID tenantId) {
         return statementPayments(tenantId, null);

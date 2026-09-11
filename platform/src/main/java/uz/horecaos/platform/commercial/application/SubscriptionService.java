@@ -318,6 +318,20 @@ public class SubscriptionService {
         return subscriptions.findLive(tenantId);
     }
 
+    /**
+     * What the live subscription still owes as its activation deposit, in the
+     * minor units of the plan version that sells it (ADR 0093, ADR 0095);
+     * zero when none is due or it has already been recorded as paid.
+     *
+     * <p>Read so the console can show it. ADR 0095 item 6 moved the deposit off
+     * the statement and into the wallet, which left the amount owed written on
+     * this column and readable nowhere: staff could only press "Record the
+     * activation deposit" and learn from the refusal whether one was due.
+     */
+    public long activationDepositDueMinor(UUID tenantId) {
+        return subscriptions.liveDepositDue(tenantId);
+    }
+
     public List<Subscription> history(UUID tenantId) {
         return subscriptions.history(tenantId);
     }

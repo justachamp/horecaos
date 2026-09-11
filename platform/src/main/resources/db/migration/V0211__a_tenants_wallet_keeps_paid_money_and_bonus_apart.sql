@@ -29,6 +29,16 @@ CREATE TABLE commercial.wallet_entries (
     -- reference, or a card charge's provider reference. Never a card number
     -- (ADR 0028): only a reference ever reaches this column.
     external_reference varchar(128),
+    -- The same reference with the rendering a human chose taken out of it:
+    -- upper case, no whitespace, no hyphens, no leading '#'. The column the
+    -- uniqueness of money in is actually enforced on, because "MT103-7" and
+    -- " mt103 7" are one transfer typed twice and a raw-column index would
+    -- credit the tenant for both. Stored and generated rather than written by
+    -- the application, so the ledger keeps verbatim what the recorder typed
+    -- and the two can never disagree. Same rule as partner.ExternalReference
+    -- (V0038), which indexes the normalised value for the same reason.
+    external_reference_normalised varchar(128)
+        GENERATED ALWAYS AS (upper(regexp_replace(external_reference, '^#|[[:space:]-]', '', 'g'))) STORED,
     reason varchar(1000) NOT NULL,
     recorded_by varchar(255) NOT NULL,
     -- Who gave the second signature on an ADJUSTMENT, BONUS_GRANT or REFUND
@@ -46,15 +56,15 @@ CREATE TABLE commercial.wallet_entries (
     CONSTRAINT ck_wallet_entry_money_kind CHECK (money_kind IN ('PAID', 'BONUS')),
     CONSTRAINT ck_wallet_entry_type CHECK (entry_type IN (
         'TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'BONUS_EXPIRY', 'STATEMENT_PAYMENT',
-        'STATEMENT_REVERSAL', 'ADJUSTMENT', 'REFUND')),
+        'STATEMENT_REVERSAL', 'ADJUSTMENT', 'REFUND', 'DEPOSIT_REVERSAL')),
     CONSTRAINT ck_wallet_entry_amount CHECK (amount_minor <> 0),
     CONSTRAINT ck_wallet_entry_currency CHECK (currency ~ '^[A-Z]{3}$'),
-    -- Money in (TOP_UP, DEPOSIT) is always PAID; a refund is always PAID
-    -- money leaving; a bonus grant and its expiry are always BONUS. A
-    -- statement payment, the reversal of one, or a correction can be either
-    -- kind.
+    -- Money in (TOP_UP, DEPOSIT) is always PAID; a refund and the reversal of
+    -- a deposit recorded in error are always PAID money leaving; a bonus grant
+    -- and its expiry are always BONUS. A statement payment, the reversal of
+    -- one, or a correction can be either kind.
     CONSTRAINT ck_wallet_entry_kind_for_type CHECK (
-        (entry_type IN ('TOP_UP', 'DEPOSIT', 'REFUND') AND money_kind = 'PAID')
+        (entry_type IN ('TOP_UP', 'DEPOSIT', 'REFUND', 'DEPOSIT_REVERSAL') AND money_kind = 'PAID')
         OR (entry_type IN ('BONUS_GRANT', 'BONUS_EXPIRY') AND money_kind = 'BONUS')
         OR (entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL', 'ADJUSTMENT'))
     ),
@@ -72,24 +82,38 @@ CREATE TABLE commercial.wallet_entries (
     CONSTRAINT ck_wallet_entry_expiry CHECK (
         (entry_type = 'BONUS_GRANT') = (expires_at IS NOT NULL)
     ),
-    -- Money in is a positive entry; a statement payment, an expiry and a
-    -- refund always take money away. Voiding a statement gives back what it
-    -- drew, which is money in again.
+    -- Money in is a positive entry; a statement payment, an expiry, a refund
+    -- and the reversal of a deposit recorded in error always take money away.
+    -- Voiding a statement gives back what it drew, which is money in again.
     CONSTRAINT ck_wallet_entry_sign CHECK (
         (entry_type IN ('TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'STATEMENT_REVERSAL') AND amount_minor > 0)
-        OR (entry_type IN ('STATEMENT_PAYMENT', 'BONUS_EXPIRY', 'REFUND') AND amount_minor < 0)
+        OR (entry_type IN ('STATEMENT_PAYMENT', 'BONUS_EXPIRY', 'REFUND', 'DEPOSIT_REVERSAL')
+            AND amount_minor < 0)
         OR (entry_type = 'ADJUSTMENT')
     ),
     -- Nothing moves until a different person approves it (ADR 0027); a
     -- one-person act carries no approver.
     CONSTRAINT ck_wallet_entry_approval CHECK (
-        (entry_type IN ('ADJUSTMENT', 'BONUS_GRANT', 'REFUND')) = (approved_by IS NOT NULL)
+        (entry_type IN ('ADJUSTMENT', 'BONUS_GRANT', 'REFUND', 'DEPOSIT_REVERSAL'))
+            = (approved_by IS NOT NULL)
         AND (approved_by IS NULL) = (approval_request_id IS NULL)
     ),
+    -- Four eyes on the row itself, the way every other money table in this
+    -- schema states it (V0033's ck_usage_adjustment_four_eyes,
+    -- ck_entitlement_override_four_eyes, V0201's ck_module_four_eyes): a
+    -- reader of the ledger alone must never find one name in both columns.
+    -- The approval model already forbids a maker deciding their own request;
+    -- this forbids the row that would *read* as one person having recorded
+    -- and approved money leaving the platform.
+    CONSTRAINT ck_wallet_entry_four_eyes CHECK (
+        approved_by IS NULL OR approved_by <> recorded_by
+    ),
     -- A transfer carries the bank's reference that proves it; a refund names
-    -- the payout it left on (ADR 0095 items 2 and 5).
+    -- the payout it left on, and a deposit reversal names the deposit it takes
+    -- back (ADR 0095 items 2 and 5).
     CONSTRAINT ck_wallet_entry_reference CHECK (
-        entry_type NOT IN ('TOP_UP', 'DEPOSIT', 'REFUND') OR external_reference IS NOT NULL
+        entry_type NOT IN ('TOP_UP', 'DEPOSIT', 'REFUND', 'DEPOSIT_REVERSAL')
+        OR external_reference IS NOT NULL
     )
 );
 
@@ -104,12 +128,31 @@ CREATE INDEX ix_wallet_entry_grant ON commercial.wallet_entries (grant_id) WHERE
 -- tenant is a transfer recorded twice -- which credits money that never came
 -- and pays statements nobody paid. The database refuses it; the service turns
 -- the refusal into a conflict the recorder can read.
+--
+-- On the normalised value, not the typed one: two recorders reconciling the
+-- same statement type "MT103-7" and " mt103 7", and an index on the raw column
+-- reads those as two transfers. Normalising narrows the hole rather than
+-- closing it -- "MT103-7" against "MT1037-A" still passes -- so one recorder
+-- per statement, reconciled against the bank feed, stays the real control.
 CREATE UNIQUE INDEX ux_wallet_entry_money_in_reference
-    ON commercial.wallet_entries (tenant_id, external_reference)
+    ON commercial.wallet_entries (tenant_id, external_reference_normalised)
     WHERE entry_type IN ('TOP_UP', 'DEPOSIT');
+-- A deposit recorded against the wrong tenant is taken back once, by the
+-- reversal that names it. Without this a second approved reversal of the same
+-- deposit would re-arm the obligation twice over.
+CREATE UNIQUE INDEX ux_wallet_entry_deposit_reversal
+    ON commercial.wallet_entries (tenant_id, external_reference_normalised)
+    WHERE entry_type = 'DEPOSIT_REVERSAL';
 -- Live bonus grants, earliest expiry first: exactly the order a statement is
 -- paid from bonus money in (ADR 0095 item 3).
 CREATE INDEX ix_wallet_entry_live_grants ON commercial.wallet_entries (tenant_id, expires_at)
+    WHERE entry_type = 'BONUS_GRANT';
+-- The hourly expiry sweep is estate-wide: it asks for the oldest expired
+-- grants across every tenant, so ix_wallet_entry_live_grants (tenant-leading)
+-- gives it neither a seek on expires_at nor the ORDER BY, and its LIMIT would
+-- buy nothing. Same pair as loyalty.lots (V0042): one tenant-scoped index for
+-- the draw order, one estate-wide index for the sweep.
+CREATE INDEX ix_wallet_entry_expiry_sweep ON commercial.wallet_entries (expires_at)
     WHERE entry_type = 'BONUS_GRANT';
 
 -- Refused at the database, not only in the service: a ledger this platform's
@@ -164,13 +207,14 @@ ALTER TABLE commercial.subscriptions
     ADD CONSTRAINT ck_subscription_deposit_due CHECK (deposit_due_minor >= 0);
 
 COMMENT ON COLUMN commercial.subscriptions.deposit_due_minor IS
-    'ADR 0095. Set to the plan version''s activation deposit when the subscription starts; cleared to zero when the deposit is recorded as a wallet top-up. Not a balance -- the wallet ledger is the only source of truth for money moved; this is a due-or-not flag a statement''s draft never reads.';
+    'ADR 0095. Set to the plan version''s activation deposit when the subscription starts; cleared to zero when the deposit is recorded as a wallet top-up, and restored when an approved DEPOSIT_REVERSAL takes a deposit recorded in error back. Not a balance -- the wallet ledger is the only source of truth for money moved; this is a due-or-not flag a statement''s draft never reads.';
 
--- ADR 0027: three actions that move a tenant's money by hand, each proposed
+-- ADR 0027: four actions that move a tenant's money by hand, each proposed
 -- by one person and approved by a different one. Seeded at platform scope so
 -- they are governed from the first day, exactly as V0203 seeds
--- tenant.country.change -- a wallet correction, a bonus grant and a refund
--- are exactly the decisions a second signature exists for.
+-- tenant.country.change -- a wallet correction, a bonus grant, a refund and
+-- the reversal of a deposit recorded against the wrong tenant are exactly the
+-- decisions a second signature exists for.
 INSERT INTO audit.approval_policies (
     id, tenant_id, action_code, scope_type, threshold_json, required_approver_capability,
     valid_from, version, approved_by)
@@ -183,4 +227,7 @@ VALUES
      'commercial.wallet.manage', '2026-09-11T00:00:00Z', 1, 'migration V0211'),
     ('0192d1a0-0000-7000-8000-000000000213', NULL, 'commercial.wallet.refund', 'PLATFORM',
      '{"description": "Every refund of a tenant''s paid money"}'::jsonb,
+     'commercial.wallet.manage', '2026-09-11T00:00:00Z', 1, 'migration V0211'),
+    ('0192d1a0-0000-7000-8000-000000000214', NULL, 'commercial.wallet.deposit-reversal', 'PLATFORM',
+     '{"description": "Every reversal of an activation deposit recorded in error"}'::jsonb,
      'commercial.wallet.manage', '2026-09-11T00:00:00Z', 1, 'migration V0211');

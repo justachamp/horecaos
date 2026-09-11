@@ -1,5 +1,7 @@
 package uz.horecaos.platform.commercial.application;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -7,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,17 +58,32 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * onto one writer at a time, without ever locking the immutable ledger
  * itself.
  *
- * <p><strong>Manual changes.</strong> An adjustment, a bonus grant and a
- * refund are proposed by one person and approved by a different one, through
- * the same ADR 0027 approval model {@code TenantProfileService.changeCountry}
- * uses for a change of country: the first call raises the request and
- * answers {@code AWAITING_APPROVAL}; the identical call again, after a
- * different person approves it, performs the change and spends the
- * signature. Recording a transfer or a deposit is not a correction — it is
- * one person's audited act, like {@code StatementService.issue}.
+ * <p><strong>Manual changes.</strong> An adjustment, a bonus grant, a refund
+ * and the reversal of a deposit recorded in error are proposed by one person
+ * and approved by a different one, through the same ADR 0027 approval model
+ * {@code TenantProfileService.changeCountry} uses for a change of country:
+ * the first call raises the request and answers {@code AWAITING_APPROVAL};
+ * the identical call again, after a different person approves it, performs
+ * the change and spends the signature. Recording a transfer or a deposit is
+ * not a correction — it is one person's audited act, like {@code
+ * StatementService.issue}.
+ *
+ * <p><strong>Why those requests are raised at {@code PLATFORM} scope.</strong>
+ * They concern a tenant's wallet but they are HorecaOS's own decisions, taken
+ * under a capability no tenant role holds and against policies V0211 seeds at
+ * platform scope. Raised at tenant scope they landed in the tenant's own
+ * approvals worklist, where its finance manager read "HorecaOS proposes a
+ * refund of your paid money" — with the maker's name on it — before anything
+ * had moved and for a decision they could never sign. At platform scope they
+ * are listed and decided only on the platform approvals queue.
  */
 @Service
 public class WalletService {
+
+    private static final Logger log = LoggerFactory.getLogger(WalletService.class);
+
+    /** How a card charge ended, counted so a provider outage is a rate rather than a pile of arrears. */
+    private static final String CARD_CHARGE_METRIC = "commercial.wallet.card_charge";
 
     /** {@code recorded_by} on an entry no person wrote — the settlement pass at issue time or later. */
     private static final String SYSTEM_SETTLEMENT = "system:wallet-settlement";
@@ -77,6 +96,7 @@ public class WalletService {
     private final ApprovalService approvals;
     private final CardCharger cardCharger;
     private final AuditRecorder audit;
+    private final MeterRegistry meters;
     private final Clock clock;
 
     public WalletService(
@@ -85,12 +105,14 @@ public class WalletService {
             ApprovalService approvals,
             CardCharger cardCharger,
             AuditRecorder audit,
+            MeterRegistry meters,
             Clock clock) {
         this.wallet = wallet;
         this.subscriptions = subscriptions;
         this.approvals = approvals;
         this.cardCharger = cardCharger;
         this.audit = audit;
+        this.meters = meters;
         this.clock = clock;
     }
 
@@ -98,6 +120,41 @@ public class WalletService {
 
     public WalletBalances balances(UUID tenantId) {
         return wallet.balances(tenantId, wallet.currencyOf(tenantId));
+    }
+
+    /**
+     * The part of the bonus balance a statement could actually draw on right
+     * now: the sum of the live grants' remainders.
+     *
+     * <p>Not the same number as {@link #balances}'s bonus figure, and
+     * deliberately reported beside it rather than instead of it. The balance is
+     * the ledger's own SUM and has no clock in it, which is ADR 0095 decision 1
+     * and must stay true; a grant's remainder stops being spendable the instant
+     * its expiry passes and stops being counted only when the hourly sweep
+     * writes the lapse. In that window — and again whenever a voided statement
+     * hands a draw back to an already-expired grant — the balance names money
+     * no statement can use, and a screen that showed only the balance would be
+     * telling a tenant it has credit it cannot spend.
+     */
+    public long spendableBonusMinor(UUID tenantId) {
+        return wallet.liveGrants(tenantId, clock.instant()).stream()
+                .mapToLong(BonusGrantBalance::remainingMinor)
+                .sum();
+    }
+
+    /**
+     * What the tenant's live subscription still owes as its activation deposit,
+     * in the minor units of the plan version that sells it; zero when none is
+     * due or it has been paid.
+     *
+     * <p>Read so the obligation is visible somewhere. It used to be written at
+     * {@code SubscriptionService.start} and read by nothing but
+     * {@link #recordDeposit}: the statement stopped billing a deposit line
+     * (ADR 0095, item 6), so a tenant received no document naming it and staff
+     * learned whether one was due from a 400 on the record-deposit endpoint.
+     */
+    public long activationDepositDueMinor(UUID tenantId) {
+        return subscriptions.liveDepositDue(tenantId);
     }
 
     public List<BonusGrantBalance> liveGrants(UUID tenantId) {
@@ -142,9 +199,7 @@ public class WalletService {
         if (amountMinor <= 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A transfer is a positive amount");
         }
-        if (bankReference == null || bankReference.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A transfer carries the bank's reference");
-        }
+        requireReference(bankReference, "A transfer carries the bank's reference");
         wallet.lockBilling(tenantId, clock.instant());
         Instant now = clock.instant();
         UUID id = Ids.newId();
@@ -185,13 +240,20 @@ public class WalletService {
      * 0095/0093, item 6): a PAID top-up marked {@code DEPOSIT}, which clears
      * the subscription's due amount back to zero. The first statement issued
      * afterwards is paid from it, like any other paid money.
+     *
+     * <p>The amount is the subscription's, not the caller's, and it is named in
+     * the plan version's currency while the wallet holds the tenant's. A wallet
+     * takes money in in its own currency only, for the same reason it pays out
+     * in its own currency only (ADR 0095): there is no rate here at which one
+     * could become the other, and crediting a foreign face value would record
+     * four cents' worth of som for a five-hundred-dollar receipt. A deposit on
+     * a plan version sold in a second currency is therefore invoiced, exactly
+     * as that version's statements are.
      */
     @Transactional
     public UUID recordDeposit(
             UUID tenantId, String bankReference, ActorRef actor, String reason, String correlationId) {
-        if (bankReference == null || bankReference.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A deposit carries the bank's reference");
-        }
+        requireReference(bankReference, "A deposit carries the bank's reference");
         wallet.lockBilling(tenantId, clock.instant());
         long due = subscriptions.liveDepositDue(tenantId);
         if (due <= 0) {
@@ -201,6 +263,19 @@ public class WalletService {
                 .findLive(tenantId)
                 .orElseThrow(
                         () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
+        String walletCurrency = wallet.currencyOf(tenantId);
+        String depositCurrency = subscriptions
+                .livePlanCurrency(tenantId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
+        if (!depositCurrency.equals(walletCurrency)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "The deposit is priced in %s and the wallet holds %s; a wallet takes money in in its own "
+                                    .formatted(depositCurrency, walletCurrency)
+                            + "currency only, so this deposit is collected by invoice",
+                    Map.of("depositCurrency", depositCurrency, "walletCurrency", walletCurrency));
+        }
 
         Instant now = clock.instant();
         UUID id = Ids.newId();
@@ -210,7 +285,7 @@ public class WalletService {
                 WalletEntry.PAID,
                 WalletEntry.DEPOSIT,
                 due,
-                wallet.currencyOf(tenantId),
+                walletCurrency,
                 null,
                 null,
                 null,
@@ -284,7 +359,7 @@ public class WalletService {
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_ADJUSTMENT.code(),
                 ApprovalParameters.of(command).excluding().hash(),
-                ResourceScope.tenant(tenantId),
+                ResourceScope.platform(),
                 actor,
                 reason,
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
@@ -320,7 +395,7 @@ public class WalletService {
                 null,
                 null,
                 reason,
-                subject(actor),
+                recordedBy(approval),
                 approvedBy(approval),
                 requestId,
                 now));
@@ -358,7 +433,7 @@ public class WalletService {
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_BONUS_GRANT.code(),
                 ApprovalParameters.of(command).excluding().hash(),
-                ResourceScope.tenant(tenantId),
+                ResourceScope.platform(),
                 actor,
                 reason,
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
@@ -385,7 +460,7 @@ public class WalletService {
                 expiresAt,
                 null,
                 reason,
-                subject(actor),
+                recordedBy(approval),
                 approvedBy(approval),
                 requestId,
                 appliedAt));
@@ -431,7 +506,7 @@ public class WalletService {
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_REFUND.code(),
                 ApprovalParameters.of(command).excluding().hash(),
-                ResourceScope.tenant(tenantId),
+                ResourceScope.platform(),
                 actor,
                 reason,
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
@@ -466,7 +541,7 @@ public class WalletService {
                 null,
                 payoutReference,
                 reason,
-                subject(actor),
+                recordedBy(approval),
                 approvedBy(approval),
                 requestId,
                 now));
@@ -477,6 +552,106 @@ public class WalletService {
                 .target("commercial.wallet_entry", id)
                 .because(reason)
                 .changed(Map.of("amountMinor", amountMinor))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .underApproval(requestId)
+                .correlatedBy(correlationId)
+                .occurredAt(now)
+                .build());
+
+        return new WalletChangeOutcome(WalletChangeOutcome.CHANGED, requestId);
+    }
+
+    /**
+     * Takes back an activation deposit recorded against the wrong tenant, and
+     * makes that tenant's deposit due again in the same locked transaction
+     * (ADR 0095, item 6).
+     *
+     * <p><strong>Why this exists rather than a downward correction.</strong>
+     * Recording a deposit does two things: it appends PAID money to the ledger
+     * and it clears {@code subscriptions.deposit_due_minor}. A plain
+     * {@code ADJUSTMENT} mends only the first. The flag stayed at zero, so the
+     * tenant's real deposit could never be recorded again — {@code
+     * recordDeposit} refuses when nothing is due — and it is never billed
+     * either, because the statement stopped carrying a deposit line. The money
+     * was recoverable and the obligation was not, and the only remedy left was
+     * hand-written SQL against production, which is the thing an append-only
+     * ledger exists to make unnecessary.
+     *
+     * <p>The reversal names the same reference the deposit was recorded under,
+     * so the two rows read as one act, and V0211 makes that reference unique
+     * among reversals for the tenant: one deposit is taken back once, and a
+     * second approved reversal cannot re-arm the obligation twice over.
+     *
+     * <p>Refused when the paid balance will not carry it, exactly as a refund
+     * is. A deposit that has already paid a statement is not reversible on its
+     * own: void the statement first, which gives the money back, then reverse.
+     */
+    @Transactional
+    public WalletChangeOutcome proposeDepositReversal(
+            UUID tenantId, UUID depositEntryId, ActorRef actor, String reason, String correlationId) {
+        WalletEntry deposit = wallet.findEntryOfType(tenantId, depositEntryId, WalletEntry.DEPOSIT)
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "That tenant has no such recorded deposit"));
+
+        DepositReversalCommand command = new DepositReversalCommand(tenantId, depositEntryId, reason);
+        ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
+                ApprovalAction.WALLET_DEPOSIT_REVERSAL.code(),
+                ApprovalParameters.of(command).excluding().hash(),
+                ResourceScope.platform(),
+                actor,
+                reason,
+                ApprovalRequestCommand.DEFAULT_VALIDITY));
+
+        WalletChangeOutcome awaiting = notYetDecided(approval);
+        if (awaiting != null) {
+            return awaiting;
+        }
+
+        wallet.lockBilling(tenantId, clock.instant());
+        long paid = wallet.paidBalance(tenantId);
+        if (paid < deposit.amountMinor()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    ("The paid balance is only %d and the deposit was %d; a reversal cannot take it below zero. "
+                                    + "Void the statements it paid first, which gives the money back.")
+                            .formatted(paid, deposit.amountMinor()),
+                    Map.of("paidBalanceMinor", paid, "depositMinor", deposit.amountMinor()));
+        }
+        approval.consume();
+
+        Instant now = clock.instant();
+        UUID id = Ids.newId();
+        UUID requestId = requestIdOf(approval);
+        appendMoneyIn(new WalletEntry(
+                id,
+                tenantId,
+                WalletEntry.PAID,
+                WalletEntry.DEPOSIT_REVERSAL,
+                -deposit.amountMinor(),
+                deposit.currency(),
+                null,
+                null,
+                null,
+                deposit.externalReference(),
+                reason,
+                recordedBy(approval),
+                approvedBy(approval),
+                requestId,
+                now));
+
+        // Same transaction, under the same lock: the entry and the obligation
+        // it re-arms are one act, and a crash between them is the drift this
+        // whole path was written to end.
+        subscriptions
+                .findLive(tenantId)
+                .ifPresent(live -> subscriptions.restoreDepositDue(tenantId, live.id(), deposit.amountMinor()));
+
+        audit.record(AuditFact.of("commercial.wallet.deposit_reversed", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.wallet_entry", id)
+                .because(reason)
+                .changed(Map.of("amountMinor", deposit.amountMinor(), "reversedEntryId", depositEntryId.toString()))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -661,6 +836,22 @@ public class WalletService {
      * after bonus and paid money (ADR 0095, item 8). {@code NotConfigured} —
      * the only answer today, with no merchant account — leaves the
      * remainder due, exactly like {@code INVOICE}.
+     *
+     * <p>Every outcome is answered for, and the three are told apart. A
+     * decline used to collapse into the same silent {@code return 0} as "no
+     * merchant account yet": the provider's reason was read by nobody, no
+     * audit fact was written and no counter moved, so a card that declined
+     * every month surfaced only weeks later as an arrears case with no cause
+     * attached, and a provider outage looked like many unrelated tenants going
+     * quietly into arrears. The shape here is {@code OwnerInvitationRelay}'s
+     * for {@code MailOutcome}: name each arm, keep the reason code, and hold
+     * the expected answer apart from the real failure.
+     *
+     * <p>Deliberately no control-plane incident per decline: one decline is a
+     * normal collections event, and an alert per tenant per month is noise
+     * that teaches operators to ignore the class. The systemic signal is the
+     * counter's failure rate; the per-tenant conversation stays with {@code
+     * CommercialArrearsReviewSweeper} (ADR 0089).
      */
     private long attemptCardCharge(
             UUID tenantId,
@@ -678,9 +869,52 @@ public class WalletService {
                 amountMinor,
                 currency,
                 statement.statementId().toString());
-        if (!(outcome instanceof CardCharger.Outcome.Succeeded succeeded)) {
-            return 0;
+        CardCharger.Outcome.Succeeded succeeded;
+        switch (outcome) {
+            case CardCharger.Outcome.Succeeded success -> succeeded = success;
+            case CardCharger.Outcome.Failed failed -> {
+                // The tenant id and the statement, never the token and never the
+                // amount beside a tenant's name (ADR 0028, ADR 0029). The reason
+                // is the provider's own code, which is what an operator asked
+                // "why is this in arrears" actually needs.
+                log.warn(
+                        "A card charge for statement {} of tenant {} was declined: {}",
+                        statement.number(),
+                        tenantId,
+                        failed.reason());
+                audit.record(AuditFact.of("commercial.wallet.card_charge_declined", AuditClass.BUSINESS)
+                        .by(ActorRef.systemJob("wallet-settlement"))
+                        .at(ResourceScope.tenant(tenantId))
+                        .target("commercial.statement", statement.statementId())
+                        .outcome(AuditFact.Outcome.REJECTED)
+                        .because("the card charge was declined by the provider")
+                        .changed(Map.of("reason", failed.reason()))
+                        .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                        .correlatedBy(statement.statementId().toString())
+                        .occurredAt(now)
+                        .build());
+                countCardCharge("failed");
+                return 0;
+            }
+            case CardCharger.Outcome.NotConfigured ignored -> {
+                // The expected answer until a merchant agreement exists, so it is
+                // counted and not logged: a WARN per CARD tenant per statement
+                // would drown the decline it has to be told apart from.
+                countCardCharge("not_configured");
+                return 0;
+            }
         }
+        countCardCharge("succeeded");
+        audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
+                .by(ActorRef.systemJob("wallet-settlement"))
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.statement", statement.statementId())
+                .because("the statement's remainder was charged to the tenant's card")
+                .changed(Map.of("amountMinor", amountMinor, "providerReference", succeeded.providerReference()))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .correlatedBy(statement.statementId().toString())
+                .occurredAt(now)
+                .build());
         appendMoneyIn(new WalletEntry(
                 Ids.newId(),
                 tenantId,
@@ -714,6 +948,14 @@ public class WalletService {
                 null,
                 now));
         return amountMinor;
+    }
+
+    private void countCardCharge(String outcome) {
+        Counter.builder(CARD_CHARGE_METRIC)
+                .description("ADR 0095 card collection of a statement's remainder, by how the charge ended")
+                .tag("outcome", outcome)
+                .register(meters)
+                .increment();
     }
 
     // ------------------------------------------------------------ bonus expiry
@@ -808,20 +1050,67 @@ public class WalletService {
     /**
      * Who gave the second signature.
      *
-     * <p>{@code WALLET_ADJUSTMENT}, {@code WALLET_BONUS_GRANT} and {@code
-     * WALLET_REFUND} are all fail-closed and seeded at platform scope (V0211),
-     * so the only outcome that reaches here is {@code Approved}. The other one
-     * {@code mayProceed()} admits is {@code NotRequired}, which would mean
-     * somebody removed the policy — and an entry written on one signature is
-     * exactly what ADR 0095 item 4 refuses, so this refuses it too rather than
-     * writing the requester's own name into {@code approved_by}.
+     * <p>{@code WALLET_ADJUSTMENT}, {@code WALLET_BONUS_GRANT}, {@code
+     * WALLET_REFUND} and {@code WALLET_DEPOSIT_REVERSAL} are all fail-closed
+     * and seeded at platform scope (V0211), so the only outcome that reaches
+     * here is {@code Approved}. The other one {@code mayProceed()} admits is
+     * {@code NotRequired}, which would mean somebody removed the policy — and
+     * an entry written on one signature is exactly what ADR 0095 item 4
+     * refuses, so this refuses it too rather than writing the requester's own
+     * name into {@code approved_by}.
      */
     private static String approvedBy(ApprovalOutcome approval) {
+        return approved(approval).approvedBy();
+    }
+
+    /**
+     * Who proposed the change — the name the ledger row records as having made
+     * it, whoever finally executed it.
+     *
+     * <p>Not the acting subject. V0071 settles that the executor need not be
+     * the maker ("Ordinarily requested_by; the four-eyes rule governs who
+     * decides, not who executes"), so the checker legitimately re-submits the
+     * identical call themselves; writing the acting subject here would produce
+     * a row naming one person as both recorder and approver of money leaving
+     * the platform — which is what a finance reviewer reading
+     * {@code commercial.wallet_entries} alone would have to take at face value.
+     * V0211's {@code ck_wallet_entry_four_eyes} refuses such a row outright,
+     * the way every other money table in this schema does; this is what keeps
+     * the legitimate path from hitting it. Who actually executed is not lost:
+     * {@code audit.approval_requests.consumed_by} records it, and the audit
+     * fact beside each entry is recorded {@code .by(actor)}.
+     */
+    private static String recordedBy(ApprovalOutcome approval) {
+        return approved(approval).requestedBy();
+    }
+
+    private static ApprovalOutcome.Approved approved(ApprovalOutcome approval) {
         if (approval instanceof ApprovalOutcome.Approved approved) {
-            return approved.approvedBy();
+            return approved;
         }
         throw new ApiException(
                 ErrorCode.APPROVAL_POLICY_REQUIRED, "A wallet change moves nothing without a second person's approval");
+    }
+
+    /**
+     * Refuses a reference that would leave nothing to be unique on.
+     *
+     * <p>{@code ux_wallet_entry_money_in_reference} is unique on the
+     * <em>normalised</em> reference (V0211) — upper case, no whitespace, no
+     * hyphens, no leading '#' — because "MT103-7" and " mt103 7" are one
+     * transfer typed twice. A reference of nothing but those characters
+     * normalises to the empty string, which would make every such record
+     * collide with every other, so it is refused at the door instead.
+     */
+    private static void requireReference(@Nullable String reference, String message) {
+        if (reference == null || reference.isBlank() || normalise(reference).isEmpty()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, message);
+        }
+    }
+
+    /** The rule V0211's generated column applies, kept here only to reject a reference that normalises away. */
+    private static String normalise(String reference) {
+        return reference.replaceFirst("^#", "").replaceAll("[\\s-]", "").toUpperCase(java.util.Locale.ROOT);
     }
 
     private static void requireMoneyKind(String moneyKind) {
@@ -842,6 +1131,8 @@ public class WalletService {
     private record BonusGrantCommand(UUID tenantId, long amountMinor, Instant expiresAt, String reason) {}
 
     private record RefundCommand(UUID tenantId, long amountMinor, String payoutReference, String reason) {}
+
+    private record DepositReversalCommand(UUID tenantId, UUID depositEntryId, String reason) {}
 
     /** What a manual change did: applied, waiting for a second signature, or declined. */
     public record WalletChangeOutcome(

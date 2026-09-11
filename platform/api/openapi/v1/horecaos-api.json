@@ -2989,6 +2989,10 @@
       },
       "CommercialControlPlaneControllerSubscriptionResponse" : {
         "properties" : {
+          "activationDepositDueMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "allowedNext" : {
             "items" : {
               "type" : "string"
@@ -18213,6 +18217,21 @@
         },
         "type" : "object"
       },
+      "WalletDepositReversalRequest" : {
+        "properties" : {
+          "depositEntryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "depositEntryId", "reason" ],
+        "type" : "object"
+      },
       "WalletEntryRecorded" : {
         "properties" : {
           "entryId" : {
@@ -18269,6 +18288,9 @@
       "WalletOverviewView" : {
         "properties" : {
           "bonusBalance" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "bonusSpendableBalance" : {
             "$ref" : "#/components/schemas/ApiMoney"
           },
           "cardTokenReference" : {
@@ -18609,7 +18631,7 @@
     },
     "/api/v1/control-plane/approval-requests" : {
       "get" : {
-        "description" : "A change of a tenant's country and a tenant's activation, oldest first. Each is decided through its tenant's own decision route. The maker's reason is not returned, for the same reason as the tenant queue.",
+        "description" : "A change of a tenant's country, a tenant's activation and the wallet changes HorecaOS proposes against a tenant's account, oldest first. A row carrying a tenant is decided through that tenant's own decision route; a PLATFORM-scope row carries no tenant and is decided through the platform route beside this one. The maker's reason is not returned, for the same reason as the tenant queue.",
         "operationId" : "platformPending",
         "parameters" : [ {
           "in" : "query",
@@ -18636,6 +18658,45 @@
           }
         },
         "summary" : "Platform decisions waiting for a second signature, in every tenant",
+        "tags" : [ "Approval requests" ]
+      }
+    },
+    "/api/v1/control-plane/approval-requests/{requestId}/decision" : {
+      "post" : {
+        "description" : "The decision route for the rows in the platform queue that carry no tenant — HorecaOS's own decisions, such as a wallet correction or a refund of a tenant's paid money. Every rule of the tenant route still applies: the capability the governing policy version named, and the requester refused outright. A request that belongs to a tenant is not reachable here, and one that belongs to no tenant is not reachable from a tenant route.",
+        "operationId" : "platformDecide",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve or decline a pending PLATFORM-scope request",
         "tags" : [ "Approval requests" ]
       }
     },
@@ -27128,7 +27189,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/wallet" : {
       "get" : {
-        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored.",
+        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. bonusSpendableBalance is the part of the bonus balance a statement could draw on now — the sum of the live grants' remainders. It is lower than bonusBalance between a grant's expiry and the hourly sweep that lapses it, and after a voided statement hands a draw back to a grant that has already expired.",
         "operationId" : "overview",
         "parameters" : [ {
           "in" : "path",
@@ -34785,6 +34846,45 @@
           }
         },
         "summary" : "Record the tenant's activation deposit as paid",
+        "tags" : [ "Commercial wallet" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/deposit-reversals" : {
+      "post" : {
+        "description" : "Takes the paid money back and makes the deposit due again, in one transaction. Needs a second signature. A plain correction would remove the money and leave the obligation cleared, so the tenant's real deposit could never be recorded or billed again. Refused when the paid balance will not carry it — void the statements the deposit paid first, which gives the money back.",
+        "operationId" : "proposeDepositReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/WalletDepositReversalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletChangeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Propose taking back an activation deposit recorded against the wrong tenant",
         "tags" : [ "Commercial wallet" ]
       }
     },

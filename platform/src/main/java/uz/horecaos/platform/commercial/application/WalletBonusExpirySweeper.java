@@ -20,7 +20,8 @@ import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStor
  * MarketingRetentionSweeper}: {@code runOnce()} does the pass and answers
  * how many grants it lapsed, for a deterministic test; {@code sweepOnce()} is
  * the {@code @Scheduled} entry point, which catches and logs so one bad row
- * cannot stop the schedule. The per-grant work — locking the tenant's
+ * cannot stop the schedule, and {@code runOnce()} catches per candidate so one
+ * bad row cannot stop the pass either. The per-grant work — locking the tenant's
  * billing row, recomputing the remainder, writing the entry — is {@link
  * WalletService#expireGrantIfDue}, so each grant lapses in its own short
  * transaction rather than this whole pass holding every candidate tenant's
@@ -60,13 +61,26 @@ public class WalletBonusExpirySweeper {
         Instant now = clock.instant();
         List<ExpiredGrantRef> candidates = wallet.findExpiredGrantCandidates(now, batchSize);
         int lapsed = 0;
+        int failed = 0;
         for (ExpiredGrantRef candidate : candidates) {
-            if (wallet.expireGrantIfDue(candidate.tenantId(), candidate.grantId(), candidate.currency(), now)) {
-                lapsed++;
+            try {
+                if (wallet.expireGrantIfDue(candidate.tenantId(), candidate.grantId(), candidate.currency(), now)) {
+                    lapsed++;
+                }
+            } catch (RuntimeException failure) {
+                // One grant's failure must not stop this pass reaching the rest
+                // of the batch — the same rule MarketingRetentionSweeper states
+                // for one snapshot. The candidate query orders by expires_at
+                // ascending, so a grant that keeps throwing keeps the earliest
+                // expiry and a remainder above zero: it would sit at the head of
+                // every later batch and hold every later expiry behind it, and
+                // the sweep would never reach another grant again.
+                failed++;
+                log.error("Bonus expiry sweep could not lapse grant {}", candidate.grantId(), failure);
             }
         }
-        if (lapsed > 0) {
-            log.info("Bonus expiry sweep: {} grants lapsed", lapsed);
+        if (lapsed > 0 || failed > 0) {
+            log.info("Bonus expiry sweep: {} grants lapsed, {} failed", lapsed, failed);
         }
         return lapsed;
     }

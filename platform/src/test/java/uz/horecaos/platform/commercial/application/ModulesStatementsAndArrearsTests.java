@@ -126,7 +126,13 @@ class ModulesStatementsAndArrearsTests {
         JdbcWalletStore walletStore = new JdbcWalletStore(jdbc);
         ApprovalService approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry());
         WalletService wallet = new WalletService(
-                walletStore, subscriptionStore, approvals, new NotConfiguredCardCharger(), audit, clock);
+                walletStore,
+                subscriptionStore,
+                approvals,
+                new NotConfiguredCardCharger(),
+                audit,
+                new SimpleMeterRegistry(),
+                clock);
 
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));
         entitlements =

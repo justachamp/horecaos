@@ -50,4 +50,16 @@ public record WalletEntry(
 
     public static final String ADJUSTMENT = "ADJUSTMENT";
     public static final String REFUND = "REFUND";
+
+    /**
+     * What an approved reversal of a deposit recorded in error gives back
+     * (ADR 0095, item 6). A deposit recorded against the wrong tenant leaves
+     * two things behind — the money in that tenant's ledger, and its
+     * subscription's deposit marked paid — and a plain downward correction
+     * mends only the first, leaving the real deposit uncollectable because
+     * nothing is due any more. This entry takes the money back and re-arms
+     * the obligation in the same locked transaction. It names the reference
+     * the deposit was recorded under, so the two rows read as one act.
+     */
+    public static final String DEPOSIT_REVERSAL = "DEPOSIT_REVERSAL";
 }

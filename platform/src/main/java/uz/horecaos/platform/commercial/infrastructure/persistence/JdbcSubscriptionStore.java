@@ -89,12 +89,59 @@ public class JdbcSubscriptionStore {
                 .orElse(0L);
     }
 
+    /**
+     * The currency the live subscription's plan version is priced in, which is
+     * the currency its activation deposit is named in.
+     *
+     * <p>Read because {@code deposit_due_minor} is copied verbatim from the
+     * plan version's {@code activation_deposit_minor} and carries no currency
+     * of its own, while a tenant's wallet is in {@code tenant.tenants
+     * .default_currency}. ADR 0095 permits a plan version sold in a second
+     * currency, so the two can differ, and crediting 50 000 minor USD into a
+     * UZS wallet as 50 000 som is a four-cent record of a five-hundred-dollar
+     * receipt. {@code WalletService.recordDeposit} compares the two and
+     * refuses rather than crediting a face value in the wrong money.
+     *
+     * <p>Empty when the tenant has no live subscription.
+     */
+    public Optional<String> livePlanCurrency(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT v.currency
+                          FROM commercial.subscriptions s
+                          JOIN commercial.plan_versions v ON v.id = s.plan_version_id
+                         WHERE s.tenant_id = :tenantId AND s.status NOT IN ('TERMINATED', 'EXPIRED')
+                        """).param("tenantId", tenantId).query(String.class).optional();
+    }
+
     /** Clears a subscription's deposit due to zero once it is paid (ADR 0095). */
     public void clearDepositDue(UUID tenantId, UUID subscriptionId) {
         jdbc.sql("""
                         UPDATE commercial.subscriptions SET deposit_due_minor = 0
                          WHERE tenant_id = :tenantId AND id = :id
                         """).param("tenantId", tenantId).param("id", subscriptionId).update();
+    }
+
+    /**
+     * Makes the activation deposit due again, after an approved
+     * {@code DEPOSIT_REVERSAL} took back a deposit recorded against the wrong
+     * tenant (ADR 0095, item 6).
+     *
+     * <p>Without this, {@link #clearDepositDue} is a one-way flag: the ledger
+     * can be put right, because a reversal is an entry like any other, but the
+     * obligation cannot, and the tenant's real deposit becomes uncollectable —
+     * nothing is due any more and the statement stopped billing a deposit line.
+     * The amount restored is the amount the reversal took back, which is the
+     * amount the mis-record cleared.
+     */
+    public void restoreDepositDue(UUID tenantId, UUID subscriptionId, long depositDueMinor) {
+        jdbc.sql("""
+                        UPDATE commercial.subscriptions SET deposit_due_minor = :depositDueMinor
+                         WHERE tenant_id = :tenantId AND id = :id
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", subscriptionId)
+                .param("depositDueMinor", depositDueMinor)
+                .update();
     }
 
     public Optional<Subscription> findLive(UUID tenantId) {
