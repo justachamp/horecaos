@@ -153,12 +153,21 @@ public class ApprovalDecisionService {
     }
 
     /**
-     * Requests for the given actions waiting in any tenant (ADR 0090): the
-     * platform approvals queue, for decisions HorecaOS staff take across
-     * tenants such as a change of country.
+     * Requests for the given actions waiting anywhere (ADR 0090, ADR 0095):
+     * the platform approvals queue, for decisions HorecaOS staff take across
+     * tenants such as a change of country, and for its own {@code PLATFORM}
+     * -scope decisions such as a wallet refund.
      *
      * <p>The same columns and the same rule as {@link #pending}: the maker's
      * reason is not returned, and lapsed requests are excluded.
+     *
+     * <p>A {@code PLATFORM}-scope request carries a null tenant, and is listed
+     * here precisely because it is nowhere else: {@link #pending} is keyed on
+     * the tenant, so nothing with a null one can reach a tenant's worklist.
+     * That is the point of raising a wallet correction at platform scope —
+     * HorecaOS proposing a change against a tenant's account is not a decision
+     * that tenant can sign, and until it was raised there it sat in the
+     * tenant's own queue with the maker's name on it.
      */
     public List<TenantPendingApproval> pendingAcrossTenants(
             java.util.Collection<String> actionCodes, int limit, String subject) {
@@ -173,8 +182,7 @@ public class ApprovalDecisionService {
                                p.required_approver_capability
                           FROM audit.approval_requests r
                           JOIN audit.approval_policies p ON p.id = r.policy_id
-                         WHERE r.tenant_id IS NOT NULL
-                           AND r.action_code IN (:actionCodes)
+                         WHERE r.action_code IN (:actionCodes)
                            AND r.status = 'PENDING'
                            AND r.expires_at > :now
                          ORDER BY r.requested_at
@@ -190,8 +198,8 @@ public class ApprovalDecisionService {
                 .toList();
     }
 
-    /** A pending request and the tenant it waits in. */
-    public record TenantPendingApproval(UUID tenantId, PendingApproval approval) {}
+    /** A pending request and the tenant it waits in; the tenant is null for a {@code PLATFORM}-scope request. */
+    public record TenantPendingApproval(@Nullable UUID tenantId, PendingApproval approval) {}
 
     /**
      * Approves or declines one pending request.
@@ -204,12 +212,16 @@ public class ApprovalDecisionService {
      *         decided it first
      */
     public DecidedApproval decide(
-            UUID tenantId, UUID requestId, ApprovalService.Decision decision, ActorRef approver, String reason) {
+            @Nullable UUID tenantId,
+            UUID requestId,
+            ApprovalService.Decision decision,
+            ActorRef approver,
+            String reason) {
 
         String decisionReason = requireReason(reason);
         RequestRow request = load(tenantId, requestId)
                 .orElseThrow(() -> new ApiException(
-                        ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s in this tenant".formatted(requestId)));
+                        ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s decidable here".formatted(requestId)));
 
         // Four eyes with one pair of eyes is not a control, so this is checked
         // before anything the caller holds can matter. The database repeats it in
@@ -335,11 +347,15 @@ public class ApprovalDecisionService {
                 .build());
     }
 
-    private Optional<RequestRow> load(UUID tenantId, UUID requestId) {
+    private Optional<RequestRow> load(@Nullable UUID tenantId, UUID requestId) {
         // Constrained on the tenant the caller was authorised against, never on
-        // the identifier alone. A PLATFORM-scoped request carries a null tenant
-        // and so cannot be reached from a tenant surface at all, which is right:
-        // HorecaOS's own floor is not a tenant's to sign.
+        // the identifier alone. IS NOT DISTINCT FROM rather than =, so the two
+        // cases stay symmetrical and neither can reach the other: a tenant
+        // surface passes its own tenant and finds only that tenant's requests,
+        // and the platform decide route passes null and finds only the
+        // PLATFORM-scope requests that carry no tenant — HorecaOS's own floor
+        // is not a tenant's to sign, and a tenant's is not reachable by
+        // pretending to be nobody.
         return jdbc.sql("""
                 SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
                        r.scope_type, r.scope_id, r.threshold_description,
@@ -348,7 +364,7 @@ public class ApprovalDecisionService {
                        p.required_approver_capability
                   FROM audit.approval_requests r
                   JOIN audit.approval_policies p ON p.id = r.policy_id
-                 WHERE r.id = :id AND r.tenant_id = :tenantId
+                 WHERE r.id = :id AND r.tenant_id IS NOT DISTINCT FROM :tenantId
                 """)
                 .param("id", requestId)
                 .param("tenantId", tenantId)
@@ -383,10 +399,17 @@ public class ApprovalDecisionService {
      * which is a migration and a change to what {@code requireApproval} records.
      */
     private static ResourceScope scopeOf(RequestRow request) {
+        if ("PLATFORM".equals(request.scopeType())) {
+            return ResourceScope.platform();
+        }
+        // Below the platform the row always carries its tenant: V0007's
+        // ck_approval_request_scope_id ties the scope identifier to the scope
+        // type, and every non-platform scope in ResourceScope requires a tenant
+        // to be constructed at all.
+        UUID tenantId = Objects.requireNonNull(request.tenantId(), "A request below platform scope names a tenant");
         return switch (request.scopeType()) {
-            case "TENANT" -> ResourceScope.tenant(request.tenantId());
-            case "BRAND" -> ResourceScope.brand(request.tenantId(), request.scopeId());
-            default -> ResourceScope.tenant(request.tenantId());
+            case "BRAND" -> ResourceScope.brand(tenantId, request.scopeId());
+            default -> ResourceScope.tenant(tenantId);
         };
     }
 
@@ -432,7 +455,7 @@ public class ApprovalDecisionService {
 
     private record RequestRow(
             UUID id,
-            UUID tenantId,
+            @Nullable UUID tenantId,
             String actionCode,
             String parametersHash,
             String scopeType,

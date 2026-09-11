@@ -1747,7 +1747,7 @@ class LoyaltyLedgerAndSplitTenderTests {
 
         @Override
         public ApprovalOutcome requireApproval(ApprovalRequestCommand command) {
-            return new ApprovalOutcome.Approved(UUID.randomUUID(), "checker-1", () -> {});
+            return new ApprovalOutcome.Approved(UUID.randomUUID(), "maker-1", "checker-1", () -> {});
         }
 
         @Override

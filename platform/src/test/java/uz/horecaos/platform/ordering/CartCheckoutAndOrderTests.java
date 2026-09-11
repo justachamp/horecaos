@@ -5545,7 +5545,7 @@ class CartCheckoutAndOrderTests {
                 public uz.horecaos.platform.audit.api.ApprovalOutcome requireApproval(
                         uz.horecaos.platform.audit.api.ApprovalRequestCommand command) {
                     return new uz.horecaos.platform.audit.api.ApprovalOutcome.Approved(
-                            UUID.randomUUID(), "checker-1", () -> {});
+                            UUID.randomUUID(), "maker-1", "checker-1", () -> {});
                 }
 
                 @Override

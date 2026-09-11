@@ -58,7 +58,13 @@ class ApprovalRequestEndpointTests {
     private static final String FINANCE = "approval-decide-finance";
     private static final String STAFF = "approval-decide-support";
 
+    /** HorecaOS staff, whose grants are at PLATFORM scope and belong to no tenant. */
+    private static final String PLATFORM_MAKER = "approval-decide-platform-maker";
+
+    private static final String PLATFORM_CHECKER = "approval-decide-platform-checker";
+
     private static final String ACTION = "payments.remedy.record";
+    private static final String WALLET_ACTION = "commercial.wallet.refund";
     private static final String PARAMETERS = "b".repeat(64);
 
     /**
@@ -340,7 +346,138 @@ class ApprovalRequestEndpointTests {
         assertThat(listed.getResponse().getContentAsString()).contains(ACTION).contains("\"mayDecide\":true");
     }
 
+    /**
+     * ADR 0095: HorecaOS proposing a change against a tenant's wallet is
+     * HorecaOS's own decision, so it is raised at {@code PLATFORM} scope and
+     * carries no tenant at all. This is the whole point of that scope, in four
+     * assertions: the platform queue lists it, the tenant's own worklist cannot
+     * see it however it asks, the tenant decision route cannot reach it, and the
+     * platform decision route signs it.
+     */
+    @Test
+    void aPlatformScopeRequestWaitsAboveEveryTenantsQueue() throws Exception {
+        grantPlatform(PLATFORM_MAKER);
+        grantPlatform(PLATFORM_CHECKER);
+        UUID requestId = platformPendingRequest(PLATFORM_MAKER, Capability.COMMERCIAL_WALLET_MANAGE);
+
+        MvcResult platformQueue = mvc.perform(
+                        get("/api/v1/control-plane/approval-requests").with(tokenFor(PLATFORM_CHECKER)))
+                .andReturn();
+        assertThat(platformQueue.getResponse().getStatus()).isEqualTo(200);
+        assertThat(platformQueue.getResponse().getContentAsString())
+                .as("a request with no tenant is listed nowhere else, so the platform queue has to carry it")
+                .contains(WALLET_ACTION)
+                .contains("\"mayDecide\":true");
+
+        String tenantQueue = "/api/v1/control-plane/tenants/" + TENANT + "/approval-requests";
+        assertThat(mvc.perform(get(tenantQueue).with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .as("the tenant's finance manager must not read HorecaOS proposing a refund of their money")
+                .doesNotContain(WALLET_ACTION);
+        assertThat(mvc.perform(get("/api/v1/operations/tenants/" + TENANT + "/approval-requests?actionCode="
+                                        + WALLET_ACTION)
+                                .with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .as("nor by asking for it by name on the operations worklist")
+                .doesNotContain(WALLET_ACTION);
+
+        MvcResult wrongRoute = mvc.perform(decision(requestId)
+                        .with(tokenFor(FINANCE))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-platform-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+        assertThat(wrongRoute.getResponse().getStatus())
+                .as("and a tenant route cannot reach a request that belongs to no tenant")
+                .isEqualTo(404);
+
+        MvcResult decided = mvc.perform(post("/api/v1/control-plane/approval-requests/" + requestId + "/decision")
+                        .with(tokenFor(PLATFORM_CHECKER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-platform-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+        assertThat(decided.getResponse().getStatus()).isEqualTo(200);
+        assertThat(status(requestId)).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void aTenantsOwnRequestIsNotReachableFromThePlatformDecisionRoute() throws Exception {
+        grantPlatform(PLATFORM_CHECKER);
+        UUID requestId = pendingRequest(TENANT, OWNER, Capability.REFUND_APPROVE);
+
+        MvcResult refused = mvc.perform(post("/api/v1/control-plane/approval-requests/" + requestId + "/decision")
+                        .with(tokenFor(PLATFORM_CHECKER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-platform-3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("the two routes are symmetrical; neither reaches the other's requests")
+                .isEqualTo(404);
+        assertThat(status(requestId)).isEqualTo("PENDING");
+    }
+
     // --- fixtures ---------------------------------------------------------
+
+    /** A request HorecaOS raised about a tenant's account, at platform scope and carrying no tenant. */
+    private UUID platformPendingRequest(String requestedBy, Capability approverCapability) {
+        UUID policyId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO audit.approval_policies
+                    (id, tenant_id, action_code, scope_type, threshold_json,
+                     required_approver_capability, valid_from, version, approved_by)
+                VALUES (:id, NULL, :actionCode, 'PLATFORM',
+                        CAST('{"description":"Every refund of a tenant''s paid money"}' AS jsonb),
+                        :approver, :now, 1, 'platform-admin')
+                """)
+                .param("id", policyId)
+                .param("actionCode", WALLET_ACTION)
+                .param("approver", approverCapability.code())
+                .param("now", clock.instant().minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
+
+        UUID requestId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO audit.approval_requests (
+                    id, tenant_id, action_code, parameters_hash, scope_type, scope_id,
+                    policy_id, policy_is_platform, policy_version, threshold_description,
+                    status, requested_by, requested_at, reason, expires_at)
+                VALUES (:id, NULL, :actionCode, :hash, 'PLATFORM', NULL,
+                        :policyId, true, 1, 'Every refund of a tenant''s paid money', 'PENDING',
+                        :requestedBy, :now, 'The tenant left', :expiresAt)
+                """)
+                .param("id", requestId)
+                .param("actionCode", WALLET_ACTION)
+                .param("hash", "c".repeat(64))
+                .param("policyId", policyId)
+                .param("requestedBy", requestedBy)
+                .param("now", clock.instant().atOffset(ZoneOffset.UTC))
+                .param("expiresAt", clock.instant().plus(Duration.ofHours(24)).atOffset(ZoneOffset.UTC))
+                .update();
+        return requestId;
+    }
+
+    private void grantPlatform(String subject) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
+                        'ACTIVE', 'test-fixture', 'approval decision endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_ADMIN.code()).getBytes(UTF_8)))
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
+                .param("validFrom", clock.instant().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
 
     private static MockHttpServletRequestBuilder decision(UUID requestId) {
         return post("/api/v1/control-plane/tenants/" + TENANT + "/approval-requests/" + requestId + "/decision");

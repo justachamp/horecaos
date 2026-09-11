@@ -666,8 +666,8 @@ class CourierCompensationTests {
         assertThat(ledgerStore.findPeriod(TENANT, period.id()).orElseThrow().status())
                 .isEqualTo(SettlementPeriodStatus.CLOSED);
 
-        approvals.answer =
-                new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager", approvals.consumed::incrementAndGet);
+        approvals.answer = new ApprovalOutcome.Approved(
+                UUID.randomUUID(), "manager-1", "another-manager", approvals.consumed::incrementAndGet);
         CourierSettlementService.PayoutOutcome authorised =
                 settlement.authorisePayout(TENANT, period.id(), PayoutMethod.CASH_AT_BRANCH, manager(), "paying");
 
@@ -927,8 +927,8 @@ class CourierCompensationTests {
                 "manager")));
         assertThat(direct).isInstanceOf(ApiException.class);
 
-        approvals.answer =
-                new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager", approvals.consumed::incrementAndGet);
+        approvals.answer = new ApprovalOutcome.Approved(
+                UUID.randomUUID(), "manager-1", "another-manager", approvals.consumed::incrementAndGet);
         CourierAdjustmentService.Outcome approved = adjustments.request(new CourierAdjustmentService.AdjustmentCommand(
                 TENANT,
                 courierId,

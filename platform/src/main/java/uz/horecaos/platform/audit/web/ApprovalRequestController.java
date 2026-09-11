@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -104,14 +105,17 @@ public class ApprovalRequestController {
             ApprovalAction.TENANT_ACTIVATE.code(),
             ApprovalAction.WALLET_ADJUSTMENT.code(),
             ApprovalAction.WALLET_BONUS_GRANT.code(),
-            ApprovalAction.WALLET_REFUND.code());
+            ApprovalAction.WALLET_REFUND.code(),
+            ApprovalAction.WALLET_DEPOSIT_REVERSAL.code());
 
     @GetMapping("/api/v1/control-plane/approval-requests")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.PLATFORM)
     @Operation(
             summary = "Platform decisions waiting for a second signature, in every tenant",
-            description = "A change of a tenant's country and a tenant's activation, oldest first. "
-                    + "Each is decided through its tenant's own decision route. The maker's reason "
+            description = "A change of a tenant's country, a tenant's activation and the wallet changes "
+                    + "HorecaOS proposes against a tenant's account, oldest first. A row carrying a tenant "
+                    + "is decided through that tenant's own decision route; a PLATFORM-scope row carries no "
+                    + "tenant and is decided through the platform route beside this one. The maker's reason "
                     + "is not returned, for the same reason as the tenant queue.")
     List<PlatformPendingApprovalResponse> platformPending(@RequestParam(required = false) Integer limit) {
         return decisions.pendingAcrossTenants(PLATFORM_ACTIONS, Page.limitOrDefault(limit), subject()).stream()
@@ -120,8 +124,30 @@ public class ApprovalRequestController {
                 .toList();
     }
 
-    /** One platform decision waiting, with the tenant it waits in. */
-    public record PlatformPendingApprovalResponse(UUID tenantId, PendingApprovalResponse request) {}
+    /**
+     * One platform decision waiting.
+     *
+     * @param tenantId the tenant it waits in, or null when the request is
+     *                 itself {@code PLATFORM}-scoped — a wallet change is
+     *                 HorecaOS's own decision about a tenant's account rather
+     *                 than the tenant's, so it is raised, listed and decided
+     *                 above every tenant's queue (ADR 0095)
+     */
+    public record PlatformPendingApprovalResponse(@Nullable UUID tenantId, PendingApprovalResponse request) {}
+
+    @PostMapping("/api/v1/control-plane/approval-requests/{requestId}/decision")
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Approve or decline a pending PLATFORM-scope request",
+            description = "The decision route for the rows in the platform queue that carry no tenant — "
+                    + "HorecaOS's own decisions, such as a wallet correction or a refund of a tenant's paid "
+                    + "money. Every rule of the tenant route still applies: the capability the governing "
+                    + "policy version named, and the requester refused outright. A request that belongs to a "
+                    + "tenant is not reachable here, and one that belongs to no tenant is not reachable from "
+                    + "a tenant route.")
+    DecisionResponse platformDecide(@PathVariable UUID requestId, @Valid @RequestBody DecisionRequest body) {
+        return decideAndRespond(null, requestId, body);
+    }
 
     @PostMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests/{requestId}/decision")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT, mutating = true)
@@ -172,7 +198,7 @@ public class ApprovalRequestController {
         return Page.last(waiting);
     }
 
-    private DecisionResponse decideAndRespond(UUID tenantId, UUID requestId, DecisionRequest body) {
+    private DecisionResponse decideAndRespond(@Nullable UUID tenantId, UUID requestId, DecisionRequest body) {
         var decided = decisions.decide(tenantId, requestId, decisionOf(body.decision()), actor(), body.reason());
 
         return new DecisionResponse(

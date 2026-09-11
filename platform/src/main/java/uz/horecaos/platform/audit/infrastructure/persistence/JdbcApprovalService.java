@@ -163,6 +163,7 @@ public class JdbcApprovalService implements ApprovalService {
             case "APPROVED" ->
                 new ApprovalOutcome.Approved(
                         request.id(),
+                        request.requestedBy(),
                         Objects.requireNonNull(request.decidedBy(), "An approved request has a decider"),
                         grantFor(request, command));
             case "DECLINED" ->

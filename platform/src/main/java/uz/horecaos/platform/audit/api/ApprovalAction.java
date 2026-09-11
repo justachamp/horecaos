@@ -58,6 +58,15 @@ public enum ApprovalAction {
     WALLET_REFUND("commercial.wallet.refund", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
 
     /**
+     * ADR 0095: taking back an activation deposit recorded against the wrong
+     * tenant, which also re-arms the obligation the mis-record cleared.
+     * Fail-closed, same reasoning: it both removes paid money and makes money
+     * owed again, and one person doing either on their own word is the control
+     * a finance review asks for first.
+     */
+    WALLET_DEPOSIT_REVERSAL("commercial.wallet.deposit-reversal", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
      * ADR 0025, Gap A of the 2026-08-30 proving run: granting or revoking a
      * {@code PLATFORM}-scope role — the highest-authority action this
      * platform's own grant model can express, since {@code PLATFORM_ADMIN}

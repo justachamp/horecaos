@@ -35,8 +35,19 @@ public sealed interface ApprovalOutcome {
      * for the rest of its validity and one signature authorised every identical
      * resubmission a maker cared to make. The grant is the half that was
      * missing: hold it, perform the action, and spend it in the same transaction.
+     *
+     * <p>{@code requestedBy} is the maker — the subject that raised the
+     * request, which is not necessarily the subject executing under it. V0071
+     * states the platform's position on that ("Ordinarily requested_by; the
+     * four-eyes rule governs who decides, not who executes"), so a checker may
+     * legitimately make the identical call themselves. A record written with
+     * the executor's name in both the "recorded by" and "approved by" columns
+     * would then read, to anyone auditing that record alone, as one person
+     * having recorded and approved money moving. Carrying the maker here lets
+     * such a record name the two people it actually involved.
      */
-    record Approved(UUID requestId, String approvedBy, ApprovalGrant grant) implements ApprovalOutcome {}
+    record Approved(UUID requestId, String requestedBy, String approvedBy, ApprovalGrant grant)
+            implements ApprovalOutcome {}
 
     /** A matching request was declined. */
     record Declined(UUID requestId, String reason) implements ApprovalOutcome {}
