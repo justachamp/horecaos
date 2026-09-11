@@ -393,13 +393,24 @@ the existing hint table.
   `claimNextStep`'s `failed.required`, without which the run silently stalls at
   step 5 while still reporting `PROVISIONING`. And the same run, reached the way
   production reaches it: the handler throws until `MAXIMUM_ATTEMPTS` is spent.
-- The rollback story, both halves: a `SAMPLE_MENU_PUBLISH` row whose handler is
-  absent is released `BLOCKED` and the run still reaches `READY`; and a
+- The rollback story, every half: a `SAMPLE_MENU_PUBLISH` row whose handler is
+  absent is released `BLOCKED` and the run still reaches `READY`; an *optional*
   `step_key` this binary has no enum constant for is released `BLOCKED` rather
-  than throwing in the claim's row mapper.
-- The stall alert: a run whose optional sample menu failed reports a stalled age
-  of zero two hours later, and the ADR 0058 stuck-run listing does not name it —
-  the mirror of `aRunThatFailedItsRequiredStepIsStalled`.
+  than throwing in the claim's row mapper, and the run still reaches `READY`; a
+  *required* one is released `FAILED`, the run fails, both stall signals name
+  it, and `resume` plus a binary that knows the key finishes the run in place —
+  the assertion that rules out the terminal-and-silent `BLOCKED`; and `validate`
+  reports an unknown key as an unresolvable `CAPABILITY_ABSENT` check beside the
+  six others rather than throwing 500 out of the dry run. That last one is
+  written against a `VALIDATING` step on purpose: `SAMPLE_MENU_PUBLISH` is
+  `CONFIGURING` and invisible to `validate`'s query, so a test written on it
+  would pass with `valueOf` restored.
+- The stall alert in both directions: a run whose optional sample menu failed
+  reports a stalled age of zero two hours later and the ADR 0058 stuck-run
+  listing does not name it; `aRunThatFailedItsRequiredStepIsStalled` asserts the
+  mirror, gauge *and* listing — the listing asserted empty and never non-empty
+  would leave `AND s.required` free to be narrowed to silence, and would never
+  invoke the listing's row mapper at all.
 - `resume` refuses such a run and leaves the failed step `FAILED`.
 - The whole run, once: `sampleMenu: true` on a tenant that authored nothing,
   driven start-to-`READY` by the real `OnboardingService` with the real
@@ -413,9 +424,22 @@ the existing hint table.
   book carries the currency the port was given, asserted on the port because the
   step refuses every currency but one.
 - A tenant whose own price book is live at priority 0 fails
-  `SAMPLE_PRICING_REFUSED` rather than retrying.
+  `SAMPLE_PRICING_REFUSED` rather than retrying — and the converse, which is
+  what keeps that catch narrow: an activation that loses its compare-and-set
+  escapes the real `SampleMenuPricing` and the real handler as an
+  `OptimisticLockingFailureException`, for `OnboardingService` to map to
+  `RETRY`, instead of spending none of its five attempts on a
+  `SAMPLE_PRICING_REFUSED` that waiting would have cleared.
+- A storefront channel that is `INACTIVE` — not only `ARCHIVED` — fails
+  `NO_CHANNEL` with nothing written. `INACTIVE` is the half `sellable()` alone
+  catches, since publication refuses `ARCHIVED` on its own; without it a
+  switched-off storefront gets the whole sample published to it and the run only
+  fails eight steps later at `ACTIVATION_SMOKE_TEST`.
 - The control-plane spec: the checkbox defaults on for a first run, off for a
-  restart, and its value reaches the start call.
+  restart, and its value reaches the start call; and each of the three sample
+  failure codes reaches the DOM as its translated hint, because the hint is the
+  only place the console says what to do about it and catalogue key parity
+  proves the string exists, not that an operator ever sees it.
 - Every `OnboardingStep` appears in `TenantOnboardingStepCompleted.v1`'s
   `stepKey` enum — the compatibility gate only catches removed values, so a
   misspelled or forgotten addition had nothing checking it.
@@ -433,8 +457,40 @@ the run froze on the row instead — a warning every tick, five steps short of
 activation, on every replica.
 
 As of this record, `claimNextStep` resolves the key with `OnboardingStep.find`
-and releases an unknown one `BLOCKED`/`CAPABILITY_ABSENT` exactly as it releases
-one whose handler is missing, so the next such rollback is safe by construction.
+and releases an unknown one `CAPABILITY_ABSENT`, so the next such rollback is
+safe by construction. Which status it releases it *as* depends on the row's own
+`required` column, and the distinction is the whole of the tolerance:
+
+- **Optional** — `BLOCKED`, exactly as a step whose handler is missing.
+  Terminal, never claimed again, and no gate on `READY`, because
+  `outstandingRequiredSteps` counts only required steps. `SAMPLE_MENU_PUBLISH`
+  is the only optional step, so this is the rollback case this record is about,
+  and a run that meets it still reaches `READY` on its own.
+- **Required** — `FAILED`. `BLOCKED` would be the wrong answer here and was
+  briefly the shipped one: a required blocked row is counted by
+  `outstandingRequiredSteps`, so `refreshRunStatus` pins the run at
+  `PROVISIONING` and `activate` answers `READINESS_INCOMPLETE` forever, while
+  the stalled gauge and the ADR 0058 stuck-run listing read only `PENDING` and
+  `FAILED` and so never name it — terminal, silent, and recoverable only by
+  abandoning the run. `FAILED` is the state the rest of the workflow already
+  knows: the run turns `FAILED` and publishes `TenantOnboardingFailed`, both
+  stall signals see it, `claimNextStep`'s `failed.required` clause halts the run
+  at the unknown step rather than draining it to one step short of `READY`, and
+  `resume` reopens it — so the moment a binary that knows the key is back in
+  place, an operator recovers the run where it stands, with no hand-written SQL
+  and no cancel-and-restart.
+
+Releasing a required unknown key back to `PENDING` with a backoff was considered
+and rejected: `release` writes `updated_at` on every call, so a re-release loop
+keeps the row permanently young and therefore invisible to both stall signals —
+the defect it was meant to fix — while `attempt_count` climbs without bound past
+`MAXIMUM_ATTEMPTS`.
+
+The direction this matters in is a rolling deploy, not only a rollback: twelve of
+the thirteen steps are required, so a step a newer replica materialises will
+normally be required too, and an older replica still serving during the rollout
+is what claims it.
+
 That tolerance ships in this wave, not in the wave being rolled back to, so
 **this** rollback still needs the outstanding rows retired by hand first:
 
