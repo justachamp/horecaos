@@ -538,6 +538,8 @@ export const en = {
   'onboarding.invitation.locale.ru': 'Russian',
   'onboarding.invitation.locale.en': 'English',
   'onboarding.invitation.resend': 'Send again',
+  'onboarding.invitation.none': 'The owner’s account was linked before invitations existed, so no email was sent. Send one so they can set a password.',
+  'onboarding.invitation.send': 'Send invitation',
   'onboarding.invitation.resending': 'Sending…',
   'onboarding.invitation.resent': 'Queued again with a new link. The earlier link no longer works.',
   'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Email is not configured on this deployment yet. The invitation goes out as soon as it is.',

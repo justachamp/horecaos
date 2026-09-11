@@ -202,6 +202,15 @@ export class TenantOnboarding {
     }
   }
 
+  /** The owner step linked an owner; with no invitation on record, one can still be sent. */
+  protected ownerLinked(view: OnboardingRunView | null): boolean {
+    return (
+      view?.steps.some(
+        (step) => step.stepKey === 'TENANT_OWNER_LINK_OR_INVITE' && step.status === 'COMPLETED',
+      ) ?? false
+    );
+  }
+
   protected invitationHint(view: OwnerInvitationView): MessageKey | null {
     const code = view.state === 'EXPIRED' ? 'EXPIRED' : view.lastErrorCode;
     return code !== null && INVITATION_HINTS.has(code)
@@ -226,7 +235,7 @@ export class TenantOnboarding {
       await this.tenantsApi.resendOwnerInvitation(
         this.tenantId,
         reason,
-        this.resendLocale() || undefined,
+        this.resendLocale() || (this.invitation() === null ? this.ownerLocale() : undefined),
       );
       this.resendReason.set('');
       this.resent.set(true);

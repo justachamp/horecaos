@@ -254,6 +254,73 @@ class OwnerInvitationFlowTests {
                 .isEqualTo("SENT");
     }
 
+    /**
+     * A tenant onboarded before invitations existed: the owner step completed,
+     * linked an owner with no password, and told nobody. Sending from the
+     * control plane invites the owner that step linked.
+     */
+    @Test
+    @DisplayName("a tenant onboarded before invitations existed can have its first one sent")
+    void aTenantOnboardedEarlierGetsItsFirstInvitation() {
+        UUID runId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.onboarding_runs (id, tenant_id, template_id, template_version, status,
+                    current_phase, started_by)
+                VALUES (:id, :tenantId, '94cc9f54-7451-4db1-ac13-4073f6833b15', 1, 'FAILED', 'VALIDATING', 'operator')
+                """).param("id", runId).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO tenant.onboarding_steps (id, tenant_id, run_id, step_key, phase, sequence_number,
+                    status, required, external_reference)
+                VALUES (:id, :tenantId, :runId, 'TENANT_OWNER_LINK_OR_INVITE', 'PROVISIONING', 2,
+                    'COMPLETED', true, 'owner-subject')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .update();
+        assertThat(invitations.view(tenantId)).isEmpty();
+
+        invitations.resend(tenantId, "uz", ActorRef.user("operator", null), "onboarded before invitations", "corr");
+
+        assertThat(invitations.view(tenantId).orElseThrow().state()).isEqualTo("QUEUED");
+        assertThat(relay.runOnce()).isEqualTo(1);
+        assertThat(mailer.last().to()).isEqualTo("dilnoza.karimova@example.uz");
+        assertThat(facts).extracting(AuditFact::actionCode).first().isEqualTo("tenant.owner_invitation.queued");
+    }
+
+    @Test
+    @DisplayName("nothing is sent for a tenant with no linked owner, or one whose owner already has a password")
+    void aFirstInvitationNeedsAnOwnerWithoutAPassword() {
+        assertThatThrownBy(() -> invitations.resend(tenantId, null, ActorRef.user("operator", null), "why", "corr"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties()).containsEntry("reason", "NO_OWNER"));
+
+        UUID runId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.onboarding_runs (id, tenant_id, template_id, template_version, status,
+                    current_phase, started_by)
+                VALUES (:id, :tenantId, '94cc9f54-7451-4db1-ac13-4073f6833b15', 1, 'ACTIVE', 'ACTIVATING', 'operator')
+                """).param("id", runId).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO tenant.onboarding_steps (id, tenant_id, run_id, step_key, phase, sequence_number,
+                    status, required, external_reference)
+                VALUES (:id, :tenantId, :runId, 'TENANT_OWNER_LINK_OR_INVITE', 'PROVISIONING', 2,
+                    'COMPLETED', true, 'set-up-owner')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .update();
+        accounts.put("set-up-owner", "owner@example.uz", true);
+
+        assertThatThrownBy(() -> invitations.resend(tenantId, null, ActorRef.user("operator", null), "why", "corr"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties()).containsEntry("reason", "ALREADY_SET_UP"));
+        assertThat(invitations.view(tenantId)).isEmpty();
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private static String tokenIn(String text) {

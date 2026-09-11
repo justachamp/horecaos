@@ -529,6 +529,8 @@ export const uzLatn: Messages = {
   'onboarding.invitation.locale.ru': 'Ruscha',
   'onboarding.invitation.locale.en': 'Inglizcha',
   'onboarding.invitation.resend': 'Qayta yuborish',
+  'onboarding.invitation.none': 'Egasining hisobi taklifnomalar paydo bo‘lishidan oldin bog‘langan, shuning uchun xat yuborilmagan. Parol o‘rnatishi uchun taklifnoma yuboring.',
+  'onboarding.invitation.send': 'Taklifnoma yuborish',
   'onboarding.invitation.resending': 'Yuborilmoqda…',
   'onboarding.invitation.resent': 'Yangi havola bilan yana navbatga qo‘yildi. Oldingi havola endi ishlamaydi.',
   'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Bu muhitda pochta hali sozlanmagan. Sozlanishi bilan taklifnoma yuboriladi.',
