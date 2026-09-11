@@ -9,6 +9,13 @@ import { newIdempotencyKey } from '../../../core/api/idempotency';
 export interface FiscalDocumentView {
   readonly documentId: string;
   readonly orderId: string;
+  /**
+   * The order's own display number, resolved through `OrderDirectory` --
+   * null only when the order itself cannot be resolved (deleted test data,
+   * never a real gap). Render this, never `orderId`: nobody outside this
+   * console has ever seen the UUID.
+   */
+  readonly publicOrderNumber: string | null;
   readonly legalEntityId: string;
   readonly documentType: string;
   readonly responsibility: string;

@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { OrderLookupApi, OrderNumberMatchView } from '../../../core/api/order-lookup-api';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ApiError } from '../../../core/api/problem-details';
 import { describeApiError } from '../../orders/order-errors';
+import { orderStatusLabel } from '../../orders/order-status';
 import { FiscalApi, FiscalCoverageView, FiscalDocumentView } from './fiscal-api';
 
 /** `FiscalReasonCode.BLOCKING` (Java), mirrored so the filter offers exactly the same set. */
@@ -44,9 +46,19 @@ type ResolveAction = 'retry' | 'unblock';
 export class FiscalPage {
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(FiscalApi);
+  private readonly orderLookup = inject(OrderLookupApi);
   protected readonly i18n = inject(I18n);
 
   protected readonly reasonCodes = BLOCKING_REASON_CODES;
+
+  // -------------------------------------------------------------- order lookup (per-order documents)
+  protected readonly orderNumberInput = signal('');
+  protected readonly orderLookupLoading = signal(false);
+  protected readonly orderLookupError = signal<string | null>(null);
+  protected readonly orderCandidates = signal<readonly OrderNumberMatchView[]>([]);
+  protected readonly selectedOrder = signal<OrderNumberMatchView | null>(null);
+  protected readonly orderDocumentsLoading = signal(false);
+  protected readonly orderDocuments = signal<readonly FiscalDocumentView[]>([]);
 
   // -------------------------------------------------------------- blocked worklist
   protected readonly blockedLoading = signal(true);
@@ -82,6 +94,71 @@ export class FiscalPage {
       return;
     }
     await Promise.all([this.loadBlocked(tenantId), this.loadCoverage(tenantId)]);
+  }
+
+  // -------------------------------------------------------------- order lookup (per-order documents)
+
+  protected canLookupOrder(): boolean {
+    return this.orderNumberInput().trim().length > 0 && !this.orderLookupLoading();
+  }
+
+  /**
+   * `FiscalApi.forOrder` wraps `GET /fiscal/orders/{orderId}/documents` and
+   * had no caller before this wave -- a FAILED or unissued document outside
+   * the blocked worklist could not be inspected from any screen. This is
+   * that caller, reached the same way `payments-page` reaches an order: by
+   * the number an operator actually has, not the UUID nobody outside this
+   * console has ever seen.
+   */
+  protected async lookupOrder(): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const number = this.orderNumberInput().trim();
+    if (!tenantId || !number) {
+      return;
+    }
+    this.orderLookupLoading.set(true);
+    this.orderLookupError.set(null);
+    this.orderCandidates.set([]);
+    this.selectedOrder.set(null);
+    this.orderDocuments.set([]);
+    try {
+      const matches = await this.orderLookup.byNumber(tenantId, number);
+      if (matches.length === 1) {
+        await this.selectOrder(matches[0]);
+      } else {
+        this.orderCandidates.set(matches);
+      }
+    } catch (error) {
+      this.orderLookupError.set(this.describe(error));
+    } finally {
+      this.orderLookupLoading.set(false);
+    }
+  }
+
+  protected async selectOrder(order: OrderNumberMatchView): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    this.orderCandidates.set([]);
+    this.selectedOrder.set(order);
+    if (!tenantId) {
+      return;
+    }
+    this.orderDocumentsLoading.set(true);
+    try {
+      this.orderDocuments.set(await this.api.forOrder(tenantId, order.orderId));
+    } catch (error) {
+      this.orderLookupError.set(this.describe(error));
+    } finally {
+      this.orderDocumentsLoading.set(false);
+    }
+  }
+
+  protected orderStatusLabel(status: string): string {
+    return orderStatusLabel(status, (key) => this.i18n.t(key));
+  }
+
+  /** `document.orderId` is a UUID nobody outside this console has ever seen. */
+  protected documentOrderLabel(document: FiscalDocumentView): string {
+    return document.publicOrderNumber ?? document.orderId;
   }
 
   // -------------------------------------------------------------- blocked worklist

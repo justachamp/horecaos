@@ -2,6 +2,107 @@
   <h1 class="q-title">{{ 'finance.fiscal.title' | t }}</h1>
   <p class="q-body-sm lead">{{ 'finance.fiscal.lead' | t }}</p>
 
+  <section class="lookup">
+    <h2 class="q-subhead">{{ 'finance.fiscal.lookup.title' | t }}</h2>
+    <label class="q-caption" for="fiscal-order-number">{{
+      'finance.fiscal.lookup.label' | t
+    }}</label>
+    <div class="lookup__row">
+      <input
+        id="fiscal-order-number"
+        class="q-body field"
+        type="text"
+        [value]="orderNumberInput()"
+        (input)="orderNumberInput.set($any($event.target).value)"
+        [placeholder]="'finance.fiscal.lookup.placeholder' | t"
+      />
+      <button
+        type="button"
+        class="q-body primary"
+        [disabled]="!canLookupOrder()"
+        (click)="lookupOrder()"
+      >
+        {{
+          orderLookupLoading()
+            ? ('finance.fiscal.lookup.searching' | t)
+            : ('finance.fiscal.lookup.action' | t)
+        }}
+      </button>
+    </div>
+    @if (orderLookupError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+    @if (
+      !orderLookupLoading() &&
+      orderCandidates().length === 0 &&
+      !selectedOrder() &&
+      orderNumberInput().trim().length > 0 &&
+      !orderLookupError()
+    ) {
+      <p class="q-body-sm empty">{{ 'finance.fiscal.lookup.empty' | t }}</p>
+    }
+    @if (orderCandidates().length > 0) {
+      <p class="q-body-sm note">{{ 'finance.fiscal.lookup.multiple' | t }}</p>
+      <table class="table">
+        <tbody>
+          @for (candidate of orderCandidates(); track candidate.orderId) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ candidate.publicOrderNumber }}</td>
+              <td class="q-body-sm">{{ orderStatusLabel(candidate.status) }}</td>
+              <td class="q-body-sm">{{ candidate.createdAt }}</td>
+              <td class="q-body-sm">
+                <button type="button" class="q-body-sm link" (click)="selectOrder(candidate)">
+                  {{ 'finance.fiscal.lookup.pick' | t }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    @if (selectedOrder(); as order) {
+      <h3 class="q-subhead">
+        {{ 'finance.fiscal.lookup.documents.title' | t: { number: order.publicOrderNumber } }}
+      </h3>
+      @if (orderDocumentsLoading()) {
+        <p class="q-body-sm">{{ 'finance.fiscal.loading' | t }}</p>
+      } @else if (orderDocuments().length === 0) {
+        <p class="q-body-sm empty">{{ 'finance.fiscal.lookup.documents.empty' | t }}</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'finance.fiscal.field.documentType' | t }}</th>
+              <th class="q-caption">{{ 'finance.fiscal.field.provider' | t }}</th>
+              <th class="q-caption">{{ 'finance.fiscal.field.status' | t }}</th>
+              <th class="q-caption">{{ 'finance.fiscal.field.reason' | t }}</th>
+              <th class="q-caption">{{ 'finance.fiscal.field.evidence' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (document of orderDocuments(); track document.documentId) {
+              <tr>
+                <td class="q-body-sm">{{ document.documentType }}</td>
+                <td class="q-body-sm">{{ document.providerType }}</td>
+                <td class="q-body-sm">
+                  <span class="status-badge">{{ document.status }}</span>
+                </td>
+                <td class="q-body-sm">{{ document.reasonCode }}</td>
+                <td class="q-body-sm">
+                  {{
+                    document.hasEvidence
+                      ? ('finance.fiscal.evidence.yes' | t)
+                      : ('finance.fiscal.evidence.no' | t)
+                  }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  </section>
+
   <section class="blocked">
     <div class="toolbar">
       <h2 class="q-subhead">{{ 'finance.fiscal.blocked.title' | t }}</h2>
@@ -36,8 +137,11 @@
             <th class="q-caption">{{ 'finance.fiscal.field.provider' | t }}</th>
             <th class="q-caption">{{ 'finance.fiscal.field.status' | t }}</th>
             <th class="q-caption">{{ 'finance.fiscal.field.reason' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.reasonNote' | t }}</th>
             <th class="q-caption">{{ 'finance.fiscal.field.attempts' | t }}</th>
             <th class="q-caption">{{ 'finance.fiscal.field.evidence' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.submittedAt' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscal.field.reportingDeadlineAt' | t }}</th>
             <th class="q-caption">{{ 'finance.fiscal.field.blockedAt' | t }}</th>
             <th class="q-caption"></th>
           </tr>
@@ -45,13 +149,14 @@
         <tbody>
           @for (document of blocked(); track document.documentId) {
             <tr>
-              <td class="q-body-sm q-mono">{{ document.orderId }}</td>
+              <td class="q-body-sm q-mono">{{ documentOrderLabel(document) }}</td>
               <td class="q-body-sm">{{ document.documentType }}</td>
               <td class="q-body-sm">{{ document.providerType }}</td>
               <td class="q-body-sm">
                 <span class="status-badge">{{ document.status }}</span>
               </td>
               <td class="q-body-sm">{{ document.reasonCode }}</td>
+              <td class="q-body-sm">{{ document.reasonNote ?? '—' }}</td>
               <td class="q-body-sm q-mono">{{ document.attemptCount }}</td>
               <td class="q-body-sm">
                 {{
@@ -60,6 +165,8 @@
                     : ('finance.fiscal.evidence.no' | t)
                 }}
               </td>
+              <td class="q-body-sm">{{ document.submittedAt ?? '—' }}</td>
+              <td class="q-body-sm">{{ document.reportingDeadlineAt ?? '—' }}</td>
               <td class="q-body-sm">{{ document.blockedAt ?? '—' }}</td>
               <td class="q-body-sm actions">
                 <button
@@ -80,7 +187,7 @@
             </tr>
             @if (resolvingDocumentId() === document.documentId) {
               <tr>
-                <td colspan="9">
+                <td colspan="12">
                   <div class="form form--inline">
                     <label class="q-caption" for="resolve-reason">{{
                       (resolveAction() === 'retry'
@@ -128,7 +235,7 @@
             }
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="9">{{ 'finance.fiscal.blocked.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="12">{{ 'finance.fiscal.blocked.empty' | t }}</td>
             </tr>
           }
         </tbody>
