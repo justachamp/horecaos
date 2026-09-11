@@ -1,7 +1,7 @@
 # ADR 0102: The order board query reads what the board shows
 
 - Decision status: Proposed
-- Implementation status: Built — `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders/board` is the new paged read: a cursor-paginated `Page<OrderSummaryResponse>` filterable by period, status, channel code, fulfilment mode, courier, payment method code, creating actor and external reference. `OrderSummaryResponse` grew from eleven fields to twenty-three, which the released `GET .../orders` returns too — that operation is frozen and marked deprecated rather than changed, because its bare-array response is published in v1 and `OpenApiContractTests` refuses to change it; `GET .../orders/counts` takes the same period; `JdbcOrderStore.listForLocation(OrderListQuery, …)` is the one query behind both, keyset on `(created_at, id)` with the filter set fingerprinted into the cursor; the process-attention level is a correlated subquery over `ordering.order_process_states`, and the courier, payment-method and reference filters are `EXISTS` subqueries over `fulfillment.shipments`, `payments.payment_intents` and `ordering.order_external_references`. Covered by `OrderBoardQueryTests` and `CursorTests`. No migration; every index the filters need already exists. Not built by this decision: the derived `LATE`/`AT_RISK` levels of orders.md §2.7, the tenant-wide reference *search* of §2.8, the courier's name and the branch name on the row, and the signed cursor ADR 0031 asks for
+- Implementation status: Built — `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders/board` is the new paged read: a cursor-paginated `Page<OrderSummaryResponse>` filterable by period, status, channel code, fulfilment mode, courier, payment method code, creating actor and external reference. `OrderSummaryResponse` grew from eleven fields to twenty-three, which the released `GET .../orders` returns too — that operation is frozen and marked deprecated rather than changed, because its bare-array response is published in v1 and `OpenApiContractTests` refuses to change it; `GET .../orders/counts` takes the same period; `JdbcOrderStore.listForLocation(OrderListQuery, …)` is the one query behind both, keyset on `(created_at, id)` with the filter set fingerprinted into the cursor; the process-attention level is a correlated subquery over `ordering.order_process_states`, the courier and payment-method filters are `EXISTS` subqueries over `fulfillment.shipments` and `payments.payment_intents`, and `reference` matches the order's own `public_order_number` or any row of `ordering.order_external_references`, both in one normalised form. Covered by `OrderBoardQueryTests` and `CursorTests`. No migration; every index the filters need already exists. Not built by this decision: the derived `LATE`/`AT_RISK` levels of orders.md §2.7, the tenant-wide reference *search* of §2.8, the courier's name and the branch name on the row, and the signed cursor ADR 0031 asks for
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
@@ -112,11 +112,25 @@ and pages with a cursor.** Concretely, five parts:
    permission: no ordering write path gains a cross-schema statement, and no
    module gains a Java import it did not have.
 
-5. **The reference parameter is a filter, not a lookup.** It narrows *this
-   location's* orders by an external reference. `ORDER_READ` at `LOCATION` is
-   unchanged and no row from another location or another tenant can be reached
-   through it. orders.md §2.8's tenant-wide aggregator search stays unbuilt and
-   needs its own endpoint at its own scope; §11 now says so.
+5. **The reference parameter is a filter, not a lookup**, and it matches two
+   kinds of identifier under one name: the order's own `public_order_number`
+   and any `order_external_references` row written against the order — both
+   reduced to the same normalised form, so `0911-142`, `0911 142` and
+   `#0911142` are one query. orders.md §2.8's first two resolution kinds are
+   an order number and an aggregator id, and an operator holding a number read
+   to them over the phone does not know which kind it is; making them choose a
+   box before they can search is what turns a four-second answer into a
+   four-minute one. It narrows *this location's* orders: `ORDER_READ` at
+   `LOCATION` is unchanged and no row from another location or another tenant
+   can be reached through it — which matters more for the number than for the
+   reference, because `public_order_number` is scoped per location per
+   business date and therefore repeats across branches. What `reference` does
+   **not** accept is §2.8's third kind, a phone number: that goes to
+   `POST /api/v1/operations/customer-lookups` with the number in the body,
+   because a number in a query string lands in an access log, a browser
+   history and a `Referer` (ADR 0029, ADR 0039). orders.md §2.8's tenant-wide
+   aggregator search stays unbuilt and needs its own endpoint at its own
+   scope; §11 now says so.
 
 No migration. `ix_order_processes_stuck`, `ix_external_reference_search`,
 `ux_payment_intent_live_per_order` and the shipments' order index already serve
@@ -133,6 +147,8 @@ these predicates, and `ordering.orders` is already indexed on the location and
 | `page`/`size` offset paging | ADR 0031. An operations list changes while it is being paged; offsets skip and duplicate rows, and in an order feed a skipped row is a missed order | Never |
 | A signed cursor, as ADR 0031 actually requires | The platform has no `CursorSigner` bean, and giving it one means a new ADR 0028 secret, a new deployment variable and a startup failure mode — a platform decision, not a consequence of widening one query. `AuditController`, `FailureOperationsController`, the migration console and the tenant directory all take the same unsigned shortcut today. The cursor here names no scope of its own: the tenant, brand and location come from the path and the capability check, and the keyset position is resolved from the database inside that scope rather than read out of the token, so a forged cursor can only give its own holder an incoherent page of data they may already read | A `CursorSigner` bean exists — at which point `encodeUnsigned`/`decodeUnsigned` are deleted and the four callers move over together |
 | Put the tenant-wide aggregator search on this endpoint, as orders.md §2.8 specifies | Turns an `ORDER_READ`@`LOCATION` grant into a tenant-wide order enumerator: a branch manager could walk every other branch's orders one reference at a time | A tenant-scoped order search endpoint is designed with its own capability |
+| Let `reference` also accept a customer's phone number, so the board's one search box answers all of orders.md §2.8 | The number would be in the query string, and therefore in the access log, the browser history and the `Referer` of every page the operator opens next — ADR 0029's rule about PII in URLs, which §2.8 already answers by putting the phone in a `POST /operations/customer-lookups` body. The order also holds no phone hash to match: the number lives envelope-encrypted in `order_customer_snapshots`, and giving it a searchable keyed hash is a schema change and an ADR 0029 question of its own | `POST /operations/customer-lookups` is built, at which point the board's search box calls two endpoints and merges — the client's job, not this query's |
+| Match a bare counter — `142` finding `0911-142` — as §2.8's "exact or prefix" wording suggests | A prefix or suffix match on an order number is a `LIKE` over one location's whole history, and it silently widens: `1` would match a third of the branch's orders and the operator would read the first row as *the* answer. §2.8's prefix rule belongs to the search endpoint, which returns a ranked, labelled list and can say "matched: our order number, 6 hits"; a filter that returns a board cannot | The §2.8 search endpoint exists and can rank and label its hits |
 | Change `GET .../orders` in place to return `Page` | Refused by the build. `OpenApiContractTests` walks the released v1 baseline and fails any response whose type changes — `array` to `object` is exactly that — and the same check runs inside `make openapi-baseline`, so a regenerated baseline cannot hide it. It would also break three console call sites silently, since their specs mock arrays | v2 exists, or the contract gate gains a reviewed break list |
 | Keep the bare array and carry `nextCursor` in a response header | Halves the contract: a generated client gets the items typed and the cursor untyped, and every caller has to know to read a header. `Page` exists for this | Never |
 | Put the paged read under the ADR 0031 `/api/v1/operations/**` prefix instead of beside the operation it supersedes | A new prefix means a `SecurityConfiguration` entry, a surface-group question and a second place the order board lives, for a path that is the same resource. `/orders/board` sits in the same group, under the same capability, next to `/orders/counts` and `/orders/drafts` | The whole controller moves to the ADR 0031 prefix, which is its own piece of work |
@@ -176,6 +192,13 @@ these predicates, and `ordering.orders` is already indexed on the location and
   copy, for the same reason the second one exists: the owning type is internal
   to its module. `OrderBoardQueryTests` holds this copy to the same answers as
   `JdbcGlobalLookup`'s, which is the guard, not a fix.
+- **The order-number half of `reference` cannot use an index.**
+  `upper(replace(public_order_number, '-', ''))` is an expression, and V0197's
+  `ix_order_public_number_lookup` is on the plain column, so this predicate is
+  a filter over whatever the tenant/brand/location predicates leave. That is
+  one branch's orders, which is small; it stops being small for a branch with
+  years of history, and the fix is an expression index rather than a different
+  match rule.
 - **The filter combinations have no covering index.** Each predicate is
   individually indexed and the population is one location's orders; a mix that
   needs a composite index will show up as a slow board before it shows up
@@ -217,7 +240,7 @@ the same scope as the frozen `GET .../orders` beside it.
 | `courierId` | uuid | An order with a shipment assigned to this courier |
 | `paymentMethodCode` | string | An order with a payment intent of this method |
 | `createdByActorId` | string | orders.md §2.4's Мои заказы, with the caller's own subject supplied by the client |
-| `reference` | string | Normalised, then matched against `reference_value_normalised` for this order |
+| `reference` | string | Normalised, then matched against this order's `public_order_number` reduced the same way **or** any of its `reference_value_normalised` rows. Never a phone number — that is a POST body, not a query string |
 | `cursor` | string | The previous page's `nextCursor` |
 | `limit` | integer | `Page.limitOrDefault`: 50 by default, 200 at most |
 
@@ -268,6 +291,11 @@ SELECT <the OrderRow columns>,
    AND (:statusFilterEmpty OR status = ANY(:statuses))
    AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
    …
+   AND (CAST(:reference AS varchar) IS NULL
+        OR upper(replace(public_order_number, '-', '')) = CAST(:reference AS varchar)
+        OR EXISTS (SELECT 1 FROM ordering.order_external_references r
+                    WHERE r.tenant_id = orders.tenant_id AND r.order_id = orders.id
+                      AND r.reference_value_normalised = CAST(:reference AS varchar)))
    AND (:unbounded OR (created_at, id) < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
  ORDER BY created_at DESC, id DESC
  LIMIT :limit
@@ -327,7 +355,7 @@ until then the description on it names its replacement.
 - [x] `OrderQueryService#forLocation` over the new query; `#counts` with a period
 - [x] `OperationsOrderController#board` returning `Page`, `#list` frozen and deprecated, `#counts` taking a period, `OrderSummaryResponse` widened
 - [x] All five OpenAPI baselines and both generated clients regenerated
-- [x] `OrderBoardQueryTests`: one test per filter, cursor stability under a concurrent insert, a cross-tenant reference and a cross-tenant cursor refused, and the no-PII assertion over the response record
+- [x] `OrderBoardQueryTests`: one test per filter, `reference` matching both an aggregator id and the order's own number, cursor stability under a concurrent insert, a cross-tenant reference, a cross-branch order number and a cross-tenant cursor refused, and the no-PII assertion over the response record
 - [x] orders.md §11 records what this closes and what it does not
 - [ ] The three console call sites move to `/orders/board` (a console wave, not this one)
 - [ ] A tenant-wide order search endpoint for orders.md §2.8 (unowned)
@@ -343,6 +371,10 @@ until then the description on it names its replacement.
 - One aggregator code issued at two tenants returns each tenant's own order and
   only that, and a cursor naming another tenant's or another location's order
   resolves to nothing.
+- One `reference` parameter finds an order by the aggregator's id and by the
+  branch's own order number, in every form an operator types either — and an
+  order number belonging to another branch, which is the same string at a
+  different location, returns nothing.
 - `OrderSummaryResponse` carries no component whose name suggests personal
   data, asserted over the record rather than over an instance.
 

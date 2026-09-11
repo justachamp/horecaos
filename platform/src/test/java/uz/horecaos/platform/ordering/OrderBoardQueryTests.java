@@ -208,6 +208,34 @@ class OrderBoardQueryTests {
         assertThat(idsOf(query().reference("nothing-like-it"))).isEmpty();
     }
 
+    @Test
+    @DisplayName("the same parameter finds an order by its own number, however the operator typed it")
+    void theReferenceFilterAlsoMatchesTheOrdersOwnNumber() {
+        // orders.md §2.8 resolution kind 1. The operator holding a number does
+        // not know whether it is ours or the aggregator's, and asking them to
+        // pick the right box before they can search is the thing that makes a
+        // four-second answer a four-minute one.
+        UUID ours = insertOrder(order("0911-142"));
+        UUID neighbour = insertOrder(order("0911-143"));
+        insertReference(TENANT, neighbour, "YE-2291-04");
+
+        for (String typed : List.of("0911-142", "0911 142", "#0911142", " 0911142 ")) {
+            assertThat(idsOf(query().reference(typed)))
+                    .as("\"%s\" is the same number to the person reading it out", typed)
+                    .containsExactly(ours)
+                    .doesNotContain(neighbour);
+        }
+
+        assertThat(idsOf(query().reference("YE-2291-04")))
+                .as("and the aggregator's own id still reaches the order it was issued for")
+                .containsExactly(neighbour);
+
+        assertThat(idsOf(query().reference("142")))
+                .as("the counter alone is not the number: matching it would need a prefix or "
+                        + "suffix rule, which is §2.8's search endpoint's job and not a filter's")
+                .isEmpty();
+    }
+
     // -------------------------------------------------------------- the scope
 
     @Test
@@ -222,6 +250,9 @@ class OrderBoardQueryTests {
                 .as("the reference exists, at another tenant, and this location's board must not see it")
                 .isEmpty();
         assertThat(idsOf(query().reference("WLT-100"))).containsExactly(mine);
+        assertThat(idsOf(query().reference("X-2")))
+                .as("nor the other tenant's order number, which the same parameter also matches")
+                .isEmpty();
 
         // The case V0038's own index comment describes: two aggregators issue the
         // same short code on the same day, at two tenants. A board that answered
@@ -266,6 +297,15 @@ class OrderBoardQueryTests {
         assertThat(idsOf(query().reference("WLT-300")))
                 .as("orders.md §2.8's tenant-wide search is a different endpoint at a different scope")
                 .isEmpty();
+        // And the order-number half of the same parameter, which is the one that
+        // would otherwise reach across branches: `public_order_number` is scoped
+        // per location per business date and therefore repeats, so a predicate
+        // that forgot the location would answer with the wrong branch's order
+        // rather than with none.
+        assertThat(idsOf(query().reference("L-2")))
+                .as("another branch's order number is another branch's order")
+                .isEmpty();
+        assertThat(idsOf(query().reference("L-1"))).containsExactly(hereOrder);
         assertThat(idsOf(query())).containsExactly(hereOrder);
     }
 

@@ -734,6 +734,17 @@ public class JdbcOrderStore {
      * {@link #listForCustomer} states: an operations list changes while it is
      * being paged, and an offset silently skips the order that moved.
      *
+     * <p>The {@code reference} predicate matches two things, because an operator
+     * with a number in their ear does not know which kind it is: the order's own
+     * {@code public_order_number} and any external reference written against it.
+     * Both are compared in the one normalised form
+     * {@link #normalisedExternalReference} produces, so {@code 0911-142},
+     * {@code 0911 142} and {@code #0911142} are one query. It does <em>not</em>
+     * match a phone number — orders.md §2.8 puts that behind
+     * {@code POST /operations/customer-lookups} with the number in the body,
+     * because a phone in a query string lands in an access log, a browser
+     * history and a {@code Referer} (ADR 0029).
+     *
      * @param beforeCreatedAt the previous page's last order's instant, or null
      *                        to start at the newest
      */
@@ -773,7 +784,10 @@ public class JdbcOrderStore {
                                   SELECT 1 FROM payments.payment_intents i
                                    WHERE i.tenant_id = orders.tenant_id AND i.order_id = orders.id
                                      AND i.payment_method_code = CAST(:paymentMethodCode AS varchar)))
-                          AND (CAST(:reference AS varchar) IS NULL OR EXISTS (
+                          AND (CAST(:reference AS varchar) IS NULL
+                               OR upper(replace(public_order_number, '-', ''))
+                                  = CAST(:reference AS varchar)
+                               OR EXISTS (
                                   SELECT 1 FROM ordering.order_external_references r
                                    WHERE r.tenant_id = orders.tenant_id AND r.order_id = orders.id
                                      AND r.reference_value_normalised = CAST(:reference AS varchar)))
@@ -1808,8 +1822,10 @@ public class JdbcOrderStore {
      * @param statuses     empty means every status, not none
      * @param from         inclusive lower bound on {@code created_at}
      * @param to           exclusive upper bound on {@code created_at}
-     * @param reference    the operator's raw search text; normalised once, here,
-     *                     so the fingerprint and the predicate agree on the form
+     * @param reference    the operator's raw search text — an order number or an
+     *                     external reference, matched against both; normalised
+     *                     once, here, so the fingerprint and the predicate agree
+     *                     on the form
      */
     public record OrderListQuery(
             UUID tenantId,
@@ -1833,8 +1849,10 @@ public class JdbcOrderStore {
         }
 
         /**
-         * The reference as {@code reference_value_normalised} holds it, or null
-         * when the search text carries nothing searchable.
+         * The reference as {@code reference_value_normalised} holds it — and as
+         * the statement reduces {@code public_order_number} to, so one parameter
+         * matches both — or null when the search text carries nothing
+         * searchable.
          */
         public @Nullable String normalisedReference() {
             return reference == null ? null : normalisedExternalReference(reference);

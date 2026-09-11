@@ -432,11 +432,21 @@ four kinds of thing, in this order, and **says which one it matched**:
 
 1. **Our order number** — `public_order_number`, exact or prefix. Scoped per
    location per day, so `142` legitimately matches several orders; results
-   show branch and date and the operator picks.
+   show branch and date and the operator picks. The **exact** half is **built**
+   (ADR 0102): `?reference=` on `.../orders/board` matches this branch's orders
+   by their own number, normalised the same way an external reference is, so
+   `0911-142`, `0911 142` and `#0911142` are one query. The **prefix** half is
+   not, and deliberately: a prefix over one branch's whole history widens
+   silently — `1` matches a third of it — and a filter that returns a board
+   cannot say "matched: our order number, 6 hits" the way a search endpoint
+   can. It belongs to the endpoint §11 says nobody owns yet.
 2. **A phone number** — detected by pattern (`+998…`, `9 digits`, `90…`).
    Issued as `POST /api/v1/operations/customer-lookups` with the number **in
    the body**, never a query string (ADR 0039 — and the number must not land in
-   an access log, a browser history or a `Referer`). Resolves through ADR 0015's
+   an access log, a browser history or a `Referer`). This is why the board's
+   `?reference=` filter takes an order number and an external reference and
+   refuses a phone: ADR 0102 states the refusal rather than leaving it to be
+   discovered. Resolves through ADR 0015's
    keyed `normalized_hash`, which is deliberately not unique: several accounts
    may come back and the operator picks from masked name plus last-order date.
    Every lookup is a `SECURITY`-class ADR 0027 audit fact.
@@ -1436,8 +1446,10 @@ refuses to change it — but it returns the same widened row, so a screen that h
 not moved still gets the new fields.
 
 What ADR 0102 deliberately did *not* do is widen scope: the `reference`
-parameter narrows this location's orders and is not §2.8's tenant-wide search,
-which still has no owner.
+parameter narrows this location's orders — by their own number or by an
+aggregator's — and is not §2.8's tenant-wide search, which still has no owner.
+It refuses a phone number for the reason §2.8 already gives: a number in a
+query string lands in an access log.
 
 | Missing | Owner | Blocks |
 |---|---|---|
@@ -1451,7 +1463,7 @@ which still has no owner.
 | `fiscal.fiscal_documents`, `_lines`, `_unit_marks` | ADR 0038 | The Фискализация panel, the fiscal chip, manual retry; §3.9, §4.10 |
 | The order board and detail rendering the shipment, the courier and the zone | ADR 0014 + 0037 (nothing left to build; a join to write) | Courier assignment, provider dispatch, the quote-delta confirmation, the Курьер column's name and shift dot; §3.8, §4.7. Narrowed by ADR 0102: the board now carries `promisedAt` and `promiseBasis` — so **§2.7's late overlay has its input** and needs only the derived levels, which nothing owns (see below) — and filters by `courierId` through `fulfillment.shipments`. What it still does not do is *render* a courier: the row has no courier name, no shift state and no zone, because those are reads into `fulfillment` this wave did not build. |
 | The order board and detail reading the marketplace columns | ADR 0040 (nothing left to build; a join to write) | Externally priced orders, the aggregator chip, the handover code; §3.5, §3.8. (`ordering.orders.origin`, `pricing_authority`, `entry_mode`, `marketplace_binding_id`, `order_external_pricing` and `order_handover_challenges` are all **built** — V0038 — and written by `JdbcMarketplaceOrderIntake`.) |
-| §2.8's aggregator search as a *tenant-wide* lookup, with its own capability and scope | unowned | §2.8's third resolution kind. ADR 0102 built the narrower half: `?reference=` filters **this location's** orders through `ordering.order_external_references`, normalised the same way the intake writes it. The search §2.8 actually describes crosses branches, so it cannot sit on an `ORDER_READ`@`LOCATION` endpoint without turning a branch grant into a tenant-wide order enumerator — it needs an endpoint and a capability of its own, and nobody owns deciding which. |
+| §2.8's search as a *tenant-wide* lookup, with its own capability and scope, and its prefix and phone resolution kinds | unowned | §2.8's four resolution kinds. ADR 0102 built the narrow half of two of them: `?reference=` filters **this location's** orders by exact `public_order_number` (kind 1) and by `ordering.order_external_references` (kind 3), both normalised the same way the intake writes a reference. Not built: the prefix match, the phone (kind 2 — it needs `POST /operations/customer-lookups`, which §5 also waits on), the raw `orders.id` paste (kind 4), and the cross-branch scope all four are specified at. The search §2.8 describes crosses branches, so it cannot sit on an `ORDER_READ`@`LOCATION` endpoint without turning a branch grant into a tenant-wide order enumerator — it needs an endpoint and a capability of its own, and nobody owns deciding which. |
 | The order timeline reading the kitchen ticket | ADR 0041 (nothing left to build; a join to write) | The production lane of the timeline; §1.2, §3.10. (`kitchen.tickets`/`ticket_events` are **built** — V0030 — and serve the kitchen board itself.) |
 | Shift enforcement on assignment | ADR 0042 | The off-shift courier state; §4.7. (`fulfillment.courier_shifts` is itself **built** — V0040.) |
 | `GET /operations/streams` and the `ORDER_QUEUE` / `ORDER_DETAIL` / `COUNTERS` channels | ADR 0045 | Live counts and live rows; §1.6 |
