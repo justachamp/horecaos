@@ -99,6 +99,7 @@ class CommercialPlatformTests {
         jdbc.sql("""
                 TRUNCATE TABLE commercial.usage_aggregates, commercial.usage_adjustments,
                     commercial.usage_events, commercial.entitlement_overrides,
+                    commercial.card_charge_attempts, commercial.wallet_entries,
                     commercial.subscriptions
                 """).update();
         jdbc.sql("TRUNCATE TABLE commercial.plan_entitlements, commercial.plan_versions, commercial.plans CASCADE")
