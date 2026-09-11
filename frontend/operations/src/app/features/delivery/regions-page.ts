@@ -180,7 +180,12 @@ export class RegionsPage implements OnInit {
     try {
       const existing = this.editing();
       if (existing) {
-        await this.api.update(scope.tenantId, existing.regionId, request);
+        // The version this form was opened with (openEditForm); a rewrite
+        // refused as STALE_VERSION means somebody else's edit landed first.
+        await this.api.update(scope.tenantId, existing.regionId, {
+          ...request,
+          expectedVersion: existing.version,
+        });
       } else {
         await this.api.create(scope.tenantId, request);
       }

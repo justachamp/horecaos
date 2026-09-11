@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -98,12 +99,21 @@ public class OperationsRegionController {
             summary = "Rewrite a region",
             description = "A tenant may rewrite its own regions and not the platform's; a "
                     + "platform region answers not-found rather than forbidden, so this cannot "
-                    + "be used to discover which platform regions exist.")
+                    + "be used to discover which platform regions exist. expectedVersion is "
+                    + "required and is the version RegionResponse last reported for this row; a "
+                    + "stale one is refused with STALE_VERSION, the optimistic-locking convention "
+                    + "every other mutable aggregate on this surface already carries.")
     public ResponseEntity<Void> update(
             @PathVariable UUID tenantId, @PathVariable UUID regionId, @Valid @RequestBody RegionGeographyRequest body) {
 
+        if (body.expectedVersion() == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "expectedVersion is required to rewrite a region",
+                    Map.of("problems", List.of("expectedVersion is required")));
+        }
         try {
-            regions.update(tenantId, regionId, body.toGeography());
+            regions.update(tenantId, regionId, body.toGeography(), body.expectedVersion());
             return ResponseEntity.noContent().build();
         } catch (RegionService.RegionRefusedException refused) {
             throw new ApiException(
@@ -138,6 +148,14 @@ public class OperationsRegionController {
      * ck_region_centre_within_bbox} as sentences and returns all of them at
      * once, which a per-field {@code @DecimalMin} cannot do for the three that
      * are about the numbers' relationship rather than their range.
+     *
+     * <p>{@code expectedVersion} is shared between {@code create} and {@code
+     * update} the way {@code ConfigurationController.SetConfigurationValueRequest}
+     * shares its own: {@code null} means "nothing to compare against yet" and
+     * {@code create} never reads it; {@code update} requires it and refuses a
+     * stale one with {@code STALE_VERSION}, the same optimistic-locking
+     * convention {@code JdbcLegalEntityStore}/{@code JdbcSalesChannelStore}
+     * already carry for their own aggregates.
      */
     public record RegionGeographyRequest(
             @NotBlank @Size(max = 32) @Pattern(regexp = "^[A-Z0-9][A-Z0-9_-]{0,31}$")
@@ -151,7 +169,8 @@ public class OperationsRegionController {
             double bboxSwLat,
             double bboxSwLon,
             double bboxNeLat,
-            double bboxNeLon) {
+            double bboxNeLon,
+            @Nullable Integer expectedVersion) {
 
         RegionGeography toGeography() {
             return new RegionGeography(

@@ -135,6 +135,7 @@
             <input
               type="number"
               step="0.000001"
+              data-testid="region-sw-lon"
               [value]="swLon()"
               (input)="swLon.set(+$any($event.target).value)"
             />
@@ -156,6 +157,7 @@
             <input
               type="number"
               step="0.000001"
+              data-testid="region-ne-lon"
               [value]="neLon()"
               (input)="neLon.set(+$any($event.target).value)"
             />
@@ -167,6 +169,7 @@
             <input
               type="number"
               step="0.000001"
+              data-testid="region-centre-lat"
               [value]="centreLat()"
               (input)="centreLat.set(+$any($event.target).value)"
             />
@@ -176,6 +179,7 @@
             <input
               type="number"
               step="0.000001"
+              data-testid="region-centre-lon"
               [value]="centreLon()"
               (input)="centreLon.set(+$any($event.target).value)"
             />

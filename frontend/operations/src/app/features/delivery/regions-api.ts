@@ -48,6 +48,12 @@ export interface RegionGeographyRequest {
   readonly bboxSwLon: number;
   readonly bboxNeLat: number;
   readonly bboxNeLon: number;
+  /**
+   * Required to rewrite a region, refused with `STALE_VERSION` when it no
+   * longer matches (ADR 0031's optimistic-locking convention) — undefined on
+   * a create, which the server ignores.
+   */
+  readonly expectedVersion?: number;
 }
 
 export interface RegionRegisteredView {

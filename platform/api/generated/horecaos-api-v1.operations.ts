@@ -2323,6 +2323,7 @@ export interface RegionGeographyRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  expectedVersion?: number;
 }
 
 export interface RegionRegisteredView {

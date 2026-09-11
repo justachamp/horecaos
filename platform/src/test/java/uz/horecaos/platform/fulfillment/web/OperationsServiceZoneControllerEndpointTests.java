@@ -61,6 +61,7 @@ class OperationsServiceZoneControllerEndpointTests {
     private static final UUID LOCATION = UUID.fromString("018f9b10-2000-7000-8000-0000000000c1");
 
     private static final UUID OTHER_TENANT = UUID.fromString("018f9b10-2000-7000-8000-0000000000a2");
+    private static final UUID OTHER_TENANT_BRAND = UUID.fromString("018f9b10-2000-7000-8000-0000000000b2");
 
     // UUID-shaped, not human-readable: draftVersion and activate write these
     // subjects onto service_zone_versions.created_by/activated_by, both `uuid
@@ -68,9 +69,14 @@ class OperationsServiceZoneControllerEndpointTests {
     private static final String OWNER = "018f9b10-3000-7000-8000-0000000000f1";
     private static final String BRAND_MANAGER = "018f9b10-3000-7000-8000-0000000000f2";
     private static final String OTHER_TENANT_OWNER = "018f9b10-3000-7000-8000-0000000000f3";
+    private static final String NO_DELIVERY_GRANT = "018f9b10-3000-7000-8000-0000000000f4";
 
     private static String zonesPath(UUID tenantId) {
-        return "/api/v1/operations/tenants/" + tenantId + "/brands/" + BRAND + "/service-zones";
+        return zonesPath(tenantId, BRAND);
+    }
+
+    private static String zonesPath(UUID tenantId, UUID brandId) {
+        return "/api/v1/operations/tenants/" + tenantId + "/brands/" + brandId + "/service-zones";
     }
 
     @SuppressWarnings("NullAway")
@@ -113,9 +119,16 @@ class OperationsServiceZoneControllerEndpointTests {
 
         insertTenantBrandAndLocatedBranch(TENANT, BRAND, LOCATION);
         insertTenant(OTHER_TENANT);
+        insertBrand(OTHER_TENANT, OTHER_TENANT_BRAND);
         grant(OWNER, PlatformRole.TENANT_OWNER, TENANT);
         grant(BRAND_MANAGER, PlatformRole.BRAND_MANAGER, TENANT);
         grant(OTHER_TENANT_OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
+        // NO_DELIVERY_GRANT deliberately has no row in iam.grants at all: the
+        // capability-refusal test below proves the unbind endpoint refuses a
+        // caller with nothing, not only one who merely lacks DELIVERY_ZONE_MANAGE
+        // — every platform role that holds DELIVERY_ZONE_READ also holds
+        // DELIVERY_ZONE_MANAGE, so "no grant" is the only way to hold the one
+        // without the other.
     }
 
     @Test
@@ -293,6 +306,57 @@ class OperationsServiceZoneControllerEndpointTests {
     }
 
     @Test
+    void aForeignTenantsOwnBrandCannotReachAnotherTenantsZoneThroughVersionsDeactivateOrUnbind() throws Exception {
+        // CapabilityEnforcementInterceptor.requireRealScope only checks that
+        // the JWT's tenant/brand scope matches the URL's tenant/brand path
+        // segments; it has no knowledge of zoneId. OTHER_TENANT_OWNER's path
+        // below is entirely their own — their tenant, their brand — so the
+        // interceptor passes it, and the only thing standing between them and
+        // TENANT's zone is ServiceZoneService's own zoneRole() ownership check.
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "foreign-tenant-draft");
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "foreign-tenant-activate"));
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/locations")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "foreign-tenant-bind")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"locationId\":\"" + LOCATION + "\"}"));
+
+        String foreignPath = zonesPath(OTHER_TENANT, OTHER_TENANT_BRAND) + "/" + zoneId;
+
+        MvcResult versionsRefused = mvc.perform(get(foreignPath + "/versions").with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(versionsRefused.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult deactivateRefused = mvc.perform(post(foreignPath + "/versions/1/deactivate")
+                        .with(tokenFor(OTHER_TENANT_OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "foreign-tenant-deactivate"))
+                .andReturn();
+        assertThat(deactivateRefused.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult unbindRefused = mvc.perform(delete(foreignPath + "/locations/" + LOCATION)
+                        .with(tokenFor(OTHER_TENANT_OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "foreign-tenant-unbind"))
+                .andReturn();
+        assertThat(unbindRefused.getResponse().getStatus()).isEqualTo(404);
+
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.service_zone_versions WHERE zone_id = :zoneId")
+                        .param("zoneId", zoneId)
+                        .query(String.class)
+                        .single())
+                .as("none of the three refused calls left a mark on TENANT's own zone")
+                .isEqualTo("ACTIVE");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.zone_location_bindings "
+                                + "WHERE zone_id = :zoneId AND valid_until IS NULL")
+                        .param("zoneId", zoneId)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+    }
+
+    @Test
     void aBrandManagerCanUnbindButNotDeactivate() throws Exception {
         UUID zoneId = registerZone(OWNER);
         draftCircle(zoneId, "split-draft");
@@ -315,6 +379,42 @@ class OperationsServiceZoneControllerEndpointTests {
                         .query(String.class)
                         .single())
                 .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void aCallerWithNoDeliveryZoneGrantCannotUnbindABranch() throws Exception {
+        // The only existing call to this DELETE route (in the lifecycle test
+        // above) uses OWNER, who already holds DELIVERY_ZONE_MANAGE — a
+        // positive-path assertion only. If the capability annotation were ever
+        // dropped from the unbind endpoint, that test would still pass; this
+        // one is what actually proves the refusal.
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "unbind-refusal-draft");
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "unbind-refusal-activate"));
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/locations")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "unbind-refusal-bind")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"locationId\":\"" + LOCATION + "\"}"));
+
+        MvcResult refused = mvc.perform(delete(zonesPath(TENANT) + "/" + zoneId + "/locations/" + LOCATION)
+                        .with(tokenFor(NO_DELIVERY_GRANT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "unbind-refusal-attempt"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.DELIVERY_ZONE_MANAGE.code());
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.zone_location_bindings "
+                                + "WHERE zone_id = :zoneId AND valid_until IS NULL")
+                        .param("zoneId", zoneId)
+                        .query(Long.class)
+                        .single())
+                .as("the refused unbind must leave the binding open")
+                .isEqualTo(1L);
     }
 
     @Test
@@ -385,12 +485,16 @@ class OperationsServiceZoneControllerEndpointTests {
                 .update();
     }
 
-    private void insertTenantBrandAndLocatedBranch(UUID tenantId, UUID brandId, UUID locationId) {
-        insertTenant(tenantId);
+    private void insertBrand(UUID tenantId, UUID brandId) {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, 'MAIN', 'main', 'Brand', 'ACTIVE', 0)
                 """).param("id", brandId).param("tenantId", tenantId).update();
+    }
+
+    private void insertTenantBrandAndLocatedBranch(UUID tenantId, UUID brandId, UUID locationId) {
+        insertTenant(tenantId);
+        insertBrand(tenantId, brandId);
         jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
                     timezone, status, version, latitude, longitude, coordinate_source)

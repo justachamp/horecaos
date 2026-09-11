@@ -19,6 +19,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionSto
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionStore.RegionRow;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Authoring the geography a geocoder is allowed to answer inside (ADR 0037,
@@ -82,21 +83,37 @@ public class RegionService {
     }
 
     /**
-     * Rewrites one of this tenant's own regions.
+     * Rewrites one of this tenant's own regions under its expected version.
      *
      * <p>A platform region reaches the update as a row this tenant does not own,
-     * the statement matches nothing, and the refusal is not-found rather than
+     * the read below finds it foreign, and the refusal is not-found rather than
      * forbidden — the same choice {@code DeliveryTariffService.requireOwned}
      * makes, and for the same reason: a forbidden here would confirm that the id
      * names a real platform row.
+     *
+     * <p>Reads the row first, mirroring {@code LegalEntityService.transition}:
+     * the read is what tells not-found (missing, foreign, platform, archived)
+     * apart from a stale write, so the conditional update below only ever fails
+     * for the second reason — a concurrent editor's write already landed
+     * between the read and this one, which is {@code STALE_VERSION}
+     * (ADR 0031), not {@code RESOURCE_NOT_FOUND}.
+     *
+     * @throws ServiceZoneService.DeliveryResourceNotFoundException no active
+     *         region this tenant owns exists at that id
+     * @throws uz.horecaos.platform.web.api.ApiException {@code STALE_VERSION}
+     *         when the row has moved on since {@code expectedVersion} was read
      */
     @Transactional
-    public void update(UUID tenantId, UUID regionId, RegionGeography geography) {
+    public void update(UUID tenantId, UUID regionId, RegionGeography geography, int expectedVersion) {
         refuseBadGeography(geography);
-        Instant now = clock.instant();
-        if (store.update(tenantId, regionId, geography, now) != 1) {
+        RegionRow current = store.find(tenantId, regionId).orElse(null);
+        if (current == null || current.platform() || !"ACTIVE".equals(current.status())) {
             throw new ServiceZoneService.DeliveryResourceNotFoundException("No active region " + regionId
                     + " this tenant may edit. A tenant may edit its " + "own regions and not the platform's");
+        }
+        Instant now = clock.instant();
+        if (store.update(tenantId, regionId, geography, expectedVersion, now) != 1) {
+            throw ApiException.staleVersion(expectedVersion, current.version());
         }
 
         audit.record(AuditFact.of("delivery.region.updated", AuditClass.BUSINESS)

@@ -7385,6 +7385,10 @@
             "maxLength" : 200,
             "minLength" : 0,
             "type" : "string"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz" ],
@@ -16843,7 +16847,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/regions/{regionId}" : {
       "put" : {
-        "description" : "A tenant may rewrite its own regions and not the platform's; a platform region answers not-found rather than forbidden, so this cannot be used to discover which platform regions exist.",
+        "description" : "A tenant may rewrite its own regions and not the platform's; a platform region answers not-found rather than forbidden, so this cannot be used to discover which platform regions exist. expectedVersion is required and is the version RegionResponse last reported for this row; a stale one is refused with STALE_VERSION, the optimistic-locking convention every other mutable aggregate on this surface already carries.",
         "operationId" : "update",
         "parameters" : [ {
           "in" : "path",

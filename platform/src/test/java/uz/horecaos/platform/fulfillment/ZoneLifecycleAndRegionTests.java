@@ -50,6 +50,8 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * What ADR 0101 adds to ADR 0037: a region anyone can author, a tariff binding
@@ -342,6 +344,45 @@ class ZoneLifecycleAndRegionTests {
         assertThat(versions.getLast().retiredAt()).isNotNull();
     }
 
+    @Test
+    @DisplayName("deactivate, unbind and listVersions all refuse a foreign tenant's or brand's zone id")
+    void theThreeNewLifecycleQueriesRefuseAForeignTenantOrBrand() {
+        // ServiceZoneService.deactivate/unbindLocation/listVersions each gate
+        // solely on store.zoneRole(tenantId, brandId, zoneId).isEmpty(); no
+        // other layer checks the zone's ownership for these three. If that
+        // check were ever dropped, another tenant's owner — or a caller who
+        // guesses a zone id under the wrong brand of their own tenant — could
+        // deactivate a competitor's live zone, unbind their branch, or read
+        // their version history.
+        UUID zone = activeZone("CITY", ZoneRole.DELIVERY, 8_000, 0, flatTariff("CITY-RATE", 4_000L), null, null);
+        UUID foreignBrand = UUID.randomUUID();
+
+        assertThat(catchThrowable(() -> zones.deactivate(OTHER_TENANT, BRAND, zone, 1)))
+                .as("a foreign tenant may not deactivate this zone even naming its own brand")
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+        assertThat(catchThrowable(() -> zones.unbindLocation(OTHER_TENANT, BRAND, zone, locatedBranch)))
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+        assertThat(catchThrowable(() -> zones.listVersions(OTHER_TENANT, BRAND, zone)))
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+
+        assertThat(catchThrowable(() -> zones.deactivate(TENANT, foreignBrand, zone, 1)))
+                .as("this tenant's own grant does not reach a zone under a brand it does not name")
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+        assertThat(catchThrowable(() -> zones.unbindLocation(TENANT, foreignBrand, zone, locatedBranch)))
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+        assertThat(catchThrowable(() -> zones.listVersions(TENANT, foreignBrand, zone)))
+                .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
+
+        // None of the six refused calls left a mark: the zone is still active
+        // and bound, exactly as it was before any of them ran.
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.service_zone_versions WHERE zone_id = :zoneId")
+                        .param("zoneId", zone)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ACTIVE");
+        assertThat(zones.zoneDetail(TENANT, BRAND, zone).boundLocationIds()).containsExactly(locatedBranch);
+    }
+
     // ------------------------------------------------------------ 3.6b regions
 
     @Test
@@ -349,7 +390,7 @@ class ZoneLifecycleAndRegionTests {
     void regionWritesLeaveAuditFacts() {
         UUID regionId = regions.create(TENANT, tashkent("TASHKENT"));
         clock.advance(Duration.ofMinutes(1));
-        regions.update(TENANT, regionId, tashkent("TASHKENT-CITY"));
+        regions.update(TENANT, regionId, tashkent("TASHKENT-CITY"), 1);
         clock.advance(Duration.ofMinutes(1));
         regions.archive(TENANT, regionId);
 
@@ -379,7 +420,7 @@ class ZoneLifecycleAndRegionTests {
                     assertThat(row.platform()).isTrue();
                 });
 
-        Throwable refusal = catchThrowable(() -> regions.update(TENANT, platformRegion, tashkent("HIJACK")));
+        Throwable refusal = catchThrowable(() -> regions.update(TENANT, platformRegion, tashkent("HIJACK"), 1));
 
         assertThat(refusal).isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
         assertThat(jdbc.sql("SELECT code FROM fulfillment.regions WHERE id = :id")
@@ -387,6 +428,30 @@ class ZoneLifecycleAndRegionTests {
                         .query(String.class)
                         .single())
                 .isEqualTo("UZ-PLATFORM");
+    }
+
+    @Test
+    @DisplayName("a stale expectedVersion is refused rather than silently overwriting a concurrent edit")
+    void aStaleVersionUpdateIsRefused() {
+        // Operator A and operator B both read version 1. B submits first (this
+        // call), landing version 2. A, still holding the stale version-1 form
+        // values, submits second and must be refused rather than clobbering B's
+        // write — the lost-update scenario the http-api-conventions skill's
+        // "aggregate mutations carry an expected version" line exists to stop.
+        UUID regionId = regions.create(TENANT, tashkent("TASHKENT"));
+        clock.advance(Duration.ofMinutes(1));
+        regions.update(TENANT, regionId, tashkent("TASHKENT-B"), 1);
+
+        Throwable refusal = catchThrowable(() -> regions.update(TENANT, regionId, tashkent("TASHKENT-A-STALE"), 1));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.STALE_VERSION);
+        assertThat(jdbc.sql("SELECT code, version FROM fulfillment.regions WHERE id = :id")
+                        .param("id", regionId)
+                        .query((rs, n) -> Map.entry(rs.getString("code"), rs.getInt("version")))
+                        .single())
+                .as("B's already-landed write must survive A's stale one")
+                .isEqualTo(Map.entry("TASHKENT-B", 2));
     }
 
     @Test

@@ -70,6 +70,11 @@ class OperationsRegionControllerEndpointTests {
         return "/api/v1/operations/tenants/" + tenantId + "/regions";
     }
 
+    /** {@code TASHKENT} carries no {@code expectedVersion}: PUT requires one, POST ignores it. */
+    private static String withExpectedVersion(String json, int version) {
+        return json.substring(0, json.lastIndexOf('}')) + ",\"expectedVersion\":" + version + "}";
+    }
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -133,7 +138,7 @@ class OperationsRegionControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-update-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(TASHKENT.replace("\"TASHKENT\"", "\"TASHKENT-CITY\"")))
+                        .content(withExpectedVersion(TASHKENT.replace("\"TASHKENT\"", "\"TASHKENT-CITY\""), 1)))
                 .andReturn();
         assertThat(rewritten.getResponse().getStatus()).isEqualTo(204);
 
@@ -167,6 +172,48 @@ class OperationsRegionControllerEndpointTests {
     }
 
     @Test
+    void aStaleExpectedVersionOnUpdateIsRefusedAndLeavesTheWinningWriteInPlace() throws Exception {
+        // Two operators open the same region's edit form (both read version 1).
+        // B submits first and lands version 2; A, still holding the stale
+        // version-1 form, must be refused rather than silently clobbering B's
+        // fix — the http-api-conventions skill's "aggregate mutations carry an
+        // expected version" line, previously unenforced on this endpoint.
+        mvc.perform(post(regionsPath(TENANT))
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-stale-seed")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TASHKENT));
+        UUID regionId = jdbc.sql("SELECT id FROM fulfillment.regions WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+
+        MvcResult bWins = mvc.perform(put(regionsPath(TENANT) + "/" + regionId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-stale-b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withExpectedVersion(TASHKENT.replace("\"TASHKENT\"", "\"TASHKENT-B\""), 1)))
+                .andReturn();
+        assertThat(bWins.getResponse().getStatus()).isEqualTo(204);
+
+        MvcResult aStale = mvc.perform(put(regionsPath(TENANT) + "/" + regionId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-stale-a")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withExpectedVersion(TASHKENT.replace("\"TASHKENT\"", "\"TASHKENT-A-STALE\""), 1)))
+                .andReturn();
+
+        assertThat(aStale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(aStale.getResponse().getContentAsString()).contains("STALE_VERSION");
+        assertThat(jdbc.sql("SELECT code, version FROM fulfillment.regions WHERE id = :id")
+                        .param("id", regionId)
+                        .query((rs, n) -> Map.entry(rs.getString("code"), rs.getInt("version")))
+                        .single())
+                .as("B's write must survive A's stale one, not be silently overwritten")
+                .isEqualTo(Map.entry("TASHKENT-B", 2));
+    }
+
+    @Test
     void aBrandScopedGrantCannotAuthorATenantWideRegion() throws Exception {
         // ADR 0101's stated negative consequence, asserted rather than assumed:
         // the row has no brand_id and its box gates every brand's zone
@@ -187,6 +234,51 @@ class OperationsRegionControllerEndpointTests {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    @Test
+    void aBrandScopedGrantCannotRewriteOrArchiveATenantWideRegion() throws Exception {
+        // create/update/archive all declare the identical DELIVERY_ZONE_MANAGE
+        // at TENANT scope, so a scope typo on update or archive is exactly as
+        // plausible as on create — but only create had a refusal test. Without
+        // this, a BRAND_MANAGER could rewrite or archive the box gating every
+        // other brand's zone activations and no test in this file would catch it.
+        mvc.perform(post(regionsPath(TENANT))
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-scope-seed")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TASHKENT));
+        UUID regionId = jdbc.sql("SELECT id FROM fulfillment.regions WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+
+        MvcResult updateRefused = mvc.perform(put(regionsPath(TENANT) + "/" + regionId)
+                        .with(tokenFor(BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-scope-update")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withExpectedVersion(TASHKENT.replace("\"TASHKENT\"", "\"HIJACKED\""), 1)))
+                .andReturn();
+        assertThat(updateRefused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(updateRefused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.DELIVERY_ZONE_MANAGE.code());
+
+        MvcResult archiveRefused = mvc.perform(post(regionsPath(TENANT) + "/" + regionId + "/archive")
+                        .with(tokenFor(BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-scope-archive"))
+                .andReturn();
+        assertThat(archiveRefused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(archiveRefused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.DELIVERY_ZONE_MANAGE.code());
+
+        assertThat(jdbc.sql("SELECT code, status FROM fulfillment.regions WHERE id = :id")
+                        .param("id", regionId)
+                        .query((rs, n) -> Map.entry(rs.getString("code"), rs.getString("status")))
+                        .single())
+                .as("neither refused call left a mark: not rewritten, not archived")
+                .isEqualTo(Map.entry("TASHKENT", "ACTIVE"));
     }
 
     @Test
@@ -213,7 +305,7 @@ class OperationsRegionControllerEndpointTests {
                         .with(tokenFor(OTHER_TENANT_OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-cross-write")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(TASHKENT))
+                        .content(withExpectedVersion(TASHKENT, 1)))
                 .andReturn();
         assertThat(writeRefused.getResponse().getStatus()).isEqualTo(404);
         assertThat(jdbc.sql("SELECT code FROM fulfillment.regions WHERE id = :id")

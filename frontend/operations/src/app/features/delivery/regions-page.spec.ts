@@ -105,10 +105,18 @@ describe('RegionsPage', () => {
 
     host().querySelector<HTMLButtonElement>('.regions__create')!.click();
     fixture.detectChanges();
+    // Six distinct, recognisable numbers: a template binding swapped between
+    // any two of them (or submit() dropping one from the outgoing request)
+    // must be visible in the assertions below, not just the two that used to
+    // be checked.
     for (const [testid, value] of [
       ['region-code', 'bukhara'],
       ['region-sw-lat', '39.6'],
+      ['region-sw-lon', '64.1'],
       ['region-ne-lat', '39.9'],
+      ['region-ne-lon', '64.5'],
+      ['region-centre-lat', '39.75'],
+      ['region-centre-lon', '64.3'],
     ] as const) {
       const input = host().querySelector<HTMLInputElement>(`[data-testid="${testid}"]`)!;
       input.value = value;
@@ -130,7 +138,30 @@ describe('RegionsPage', () => {
     // The code is upper-cased for the database's own `ck_region_code` shape.
     expect(body.code).toBe('BUKHARA');
     expect(body.bboxSwLat).toBe(39.6);
+    expect(body.bboxSwLon).toBe(64.1);
     expect(body.bboxNeLat).toBe(39.9);
+    expect(body.bboxNeLon).toBe(64.5);
+    expect(body.centreLat).toBe(39.75);
+    expect(body.centreLon).toBe(64.3);
+  });
+
+  it('rewrites a region carrying the version the edit form was opened with', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    await render({ list: vi.fn().mockResolvedValue([TENANT_REGION]), update });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="region-edit"]')!.click();
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+    await flushMicrotasks();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const [tenantId, regionId, body] = update.mock.calls[0];
+    expect(tenantId).toBe('t1');
+    expect(regionId).toBe(TENANT_REGION.regionId);
+    // The version the row carried when the form was opened (openEditForm),
+    // not some later or hard-coded number — a stale one is what STALE_VERSION
+    // exists to refuse.
+    expect(body.expectedVersion).toBe(TENANT_REGION.version);
   });
 
   it('names every refused corner at once instead of only the first', async () => {

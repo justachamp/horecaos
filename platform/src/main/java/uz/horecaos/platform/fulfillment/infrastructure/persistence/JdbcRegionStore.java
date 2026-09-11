@@ -93,15 +93,23 @@ public class JdbcRegionStore {
     }
 
     /**
-     * Rewrites the tenant's own region, bumping {@code version}.
+     * Rewrites the tenant's own region under its expected version, bumping
+     * {@code version}.
      *
      * <p>{@code tenant_id = :tenantId} rather than {@code IS NOT DISTINCT FROM}
      * is deliberate: a platform region matches no row here and the update
-     * returns 0.
+     * returns 0. {@code version = :expectedVersion} is the optimistic-locking
+     * predicate {@code platform/.claude/skills/http-api-conventions/SKILL.md}
+     * requires and {@code JdbcLegalEntityStore.update}/{@code
+     * JdbcSalesChannelStore} already carry for their own aggregates — without
+     * it two operators editing the same region concurrently silently clobber
+     * each other, the later write winning with no conflict surfaced to either.
      *
-     * @return 1 when a row of this tenant's was rewritten, 0 otherwise
+     * @return 1 when a row of this tenant's was rewritten at exactly {@code
+     *         expectedVersion}, 0 otherwise (not found, not owned, not active,
+     *         or the version has moved on — the caller distinguishes those)
      */
-    public int update(UUID tenantId, UUID regionId, RegionGeography geography, Instant now) {
+    public int update(UUID tenantId, UUID regionId, RegionGeography geography, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.regions
                 SET code = :code,
@@ -117,6 +125,7 @@ public class JdbcRegionStore {
                     version = version + 1,
                     updated_at = :now
                 WHERE id = :regionId AND tenant_id = :tenantId AND status = 'ACTIVE'
+                      AND version = :expectedVersion
                 """)
                 .param("regionId", regionId)
                 .param("tenantId", tenantId)
@@ -130,6 +139,7 @@ public class JdbcRegionStore {
                 .param("swLon", geography.bboxSwLon())
                 .param("neLat", geography.bboxNeLat())
                 .param("neLon", geography.bboxNeLon())
+                .param("expectedVersion", expectedVersion)
                 .param("now", Timestamp.from(now))
                 .update();
     }
