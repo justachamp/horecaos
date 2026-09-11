@@ -1715,6 +1715,10 @@ export const messagesRu: MessageCatalogue = {
   'staff.roles.cannotDo': 'Чего нельзя',
   'staff.roles.holders': 'Кто занимает',
   'staff.roles.holders.none': 'Пока никто',
+  'staff.roles.search.label': 'Поиск должностей',
+  'staff.roles.search.placeholder':
+    'Ищите по тому, что можно делать — «отменять заказы», «возвраты»…',
+  'staff.roles.search.empty': 'Ничего не найдено по запросу «{query}»',
 
   'staff.shell.people': 'Люди',
   'staff.shell.roles': 'Должности',
@@ -2627,4 +2631,15 @@ export const messagesRu: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Завершён',
   'orders.callCentre.callLog.type.MISSED': 'Пропущен',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Переведён',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  'ui.denied.title': 'Нет доступа к этому разделу',
+  'ui.denied.capability': 'Не хватает права:',
+  'ui.denied.ask': 'Выдать его может руководитель с доступом к ролям сотрудников.',
+  'ui.locked.title': 'Не входит в текущий тариф',
+  'ui.locked.module': 'Модуль:',
+  'ui.locked.ask': 'Владелец аккаунта может подключить его к тарифу.',
+
+  // --- shell/access-denied-page (operations IA §9.1c) ---------------------
+  'shell.accessDenied.backHome': 'На главную',
 };

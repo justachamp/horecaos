@@ -1723,6 +1723,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.roles.cannotDo': 'Nima qila olmaydi',
   'staff.roles.holders': 'Kim egallagan',
   'staff.roles.holders.none': 'Hali hech kim',
+  'staff.roles.search.label': 'Lavozimlarni qidirish',
+  'staff.roles.search.placeholder':
+    'Nima qila olishi boʻyicha qidiring — «buyurtmalarni bekor qilish», «qaytarishlar»…',
+  'staff.roles.search.empty': '«{query}» boʻyicha hech narsa topilmadi',
 
   'staff.shell.people': 'Xodimlar',
   'staff.shell.roles': 'Lavozimlar',
@@ -2643,4 +2647,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Tugagan',
   'orders.callCentre.callLog.type.MISSED': 'O‘tkazib yuborilgan',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Uzatilgan',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
+  'ui.denied.capability': 'Yetishmayotgan huquq:',
+  'ui.denied.ask': 'Uni xodimlar rollarini tahrirlay oladigan rahbar bera oladi.',
+  'ui.locked.title': 'Joriy tarifga kirmagan',
+  'ui.locked.module': 'Modul:',
+  'ui.locked.ask': 'Uni tarifga hisob egasi qoʻsha oladi.',
+
+  // --- shell/access-denied-page (operations IA §9.1c) ---------------------
+  'shell.accessDenied.backHome': 'Bugungi kunga qaytish',
 };

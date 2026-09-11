@@ -1739,6 +1739,9 @@ export const messagesEn = {
   'staff.roles.cannotDo': "What it can't do",
   'staff.roles.holders': 'Who holds it',
   'staff.roles.holders.none': 'Nobody yet',
+  'staff.roles.search.label': 'Search jobs',
+  'staff.roles.search.placeholder': 'Search by what a job can do — “cancel orders”, “refunds”…',
+  'staff.roles.search.empty': 'No job matches “{query}”',
 
   'staff.shell.people': 'People',
   'staff.shell.roles': 'Jobs',
@@ -2646,6 +2649,20 @@ export const messagesEn = {
   'orders.callCentre.callLog.type.ENDED': 'Ended',
   'orders.callCentre.callLog.type.MISSED': 'Missed',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Transferred',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  // The only keys in this catalogue owned by a component rather than by a
+  // screen. `ui.*` rather than a per-component namespace because `q-denied-
+  // state` and `q-locked-state` share both sentences.
+  'ui.denied.title': 'You do not have access to this',
+  'ui.denied.capability': 'Missing capability:',
+  'ui.denied.ask': 'A manager who can edit staff roles can grant it.',
+  'ui.locked.title': 'Not included in this plan',
+  'ui.locked.module': 'Module:',
+  'ui.locked.ask': 'The account owner can add it to the plan.',
+
+  // --- shell/access-denied-page (operations IA §9.1c) ---------------------
+  'shell.accessDenied.backHome': 'Back to Today',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */
