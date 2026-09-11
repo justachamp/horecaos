@@ -40,11 +40,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'support.banner.until': '{time} gacha',
   'support.banner.none': 'Ochiq yordam sessiyasi yo‘q; u ochilmaguncha ekranlar rad etadi',
   'support.banner.leave': 'Chiqish',
-  'settings.supportVisits.lead':
-    'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
+  'settings.supportVisits.lead': 'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
   'settings.supportVisits.loading': 'Tashriflar yuklanmoqda…',
-  'settings.supportVisits.denied':
-    'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
+  'settings.supportVisits.denied': 'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
   'settings.supportVisits.empty': 'HorecaOS yordamidan hech kim hisobingizga kirmagan.',
   'settings.supportVisits.openUntil': 'Davom etmoqda, {time} gacha',
   'settings.supportVisits.endedAt': '{time} da tugagan',
@@ -326,11 +324,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.submitting': 'Saqlanmoqda…',
   'invite.signingIn': 'Hisobingiz tayyor. Tizimga kirilmoqda…',
   'invite.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
-  'invite.invalid.body':
-    'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
+  'invite.invalid.body': 'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
   'invite.expired.title': 'Havolaning muddati tugagan',
-  'invite.expired.body':
-    'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
+  'invite.expired.body': 'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
   'invite.toSignIn': 'Kirish sahifasiga o‘tish',
   'invite.policy.length': 'Parol juda qisqa: kamida 12 ta belgi bo‘lsin.',
   'invite.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasin.',
@@ -2098,8 +2094,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Tushunarli',
   'marketing.promoCodes.form.name': 'Nomi (ushbu ro‘yxat uchun)',
   'marketing.promoCodes.form.code': 'Mijoz kiritadigan kod',
-  'marketing.promoCodes.form.code.hint':
-    '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
+  'marketing.promoCodes.form.code.hint': '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
   'marketing.promoCodes.form.shape': 'Chegirma turi',
   'marketing.promoCodes.form.percent': 'Buyurtmadan foiz, %',
   'marketing.promoCodes.form.amount': 'Buyurtmadan chegirma summasi',
@@ -2571,8 +2566,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.supportVisits': 'HorecaOS yordami tashriflari',
   'settings.home.description.dataPrivacy':
     'Saqlash muddatlari, rozilik, ma’lumot subyekti so‘rovlari va mijoz shaxsiy ma’lumotini kim ko‘rgani.',
-  'settings.home.description.supportVisits':
-    'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
+  'settings.home.description.supportVisits': 'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
   'settings.dataPrivacy.title': 'Ma’lumotlar va maxfiylik',
   'settings.dataPrivacy.lead':
     'Restoran shaxsiy ma’lumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning o‘z so‘zlarini kim ko‘rgan.',

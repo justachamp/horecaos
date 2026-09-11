@@ -50,11 +50,9 @@ export const messagesEn = {
   'support.banner.until': 'until {time}',
   'support.banner.none': 'No open support session here; screens will refuse until one is opened',
   'support.banner.leave': 'Leave',
-  'settings.supportVisits.lead':
-    'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
+  'settings.supportVisits.lead': 'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
   'settings.supportVisits.loading': 'Loading visits…',
-  'settings.supportVisits.denied':
-    'Only the account’s owner and administrators can see support visits.',
+  'settings.supportVisits.denied': 'Only the account’s owner and administrators can see support visits.',
   'settings.supportVisits.empty': 'Nobody from HorecaOS support has entered your account.',
   'settings.supportVisits.openUntil': 'In progress, until {time}',
   'settings.supportVisits.endedAt': 'Ended {time}',
@@ -341,11 +339,9 @@ export const messagesEn = {
   'invite.submitting': 'Setting up…',
   'invite.signingIn': 'Your account is ready. Signing you in…',
   'invite.invalid.title': 'This link cannot be used',
-  'invite.invalid.body':
-    'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
+  'invite.invalid.body': 'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
   'invite.expired.title': 'This link has expired',
-  'invite.expired.body':
-    'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
+  'invite.expired.body': 'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
   'invite.toSignIn': 'Go to sign in',
   'invite.policy.length': 'The password is too short: use at least 12 characters.',
   'invite.policy.notEmail': 'The password must not be your email address.',
@@ -2577,8 +2573,7 @@ export const messagesEn = {
   'settings.nav.supportVisits': 'HorecaOS support visits',
   'settings.home.description.dataPrivacy':
     'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
-  'settings.home.description.supportVisits':
-    'Who from HorecaOS support entered your account, when and why',
+  'settings.home.description.supportVisits': 'Who from HorecaOS support entered your account, when and why',
   'settings.dataPrivacy.title': 'Data & privacy',
   'settings.dataPrivacy.lead':
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',
