@@ -1581,6 +1581,20 @@ export interface PageVariantAvailabilityResponse {
   nextCursor?: string;
 }
 
+export interface PasswordResetAcceptRequest {
+  password: string;
+  token: string;
+}
+
+export interface PasswordResetRequest {
+  locale?: string;
+  login: string;
+}
+
+export interface PasswordResetTokenRequest {
+  token: string;
+}
+
 export interface PendingApprovalResponse {
   actionCode?: string;
   expiresAt?: string;
@@ -1951,6 +1965,13 @@ export interface RegisterLegalEntityRequest {
 
 export interface RemoveHolidayRequest {
   reason: string;
+}
+
+export interface ResetInspection {
+  console?: string;
+  expiresAt?: string;
+  locale?: string;
+  maskedLogin?: string;
 }
 
 export interface ResidencyView {
@@ -2626,6 +2647,9 @@ export interface Operations {
   "raiseControlBandEscalation": { method: "POST"; path: "/api/v1/control-plane/alerts/control-band-escalations"; request: { parameters: Record<string, never>; body: ControlBandEscalationRequest }; responses: { "200": unknown } };
   "platformPending": { method: "GET"; path: "/api/v1/control-plane/approval-requests"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<PlatformPendingApprovalResponse> } };
   "board": { method: "GET"; path: "/api/v1/control-plane/arrears"; request: { parameters: Record<string, never> }; responses: { "200": ArrearsBoardView } };
+  "requestControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets"; request: { parameters: Record<string, never>; body: PasswordResetRequest }; responses: { "200": unknown } };
+  "acceptControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets/accept"; request: { parameters: Record<string, never>; body: PasswordResetAcceptRequest }; responses: { "200": unknown } };
+  "inspectControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets/inspect"; request: { parameters: Record<string, never>; body: PasswordResetTokenRequest }; responses: { "200": ResetInspection } };
   "signInControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
