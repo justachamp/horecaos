@@ -1,13 +1,13 @@
 # ADR 0089: A tenant in arrears is a conversation the platform schedules
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — V0202's `subscriptions.status_changed_at` and arrears index, `JdbcArrearsStore`, `ArrearsService` (the `ArrearsDirectory` port), `ArrearsController`, `CommercialArrearsReviewSweeper` raising an ADR 0085 incident, tested in `ModulesStatementsAndArrearsTests` and `CommercialArrearsReviewSweeperTests`; the control-plane dunning board. Nothing moves a subscription by itself
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0021, ADR 0085, ADR 0088
 - Supersedes / Superseded by: —
-- Open inputs: how long late is too long (finance) — the review interval defaults to fourteen days and is a setting
+- Open inputs: closed 2026-09-11: fourteen days, the default, is the review interval finance wants
 
 ## Context
 

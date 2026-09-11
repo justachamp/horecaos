@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -31,7 +32,8 @@ public class OnboardingTemplateService {
 
     private static final String SELECT = """
             SELECT id, code, version, status, description, required_steps::text AS required_steps,
-                   default_configuration::text AS default_configuration, created_by, created_at
+                   default_configuration::text AS default_configuration, business_types,
+                   created_by, created_at
               FROM tenant.onboarding_templates
             """;
 
@@ -75,12 +77,38 @@ public class OnboardingTemplateService {
                         "No default onboarding template is configured; this deployment's migrations are behind"));
     }
 
+    /**
+     * The template a run for a tenant of this business type starts under when
+     * nobody names one (ADR 0090, decided 2026-09-11): the newest {@code
+     * ACTIVE} version that names the type, and {@link #currentDefault()} when
+     * none does. Pre-selected in the control plane, where the operator can
+     * still choose another.
+     */
+    public Suggestion suggestedFor(@Nullable String businessType) {
+        if (businessType != null) {
+            Optional<TemplateView> suited = jdbc.sql(SELECT + """
+                     WHERE status = 'ACTIVE' AND :businessType = ANY(business_types)
+                     ORDER BY code, version DESC
+                     LIMIT 1
+                    """)
+                    .param("businessType", businessType)
+                    .query(this::map)
+                    .optional();
+            if (suited.isPresent()) {
+                return new Suggestion(suited.get(), businessType, true);
+            }
+        }
+        return new Suggestion(currentDefault(), businessType, false);
+    }
+
     @SuppressWarnings("unchecked")
     private TemplateView map(java.sql.ResultSet rs, int rowNumber) throws java.sql.SQLException {
         List<String> requiredSteps = objectMapper.readValue(rs.getString("required_steps"), List.class);
         Map<String, Object> defaultConfiguration =
                 objectMapper.readValue(rs.getString("default_configuration"), Map.class);
         OffsetDateTime createdAt = rs.getObject("created_at", OffsetDateTime.class);
+        java.sql.Array types = rs.getArray("business_types");
+        List<String> businessTypes = types == null ? List.of() : List.of((String[]) types.getArray());
         return new TemplateView(
                 rs.getObject("id", UUID.class),
                 rs.getString("code"),
@@ -89,6 +117,7 @@ public class OnboardingTemplateService {
                 rs.getString("description"),
                 requiredSteps,
                 defaultConfiguration,
+                businessTypes,
                 rs.getString("created_by"),
                 createdAt == null ? null : createdAt.toInstant());
     }
@@ -101,6 +130,15 @@ public class OnboardingTemplateService {
             String description,
             List<String> requiredSteps,
             Map<String, Object> defaultConfiguration,
+            List<String> businessTypes,
             String createdBy,
             @Nullable Instant createdAt) {}
+
+    /**
+     * The template pre-selected for a tenant, and why: {@code matched} is true
+     * when a template names the tenant's business type, false when the
+     * default was taken because none does.
+     */
+    public record Suggestion(
+            TemplateView template, @Nullable String businessType, boolean matched) {}
 }

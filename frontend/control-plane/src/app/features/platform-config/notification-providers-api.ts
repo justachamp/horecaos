@@ -7,6 +7,8 @@ export interface Gateway {
   readonly code: string;
   readonly providerType: string;
   readonly production: boolean;
+  /** ADR 0091: new SMS wordings for this gateway wait for its approval. */
+  readonly moderatesWordings: boolean;
   readonly notes: string | null;
 }
 

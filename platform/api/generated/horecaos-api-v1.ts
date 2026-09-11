@@ -2116,6 +2116,7 @@ export interface FutureDiscountRequest {
 
 export interface Gateway {
   code?: string;
+  moderatesWordings?: boolean;
   notes?: string;
   production?: boolean;
   providerType?: string;
@@ -5242,6 +5243,12 @@ export interface SubmitReviewRequest {
   rating?: number;
 }
 
+export interface Suggestion {
+  businessType?: string;
+  matched?: boolean;
+  template?: TemplateView;
+}
+
 export interface SupportSessionControllerOpenRequest {
   access: "VIEW" | "ASSIST";
   minutes?: number;
@@ -5409,6 +5416,7 @@ export interface TemplateReviewView {
 }
 
 export interface TemplateView {
+  businessTypes?: Array<string>;
   code?: string;
   createdAt?: string;
   createdBy?: string;
@@ -5930,6 +5938,7 @@ export interface Operations {
   "tenantModules": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/modules"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<TenantModuleView> } };
   "start_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs"; request: { parameters: { path: { tenantId: string } }; body: OnboardingControllerStartRequest }; responses: { "200": {  } } };
   "current_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/current"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OnboardingControllerRunView } };
+  "suggestedTemplate": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/suggested-template"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Suggestion } };
   "get_8": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": OnboardingControllerRunView } };
   "activate_8": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate"; request: { parameters: { path: { runId: string; tenantId: string } }; body: OnboardingControllerReasonRequest }; responses: { "200": ActivationOutcome } };
   "cancel_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/cancel"; request: { parameters: { path: { runId: string; tenantId: string } }; body: OnboardingControllerReasonRequest }; responses: { "200": {  } } };

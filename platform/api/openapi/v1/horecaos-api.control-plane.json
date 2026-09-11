@@ -3256,6 +3256,9 @@
           "code" : {
             "type" : "string"
           },
+          "moderatesWordings" : {
+            "type" : "boolean"
+          },
           "notes" : {
             "type" : "string"
           },
@@ -7107,6 +7110,20 @@
         },
         "type" : "object"
       },
+      "Suggestion" : {
+        "properties" : {
+          "businessType" : {
+            "type" : "string"
+          },
+          "matched" : {
+            "type" : "boolean"
+          },
+          "template" : {
+            "$ref" : "#/components/schemas/TemplateView"
+          }
+        },
+        "type" : "object"
+      },
       "SupportSessionControllerOpenRequest" : {
         "properties" : {
           "access" : {
@@ -7352,6 +7369,12 @@
       },
       "TemplateView" : {
         "properties" : {
+          "businessTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "code" : {
             "type" : "string"
           },
@@ -14700,7 +14723,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs" : {
       "post" : {
-        "description" : "Omit templateId to use the platform's current default template (Gap B).",
+        "description" : "Omit templateId to use the template suited to the tenant's business type, or the platform's default when none suits it (ADR 0090).",
         "operationId" : "start_2",
         "parameters" : [ {
           "in" : "path",
@@ -14763,6 +14786,35 @@
           }
         },
         "summary" : "The tenant's current onboarding run",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/suggested-template" : {
+      "get" : {
+        "description" : "The newest active template naming the tenant's business type, or the platform's default when none does. The console pre-selects it (ADR 0090).",
+        "operationId" : "suggestedTemplate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Suggestion"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The template a new run would start under",
         "tags" : [ "Tenant onboarding" ]
       }
     },

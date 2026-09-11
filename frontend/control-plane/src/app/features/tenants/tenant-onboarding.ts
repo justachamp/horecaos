@@ -1,10 +1,16 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
-import { OnboardingRunView, OnboardingTemplateView, TenantsApi, ValidationOutcome } from './tenants-api';
+import {
+  OnboardingRunView,
+  OnboardingTemplateSuggestion,
+  OnboardingTemplateView,
+  TenantsApi,
+  ValidationOutcome,
+} from './tenants-api';
 
 /** Where each failure is fixed, when it is fixed in this console. */
 type HintLink = 'brands' | 'legal-entities' | 'identity' | 'installations';
@@ -109,7 +115,22 @@ export class TenantOnboarding {
   protected readonly validating = signal(false);
   protected readonly cancelReason = signal('');
   protected readonly cancelling = signal(false);
-  protected readonly defaultTemplate = signal<OnboardingTemplateView | null>(null);
+  protected readonly suggestion = signal<OnboardingTemplateSuggestion | null>(null);
+  protected readonly templates = signal<readonly OnboardingTemplateView[]>([]);
+  protected readonly selectedTemplateId = signal<string | null>(null);
+
+  /** Active versions to choose from; the list needs platform scope, so it may be empty. */
+  protected readonly activeTemplates = computed(() =>
+    this.templates().filter((template) => template.status === 'ACTIVE'),
+  );
+
+  /** The template a new run will start under: the operator's choice, else the suggestion. */
+  protected readonly selectedTemplate = computed(
+    () =>
+      this.activeTemplates().find((template) => template.id === this.selectedTemplateId()) ??
+      this.suggestion()?.template ??
+      null,
+  );
 
   constructor() {
     void this.load();
@@ -128,24 +149,43 @@ export class TenantOnboarding {
       this.loading.set(false);
     }
     try {
-      this.defaultTemplate.set(await this.tenantsApi.defaultOnboardingTemplate());
+      const suggestion = await this.tenantsApi.suggestedOnboardingTemplate(this.tenantId);
+      this.suggestion.set(suggestion);
+      this.selectedTemplateId.set(suggestion.template.id);
     } catch {
-      // Reading templates needs platform scope; without it the start panel
-      // simply does not name the template.
-      this.defaultTemplate.set(null);
+      // Without the suggestion the server still picks one when the run starts;
+      // the panel just cannot name it in advance.
+      this.suggestion.set(null);
+    }
+    try {
+      this.templates.set(await this.tenantsApi.onboardingTemplates());
+    } catch {
+      // Listing every template needs platform scope; without it there is
+      // nothing to choose between, and the suggestion stands.
+      this.templates.set([]);
     }
   }
 
-  protected stepName(stepKey: string): string {
-    return STEP_NAMES.has(stepKey) ? this.i18n.t(`onboarding.step.${stepKey}` as MessageKey) : stepKey;
+  protected businessTypeLabel(code: string | null): string {
+    return code === null ? '' : this.i18n.t(`businessTypes.type.${code}` as MessageKey);
   }
 
-  protected hint(errorCode: string | null): { readonly key: MessageKey; readonly link?: HintLink } | null {
+  protected stepName(stepKey: string): string {
+    return STEP_NAMES.has(stepKey)
+      ? this.i18n.t(`onboarding.step.${stepKey}` as MessageKey)
+      : stepKey;
+  }
+
+  protected hint(
+    errorCode: string | null,
+  ): { readonly key: MessageKey; readonly link?: HintLink } | null {
     return errorCode === null ? null : (HINTS[errorCode] ?? null);
   }
 
   protected hintRoute(link: HintLink): readonly string[] {
-    return link === 'installations' ? ['/providers', 'installations'] : ['/tenants', this.tenantId, link];
+    return link === 'installations'
+      ? ['/providers', 'installations']
+      : ['/tenants', this.tenantId, link];
   }
 
   /** A run that has ended can be replaced by a fresh one; one in flight cannot. */
@@ -201,6 +241,8 @@ export class TenantOnboarding {
       const { runId } = await this.tenantsApi.startOnboarding(
         this.tenantId,
         this.ownerEmail().trim() || undefined,
+        undefined,
+        this.selectedTemplate()?.id,
       );
       this.runId.set(runId);
       this.validation.set(null);
@@ -232,9 +274,7 @@ export class TenantOnboarding {
         runId,
         this.resumeReason().trim(),
       );
-      this.resumeMessage.set(
-        this.i18n.t('onboarding.resume.result', { count: reopenedSteps }),
-      );
+      this.resumeMessage.set(this.i18n.t('onboarding.resume.result', { count: reopenedSteps }));
       this.resumeReason.set('');
       await this.reloadRun();
     } catch (error) {

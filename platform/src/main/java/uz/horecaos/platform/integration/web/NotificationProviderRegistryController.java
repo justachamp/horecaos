@@ -39,7 +39,7 @@ public class NotificationProviderRegistryController {
                     + "sender name and how many brands send under a different one.")
     NotificationProviders registry() {
         List<Gateway> gateways = jdbc.sql("""
-                        SELECT code, provider_type, is_production, notes
+                        SELECT code, provider_type, is_production, moderates_wordings, notes
                           FROM integration.provider_environments
                          WHERE provider_category = 'NOTIFICATION'
                          ORDER BY provider_type, code
@@ -48,6 +48,7 @@ public class NotificationProviderRegistryController {
                         row.getString("code"),
                         row.getString("provider_type"),
                         row.getBoolean("is_production"),
+                        row.getBoolean("moderates_wordings"),
                         row.getString("notes")))
                 .list();
         List<Sender> senders = jdbc.sql("""
@@ -81,6 +82,8 @@ public class NotificationProviderRegistryController {
             String code,
             String providerType,
             boolean production,
+            /* ADR 0091: a new SMS wording for this gateway waits for its approval. */
+            boolean moderatesWordings,
             @Nullable String notes) {}
 
     /** One tenant's messaging installation and the name it sends as. */

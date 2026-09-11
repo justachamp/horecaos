@@ -1,10 +1,10 @@
 # ADR 0086: Integration operators read the webhook log, the failure taxonomy and adapter versions
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `PlatformWebhookLogController` over `payments.provider_callbacks` with V0200's index, `FailureTaxonomyController` counting both queues by category, the adapter-version count on `PlatformIntegrationAdminController`, tested against the migrated schema; the control-plane webhook deliveries, error taxonomy, contracts and versions, and sandbox screens. Replaying recorded provider traffic stays in the build's contract tests
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0005, ADR 0006, ADR 0013, ADR 0026, ADR 0029
 - Supersedes / Superseded by: —
 - Open inputs: none

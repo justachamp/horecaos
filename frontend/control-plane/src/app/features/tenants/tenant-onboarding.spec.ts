@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../core/api/problem';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { ru } from '../../core/i18n/messages.ru';
-import { ActivationOutcome, OnboardingRunView, OnboardingTemplateView, ValidationOutcome } from './tenants-api';
+import {
+  ActivationOutcome,
+  OnboardingRunView,
+  OnboardingTemplateSuggestion,
+  OnboardingTemplateView,
+  ValidationOutcome,
+} from './tenants-api';
 import { TenantOnboarding } from './tenant-onboarding';
 import { TenantsApi } from './tenants-api';
 
@@ -15,7 +21,13 @@ const CONFIG: AppConfig = {
 };
 
 const RUN: OnboardingRunView = {
-  run: { id: 'run-1', status: 'FAILED', currentPhase: 'READINESS', startedBy: 'owner@test', lastError: null },
+  run: {
+    id: 'run-1',
+    status: 'FAILED',
+    currentPhase: 'READINESS',
+    startedBy: 'owner@test',
+    lastError: null,
+  },
   steps: [
     {
       stepKey: 'PAYMENT_CONFIGURATION_VALIDATE',
@@ -31,6 +43,24 @@ const RUN: OnboardingRunView = {
   outstandingRequired: ['PAYMENT_CONFIGURATION_VALIDATE'],
 };
 
+const DEFAULT: OnboardingTemplateView = {
+  id: 'template-1',
+  code: 'default',
+  version: 1,
+  status: 'ACTIVE',
+  description: 'The default onboarding',
+  requiredSteps: ['BRANDS_AND_LOCATIONS_VALIDATE', 'PAYMENT_CONFIGURATION_VALIDATE'],
+  businessTypes: [],
+};
+
+const DARK_KITCHEN: OnboardingTemplateView = {
+  ...DEFAULT,
+  id: 'template-2',
+  code: 'dark-kitchen',
+  description: 'Delivery only',
+  businessTypes: ['DARK_KITCHEN'],
+};
+
 class FakeTenantsApi {
   readonly currentOnboardingRun = vi.fn<() => Promise<OnboardingRunView | null>>();
   readonly startOnboarding = vi.fn<() => Promise<{ runId: string }>>();
@@ -38,24 +68,27 @@ class FakeTenantsApi {
   readonly activateOnboarding = vi.fn<() => Promise<ActivationOutcome>>();
   readonly validateOnboarding = vi.fn<() => Promise<ValidationOutcome>>();
   readonly cancelOnboarding = vi.fn<(...args: unknown[]) => Promise<void>>();
-  readonly defaultOnboardingTemplate = vi.fn<() => Promise<OnboardingTemplateView>>();
+  readonly suggestedOnboardingTemplate = vi.fn<() => Promise<OnboardingTemplateSuggestion>>();
+  readonly onboardingTemplates = vi.fn<() => Promise<OnboardingTemplateView[]>>();
 }
 
 describe('TenantOnboarding', () => {
   let fixture: ComponentFixture<TenantOnboarding>;
   let api: FakeTenantsApi;
 
-  async function createWith(run: OnboardingRunView | null): Promise<void> {
+  async function createWith(
+    run: OnboardingRunView | null,
+    suggestion: OnboardingTemplateSuggestion = {
+      template: DEFAULT,
+      businessType: 'CAFE',
+      matched: false,
+    },
+    templates: OnboardingTemplateView[] = [DEFAULT],
+  ): Promise<void> {
     api = new FakeTenantsApi();
     api.currentOnboardingRun.mockResolvedValue(run);
-    api.defaultOnboardingTemplate.mockResolvedValue({
-      id: 'template-1',
-      code: 'default',
-      version: 1,
-      status: 'ACTIVE',
-      description: 'The default onboarding',
-      requiredSteps: ['BRANDS_AND_LOCATIONS_VALIDATE', 'PAYMENT_CONFIGURATION_VALIDATE'],
-    });
+    api.suggestedOnboardingTemplate.mockResolvedValue(suggestion);
+    api.onboardingTemplates.mockResolvedValue(templates);
     localStorage.clear();
 
     await TestBed.configureTestingModule({
@@ -78,9 +111,9 @@ describe('TenantOnboarding', () => {
 
   /** A panel found by its heading, so adding a panel never reshuffles the rest. */
   function panel(title: string): HTMLElement {
-    const found = Array.from(fixture.nativeElement.querySelectorAll('.panel') as NodeListOf<HTMLElement>).find(
-      (section) => section.querySelector('h2')?.textContent?.trim() === title,
-    );
+    const found = Array.from(
+      fixture.nativeElement.querySelectorAll('.panel') as NodeListOf<HTMLElement>,
+    ).find((section) => section.querySelector('h2')?.textContent?.trim() === title);
     if (found === undefined) {
       throw new Error(`No panel titled ${title}`);
     }
@@ -99,6 +132,59 @@ describe('TenantOnboarding', () => {
     expect(fixture.nativeElement.textContent).toContain('Начать подключение');
   });
 
+  it("pre-selects the template named for the tenant's business type, and starts under the one chosen", async () => {
+    await createWith(
+      null,
+      { template: DARK_KITCHEN, businessType: 'DARK_KITCHEN', matched: true },
+      [DEFAULT, DARK_KITCHEN],
+    );
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    expect(start.querySelector('.templateSuggestion')?.textContent).toContain('dark-kitchen');
+    const select = start.querySelector('select[name="templateId"]') as HTMLSelectElement;
+    expect(select.value).toBe('template-2');
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-2',
+    );
+  });
+
+  it('lets the operator choose another template, and says when the default is only a fallback', async () => {
+    await createWith(null, { template: DEFAULT, businessType: 'CAFE', matched: false }, [
+      DEFAULT,
+      DARK_KITCHEN,
+    ]);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    expect(start.querySelector('.templateSuggestion')?.textContent).toContain(
+      ru['businessTypes.type.CAFE'],
+    );
+    const select = start.querySelector('select[name="templateId"]') as HTMLSelectElement;
+    select.value = 'template-2';
+    select.dispatchEvent(new Event('change'));
+    await settle();
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-2',
+    );
+  });
+
   it('renders every step with its status', async () => {
     await createWith(RUN);
     expect(fixture.nativeElement.textContent).toContain('PAYMENT_CONFIGURATION_VALIDATE');
@@ -110,10 +196,9 @@ describe('TenantOnboarding', () => {
     api.resumeOnboarding.mockResolvedValue({ reopenedSteps: 2 });
     api.currentOnboardingRun.mockResolvedValue(RUN);
 
-    const [reasonInput, submit] = panel(ru['onboarding.resume.title']).querySelectorAll('input, button') as unknown as [
-      HTMLInputElement,
-      HTMLButtonElement,
-    ];
+    const [reasonInput, submit] = panel(ru['onboarding.resume.title']).querySelectorAll(
+      'input, button',
+    ) as unknown as [HTMLInputElement, HTMLButtonElement];
     reasonInput.value = 'payment configured now';
     reasonInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -121,7 +206,11 @@ describe('TenantOnboarding', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.resumeOnboarding).toHaveBeenCalledWith('tenant-1', 'run-1', 'payment configured now');
+    expect(api.resumeOnboarding).toHaveBeenCalledWith(
+      'tenant-1',
+      'run-1',
+      'payment configured now',
+    );
     expect(fixture.nativeElement.textContent).toContain('Открыто заново шагов: 2');
   });
 
@@ -151,7 +240,13 @@ describe('TenantOnboarding', () => {
   it('names a step in the operator’s language and says what to do about its failure', async () => {
     await createWith({
       ...RUN,
-      steps: [{ ...RUN.steps[0], errorCode: 'NO_LEGAL_ENTITY', detail: 'Location CHILONZOR has no active legal entity assigned' }],
+      steps: [
+        {
+          ...RUN.steps[0],
+          errorCode: 'NO_LEGAL_ENTITY',
+          detail: 'Location CHILONZOR has no active legal entity assigned',
+        },
+      ],
     });
 
     const text = fixture.nativeElement.textContent as string;
@@ -168,7 +263,12 @@ describe('TenantOnboarding', () => {
       allPassed: false,
       checks: [
         { stepKey: 'BRANDS_AND_LOCATIONS_VALIDATE', passed: true, errorCode: null, detail: null },
-        { stepKey: 'PAYMENT_CONFIGURATION_VALIDATE', passed: false, errorCode: 'NO_MERCHANT_BINDING', detail: null },
+        {
+          stepKey: 'PAYMENT_CONFIGURATION_VALIDATE',
+          passed: false,
+          errorCode: 'NO_MERCHANT_BINDING',
+          detail: null,
+        },
       ],
     });
 
@@ -187,7 +287,10 @@ describe('TenantOnboarding', () => {
     expect(() => panel(ru['onboarding.start.title'])).toThrow();
 
     api.cancelOnboarding.mockResolvedValue();
-    api.currentOnboardingRun.mockResolvedValue({ ...inFlight, run: { ...inFlight.run, status: 'CANCELLED' } });
+    api.currentOnboardingRun.mockResolvedValue({
+      ...inFlight,
+      run: { ...inFlight.run, status: 'CANCELLED' },
+    });
     const cancelPanel = panel(ru['onboarding.cancel.title']);
     const reason = cancelPanel.querySelector('input') as HTMLInputElement;
     reason.value = 'started for the wrong tenant';
@@ -196,14 +299,20 @@ describe('TenantOnboarding', () => {
     (cancelPanel.querySelector('button') as HTMLButtonElement).click();
     await settle();
 
-    expect(api.cancelOnboarding).toHaveBeenCalledWith('tenant-1', 'run-1', 'started for the wrong tenant');
+    expect(api.cancelOnboarding).toHaveBeenCalledWith(
+      'tenant-1',
+      'run-1',
+      'started for the wrong tenant',
+    );
     expect(panel(ru['onboarding.start.title']).textContent).toContain('default');
     expect(() => panel(ru['onboarding.cancel.title'])).toThrow();
   });
 
   it('shows a translated error when loading the run fails', async () => {
     api = new FakeTenantsApi();
-    api.currentOnboardingRun.mockRejectedValue(new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }));
+    api.currentOnboardingRun.mockRejectedValue(
+      new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }),
+    );
     localStorage.clear();
 
     await TestBed.configureTestingModule({

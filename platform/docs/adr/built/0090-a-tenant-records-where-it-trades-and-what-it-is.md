@@ -1,13 +1,13 @@
 # ADR 0090: A tenant records where it trades and what it is
 
-- Decision status: Proposed
-- Implementation status: Built — V0203's `tenant.tenants.country_code` and `business_type`, the seeded `tenant.country.change` platform policy and `tenant.public_holidays` with Uzbekistan's fixed dates; `TenantProfileService`, `TenantProfileController`, the cross-tenant approvals read on `ApprovalRequestController`, `TenantHealthController`, `TenantPlansController`, `SlaBucketController`, holidays on `ReferenceDataController`, tested in `TenantProfileServiceTests` and the controller tests; the control-plane residency, approvals, business types, reference data screens and the directory's new columns. Bulk export and retention override are not platform actions yet
+- Decision status: Accepted
+- Implementation status: Built — V0203's `tenant.tenants.country_code` and `business_type`, the seeded `tenant.country.change` platform policy and `tenant.public_holidays` with Uzbekistan's fixed dates; `TenantProfileService`, `TenantProfileController`, the cross-tenant approvals read on `ApprovalRequestController`, `TenantHealthController`, `TenantPlansController`, `SlaBucketController`, holidays on `ReferenceDataController`, tested in `TenantProfileServiceTests` and the controller tests; the control-plane residency, approvals, business types, reference data screens and the directory's new columns; V0207's `business_types` on onboarding templates, `OnboardingTemplateService.suggestedFor` and the onboarding start panel's template choice, tested in `OnboardingTemplateServiceTests` and the console's onboarding spec. Only the default template exists, so every type falls back to it until a template names one. Bulk export and retention override are not platform actions yet
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0027, ADR 0030, ADR 0043, ADR 0050, ADR 0073
 - Supersedes / Superseded by: —
-- Open inputs: whether a business type should choose the onboarding template (product); the movable holidays of each year (operations, entered as announced)
+- Open inputs: closed 2026-09-11: a business type pre-selects the onboarding template that names it, and the operator can choose another. The movable holidays of each year are entered by operations as they are announced; that is a routine, not a decision
 
 ## Context
 
@@ -34,8 +34,12 @@ does not vary per tenant.
    (restaurant, café, fast food, bakery, delivery-only kitchen, catering,
    courier service, pharmacy, florist), each with its usual handovers and
    whether it runs a kitchen display. It is recorded, audited and shown; it
-   enables and disables nothing, and onboarding still applies the default
-   template to every type.
+   enables and disables nothing by itself. It pre-selects the onboarding
+   template: a template version names the types it suits, a run started
+   without naming one takes the newest active version suiting the tenant's
+   type, and the platform's default when none does. The console shows the
+   suggestion and lets the operator choose another. Decided by the platform
+   owner on 2026-09-11.
 4. **Platform approvals.** One read lists the platform decisions waiting in any
    tenant (a change of country, an activation a policy governs), decided
    through each tenant's own decision route. Bulk export and retention override

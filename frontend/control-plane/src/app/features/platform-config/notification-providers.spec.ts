@@ -8,23 +8,66 @@ import { ru } from '../../core/i18n/messages.ru';
 import { NotificationProviders } from './notification-providers';
 import { NotificationProvidersApi, TemplateReview } from './notification-providers-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const PENDING: TemplateReview = {
-  versionId: 'v-1', tenantId: 'tenant-1', tenantName: 'Non uyi', templateKey: 'ORDER_CONFIRMED', versionNumber: 2,
-  locale: 'ru', status: 'ACTIVE', body: 'Заказ {number} принят', providerReview: 'PENDING', reference: null,
-  providerNote: null, updatedBy: 'desk', updatedAt: '2026-09-11T08:00:00Z',
+  versionId: 'v-1',
+  tenantId: 'tenant-1',
+  tenantName: 'Non uyi',
+  templateKey: 'ORDER_CONFIRMED',
+  versionNumber: 2,
+  locale: 'ru',
+  status: 'ACTIVE',
+  body: 'Заказ {number} принят',
+  providerReview: 'PENDING',
+  reference: null,
+  providerNote: null,
+  updatedBy: 'desk',
+  updatedAt: '2026-09-11T08:00:00Z',
 };
 
 describe('NotificationProviders', () => {
   let fixture: ComponentFixture<NotificationProviders>;
-  let api: { registry: ReturnType<typeof vi.fn>; reviews: ReturnType<typeof vi.fn>; record: ReturnType<typeof vi.fn> };
+  let api: {
+    registry: ReturnType<typeof vi.fn>;
+    reviews: ReturnType<typeof vi.fn>;
+    record: ReturnType<typeof vi.fn>;
+  };
 
   async function create(): Promise<void> {
     api = {
       registry: vi.fn().mockResolvedValue({
-        gateways: [{ code: 'smsgw-vas-production', providerType: 'SMSGW_VAS', production: true, notes: null }],
-        senders: [{ installationId: 'i-1', tenantId: 'tenant-1', tenantName: 'Non uyi', providerType: 'SMSGW_VAS', environmentCode: 'smsgw-vas-production', status: 'ACTIVE', sender: 'NONUYI', brandSenders: 1 }],
+        gateways: [
+          {
+            code: 'smsgw-vas-production',
+            providerType: 'SMSGW_VAS',
+            production: true,
+            moderatesWordings: true,
+            notes: null,
+          },
+          {
+            code: 'quiet-sandbox',
+            providerType: 'SMSGW_QUIET',
+            production: false,
+            moderatesWordings: false,
+            notes: null,
+          },
+        ],
+        senders: [
+          {
+            installationId: 'i-1',
+            tenantId: 'tenant-1',
+            tenantName: 'Non uyi',
+            providerType: 'SMSGW_VAS',
+            environmentCode: 'smsgw-vas-production',
+            status: 'ACTIVE',
+            sender: 'NONUYI',
+            brandSenders: 1,
+          },
+        ],
       }),
       reviews: vi.fn().mockResolvedValue([PENDING]),
       record: vi.fn().mockResolvedValue(undefined),
@@ -35,7 +78,10 @@ describe('NotificationProviders', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: NotificationProvidersApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(NotificationProviders);
@@ -63,10 +109,14 @@ describe('NotificationProviders', () => {
   it('lists the gateways, who sends as what, and the wordings waiting first', async () => {
     await create();
 
-    expect(el('[data-gateway="smsgw-vas-production"]').textContent).toContain(ru['notificationProviders.live']);
+    expect(el('[data-gateway="smsgw-vas-production"]').textContent).toContain(
+      ru['notificationProviders.live'],
+    );
     expect(el('[data-sender="i-1"]').textContent).toContain('NONUYI');
     expect(api.reviews).toHaveBeenCalledWith('PENDING');
-    expect(el('[data-review="v-1"]').textContent).toContain(ru['notificationProviders.review.PENDING']);
+    expect(el('[data-review="v-1"]').textContent).toContain(
+      ru['notificationProviders.review.PENDING'],
+    );
   });
 
   it('records an approval only with the gateway’s reference', async () => {
@@ -93,5 +143,14 @@ describe('NotificationProviders', () => {
     await settle();
 
     expect(api.reviews).toHaveBeenLastCalledWith(null);
+  });
+
+  it('says which gateways moderate wordings, and only those', async () => {
+    await create();
+
+    expect(el('[data-gateway="smsgw-vas-production"] .moderates').textContent).toContain(
+      ru['notificationProviders.moderates'],
+    );
+    expect(el('[data-gateway="quiet-sandbox"] .moderates')).toBeNull();
   });
 });

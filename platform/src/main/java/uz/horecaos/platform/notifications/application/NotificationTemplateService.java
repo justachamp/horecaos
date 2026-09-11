@@ -113,10 +113,14 @@ public class NotificationTemplateService {
         // Read for its side effect: a template id from another tenant must not be
         // given a version here, and the composite foreign key alone would let the
         // insert through on a matching id.
-        var _ = templates
+        TemplateRow owned = templates
                 .template(tenantId, templateId)
                 .orElseThrow(
                         () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
+        // ADR 0091, decided 2026-09-11: a new SMS wording for a gateway that
+        // moderates texts waits for the gateway's approval before it can send.
+        boolean awaitsGateway =
+                NotificationChannel.SMS.name().equals(owned.channel()) && templates.smsWordingAwaitsGateway(tenantId);
 
         List<MessageLocale> missing = MessageLocale.required().stream()
                 .filter(locale -> !wordings.containsKey(locale))
@@ -150,6 +154,7 @@ public class NotificationTemplateService {
                     wording.body(),
                     schemaJson,
                     contentHashOf(locale, wording),
+                    awaitsGateway,
                     now);
         }
 

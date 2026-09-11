@@ -1,13 +1,13 @@
 # ADR 0094: Support finds a customer by phone, and sees credentials due
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `PlatformCustomerLookupController` over each tenant's keyed phone lookup, audited, and `CredentialRotationController` over installations and merchant accounts, tested in `PlatformCustomerLookupControllerTests` and `CredentialRotationControllerTests`; the global lookup's phone search and the tenant issue queue's credentials section
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0015, ADR 0026, ADR 0028, ADR 0029, ADR 0083
 - Supersedes / Superseded by: —
-- Open inputs: the rotation interval (security, default 180 days)
+- Open inputs: closed 2026-09-11: 180 days, the default, is the rotation interval
 
 ## Context
 

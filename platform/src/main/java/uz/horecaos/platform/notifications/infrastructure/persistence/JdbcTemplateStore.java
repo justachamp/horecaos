@@ -192,6 +192,39 @@ public class JdbcTemplateStore {
             String variablesSchemaJson,
             String contentHash,
             Instant now) {
+        insertVersion(
+                id,
+                tenantId,
+                templateId,
+                versionNumber,
+                locale,
+                subjectTemplate,
+                bodyTemplate,
+                variablesSchemaJson,
+                contentHash,
+                false,
+                now);
+    }
+
+    /**
+     * Inserts one draft locale of a version.
+     *
+     * @param awaitsGateway whether the version starts {@code PENDING} its SMS
+     *        gateway's approval (ADR 0091) rather than {@code NOT_REQUIRED};
+     *        attributed to the platform, because no person marked it
+     */
+    public void insertVersion(
+            UUID id,
+            UUID tenantId,
+            UUID templateId,
+            int versionNumber,
+            String locale,
+            @Nullable String subjectTemplate,
+            String bodyTemplate,
+            String variablesSchemaJson,
+            String contentHash,
+            boolean awaitsGateway,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -203,14 +236,65 @@ public class JdbcTemplateStore {
         parameters.put("schema", variablesSchemaJson);
         parameters.put("hash", contentHash);
         parameters.put("now", utc(now));
+        parameters.put("review", awaitsGateway ? "PENDING" : "NOT_REQUIRED");
+        parameters.put("reviewedBy", awaitsGateway ? GATEWAY_MODERATION : null);
+        parameters.put("reviewedAt", awaitsGateway ? utc(now) : null);
+        parameters.put(
+                "reviewNote", awaitsGateway ? "The SMS gateway moderates wordings; awaiting its approval" : null);
 
         jdbc.sql("""
                 INSERT INTO notifications.template_versions (
                     id, tenant_id, template_id, version_number, locale, subject_template,
-                    body_template, variables_schema, content_hash, status, created_at, updated_at)
+                    body_template, variables_schema, content_hash, status, created_at, updated_at,
+                    provider_review, provider_review_updated_by, provider_review_updated_at,
+                    provider_review_note)
                 VALUES (:id, :tenantId, :templateId, :versionNumber, :locale, :subject,
-                    :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now)
+                    :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now,
+                    :review, :reviewedBy, :reviewedAt, :reviewNote)
                 """).params(parameters).update();
+    }
+
+    /** Who a version marked as awaiting its gateway at creation was marked by: the platform's own rule. */
+    public static final String GATEWAY_MODERATION = "platform:gateway-moderation";
+
+    /**
+     * Whether a new SMS wording of this tenant waits for its gateway's approval
+     * (ADR 0091, decided 2026-09-11).
+     *
+     * <p>When the tenant has SMS bindings, it waits if any of them sits on an
+     * endpoint that moderates wordings. When it has none yet, the gateway it
+     * will use is unknown, so it waits if any approved notification endpoint
+     * moderates. The installations and endpoints are the integration module's,
+     * read by name for the reason this module reads other schemas by name:
+     * the rule needs two columns, not that module's types.
+     */
+    public boolean smsWordingAwaitsGateway(UUID tenantId) {
+        return Boolean.TRUE.equals(
+                jdbc.sql("""
+                        WITH sms_endpoints AS (
+                            SELECT DISTINCT i.environment_code
+                              FROM integration.installations i
+                              JOIN integration.bindings b
+                                ON b.tenant_id = i.tenant_id AND b.installation_id = i.id
+                              JOIN integration.binding_capabilities c
+                                ON c.tenant_id = b.tenant_id AND c.binding_id = b.id
+                             WHERE i.tenant_id = :tenantId
+                               AND c.capability_code = 'SEND_SMS'
+                               AND c.enabled
+                               AND b.status <> 'SUSPENDED'
+                        )
+                        SELECT CASE
+                                 WHEN EXISTS (SELECT 1 FROM sms_endpoints) THEN EXISTS (
+                                     SELECT 1
+                                       FROM integration.provider_environments e
+                                       JOIN sms_endpoints s ON s.environment_code = e.code
+                                      WHERE e.moderates_wordings)
+                                 ELSE EXISTS (
+                                     SELECT 1
+                                       FROM integration.provider_environments e
+                                      WHERE e.provider_category = 'NOTIFICATION' AND e.moderates_wordings)
+                               END
+                        """).param("tenantId", tenantId).query(Boolean.class).single());
     }
 
     /**

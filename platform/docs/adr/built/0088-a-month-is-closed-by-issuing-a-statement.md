@@ -1,13 +1,13 @@
 # ADR 0088: A month is closed by issuing a statement
 
-- Decision status: Proposed
-- Implementation status: Built — V0202's `commercial.statements` and `commercial.statement_lines` with their freeze triggers, `StatementService`, `CommercialStatementController` with CSV export, tested against the migrated schema in `ModulesStatementsAndArrearsTests` and `CommercialStatementCsvTests`; the control-plane statements screen. The prepaid wallet is not built: how tenants pay and how money held in advance is taxed are not decided
+- Decision status: Accepted
+- Implementation status: Built — V0202's `commercial.statements` and `commercial.statement_lines` with their freeze triggers, `StatementService`, `CommercialStatementController` with CSV export, tested against the migrated schema in `ModulesStatementsAndArrearsTests` and `CommercialStatementCsvTests`; the control-plane statements screen. How a statement is paid, and the wallet, are ADR 0095's; sending it to Didox or Faktura.uz is ADR 0096's
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0021, ADR 0027, ADR 0087
 - Supersedes / Superseded by: —
-- Open inputs: tax treatment of a subscription and of prepaid credit, and the invoicing system a statement is exported to (finance) — the wallet waits on both
+- Open inputs: closed 2026-09-11. Tenants pay by invoice and bank transfer, from a prepaid wallet, or by card charged automatically; the wallet keeps money a tenant paid apart from bonus money HorecaOS grants, and every manual change to it is proposed by one person and approved by another. Issued statements go to the accountant as CSV and to the Didox and Faktura.uz e-invoicing operators. Those are ADR 0095's (wallet and payment) and ADR 0096's (e-invoicing) to build. Tax on a subscription and on prepaid money is still finance's to state, and a statement stays before tax until it does
 
 ## Context
 
@@ -38,9 +38,10 @@ before tax.
 4. **Exported.** An issued statement downloads as CSV for the accounting
    system; a cell that a spreadsheet would read as a formula is written as
    text.
-5. **Wallet not built.** No balance, top-up or credit expiry is recorded until
-   finance decides how tenants pay and how prepaid money is taxed. The screen
-   says so.
+5. **Payment is separate.** A statement is what is owed, whichever way it is
+   paid. How it is paid -- by invoice, from the wallet or by card -- and the
+   wallet itself are ADR 0095's; sending it to an e-invoicing operator is
+   ADR 0096's. Decided by the platform owner on 2026-09-11.
 
 ## Alternatives considered
 
