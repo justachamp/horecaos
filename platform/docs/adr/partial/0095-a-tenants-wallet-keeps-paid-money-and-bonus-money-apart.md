@@ -241,11 +241,14 @@ As built on 2026-09-11.
   adds: a `PLATFORM`-scope request carries no tenant, so neither the tenant's
   own worklist nor its decision route can reach it, and the platform route
   cannot reach a tenant's own requests either.
-- Control plane: the Invoices & wallet screen carries both balances, the
-  ledger, live grants, each statement's paid and due amounts, the payment
+- Control plane: the Invoices & wallet screen carries the spendable bonus with
+  the ledger balance beside it, the paid balance, the ledger with a load-more
+  control and a caption that stops claiming the balance is the sum of the rows
+  on screen, live grants, each statement's paid and due amounts, the payment
   method with its change action, and the sentence that card charging is not
-  connected. A proposed change answers that nothing has moved and links to
-  Approvals.
+  connected. A correction accepts the minus sign its own placeholder asks for.
+  A proposed change answers that nothing has moved and links to Approvals,
+  where a row carrying no tenant is decided through the platform route.
 
 ## Rollout and rollback
 
