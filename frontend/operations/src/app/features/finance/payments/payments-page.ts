@@ -1,20 +1,33 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { OrderLookupApi, OrderNumberMatchView } from '../../../core/api/order-lookup-api';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ApiError } from '../../../core/api/problem-details';
 import { describeApiError } from '../../orders/order-errors';
+import { orderStatusLabel } from '../../orders/order-status';
 import { describeReissueRefusal } from '../finance-errors';
 import {
+  ENTITLEMENT_BENEFIT_KEYS,
+  ENTITLEMENT_SCOPE_KEYS,
+  PAYMENT_ATTEMPT_STATUS_KEYS,
+  PAYMENT_INTENT_STATUS_KEYS,
+  REFUND_REASON_CODES,
+  REFUND_REASON_CODE_KEYS,
+  RefundReasonCode,
   REMEDY_TYPE_KEYS,
   SETTLEMENT_BASIS_KEYS,
   VERIFICATION_STATE_KEYS,
 } from '../finance-labels';
 import {
+  EntitlementBenefit,
+  EntitlementScope,
   ExecutionChannel,
   OrderPaymentView,
+  PaymentAttemptStatus,
+  PaymentIntentStatus,
   PaymentSessionView,
   PaymentsApi,
   RemedyType,
@@ -24,7 +37,7 @@ import {
   VerificationState,
 } from './payments-api';
 
-type RemedyKind = Extract<RemedyType, 'ORDER_REFUND' | 'DELIVERY_FEE_REIMBURSEMENT'>;
+type RemedyKind = RemedyType;
 type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
 
 /**
@@ -57,7 +70,25 @@ type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
 export class PaymentsPage {
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(PaymentsApi);
+  private readonly orderLookup = inject(OrderLookupApi);
   protected readonly i18n = inject(I18n);
+
+  protected readonly reasonCodes = REFUND_REASON_CODES;
+  protected readonly entitlementScopes: readonly EntitlementScope[] = [
+    'SUBTOTAL',
+    'DELIVERY_FEE',
+    'BOTH',
+  ];
+  protected readonly entitlementBenefits: readonly EntitlementBenefit[] = [
+    'PERCENT',
+    'FIXED_AMOUNT',
+  ];
+
+  // -------------------------------------------------------------- order lookup by number
+  protected readonly orderNumberInput = signal('');
+  protected readonly lookupByNumberLoading = signal(false);
+  protected readonly lookupByNumberError = signal<string | null>(null);
+  protected readonly lookupCandidates = signal<readonly OrderNumberMatchView[]>([]);
 
   // -------------------------------------------------------------- order lookup
   protected readonly orderIdInput = signal('');
@@ -75,7 +106,7 @@ export class PaymentsPage {
   protected readonly reissueError = signal<string | null>(null);
   protected readonly reissueResult = signal<PaymentSessionView | null>(null);
 
-  // -------------------------------------------------------------- remedy (refund / delivery fee)
+  // -------------------------------------------------------------- remedy (refund / delivery fee / future discount)
   protected readonly showRemedyForm = signal(false);
   protected readonly remedyKind = signal<RemedyKind>('ORDER_REFUND');
   protected readonly remedyAmount = signal('');
@@ -85,6 +116,15 @@ export class PaymentsPage {
   protected readonly remedyProviderReference = signal('');
   protected readonly remedySubmitting = signal(false);
   protected readonly remedyError = signal<string | null>(null);
+
+  // ---------------------------------------------------- future-discount fields (RemedyKind = FUTURE_DISCOUNT)
+  protected readonly discountAppliesTo = signal<EntitlementScope>('SUBTOTAL');
+  protected readonly discountBenefit = signal<EntitlementBenefit>('PERCENT');
+  protected readonly discountPercentBasisPoints = signal('');
+  protected readonly discountAmount = signal('');
+  protected readonly discountMaximum = signal('');
+  protected readonly discountUses = signal('1');
+  protected readonly discountValidForDays = signal('30');
 
   // -------------------------------------------------------------- unverified worklist
   protected readonly unverifiedLoading = signal(true);
@@ -117,6 +157,49 @@ export class PaymentsPage {
       return;
     }
     await Promise.all([this.loadUnverified(tenantId), this.loadTotals(tenantId)]);
+  }
+
+  // -------------------------------------------------------------- order lookup by number
+
+  protected canLookupByNumber(): boolean {
+    return this.orderNumberInput().trim().length > 0 && !this.lookupByNumberLoading();
+  }
+
+  /**
+   * The thing an operator actually has -- a public order number, from a
+   * receipt or a call -- resolved to the order id `lookup()` still needs.
+   * `uq_order_number` is per-location, not per-tenant, so more than one
+   * candidate is a real answer, not a bug: a two-branch tenant can hand out
+   * the same number to two customers the same afternoon.
+   */
+  protected async lookupByNumber(): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const number = this.orderNumberInput().trim();
+    if (!tenantId || !number) {
+      return;
+    }
+    this.lookupByNumberLoading.set(true);
+    this.lookupByNumberError.set(null);
+    this.lookupCandidates.set([]);
+    try {
+      const matches = await this.orderLookup.byNumber(tenantId, number);
+      if (matches.length === 1) {
+        this.orderIdInput.set(matches[0].orderId);
+        await this.lookup();
+      } else {
+        this.lookupCandidates.set(matches);
+      }
+    } catch (error) {
+      this.lookupByNumberError.set(this.describe(error));
+    } finally {
+      this.lookupByNumberLoading.set(false);
+    }
+  }
+
+  protected async pickCandidate(candidate: OrderNumberMatchView): Promise<void> {
+    this.lookupCandidates.set([]);
+    this.orderIdInput.set(candidate.orderId);
+    await this.lookup();
   }
 
   // -------------------------------------------------------------- order lookup
@@ -218,16 +301,43 @@ export class PaymentsPage {
   // -------------------------------------------------------------- remedy
 
   protected canSubmitRemedy(): boolean {
+    if (
+      this.remedySubmitting() ||
+      this.remedyReasonCode().trim().length === 0 ||
+      this.remedyReason().trim().length === 0
+    ) {
+      return false;
+    }
+    if (this.remedyKind() === 'FUTURE_DISCOUNT') {
+      return this.canSubmitFutureDiscount();
+    }
     const amount = Number(this.remedyAmount());
     return (
-      !this.remedySubmitting() &&
       Number.isInteger(amount) &&
       amount > 0 &&
-      this.remedyReasonCode().trim().length > 0 &&
-      this.remedyReason().trim().length > 0 &&
       (this.remedyChannel() !== 'PROVIDER_CONSOLE' ||
         this.remedyProviderReference().trim().length > 0)
     );
+  }
+
+  private canSubmitFutureDiscount(): boolean {
+    const uses = Number(this.discountUses());
+    const validForDays = Number(this.discountValidForDays());
+    if (
+      !Number.isInteger(uses) ||
+      uses < 1 ||
+      !Number.isInteger(validForDays) ||
+      validForDays < 1
+    ) {
+      return false;
+    }
+    if (this.discountBenefit() === 'PERCENT') {
+      const percent = Number(this.discountPercentBasisPoints());
+      const max = Number(this.discountMaximum());
+      return Number.isInteger(percent) && percent > 0 && Number.isInteger(max) && max > 0;
+    }
+    const amount = Number(this.discountAmount());
+    return Number.isInteger(amount) && amount > 0;
   }
 
   protected async submitRemedy(): Promise<void> {
@@ -238,19 +348,8 @@ export class PaymentsPage {
     }
     this.remedySubmitting.set(true);
     this.remedyError.set(null);
-    const input = {
-      amountMinor: Number(this.remedyAmount()),
-      currency: order.orderTotal.currency,
-      reasonCode: this.remedyReasonCode().trim(),
-      reason: this.remedyReason().trim(),
-      channel: this.remedyChannel(),
-      providerReference: this.remedyProviderReference().trim() || undefined,
-    };
     try {
-      const outcome =
-        this.remedyKind() === 'ORDER_REFUND'
-          ? await this.api.recordRefund(tenantId, order.orderId, input)
-          : await this.api.reimburseDeliveryFee(tenantId, order.orderId, input);
+      const outcome = await this.submitRemedyOfKind(tenantId, order);
       if (outcome.approvalStatus === 'PENDING') {
         this.remedyError.set(this.i18n.t('finance.payments.remedy.pending'));
       } else {
@@ -268,6 +367,37 @@ export class PaymentsPage {
     }
   }
 
+  private async submitRemedyOfKind(tenantId: string, order: OrderPaymentView): Promise<RemedyView> {
+    const reasonCode = this.remedyReasonCode().trim();
+    const reason = this.remedyReason().trim();
+    if (this.remedyKind() === 'FUTURE_DISCOUNT') {
+      const benefit = this.discountBenefit();
+      return this.api.grantFutureDiscount(tenantId, order.orderId, {
+        appliesTo: this.discountAppliesTo(),
+        benefit,
+        percentBasisPoints:
+          benefit === 'PERCENT' ? Number(this.discountPercentBasisPoints()) : undefined,
+        maximumMinor: benefit === 'PERCENT' ? Number(this.discountMaximum()) : undefined,
+        amountMinor: benefit === 'FIXED_AMOUNT' ? Number(this.discountAmount()) : undefined,
+        uses: Number(this.discountUses()),
+        validForDays: Number(this.discountValidForDays()),
+        reasonCode,
+        reason,
+      });
+    }
+    const input = {
+      amountMinor: Number(this.remedyAmount()),
+      currency: order.orderTotal.currency,
+      reasonCode,
+      reason,
+      channel: this.remedyChannel(),
+      providerReference: this.remedyProviderReference().trim() || undefined,
+    };
+    return this.remedyKind() === 'ORDER_REFUND'
+      ? this.api.recordRefund(tenantId, order.orderId, input)
+      : this.api.reimburseDeliveryFee(tenantId, order.orderId, input);
+  }
+
   private resetRemedyForm(): void {
     this.showRemedyForm.set(false);
     this.remedyKind.set('ORDER_REFUND');
@@ -277,6 +407,13 @@ export class PaymentsPage {
     this.remedyChannel.set('CASH_DRAWER');
     this.remedyProviderReference.set('');
     this.remedyError.set(null);
+    this.discountAppliesTo.set('SUBTOTAL');
+    this.discountBenefit.set('PERCENT');
+    this.discountPercentBasisPoints.set('');
+    this.discountAmount.set('');
+    this.discountMaximum.set('');
+    this.discountUses.set('1');
+    this.discountValidForDays.set('30');
   }
 
   // -------------------------------------------------------------- unverified worklist
@@ -386,12 +523,48 @@ export class PaymentsPage {
     return state ? this.i18n.t(VERIFICATION_STATE_KEYS[state]) : '—';
   }
 
+  /** Reuses `orders/order-status.ts`'s own twelve-value map — one order status, one label, everywhere. */
+  protected orderStatusLabel(status: string): string {
+    return orderStatusLabel(status, (key) => this.i18n.t(key));
+  }
+
+  protected intentStatusLabel(status: PaymentIntentStatus): string {
+    return this.i18n.t(PAYMENT_INTENT_STATUS_KEYS[status]);
+  }
+
+  protected attemptStatusLabel(status: PaymentAttemptStatus): string {
+    return this.i18n.t(PAYMENT_ATTEMPT_STATUS_KEYS[status]);
+  }
+
+  /**
+   * A remedy recorded before this wave may carry any free-typed string, so
+   * this falls back to the raw code rather than assuming every reasonCode on
+   * a historical row is one of the fixed vocabulary's ten.
+   */
+  protected reasonCodeLabel(code: string): string {
+    return isRefundReasonCode(code) ? this.i18n.t(REFUND_REASON_CODE_KEYS[code]) : code;
+  }
+
+  protected entitlementScopeLabel(scope: EntitlementScope): string {
+    return this.i18n.t(ENTITLEMENT_SCOPE_KEYS[scope]);
+  }
+
+  protected entitlementBenefitLabel(benefit: EntitlementBenefit): string {
+    return this.i18n.t(ENTITLEMENT_BENEFIT_KEYS[benefit]);
+  }
+
   private describe(error: unknown): string {
     if (error instanceof ApiError) {
       return describeApiError(error, (key, values) => this.i18n.t(key, values));
     }
     return this.i18n.t('error.unknown.noReference');
   }
+}
+
+const KNOWN_REASON_CODES: ReadonlySet<string> = new Set(REFUND_REASON_CODES);
+
+function isRefundReasonCode(value: string): value is RefundReasonCode {
+  return KNOWN_REASON_CODES.has(value);
 }
 
 function isoNow(): string {
