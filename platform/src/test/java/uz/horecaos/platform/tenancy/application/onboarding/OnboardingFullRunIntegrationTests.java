@@ -68,9 +68,10 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControl
 /**
  * ADR 0008 end to end: a tenant with a realistic, minimal-but-complete
  * configuration (cash-only, pickup-only, one published item, no media, no
- * POS, no custom domain) drains through every one of the eleven buildable
- * steps to {@code READY} — the state where only {@code TENANT_ACTIVATE},
- * which waits on a platform administrator by design, remains.
+ * POS, no custom domain) drains through every buildable step to {@code READY} —
+ * the state where only {@code TENANT_ACTIVATE}, which waits on a platform
+ * administrator by design, remains. And the tenant that authored none of that,
+ * which reaches the same place on ADR 0099's sample menu alone.
  *
  * <p>Every handler here is the real production class, wired against a real
  * database exactly as {@link uz.horecaos.platform.pricing.QuoteAndReservationTests}
@@ -175,7 +176,7 @@ class OnboardingFullRunIntegrationTests {
         service = new OnboardingService(
                 jdbc,
                 transactions,
-                allElevenHandlers(organizationProvisioner),
+                everyRealHandler(organizationProvisioner),
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
                 new JdbcApprovalService(
                         jdbc,
@@ -255,6 +256,54 @@ class OnboardingFullRunIntegrationTests {
                  WHERE c.key_code = 'ordering.acceptance' AND c.scope_type = 'TENANT' AND c.tenant_id = :tenantId
                 """).param("tenantId", tenantId).query(String.class).single())
                 .isEqualTo("RESTAURANT_APPROVAL");
+    }
+
+    /**
+     * ADR 0099's exit criterion, through the real workflow rather than through
+     * the handler on its own: a tenant whose owner has authored nothing at all
+     * starts a run with {@code sampleMenu: true}, and the same {@link
+     * OnboardingService} and the same production handlers that drive every other
+     * run here carry it to {@code READY} — with {@code CATALOG_READINESS_VALIDATE}
+     * and {@code ACTIVATION_SMOKE_TEST} passing on the sample menu as the only
+     * menu the tenant has, and the anonymous storefront query returning it.
+     *
+     * <p>{@code SampleMenuPublishStepTests} proves the step; this proves the run.
+     * They are different claims: that suite calls {@code handler().execute()}
+     * directly, so it says nothing about claiming, sequencing, {@code
+     * result_snapshot}, or whether the steps after it see what it made.
+     */
+    @Test
+    void aTenantThatAuthoredNothingReachesReadyOnTheSampleMenuAlone() {
+        removeEverythingTheTenantAuthored();
+
+        UUID runId = startRealisticRunAskingForASampleMenu();
+        drain(runId);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH"))
+                .as("last_error: " + lastErrorOf(runId, "SAMPLE_MENU_PUBLISH"))
+                .isEqualTo("COMPLETED");
+        assertThat(stepStatus(runId, "CATALOG_READINESS_VALIDATE"))
+                .as("last_error: " + lastErrorOf(runId, "CATALOG_READINESS_VALIDATE"))
+                .isEqualTo("COMPLETED");
+        assertThat(stepStatus(runId, "ACTIVATION_SMOKE_TEST"))
+                .as("last_error: " + lastErrorOf(runId, "ACTIVATION_SMOKE_TEST"))
+                .isEqualTo("COMPLETED");
+        assertThat(service.outstandingRequiredSteps(runId)).isEmpty();
+        assertThat(runStatus(runId)).isEqualTo("READY");
+
+        // The menu a real customer would be served, read through the anonymous
+        // storefront query — the last link in "the platform can see its own
+        // storefront answer before the tenant has authored anything".
+        Optional<uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.StorefrontMenu> menu =
+                storefront().menuFor(tenantId, brandId, locationId, "ru", CHANNEL_CODE);
+        assertThat(menu).isPresent();
+        assertThat(menu.orElseThrow().products()).isNotEmpty().allSatisfy(product -> {
+            assertThat(product.name()).startsWith("Образец");
+            assertThat(product.variants())
+                    .allSatisfy(variant -> assertThat(variant.amountMinor())
+                            .as("variant %s has no price", variant.sku())
+                            .isNotNull());
+        });
     }
 
     /**
@@ -385,6 +434,57 @@ class OnboardingFullRunIntegrationTests {
                 ADMIN);
     }
 
+    /** The same run, plus the one choice ADR 0099 added to starting one. */
+    private UUID startRealisticRunAskingForASampleMenu() {
+        return service.startRun(
+                tenantId, templateId, 1, Map.of("ownerEmail", "owner@acme.example", "sampleMenu", true), ADMIN);
+    }
+
+    /**
+     * Strips the menu, prices, tax profile and stock {@code seedARealisticTenant}
+     * writes, leaving the tenant, brand, location, channel, payment method and
+     * legal entity — i.e. a tenant that has been provisioned and has authored
+     * nothing, which is the state ADR 0099 exists for. The rest of the fixture
+     * stays exactly as the other tests in this class see it.
+     */
+    private void removeEverythingTheTenantAuthored() {
+        jdbc.sql("TRUNCATE TABLE inventory.positions, inventory.stock_items CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, "
+                        + "catalog.location_offerings, catalog.variants, catalog.products, "
+                        + "catalog.catalogs CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE pricing.quote_adjustments, pricing.quote_lines, pricing.quotes, "
+                        + "pricing.prices, pricing.price_book_assignments, pricing.price_books, "
+                        + "pricing.tax_profiles CASCADE")
+                .update();
+    }
+
+    private uz.horecaos.platform.catalog.application.StorefrontCatalogQuery storefront() {
+        return new uz.horecaos.platform.catalog.application.StorefrontCatalogQuery(
+                catalogStore(),
+                new uz.horecaos.platform.pricing.infrastructure.catalog.PricingMenuPriceLookup(
+                        new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
+                        new JdbcSalesChannelStore(jdbc),
+                        CLOCK));
+    }
+
+    private uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore catalogStore() {
+        return new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(
+                jdbc, JsonMapper.builder().build());
+    }
+
+    private String stepStatus(UUID runId, String stepKey) {
+        return jdbc.sql("""
+                SELECT status FROM tenant.onboarding_steps
+                 WHERE run_id = :runId AND step_key = :stepKey
+                """)
+                .param("runId", runId)
+                .param("stepKey", stepKey)
+                .query(String.class)
+                .single();
+    }
+
     /** Never actually consulted: every {@link TenantControlPlaneService} call here runs as platform-admin. */
     private static AuthorizationService deniesEverything() {
         return new AuthorizationService() {
@@ -437,7 +537,7 @@ class OnboardingFullRunIntegrationTests {
 
     // --------------------------------------------------------------------- the handler graph
 
-    private List<OnboardingStepHandler> allElevenHandlers(OrganizationProvisioner provisioner) {
+    private List<OnboardingStepHandler> everyRealHandler(OrganizationProvisioner provisioner) {
         var tenants = new JdbcTenantControlPlaneStore(jdbc);
 
         var currentActor = new uz.horecaos.platform.iam.api.CurrentActor() {
@@ -490,7 +590,56 @@ class OnboardingFullRunIntegrationTests {
 
         var inventory = new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, CLOCK);
 
+        // ADR 0099's step, with the same three real services the production bean
+        // gets. A stand-in would prove the handler calls a stand-in, and what
+        // aTenantThatAuthoredNothingReachesReadyOnTheSampleMenuAlone exists to
+        // prove is that the two validation steps after it pass on what it wrote.
+        var commercial = uz.horecaos.platform.support.CommercialDefaults.wire(jdbc, CLOCK);
+        var catalogStore = catalogStore();
+        var catalogAuthoring = new uz.horecaos.platform.catalog.application.CatalogAuthoringService(
+                catalogStore,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
+                CLOCK);
+        var snapshots = new uz.horecaos.platform.catalog.application.CatalogSnapshotLoader(
+                catalogStore,
+                (tenant, assetIds) -> true,
+                new uz.horecaos.platform.pricing.infrastructure.catalog.PricingVariantLookup(
+                        new JdbcPricingStore(jdbc, JsonMapper.builder().build()), CLOCK),
+                "uz");
+        var sampleMenu = new uz.horecaos.platform.catalog.application.SampleMenuService(
+                catalogStore,
+                catalogAuthoring,
+                new uz.horecaos.platform.catalog.application.CatalogPublicationService(
+                        catalogStore,
+                        new uz.horecaos.platform.catalog.application.CatalogValidator(),
+                        snapshots,
+                        channels,
+                        CLOCK),
+                "uz");
+        var samplePricing = new uz.horecaos.platform.pricing.application.SampleMenuPricing(
+                new uz.horecaos.platform.pricing.application.PriceAuthoringService(
+                        new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
+                        new JdbcCatalogPricingContext(jdbc, "uz"),
+                        channels,
+                        CLOCK,
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        event -> {},
+                        () -> {
+                            throw new IllegalStateException(
+                                    "SAMPLE_MENU_PUBLISH runs from the scheduler and has no request actor");
+                        }),
+                new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
+                CLOCK);
+
         return List.of(
+                new OrderingOnboardingStepHandlers.SampleMenuPublish(
+                        jdbc,
+                        sampleMenu,
+                        samplePricing,
+                        new uz.horecaos.platform.inventory.application.StockListingPortAdapter(inventory),
+                        channels),
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, tenants),
                 new OnboardingStepHandlers.TenantOwnerLinkOrInvite(
                         provisioner,
