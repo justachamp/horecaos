@@ -1,7 +1,7 @@
 # ADR 0101: A region, a tariff binding, and a zone you can take back
 
 - Decision status: Proposed
-- Implementation status: Not started
+- Implementation status: Built — `RegionService`/`JdbcRegionStore`/`OperationsRegionController` give `fulfillment.regions` its first non-test writer, with a `delivery.region.*` ADR 0027 audit fact per write; `OperationsServiceZoneController` gains the version list, deactivate and unbind (`DELETE /{zoneId}/locations/{locationId}`, window-close semantics) alongside the existing draft/activate/bind; `delivery-zones-page.ts`'s `submitDraft` now sends `deliveryTariffId`, offers `CATCHMENT` with the priced half hidden, authors three separate display names, and separates draft from activate from bind, with a version list, a deactivate and an unbind behind each row and a «бесплатно» marker computed from the bound tariff's active version; `regions-page.ts` is the SW/NE form, platform regions listed read-only; `delivery-tariffs-page.ts` authors bands, day-masked time rules, discounts, min/max, rounding, `distanceAccrual`, `feeSource`/`distanceMode` (including `ROAD` with the no-routing-installation warning) and binds a tariff to a branch, with the detail panel rendering `RADIUS_FALLBACK`; `delivery-paths.ts` builds from `/api/v1/operations` and neither client sends `actorId`. Covered by `ZoneLifecycleAndRegionTests`, `OperationsRegionControllerEndpointTests`, `OperationsServiceZoneControllerEndpointTests` and the three Angular specs. The IA's §3.6 "free geozone" wording was struck separately, on `main`, citing ADR 0037 directly
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
@@ -246,13 +246,13 @@ unaffected. Rollback is reverting the branch.
 
 ## Implementation checklist
 
-- [ ] `JdbcRegionStore`, `RegionService`, `OperationsRegionController`
-- [ ] Zone version list, deactivate, unbind on the operations mirror
-- [ ] `delivery-paths.ts` on `/api/v1/operations`, `actorId` removed from both clients
-- [ ] Zone page: tariff binding, role, per-locale names, region, split draft/activate/bind, version list, deactivate, unbind, «бесплатно»
-- [ ] Region page
-- [ ] Tariff page: bands, time rules, discounts, min/max, rounding, branch binding, full detail render
-- [ ] IA §3.6 "free geozone" wording struck, ADR 0037 cited
+- [x] `JdbcRegionStore`, `RegionService`, `OperationsRegionController`
+- [x] Zone version list, deactivate, unbind on the operations mirror
+- [x] `delivery-paths.ts` on `/api/v1/operations`, `actorId` removed from both clients
+- [x] Zone page: tariff binding, role, per-locale names, region, split draft/activate/bind, version list, deactivate, unbind, «бесплатно»
+- [x] Region page
+- [x] Tariff page: bands, time rules, discounts, min/max, rounding, branch binding, full detail render
+- [x] IA §3.6 "free geozone" wording struck, ADR 0037 cited
 
 ## Exit criteria
 
