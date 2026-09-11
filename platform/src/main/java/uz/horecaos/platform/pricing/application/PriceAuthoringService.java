@@ -217,6 +217,27 @@ public class PriceAuthoringService {
      */
     @Transactional
     public PriceBook activate(UUID tenantId, UUID brandId, UUID priceBookId, int expectedVersion) {
+        return activate(
+                tenantId,
+                brandId,
+                priceBookId,
+                expectedVersion,
+                ActorRef.user(currentActor.get().subject(), null));
+    }
+
+    /**
+     * The same activation, for a caller with no authenticated request behind it.
+     *
+     * <p>{@link CurrentActor} reads the Spring Security context and refuses when
+     * there is none, so the overload above cannot be called from a background
+     * job — and ADR 0099's {@code SAMPLE_MENU_PUBLISH} onboarding step is exactly
+     * that: it runs from {@code OnboardingScheduler}, not from an operator's
+     * request. The actor is a parameter rather than a null, because ADR 0027
+     * requires every fact to name who caused it and "the onboarding workflow" is
+     * a real, nameable answer.
+     */
+    @Transactional
+    public PriceBook activate(UUID tenantId, UUID brandId, UUID priceBookId, int expectedVersion, ActorRef actor) {
         PriceBook book = require(tenantId, brandId, priceBookId);
 
         if (book.status() != Status.DRAFT) {
@@ -247,7 +268,7 @@ public class PriceAuthoringService {
         // nothing before this line may have a side effect that outlives a
         // rollback of this write.
         audit.record(AuditFact.of("pricing.price_book.activated", AuditClass.BUSINESS)
-                .by(ActorRef.user(currentActor.get().subject(), null))
+                .by(actor)
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("PriceBook", priceBookId)
                 .targetVersion((long) activated.version())

@@ -2,16 +2,21 @@ package uz.horecaos.platform.ordering.application.onboarding;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.catalog.api.SampleMenuPort;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
+import uz.horecaos.platform.inventory.api.StockListingPort;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.SampleMenuPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -20,7 +25,7 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 
 /**
- * The one ADR 0008 step handler that cannot live beside the rest.
+ * The two ADR 0008 step handlers that cannot live beside the rest.
  *
  * <p>{@code tenancy.application.onboarding.OnboardingStepHandlers} holds every
  * other unblocked handler, each reading another module's schema directly to
@@ -42,10 +47,192 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
  * {@code @NamedInterface} precisely so a handler can live outside {@code
  * tenancy}; {@code OnboardingService} discovers it the same way it discovers
  * every other handler, through ordinary Spring bean collection.
+ *
+ * <p>{@code SAMPLE_MENU_PUBLISH} (ADR 0099) is here for a stronger version of
+ * the same reason. It has to write {@code catalog}, {@code pricing} and {@code
+ * inventory} — and writing another module's tables through raw SQL is a second
+ * implementation of that module's rules, not the boundary compromise reading
+ * them is. {@code ordering} is the only module that already depends on all
+ * three exported interfaces plus {@code tenancy.api}, so putting the handler
+ * here adds no module edge whatsoever.
  */
 public final class OrderingOnboardingStepHandlers {
 
+    /**
+     * {@code StorefrontChannelSeeder.STOREFRONT_CODE} (tenancy, not importable
+     * from here): every tenant gets this channel on creation, and it is the
+     * channel both handlers below care about.
+     */
+    private static final String STOREFRONT_CHANNEL = "STOREFRONT";
+
     private OrderingOnboardingStepHandlers() {}
+
+    /**
+     * Plants and publishes the sample menu a run may have asked for (ADR 0099).
+     *
+     * <p>The one optional step. A run that did not ask for a sample menu carries
+     * this step {@code SKIPPED} from the moment it was materialised, so this
+     * handler never sees it: {@code claimNextStep} takes only {@code PENDING}.
+     *
+     * <p>Orchestration only. Each of the three ports below is idempotent on its
+     * own and each runs in its own transaction, deliberately: a step that dies
+     * between the catalog and the prices has to be able to run again from the
+     * top and find what it already made, and one long transaction spanning three
+     * modules' writes would buy atomicity this step does not need at the cost of
+     * a lock held across a publication's validation pass.
+     *
+     * <p>Does nothing at all when the brand already has a published menu that is
+     * not the sample's. A tenant that authored a real menu between starting a
+     * run and this step running must not have a sample published over it — and
+     * the honest outcome for that is {@code COMPLETED}, because the thing this
+     * step exists to guarantee (a published, sellable menu) is true.
+     */
+    @Component
+    public static class SampleMenuPublish implements OnboardingStepHandler {
+
+        private final JdbcClient jdbc;
+        private final SampleMenuPort catalog;
+        private final SampleMenuPricingPort pricing;
+        private final StockListingPort stock;
+
+        public SampleMenuPublish(
+                JdbcClient jdbc, SampleMenuPort catalog, SampleMenuPricingPort pricing, StockListingPort stock) {
+            this.jdbc = jdbc;
+            this.catalog = catalog;
+            this.pricing = pricing;
+            this.stock = stock;
+        }
+
+        @Override
+        public OnboardingStep step() {
+            return OnboardingStep.SAMPLE_MENU_PUBLISH;
+        }
+
+        @Override
+        public StepResult execute(StepContext context) {
+            UUID tenantId = context.tenantId();
+
+            Optional<BrandRow> brand = firstBrand(tenantId);
+            if (brand.isEmpty()) {
+                return StepResult.failed("NO_BRAND", "The tenant has no brand to hang a sample menu on");
+            }
+            UUID brandId = brand.get().id();
+
+            List<UUID> locationIds = locationsOfBrand(tenantId, brandId);
+            if (locationIds.isEmpty()) {
+                return StepResult.failed(
+                        "NO_LOCATION",
+                        "Brand %s has no location to offer a sample menu at"
+                                .formatted(brand.get().code()));
+            }
+
+            Optional<UUID> sampleCatalogId = catalog.sampleCatalogId(tenantId, brandId);
+            Optional<UUID> publishedCatalogId = catalog.publishedCatalogId(tenantId, brandId, STOREFRONT_CHANNEL);
+            if (publishedCatalogId.isPresent() && !publishedCatalogId.equals(sampleCatalogId)) {
+                // A real menu is already live on the storefront. Publishing a
+                // sample over it would retire the tenant's own work.
+                return StepResult.completed(
+                        Map.of("channel", STOREFRONT_CHANNEL, "created", false, "reason", "MENU_ALREADY_PUBLISHED"),
+                        null);
+            }
+
+            SampleMenuPort.SampleMenu menu = catalog.installSample(tenantId, brandId, locationIds);
+
+            SampleMenuPricingPort.SamplePricing priced = pricing.priceSample(
+                    tenantId,
+                    brandId,
+                    currencyOf(tenantId),
+                    menu.variants().stream()
+                            .map(variant -> new SampleMenuPricingPort.SampleVariantPrice(
+                                    variant.variantId(), variant.amountMinor()))
+                            .toList());
+
+            // An item with no stock row reads as unavailable rather than
+            // available, so a menu that is published, offered and priced still
+            // cannot be sold until something lists it — which is exactly what
+            // ACTIVATION_SMOKE_TEST checks two steps later.
+            int listed = 0;
+            for (UUID locationId : locationIds) {
+                for (SampleMenuPort.SampleVariant variant : menu.variants()) {
+                    if (stock.ensureListed(tenantId, brandId, locationId, variant.variantId())) {
+                        listed++;
+                    }
+                }
+            }
+
+            SampleMenuPort.SamplePublication publication =
+                    catalog.publishSample(tenantId, brandId, menu.catalogId(), STOREFRONT_CHANNEL);
+            if (!publication.blockers().isEmpty()) {
+                return StepResult.failed(
+                        "SAMPLE_MENU_REJECTED",
+                        "The sample menu did not pass catalog validation: %s"
+                                .formatted(String.join(", ", publication.blockers())));
+            }
+
+            // Ids and counts only (ADR 0029): no item name, no price, nothing
+            // about a person. The catalog id is also the external reference, so
+            // a re-run reconciles against what it made rather than looking again.
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("catalogId", menu.catalogId().toString());
+            result.put("catalogCode", menu.catalogCode());
+            result.put("publicationId", publication.publicationId().toString());
+            if (priced.priceBookId() != null) {
+                // Absent rather than null when the tenant's own prices already
+                // covered the sample and no sample book was needed.
+                result.put("priceBookId", priced.priceBookId().toString());
+            }
+            result.put("categories", menu.categories());
+            result.put("products", menu.products());
+            result.put("variants", menu.variants().size());
+            result.put("locations", locationIds.size());
+            result.put("stockItemsListed", listed);
+            result.put("pricesSet", priced.priced());
+            result.put("channel", STOREFRONT_CHANNEL);
+            result.put("created", menu.created());
+            return StepResult.completed(result, menu.catalogId().toString());
+        }
+
+        /**
+         * The brand the sample hangs on: lowest code, which is stable across
+         * runs. Ordering by {@code created_at} would depend on clock resolution
+         * for two brands created in the same millisecond by the same import.
+         */
+        private Optional<BrandRow> firstBrand(UUID tenantId) {
+            return jdbc.sql("""
+                    SELECT id, code FROM tenant.brands
+                     WHERE tenant_id = :tenantId AND status <> 'ARCHIVED'
+                     ORDER BY code
+                     LIMIT 1
+                    """)
+                    .param("tenantId", tenantId)
+                    .query((row, n) -> new BrandRow(row.getObject("id", UUID.class), row.getString("code")))
+                    .optional();
+        }
+
+        private List<UUID> locationsOfBrand(UUID tenantId, UUID brandId) {
+            return jdbc.sql("""
+                    SELECT id FROM tenant.locations
+                     WHERE tenant_id = :tenantId AND brand_id = :brandId
+                     ORDER BY code
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .query(UUID.class)
+                    .list();
+        }
+
+        /** The sample is priced in the tenant's own money, never in a currency this step chose. */
+        private String currencyOf(UUID tenantId) {
+            return Objects.requireNonNull(
+                    jdbc.sql("SELECT default_currency FROM tenant.tenants WHERE id = :tenantId")
+                            .param("tenantId", tenantId)
+                            .query(String.class)
+                            .single(),
+                    "A tenant row always carries a currency: the column is NOT NULL");
+        }
+
+        private record BrandRow(UUID id, String code) {}
+    }
 
     /**
      * A read-only dry run: does the location have a working serviceability
@@ -82,12 +269,6 @@ public final class OrderingOnboardingStepHandlers {
      */
     @Component
     public static class ActivationSmokeTest implements OnboardingStepHandler {
-
-        /**
-         * {@code StorefrontChannelSeeder.STOREFRONT_CODE} (tenancy, not
-         * importable from here): every tenant gets this channel on creation.
-         */
-        private static final String STOREFRONT_CHANNEL = "STOREFRONT";
 
         private final JdbcClient jdbc;
         private final SalesChannelLookup channels;

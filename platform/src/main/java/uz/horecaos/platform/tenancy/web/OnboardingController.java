@@ -66,7 +66,10 @@ public class OnboardingController {
     @Operation(
             summary = "Start an onboarding run",
             description = "Omit templateId to use the template suited to the tenant's business type, "
-                    + "or the platform's default when none suits it (ADR 0090).")
+                    + "or the platform's default when none suits it (ADR 0090). Set sampleMenu to "
+                    + "create and publish a clearly marked sample menu for the tenant's first brand, "
+                    + "so the platform can see the storefront answer before the tenant has authored "
+                    + "anything (ADR 0099); omitting it is a no.")
     ResponseEntity<Map<String, Object>> start(@PathVariable UUID tenantId, @Valid @RequestBody StartRequest request) {
 
         TemplateView template = request.templateId() == null
@@ -94,6 +97,8 @@ public class OnboardingController {
                         request.ownerSubjectId() == null ? "" : request.ownerSubjectId(),
                         OnboardingInputs.OWNER_LOCALE,
                         OnboardingInputs.locale(request.ownerLocale()),
+                        OnboardingInputs.SAMPLE_MENU,
+                        Boolean.TRUE.equals(request.sampleMenu()),
                         "defaultConfiguration",
                         template.defaultConfiguration()),
                 actor());
@@ -265,13 +270,19 @@ public class OnboardingController {
      *                   {@code version} is always used; a caller cannot pin a
      *                   run to a version other than the one {@code templateId}
      *                   currently names.
+     * @param sampleMenu whether to create and publish a sample menu for the
+     *                   tenant's first brand (ADR 0099). Absent means no: a
+     *                   caller that predates this field must not start planting
+     *                   sample catalogs in tenants that already have real menus
      */
     public record StartRequest(
             UUID templateId,
             @Size(max = 320) String ownerEmail,
             @Size(max = 255) String ownerSubjectId,
             /* The language the owner's invitation is written in: uz, ru or en (ADR 0097). */
-            @Size(max = 8) String ownerLocale) {
+            @Size(max = 8) String ownerLocale,
+            /* Whether to create and publish a sample menu (ADR 0099). Absent is a no. */
+            @Nullable Boolean sampleMenu) {
 
         /** A record's generated {@code toString} would print the owner's address. */
         @Override

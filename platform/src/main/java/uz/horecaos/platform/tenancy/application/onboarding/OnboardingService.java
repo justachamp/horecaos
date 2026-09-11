@@ -133,11 +133,20 @@ public class OnboardingService implements OnboardingHealthQuery {
         // measured across two clocks — harmless on one host, meaningless in a
         // test, and exactly the kind of thing that makes an alert unarguable
         // only until someone argues with it.
+        // ADR 0099: the one step a run chooses. Read once rather than per step,
+        // because the answer is the run's, not any step's.
+        boolean sampleMenu = OnboardingInputs.sampleMenuRequested(input);
+
         for (OnboardingStep step : OnboardingStep.values()) {
             // A blocked step is created in that state rather than omitted. A
             // template that silently skips a check reads exactly like one that
-            // passed it, which is the confusion this avoids.
-            String status = step.isBlocked() ? "BLOCKED" : "PENDING";
+            // passed it, which is the confusion this avoids — and the same
+            // argument is why a declined sample menu (ADR 0099) is materialised
+            // SKIPPED here rather than left out. SKIPPED is never claimed by
+            // claimNextStep, which takes only PENDING, and never blocks READY,
+            // because outstandingRequiredSteps counts only required steps.
+            boolean declined = step == OnboardingStep.SAMPLE_MENU_PUBLISH && !sampleMenu;
+            String status = step.isBlocked() ? "BLOCKED" : declined ? "SKIPPED" : "PENDING";
 
             jdbc.sql("""
                     INSERT INTO tenant.onboarding_steps
@@ -157,12 +166,14 @@ public class OnboardingService implements OnboardingHealthQuery {
                     .param("status", status)
                     .param("required", step.requiredInV1())
                     .param("input", toJson(input))
-                    .param("errorCode", step.isBlocked() ? "CAPABILITY_ABSENT" : null)
+                    .param("errorCode", step.isBlocked() ? "CAPABILITY_ABSENT" : declined ? "NOT_REQUESTED" : null)
                     .param(
                             "error",
-                            step.blockedUntil()
-                                    .map("Blocked until %s ships"::formatted)
-                                    .orElse(null))
+                            declined
+                                    ? "No sample menu was asked for when this run was started"
+                                    : step.blockedUntil()
+                                            .map("Blocked until %s ships"::formatted)
+                                            .orElse(null))
                     .param("now", at(now))
                     .update();
         }
@@ -172,6 +183,10 @@ public class OnboardingService implements OnboardingHealthQuery {
                 .at(ResourceScope.tenant(tenantId))
                 .target("OnboardingRun", runId)
                 .because("Tenant onboarding")
+                // ADR 0099: the one choice the caller made when starting the run,
+                // so "who asked for a sample menu in this tenant" is answerable
+                // from the audit trail rather than only from a step's status.
+                .changed(Map.of("sampleMenu", sampleMenu))
                 .correlatedBy(runId.toString())
                 .occurredAt(now)
                 .build());
