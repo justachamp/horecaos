@@ -176,6 +176,12 @@ public enum PlatformRole {
                     TENANT_READ,
                     TENANT_WRITE,
                     TENANT_ONBOARDING_MANAGE,
+                    // ADR 0030, wave P31: the settings.md scope bar and every
+                    // InheritedField on it. Held here and by TENANT_ADMIN alone among
+                    // the tenant bundles, the same administrative-configuration class
+                    // as ORDER_ACCEPTANCE_POLICY_MANAGE below.
+                    TENANT_CONFIGURATION_READ,
+                    TENANT_CONFIGURATION_WRITE,
                     // ADR 0038: registering a legal entity and naming it a location's
                     // seller, held here alone among the tenant bundles for the reason
                     // PAYMENT_MERCHANT_BINDING_MANAGE is: it decides whose name appears
@@ -331,6 +337,12 @@ public enum PlatformRole {
                     COURIER_REGISTRATION_VERIFY,
                     TENANT_READ,
                     TENANT_ONBOARDING_MANAGE,
+                    // ADR 0030, wave P31: same reasoning as TENANT_OWNER's own copy of
+                    // this pair — the settings.md scope bar and every InheritedField
+                    // on it, an administrative-configuration power alongside
+                    // ORDER_ACCEPTANCE_POLICY_MANAGE below.
+                    TENANT_CONFIGURATION_READ,
+                    TENANT_CONFIGURATION_WRITE,
                     BRAND_READ,
                     BRAND_WRITE,
                     LOCATION_READ,
