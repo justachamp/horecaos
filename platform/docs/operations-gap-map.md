@@ -547,13 +547,13 @@ not scheduled as waves; they are scheduled as **decisions**.
 Five rows describe behaviour a decision record has already refused. Building against them
 would be building against a superseded design.
 
-| # | Row | The decision that refuses it |
-|---|---|---|
-| `1.2d` | Multi-step (multi-branch) composition | orders.md:52 and :1342 — Delever's `steps[]` is declined, «two nested state machines for a behaviour no evidence shows anyone using». |
-| `1.6a` | Call centre — softphone and click-to-call | ADR 0064's Alternatives refused WebRTC inside operations. The IA's «Owns: softphone» line should be struck with the ADR cited. |
-| `6.7a` | Editorial surfaces (news, gallery, recipes, vacancies) | The parity matrix excludes the general-purpose CMS with tenant-authored raw HTML; ADR 0044 repeats it. The IA still lists them in three places. |
-| `3.6` free geozone | «Бесплатная геозона» as a geometry layer beside zones and branch geozones | `fulfillment/domain/zone/ZoneRole.java` — «a 'free geozone' is not a third role: it is a DELIVERY zone whose tariff resolves to zero, and expressing it as a layer is what left three layers with no documented interaction». The IA's 3.6 bullet and the parity matrix's ○ row should both read «a zone whose tariff resolves to zero», and the buildable half is `3.6`'s tariff binding, tracked as `3.6d`. |
-| `7.7c` | Kiosk sales report | statistics.md §2.7: «a separate report for one channel is a precedent that ends in eleven reports». Kiosk must be readable as a channel slice instead. |
+| # | Row | The decision that refuses it | Done |
+|---|---|---|---|
+| `1.2d` | Multi-step (multi-branch) composition | orders.md:52 and :1342 — Delever's `steps[]` is declined, «two nested state machines for a behaviour no evidence shows anyone using». | 2026-09-11 — IA §1 row `1.2`: the clause is struck in place in the **Owns** list with a dated note citing orders.md §0.1 and the parity matrix. |
+| `1.6a` | Call centre — softphone and click-to-call | ADR 0064's Alternatives refused WebRTC inside operations. The IA's «Owns: softphone» line should be struck with the ADR cited. | 2026-09-11 — IA §1 row `1.6`: «Owns: softphone» struck with a dated note quoting ADR 0064's Alternatives; click-to-call is removed from the screen's purpose line in the same note, because dialling needs the same client. |
+| `6.7a` | Editorial surfaces (news, gallery, recipes, vacancies) | The parity matrix excludes the general-purpose CMS with tenant-authored raw HTML; ADR 0044 repeats it. The IA still lists them in three places. | 2026-09-11 — struck in all three: IA §6 row `6.7`'s **Owns** list, the «Deliberately excluded from operations» bullet on a recruitment ATS (which had kept vacancies as content), and PART 4's **RichTextEditor** component row. Each keeps a dated note citing the parity matrix's exclusion and ADR 0044. The control-plane exclusion bullet in PART 1 still names consumer content generically and was left alone. |
+| `3.6` free geozone | «Бесплатная геозона» as a geometry layer beside zones and branch geozones | `fulfillment/domain/zone/ZoneRole.java` — «a 'free geozone' is not a third role: it is a DELIVERY zone whose tariff resolves to zero, and expressing it as a layer is what left three layers with no documented interaction». The IA's 3.6 bullet and the parity matrix's ○ row should both read «a zone whose tariff resolves to zero», and the buildable half is `3.6`'s tariff binding, tracked as `3.6d`. | 2026-09-11 — IA §3 row `3.6`'s **Owns** list and the parity matrix's ○ «Free geozone (Бесплатная геозона)» row both now read «a DELIVERY zone whose tariff resolves to zero, shown as free», citing `ZoneRole.java` and ADR 0037. The buildable half stays `3.6d` in `P20`. |
+| `7.7c` | Kiosk sales report | statistics.md §2.7: «a separate report for one channel is a precedent that ends in eleven reports». Kiosk must be readable as a channel slice instead. | 2026-09-11 — IA §7 row `7.7`: «kiosk sales report» replaced by «kiosk readable as a channel slice of the sales report», citing statistics.md §2.7. |
 
 Two further IA defects the verification surfaced, both documentation rather than build:
 the **operator inbox** (`§1/X.1`, shipped, ADR 0059) has no IA row at all, and **KDS device
@@ -561,6 +561,17 @@ enrolment** (`§2/X.2`, backend complete) has none either — IA 10.5 registers 
 kitchen devices. `1.5a`'s «auto-create client on unknown phone» and «external reservation ID
 as the displayed identifier» contradict a deliberate ADR 0047 decision and should be struck
 from the row rather than scheduled.
+
+**Done, 2026-09-11.** The operator inbox is now IA §1 row `1.7` and KDS device enrolment is
+IA §2 row `2.7`, each marked as already existing — `1.7` shipped under ADR 0059 stage 2,
+`2.7` backend-complete under ADR 0079 with no console caller. Both strikes in `1.5a` landed
+in IA §1 row `1.5`, with one dated note citing ADR 0047: a booking for a guest with no
+account creates no customer record and no consent, and the external reservation id lives
+once in `integration.provider_entity_mappings` as a lookup key rather than as the displayed
+identifier. No other IA row was touched; `settings.md`, `orders.md` and `statistics.md`
+already carried the refusing wording and needed no edit. IA PART 3's pilot screen lists
+were deliberately left alone: they enumerate what the pilot has to **build**, and `1.7` is
+already shipped while `2.7`'s console half is scheduled here as `2/X.2` in `P17`.
 
 ---
 
