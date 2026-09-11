@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.application.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -44,6 +45,7 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStuckRunDirectory.StuckRun;
 import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
@@ -272,6 +274,13 @@ class OnboardingServiceTests {
      * handler was looked up, and because the step sorts before every validation
      * the run froze there — one warning per replica per tick, forever, five steps
      * short of activation.
+     *
+     * <p>The optional half of that release. {@code SAMPLE_MENU_PUBLISH} is the
+     * only optional step, so {@code BLOCKED} — terminal, unclaimed, ungating —
+     * is the right end state and the run still reaches {@code READY}. The
+     * required half is
+     * {@link #aRequiredStepKeyThisBinaryDoesNotKnowFailsTheRunRatherThanWedgingItSilently},
+     * and the pair reads as one statement about {@code required}.
      */
     @Test
     void aStepKeyThisBinaryDoesNotKnowIsReleasedBlockedRatherThanThrowing() {
@@ -287,6 +296,102 @@ class OnboardingServiceTests {
         assertThat(runStatus(runId))
                 .as("an unknown key must not wedge the run short of the steps after it")
                 .isEqualTo("READY");
+    }
+
+    /**
+     * The dangerous half of the same rollback, and the one a rolling deploy
+     * actually produces: twelve of the thirteen steps are required, so a step a
+     * newer replica materialised will normally be required too.
+     *
+     * <p>{@code BLOCKED} would be exactly the wrong end state for it.
+     * {@code outstandingRequiredSteps} counts a blocked required row, so the run
+     * is pinned {@code PROVISIONING} and {@code activate} answers
+     * {@code READINESS_INCOMPLETE} forever — while the stalled gauge and the ADR
+     * 0058 listing both read {@code PENDING} and {@code FAILED} only, so nothing
+     * is ever raised. Silent, terminal, and recoverable only by abandoning the
+     * run. {@code FAILED} is the state every other mechanism here already
+     * handles, which is what this test asserts end to end: the run fails, both
+     * stall signals name it, and once the binary that knows the key is back,
+     * {@code resume} reopens the row and the run finishes where it stood.
+     */
+    @Test
+    void aRequiredStepKeyThisBinaryDoesNotKnowFailsTheRunRatherThanWedgingItSilently() {
+        UUID runId = startRun();
+        renameStep(runId, "BRANDS_AND_LOCATIONS_VALIDATE", "A_STEP_FROM_A_LATER_BINARY");
+
+        drain(runId);
+
+        assertThat(stepStatus(runId, "A_STEP_FROM_A_LATER_BINARY")).isEqualTo("FAILED=CAPABILITY_ABSENT");
+        assertThat(runStatus(runId))
+                .as("a required step this binary cannot run has stopped onboarding, and must say so")
+                .isEqualTo("FAILED");
+
+        clock.advance(java.time.Duration.ofHours(2));
+
+        assertThat(stalledAgeSeconds())
+                .as("the stalled gauge must see it; a silent terminal state is the defect")
+                .isGreaterThanOrEqualTo(7200);
+        assertThat(new JdbcOnboardingStuckRunDirectory(jdbc)
+                        .stuckRuns(clock.instant(), java.time.Duration.ofHours(1), 10))
+                .as("and so must the ADR 0058 stuck-run listing")
+                .extracting(StuckRun::runId, StuckRun::tenantId)
+                .containsExactly(tuple(runId, TENANT));
+
+        assertThat(service.resume(runId, ADMIN, "the newer binary is back")).isEqualTo(1);
+        renameStep(runId, "A_STEP_FROM_A_LATER_BINARY", "BRANDS_AND_LOCATIONS_VALIDATE");
+
+        drain(runId);
+
+        assertThat(runStatus(runId))
+                .as("the run heals in place once a binary that knows the key claims the step")
+                .isEqualTo("READY");
+    }
+
+    /**
+     * The third place the rollback story lands, and the only one an operator
+     * drives by hand: {@code validate} reads every {@code VALIDATING} row
+     * regardless of status, so an older binary asked for a dry run on a run a
+     * newer replica materialised used to throw {@code IllegalArgumentException}
+     * out of the loop and answer 500 — losing the dry run on the one run that
+     * needed it. The unresolvable key belongs in the report beside every other
+     * step's answer.
+     *
+     * <p>A {@code VALIDATING} step, deliberately: {@code SAMPLE_MENU_PUBLISH} is
+     * {@code CONFIGURING} and invisible to this query, so a test written on it
+     * would pass with {@code valueOf} restored and pin nothing.
+     */
+    @Test
+    void aStepKeyThisBinaryDoesNotKnowIsReportedUnresolvableRatherThanThrownOutOfADryRun() {
+        UUID runId = startRun();
+        renameStep(runId, "POS_BINDINGS_VALIDATE", "A_STEP_FROM_A_LATER_BINARY");
+
+        var outcome = service.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed()).isFalse();
+        assertThat(outcome.checks())
+                .filteredOn(check -> "A_STEP_FROM_A_LATER_BINARY".equals(check.stepKey()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.errorCode()).isEqualTo("CAPABILITY_ABSENT");
+                });
+        assertThat(outcome.checks())
+                .as("the dry run still answers for every other VALIDATING step")
+                .hasSize(7);
+    }
+
+    private void renameStep(UUID runId, String from, String to) {
+        int renamed = jdbc.sql("""
+                UPDATE tenant.onboarding_steps SET step_key = :to
+                 WHERE run_id = :runId AND step_key = :from
+                """)
+                .param("runId", runId)
+                .param("from", from)
+                .param("to", to)
+                .update();
+        assertThat(renamed)
+                .as("the fixture must actually carry the step it renames")
+                .isEqualTo(1);
     }
 
     /**
@@ -923,6 +1028,16 @@ class OnboardingServiceTests {
                 .isZero();
     }
 
+    /**
+     * The positive half of both stall signals. The listing's {@code WHERE} is
+     * character-identical to the gauge's, {@code AND s.required} included, so
+     * asserting only that it comes back empty for an optional failure pins the
+     * clause in one direction: any narrowing of it — {@code AND s.status =
+     * 'RUNNING'}, a {@code HAVING} inverted, {@code LIMIT 0} — leaves the suite
+     * green while ADR 0058's sweeper goes permanently silent and no one is
+     * paged. Asserting the mapped tenant as well as the run is what makes the
+     * row mapper live at all; empty results never invoke it.
+     */
     @Test
     void aRunThatFailedItsRequiredStepIsStalled() {
         jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
@@ -937,6 +1052,11 @@ class OnboardingServiceTests {
         assertThat(stalledAgeSeconds())
                 .as("a required step out of attempts is exactly what the alert exists for")
                 .isGreaterThanOrEqualTo(7200);
+        assertThat(new JdbcOnboardingStuckRunDirectory(jdbc)
+                        .stuckRuns(clock.instant(), java.time.Duration.ofHours(1), 10))
+                .as("the ADR 0058 listing reads the same rows as the gauge, so it must name this run")
+                .extracting(StuckRun::runId, StuckRun::tenantId)
+                .containsExactly(tuple(runId, TENANT));
     }
 
     /**

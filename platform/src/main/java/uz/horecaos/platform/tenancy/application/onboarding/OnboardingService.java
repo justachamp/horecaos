@@ -283,7 +283,7 @@ public class OnboardingService implements OnboardingHealthQuery {
      */
     private Claim claimNextStep(UUID runId, Instant now) {
         Optional<DueStep> due = jdbc.sql("""
-                SELECT s.id, s.tenant_id, s.step_key, s.attempt_count, s.external_reference,
+                SELECT s.id, s.tenant_id, s.step_key, s.required, s.attempt_count, s.external_reference,
                        s.input_snapshot::text AS input
                   FROM tenant.onboarding_steps s
                  WHERE s.run_id = :runId
@@ -301,16 +301,20 @@ public class OnboardingService implements OnboardingHealthQuery {
                 .param("runId", runId)
                 .param("now", at(now))
                 .query((rs, n) -> {
-                    // find rather than valueOf: an unknown key is released BLOCKED
-                    // below, and throwing here — inside the row mapper, before the
-                    // claim and before any handler lookup — would instead freeze
-                    // the run on every tick with nothing but a scheduler warning.
+                    // find rather than valueOf: an unknown key is released below
+                    // — FAILED when required, BLOCKED when not — and throwing
+                    // here, inside the row mapper, before the claim and before any
+                    // handler lookup, would instead freeze the run on every tick
+                    // with nothing but a scheduler warning. `required` is read
+                    // here and nowhere later, because that release is the one
+                    // decision taken without a resolved step to ask.
                     String key = rs.getString("step_key");
                     return new DueStep(
                             rs.getObject("id", UUID.class),
                             rs.getObject("tenant_id", UUID.class),
                             key,
                             OnboardingStep.find(key).orElse(null),
+                            rs.getBoolean("required"),
                             rs.getInt("attempt_count"),
                             rs.getString("external_reference"),
                             rs.getString("input"));
@@ -341,16 +345,33 @@ public class OnboardingService implements OnboardingHealthQuery {
         }
 
         // A key this binary has no constant for — a step materialised by a newer
-        // replica, or by the binary a rollback reverted from. Released the same
-        // way a missing handler is: BLOCKED is terminal for the step, is never
-        // claimed again, and does not gate READY for an optional step. Ordered
-        // before every comparison below, all of which need a resolved step, and
-        // placed after the claim so release's own claim-token predicate holds.
+        // replica, or by the binary a rollback reverted from. Ordered before
+        // every comparison below, all of which need a resolved step, and placed
+        // after the claim so release's own claim-token predicate holds.
+        //
+        // An optional one is released BLOCKED, exactly as a missing handler is:
+        // terminal for the step, never claimed again, and no gate on READY.
+        //
+        // A required one is released FAILED instead, because BLOCKED for a
+        // required row is a terminal state nothing recovers from and nothing
+        // reports: outstandingRequiredSteps still counts it, so refreshRunStatus
+        // pins the run at PROVISIONING and activate answers READINESS_INCOMPLETE
+        // forever, while the stalled gauge and the ADR 0058 listing both read
+        // only PENDING and FAILED and so never name it. FAILED is the state the
+        // rest of this class already knows how to handle: the run turns FAILED
+        // and publishes TenantOnboardingFailed, both stall signals see it,
+        // claimNextStep's own `failed.required` clause halts the run at the
+        // unknown step rather than draining it to one step short of READY, and
+        // resume reopens it — so the moment a binary that knows the key is in
+        // place, an operator recovers the run where it stands. Releasing it
+        // PENDING instead would be worse than either: release writes updated_at,
+        // so a re-release loop keeps the row permanently young, invisible to
+        // both stall signals, while attempt_count climbs without bound.
         if (step.step() == null) {
             release(
                     step.id(),
                     claimToken,
-                    "BLOCKED",
+                    step.required() ? "FAILED" : "BLOCKED",
                     "CAPABILITY_ABSENT",
                     "This binary does not know step " + step.stepKey(),
                     now,
@@ -1126,6 +1147,7 @@ public class OnboardingService implements OnboardingHealthQuery {
             UUID tenantId,
             String stepKey,
             @Nullable OnboardingStep step,
+            boolean required,
             int attemptCount,
             String externalReference,
             String input) {
@@ -1133,8 +1155,9 @@ public class OnboardingService implements OnboardingHealthQuery {
         /**
          * The resolved step. Non-null on every path that reaches a handler:
          * {@link Claim}'s own invariant is that a handler exists only for a step
-         * this binary knows, and an unknown key is released {@code BLOCKED}
-         * inside the claim transaction before any handler is looked up.
+         * this binary knows, and an unknown key is released — {@code FAILED} when
+         * {@link #required}, {@code BLOCKED} when not — inside the claim
+         * transaction before any handler is looked up.
          */
         OnboardingStep resolved() {
             return Objects.requireNonNull(step, "A step only reaches a handler once its key has resolved");
