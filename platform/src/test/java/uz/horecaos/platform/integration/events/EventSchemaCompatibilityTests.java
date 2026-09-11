@@ -135,6 +135,34 @@ class EventSchemaCompatibilityTests {
         }
     }
 
+    /**
+     * The other direction this gate does not cover: an enum value that should
+     * have been added and was not, or was added misspelled.
+     * {@link #staysBackwardCompatible} only flags values *removed* relative to
+     * the baseline, so {@code SAMPLE_MENU_PUBLISHED} for {@code
+     * SAMPLE_MENU_PUBLISH} — or the next step added to {@code OnboardingStep}
+     * and never added here — passes the build and first shows up as an
+     * integration partner's dead-letter queue.
+     *
+     * <p>Containment, not equality: a step retired from the enum must be allowed
+     * to stay in the published contract, because removing its value is exactly
+     * what {@link #staysBackwardCompatible} calls a breaking change within v1.
+     */
+    @Test
+    void everyOnboardingStepIsAPublishableStepKey() throws Exception {
+        EventContract contract = EventCatalog.require("TenantOnboardingStepCompleted", 1);
+        JsonNode stepKey = MAPPER.readTree(currentSchemaSource(contract))
+                .path("properties")
+                .path("stepKey");
+
+        assertThat(enumOf(stepKey))
+                .as("every OnboardingStep must be publishable; the schema may also keep retired values")
+                .containsAll(
+                        java.util.Arrays.stream(uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep.values())
+                                .map(Enum::name)
+                                .toList());
+    }
+
     @Test
     void detectsARemovedPropertyAsBreaking() throws Exception {
         JsonNode baseline = MAPPER.readTree("""
