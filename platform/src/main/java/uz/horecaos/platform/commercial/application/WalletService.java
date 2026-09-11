@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -1110,7 +1111,7 @@ public class WalletService {
 
     /** The rule V0211's generated column applies, kept here only to reject a reference that normalises away. */
     private static String normalise(String reference) {
-        return reference.replaceFirst("^#", "").replaceAll("[\\s-]", "").toUpperCase(java.util.Locale.ROOT);
+        return reference.replaceFirst("^#", "").replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
     }
 
     private static void requireMoneyKind(String moneyKind) {
