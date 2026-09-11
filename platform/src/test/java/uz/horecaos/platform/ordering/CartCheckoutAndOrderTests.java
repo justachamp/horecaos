@@ -4329,7 +4329,16 @@ class CartCheckoutAndOrderTests {
         var order = orderStore
                 .find(
                         TENANT,
-                        orderStore.listForLocation(TENANT, BRAND, LOCATION, List.of(), 10).stream()
+                        orderStore
+                                .listForLocation(
+                                        new JdbcOrderStore.OrderListQuery(
+                                                TENANT, BRAND, LOCATION, List.of(), null, null, null, null, null, null,
+                                                null, null),
+                                        null,
+                                        null,
+                                        10)
+                                .stream()
+                                .map(JdbcOrderStore.OrderBoardRow::order)
                                 .filter(row -> !row.orderId().equals(first))
                                 .findFirst()
                                 .orElseThrow()
