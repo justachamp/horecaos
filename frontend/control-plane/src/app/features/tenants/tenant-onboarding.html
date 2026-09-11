@@ -211,6 +211,77 @@
     }
   }
 
+  @if (invitation(); as invite) {
+    <section class="panel invitation" [attr.data-state]="invite.state">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.invitation.title') }}</h2>
+      <p class="q-body-sm">
+        <span class="pill" [class]="'pill pill-' + invite.state">{{
+          i18n.t($any('onboarding.invitation.state.' + invite.state))
+        }}</span>
+        @if (invite.emailMasked; as email) {
+          <span class="muted q-tnum">{{ email }}</span>
+        }
+      </p>
+      <dl class="q-body-sm invitationFacts">
+        <dt class="muted">{{ i18n.t('onboarding.invitation.queuedAt') }}</dt>
+        <dd class="q-tnum">{{ when(invite.queuedAt) }}</dd>
+        @if (invite.sentAt) {
+          <dt class="muted">{{ i18n.t('onboarding.invitation.sentAt') }}</dt>
+          <dd class="q-tnum">{{ when(invite.sentAt) }}</dd>
+        }
+        @if (invite.openedAt) {
+          <dt class="muted">{{ i18n.t('onboarding.invitation.openedAt') }}</dt>
+          <dd class="q-tnum">{{ when(invite.openedAt) }}</dd>
+        }
+        @if (invite.acceptedAt) {
+          <dt class="muted">{{ i18n.t('onboarding.invitation.acceptedAt') }}</dt>
+          <dd class="q-tnum">{{ when(invite.acceptedAt) }}</dd>
+        }
+        @if (invite.expiresAt && invite.state !== 'ACCEPTED') {
+          <dt class="muted">{{ i18n.t('onboarding.invitation.expiresAt') }}</dt>
+          <dd class="q-tnum">{{ when(invite.expiresAt) }}</dd>
+        }
+      </dl>
+      @if (invitationHint(invite); as hint) {
+        <p class="q-body-sm pending invitationHint">{{ i18n.t(hint) }}</p>
+      }
+      @if (invite.state !== 'ACCEPTED' && invite.state !== 'NOT_NEEDED') {
+        <form class="inlineForm resendForm" (submit)="resendInvitation($event)">
+          <input
+            class="q-body-sm"
+            name="resendReason"
+            [placeholder]="i18n.t('onboarding.invitation.resendReason')"
+            [value]="resendReason()"
+            (input)="resendReason.set($any($event.target).value)"
+          />
+          <select
+            class="q-body-sm"
+            name="resendLocale"
+            [value]="resendLocale()"
+            (change)="resendLocale.set($any($event.target).value)"
+          >
+            <option value="">{{ i18n.t('onboarding.invitation.sameLanguage') }}</option>
+            @for (locale of invitationLocales; track locale) {
+              <option [value]="locale">
+                {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+              </option>
+            }
+          </select>
+          <button type="submit" [disabled]="resending() || resendReason().trim().length === 0">
+            {{
+              resending()
+                ? i18n.t('onboarding.invitation.resending')
+                : i18n.t('onboarding.invitation.resend')
+            }}
+          </button>
+        </form>
+        @if (resent()) {
+          <p class="q-body-sm success">{{ i18n.t('onboarding.invitation.resent') }}</p>
+        }
+      }
+    </section>
+  }
+
   @if (canStartNew(run())) {
     <section class="panel">
       <h2 class="q-subhead">{{ i18n.t('onboarding.start.title') }}</h2>
@@ -267,6 +338,20 @@
           [value]="ownerEmail()"
           (input)="ownerEmail.set($any($event.target).value)"
         />
+        <label class="q-body-sm ownerLocale">
+          {{ i18n.t('onboarding.start.ownerLocale') }}
+          <select
+            name="ownerLocale"
+            [value]="ownerLocale()"
+            (change)="ownerLocale.set($any($event.target).value)"
+          >
+            @for (locale of invitationLocales; track locale) {
+              <option [value]="locale" [selected]="locale === ownerLocale()">
+                {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+              </option>
+            }
+          </select>
+        </label>
         <button type="submit" [disabled]="starting()">
           {{
             starting() ? i18n.t('onboarding.start.submitting') : i18n.t('onboarding.start.submit')

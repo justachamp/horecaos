@@ -355,6 +355,21 @@ services:
       HORECAOS_OIDC_AUDIENCE: horecaos-api
       HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
       HORECAOS_KEYCLOAK_REALM: horecaos
+      # ADR 0097: the platform's own email (owner invitations first). With no
+      # host set, invitations wait and the control plane says mail is not
+      # configured. The password is never a value here: the reference names it
+      # in OpenBao, for example
+      # horecaos:production:provider_notification:platform:smtp, stored with
+      #   bao kv put horecaos/production/provider_notification/platform/smtp value=...
+      HORECAOS_MAIL_FROM: ${HORECAOS_MAIL_FROM:-}
+      HORECAOS_MAIL_SMTP_HOST: ${HORECAOS_MAIL_SMTP_HOST:-}
+      HORECAOS_MAIL_SMTP_PORT: ${HORECAOS_MAIL_SMTP_PORT:-587}
+      HORECAOS_MAIL_SMTP_SECURITY: ${HORECAOS_MAIL_SMTP_SECURITY:-STARTTLS}
+      HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
+      HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
+      # Where an invitation's link points: the operations console the owner
+      # sets their password in.
+      HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN}
 
       HORECAOS_SECRETS_PROVIDER: openbao
       HORECAOS_OPENBAO_URL: http://openbao:8200

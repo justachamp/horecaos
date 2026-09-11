@@ -1,7 +1,7 @@
 # ADR 0097: HorecaOS sends its own email, and invites a tenant owner itself
 
 - Decision status: Proposed
-- Implementation status: Not started — onboarding creates the owner's account and sends nothing; the owner has no way to set a password
+- Implementation status: Partial — the `mail` module over SMTP with its password from the secrets manager, V0210's `tenant.owner_invitations`, `OwnerInvitationService` and `OwnerInvitationRelay`, the owner step queueing an invitation for an account with no password, `StaffInvitationController`'s inspect and accept over `KeycloakStaffAccounts`, the owner email encrypted in the onboarding input, the control plane's invitation panel with resend and the operations console's `/invite` page, tested in `SmtpPlatformMailerTests` against Mailpit, `OwnerInvitationFlowTests`, `TenantOwnerLinkOrInviteTests` and against the live realm in `KeycloakOrganizationIntegrationTests`. Nothing is delivered until a provider's settings and the domain's DNS records exist (runbook `platform-email.md`); none are configured yet
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: the platform owner decided on 2026-09-11 that the platform sends email over SMTP through a hosted provider, and that HorecaOS, not Keycloak, sends the owner's invitation and hosts the page where they set their password. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
@@ -103,13 +103,14 @@ leaves queued rows unread; accounts already set up are unaffected.
 
 ## Implementation checklist
 
-- [ ] Mail module over SMTP, with the password from the secrets manager
-- [ ] Invitation table, relay, token hash and expiry
-- [ ] Owner step queues an invitation for an account with no password
-- [ ] Public inspect and accept; Keycloak password, name and verified address
-- [ ] Owner email encrypted in the onboarding input
-- [ ] Control-plane state and resend; operations-console set-password page
-- [ ] Deployment configuration and the provider's DNS records
+- [x] Mail module over SMTP, with the password from the secrets manager
+- [x] Invitation table, relay, token hash and expiry
+- [x] Owner step queues an invitation for an account with no password
+- [x] Public inspect and accept; Keycloak password, name and verified address
+- [x] Owner email encrypted in the onboarding input
+- [x] Control-plane state and resend; operations-console set-password page
+- [x] Deployment configuration (`compose.production.yml`, `env.template`, runbook `platform-email.md`)
+- [ ] A provider account and the domain's SPF, DKIM and DMARC records (platform owner)
 
 ## Exit criteria
 

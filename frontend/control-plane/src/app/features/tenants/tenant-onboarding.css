@@ -74,13 +74,17 @@
   border: 1px solid var(--q-hairline);
 }
 
-.pill-COMPLETED {
+.pill-COMPLETED,
+.pill-ACCEPTED,
+.pill-SENT {
   color: var(--q-success-text);
   border-color: var(--q-success);
 }
 
 .pill-PENDING,
-.pill-IN_PROGRESS {
+.pill-IN_PROGRESS,
+.pill-QUEUED,
+.pill-EXPIRED {
   color: var(--q-warning-text);
   border-color: var(--q-warning);
 }
@@ -161,4 +165,29 @@
 .danger {
   color: var(--q-error-text);
   border-color: var(--q-error);
+}
+
+.invitationFacts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+}
+
+.invitationFacts dd {
+  margin: 0;
+}
+
+.invitationHint {
+  margin-top: 12px;
+}
+
+.resendForm {
+  margin-top: 16px;
+}
+
+.ownerLocale {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
