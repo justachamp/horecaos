@@ -162,3 +162,8 @@
 .muted {
   color: var(--q-ink-muted);
 }
+
+/* ADR 0100: an owner who has not set up an account is work, so it reads as work. */
+.owner .waiting {
+  color: var(--q-warning-text);
+}

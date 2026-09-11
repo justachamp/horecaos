@@ -1,0 +1,189 @@
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.filter {
+  background: none;
+  border: 1px solid var(--q-hairline);
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--q-ink-muted);
+}
+
+.filter.selected {
+  color: var(--q-ink);
+  border-color: var(--q-ink);
+}
+
+.state {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.state.error {
+  color: var(--q-error-text);
+}
+
+.outstanding {
+  margin-top: 20px;
+  color: var(--q-ink-muted);
+}
+
+.table {
+  margin-top: 12px;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+}
+
+.table thead tr,
+.table tbody tr {
+  background: var(--q-canvas);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.table a {
+  color: var(--q-ink);
+  text-decoration: underline;
+}
+
+.slug {
+  display: block;
+  margin-top: 2px;
+}
+
+/*
+ * A masked address is dimmed so an operator can tell at a glance that they are
+ * not looking at the real one -- the whole point of the column is comparing it
+ * with what was typed at onboarding, and a mask cannot be compared.
+ */
+.recipient.masked {
+  color: var(--q-ink-subtle);
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  white-space: nowrap;
+}
+
+.pill-ACCEPTED {
+  color: var(--q-success-text);
+  border-color: var(--q-success);
+}
+
+.pill-QUEUED,
+.pill-SENT {
+  color: var(--q-warning-text);
+  border-color: var(--q-warning);
+}
+
+.pill-NONE,
+.pill-FAILED,
+.pill-EXPIRED {
+  color: var(--q-error-text);
+  border-color: var(--q-error);
+}
+
+.pill-NOT_NEEDED {
+  color: var(--q-ink-subtle);
+}
+
+.muted {
+  color: var(--q-ink-subtle);
+}
+
+.pending {
+  color: var(--q-warning-text);
+}
+
+.success {
+  color: var(--q-success-text);
+}
+
+.error {
+  color: var(--q-error-text);
+  margin-top: 8px;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--q-ink);
+  text-decoration: underline;
+}
+
+.resendRow td {
+  background: var(--q-surface-sunken, var(--q-canvas));
+}
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inlineForm input[type='text'] {
+  flex: 1 1 280px;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.inlineForm select,
+.inlineForm button {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.inlineForm .primary {
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  border: none;
+}
+
+.inlineForm .primary:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

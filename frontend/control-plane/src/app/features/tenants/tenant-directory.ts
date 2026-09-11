@@ -43,6 +43,19 @@ export class TenantDirectory {
   protected readonly plans = signal<ReadonlyMap<string, TenantPlanView>>(new Map());
   protected readonly health = signal<ReadonlyMap<string, TenantHealthView>>(new Map());
 
+  /**
+   * The tenants whose owner has not set up an account (ADR 0100), by id.
+   *
+   * Read from the same overview the invitations screen uses, with the same
+   * optional-column discipline as plan and health: a caller without
+   * `TENANT_ONBOARDING_MANAGE` gets an empty map and a dash, never an error
+   * across the page. Held as a set of ids rather than the rows themselves, so
+   * nothing an operator may not read -- an address above all -- sits in this
+   * component at all.
+   */
+  protected readonly ownerWaiting = signal<ReadonlySet<string>>(new Set());
+  protected readonly ownerKnown = signal(false);
+
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
   protected readonly tenants = signal<readonly TenantSummaryView[]>([]);
@@ -87,16 +100,35 @@ export class TenantDirectory {
   private async loadColumns(): Promise<void> {
     if (this.session.has('COMMERCIAL_PLAN_READ')) {
       try {
-        this.plans.set(new Map((await this.tenantsApi.tenantPlans()).map((plan) => [plan.tenantId, plan])));
+        this.plans.set(
+          new Map((await this.tenantsApi.tenantPlans()).map((plan) => [plan.tenantId, plan])),
+        );
       } catch {
         this.plans.set(new Map());
       }
     }
     try {
-      this.health.set(new Map((await this.tenantsApi.tenantHealth()).map((row) => [row.tenantId, row])));
+      this.health.set(
+        new Map((await this.tenantsApi.tenantHealth()).map((row) => [row.tenantId, row])),
+      );
     } catch {
       this.health.set(new Map());
     }
+    if (this.session.has('TENANT_ONBOARDING_MANAGE')) {
+      try {
+        const outstanding = await this.tenantsApi.ownerInvitations('OUTSTANDING');
+        this.ownerWaiting.set(new Set(outstanding.map((row) => row.tenantId)));
+        this.ownerKnown.set(true);
+      } catch {
+        this.ownerWaiting.set(new Set());
+        this.ownerKnown.set(false);
+      }
+    }
+  }
+
+  /** Whether this tenant's owner is still to set up an account; null when unknown. */
+  protected ownerWaitingFor(tenantId: string): boolean | null {
+    return this.ownerKnown() ? this.ownerWaiting().has(tenantId) : null;
   }
 
   protected planOf(tenantId: string): string {

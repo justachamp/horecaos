@@ -7,7 +7,12 @@ import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { Page } from '../../core/api/page';
 import { TenantDirectory } from './tenant-directory';
-import { TenantSummaryView, TenantView, TenantsApi } from './tenants-api';
+import {
+  OwnerInvitationOverviewRow,
+  TenantSummaryView,
+  TenantView,
+  TenantsApi,
+} from './tenants-api';
 
 const CONFIG: AppConfig = {
   apiBaseUrl: 'https://api.test.horecaos.uz',
@@ -30,13 +35,38 @@ const TENANT_A: TenantSummaryView = {
 class FakeTenantsApi {
   readonly listTenants = vi.fn<() => Promise<Page<TenantSummaryView>>>();
   readonly createTenant = vi.fn<() => Promise<TenantView>>();
-  readonly tenantPlans = vi.fn().mockResolvedValue([
-    { tenantId: 'tenant-a', planCode: 'BASIC', planVersionNumber: 2, status: 'ACTIVE' },
-  ]);
-  readonly tenantHealth = vi.fn().mockResolvedValue([
-    { tenantId: 'tenant-a', deadLetters: 1, blockedReceipts: 2, posOrdersAwaiting: 0 },
-  ]);
+  readonly tenantPlans = vi
+    .fn()
+    .mockResolvedValue([
+      { tenantId: 'tenant-a', planCode: 'BASIC', planVersionNumber: 2, status: 'ACTIVE' },
+    ]);
+  readonly tenantHealth = vi
+    .fn()
+    .mockResolvedValue([
+      { tenantId: 'tenant-a', deadLetters: 1, blockedReceipts: 2, posOrdersAwaiting: 0 },
+    ]);
+  readonly ownerInvitations = vi
+    .fn<(state?: string) => Promise<readonly OwnerInvitationOverviewRow[]>>()
+    .mockResolvedValue([]);
 }
+
+const WAITING: OwnerInvitationOverviewRow = {
+  tenantId: 'tenant-a',
+  tenantSlug: 'tenant-a',
+  tenantName: 'Tenant A',
+  tenantStatus: 'ACTIVE',
+  state: 'SENT',
+  recipient: 'dilnoza.karimova@example.uz',
+  emailMasked: 'd***a@example.uz',
+  locale: 'ru',
+  attempts: 1,
+  lastErrorCode: null,
+  queuedAt: '2026-09-11T04:00:00Z',
+  sentAt: '2026-09-11T04:01:00Z',
+  openedAt: null,
+  acceptedAt: null,
+  expiresAt: '2026-09-14T04:01:00Z',
+};
 
 describe('TenantDirectory', () => {
   let fixture: ComponentFixture<TenantDirectory>;
@@ -53,7 +83,10 @@ describe('TenantDirectory', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: TenantsApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
 
@@ -93,7 +126,9 @@ describe('TenantDirectory', () => {
 
   it('leaves a dash where a platform-wide read fails, not an error across the page', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-    api.tenantPlans.mockRejectedValue(new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }));
+    api.tenantPlans.mockRejectedValue(
+      new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }),
+    );
 
     fixture = TestBed.createComponent(TenantDirectory);
     fixture.detectChanges();
@@ -117,7 +152,9 @@ describe('TenantDirectory', () => {
   });
 
   it('shows a translated error rather than a raw code on failure', async () => {
-    api.listTenants.mockRejectedValue(new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }));
+    api.listTenants.mockRejectedValue(
+      new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY' }),
+    );
 
     fixture = TestBed.createComponent(TenantDirectory);
     fixture.detectChanges();
@@ -138,7 +175,12 @@ describe('TenantDirectory', () => {
     const loadMore = fixture.nativeElement.querySelector('.loadMore') as HTMLButtonElement;
     expect(loadMore).not.toBeNull();
 
-    const tenantB: TenantSummaryView = { ...TENANT_A, id: 'tenant-b', slug: 'tenant-b', displayName: 'Tenant B' };
+    const tenantB: TenantSummaryView = {
+      ...TENANT_A,
+      id: 'tenant-b',
+      slug: 'tenant-b',
+      displayName: 'Tenant B',
+    };
     api.listTenants.mockResolvedValueOnce({ items: [tenantB], nextCursor: null });
 
     loadMore.click();
@@ -179,12 +221,78 @@ describe('TenantDirectory', () => {
     });
     fixture.detectChanges();
 
-    fixture.nativeElement.querySelector('.drawer').dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.nativeElement
+      .querySelector('.drawer')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
 
     expect(api.createTenant).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: 'new-tenant', legalName: 'New Tenant LLC', displayName: 'New Tenant' }),
+      expect.objectContaining({
+        slug: 'new-tenant',
+        legalName: 'New Tenant LLC',
+        displayName: 'New Tenant',
+      }),
     );
     expect(router.navigate).toHaveBeenCalledWith(['/tenants', 'new-tenant']);
+  });
+
+  /**
+   * ADR 0100: a tenant sitting in PROVISIONING because its owner never opened
+   * an email looks exactly like a tenant mid-onboarding for any other reason,
+   * so the directory says which.
+   */
+  it('marks a tenant whose owner has not set up an account, and links to its onboarding', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerInvitations.mockResolvedValue([WAITING]);
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(api.ownerInvitations).toHaveBeenCalledWith('OUTSTANDING');
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.dataset['owner']).toBe('true');
+    const link = owner.querySelector('a') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/tenants/tenant-a/onboarding');
+    expect(owner.textContent).not.toContain('example.uz');
+  });
+
+  it('says the owner is set up when the overview does not list the tenant', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerInvitations.mockResolvedValue([]);
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.dataset['owner']).toBe('false');
+    expect(owner.querySelector('a')).toBeNull();
+  });
+
+  /**
+   * The column is optional in exactly the way plan and health are: a refused or
+   * failing read leaves a dash, never an error across a page that is mostly
+   * about something else.
+   */
+  it('leaves a dash rather than an error when the overview cannot be read', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerInvitations.mockRejectedValue(
+      new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY', detail: 'no' }),
+    );
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.textContent?.trim()).toBe('\u2014');
+    expect(fixture.nativeElement.querySelector('.state.error')).toBeNull();
   });
 });

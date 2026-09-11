@@ -58,6 +58,13 @@ export const SECTIONS: readonly Section[] = [
     capability: 'TENANT_READ',
   },
   {
+    id: 'ownerInvitations',
+    labelKey: 'nav.ownerInvitations',
+    route: '/tenants/invitations',
+    group: 'nav.group.tenants',
+    capability: 'TENANT_ONBOARDING_MANAGE',
+  },
+  {
     id: 'configurationPolicy',
     labelKey: 'nav.configurationPolicy',
     route: '/tenants/configuration',

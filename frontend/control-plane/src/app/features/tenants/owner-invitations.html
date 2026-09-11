@@ -1,0 +1,134 @@
+<div class="head">
+  <div>
+    <h1 class="q-title">{{ i18n.t('ownerInvitations.title') }}</h1>
+    <p class="q-body-sm lead">{{ i18n.t('ownerInvitations.lead') }}</p>
+  </div>
+</div>
+
+<div class="filters">
+  @for (option of filters; track option) {
+    <button
+      type="button"
+      class="q-body-sm filter"
+      [class.selected]="filter() === option"
+      [attr.aria-pressed]="filter() === option"
+      [attr.data-filter]="option || 'ALL'"
+      (click)="choose(option)"
+    >
+      {{ i18n.t(filterKey(option)) }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('ownerInvitations.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else if (rows().length === 0) {
+  <p class="q-body-sm state">{{ i18n.t('ownerInvitations.empty') }}</p>
+} @else {
+  <p class="q-body-sm outstanding">
+    {{ i18n.t('ownerInvitations.outstanding', { count: outstanding() }) }}
+  </p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.tenant') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.recipient') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.state') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.sentAt') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.openedAt') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.acceptedAt') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.attempts') }}</th>
+        <th class="q-caption">{{ i18n.t('ownerInvitations.column.lastError') }}</th>
+        <th class="q-caption"></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.tenantId) {
+        <tr [attr.data-state]="row.state" [attr.data-tenant]="row.tenantSlug">
+          <td class="q-body-sm">
+            <a [routerLink]="['/tenants', row.tenantId, 'onboarding']">{{ row.tenantName }}</a>
+            <span class="q-caption muted slug">{{ row.tenantSlug }}</span>
+          </td>
+          <td class="q-body-sm q-tnum recipient" [class.masked]="row.recipient === null">
+            {{ recipientOf(row) }}
+          </td>
+          <td class="q-body-sm">
+            <span class="pill" [class]="'pill pill-' + row.state">{{
+              i18n.t(stateKey(row.state))
+            }}</span>
+          </td>
+          <td class="q-body-sm q-tnum">{{ when(row.sentAt) }}</td>
+          <td class="q-body-sm q-tnum">{{ when(row.openedAt) }}</td>
+          <td class="q-body-sm q-tnum">{{ when(row.acceptedAt) }}</td>
+          <td class="q-body-sm q-tnum attempts">{{ row.attempts }}</td>
+          <td class="q-body-sm lastError">
+            @if (row.lastErrorCode; as code) {
+              <span class="pending">{{ code }}</span>
+            } @else {
+              <span class="muted">—</span>
+            }
+          </td>
+          <td class="q-body-sm actions">
+            @if (canResend(row)) {
+              <button type="button" class="q-body-sm link" (click)="openResend(row.tenantId)">
+                {{ i18n.t('onboarding.invitation.resend') }}
+              </button>
+            } @else if (resent() === row.tenantId) {
+              <span class="success">{{ i18n.t('ownerInvitations.resent') }}</span>
+            }
+          </td>
+        </tr>
+        @if (resending() === row.tenantId) {
+          <tr class="resendRow">
+            <td colspan="9">
+              <form class="inlineForm resendForm" (submit)="submitResend($event, row)">
+                <input
+                  type="text"
+                  class="q-body-sm"
+                  required
+                  maxlength="1000"
+                  [attr.aria-label]="i18n.t('onboarding.invitation.resendReason')"
+                  [placeholder]="i18n.t('onboarding.invitation.resendReason')"
+                  [value]="resendReason()"
+                  (input)="resendReason.set($any($event.target).value)"
+                />
+                <select
+                  class="q-body-sm"
+                  [attr.aria-label]="i18n.t('onboarding.invitation.sameLanguage')"
+                  [value]="resendLocale()"
+                  (change)="resendLocale.set($any($event.target).value)"
+                >
+                  <option value="">{{ i18n.t('onboarding.invitation.sameLanguage') }}</option>
+                  @for (locale of invitationLocales; track locale) {
+                    <option [value]="locale">
+                      {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+                    </option>
+                  }
+                </select>
+                <button
+                  type="submit"
+                  class="q-body-sm primary"
+                  [disabled]="resendSubmitting() || resendReason().trim().length === 0"
+                >
+                  {{
+                    resendSubmitting()
+                      ? i18n.t('onboarding.invitation.resending')
+                      : i18n.t('onboarding.invitation.resend')
+                  }}
+                </button>
+                <button type="button" class="q-body-sm" (click)="closeResend()">
+                  {{ i18n.t('ownerInvitations.cancel') }}
+                </button>
+              </form>
+              @if (resendError(); as message) {
+                <p class="q-body-sm error">{{ message }}</p>
+              }
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+}

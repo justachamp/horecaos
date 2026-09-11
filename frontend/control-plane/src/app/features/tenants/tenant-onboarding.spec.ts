@@ -199,6 +199,7 @@ describe('TenantOnboarding', () => {
   it('shows the owner invitation waiting for mail, and resends it with a reason in another language', async () => {
     const waiting: OwnerInvitationView = {
       state: 'QUEUED',
+      recipient: null,
       emailMasked: 'd***a@example.uz',
       locale: 'ru',
       attempts: 0,
@@ -208,6 +209,7 @@ describe('TenantOnboarding', () => {
       openedAt: null,
       acceptedAt: null,
       expiresAt: null,
+      timeline: [],
     };
     await createWith(RUN, undefined, undefined, waiting);
     await settle();
@@ -274,6 +276,7 @@ describe('TenantOnboarding', () => {
   it('offers no resend once the owner has accepted', async () => {
     await createWith(RUN, undefined, undefined, {
       state: 'ACCEPTED',
+      recipient: null,
       emailMasked: 'd***a@example.uz',
       locale: 'ru',
       attempts: 1,
@@ -283,12 +286,112 @@ describe('TenantOnboarding', () => {
       openedAt: '2026-09-11T05:00:00Z',
       acceptedAt: '2026-09-11T05:02:00Z',
       expiresAt: '2026-09-14T04:01:00Z',
+      timeline: [],
     });
     await settle();
 
     const invitation = panel(ru['onboarding.invitation.title']);
     expect(invitation.textContent).toContain(ru['onboarding.invitation.state.ACCEPTED']);
     expect(invitation.querySelector('form')).toBeNull();
+  });
+
+  it('shows the whole address when the server sends one, and the invitation history under it', async () => {
+    await createWith(RUN, undefined, undefined, {
+      state: 'SENT',
+      // The server sends this only to a caller holding TENANT_ONBOARDING_MANAGE
+      // here, and records an ADR 0029 reveal when it does (ADR 0100).
+      recipient: 'dilnoza.karimova@example.uz',
+      emailMasked: 'd***a@example.uz',
+      locale: 'ru',
+      attempts: 2,
+      lastErrorCode: null,
+      queuedAt: '2026-09-11T04:00:00Z',
+      sentAt: '2026-09-11T04:05:00Z',
+      openedAt: null,
+      acceptedAt: null,
+      expiresAt: '2026-09-14T04:05:00Z',
+      timeline: [
+        {
+          type: 'QUEUED',
+          attempt: 0,
+          locale: 'ru',
+          outcomeCode: null,
+          actorType: 'SYSTEM_JOB',
+          actor: 'onboarding-run:run-1',
+          reason: null,
+          occurredAt: '2026-09-11T04:00:00Z',
+        },
+        {
+          type: 'SEND_DEFERRED',
+          attempt: 1,
+          locale: 'ru',
+          outcomeCode: 'SMTP_UNAVAILABLE',
+          actorType: 'SYSTEM_JOB',
+          actor: 'owner-invitation-relay',
+          reason: null,
+          occurredAt: '2026-09-11T04:01:00Z',
+        },
+        {
+          type: 'RESENT',
+          attempt: 0,
+          locale: 'ru',
+          outcomeCode: 'QUEUED',
+          actorType: 'USER',
+          actor: 'operator-subject',
+          reason: 'the owner never got the first one',
+          occurredAt: '2026-09-11T04:04:00Z',
+        },
+        {
+          type: 'SENT',
+          attempt: 2,
+          locale: 'ru',
+          outcomeCode: null,
+          actorType: 'SYSTEM_JOB',
+          actor: 'owner-invitation-relay',
+          reason: null,
+          occurredAt: '2026-09-11T04:05:00Z',
+        },
+      ],
+    });
+    await settle();
+
+    const invitation = panel(ru['onboarding.invitation.title']);
+    const recipient = invitation.querySelector('.recipient') as HTMLElement;
+    expect(recipient.textContent).toContain('dilnoza.karimova@example.uz');
+    expect(recipient.textContent).not.toContain('d***a');
+    expect(recipient.dataset['whole']).toBe('true');
+
+    const events = invitation.querySelectorAll('.timeline li');
+    expect(events).toHaveLength(4);
+    expect(events[1].textContent).toContain('SMTP_UNAVAILABLE');
+    expect(events[2].textContent).toContain('the owner never got the first one');
+    expect(events[2].textContent).toContain('operator-subject');
+    expect((events[3] as HTMLElement).dataset['event']).toBe('SENT');
+  });
+
+  it('dims the mask when the server would not send the address, and says so when there is no history', async () => {
+    await createWith(RUN, undefined, undefined, {
+      state: 'SENT',
+      recipient: null,
+      emailMasked: 'd***a@example.uz',
+      locale: 'ru',
+      attempts: 1,
+      lastErrorCode: null,
+      queuedAt: '2026-09-11T04:00:00Z',
+      sentAt: '2026-09-11T04:01:00Z',
+      openedAt: null,
+      acceptedAt: null,
+      expiresAt: '2026-09-14T04:01:00Z',
+      timeline: [],
+    });
+    await settle();
+
+    const invitation = panel(ru['onboarding.invitation.title']);
+    const recipient = invitation.querySelector('.recipient') as HTMLElement;
+    expect(recipient.textContent).toContain('d***a@example.uz');
+    expect(recipient.dataset['whole']).toBe('false');
+    expect(invitation.querySelector('.timeline')).toBeNull();
+    expect(invitation.textContent).toContain(ru['onboarding.invitation.timelineEmpty']);
   });
 
   it('renders every step with its status', async () => {

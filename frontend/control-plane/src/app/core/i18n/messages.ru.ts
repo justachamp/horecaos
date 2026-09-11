@@ -19,6 +19,7 @@ export const ru: Messages = {
 
   'nav.group.tenants': 'Клиенты',
   'nav.tenants': 'Клиенты',
+  'nav.ownerInvitations': 'Приглашения владельцев',
   'nav.configurationPolicy': 'Конфигурация и политики',
 
   'nav.group.providers': 'Провайдеры',
@@ -40,7 +41,8 @@ export const ru: Messages = {
   'nav.moduleCatalog': 'Каталог модулей',
   'nav.usageMetering': 'Учёт использования',
   'nav.invoicesWallet': 'Счета и кошелёк',
-  'piiClassification.lead': 'Как платформа обращается с персональными данными: что требует каждый класс, сколько хранится каждый вид и какая задача его удаляет, запросы клиентов на удаление, как часто данные раскрывались или выгружались, и все столбцы, хранимые в зашифрованном виде. Здесь не называется ни один клиент.',
+  'piiClassification.lead':
+    'Как платформа обращается с персональными данными: что требует каждый класс, сколько хранится каждый вид и какая задача его удаляет, запросы клиентов на удаление, как часто данные раскрывались или выгружались, и все столбцы, хранимые в зашифрованном виде. Здесь не называется ни один клиент.',
   'piiClassification.classes': 'Классы данных',
   'piiClassification.encrypted': 'хранится зашифрованным',
   'piiClassification.plain': 'хранится как есть',
@@ -51,13 +53,15 @@ export const ru: Messages = {
   'piiClassification.column.keptFor': 'Срок',
   'piiClassification.column.enforcedBy': 'Удаляет',
   'piiClassification.erasure': 'Запросы на удаление данных',
-  'piiClassification.erasureCounts': '{pending} ждут · {completed} выполнено · {cancelled} отозвано',
+  'piiClassification.erasureCounts':
+    '{pending} ждут · {completed} выполнено · {cancelled} отозвано',
   'piiClassification.daysWaiting': 'ждёт {days} дн.',
   'piiClassification.via.STOREFRONT': 'запрос клиента',
   'piiClassification.via.OPERATIONS': 'оформлено сотрудником',
   'piiClassification.egress': 'Раскрыто или выгружено за 30 дней',
   'piiClassification.egressNone': 'Ничего не раскрывалось и не выгружалось.',
-  'piiClassification.egressNote': 'Каждый случай — человек, который посмотрел или выгрузил персональные данные; причина записана в журнале аудита.',
+  'piiClassification.egressNote':
+    'Каждый случай — человек, который посмотрел или выгрузил персональные данные; причина записана в журнале аудита.',
   'piiClassification.columns': 'Зашифрованные столбцы ({count})',
   'piiClassification.class.PUBLIC': 'Публичные',
   'piiClassification.class.INTERNAL': 'Внутренние',
@@ -73,7 +77,8 @@ export const ru: Messages = {
   'piiClassification.rule.CUSTOMER_ACCOUNTS': 'Аккаунты клиентов',
   'piiClassification.rule.ABANDONED_CARTS': 'Корзины, не ставшие заказом',
   'piiClassification.rule.COURIER_APPLICANTS': 'Заявки курьеров, которые никто не проверил',
-  'notificationProviders.lead': 'Шлюзы сообщений, через которые может отправлять платформа, имя отправителя каждого клиента и статус каждого текста SMS у шлюза. Текст, ожидающий шлюз или отклонённый им, не отправляется.',
+  'notificationProviders.lead':
+    'Шлюзы сообщений, через которые может отправлять платформа, имя отправителя каждого клиента и статус каждого текста SMS у шлюза. Текст, ожидающий шлюз или отклонённый им, не отправляется.',
   'notificationProviders.gateways': 'Шлюзы',
   'notificationProviders.live': 'боевой',
   'notificationProviders.test': 'тестовый',
@@ -86,7 +91,8 @@ export const ru: Messages = {
   'notificationProviders.column.status': 'Статус',
   'notificationProviders.brandSenders': 'у {count} брендов своё',
   'notificationProviders.reviews': 'Тексты SMS',
-  'notificationProviders.reviewsNote': 'Отметьте текст как ожидающий, если шлюз должен его одобрить, затем внесите ответ. До этого он не отправляется.',
+  'notificationProviders.reviewsNote':
+    'Отметьте текст как ожидающий, если шлюз должен его одобрить, затем внесите ответ. До этого он не отправляется.',
   'notificationProviders.allWordings': 'Все',
   'notificationProviders.noReviews': 'Нет текстов SMS в этом состоянии.',
   'notificationProviders.record': 'Внести ответ шлюза',
@@ -98,19 +104,23 @@ export const ru: Messages = {
   'notificationProviders.review.APPROVED': 'Одобрено шлюзом',
   'notificationProviders.review.REJECTED': 'Отклонено шлюзом',
   'notificationProviders.review.NOT_REQUIRED': 'Одобрение не нужно',
-  'residency.lead': 'Где работает каждый клиент. Страна задаёт исходную валюту и часовой пояс; перевод клиента в другую страну требует второй подписи.',
+  'residency.lead':
+    'Где работает каждый клиент. Страна задаёт исходную валюту и часовой пояс; перевод клиента в другую страну требует второй подписи.',
   'residency.hosting': 'Данные всех клиентов хранятся в стране: {country}.',
-  'residency.hostingNote': 'Место хранения не зависит от клиента: клиент из другой страны тоже хранится здесь.',
+  'residency.hostingNote':
+    'Место хранения не зависит от клиента: клиент из другой страны тоже хранится здесь.',
   'residency.tenantCount': 'клиентов: {count}',
   'residency.column.timezone': 'Часовой пояс',
   'residency.change.open': 'Сменить страну',
   'residency.change.choose': 'Выберите страну',
   'residency.change.submit': 'Запросить смену',
-  'residency.change.note': 'Второй человек подтверждает запрос в разделе «Подтверждения»; затем запросите снова здесь, чтобы применить. Валюта и часовой пояс не меняются.',
+  'residency.change.note':
+    'Второй человек подтверждает запрос в разделе «Подтверждения»; затем запросите снова здесь, чтобы применить. Валюта и часовой пояс не меняются.',
   'residency.change.awaiting': 'Ждём вторую подпись для перевода {tenant} в страну {country}.',
   'residency.change.done': '{tenant} теперь работает в стране {country}.',
   'residency.change.declined': 'Перевод {tenant} в страну {country} отклонён.',
-  'platformApprovals.lead': 'Решения платформы, ожидающие второй подписи, у любых клиентов: смена страны клиента и активация клиента, если её требует политика.',
+  'platformApprovals.lead':
+    'Решения платформы, ожидающие второй подписи, у любых клиентов: смена страны клиента и активация клиента, если её требует политика.',
   'platformApprovals.empty': 'Ничего не ждёт второй подписи.',
   'platformApprovals.column.action': 'Решение',
   'platformApprovals.column.asked': 'Кто запросил',
@@ -122,9 +132,12 @@ export const ru: Messages = {
   'platformApprovals.notYours': 'Запрошено вами; решает другой',
   'platformApprovals.approved': 'Подтверждено для {tenant}. Запросивший может продолжать.',
   'platformApprovals.declined': 'Отклонено для {tenant}.',
-  'platformApprovals.gap': 'Массовые выгрузки и изменение сроков хранения пока не существуют как действия, поэтому здесь их нет. Подтверждения доступа сотрудников — в разделе «Сотрудники и роли».',
-  'businessTypes.lead': 'Типы бизнеса, которые обслуживает платформа, как каждый обычно передаёт заказы и какие клиенты к ним относятся. Тип записывается и показывается, но сам ничего не включает и не выключает.',
-  'businessTypes.note': 'Подключение использует шаблон по умолчанию для всех типов; что может клиент, решают его роли и тариф.',
+  'platformApprovals.gap':
+    'Массовые выгрузки и изменение сроков хранения пока не существуют как действия, поэтому здесь их нет. Подтверждения доступа сотрудников — в разделе «Сотрудники и роли».',
+  'businessTypes.lead':
+    'Типы бизнеса, которые обслуживает платформа, как каждый обычно передаёт заказы и какие клиенты к ним относятся. Тип записывается и показывается, но сам ничего не включает и не выключает.',
+  'businessTypes.note':
+    'Подключение использует шаблон по умолчанию для всех типов; что может клиент, решают его роли и тариф.',
   'businessTypes.kitchen': 'кухонный экран',
   'businessTypes.noKitchen': 'без кухонного экрана',
   'businessTypes.handover.DELIVERY': 'доставка',
@@ -205,7 +218,8 @@ export const ru: Messages = {
   'state.notBuilt.body': 'У этого раздела пока нет экрана.',
 
   'overview.title': 'Здоровье платформы',
-  'overview.lead': 'Клиенты, заказы, фискальные чеки и очереди по всем клиентам — подсчитано в момент открытия.',
+  'overview.lead':
+    'Клиенты, заказы, фискальные чеки и очереди по всем клиентам — подсчитано в момент открытия.',
   'overview.tenants.title': 'Клиенты',
   'overview.tenants.active': 'активны',
   'overview.tenants.provisioning': 'в подготовке',
@@ -276,22 +290,26 @@ export const ru: Messages = {
   'tenantDetail.action.identity': 'Идентификация и realm',
   'tenantDetail.action.impersonation': 'Сессия поддержки',
   'support.title': 'Сессии поддержки',
-  'support.lead': 'Вход в операционное приложение клиента на заданное время и с указанной причиной. Доступ заканчивается сам в срок; клиент видит каждый визит в своём журнале и может его завершить.',
+  'support.lead':
+    'Вход в операционное приложение клиента на заданное время и с указанной причиной. Доступ заканчивается сам в срок; клиент видит каждый визит в своём журнале и может его завершить.',
   'support.current.title': 'Ваша открытая сессия',
   'support.openOperations': 'Открыть операционное приложение клиента →',
-  'support.noOperationsUrl': 'Адрес операционного приложения не задан; откройте его с ?supportTenant={tenantId}.',
+  'support.noOperationsUrl':
+    'Адрес операционного приложения не задан; откройте его с ?supportTenant={tenantId}.',
   'support.end': 'Завершить сессию',
   'support.open.title': 'Открыть сессию поддержки',
   'support.open.access': 'Доступ',
   'support.access.VIEW': 'Только просмотр',
   'support.access.VIEW.hint': 'видеть заказы, меню, настройки и сбои; ничего не менять',
   'support.access.ASSIST': 'Помощь в работе',
-  'support.access.ASSIST.hint': 'также двигать, менять и отменять заказы, стоп-лист, закрыть филиал, решать выгрузки на кассу; никогда возвраты, данные покупателей и доступы',
+  'support.access.ASSIST.hint':
+    'также двигать, менять и отменять заказы, стоп-лист, закрыть филиал, решать выгрузки на кассу; никогда возвраты, данные покупателей и доступы',
   'support.open.length': 'На какое время',
   'support.open.minutes': '{minutes} мин',
   'support.open.reason': 'Причина (клиент её увидит)',
   'support.open.ticket': 'Номер обращения (необязательно)',
-  'support.open.hint': 'Используется ваша учётная запись; всё, что вы делаете, записывается под вашим именем.',
+  'support.open.hint':
+    'Используется ваша учётная запись; всё, что вы делаете, записывается под вашим именем.',
   'support.open.submit': 'Открыть сессию',
   'support.opened': 'Сессия открыта. Откройте операционное приложение по ссылке ниже.',
   'support.ended': 'Сессия завершена; доступа больше нет.',
@@ -303,7 +321,8 @@ export const ru: Messages = {
   'support.state.open': 'открыта до {time}',
   'support.state.ended': 'завершена {time}, {who}',
   'support.state.lapsed': 'истекла в {time}',
-  'featureFlags.lead': 'Функции, которые выкатываются, и кому. Флаг выключен, пока его не включат: для всех или для выбранных клиентов; клиента можно оставить без функции, включённой для всех.',
+  'featureFlags.lead':
+    'Функции, которые выкатываются, и кому. Флаг выключен, пока его не включат: для всех или для выбранных клиентов; клиента можно оставить без функции, включённой для всех.',
   'featureFlags.empty': 'В этой сборке флаги функций не объявлены.',
   'featureFlags.summary.nobody': 'Выключен везде',
   'featureFlags.summary.some': 'Включён у клиентов: {count}',
@@ -325,7 +344,8 @@ export const ru: Messages = {
   'featureFlags.confirm': 'Сохранить',
   'featureFlags.saved': 'Сохранено. Изменение действует со следующего запроса клиента.',
   'featureFlags.flag.supportVisits': 'Страница визитов поддержки',
-  'featureFlags.flag.supportVisits.description': 'Показывает администраторам клиента в операционном приложении все визиты поддержки HorecaOS и позволяет завершить визит.',
+  'featureFlags.flag.supportVisits.description':
+    'Показывает администраторам клиента в операционном приложении все визиты поддержки HorecaOS и позволяет завершить визит.',
 
   'tenantDetail.facts.title': 'Сведения о клиенте',
   'tenantDetail.facts.status': 'Статус',
@@ -336,9 +356,11 @@ export const ru: Messages = {
   'tenantDetail.facts.keycloakUnlinked': 'Не привязана',
   'tenantDetail.status.title': 'Работа клиента',
   'tenantDetail.status.suspend': 'Приостановить клиента',
-  'tenantDetail.status.suspendLead': 'Все сотрудники клиента сохраняют доступ только на чтение до возобновления, а их организация входа отключается. Ничего не удаляется.',
+  'tenantDetail.status.suspendLead':
+    'Все сотрудники клиента сохраняют доступ только на чтение до возобновления, а их организация входа отключается. Ничего не удаляется.',
   'tenantDetail.status.reactivate': 'Возобновить клиента',
-  'tenantDetail.status.reactivateLead': 'Восстанавливает доступ всех сотрудников таким, каким он был до приостановки.',
+  'tenantDetail.status.reactivateLead':
+    'Восстанавливает доступ всех сотрудников таким, каким он был до приостановки.',
   'tenantDetail.status.reason': 'Причина, записывается в журнал аудита',
   'tenantDetail.status.confirmSuspend': 'Приостановить',
   'tenantDetail.status.confirmReactivate': 'Возобновить',
@@ -380,24 +402,30 @@ export const ru: Messages = {
   'tenantBrands.edit.action': 'Изменить',
   'tenantBrands.edit.brandTitle': 'Изменение бренда',
   'tenantBrands.edit.locationTitle': 'Изменение точки',
-  'tenantBrands.edit.brandLocked': 'Бренд уже был активен, поэтому код и слаг изменить нельзя. Отображаемое название менять можно.',
-  'tenantBrands.edit.locationLocked': 'Точка уже была активна, поэтому код, слаг и часовой пояс изменить нельзя. Отображаемое название менять можно.',
+  'tenantBrands.edit.brandLocked':
+    'Бренд уже был активен, поэтому код и слаг изменить нельзя. Отображаемое название менять можно.',
+  'tenantBrands.edit.locationLocked':
+    'Точка уже была активна, поэтому код, слаг и часовой пояс изменить нельзя. Отображаемое название менять можно.',
   'tenantBrands.edit.save': 'Сохранить',
   'tenantBrands.edit.saving': 'Сохранение…',
   'tenantBrands.delete.action': 'Удалить',
   'tenantBrands.delete.confirm': 'Удалить окончательно',
   'tenantBrands.delete.cancel': 'Отмена',
   'tenantBrands.delete.hasLocationsHint': 'Сначала удалите его точки.',
-  'tenantBrands.delete.reason.NOT_DRAFT': 'Удалить можно только черновик. Этот уже был активен, и его история сохраняется.',
+  'tenantBrands.delete.reason.NOT_DRAFT':
+    'Удалить можно только черновик. Этот уже был активен, и его история сохраняется.',
   'tenantBrands.delete.reason.HAS_LOCATIONS': 'У бренда ещё есть точки. Сначала удалите их.',
-  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS': 'У сотрудников ещё есть доступ к нему. Сначала отзовите этот доступ.',
-  'tenantBrands.delete.reason.STILL_REFERENCED': 'На него всё ещё ссылаются другие данные — например, привязка юрлица, канал продаж или меню. Сначала уберите их.',
+  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS':
+    'У сотрудников ещё есть доступ к нему. Сначала отзовите этот доступ.',
+  'tenantBrands.delete.reason.STILL_REFERENCED':
+    'На него всё ещё ссылаются другие данные — например, привязка юрлица, канал продаж или меню. Сначала уберите их.',
   'tenantBrands.delete.referencedBy': '(Ссылка из: {table})',
   'tenantBrands.column.address': 'Адрес',
   'tenantBrands.place.notSet': 'Не указан',
   'tenantBrands.place.action': 'Адрес',
   'tenantBrands.place.title': 'Где находится точка',
-  'tenantBrands.place.lead': 'Доставку предлагают и курьеров отправляют по отметке на карте — ставьте её по карте, а не по памяти.',
+  'tenantBrands.place.lead':
+    'Доставку предлагают и курьеров отправляют по отметке на карте — ставьте её по карте, а не по памяти.',
   'tenantBrands.place.addressLine': 'Адрес',
   'tenantBrands.place.district': 'Район',
   'tenantBrands.place.city': 'Город',
@@ -427,14 +455,17 @@ export const ru: Messages = {
   'legalEntities.register.vatRegistered': 'Плательщик НДС',
   'legalEntities.assign.action': 'Назначить филиал',
   'legalEntities.assign.title': 'Назначение продавца филиала',
-  'legalEntities.assign.lead': 'Закрывает текущее назначение филиала (если есть) на дату начала нового.',
+  'legalEntities.assign.lead':
+    'Закрывает текущее назначение филиала (если есть) на дату начала нового.',
   'legalEntities.assign.effectiveFrom': 'Действует с',
   'legalEntities.assign.location': 'Точка',
   'legalEntities.assign.chooseLocation': 'Выберите точку',
-  'legalEntities.assign.noLocations': 'У клиента пока нет точек. Сначала создайте точку в разделе «Бренды и точки».',
+  'legalEntities.assign.noLocations':
+    'У клиента пока нет точек. Сначала создайте точку в разделе «Бренды и точки».',
   'legalEntities.assign.done': 'Назначено.',
   'legalEntities.locations.title': 'Под каким юрлицом фискализирует каждая точка',
-  'legalEntities.locations.lead': 'Точка принимает безналичную оплату только после назначения активного юрлица.',
+  'legalEntities.locations.lead':
+    'Точка принимает безналичную оплату только после назначения активного юрлица.',
   'legalEntities.locations.column.location': 'Точка',
   'legalEntities.locations.column.entity': 'Юрлицо',
   'legalEntities.locations.column.since': 'С',
@@ -477,39 +508,60 @@ export const ru: Messages = {
   'onboarding.step.FRONTEND_DOMAIN_VALIDATE': 'Адрес витрины',
   'onboarding.step.ACTIVATION_SMOKE_TEST': 'Тестовый заказ',
   'onboarding.step.TENANT_ACTIVATE': 'Запуск',
-  'onboarding.hint.AWAITING_ORGANIZATION': 'Ожидание создания организации входа. Повтор выполнится сам.',
-  'onboarding.hint.IDENTITY_DRIFT': 'В сервисе входа есть организация, которая не совпадает с этим клиентом. Её нужно исправить там; ниже указано, что именно отличается.',
-  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL': 'Позицию меню нельзя продать в точке. Проверьте, где предлагается меню, в операционном приложении.',
-  'onboarding.hint.MEDIA_NOT_AVAILABLE': 'Изображения меню пока недоступны. Проверьте загрузки в операционном приложении.',
-  'onboarding.hint.NO_AVAILABLE_ITEM': 'В меню пока нечего продавать. Опубликуйте меню хотя бы с одной доступной позицией в операционном приложении.',
+  'onboarding.hint.AWAITING_ORGANIZATION':
+    'Ожидание создания организации входа. Повтор выполнится сам.',
+  'onboarding.hint.IDENTITY_DRIFT':
+    'В сервисе входа есть организация, которая не совпадает с этим клиентом. Её нужно исправить там; ниже указано, что именно отличается.',
+  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL':
+    'Позицию меню нельзя продать в точке. Проверьте, где предлагается меню, в операционном приложении.',
+  'onboarding.hint.MEDIA_NOT_AVAILABLE':
+    'Изображения меню пока недоступны. Проверьте загрузки в операционном приложении.',
+  'onboarding.hint.NO_AVAILABLE_ITEM':
+    'В меню пока нечего продавать. Опубликуйте меню хотя бы с одной доступной позицией в операционном приложении.',
   'onboarding.hint.NO_BRAND': 'У клиента нет бренда. Создайте его в разделе «Бренды и точки».',
-  'onboarding.hint.NO_CHANNEL': 'Нет активного канала продаж. Настройте его в операционном приложении.',
-  'onboarding.hint.NO_DELIVERY_TARIFF': 'У доставки нет тарифа. Добавьте его в операционном приложении.',
-  'onboarding.hint.NO_DELIVERY_ZONE': 'У доставки нет зоны. Нарисуйте её в операционном приложении.',
-  'onboarding.hint.NO_FULFILLMENT_MODE': 'Канал продаж не предлагает ни самовывоз, ни доставку. Выберите способы выдачи в операционном приложении.',
-  'onboarding.hint.NO_LEGAL_ENTITY': 'У точки нет активного юрлица. Назначьте его в разделе «Юридические лица».',
-  'onboarding.hint.NO_LOCATION': 'Ни у одного бренда нет точки. Создайте её в разделе «Бренды и точки».',
-  'onboarding.hint.NO_MERCHANT_BINDING': 'За оплатой картой или кошельком не стоит мерчант-аккаунт. Подключите платёжного провайдера для этого юрлица.',
-  'onboarding.hint.NO_PUBLISHED_MENU': 'Нет опубликованного меню. Опубликуйте его в операционном приложении.',
-  'onboarding.hint.OWNER_NOT_SUPPLIED': 'Владелец не указан. Отмените этот запуск и начните новый с адресом владельца.',
-  'onboarding.hint.POS_BINDING_UNHEALTHY': 'Подключение POS не работает. Проверьте его в разделе «Подключения».',
-  'onboarding.hint.QUOTE_REFUSED': 'Тестовый заказ не удалось оценить. Проверьте цены меню в операционном приложении.',
-  'onboarding.hint.SERVICEABILITY_UNAVAILABLE': 'Покрытие доставки сейчас не удалось проверить. Повтор выполнится сам.',
+  'onboarding.hint.NO_CHANNEL':
+    'Нет активного канала продаж. Настройте его в операционном приложении.',
+  'onboarding.hint.NO_DELIVERY_TARIFF':
+    'У доставки нет тарифа. Добавьте его в операционном приложении.',
+  'onboarding.hint.NO_DELIVERY_ZONE':
+    'У доставки нет зоны. Нарисуйте её в операционном приложении.',
+  'onboarding.hint.NO_FULFILLMENT_MODE':
+    'Канал продаж не предлагает ни самовывоз, ни доставку. Выберите способы выдачи в операционном приложении.',
+  'onboarding.hint.NO_LEGAL_ENTITY':
+    'У точки нет активного юрлица. Назначьте его в разделе «Юридические лица».',
+  'onboarding.hint.NO_LOCATION':
+    'Ни у одного бренда нет точки. Создайте её в разделе «Бренды и точки».',
+  'onboarding.hint.NO_MERCHANT_BINDING':
+    'За оплатой картой или кошельком не стоит мерчант-аккаунт. Подключите платёжного провайдера для этого юрлица.',
+  'onboarding.hint.NO_PUBLISHED_MENU':
+    'Нет опубликованного меню. Опубликуйте его в операционном приложении.',
+  'onboarding.hint.OWNER_NOT_SUPPLIED':
+    'Владелец не указан. Отмените этот запуск и начните новый с адресом владельца.',
+  'onboarding.hint.POS_BINDING_UNHEALTHY':
+    'Подключение POS не работает. Проверьте его в разделе «Подключения».',
+  'onboarding.hint.QUOTE_REFUSED':
+    'Тестовый заказ не удалось оценить. Проверьте цены меню в операционном приложении.',
+  'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
+    'Покрытие доставки сейчас не удалось проверить. Повтор выполнится сам.',
   'onboarding.hint.TENANT_MISSING': 'Запись клиента не найдена.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE': 'Временный сбой. Повтор выполнится сам.',
   'onboarding.hint.open': 'Открыть',
   'onboarding.validate.title': 'Проверить сейчас',
-  'onboarding.validate.lead': 'Запускает все проверки готовности для текущего состояния клиента, не меняя запуск. Используйте после исправления, перед возобновлением.',
+  'onboarding.validate.lead':
+    'Запускает все проверки готовности для текущего состояния клиента, не меняя запуск. Используйте после исправления, перед возобновлением.',
   'onboarding.validate.submit': 'Проверить',
   'onboarding.validate.submitting': 'Проверка…',
-  'onboarding.validate.allPassed': 'Все проверки пройдены. Возобновите запуск, чтобы это зафиксировать.',
+  'onboarding.validate.allPassed':
+    'Все проверки пройдены. Возобновите запуск, чтобы это зафиксировать.',
   'onboarding.validate.passed': 'Пройдено',
   'onboarding.validate.failed': 'Не пройдено',
   'onboarding.cancel.title': 'Отменить запуск',
-  'onboarding.cancel.lead': 'Останавливает запуск окончательно; потом можно начать новый. Уже настроенное не отменяется.',
+  'onboarding.cancel.lead':
+    'Останавливает запуск окончательно; потом можно начать новый. Уже настроенное не отменяется.',
   'onboarding.cancel.submit': 'Отменить запуск',
   'onboarding.cancel.submitting': 'Отмена…',
-  'onboarding.template.label': 'Новые запуски идут по шаблону {code}, версия {version}: обязательных шагов — {count}.',
+  'onboarding.template.label':
+    'Новые запуски идут по шаблону {code}, версия {version}: обязательных шагов — {count}.',
   'onboarding.start.ownerLocale': 'Язык приглашения',
   'onboarding.invitation.title': 'Приглашение владельца',
   'onboarding.invitation.state.QUEUED': 'Ожидает отправки',
@@ -529,58 +581,123 @@ export const ru: Messages = {
   'onboarding.invitation.locale.ru': 'Русский',
   'onboarding.invitation.locale.en': 'Английский',
   'onboarding.invitation.resend': 'Отправить снова',
-  'onboarding.invitation.none': 'Учётная запись владельца была привязана до появления приглашений, поэтому письмо не отправлялось. Отправьте его, чтобы владелец мог задать пароль.',
+  'onboarding.invitation.none':
+    'Учётная запись владельца была привязана до появления приглашений, поэтому письмо не отправлялось. Отправьте его, чтобы владелец мог задать пароль.',
   'onboarding.invitation.send': 'Отправить приглашение',
   'onboarding.invitation.resending': 'Отправляем…',
-  'onboarding.invitation.resent': 'Снова в очереди с новой ссылкой. Прежняя ссылка больше не работает.',
-  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Почта на этом стенде ещё не настроена. Приглашение уйдёт, как только её настроят.',
-  'onboarding.invitation.hint.SMTP_UNAVAILABLE': 'Почтовый сервер недоступен. Повтор выполняется автоматически.',
-  'onboarding.invitation.hint.SMTP_AUTHENTICATION': 'Почтовый сервер отклонил учётные данные платформы. Проверьте пароль SMTP в хранилище секретов.',
-  'onboarding.invitation.hint.SMTP_SECRET_MISSING': 'Пароля SMTP нет в хранилище секретов по указанной ссылке.',
-  'onboarding.invitation.hint.ADDRESS_REJECTED': 'Адрес владельца отклонён. Исправьте его в сервисе входа и отправьте снова.',
-  'onboarding.invitation.hint.ADDRESS_INVALID': 'Адрес владельца некорректен. Исправьте его в сервисе входа и отправьте снова.',
-  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING': 'Учётной записи владельца больше нет в сервисе входа.',
-  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE': 'Сервис входа не ответил. Повтор выполняется автоматически.',
-  'onboarding.invitation.hint.EXPIRED': 'Ссылкой не воспользовались за 72 часа. Отправьте приглашение снова.',
-  'onboarding.hint.OWNER_EMAIL_UNREADABLE': 'Email владельца не удалось расшифровать для этого арендатора. Запустите новое подключение с email владельца.',
-  'onboarding.template.suggested': 'Предложен для типа «{type}»: шаблон {code} указывает этот тип бизнеса.',
-  'onboarding.template.fallback': 'Ни один шаблон пока не указывает тип «{type}», поэтому новые запуски идут по шаблону {code}.',
+  'onboarding.invitation.resent':
+    'Снова в очереди с новой ссылкой. Прежняя ссылка больше не работает.',
+  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED':
+    'Почта на этом стенде ещё не настроена. Приглашение уйдёт, как только её настроят.',
+  'onboarding.invitation.hint.SMTP_UNAVAILABLE':
+    'Почтовый сервер недоступен. Повтор выполняется автоматически.',
+  'onboarding.invitation.hint.SMTP_AUTHENTICATION':
+    'Почтовый сервер отклонил учётные данные платформы. Проверьте пароль SMTP в хранилище секретов.',
+  'onboarding.invitation.hint.SMTP_SECRET_MISSING':
+    'Пароля SMTP нет в хранилище секретов по указанной ссылке.',
+  'onboarding.invitation.hint.ADDRESS_REJECTED':
+    'Адрес владельца отклонён. Исправьте его в сервисе входа и отправьте снова.',
+  'onboarding.invitation.hint.ADDRESS_INVALID':
+    'Адрес владельца некорректен. Исправьте его в сервисе входа и отправьте снова.',
+  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING':
+    'Учётной записи владельца больше нет в сервисе входа.',
+  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE':
+    'Сервис входа не ответил. Повтор выполняется автоматически.',
+  'onboarding.invitation.hint.EXPIRED':
+    'Ссылкой не воспользовались за 72 часа. Отправьте приглашение снова.',
+
+  // IA 2.9 Приглашения владельцев — последний шаг подключения по всем арендаторам (ADR 0100).
+  'ownerInvitations.title': 'Приглашения владельцев',
+  'ownerInvitations.lead':
+    'Все арендаторы, владелец которых ещё не завёл учётную запись, и что им было отправлено. Арендатор, которому владельца назначили до появления приглашений, отмечен как неприглашённый.',
+  'ownerInvitations.loading': 'Загрузка приглашений…',
+  'ownerInvitations.empty': 'Под этот фильтр не подходит ни один арендатор.',
+  'ownerInvitations.outstanding': 'Ещё ждут владельца: {count}.',
+  'ownerInvitations.resent': 'Отправлено повторно.',
+  'ownerInvitations.cancel': 'Отмена',
+  'ownerInvitations.filter.OUTSTANDING': 'Ещё ждут',
+  'ownerInvitations.filter.ALL': 'Все',
+  'ownerInvitations.filter.NONE': 'Не приглашали',
+  'ownerInvitations.filter.FAILED': 'Не доставлено',
+  'ownerInvitations.filter.EXPIRED': 'Ссылка истекла',
+  'ownerInvitations.filter.QUEUED': 'Ожидает отправки',
+  'ownerInvitations.filter.SENT': 'Отправлено',
+  'ownerInvitations.filter.ACCEPTED': 'Принято',
+  'ownerInvitations.state.NONE': 'Не приглашали',
+  'ownerInvitations.column.tenant': 'Арендатор',
+  'ownerInvitations.column.recipient': 'Кому отправлено',
+  'ownerInvitations.column.state': 'Состояние',
+  'ownerInvitations.column.sentAt': 'Отправлено',
+  'ownerInvitations.column.openedAt': 'Открыто',
+  'ownerInvitations.column.acceptedAt': 'Учётная запись создана',
+  'ownerInvitations.column.attempts': 'Попыток',
+  'ownerInvitations.column.lastError': 'Последний сбой',
+  'onboarding.invitation.recipient': 'Кому отправлено',
+  'onboarding.invitation.timeline': 'История',
+  'onboarding.invitation.timelineEmpty':
+    'Это приглашение старше истории, поэтому по нему ничего не записано.',
+  'onboarding.invitation.attempt': 'попытка {number}',
+  'onboarding.invitation.event.QUEUED': 'Поставлено в очередь',
+  'onboarding.invitation.event.RESENT': 'Отправлено повторно',
+  'onboarding.invitation.event.SENT': 'Отправлено письмо',
+  'onboarding.invitation.event.SEND_DEFERRED': 'Доставка отложена',
+  'onboarding.invitation.event.SEND_FAILED': 'Доставка прекращена',
+  'onboarding.invitation.event.OPENED': 'Ссылка открыта',
+  'onboarding.invitation.event.ACCEPTED': 'Учётная запись создана',
+  'onboarding.invitation.event.NOT_NEEDED': 'Пароль уже был задан',
+  'onboarding.invitation.actor.SYSTEM_JOB': 'платформа',
+  'onboarding.invitation.actor.USER': 'оператор',
+  'onboarding.invitation.actor.OWNER': 'владелец',
+  'tenants.column.owner': 'Владелец',
+  'tenants.owner.waiting': 'Не создан',
+  'tenants.owner.ready': 'Создан',
+  'onboarding.hint.OWNER_EMAIL_UNREADABLE':
+    'Email владельца не удалось расшифровать для этого арендатора. Запустите новое подключение с email владельца.',
+  'onboarding.template.suggested':
+    'Предложен для типа «{type}»: шаблон {code} указывает этот тип бизнеса.',
+  'onboarding.template.fallback':
+    'Ни один шаблон пока не указывает тип «{type}», поэтому новые запуски идут по шаблону {code}.',
   'onboarding.template.choose': 'Шаблон',
   'onboarding.required.yes': 'Да',
   'onboarding.required.no': 'Нет',
   'onboarding.reason.placeholder': 'Причина (обязательно)',
   'onboarding.resume.title': 'Возобновить',
-  'onboarding.resume.lead': 'Открывает заново неудавшиеся шаги. Завершённые шаги никогда не сбрасываются.',
+  'onboarding.resume.lead':
+    'Открывает заново неудавшиеся шаги. Завершённые шаги никогда не сбрасываются.',
   'onboarding.resume.submit': 'Возобновить',
   'onboarding.resume.submitting': 'Возобновление…',
   'onboarding.resume.result': 'Открыто заново шагов: {count}.',
   'onboarding.activate.title': 'Активировать',
-  'onboarding.activate.lead': 'Требует завершения всех обязательных шагов и, если политика требует, второй подписи платформы.',
+  'onboarding.activate.lead':
+    'Требует завершения всех обязательных шагов и, если политика требует, второй подписи платформы.',
   'onboarding.activate.submit': 'Активировать клиента',
   'onboarding.activate.submitting': 'Активация…',
   'onboarding.activate.outcome.activated': 'Клиент теперь активен.',
-  'onboarding.activate.outcome.awaitingApproval': 'Ожидает вторую подпись. Администратор платформы должен принять решение в разделе «Сотрудники и роли».',
+  'onboarding.activate.outcome.awaitingApproval':
+    'Ожидает вторую подпись. Администратор платформы должен принять решение в разделе «Сотрудники и роли».',
   'onboarding.activate.outcome.notReady': 'Ещё не готово — см. незавершённые шаги выше.',
   'onboarding.start.title': 'Начать подключение',
-  'onboarding.start.lead': 'Запускает шаблон, указанный ниже. Оставьте email пустым, если приглашать пока некого.',
+  'onboarding.start.lead':
+    'Запускает шаблон, указанный ниже. Оставьте email пустым, если приглашать пока некого.',
   'onboarding.start.ownerEmail': 'Email владельца (необязательно)',
   'onboarding.start.submit': 'Начать',
   'onboarding.start.submitting': 'Запуск…',
-
 
   'providerRegistry.title': 'Реестр провайдеров',
   'providerRegistry.lead': 'Все адаптеры этой сборки и поля подключения, которые им нужны.',
   'providerRegistry.column.provider': 'Провайдер',
   'providerRegistry.column.category': 'Категория',
   'providerRegistry.column.fields': 'Поля подключения',
-  'providerRegistry.note': 'Поля янтарного цвета — учётные данные: их вводят один раз и больше никогда не показывают.',
+  'providerRegistry.note':
+    'Поля янтарного цвета — учётные данные: их вводят один раз и больше никогда не показывают.',
 
   'capabilityMatrix.title': 'Матрица возможностей',
   'capabilityMatrix.lead': 'Какие возможности заявляет каждый подключённый POS-адаптер.',
   'capabilityMatrix.empty': 'В этой сборке не подключено ни одного POS-адаптера.',
 
   'installationsExplorer.title': 'Обзор подключений',
-  'installationsExplorer.lead': 'Все подключения провайдеров у клиентов: подключить провайдера клиенту, привязать к точке, проверить связь, заменить учётные данные.',
+  'installationsExplorer.lead':
+    'Все подключения провайдеров у клиентов: подключить провайдера клиенту, привязать к точке, проверить связь, заменить учётные данные.',
   'installationsExplorer.empty': 'Подключений пока нет.',
   'installationsExplorer.column.tenant': 'Клиент',
   'installationsExplorer.column.provider': 'Провайдер',
@@ -594,7 +711,8 @@ export const ru: Messages = {
   'installationsExplorer.check.action': 'Проверить подключение',
   'installationsExplorer.check.working': 'Проверка…',
   'installationsExplorer.check.result': 'Подключение: {status}.',
-  'installationsExplorer.check.lead': 'Проверяет, отвечает ли провайдер и что он умеет, с учётными данными самого ресторана. Привязку можно активировать только после успешной проверки.',
+  'installationsExplorer.check.lead':
+    'Проверяет, отвечает ли провайдер и что он умеет, с учётными данными самого ресторана. Привязку можно активировать только после успешной проверки.',
   'installationsExplorer.bindings.title': 'Где используется',
   'installationsExplorer.bindings.empty': 'Пока не привязано ни к бренду, ни к точке.',
   'installationsExplorer.bindings.wholeBrand': 'весь бренд',
@@ -602,7 +720,8 @@ export const ru: Messages = {
   'installationsExplorer.bindings.activate': 'Активировать',
   'installationsExplorer.bindings.reason': 'Причина, записывается в журнал аудита',
   'installationsExplorer.bindings.confirm': 'Подтвердить',
-  'installationsExplorer.bindings.suspendLead': 'Заказы для этого места переходят на ручной процесс до повторной активации. Ничего не удаляется.',
+  'installationsExplorer.bindings.suspendLead':
+    'Заказы для этого места переходят на ручной процесс до повторной активации. Ничего не удаляется.',
   'installationsExplorer.bindings.changed': 'Готово.',
   'installationsExplorer.bindings.noChange': 'Без изменений — возможно, уже в этом состоянии.',
   'installationsExplorer.install.open': 'Подключить провайдера клиенту',
@@ -613,13 +732,16 @@ export const ru: Messages = {
   'installationsExplorer.install.displayName': 'Название для сотрудников',
   'installationsExplorer.install.credential': 'Учётные данные (необязательно)',
   'installationsExplorer.install.credentialNamed': 'Учётные данные: {field} (необязательно)',
-  'installationsExplorer.install.credentialHint': 'Отправляется один раз в хранилище секретов и больше нигде не показывается.',
+  'installationsExplorer.install.credentialHint':
+    'Отправляется один раз в хранилище секретов и больше нигде не показывается.',
   'installationsExplorer.install.account': 'Учётная запись у провайдера (необязательно)',
   'installationsExplorer.install.submit': 'Подключить',
-  'installationsExplorer.install.done': 'Подключено для {tenant}. Привяжите к бренду или филиалу, проверьте связь, затем активируйте привязку.',
+  'installationsExplorer.install.done':
+    'Подключено для {tenant}. Привяжите к бренду или филиалу, проверьте связь, затем активируйте привязку.',
   'installationsExplorer.bind.title': 'Привязать к бренду или филиалу',
   'installationsExplorer.bind.chooseBrand': 'Выберите бренд',
-  'installationsExplorer.bind.hint': 'Привязка создаётся приостановленной; активируйте её, убедившись, что она указывает на нужную точку.',
+  'installationsExplorer.bind.hint':
+    'Привязка создаётся приостановленной; активируйте её, убедившись, что она указывает на нужную точку.',
   'installationsExplorer.bind.submit': 'Привязать',
   'installationsExplorer.bind.done': 'Привязано; приостановлено до активации.',
   'installationsExplorer.rotate.title': 'Заменить учётные данные',
@@ -627,14 +749,16 @@ export const ru: Messages = {
   'installationsExplorer.rotate.submit': 'Заменить',
   'installationsExplorer.rotate.done': 'Учётные данные заменены.',
   'installationsExplorer.clopos.clerk': 'Кассир принимает каждый заказ на кассе',
-  'installationsExplorer.clopos.hint': 'Если выключено, заказы принимаются автоматически и сразу идут на кухню.',
+  'installationsExplorer.clopos.hint':
+    'Если выключено, заказы принимаются автоматически и сразу идут на кухню.',
   'installationsExplorer.clopos.saved': 'Настройка сохранена.',
 
   'messageFlow.title': 'Поток сообщений',
   'messageFlow.lead': 'Что ждёт в каждой очереди по всем клиентам и как долго.',
   'messageFlow.gap': 'Зависшие разделы брокера видны в системе мониторинга, не здесь.',
   'messageFlow.outbox.title': 'Ждут публикации',
-  'messageFlow.outbox.note': 'События, ещё не отправленные платформой, по темам. Красным — пятнадцать минут и больше.',
+  'messageFlow.outbox.note':
+    'События, ещё не отправленные платформой, по темам. Красным — пятнадцать минут и больше.',
   'messageFlow.inbox.title': 'Ждут обработки',
   'messageFlow.inbox.note': 'Сообщения, ещё не обработанные потребителем, по потребителям.',
   'messageFlow.empty': 'Ничего не ждёт.',
@@ -646,7 +770,8 @@ export const ru: Messages = {
   'messageFlow.deadLetters.open': 'Открыть очередь ошибок →',
 
   'deadLetters.title': 'Недоставленные и повтор',
-  'deadLetters.lead': 'Сообщения, не прошедшие после всех повторов: события, которые платформа не смогла опубликовать, и события, которые не смог обработать обработчик. Повторите или закройте каждое, указав причину.',
+  'deadLetters.lead':
+    'Сообщения, не прошедшие после всех повторов: события, которые платформа не смогла опубликовать, и события, которые не смог обработать обработчик. Повторите или закройте каждое, указав причину.',
   'deadLetters.empty': 'Недоставленных событий нет.',
   'deadLetters.column.event': 'Событие',
   'deadLetters.column.type': 'Тип',
@@ -689,11 +814,14 @@ export const ru: Messages = {
   'deadLetters.detail.resolved': 'Закрыл',
 
   'entitlements.title': 'Права по тарифу',
-  'entitlements.lead': 'Подписка одного клиента и всё, на что он имеет право, — с указанием, откуда взялось каждое значение.',
+  'entitlements.lead':
+    'Подписка одного клиента и всё, на что он имеет право, — с указанием, откуда взялось каждое значение.',
   'tenantPicker.label': 'Клиент',
   'tenantPicker.placeholder': 'Выберите клиента',
-  'tenantPicker.failed': 'Не удалось загрузить список клиентов. Обновите страницу, чтобы повторить.',
-  'alertsIncidents.lead': 'Каждое оповещение платформы хранится, пока его не закроют. Повтор открытого оповещения увеличивает счётчик, а не добавляет строку.',
+  'tenantPicker.failed':
+    'Не удалось загрузить список клиентов. Обновите страницу, чтобы повторить.',
+  'alertsIncidents.lead':
+    'Каждое оповещение платформы хранится, пока его не закроют. Повтор открытого оповещения увеличивает счётчик, а не добавляет строку.',
   'alertsIncidents.showResolved': 'Показать закрытые',
   'alertsIncidents.empty': 'Открытых инцидентов нет.',
   'alertsIncidents.class.CONTROL_BAND_ESCALATED': 'Показатель платформы вышел за пределы',
@@ -709,12 +837,14 @@ export const ru: Messages = {
   'alertsIncidents.resolve': 'Закрыть',
   'alertsIncidents.ackNote': 'Что вы делаете',
   'alertsIncidents.resolveNote': 'Что было сделано',
-  'webhookDeliveries.lead': 'Все вызовы платёжных провайдеров к HorecaOS, новые сверху: верна ли подпись, что мы ответили и совпал ли с платежом.',
+  'webhookDeliveries.lead':
+    'Все вызовы платёжных провайдеров к HorecaOS, новые сверху: верна ли подпись, что мы ответили и совпал ли с платежом.',
   'webhookDeliveries.provider': 'Провайдер',
   'webhookDeliveries.allProviders': 'Все провайдеры',
   'webhookDeliveries.invalidOnly': 'Только с неверной подписью',
   'webhookDeliveries.empty': 'Вызовов не зафиксировано.',
-  'webhookDeliveries.invalidWarning': 'У {count} из них неверная подпись: кто-то проверяет, или одна сторона не сменила ключ.',
+  'webhookDeliveries.invalidWarning':
+    'У {count} из них неверная подпись: кто-то проверяет, или одна сторона не сменила ключ.',
   'webhookDeliveries.column.received': 'Получено',
   'webhookDeliveries.column.call': 'Вызов',
   'webhookDeliveries.column.reference': 'Номер у провайдера',
@@ -723,7 +853,8 @@ export const ru: Messages = {
   'webhookDeliveries.signature.valid': 'Верна',
   'webhookDeliveries.signature.invalid': 'Неверна',
   'webhookDeliveries.unmatched': 'платёж не найден',
-  'errorTaxonomy.lead': 'Категории, по которым разбираются все сбои: что каждая значит, что делать и сколько сообщений в каждой сейчас.',
+  'errorTaxonomy.lead':
+    'Категории, по которым разбираются все сбои: что каждая значит, что делать и сколько сообщений в каждой сейчас.',
   'errorTaxonomy.retried': 'повторяется сам',
   'errorTaxonomy.notRetried': 'нужен человек',
   'errorTaxonomy.reconcileFirst': 'сначала проверить провайдера',
@@ -731,36 +862,53 @@ export const ru: Messages = {
   'errorTaxonomy.counts': '{dead} ждут человека · {waiting} повторяются',
   'errorTaxonomy.openDeadLetters': 'открыть',
   'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.name': 'Сбой нашей инфраструктуры',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning': 'Таймаут или брокер либо база ненадолго были недоступны.',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action': 'Ничего, если не повторяется: платформа повторит сама.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning':
+    'Таймаут или брокер либо база ненадолго были недоступны.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action':
+    'Ничего, если не повторяется: платформа повторит сама.',
   'errorTaxonomy.TRANSIENT_PROVIDER.name': 'Провайдер временно недоступен',
-  'errorTaxonomy.TRANSIENT_PROVIDER.meaning': 'Провайдер ответил 429 или 5xx, либо временно отключён предохранителем.',
-  'errorTaxonomy.TRANSIENT_PROVIDER.action': 'Подождать — повтор будет. Если затянулось, проверить статус провайдера.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.meaning':
+    'Провайдер ответил 429 или 5xx, либо временно отключён предохранителем.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.action':
+    'Подождать — повтор будет. Если затянулось, проверить статус провайдера.',
   'errorTaxonomy.CONTRACT_UNSUPPORTED.name': 'Непонятное сообщение',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning': 'Тип или версия события, неизвестные этой сборке. Повтор не поможет.',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.action': 'Развернуть версию, которая его знает, и повторить; либо закрыть, если он не наш.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning':
+    'Тип или версия события, неизвестные этой сборке. Повтор не поможет.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.action':
+    'Развернуть версию, которая его знает, и повторить; либо закрыть, если он не наш.',
   'errorTaxonomy.PAYLOAD_INVALID.name': 'Испорченное сообщение',
-  'errorTaxonomy.PAYLOAD_INVALID.meaning': 'Нет обязательного поля, или то же сообщение пришло с другим содержимым.',
-  'errorTaxonomy.PAYLOAD_INVALID.action': 'Найти отправителя и исправить его; это сообщение закрыть с причиной.',
+  'errorTaxonomy.PAYLOAD_INVALID.meaning':
+    'Нет обязательного поля, или то же сообщение пришло с другим содержимым.',
+  'errorTaxonomy.PAYLOAD_INVALID.action':
+    'Найти отправителя и исправить его; это сообщение закрыть с причиной.',
   'errorTaxonomy.DOMAIN_REJECTED.name': 'Отклонено правилами',
   'errorTaxonomy.DOMAIN_REJECTED.meaning': 'Оно нарушило бы правило, или объект уже изменился.',
-  'errorTaxonomy.DOMAIN_REJECTED.action': 'Обычно переделывать нечего: прочитать ошибку и закрыть с выводом.',
+  'errorTaxonomy.DOMAIN_REJECTED.action':
+    'Обычно переделывать нечего: прочитать ошибку и закрыть с выводом.',
   'errorTaxonomy.AUTHORIZATION_REJECTED.name': 'Отказано: не тот клиент или доступ',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning': 'Сообщение указало клиента, точку или служебную учётную запись без права.',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.action': 'Считать вопросом безопасности: выяснить причину до любого повтора.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning':
+    'Сообщение указало клиента, точку или служебную учётную запись без права.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.action':
+    'Считать вопросом безопасности: выяснить причину до любого повтора.',
   'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.name': 'Провайдер мог уже выполнить',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning': 'Провайдер мог принять запрос; слепой повтор может списать деньги дважды.',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action': 'Сначала проверить у провайдера, затем повторить или закрыть с доказательством.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning':
+    'Провайдер мог принять запрос; слепой повтор может списать деньги дважды.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action':
+    'Сначала проверить у провайдера, затем повторить или закрыть с доказательством.',
   'errorTaxonomy.UNKNOWN.name': 'Не классифицировано',
   'errorTaxonomy.UNKNOWN.meaning': 'Причина не относится к известным платформе видам.',
-  'errorTaxonomy.UNKNOWN.action': 'Прочитать текст ошибки; если есть закономерность, ей нужна своя категория.',
-  'sandbox.lead': 'Проверьте адаптер на тестовом адресе провайдера, прежде чем от него будет зависеть ресторан: все подключения к песочнице и та же проверка связи, что у боевых.',
+  'errorTaxonomy.UNKNOWN.action':
+    'Прочитать текст ошибки; если есть закономерность, ей нужна своя категория.',
+  'sandbox.lead':
+    'Проверьте адаптер на тестовом адресе провайдера, прежде чем от него будет зависеть ресторан: все подключения к песочнице и та же проверка связи, что у боевых.',
   'sandbox.environments.title': 'Тестовые адреса',
   'sandbox.environments.empty': 'Ни у одного провайдера нет утверждённого тестового адреса.',
   'sandbox.installations.title': 'Подключения к песочнице',
-  'sandbox.installations.empty': 'К тестовым адресам ничего не подключено. Подключите для тестового клиента в разделе «Подключения».',
+  'sandbox.installations.empty':
+    'К тестовым адресам ничего не подключено. Подключите для тестового клиента в разделе «Подключения».',
   'sandbox.column.endpoint': 'Адрес',
-  'sandbox.contractNote': 'Прогон записанного трафика провайдеров через каждый адаптер входит в контрактные тесты и выполняется при каждой сборке.',
+  'sandbox.contractNote':
+    'Прогон записанного трафика провайдеров через каждый адаптер входит в контрактные тесты и выполняется при каждой сборке.',
   'common.reason': 'Причина, записывается в журнал аудита',
   'common.cancel': 'Отмена',
   'common.chooseColleague': 'Выберите коллегу',
@@ -804,7 +952,8 @@ export const ru: Messages = {
   'entitlements.column.mode': 'Режим',
   'entitlements.column.source': 'Источник',
   'entitlements.override.title': 'Выдать временное исключение',
-  'entitlements.override.lead': 'Меняет одно право для этого клиента до заданной даты, не меняя тариф. Каждое исключение истекает.',
+  'entitlements.override.lead':
+    'Меняет одно право для этого клиента до заданной даты, не меняя тариф. Каждое исключение истекает.',
   'entitlements.override.key': 'Ключ права',
   'entitlements.override.limit': 'Новый лимит',
   'entitlements.override.validUntil': 'Действует до',
@@ -821,24 +970,29 @@ export const ru: Messages = {
   'entitlements.start.trialDays': 'Дней пробного периода (необязательно)',
   'entitlements.start.submit': 'Начать подписку',
   'entitlements.start.done': 'Подписка начата.',
-  'entitlements.start.noPlans': 'Нет действующей версии тарифа для подключения. Сначала активируйте её в каталоге тарифов.',
+  'entitlements.start.noPlans':
+    'Нет действующей версии тарифа для подключения. Сначала активируйте её в каталоге тарифов.',
   'entitlements.transition.title': 'Изменить статус',
   'entitlements.transition.to': 'Новый статус',
   'entitlements.transition.choose': 'Выберите статус',
-  'entitlements.transition.suspendHint': 'Пока подписка приостановлена, клиент не может добавлять ничего из того, что считает тариф. Ничего не удаляется.',
+  'entitlements.transition.suspendHint':
+    'Пока подписка приостановлена, клиент не может добавлять ничего из того, что считает тариф. Ничего не удаляется.',
   'entitlements.transition.suspensionReason': 'Причина приостановки (видна в подписке)',
   'entitlements.transition.cancelAt': 'Дата окончания',
-  'entitlements.transition.terminalWarning': 'Это окончательно завершает подписку. Чтобы продолжить, нужно начать новую.',
+  'entitlements.transition.terminalWarning':
+    'Это окончательно завершает подписку. Чтобы продолжить, нужно начать новую.',
   'entitlements.transition.submit': 'Изменить статус',
   'entitlements.transition.done': 'Статус подписки: {status}.',
-  'entitlements.transition.ended': 'Эта подписка завершена. Чтобы снова подключить клиента к тарифу, начните новую.',
+  'entitlements.transition.ended':
+    'Эта подписка завершена. Чтобы снова подключить клиента к тарифу, начните новую.',
   'entitlements.planSays': 'по тарифу: {mode}',
   'entitlements.usage.open': 'Открыть использование этого клиента →',
   'entitlements.override.chooseKey': 'Выберите право',
   'entitlements.override.feature': 'Функция',
 
   'fiscalization.title': 'Фискализация',
-  'fiscalization.lead': 'Сбои фискальных чеков одного клиента и повтор, который фиксируется в аудите.',
+  'fiscalization.lead':
+    'Сбои фискальных чеков одного клиента и повтор, который фиксируется в аудите.',
   'fiscalization.empty': 'Для этого клиента ничего не заблокировано.',
   'fiscalization.allTenants': 'Все клиенты. Выберите клиента, чтобы сузить список.',
   'fiscalization.emptyEverywhere': 'Ни один чек нигде не ждёт человека.',
@@ -853,8 +1007,10 @@ export const ru: Messages = {
   'fiscalization.retry.result': 'Успешно: {succeeded}, неудачно: {failed}.',
 
   'fiscalReference.title': 'Фискальный справочник',
-  'fiscalReference.lead': 'Импортированный справочник классификации товаров ИКПУ/MXIK, поиск по коду или названию.',
-  'fiscalReference.notLoaded': 'Официальный список ИКПУ/MXIK ещё не импортирован. Поиск ничего не найдёт, пока это не сделано.',
+  'fiscalReference.lead':
+    'Импортированный справочник классификации товаров ИКПУ/MXIK, поиск по коду или названию.',
+  'fiscalReference.notLoaded':
+    'Официальный список ИКПУ/MXIK ещё не импортирован. Поиск ничего не найдёт, пока это не сделано.',
   'fiscalReference.query': 'Поиск',
   'fiscalReference.empty': 'Совпадений нет.',
   'fiscalReference.column.code': 'Код',
@@ -863,7 +1019,8 @@ export const ru: Messages = {
   'fiscalReference.column.packages': 'Упаковки по умолчанию',
 
   'staff.title': 'Сотрудники и роли',
-  'staff.lead': 'Сотрудники HorecaOS, роли и привязка к клиентам — а также очередь, где второй администратор решает по ожидающему предоставлению или активации.',
+  'staff.lead':
+    'Сотрудники HorecaOS, роли и привязка к клиентам — а также очередь, где второй администратор решает по ожидающему предоставлению или активации.',
   'staff.platformGrants.title': 'Права уровня платформы',
   'staff.platformGrants.empty': 'Прав уровня платформы пока нет.',
   'staff.column.principal': 'Субъект',
@@ -876,7 +1033,8 @@ export const ru: Messages = {
   'staff.grant.role': 'Код роли',
   'staff.grant.action': 'Выдать',
   'staff.grant.outcome.granted': 'Выдано.',
-  'staff.grant.outcome.awaitingApproval': 'Ожидает вторую подпись — это предоставление регулируется политикой.',
+  'staff.grant.outcome.awaitingApproval':
+    'Ожидает вторую подпись — это предоставление регулируется политикой.',
   'staff.tenantGrant.title': 'Выдать роль в рамках клиента',
   'staff.tenantGrant.lead': 'Ограничивает субъект одним клиентом, брендом или точкой.',
   'staff.tenantGrant.success': 'Выдано.',
@@ -896,7 +1054,8 @@ export const ru: Messages = {
   'staff.grant.location': 'Точка',
   'staff.grant.chooseLocation': 'Выберите точку',
   'staff.approvals.title': 'Ожидающие решения',
-  'staff.approvals.lead': 'Что ожидает вторую подпись у одного клиента, включая активацию подключения.',
+  'staff.approvals.lead':
+    'Что ожидает вторую подпись у одного клиента, включая активацию подключения.',
   'staff.approvals.decisionReason': 'Причина решения (обязательна для одобрения или отклонения)',
   'staff.approvals.column.action': 'Действие',
   'staff.approvals.column.threshold': 'Порог',
@@ -914,7 +1073,8 @@ export const ru: Messages = {
   'capabilityRegistry.column.action': 'Действие',
 
   'secrets.title': 'Секреты',
-  'secrets.lead': 'Учётные данные провайдеров по клиентам и время их последнего обновления. Значения никогда не показываются.',
+  'secrets.lead':
+    'Учётные данные провайдеров по клиентам и время их последнего обновления. Значения никогда не показываются.',
   'secrets.empty': 'Подключений пока нет.',
   'secrets.column.credential': 'Учётные данные',
   'secrets.column.rotated': 'Последнее обновление',
@@ -952,16 +1112,17 @@ export const ru: Messages = {
   'auditLog.detail.change': 'Что изменилось',
   'auditLog.detail.noChange': 'Документ изменений не записан.',
 
-
   'referenceData.title': 'Справочные данные',
-  'referenceData.lead': 'Страны, в которых работает платформа, языки консолей, праздники каждой страны и интервалы времени, по которым считаются заказы.',
+  'referenceData.lead':
+    'Страны, в которых работает платформа, языки консолей, праздники каждой страны и интервалы времени, по которым считаются заказы.',
   'referenceData.countries': 'Страны',
   'referenceData.column.country': 'Страна',
   'referenceData.column.currency': 'Валюта по умолчанию',
   'referenceData.column.timezone': 'Часовой пояс по умолчанию',
   'referenceData.locales': 'Языки',
   'referenceData.holidays': 'Праздничные дни',
-  'referenceData.holidaysNote': 'Фиксированные даты повторяются каждый год. Праздники по лунному календарю, например Рамазан и Курбан хайит, вносятся на конкретный год после объявления.',
+  'referenceData.holidaysNote':
+    'Фиксированные даты повторяются каждый год. Праздники по лунному календарю, например Рамазан и Курбан хайит, вносятся на конкретный год после объявления.',
   'referenceData.holiday.add': 'Добавить праздник',
   'referenceData.holiday.name': 'Название',
   'referenceData.holiday.everyYear': 'каждый год',
@@ -969,12 +1130,14 @@ export const ru: Messages = {
   'referenceData.holiday.remove': 'Удалить',
   'referenceData.holiday.none': 'Праздники не внесены.',
   'referenceData.sla': 'Интервалы времени заказов',
-  'referenceData.slaNote': 'Каждый заказ попадает в один интервал — от оформления до передачи. Интервалы фиксированы для выпуска (набор {version}), поэтому прошлые графики не меняют смысла.',
+  'referenceData.slaNote':
+    'Каждый заказ попадает в один интервал — от оформления до передачи. Интервалы фиксированы для выпуска (набор {version}), поэтому прошлые графики не меняют смысла.',
   'referenceData.bucket.range': 'от {from} до {to} мин',
   'referenceData.bucket.over': '{from} мин и больше',
 
   'migrationRuns.title': 'Миграционные запуски',
-  'migrationRuns.lead': 'Перенос клиентов со старой системы. Программа состоит из областей — по одному клиенту, бренду или филиалу и одной функции, — и каждая проходит один и тот же путь до вывода старой системы.',
+  'migrationRuns.lead':
+    'Перенос клиентов со старой системы. Программа состоит из областей — по одному клиенту, бренду или филиалу и одной функции, — и каждая проходит один и тот же путь до вывода старой системы.',
   'migrationRuns.program.name': 'Название программы',
   'migrationRuns.program.source': 'Исходная среда',
   'migrationRuns.program.target': 'Целевая среда',
@@ -996,7 +1159,8 @@ export const ru: Messages = {
   'migrationRuns.program.chooseMove': 'Изменить статус программы',
   'migrationRuns.program.move': 'Изменить статус',
   'migrationRuns.program.moved': 'Статус программы: {status}.',
-  'migrationRuns.program.completeHint': 'Программу можно завершить, только когда все области выведены.',
+  'migrationRuns.program.completeHint':
+    'Программу можно завершить, только когда все области выведены.',
   'migrationRuns.column.environments': 'Откуда → куда',
   'migrationRuns.column.status': 'Статус',
   'migrationRuns.column.place': 'Охват',
@@ -1016,7 +1180,8 @@ export const ru: Messages = {
   'migrationRuns.move.done': 'Область переведена: {state}.',
   'migrationRuns.move.resume': 'Возобновить',
   'migrationRuns.move.resumed': 'Область возобновлена с того места, где остановилась.',
-  'migrationRuns.move.rollbackWarning': 'Откат возвращает запись в старую систему. Копия в HorecaOS сохраняется и продолжает обновляться.',
+  'migrationRuns.move.rollbackWarning':
+    'Откат возвращает запись в старую систему. Копия в HorecaOS сохраняется и продолжает обновляться.',
   'migrationRuns.move.toCutover': 'Готово: решение о переключении — в чек-листе →',
   'migrationRuns.runs.title': 'Запуски',
   'migrationRuns.runs.empty': 'По этой области ещё не было запусков.',
@@ -1031,7 +1196,8 @@ export const ru: Messages = {
   'migrationRuns.run.start': 'Начать запуск',
   'migrationRuns.run.finish': 'Завершить',
   'migrationRuns.run.finishSubmit': 'Завершить запуск',
-  'migrationRuns.run.finishHint': 'После этого показатели запуска фиксируются; исправление — это новый запуск типа «Исправление».',
+  'migrationRuns.run.finishHint':
+    'После этого показатели запуска фиксируются; исправление — это новый запуск типа «Исправление».',
   'migrationRuns.run.checksum': 'SHA-256 результата (необязательно)',
   'migrationRuns.run.finished': 'Запуск завершён: {status}.',
   'migrationRuns.quarantine.title': 'Отложено до решения',
@@ -1082,17 +1248,21 @@ export const ru: Messages = {
   'migration.programStatus.ACTIVE': 'Активна',
   'migration.programStatus.COMPLETED': 'Завершена',
   'migration.programStatus.ABANDONED': 'Прекращена',
-  'migration.resolution.REIMPORTED_AFTER_SOURCE_FIX': 'Загружено повторно после исправления источника',
+  'migration.resolution.REIMPORTED_AFTER_SOURCE_FIX':
+    'Загружено повторно после исправления источника',
   'migration.resolution.MAPPED_BY_HAND': 'Сопоставлено вручную после проверки',
   'migration.resolution.ACCEPTED_NOT_MIGRATABLE': 'Признано непереносимым',
 
   'globalLookup.title': 'Глобальный поиск',
-  'globalLookup.lead': 'Вставьте любой идентификатор, чтобы узнать, что это и чьё, по всем клиентам.',
+  'globalLookup.lead':
+    'Вставьте любой идентификатор, чтобы узнать, что это и чьё, по всем клиентам.',
   'globalLookup.search': 'Найти',
   'globalLookup.placeholder': 'Id, номер заказа, код курьера, номер у провайдера или имя клиента',
-  'globalLookup.hint': 'Совпадения точные, кроме имён клиентов. Покупатели и курьеры показываются только по id; подробности — у клиента.',
+  'globalLookup.hint':
+    'Совпадения точные, кроме имён клиентов. Покупатели и курьеры показываются только по id; подробности — у клиента.',
   'globalLookup.phone.title': 'Найти клиента по телефону',
-  'globalLookup.phone.lead': 'У каких клиентов этот номер записан как покупатель. Ответ — клиент и номер аккаунта, без имени; поиск записывается с вашей причиной.',
+  'globalLookup.phone.lead':
+    'У каких клиентов этот номер записан как покупатель. Ответ — клиент и номер аккаунта, без имени; поиск записывается с вашей причиной.',
   'globalLookup.phone.number': 'Номер телефона',
   'globalLookup.phone.none': 'Ни у одного клиента нет этого номера (проверено: {tenants}).',
   'globalLookup.phone.account': 'аккаунт {id}',
@@ -1120,7 +1290,6 @@ export const ru: Messages = {
   'globalLookup.matched.PARTNER_REFERENCE': 'Номер заказа у партнёра',
   'globalLookup.notFound': 'Точных совпадений нет.',
 
-
   'tenantIdentity.title': 'Идентификация и realm',
   'tenantIdentity.lead': 'Привязка этого клиента к его организации входа.',
   'tenantIdentity.organization.title': 'Организация Keycloak',
@@ -1128,15 +1297,18 @@ export const ru: Messages = {
   'tenantIdentity.status': 'Статус клиента',
   'tenantIdentity.notLinked': 'К этому клиенту ещё не привязана организация Keycloak.',
   'tenantIdentity.link.title': 'Привязать существующую организацию',
-  'tenantIdentity.link.lead': 'Обычно организацию создаёт и привязывает подключение. Привязывайте вручную, только если она уже есть в сервисе входа, — изменить привязку потом нельзя.',
+  'tenantIdentity.link.lead':
+    'Обычно организацию создаёт и привязывает подключение. Привязывайте вручную, только если она уже есть в сервисе входа, — изменить привязку потом нельзя.',
   'tenantIdentity.link.organizationId': 'Идентификатор организации из сервиса входа',
   'tenantIdentity.link.submit': 'Привязать',
   'tenantIdentity.link.submitting': 'Привязка…',
   'tenantIdentity.link.done': 'Привязано.',
-  'tenantIdentity.gap': 'Настройки входа сотрудников и курьеров задаются при развёртывании и здесь не показываются. Расхождения между HorecaOS и сервисом входа видны в журнале аудита.',
+  'tenantIdentity.gap':
+    'Настройки входа сотрудников и курьеров задаются при развёртывании и здесь не показываются. Расхождения между HorecaOS и сервисом входа видны в журнале аудита.',
 
   'configurationPolicy.title': 'Конфигурация и политики',
-  'configurationPolicy.lead': 'Рассчитайте любую настройку на любом уровне и узнайте, откуда взялось значение.',
+  'configurationPolicy.lead':
+    'Рассчитайте любую настройку на любом уровне и узнайте, откуда взялось значение.',
   'configurationPolicy.picker.title': 'Рассчитать ключ',
   'configurationPolicy.picker.key': 'Ключ',
   'configurationPolicy.picker.keyPlaceholder': 'Выберите ключ…',
@@ -1161,14 +1333,17 @@ export const ru: Messages = {
   'configurationPolicy.result.storedVersion.none': 'Не задано здесь',
 
   'configurationPolicy.write.title': 'Задать значение',
-  'configurationPolicy.write.stale': 'Рассчитайте заново, чтобы редактировать именно на этом уровне.',
+  'configurationPolicy.write.stale':
+    'Рассчитайте заново, чтобы редактировать именно на этом уровне.',
   'configurationPolicy.write.notConsumed':
     'Этот ключ зарегистрирован, но в этой сборке ничего не читает его сохранённое значение. Запись здесь будет зафиксирована и подтверждена аудитом, но не изменит поведение системы, поэтому экран показывает его только для чтения.',
   'configurationPolicy.write.notSettableAtScope':
     'Этот ключ нельзя задать на этом уровне. Доступные уровни: {scopes}.',
   'configurationPolicy.write.scopeBanner': 'Вы собираетесь задать {code} на уровне {scope}.',
-  'configurationPolicy.write.note.trackRetentionFloor': 'Платформа не запустится, если сохранённое значение этой настройки короче периода расчётов плюс окна оспаривания. Изменение действует сразу; под угрозой только следующий перезапуск.',
-  'configurationPolicy.write.note.auditRetention': 'Один из двух сроков хранения аудита, ещё ожидающих согласования с юристами. Уменьшение сократит время защиты доказательств до архивации.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'Платформа не запустится, если сохранённое значение этой настройки короче периода расчётов плюс окна оспаривания. Изменение действует сразу; под угрозой только следующий перезапуск.',
+  'configurationPolicy.write.note.auditRetention':
+    'Один из двух сроков хранения аудита, ещё ожидающих согласования с юристами. Уменьшение сократит время защиты доказательств до архивации.',
   'configurationPolicy.write.explicitNull': 'Явный null (намеренно не задано здесь)',
   'configurationPolicy.write.value': 'Значение',
   'configurationPolicy.write.invalidValue': 'Введите значение, соответствующее типу этого ключа.',
@@ -1180,7 +1355,8 @@ export const ru: Messages = {
     'Сохранено. Результат выше теперь показывает, что рассчитает платформа после этой записи.',
 
   'contractsVersions.title': 'Контракты и версии',
-  'contractsVersions.lead': 'Какую версию адаптера используют подключения каждого провайдера, и все события этой сборки с версией схемы.',
+  'contractsVersions.lead':
+    'Какую версию адаптера используют подключения каждого провайдера, и все события этой сборки с версией схемы.',
   'contractsVersions.gap': 'Устаревшие версии не перечислены: ни один адаптер ещё не выводился.',
   'contractsVersions.column.event': 'Событие',
   'contractsVersions.column.module': 'Модуль-источник',
@@ -1196,11 +1372,9 @@ export const ru: Messages = {
   'contractsVersions.adapters.unchecked': 'ещё не проверялось',
   'contractsVersions.events.title': 'Контракты событий',
 
-
-
-
   'planCatalog.title': 'Каталог тарифов',
-  'planCatalog.lead': 'Все тарифы и все их версии. Черновик вступает в силу, только когда его активирует не автор; действующая версия больше не меняется.',
+  'planCatalog.lead':
+    'Все тарифы и все их версии. Черновик вступает в силу, только когда его активирует не автор; действующая версия больше не меняется.',
   'planCatalog.empty': 'Тарифы ещё не зарегистрированы.',
   'planCatalog.column.price': 'Цена',
   'planCatalog.column.billingPeriod': 'Период оплаты',
@@ -1217,12 +1391,14 @@ export const ru: Messages = {
   'planCatalog.draft.trialDays': 'Пробный период, дней',
   'planCatalog.draft.deposit': 'Депозит при подключении',
   'planCatalog.draft.discount': 'Срок {months} мес., скидка %',
-  'planCatalog.draft.termsInvalid': 'Пробный период — от 1 до 90 дней, депозит — сумма, скидка за срок — от 0,01 до 50 %, только для помесячного тарифа.',
+  'planCatalog.draft.termsInvalid':
+    'Пробный период — от 1 до 90 дней, депозит — сумма, скидка за срок — от 0,01 до 50 %, только для помесячного тарифа.',
   'entitlements.start.term': 'Срок',
   'entitlements.start.monthToMonth': 'Помесячно',
   'entitlements.start.termOption': '{months} мес., скидка {percent}%',
   'entitlements.subscription.termMonths': '{months} мес.',
-  'moduleCatalog.lead': 'Модули, продаваемые отдельно от тарифов, каждый по своей единице: за клиента, за бренд, за филиал, за штуку (например, киоск) или разово. Модуль может включать функции, которых нет в тарифе. Один человек составляет модуль, другой выпускает его в продажу, и после этого цена не меняется.',
+  'moduleCatalog.lead':
+    'Модули, продаваемые отдельно от тарифов, каждый по своей единице: за клиента, за бренд, за филиал, за штуку (например, киоск) или разово. Модуль может включать функции, которых нет в тарифе. Один человек составляет модуль, другой выпускает его в продажу, и после этого цена не меняется.',
   'moduleCatalog.empty': 'Модулей пока нет.',
   'moduleCatalog.draft.open': 'Составить модуль',
   'moduleCatalog.draft.title': 'Новый модуль',
@@ -1264,7 +1440,8 @@ export const ru: Messages = {
   'moduleCatalog.tenant.quantity': 'Сколько',
   'moduleCatalog.tenant.add': 'Подключить',
   'moduleCatalog.tenant.added': '{code} подключён.',
-  'statements.lead': 'Сколько клиент должен за месяц по тарифу и модулям, без налогов: тариф, каждый модуль по своей единице и использование сверх включённого в тариф. Любой месяц можно посмотреть заранее; выставить — после его окончания, затем выгрузить в бухгалтерию. Ошибочную выписку аннулируют и выставляют заново.',
+  'statements.lead':
+    'Сколько клиент должен за месяц по тарифу и модулям, без налогов: тариф, каждый модуль по своей единице и использование сверх включённого в тариф. Любой месяц можно посмотреть заранее; выставить — после его окончания, затем выгрузить в бухгалтерию. Ошибочную выписку аннулируют и выставляют заново.',
   'statements.preview.title': 'Предпросмотр месяца',
   'statements.preview.month': 'Месяц',
   'statements.preview.nothing': 'За этот месяц нечего выставлять.',
@@ -1285,7 +1462,8 @@ export const ru: Messages = {
   'statements.status.ISSUED': 'Выставлена',
   'statements.status.VOID': 'Аннулирована',
   'statements.issue.notEnded': 'Месяц ещё не закончился; выставить можно после его окончания.',
-  'statements.issue.already': 'За этот месяц уже есть выписка. Чтобы выставить новую, аннулируйте её.',
+  'statements.issue.already':
+    'За этот месяц уже есть выписка. Чтобы выставить новую, аннулируйте её.',
   'statements.issue.submit': 'Выставить выписку за {month}',
   'statements.issue.done': 'Выписка {number} выставлена.',
   'statements.issued.title': 'Выставленные выписки',
@@ -1295,12 +1473,16 @@ export const ru: Messages = {
   'statements.void.submit': 'Аннулировать выписку',
   'statements.void.done': 'Выписка {number} аннулирована.',
   'statements.wallet.title': 'Предоплаченный кошелёк',
-  'statements.wallet.body': 'Не сделан. Как клиенты платят HorecaOS и как облагается налогом предоплата, ещё не решено, поэтому баланса, пополнений и сгорания кредита нет.',
-  'dunning.lead': 'Все клиенты, которые опаздывают с оплатой или приостановлены, сколько времени они в этом состоянии и что ограничивает каждый этап. Сам по себе клиент никуда не переходит: через две недели просрочки инцидент просит человека принять решение.',
+  'statements.wallet.body':
+    'Не сделан. Как клиенты платят HorecaOS и как облагается налогом предоплата, ещё не решено, поэтому баланса, пополнений и сгорания кредита нет.',
+  'dunning.lead':
+    'Все клиенты, которые опаздывают с оплатой или приостановлены, сколько времени они в этом состоянии и что ограничивает каждый этап. Сам по себе клиент никуда не переходит: через две недели просрочки инцидент просит человека принять решение.',
   'dunning.stage.planApplies': 'Всё из тарифа и модулей работает.',
   'dunning.stage.planLapses': 'Тариф и модули не действуют; функции возвращаются к умолчаниям.',
-  'dunning.stage.additionsBlocked': 'Ничего нельзя добавить: ни филиал, ни товар, ни пользователя. Ничего не удаляется.',
-  'dunning.review': 'Клиент, опаздывающий две недели, создаёт инцидент в «Оповещениях», и затем каждые две недели, пока просрочка сохраняется.',
+  'dunning.stage.additionsBlocked':
+    'Ничего нельзя добавить: ни филиал, ни товар, ни пользователя. Ничего не удаляется.',
+  'dunning.review':
+    'Клиент, опаздывающий две недели, создаёт инцидент в «Оповещениях», и затем каждые две недели, пока просрочка сохраняется.',
   'dunning.empty': 'Нет клиентов с просрочкой.',
   'dunning.column.stage': 'Этап',
   'dunning.column.plan': 'Тариф',
@@ -1322,31 +1504,39 @@ export const ru: Messages = {
   'planCatalog.register.cancel': 'Отмена',
   'planCatalog.register.title': 'Новый тариф',
   'planCatalog.register.code': 'Код',
-  'planCatalog.register.codeHint': 'Заглавные латинские буквы, цифры и подчёркивания, например NETWORK. Изменить потом нельзя.',
+  'planCatalog.register.codeHint':
+    'Заглавные латинские буквы, цифры и подчёркивания, например NETWORK. Изменить потом нельзя.',
   'planCatalog.register.name': 'Название',
   'planCatalog.register.submit': 'Зарегистрировать',
-  'planCatalog.register.done': 'Тариф {code} зарегистрирован. Ниже можно составить его первую версию.',
+  'planCatalog.register.done':
+    'Тариф {code} зарегистрирован. Ниже можно составить его первую версию.',
   'planCatalog.draft.open': 'Составить новую версию',
   'planCatalog.draft.cancel': 'Закрыть',
-  'planCatalog.draft.prefilled': 'Заполнено по версии v{version}. Измените только отличия; сама v{version} останется без изменений.',
+  'planCatalog.draft.prefilled':
+    'Заполнено по версии v{version}. Измените только отличия; сама v{version} останется без изменений.',
   'planCatalog.draft.first': 'Первая версия тарифа.',
   'planCatalog.draft.currency': 'Валюта',
-  'planCatalog.draft.priceInvalid': 'Укажите цену целым числом, с дробной частью только для валют, где она есть.',
+  'planCatalog.draft.priceInvalid':
+    'Укажите цену целым числом, с дробной частью только для валют, где она есть.',
   'planCatalog.draft.include': 'Включить',
   'planCatalog.draft.feature': 'функция',
   'planCatalog.draft.noOverage': 'нет',
-  'planCatalog.draft.linesHint': 'Невключённый ключ получает безопасное значение по умолчанию, которое ничего не запрещает.',
+  'planCatalog.draft.linesHint':
+    'Невключённый ключ получает безопасное значение по умолчанию, которое ничего не запрещает.',
   'planCatalog.draft.submit': 'Сохранить черновик',
-  'planCatalog.draft.done': 'Новый черновик {code} сохранён. Активировать его должен другой сотрудник.',
+  'planCatalog.draft.done':
+    'Новый черновик {code} сохранён. Активировать его должен другой сотрудник.',
   'planCatalog.activate.open': 'Активировать…',
-  'planCatalog.activate.warning': 'Активацию нельзя отменить. Цена и права этой версии фиксируются, и её можно предлагать клиентам.',
-  'planCatalog.activate.ownDraft': 'Вы составили эту версию, поэтому активировать её должен другой сотрудник.',
+  'planCatalog.activate.warning':
+    'Активацию нельзя отменить. Цена и права этой версии фиксируются, и её можно предлагать клиентам.',
+  'planCatalog.activate.ownDraft':
+    'Вы составили эту версию, поэтому активировать её должен другой сотрудник.',
   'planCatalog.activate.confirm': 'Активировать v{version}',
   'planCatalog.activate.done': '{code} v{version} вступила в силу.',
 
-
   'usageMetering.title': 'Учёт использования',
-  'usageMetering.lead': 'Сколько использовал один клиент по каждому праву и периоду. Цифру исправляют корректировкой — измеренное не редактируется.',
+  'usageMetering.lead':
+    'Сколько использовал один клиент по каждому праву и периоду. Цифру исправляют корректировкой — измеренное не редактируется.',
   'usageMetering.empty': 'Для этого клиента не зафиксировано учтённого использования.',
   'usageMetering.column.period': 'Период',
   'usageMetering.column.measured': 'Измерено',
@@ -1355,20 +1545,19 @@ export const ru: Messages = {
   'usageMetering.rebuild.action': 'Пересчитать итоги по журналу',
   'usageMetering.rebuild.hint': 'Можно в любое время: записанные движения не меняются.',
   'usageMetering.rebuild.clean': 'Все итоги совпали с журналом.',
-  'usageMetering.rebuild.diverged': 'Итогов, не совпавших с журналом и исправленных: {count}. Стоит выяснить причину:',
+  'usageMetering.rebuild.diverged':
+    'Итогов, не совпавших с журналом и исправленных: {count}. Стоит выяснить причину:',
   'usageMetering.adjust.open': 'Скорректировать',
-  'usageMetering.adjust.lead': 'Добавляет корректировку со знаком, причиной и вторым именем. Измеренное остаётся как было.',
+  'usageMetering.adjust.lead':
+    'Добавляет корректировку со знаком, причиной и вторым именем. Измеренное остаётся как было.',
   'usageMetering.adjust.delta': 'Изменение (например, -3 или 5)',
   'usageMetering.adjust.source': 'Ссылка на основание (необязательно)',
   'usageMetering.adjust.submit': 'Записать корректировку',
   'usageMetering.adjust.done': 'Корректировка записана.',
 
-
-
-
-
   'accessDebugger.title': 'Отладчик доступа',
-  'accessDebugger.lead': 'Что может делать человек или сервис и почему — то же решение, что сервер принимает при каждом запросе.',
+  'accessDebugger.lead':
+    'Что может делать человек или сервис и почему — то же решение, что сервер принимает при каждом запросе.',
   'accessDebugger.subject': 'Субъект',
   'accessDebugger.tenantId': 'Id клиента (необязательно)',
   'accessDebugger.brandId': 'Id бренда (необязательно)',
@@ -1385,8 +1574,6 @@ export const ru: Messages = {
   'accessDebugger.column.role': 'Роль',
   'accessDebugger.column.capabilities': 'Права',
 
-
-
   'policyDefaults.title': 'Значения политик по умолчанию',
   'policyDefaults.lead': 'Значения платформы по умолчанию, которые клиенты видят и наследуют.',
   'policyDefaults.empty': 'Ключей конфигурации, видимых клиенту, не объявлено.',
@@ -1396,7 +1583,8 @@ export const ru: Messages = {
   'policyDefaults.column.description': 'Описание',
 
   'idMappingExplorer.title': 'Сопоставление идентификаторов',
-  'idMappingExplorer.lead': 'Как идентификаторы старой системы соответствуют идентификаторам HorecaOS в одной области миграции.',
+  'idMappingExplorer.lead':
+    'Как идентификаторы старой системы соответствуют идентификаторам HorecaOS в одной области миграции.',
   'idMappingExplorer.entityType': 'Тип сущности',
   'idMappingExplorer.search': 'Найти',
   'idMappingExplorer.empty': 'Для этой области и типа сущности сопоставлений не зафиксировано.',
@@ -1406,7 +1594,8 @@ export const ru: Messages = {
   'idMappingExplorer.column.created': 'Зафиксировано',
 
   'dualRunComparison.title': 'Сравнение параллельных прогонов',
-  'dualRunComparison.lead': 'Результаты старой системы рядом с результатами HorecaOS, правило за правилом, для одного прогона сверки.',
+  'dualRunComparison.lead':
+    'Результаты старой системы рядом с результатами HorecaOS, правило за правилом, для одного прогона сверки.',
   'dualRunComparison.search': 'Найти',
   'dualRunComparison.empty': 'Для этого прогона результатов сверки не зафиксировано.',
   'dualRunComparison.column.rule': 'Правило',
@@ -1419,16 +1608,19 @@ export const ru: Messages = {
   'dualRunComparison.noRuns': 'У этой области ещё нет запусков сверки.',
 
   'cutoverChecklist.title': 'Чек-лист перехода',
-  'cutoverChecklist.lead': 'Готовность каждой области программы и само решение: одобрить, отказать или откатить.',
+  'cutoverChecklist.lead':
+    'Готовность каждой области программы и само решение: одобрить, отказать или откатить.',
   'cutoverChecklist.scopes.title': 'Области',
   'cutoverChecklist.column.readiness': 'Готовность',
   'cutoverChecklist.readiness.go': 'Готово',
   'cutoverChecklist.readiness.blocked': 'Заблокировано',
   'cutoverChecklist.readiness.pending': 'В процессе',
   'cutoverChecklist.decide': 'Решить…',
-  'cutoverChecklist.decideLead': 'При одобрении запись по этой области переходит к HorecaOS. Проверки выполняются заново в этот момент.',
+  'cutoverChecklist.decideLead':
+    'При одобрении запись по этой области переходит к HorecaOS. Проверки выполняются заново в этот момент.',
   'cutoverChecklist.requestedBy': 'Запросил',
-  'cutoverChecklist.requestedByHint': 'Коллега, запросивший это окно, — не вы: вы записываетесь как принимающий решение.',
+  'cutoverChecklist.requestedByHint':
+    'Коллега, запросивший это окно, — не вы: вы записываетесь как принимающий решение.',
   'cutoverChecklist.evidence': 'На чём основано решение',
   'cutoverChecklist.evidenceKey': 'Название',
   'cutoverChecklist.evidenceValue': 'Значение',
@@ -1439,14 +1631,17 @@ export const ru: Messages = {
   'cutoverChecklist.approved': 'Переключение для {tenant} одобрено.',
   'cutoverChecklist.refused': 'Переключение для {tenant} отклонено; область остаётся на месте.',
   'cutoverChecklist.rollback': 'Откатить…',
-  'cutoverChecklist.rollbackWarning': 'Откат возвращает запись в старую систему. Копия в HorecaOS сохраняется и продолжает обновляться.',
+  'cutoverChecklist.rollbackWarning':
+    'Откат возвращает запись в старую систему. Копия в HorecaOS сохраняется и продолжает обновляться.',
   'cutoverChecklist.rollbackConfirm': 'Откатить',
   'cutoverChecklist.rolledBack': 'Откат для {tenant}: запись снова в старой системе.',
 
   'tenantIssueQueue.title': 'Очередь проблем клиента',
-  'tenantIssueQueue.lead': 'Открытые проблемы одного клиента — с доказательствами и, где возможно, с решением, которое их закрывает.',
+  'tenantIssueQueue.lead':
+    'Открытые проблемы одного клиента — с доказательствами и, где возможно, с решением, которое их закрывает.',
   'tenantIssueQueue.credentials.title': 'Учётные данные пора сменить',
-  'tenantIssueQueue.credentials.rule': 'Провайдеры не сообщают срок действия, поэтому учётные данные пора менять, если их не меняли {days} дней.',
+  'tenantIssueQueue.credentials.rule':
+    'Провайдеры не сообщают срок действия, поэтому учётные данные пора менять, если их не меняли {days} дней.',
   'tenantIssueQueue.credentials.empty': 'Все учётные данные менялись недавно.',
   'tenantIssueQueue.credentials.rotated': 'последняя смена {days} дн. назад',
   'tenantIssueQueue.credentials.never': 'не менялись, заданы {days} дн. назад',
@@ -1460,18 +1655,22 @@ export const ru: Messages = {
   'tenantIssueQueue.fiscal.fullScreen': 'Открыть в разделе «Фискализация» →',
   'tenantIssueQueue.pos.title': 'Заказы, ожидающие решения по кассе',
   'tenantIssueQueue.pos.empty': 'Нет заказов, застрявших между HorecaOS и кассой.',
-  'tenantIssueQueue.pos.lead': 'Заказ отправлен на кассу, но ответ не пришёл. Сначала спросите кассу; если она не может ответить, решите по найденному.',
+  'tenantIssueQueue.pos.lead':
+    'Заказ отправлен на кассу, но ответ не пришёл. Сначала спросите кассу; если она не может ответить, решите по найденному.',
   'tenantIssueQueue.pos.venue': 'Точка на кассе',
   'tenantIssueQueue.pos.sent': 'Отправлен',
   'tenantIssueQueue.pos.stateColumn': 'Статус',
   'tenantIssueQueue.pos.state.UNCERTAIN': 'Касса ещё не опрошена',
   'tenantIssueQueue.pos.state.AWAITING_OPERATOR': 'Нужно решение',
   'tenantIssueQueue.pos.ask': 'Спросить кассу',
-  'tenantIssueQueue.pos.asked': 'Касса опрошена. Если заказ опознан, выгрузка закрыта; иначе она ждёт решения.',
-  'tenantIssueQueue.pos.askFailed': 'Не удалось опросить кассу: {detail}. Попробуйте позже; заказ повторно не отправлялся.',
+  'tenantIssueQueue.pos.asked':
+    'Касса опрошена. Если заказ опознан, выгрузка закрыта; иначе она ждёт решения.',
+  'tenantIssueQueue.pos.askFailed':
+    'Не удалось опросить кассу: {detail}. Попробуйте позже; заказ повторно не отправлялся.',
   'tenantIssueQueue.pos.decide': 'Решить…',
   'tenantIssueQueue.pos.noCandidates': 'На кассе нет похожего заказа.',
-  'tenantIssueQueue.pos.candidatesLead': 'Заказы на кассе, похожие на этот. Доказательство — только совпавшая ссылка HorecaOS.',
+  'tenantIssueQueue.pos.candidatesLead':
+    'Заказы на кассе, похожие на этот. Доказательство — только совпавшая ссылка HorecaOS.',
   'tenantIssueQueue.pos.posOrder': 'Заказ на кассе',
   'tenantIssueQueue.pos.evidence': 'Почему может быть нашим',
   'tenantIssueQueue.pos.match.reference': 'Содержит нашу ссылку: это наш заказ',
@@ -1501,7 +1700,8 @@ export const ru: Messages = {
   'error.TENANT_ACCESS_DENIED': 'У вас нет доступа к этому клиенту.',
   'error.RESOURCE_NOT_FOUND': 'Этого больше не существует.',
   'error.RESOURCE_CONFLICT': 'Это противоречит уже сохранённым данным.',
-  'error.STALE_VERSION': 'Кто-то изменил эту запись, пока вы её редактировали. Обновите и повторите.',
+  'error.STALE_VERSION':
+    'Кто-то изменил эту запись, пока вы её редактировали. Обновите и повторите.',
   'error.IDEMPOTENCY_KEY_REUSED': 'Похоже, это другой запрос со старым ключом повтора.',
   'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'Тот же запрос ещё выполняется. Он не применится дважды.',
   'error.PRICE_CHANGED': 'Цена изменилась, пока экран был открыт. Проверьте и подтвердите снова.',
@@ -1512,7 +1712,8 @@ export const ru: Messages = {
   'error.INTERNAL_ERROR': 'Сбой на стороне платформы. Он зафиксирован.',
   'error.NETWORK_UNREACHABLE': 'Платформа недоступна.',
   'error.UNRECOGNISED_ERROR_RESPONSE': 'Платформа ответила так, как эта панель не понимает.',
-  'error.SECOND_APPROVER_REQUIRED': 'Записано. Нужно согласование второго администратора платформы — запрос ждёт в разделе «Сотрудники и роли».',
+  'error.SECOND_APPROVER_REQUIRED':
+    'Записано. Нужно согласование второго администратора платформы — запрос ждёт в разделе «Сотрудники и роли».',
   'error.APPROVAL_POLICY_REQUIRED': 'Для этого действия сначала нужна политика согласования.',
   'error.UNPROCESSABLE_STATE': 'В текущем состоянии это сделать нельзя.',
   'error.SESSION_EXPIRED': 'Сессия истекла. Войдите снова.',

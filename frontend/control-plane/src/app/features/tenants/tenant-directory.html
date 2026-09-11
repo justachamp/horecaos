@@ -26,6 +26,7 @@
           <th class="q-caption">{{ i18n.t('tenants.column.plan') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.currency') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.status') }}</th>
+          <th class="q-caption">{{ i18n.t('tenants.column.owner') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.health') }}</th>
           <th class="q-caption">{{ i18n.t('tenants.column.created') }}</th>
         </tr>
@@ -42,11 +43,32 @@
             <td class="q-body-sm q-tnum plan">{{ planOf(tenant.id) }}</td>
             <td class="q-body-sm q-tnum">{{ tenant.defaultCurrency }}</td>
             <td class="q-body-sm">
-              <span class="pill" [class]="'pill-' + tenant.status">{{ i18n.t(statusKey(tenant.status)) }}</span>
+              <span class="pill" [class]="'pill-' + tenant.status">{{
+                i18n.t(statusKey(tenant.status))
+              }}</span>
+            </td>
+            <!--
+              ADR 0100: a tenant sitting in PROVISIONING because its owner never
+              opened an email looks exactly like one mid-onboarding for any other
+              reason, so the marker says which. A dash means the caller may not
+              read invitations, not that the owner is fine.
+            -->
+            <td class="q-body-sm owner" [attr.data-owner]="ownerWaitingFor(tenant.id)">
+              @if (ownerWaitingFor(tenant.id) === true) {
+                <a [routerLink]="['/tenants', tenant.id, 'onboarding']" class="waiting">{{
+                  i18n.t('tenants.owner.waiting')
+                }}</a>
+              } @else if (ownerWaitingFor(tenant.id) === false) {
+                <span class="muted">{{ i18n.t('tenants.owner.ready') }}</span>
+              } @else {
+                <span class="muted">—</span>
+              }
             </td>
             <td class="q-body-sm q-tnum health" [attr.data-problems]="problemsOf(tenant.id)">
               @if (problemsOf(tenant.id) > 0) {
-                <a routerLink="/support/issue-queue" [queryParams]="{ tenantId: tenant.id }">{{ i18n.t('tenants.health.problems', { count: problemsOf(tenant.id) }) }}</a>
+                <a routerLink="/support/issue-queue" [queryParams]="{ tenantId: tenant.id }">{{
+                  i18n.t('tenants.health.problems', { count: problemsOf(tenant.id) })
+                }}</a>
               } @else {
                 <span class="muted">{{ i18n.t('tenants.health.clear') }}</span>
               }
@@ -58,7 +80,12 @@
     </table>
 
     @if (nextCursor(); as cursor) {
-      <button type="button" class="q-body-sm loadMore" [disabled]="loadingMore()" (click)="loadMore()">
+      <button
+        type="button"
+        class="q-body-sm loadMore"
+        [disabled]="loadingMore()"
+        (click)="loadMore()"
+      >
         {{ loadingMore() ? i18n.t('tenants.loadingMore') : i18n.t('tenants.loadMore') }}
       </button>
     }
@@ -133,8 +160,12 @@
         [value]="customerIdentityMode()"
         (change)="customerIdentityMode.set($any($event.target).value)"
       >
-        <option value="TENANT_SHARED">{{ i18n.t('tenants.create.identityMode.tenantShared') }}</option>
-        <option value="BRAND_ISOLATED">{{ i18n.t('tenants.create.identityMode.brandIsolated') }}</option>
+        <option value="TENANT_SHARED">
+          {{ i18n.t('tenants.create.identityMode.tenantShared') }}
+        </option>
+        <option value="BRAND_ISOLATED">
+          {{ i18n.t('tenants.create.identityMode.brandIsolated') }}
+        </option>
       </select>
     </label>
 
@@ -143,9 +174,13 @@
     }
 
     <div class="actions">
-      <button type="button" class="q-body-sm" (click)="closeCreate()">{{ i18n.t('tenants.create.cancel') }}</button>
+      <button type="button" class="q-body-sm" (click)="closeCreate()">
+        {{ i18n.t('tenants.create.cancel') }}
+      </button>
       <button type="submit" class="q-body-sm primary" [disabled]="!canSubmitCreate()">
-        {{ createSubmitting() ? i18n.t('tenants.create.submitting') : i18n.t('tenants.create.submit') }}
+        {{
+          createSubmitting() ? i18n.t('tenants.create.submitting') : i18n.t('tenants.create.submit')
+        }}
       </button>
     </div>
   </form>
