@@ -130,6 +130,15 @@
   collides with a second `startRun` with `DataIntegrityViolationException`,
   and cancelling an already-`ACTIVE` or already-`FAILED` run throws the
   identical `CancellationNotPermittedException` message either way.
+  As of 2026-09-11, [ADR 0099](0099-a-new-tenant-can-be-onboarded-with-a-sample-menu.md)
+  adds `SAMPLE_MENU_PUBLISH` at sequence 4, so the catalogue is thirteen steps
+  and twelve of them have handlers. It is the first step that is not
+  `requiredInV1` and the first a run chooses: `startRun` materialises it
+  `SKIPPED`/`NOT_REQUESTED` when the run did not ask for one, which neither
+  `claimNextStep` (it takes only `PENDING`) nor `outstandingRequiredSteps` (it
+  counts only required rows) can be held up by. Everything else here is
+  unchanged; the steps that were 4–12 are now 5–13, and runs materialised
+  before that keep the `sequence_number` they were created with.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
