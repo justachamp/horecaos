@@ -45,7 +45,11 @@
     } @else if (denied()) {
       <!-- One denied sentence for the whole console, naming the capability and
            who can grant it, rather than this screen's own line (ADR 0101). -->
-      <q-denied-state capability="CONVERSATION_INBOX_MANAGE" data-testid="inbox-denied" />
+      <q-denied-state
+        [capability]="deniedCapability()"
+        [askKey]="deniedAskKey()"
+        data-testid="inbox-denied"
+      />
     } @else {
       <table class="inbox-list__table">
         <thead>

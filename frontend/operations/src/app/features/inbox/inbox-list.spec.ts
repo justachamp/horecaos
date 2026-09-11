@@ -157,6 +157,37 @@ describe('InboxList: denied and error states', () => {
     expect(
       harness.routeNativeElement!.querySelector('[data-testid="inbox-denied"]'),
     ).not.toBeNull();
+    // No request was ever made, so no capability was ever checked — naming
+    // CONVERSATION_INBOX_MANAGE here would send the operator to ask a manager
+    // to grant a capability that does nothing for them; the real fix is
+    // assigning them a location.
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-denied-state-capability"]'),
+    ).toBeNull();
+    expect(harness.routeNativeElement!.textContent).toContain(
+      'Ask a manager to assign you a location.',
+    );
+  });
+
+  it('shows the denied state with no capability named on a 403 that was not a capability refusal', async () => {
+    // TENANT_ACCESS_DENIED is also HTTP 403, but it is not
+    // INSUFFICIENT_CAPABILITY — naming CONVERSATION_INBOX_MANAGE here would
+    // be a guess, not an observed fact.
+    const list = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.TENANT_ACCESS_DENIED, 403, null, null)),
+      );
+    configure(list);
+    const harness = await RouterTestingHarness.create('/inbox');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="inbox-denied"]'),
+    ).not.toBeNull();
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-denied-state-capability"]'),
+    ).toBeNull();
   });
 
   it('shows a retryable error band and keeps the frame on a failed fetch', async () => {

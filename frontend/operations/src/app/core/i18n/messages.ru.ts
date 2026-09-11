@@ -2632,6 +2632,7 @@ export const messagesRu: MessageCatalogue = {
   'ui.denied.title': 'Нет доступа к этому разделу',
   'ui.denied.capability': 'Не хватает права:',
   'ui.denied.ask': 'Выдать его может руководитель с доступом к ролям сотрудников.',
+  'ui.denied.ask.noLocation': 'Попросите руководителя назначить вам точку.',
   'ui.locked.title': 'Не входит в текущий тариф',
   'ui.locked.module': 'Модуль:',
   'ui.locked.ask': 'Владелец аккаунта может подключить его к тарифу.',

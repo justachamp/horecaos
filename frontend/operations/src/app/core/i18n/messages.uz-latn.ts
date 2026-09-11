@@ -2648,6 +2648,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
   'ui.denied.capability': 'Yetishmayotgan huquq:',
   'ui.denied.ask': 'Uni xodimlar rollarini tahrirlay oladigan rahbar bera oladi.',
+  'ui.denied.ask.noLocation': 'Menejerdan sizga joy biriktirishini soʻrang.',
   'ui.locked.title': 'Joriy tarifga kirmagan',
   'ui.locked.module': 'Modul:',
   'ui.locked.ask': 'Uni tarifga hisob egasi qoʻsha oladi.',

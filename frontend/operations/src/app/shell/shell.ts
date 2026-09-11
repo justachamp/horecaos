@@ -5,6 +5,7 @@ import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
+import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
 import { NAVIGATION } from './navigation';
 import { ServiceStatus } from './service-status';
@@ -57,6 +58,7 @@ export class Shell {
   private readonly currentLocation = inject(CurrentLocation);
   protected readonly auth = inject(Auth);
   protected readonly status = inject(ServiceStatus);
+  private readonly toasts = inject(Toasts);
 
   protected readonly navigation = NAVIGATION;
   protected readonly locales = LOCALES;
@@ -137,6 +139,11 @@ export class Shell {
   }
 
   protected signOut(): void {
+    // `Toasts.clear()`'s own doc: a sign-out "must not leave the previous
+    // session's words on screen" — a toast raised just before the operator
+    // clicks sign-out must not still be reading on a shared kiosk terminal
+    // once the next operator sits down.
+    this.toasts.clear();
     this.auth.logout().subscribe();
   }
 }

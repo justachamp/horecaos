@@ -277,4 +277,20 @@ describe('Shell: the toast host', () => {
       'Order updated',
     );
   });
+
+  it('clears every toast on sign-out, so the next operator at the terminal sees none of the last one’s', () => {
+    // The exact handoff `Toasts.clear()`'s own doc warns about: an operator
+    // raises a confirmation, then immediately signs out for the next one.
+    toasts.show({ message: 'Customer created', tone: 'success', timeoutMs: 0 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="q-toast"]').length).toBe(1);
+
+    const signOut = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.rail__signout',
+    )!;
+    signOut.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="q-toast"]').length).toBe(0);
+  });
 });

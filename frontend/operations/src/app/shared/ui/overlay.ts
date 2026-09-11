@@ -73,6 +73,22 @@ export function tabbableWithin(root: HTMLElement): readonly HTMLElement[] {
   });
 }
 
+/**
+ * Every currently-open overlay, in the order it was constructed — i.e. the
+ * order it was opened, since `OverlayBehaviour` is built as a field
+ * initializer on the host component. The last entry is the topmost one.
+ *
+ * Exists only to answer "is this the topmost overlay?" for Escape. A
+ * `keydown` listener on `document` does not carry that answer on its own:
+ * every open overlay's listener is on the same node, so `stopPropagation()`
+ * (and even `stopImmediatePropagation()`, which only stops *later*-registered
+ * listeners on that node — and the earlier-opened, outer overlay always
+ * registers first) cannot by itself make the *later*-opened, inner overlay
+ * the one that wins. A small shared stack makes it explicit instead of
+ * relying on registration order.
+ */
+const openOverlays: OverlayBehaviour[] = [];
+
 let domIdSequence = 0;
 
 /**
@@ -105,9 +121,14 @@ export class OverlayBehaviour {
 
     const onKeydown = (event: KeyboardEvent): void => this.onKeydown(event);
     document.addEventListener('keydown', onKeydown, true);
+    openOverlays.push(this);
 
     destroyRef.onDestroy(() => {
       document.removeEventListener('keydown', onKeydown, true);
+      const index = openOverlays.indexOf(this);
+      if (index !== -1) {
+        openOverlays.splice(index, 1);
+      }
       // Only if it is still in the document: an overlay opened from a row that
       // the mutation it performed has just removed has nowhere to go back to,
       // and calling `focus()` on a detached node silently focuses `<body>`,
@@ -143,6 +164,14 @@ export class OverlayBehaviour {
     }
 
     if (event.key === 'Escape') {
+      // Only the topmost overlay answers Escape. Every open overlay's
+      // listener is on `document` and all of them see this same keydown —
+      // without this check, a confirm dialog opened on top of a drawer would
+      // dismiss both at once on a single Escape press, discarding the
+      // drawer's state instead of just canceling the confirmation.
+      if (openOverlays[openOverlays.length - 1] !== this) {
+        return;
+      }
       if (this.options.closeOnEscape?.() === false) {
         return;
       }

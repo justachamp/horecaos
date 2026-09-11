@@ -76,7 +76,11 @@
     @if (loading()) {
       <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
     } @else if (denied()) {
-      <q-denied-state capability="CUSTOMER_READ" data-testid="customers-denied" />
+      <q-denied-state
+        [capability]="deniedCapability()"
+        [askKey]="deniedAskKey()"
+        data-testid="customers-denied"
+      />
     } @else if (loadError(); as message) {
       <q-inline-alert severity="error" [text]="message" />
     } @else {

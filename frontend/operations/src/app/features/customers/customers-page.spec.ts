@@ -221,9 +221,42 @@ describe('CustomersPage', () => {
     await flushMicrotasks();
     deniedFixture.detectChanges();
 
-    // The shared denied state (ADR 0101), not this screen's own sentence: it
-    // names the capability the operator is missing and who can grant it, which
-    // is the whole difference between a wall and a dead end.
+    // The shared denied state (ADR 0101) — but no request was ever made here,
+    // so no capability was ever checked. Naming `CUSTOMER_READ` would send the
+    // operator to ask a manager to grant a capability that does nothing for
+    // them: the real fix is assigning them a location, not a capability
+    // grant. See `deniedCapability`'s own doc on `customers-page.ts`.
+    const deniedHost = deniedFixture.nativeElement as HTMLElement;
+    expect(deniedHost.querySelector('[data-testid="customers-denied"]')).not.toBeNull();
+    expect(deniedHost.querySelector('[data-testid="q-denied-state-capability"]')).toBeNull();
+    expect(deniedHost.textContent).toContain('Ask a manager to assign you a location.');
+    expect(deniedHost.textContent).not.toContain(
+      'A manager who can edit staff roles can grant it.',
+    );
+  });
+
+  it('shows the denied state naming CUSTOMER_READ when the server actually refuses it', async () => {
+    api.list.mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+
+    await TestBed.resetTestingModule()
+      .configureTestingModule({
+        imports: [CustomersPage],
+        providers: [
+          provideRouter([{ path: '**', component: StubPage }]),
+          { provide: CustomersApi, useValue: api },
+          { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        ],
+      })
+      .compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const deniedFixture = TestBed.createComponent(CustomersPage);
+    deniedFixture.detectChanges();
+    await flushMicrotasks();
+    deniedFixture.detectChanges();
+
+    // Here the server genuinely checked and refused CUSTOMER_READ, so naming
+    // it — and pointing at whoever can grant it — is the right sentence,
+    // unlike the no-location case above.
     const deniedHost = deniedFixture.nativeElement as HTMLElement;
     expect(deniedHost.querySelector('[data-testid="customers-denied"]')).not.toBeNull();
     expect(

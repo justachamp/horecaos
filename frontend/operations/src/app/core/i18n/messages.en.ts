@@ -2654,6 +2654,7 @@ export const messagesEn = {
   'ui.denied.title': 'You do not have access to this',
   'ui.denied.capability': 'Missing capability:',
   'ui.denied.ask': 'A manager who can edit staff roles can grant it.',
+  'ui.denied.ask.noLocation': 'Ask a manager to assign you a location.',
   'ui.locked.title': 'Not included in this plan',
   'ui.locked.module': 'Module:',
   'ui.locked.ask': 'The account owner can add it to the plan.',
