@@ -164,6 +164,7 @@ describe('TenantOnboarding', () => {
       undefined,
       'template-2',
       'ru',
+      true,
     );
   });
 
@@ -193,6 +194,7 @@ describe('TenantOnboarding', () => {
       undefined,
       'template-2',
       'ru',
+      true,
     );
   });
 
@@ -439,5 +441,113 @@ describe('TenantOnboarding', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('У вас нет права');
+  });
+  it('asks for a sample menu by default, and says so in the operator\u2019s language', async () => {
+    await createWith(null);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    expect(start.textContent).toContain(ru['onboarding.start.sampleMenu']);
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      true,
+    );
+  });
+
+  it('starts without a sample menu when the operator clears the box', async () => {
+    await createWith(null);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    await settle();
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    // Sent as an explicit false rather than omitted: the server reads an absent
+    // field as a no either way, but a caller that means no should say so.
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      false,
+    );
+  });
+
+  it('shows the sample menu step like any other, and explains a skipped one', async () => {
+    await createWith({
+      run: {
+        id: 'run-3',
+        status: 'IN_PROGRESS',
+        currentPhase: 'CONFIGURING',
+        startedBy: 'admin@test',
+        lastError: null,
+      },
+      steps: [
+        {
+          stepKey: 'SAMPLE_MENU_PUBLISH',
+          phase: 'CONFIGURING',
+          status: 'SKIPPED',
+          required: false,
+          attemptCount: 0,
+          errorCode: 'NOT_REQUESTED',
+          detail: null,
+          externalReference: null,
+        },
+      ],
+      outstandingRequired: [],
+    });
+
+    // Named, not left as a raw enum key, and the hint says what happened.
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.step.SAMPLE_MENU_PUBLISH']);
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.hint.NOT_REQUESTED']);
+  });
+
+  it('explains a sample menu the catalogue refused to publish', async () => {
+    await createWith({
+      run: {
+        id: 'run-4',
+        status: 'FAILED',
+        currentPhase: 'CONFIGURING',
+        startedBy: 'admin@test',
+        lastError: null,
+      },
+      steps: [
+        {
+          stepKey: 'SAMPLE_MENU_PUBLISH',
+          phase: 'CONFIGURING',
+          status: 'FAILED',
+          required: false,
+          attemptCount: 1,
+          errorCode: 'SAMPLE_MENU_REJECTED',
+          detail: 'VARIANT_HAS_NO_ACTIVE_PRICE',
+          externalReference: null,
+        },
+      ],
+      outstandingRequired: [],
+    });
+
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.hint.SAMPLE_MENU_REJECTED']);
+    // The server's own detail is still shown, because it names the specifics.
+    expect(fixture.nativeElement.textContent).toContain('VARIANT_HAS_NO_ACTIVE_PRICE');
   });
 });

@@ -9113,6 +9113,9 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "sampleMenu" : {
+            "type" : "boolean"
+          },
           "templateId" : {
             "format" : "uuid",
             "type" : "string"
@@ -24907,7 +24910,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs" : {
       "post" : {
-        "description" : "Omit templateId to use the template suited to the tenant's business type, or the platform's default when none suits it (ADR 0090).",
+        "description" : "Omit templateId to use the template suited to the tenant's business type, or the platform's default when none suits it (ADR 0090). Set sampleMenu to create and publish a clearly marked sample menu for the tenant's first brand, so the platform can see the storefront answer before the tenant has authored anything (ADR 0099); omitting it is a no.",
         "operationId" : "start_3",
         "parameters" : [ {
           "in" : "path",

@@ -94,13 +94,19 @@ public final class OrderingOnboardingStepHandlers {
         private final SampleMenuPort catalog;
         private final SampleMenuPricingPort pricing;
         private final StockListingPort stock;
+        private final SalesChannelLookup channels;
 
         public SampleMenuPublish(
-                JdbcClient jdbc, SampleMenuPort catalog, SampleMenuPricingPort pricing, StockListingPort stock) {
+                JdbcClient jdbc,
+                SampleMenuPort catalog,
+                SampleMenuPricingPort pricing,
+                StockListingPort stock,
+                SalesChannelLookup channels) {
             this.jdbc = jdbc;
             this.catalog = catalog;
             this.pricing = pricing;
             this.stock = stock;
+            this.channels = channels;
         }
 
         @Override
@@ -124,6 +130,18 @@ public final class OrderingOnboardingStepHandlers {
                         "NO_LOCATION",
                         "Brand %s has no location to offer a sample menu at"
                                 .formatted(brand.get().code()));
+            }
+
+            // Checked here rather than left to the publication, which throws an
+            // IllegalArgumentException for an unregistered channel — and a thrown
+            // handler is mapped to RETRY/TRANSIENT_INFRASTRUCTURE, so a tenant
+            // whose storefront channel was never seeded would retry a permanent
+            // condition until a human noticed. Named the same way
+            // ACTIVATION_SMOKE_TEST names it, because it is the same gap.
+            if (channels.byCode(tenantId, STOREFRONT_CHANNEL).isEmpty()) {
+                return StepResult.failed(
+                        "NO_CHANNEL",
+                        "The tenant has no %s channel to publish a sample menu to".formatted(STOREFRONT_CHANNEL));
             }
 
             Optional<UUID> sampleCatalogId = catalog.sampleCatalogId(tenantId, brandId);

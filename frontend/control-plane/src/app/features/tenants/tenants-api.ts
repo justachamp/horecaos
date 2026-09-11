@@ -506,17 +506,23 @@ export class TenantsApi {
     );
   }
 
+  /**
+   * @param sampleMenu create and publish a clearly marked sample menu for the
+   *   tenant's first brand (ADR 0099). Absent is a no on the server, so this is
+   *   sent explicitly rather than omitted when false.
+   */
   async startOnboarding(
     tenantId: string,
     ownerEmail?: string,
     ownerSubjectId?: string,
     templateId?: string,
     ownerLocale?: InvitationLocale,
+    sampleMenu?: boolean,
   ): Promise<{ runId: string }> {
     return firstValueFrom(
       this.api.post<{ runId: string }>(
         `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs`,
-        { ownerEmail, ownerSubjectId, templateId, ownerLocale },
+        { ownerEmail, ownerSubjectId, templateId, ownerLocale, sampleMenu },
       ),
     );
   }

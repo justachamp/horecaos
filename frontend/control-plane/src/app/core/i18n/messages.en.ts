@@ -43,7 +43,8 @@ export const en = {
   'nav.moduleCatalog': 'Module catalog',
   'nav.usageMetering': 'Metering & usage',
   'nav.invoicesWallet': 'Invoices & wallet',
-  'piiClassification.lead': 'How the platform treats personal data: what each class requires, how long each kind is kept and which job deletes it, customers’ erasure requests, how often personal data was revealed or exported, and every column stored encrypted. Nothing here names a customer.',
+  'piiClassification.lead':
+    'How the platform treats personal data: what each class requires, how long each kind is kept and which job deletes it, customers’ erasure requests, how often personal data was revealed or exported, and every column stored encrypted. Nothing here names a customer.',
   'piiClassification.classes': 'Data classes',
   'piiClassification.encrypted': 'stored encrypted',
   'piiClassification.plain': 'stored as is',
@@ -60,7 +61,8 @@ export const en = {
   'piiClassification.via.OPERATIONS': 'filed by staff',
   'piiClassification.egress': 'Revealed or exported in the last 30 days',
   'piiClassification.egressNone': 'Nothing was revealed or exported.',
-  'piiClassification.egressNote': 'Each is a person looking at or taking out personal data, recorded with their reason in the audit log.',
+  'piiClassification.egressNote':
+    'Each is a person looking at or taking out personal data, recorded with their reason in the audit log.',
   'piiClassification.columns': 'Encrypted columns ({count})',
   'piiClassification.class.PUBLIC': 'Public',
   'piiClassification.class.INTERNAL': 'Internal',
@@ -76,7 +78,8 @@ export const en = {
   'piiClassification.rule.CUSTOMER_ACCOUNTS': 'Customer accounts',
   'piiClassification.rule.ABANDONED_CARTS': 'Carts that never became an order',
   'piiClassification.rule.COURIER_APPLICANTS': 'Courier applications nobody verified',
-  'notificationProviders.lead': 'The messaging gateways the platform may send through, the name each tenant sends as, and where each SMS wording stands with its gateway. A wording waiting on its gateway, or refused by it, is not sent.',
+  'notificationProviders.lead':
+    'The messaging gateways the platform may send through, the name each tenant sends as, and where each SMS wording stands with its gateway. A wording waiting on its gateway, or refused by it, is not sent.',
   'notificationProviders.gateways': 'Gateways',
   'notificationProviders.live': 'live',
   'notificationProviders.test': 'test',
@@ -89,7 +92,8 @@ export const en = {
   'notificationProviders.column.status': 'Status',
   'notificationProviders.brandSenders': '{count} brands use their own',
   'notificationProviders.reviews': 'SMS wordings',
-  'notificationProviders.reviewsNote': 'Mark a wording as waiting when its gateway has to approve it, then record the answer. Until then it is not sent.',
+  'notificationProviders.reviewsNote':
+    'Mark a wording as waiting when its gateway has to approve it, then record the answer. Until then it is not sent.',
   'notificationProviders.allWordings': 'All',
   'notificationProviders.noReviews': 'No SMS wording in this state.',
   'notificationProviders.record': 'Record the gateway’s answer',
@@ -101,19 +105,23 @@ export const en = {
   'notificationProviders.review.APPROVED': 'Approved by the gateway',
   'notificationProviders.review.REJECTED': 'Refused by the gateway',
   'notificationProviders.review.NOT_REQUIRED': 'No approval needed',
-  'residency.lead': 'Where every tenant trades. The country decides the currency and timezone a tenant starts from; moving a tenant to another country needs a second signature.',
+  'residency.lead':
+    'Where every tenant trades. The country decides the currency and timezone a tenant starts from; moving a tenant to another country needs a second signature.',
   'residency.hosting': 'All tenant data is hosted in {country}.',
-  'residency.hostingNote': 'Where data is hosted does not vary by tenant: a tenant trading in another country is still hosted here.',
+  'residency.hostingNote':
+    'Where data is hosted does not vary by tenant: a tenant trading in another country is still hosted here.',
   'residency.tenantCount': '{count} tenants',
   'residency.column.timezone': 'Timezone',
   'residency.change.open': 'Change country',
   'residency.change.choose': 'Choose a country',
   'residency.change.submit': 'Ask to change',
-  'residency.change.note': 'A second person approves it under Approvals; then ask again here to make the change. Currency and timezone are not changed.',
+  'residency.change.note':
+    'A second person approves it under Approvals; then ask again here to make the change. Currency and timezone are not changed.',
   'residency.change.awaiting': 'Waiting for a second signature to move {tenant} to {country}.',
   'residency.change.done': '{tenant} now trades in {country}.',
   'residency.change.declined': 'Moving {tenant} to {country} was declined.',
-  'platformApprovals.lead': 'Platform decisions waiting for a second signature in any tenant: a change of the country a tenant trades in, and a tenant’s activation where a policy asks for one.',
+  'platformApprovals.lead':
+    'Platform decisions waiting for a second signature in any tenant: a change of the country a tenant trades in, and a tenant’s activation where a policy asks for one.',
   'platformApprovals.empty': 'Nothing is waiting for a second signature.',
   'platformApprovals.column.action': 'Decision',
   'platformApprovals.column.asked': 'Asked by',
@@ -125,9 +133,12 @@ export const en = {
   'platformApprovals.notYours': 'Asked by you; someone else decides',
   'platformApprovals.approved': 'Approved for {tenant}. The person who asked can now go ahead.',
   'platformApprovals.declined': 'Declined for {tenant}.',
-  'platformApprovals.gap': 'Bulk exports and retention overrides are not actions the platform has yet, so nothing of theirs waits here. Staff access approvals are under Staff & roles.',
-  'businessTypes.lead': 'The kinds of business the platform serves, how each usually hands orders over, and which tenants are which. A type is recorded and shown; it switches nothing on or off by itself.',
-  'businessTypes.note': 'Onboarding uses the default template for every type; what a tenant may do is decided by its roles and plan.',
+  'platformApprovals.gap':
+    'Bulk exports and retention overrides are not actions the platform has yet, so nothing of theirs waits here. Staff access approvals are under Staff & roles.',
+  'businessTypes.lead':
+    'The kinds of business the platform serves, how each usually hands orders over, and which tenants are which. A type is recorded and shown; it switches nothing on or off by itself.',
+  'businessTypes.note':
+    'Onboarding uses the default template for every type; what a tenant may do is decided by its roles and plan.',
   'businessTypes.kitchen': 'kitchen display',
   'businessTypes.noKitchen': 'no kitchen display',
   'businessTypes.handover.DELIVERY': 'delivery',
@@ -214,7 +225,8 @@ export const en = {
   'state.notBuilt.body': 'This section has no screen yet.',
 
   'overview.title': 'Platform health',
-  'overview.lead': 'Tenants, orders, fiscal receipts and queues across every tenant, counted at the moment you open it.',
+  'overview.lead':
+    'Tenants, orders, fiscal receipts and queues across every tenant, counted at the moment you open it.',
   'overview.tenants.title': 'Tenants',
   'overview.tenants.active': 'active',
   'overview.tenants.provisioning': 'provisioning',
@@ -285,17 +297,20 @@ export const en = {
   'tenantDetail.action.identity': 'Identity & realm',
   'tenantDetail.action.impersonation': 'Support session',
   'support.title': 'Support sessions',
-  'support.lead': 'Enter this tenant’s operations app for a set time and a stated reason. Access ends by itself at the deadline; the tenant sees every visit in their own log and can end one.',
+  'support.lead':
+    'Enter this tenant’s operations app for a set time and a stated reason. Access ends by itself at the deadline; the tenant sees every visit in their own log and can end one.',
   'support.current.title': 'Your open session',
   'support.openOperations': 'Open the operations app for this tenant →',
-  'support.noOperationsUrl': 'This deployment has no operations address set; open the operations app with ?supportTenant={tenantId}.',
+  'support.noOperationsUrl':
+    'This deployment has no operations address set; open the operations app with ?supportTenant={tenantId}.',
   'support.end': 'End session now',
   'support.open.title': 'Open a support session',
   'support.open.access': 'Access',
   'support.access.VIEW': 'View only',
   'support.access.VIEW.hint': 'see orders, menus, settings and failures; change nothing',
   'support.access.ASSIST': 'Assist',
-  'support.access.ASSIST.hint': 'also move, amend or cancel orders, stop items, close a branch, settle POS exports; never refunds, customer details or access',
+  'support.access.ASSIST.hint':
+    'also move, amend or cancel orders, stop items, close a branch, settle POS exports; never refunds, customer details or access',
   'support.open.length': 'For how long',
   'support.open.minutes': '{minutes} min',
   'support.open.reason': 'Why (the tenant will see this)',
@@ -312,7 +327,8 @@ export const en = {
   'support.state.open': 'open until {time}',
   'support.state.ended': 'ended {time} by {who}',
   'support.state.lapsed': 'ran out at {time}',
-  'featureFlags.lead': 'Features being rolled out, and to whom. A flag is off until turned on: for everyone, or for chosen tenants, and a tenant can be held back from one that is on for everyone.',
+  'featureFlags.lead':
+    'Features being rolled out, and to whom. A flag is off until turned on: for everyone, or for chosen tenants, and a tenant can be held back from one that is on for everyone.',
   'featureFlags.empty': 'No feature flags are declared in this build.',
   'featureFlags.summary.nobody': 'Off everywhere',
   'featureFlags.summary.some': 'On for {count} tenants',
@@ -334,7 +350,8 @@ export const en = {
   'featureFlags.confirm': 'Save',
   'featureFlags.saved': 'Saved. The change applies on the tenant’s next request.',
   'featureFlags.flag.supportVisits': 'Support visits page',
-  'featureFlags.flag.supportVisits.description': 'Shows a tenant’s administrators, in the operations app, every HorecaOS support visit to their account, and lets them end one.',
+  'featureFlags.flag.supportVisits.description':
+    'Shows a tenant’s administrators, in the operations app, every HorecaOS support visit to their account, and lets them end one.',
 
   'tenantDetail.facts.title': 'Tenant facts',
   'tenantDetail.facts.status': 'Status',
@@ -345,9 +362,11 @@ export const en = {
   'tenantDetail.facts.keycloakUnlinked': 'Not linked',
   'tenantDetail.status.title': 'Trading',
   'tenantDetail.status.suspend': 'Suspend tenant',
-  'tenantDetail.status.suspendLead': 'Everyone at this tenant keeps read-only access until it is reactivated, and their sign-in organization is disabled. Nothing is deleted.',
+  'tenantDetail.status.suspendLead':
+    'Everyone at this tenant keeps read-only access until it is reactivated, and their sign-in organization is disabled. Nothing is deleted.',
   'tenantDetail.status.reactivate': 'Reactivate tenant',
-  'tenantDetail.status.reactivateLead': 'Restores everyone’s access as it was before the suspension.',
+  'tenantDetail.status.reactivateLead':
+    'Restores everyone’s access as it was before the suspension.',
   'tenantDetail.status.reason': 'Reason, recorded in the audit log',
   'tenantDetail.status.confirmSuspend': 'Suspend',
   'tenantDetail.status.confirmReactivate': 'Reactivate',
@@ -367,7 +386,8 @@ export const en = {
   'tenantDetail.entitlements.fullScreen': 'Open in Entitlements →',
 
   'tenantBrands.title': 'Brands & locations',
-  'tenantBrands.lead': 'The ownership tree. Provision brands and locations on this tenant’s behalf.',
+  'tenantBrands.lead':
+    'The ownership tree. Provision brands and locations on this tenant’s behalf.',
   'tenantBrands.empty': 'No brands yet.',
   'tenantBrands.noLocations': 'No locations yet.',
   'tenantBrands.activateBrand': 'Activate',
@@ -389,24 +409,30 @@ export const en = {
   'tenantBrands.edit.action': 'Edit',
   'tenantBrands.edit.brandTitle': 'Edit brand',
   'tenantBrands.edit.locationTitle': 'Edit location',
-  'tenantBrands.edit.brandLocked': 'This brand has been active, so its code and slug are fixed. The display name can still change.',
-  'tenantBrands.edit.locationLocked': 'This location has been active, so its code, slug and timezone are fixed. The display name can still change.',
+  'tenantBrands.edit.brandLocked':
+    'This brand has been active, so its code and slug are fixed. The display name can still change.',
+  'tenantBrands.edit.locationLocked':
+    'This location has been active, so its code, slug and timezone are fixed. The display name can still change.',
   'tenantBrands.edit.save': 'Save',
   'tenantBrands.edit.saving': 'Saving…',
   'tenantBrands.delete.action': 'Delete',
   'tenantBrands.delete.confirm': 'Delete for good',
   'tenantBrands.delete.cancel': 'Keep',
   'tenantBrands.delete.hasLocationsHint': 'Delete its locations first.',
-  'tenantBrands.delete.reason.NOT_DRAFT': 'Only a draft can be deleted. This one has been active and keeps its history.',
+  'tenantBrands.delete.reason.NOT_DRAFT':
+    'Only a draft can be deleted. This one has been active and keeps its history.',
   'tenantBrands.delete.reason.HAS_LOCATIONS': 'This brand still has locations. Delete them first.',
-  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS': 'Staff still have access scoped to it. Revoke that access first.',
-  'tenantBrands.delete.reason.STILL_REFERENCED': 'Something else still refers to it — a legal entity assignment, a sales channel or a menu, for example. Remove that first.',
+  'tenantBrands.delete.reason.HAS_ACCESS_GRANTS':
+    'Staff still have access scoped to it. Revoke that access first.',
+  'tenantBrands.delete.reason.STILL_REFERENCED':
+    'Something else still refers to it — a legal entity assignment, a sales channel or a menu, for example. Remove that first.',
   'tenantBrands.delete.referencedBy': '(Referenced from: {table})',
   'tenantBrands.column.address': 'Address',
   'tenantBrands.place.notSet': 'Not set',
   'tenantBrands.place.action': 'Address',
   'tenantBrands.place.title': 'Where this location is',
-  'tenantBrands.place.lead': 'Deliveries are offered by where the pin is, and couriers are sent there, so enter it from a map rather than from memory.',
+  'tenantBrands.place.lead':
+    'Deliveries are offered by where the pin is, and couriers are sent there, so enter it from a map rather than from memory.',
   'tenantBrands.place.addressLine': 'Street address',
   'tenantBrands.place.district': 'District',
   'tenantBrands.place.city': 'City',
@@ -416,7 +442,8 @@ export const en = {
   'tenantBrands.place.longitude': 'Longitude',
   'tenantBrands.place.pairError': 'Give both latitude and longitude, or neither.',
   'tenantBrands.place.rangeError': 'Latitude runs from -90 to 90 and longitude from -180 to 180.',
-  'tenantBrands.place.phoneError': 'A phone number starts with + and the country code, then 7 to 14 digits.',
+  'tenantBrands.place.phoneError':
+    'A phone number starts with + and the country code, then 7 to 14 digits.',
 
   'legalEntities.title': 'Legal entities & tax identities',
   'legalEntities.lead': 'The INN registry behind branches, and which entity fiscalizes each one.',
@@ -436,14 +463,17 @@ export const en = {
   'legalEntities.register.vatRegistered': 'VAT registered',
   'legalEntities.assign.action': 'Assign to branch',
   'legalEntities.assign.title': 'Assign as a branch’s seller',
-  'legalEntities.assign.lead': 'Closes the branch’s currently open assignment, if any, at the new one’s start date.',
+  'legalEntities.assign.lead':
+    'Closes the branch’s currently open assignment, if any, at the new one’s start date.',
   'legalEntities.assign.effectiveFrom': 'Effective from',
   'legalEntities.assign.location': 'Location',
   'legalEntities.assign.chooseLocation': 'Choose a location',
-  'legalEntities.assign.noLocations': 'This tenant has no locations yet. Create one under Brands & locations first.',
+  'legalEntities.assign.noLocations':
+    'This tenant has no locations yet. Create one under Brands & locations first.',
   'legalEntities.assign.done': 'Assigned.',
   'legalEntities.locations.title': 'Which entity each location fiscalizes under',
-  'legalEntities.locations.lead': 'A location takes non-cash payments only once an active entity is assigned to it.',
+  'legalEntities.locations.lead':
+    'A location takes non-cash payments only once an active entity is assigned to it.',
   'legalEntities.locations.column.location': 'Location',
   'legalEntities.locations.column.entity': 'Legal entity',
   'legalEntities.locations.column.since': 'Since',
@@ -477,6 +507,7 @@ export const en = {
   'onboarding.step.KEYCLOAK_ORGANIZATION_RECONCILE': 'Sign-in organization',
   'onboarding.step.TENANT_OWNER_LINK_OR_INVITE': 'Owner account',
   'onboarding.step.DEFAULT_CONFIGURATION_APPLY': 'Default settings',
+  'onboarding.step.SAMPLE_MENU_PUBLISH': 'Sample menu',
   'onboarding.step.BRANDS_AND_LOCATIONS_VALIDATE': 'Brands and locations',
   'onboarding.step.PAYMENT_CONFIGURATION_VALIDATE': 'Payments and legal entities',
   'onboarding.step.DELIVERY_CONFIGURATION_VALIDATE': 'Delivery zones and tariffs',
@@ -486,40 +517,60 @@ export const en = {
   'onboarding.step.FRONTEND_DOMAIN_VALIDATE': 'Storefront address',
   'onboarding.step.ACTIVATION_SMOKE_TEST': 'Test order',
   'onboarding.step.TENANT_ACTIVATE': 'Go live',
-  'onboarding.hint.AWAITING_ORGANIZATION': 'Waiting for the sign-in organization to be created. This retries on its own.',
-  'onboarding.hint.IDENTITY_DRIFT': 'The sign-in service holds an organization that does not match this tenant. It has to be corrected there; the detail below says what differs.',
-  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL': 'A menu item cannot be sold at a location. Check where the menu is offered, in the operations app.',
-  'onboarding.hint.MEDIA_NOT_AVAILABLE': 'Menu images are not available yet. Check the uploads in the operations app.',
-  'onboarding.hint.NO_AVAILABLE_ITEM': 'Nothing on the menu can be sold yet. Publish a menu with at least one available item, in the operations app.',
+  'onboarding.hint.AWAITING_ORGANIZATION':
+    'Waiting for the sign-in organization to be created. This retries on its own.',
+  'onboarding.hint.IDENTITY_DRIFT':
+    'The sign-in service holds an organization that does not match this tenant. It has to be corrected there; the detail below says what differs.',
+  'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL':
+    'A menu item cannot be sold at a location. Check where the menu is offered, in the operations app.',
+  'onboarding.hint.MEDIA_NOT_AVAILABLE':
+    'Menu images are not available yet. Check the uploads in the operations app.',
+  'onboarding.hint.NO_AVAILABLE_ITEM':
+    'Nothing on the menu can be sold yet. Publish a menu with at least one available item, in the operations app.',
   'onboarding.hint.NO_BRAND': 'The tenant has no brand. Create one under Brands & locations.',
   'onboarding.hint.NO_CHANNEL': 'No sales channel is active. Set one up in the operations app.',
   'onboarding.hint.NO_DELIVERY_TARIFF': 'Delivery has no tariff. Add one in the operations app.',
   'onboarding.hint.NO_DELIVERY_ZONE': 'Delivery has no zone. Draw one in the operations app.',
-  'onboarding.hint.NO_FULFILLMENT_MODE': 'A sales channel offers neither pickup nor delivery. Choose how it fulfils orders, in the operations app.',
-  'onboarding.hint.NO_LEGAL_ENTITY': 'A location has no active legal entity. Assign one under Legal entities.',
+  'onboarding.hint.NO_FULFILLMENT_MODE':
+    'A sales channel offers neither pickup nor delivery. Choose how it fulfils orders, in the operations app.',
+  'onboarding.hint.NO_LEGAL_ENTITY':
+    'A location has no active legal entity. Assign one under Legal entities.',
   'onboarding.hint.NO_LOCATION': 'No brand has a location. Create one under Brands & locations.',
-  'onboarding.hint.NO_MERCHANT_BINDING': 'A card or wallet payment has no merchant account behind it. Connect the payment provider for that legal entity.',
+  'onboarding.hint.NO_MERCHANT_BINDING':
+    'A card or wallet payment has no merchant account behind it. Connect the payment provider for that legal entity.',
   'onboarding.hint.NO_PUBLISHED_MENU': 'No menu is published. Publish one in the operations app.',
-  'onboarding.hint.OWNER_NOT_SUPPLIED': 'No owner was named. Cancel this run and start a new one with the owner’s email.',
-  'onboarding.hint.POS_BINDING_UNHEALTHY': 'The POS connection is failing. Check it under Installations.',
-  'onboarding.hint.QUOTE_REFUSED': 'A test order could not be priced. Check the menu’s prices in the operations app.',
-  'onboarding.hint.SERVICEABILITY_UNAVAILABLE': 'Delivery coverage could not be checked just now. This retries on its own.',
+  'onboarding.hint.NOT_REQUESTED': 'No sample menu was asked for when this run was started.',
+  'onboarding.hint.OWNER_NOT_SUPPLIED':
+    'No owner was named. Cancel this run and start a new one with the owner’s email.',
+  'onboarding.hint.POS_BINDING_UNHEALTHY':
+    'The POS connection is failing. Check it under Installations.',
+  'onboarding.hint.QUOTE_REFUSED':
+    'A test order could not be priced. Check the menu’s prices in the operations app.',
+  'onboarding.hint.SAMPLE_MENU_REJECTED':
+    'The sample menu did not pass catalogue validation and was not published.',
+  'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
+    'Delivery coverage could not be checked just now. This retries on its own.',
   'onboarding.hint.TENANT_MISSING': 'The tenant record was not found.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE': 'A temporary failure. This retries on its own.',
   'onboarding.hint.open': 'Open',
   'onboarding.validate.title': 'Check now',
-  'onboarding.validate.lead': 'Runs every readiness check against the tenant as it is now, without changing the run. Use it after fixing something, before resuming.',
+  'onboarding.validate.lead':
+    'Runs every readiness check against the tenant as it is now, without changing the run. Use it after fixing something, before resuming.',
   'onboarding.validate.submit': 'Check now',
   'onboarding.validate.submitting': 'Checking…',
   'onboarding.validate.allPassed': 'Every check passes. Resume the run to record it.',
   'onboarding.validate.passed': 'Passes',
   'onboarding.validate.failed': 'Fails',
   'onboarding.cancel.title': 'Cancel this run',
-  'onboarding.cancel.lead': 'Stops the run for good; a new one can be started afterwards. Nothing already set up is undone.',
+  'onboarding.cancel.lead':
+    'Stops the run for good; a new one can be started afterwards. Nothing already set up is undone.',
   'onboarding.cancel.submit': 'Cancel run',
   'onboarding.cancel.submitting': 'Cancelling…',
-  'onboarding.template.label': 'New runs follow the {code} template, version {version}: {count} required steps.',
+  'onboarding.template.label':
+    'New runs follow the {code} template, version {version}: {count} required steps.',
   'onboarding.start.ownerLocale': 'Invitation language',
+  'onboarding.start.sampleMenu':
+    'Create and publish a sample menu so we can check everything works; the tenant replaces it later',
   'onboarding.invitation.title': 'Owner invitation',
   'onboarding.invitation.state.QUEUED': 'Waiting to be sent',
   'onboarding.invitation.state.SENT': 'Sent',
@@ -538,22 +589,34 @@ export const en = {
   'onboarding.invitation.locale.ru': 'Russian',
   'onboarding.invitation.locale.en': 'English',
   'onboarding.invitation.resend': 'Send again',
-  'onboarding.invitation.none': 'The owner’s account was linked before invitations existed, so no email was sent. Send one so they can set a password.',
+  'onboarding.invitation.none':
+    'The owner’s account was linked before invitations existed, so no email was sent. Send one so they can set a password.',
   'onboarding.invitation.send': 'Send invitation',
   'onboarding.invitation.resending': 'Sending…',
   'onboarding.invitation.resent': 'Queued again with a new link. The earlier link no longer works.',
-  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Email is not configured on this deployment yet. The invitation goes out as soon as it is.',
-  'onboarding.invitation.hint.SMTP_UNAVAILABLE': 'The mail server could not be reached. It is retried automatically.',
-  'onboarding.invitation.hint.SMTP_AUTHENTICATION': 'The mail server refused the platform’s credentials. Check the SMTP password in the secrets manager.',
-  'onboarding.invitation.hint.SMTP_SECRET_MISSING': 'The SMTP password is not in the secrets manager at the configured reference.',
-  'onboarding.invitation.hint.ADDRESS_REJECTED': 'The owner’s email address was refused. Correct it in the sign-in service, then send again.',
-  'onboarding.invitation.hint.ADDRESS_INVALID': 'The owner’s email address is not a valid address. Correct it in the sign-in service, then send again.',
-  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING': 'The owner’s account no longer exists in the sign-in service.',
-  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE': 'The sign-in service did not answer. It is retried automatically.',
+  'onboarding.invitation.hint.MAIL_NOT_CONFIGURED':
+    'Email is not configured on this deployment yet. The invitation goes out as soon as it is.',
+  'onboarding.invitation.hint.SMTP_UNAVAILABLE':
+    'The mail server could not be reached. It is retried automatically.',
+  'onboarding.invitation.hint.SMTP_AUTHENTICATION':
+    'The mail server refused the platform’s credentials. Check the SMTP password in the secrets manager.',
+  'onboarding.invitation.hint.SMTP_SECRET_MISSING':
+    'The SMTP password is not in the secrets manager at the configured reference.',
+  'onboarding.invitation.hint.ADDRESS_REJECTED':
+    'The owner’s email address was refused. Correct it in the sign-in service, then send again.',
+  'onboarding.invitation.hint.ADDRESS_INVALID':
+    'The owner’s email address is not a valid address. Correct it in the sign-in service, then send again.',
+  'onboarding.invitation.hint.OWNER_ACCOUNT_MISSING':
+    'The owner’s account no longer exists in the sign-in service.',
+  'onboarding.invitation.hint.IDENTITY_UNAVAILABLE':
+    'The sign-in service did not answer. It is retried automatically.',
   'onboarding.invitation.hint.EXPIRED': 'The link was not used within 72 hours. Send it again.',
-  'onboarding.hint.OWNER_EMAIL_UNREADABLE': 'The owner’s email could not be decrypted for this tenant. Start a new run with the owner’s email.',
-  'onboarding.template.suggested': 'Suggested for a {type}: the {code} template names this business type.',
-  'onboarding.template.fallback': 'No template names {type} yet, so new runs follow the {code} template.',
+  'onboarding.hint.OWNER_EMAIL_UNREADABLE':
+    'The owner’s email could not be decrypted for this tenant. Start a new run with the owner’s email.',
+  'onboarding.template.suggested':
+    'Suggested for a {type}: the {code} template names this business type.',
+  'onboarding.template.fallback':
+    'No template names {type} yet, so new runs follow the {code} template.',
   'onboarding.template.choose': 'Template',
   'onboarding.required.yes': 'Yes',
   'onboarding.required.no': 'No',
@@ -564,32 +627,36 @@ export const en = {
   'onboarding.resume.submitting': 'Resuming…',
   'onboarding.resume.result': '{count} step(s) reopened.',
   'onboarding.activate.title': 'Activate',
-  'onboarding.activate.lead': 'Requires every required step to have completed, plus platform approval where a policy demands it.',
+  'onboarding.activate.lead':
+    'Requires every required step to have completed, plus platform approval where a policy demands it.',
   'onboarding.activate.submit': 'Activate tenant',
   'onboarding.activate.submitting': 'Activating…',
   'onboarding.activate.outcome.activated': 'The tenant is now active.',
-  'onboarding.activate.outcome.awaitingApproval': 'Awaiting a second signature. A platform admin must decide this request from Staff & roles.',
+  'onboarding.activate.outcome.awaitingApproval':
+    'Awaiting a second signature. A platform admin must decide this request from Staff & roles.',
   'onboarding.activate.outcome.notReady': 'Not ready yet — see the outstanding steps above.',
   'onboarding.start.title': 'Start onboarding',
-  'onboarding.start.lead': 'Starts the template named below. Omit the owner email to invite nobody yet.',
+  'onboarding.start.lead':
+    'Starts the template named below. Omit the owner email to invite nobody yet.',
   'onboarding.start.ownerEmail': 'Owner email (optional)',
   'onboarding.start.submit': 'Start run',
   'onboarding.start.submitting': 'Starting…',
-
 
   'providerRegistry.title': 'Provider registry',
   'providerRegistry.lead': 'Every adapter this build declares, with the connect fields it needs.',
   'providerRegistry.column.provider': 'Provider',
   'providerRegistry.column.category': 'Category',
   'providerRegistry.column.fields': 'Connect fields',
-  'providerRegistry.note': 'Fields in amber are credentials: they are written once and never shown again.',
+  'providerRegistry.note':
+    'Fields in amber are credentials: they are written once and never shown again.',
 
   'capabilityMatrix.title': 'Capability matrix',
   'capabilityMatrix.lead': 'Which capabilities each connected POS adapter declares.',
   'capabilityMatrix.empty': 'No POS adapters are wired in this build.',
 
   'installationsExplorer.title': 'Installations explorer',
-  'installationsExplorer.lead': 'Every provider installation across tenants: install one for a tenant, bind it to a place, check its connection, replace its credential.',
+  'installationsExplorer.lead':
+    'Every provider installation across tenants: install one for a tenant, bind it to a place, check its connection, replace its credential.',
   'installationsExplorer.empty': 'No installations yet.',
   'installationsExplorer.column.tenant': 'Tenant',
   'installationsExplorer.column.provider': 'Provider',
@@ -603,7 +670,8 @@ export const en = {
   'installationsExplorer.check.action': 'Check connection',
   'installationsExplorer.check.working': 'Checking…',
   'installationsExplorer.check.result': 'Connection: {status}.',
-  'installationsExplorer.check.lead': 'Uses the restaurant’s own credential to confirm the provider answers and what it can do. A binding can only be activated after this succeeds.',
+  'installationsExplorer.check.lead':
+    'Uses the restaurant’s own credential to confirm the provider answers and what it can do. A binding can only be activated after this succeeds.',
   'installationsExplorer.bindings.title': 'Where it is used',
   'installationsExplorer.bindings.empty': 'Not bound to any brand or location yet.',
   'installationsExplorer.bindings.wholeBrand': 'whole brand',
@@ -611,7 +679,8 @@ export const en = {
   'installationsExplorer.bindings.activate': 'Activate',
   'installationsExplorer.bindings.reason': 'Reason, recorded in the audit log',
   'installationsExplorer.bindings.confirm': 'Confirm',
-  'installationsExplorer.bindings.suspendLead': 'Orders for this place fall back to the manual process until it is activated again. Nothing is deleted.',
+  'installationsExplorer.bindings.suspendLead':
+    'Orders for this place fall back to the manual process until it is activated again. Nothing is deleted.',
   'installationsExplorer.bindings.changed': 'Done.',
   'installationsExplorer.bindings.noChange': 'No change — it may already be in that state.',
   'installationsExplorer.install.open': 'Install a provider for a tenant',
@@ -622,13 +691,16 @@ export const en = {
   'installationsExplorer.install.displayName': 'Name shown to staff',
   'installationsExplorer.install.credential': 'Credential (optional)',
   'installationsExplorer.install.credentialNamed': 'Credential: {field} (optional)',
-  'installationsExplorer.install.credentialHint': 'Sent once to the secrets store and never shown again, here or anywhere.',
+  'installationsExplorer.install.credentialHint':
+    'Sent once to the secrets store and never shown again, here or anywhere.',
   'installationsExplorer.install.account': 'Account at the provider (optional)',
   'installationsExplorer.install.submit': 'Install',
-  'installationsExplorer.install.done': 'Installed for {tenant}. Bind it to a brand or branch, check the connection, then activate the binding.',
+  'installationsExplorer.install.done':
+    'Installed for {tenant}. Bind it to a brand or branch, check the connection, then activate the binding.',
   'installationsExplorer.bind.title': 'Bind to a brand or branch',
   'installationsExplorer.bind.chooseBrand': 'Choose a brand',
-  'installationsExplorer.bind.hint': 'The binding starts suspended; activate it once you have confirmed it points at the right place.',
+  'installationsExplorer.bind.hint':
+    'The binding starts suspended; activate it once you have confirmed it points at the right place.',
   'installationsExplorer.bind.submit': 'Bind',
   'installationsExplorer.bind.done': 'Bound, suspended until activated.',
   'installationsExplorer.rotate.title': 'Replace the credential',
@@ -636,14 +708,16 @@ export const en = {
   'installationsExplorer.rotate.submit': 'Replace',
   'installationsExplorer.rotate.done': 'Credential replaced.',
   'installationsExplorer.clopos.clerk': 'A clerk accepts each order at the till',
-  'installationsExplorer.clopos.hint': 'Off means orders are accepted automatically and go straight to the kitchen.',
+  'installationsExplorer.clopos.hint':
+    'Off means orders are accepted automatically and go straight to the kitchen.',
   'installationsExplorer.clopos.saved': 'Setting saved.',
 
   'messageFlow.title': 'Message flow',
   'messageFlow.lead': 'What is waiting in each queue across every tenant, and for how long.',
   'messageFlow.gap': 'Stuck broker partitions are visible in the monitoring stack, not here.',
   'messageFlow.outbox.title': 'Waiting to be published',
-  'messageFlow.outbox.note': 'Events the platform has not yet sent, by topic. Red means fifteen minutes or more.',
+  'messageFlow.outbox.note':
+    'Events the platform has not yet sent, by topic. Red means fifteen minutes or more.',
   'messageFlow.inbox.title': 'Waiting to be processed',
   'messageFlow.inbox.note': 'Messages a consumer has not yet handled, by consumer.',
   'messageFlow.empty': 'Nothing waiting.',
@@ -655,7 +729,8 @@ export const en = {
   'messageFlow.deadLetters.open': 'Open dead letters →',
 
   'deadLetters.title': 'Dead letters & replay',
-  'deadLetters.lead': 'Messages that failed after every retry: events the platform could not publish, and events a consumer could not process. Retry or resolve each one, with a reason.',
+  'deadLetters.lead':
+    'Messages that failed after every retry: events the platform could not publish, and events a consumer could not process. Retry or resolve each one, with a reason.',
   'deadLetters.empty': 'No dead-lettered events.',
   'deadLetters.column.event': 'Event',
   'deadLetters.column.type': 'Type',
@@ -698,11 +773,13 @@ export const en = {
   'deadLetters.detail.resolved': 'Resolved by',
 
   'entitlements.title': 'Entitlements',
-  'entitlements.lead': 'One tenant’s subscription and everything it is entitled to, with where each value came from.',
+  'entitlements.lead':
+    'One tenant’s subscription and everything it is entitled to, with where each value came from.',
   'tenantPicker.label': 'Tenant',
   'tenantPicker.placeholder': 'Choose a tenant',
   'tenantPicker.failed': 'The tenant list could not be loaded. Reload the page to try again.',
-  'alertsIncidents.lead': 'Every platform alert, kept until someone resolves it. An alert raised again while it is open counts another occurrence instead of adding a row.',
+  'alertsIncidents.lead':
+    'Every platform alert, kept until someone resolves it. An alert raised again while it is open counts another occurrence instead of adding a row.',
   'alertsIncidents.showResolved': 'Show resolved',
   'alertsIncidents.empty': 'No open incidents.',
   'alertsIncidents.class.CONTROL_BAND_ESCALATED': 'A platform measure crossed its band',
@@ -718,12 +795,14 @@ export const en = {
   'alertsIncidents.resolve': 'Resolve',
   'alertsIncidents.ackNote': 'What you are doing about it',
   'alertsIncidents.resolveNote': 'What was done',
-  'webhookDeliveries.lead': 'Every call a payment provider made to HorecaOS, newest first: whether its signature checked out, what we answered, and whether it matched a payment.',
+  'webhookDeliveries.lead':
+    'Every call a payment provider made to HorecaOS, newest first: whether its signature checked out, what we answered, and whether it matched a payment.',
   'webhookDeliveries.provider': 'Provider',
   'webhookDeliveries.allProviders': 'All providers',
   'webhookDeliveries.invalidOnly': 'Only calls with a bad signature',
   'webhookDeliveries.empty': 'No calls recorded.',
-  'webhookDeliveries.invalidWarning': '{count} of these had a bad signature: someone probing, or a key one side did not rotate.',
+  'webhookDeliveries.invalidWarning':
+    '{count} of these had a bad signature: someone probing, or a key one side did not rotate.',
   'webhookDeliveries.column.received': 'Received',
   'webhookDeliveries.column.call': 'Call',
   'webhookDeliveries.column.reference': 'Provider’s reference',
@@ -732,7 +811,8 @@ export const en = {
   'webhookDeliveries.signature.valid': 'Valid',
   'webhookDeliveries.signature.invalid': 'Bad',
   'webhookDeliveries.unmatched': 'no matching payment',
-  'errorTaxonomy.lead': 'The categories every failure is filed under, what each means, what to do, and how many messages are in each right now.',
+  'errorTaxonomy.lead':
+    'The categories every failure is filed under, what each means, what to do, and how many messages are in each right now.',
   'errorTaxonomy.retried': 'retried by itself',
   'errorTaxonomy.notRetried': 'needs a person',
   'errorTaxonomy.reconcileFirst': 'check the provider first',
@@ -740,36 +820,55 @@ export const en = {
   'errorTaxonomy.counts': '{dead} waiting on a person · {waiting} being retried',
   'errorTaxonomy.openDeadLetters': 'open',
   'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.name': 'Our infrastructure hiccup',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning': 'A timeout, or the broker or database was briefly unavailable.',
-  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action': 'Nothing, unless it keeps coming back: the platform retries by itself.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.meaning':
+    'A timeout, or the broker or database was briefly unavailable.',
+  'errorTaxonomy.TRANSIENT_INFRASTRUCTURE.action':
+    'Nothing, unless it keeps coming back: the platform retries by itself.',
   'errorTaxonomy.TRANSIENT_PROVIDER.name': 'Provider temporarily unavailable',
-  'errorTaxonomy.TRANSIENT_PROVIDER.meaning': 'The provider answered 429 or 5xx, or its circuit is open for a while.',
-  'errorTaxonomy.TRANSIENT_PROVIDER.action': 'Wait; it is retried. If it lasts, check the provider’s status page.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.meaning':
+    'The provider answered 429 or 5xx, or its circuit is open for a while.',
+  'errorTaxonomy.TRANSIENT_PROVIDER.action':
+    'Wait; it is retried. If it lasts, check the provider’s status page.',
   'errorTaxonomy.CONTRACT_UNSUPPORTED.name': 'Message we do not understand',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning': 'An event type or version this build does not know. Retrying never helps.',
-  'errorTaxonomy.CONTRACT_UNSUPPORTED.action': 'Deploy the version that knows it, then retry; or resolve if it was never ours.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.meaning':
+    'An event type or version this build does not know. Retrying never helps.',
+  'errorTaxonomy.CONTRACT_UNSUPPORTED.action':
+    'Deploy the version that knows it, then retry; or resolve if it was never ours.',
   'errorTaxonomy.PAYLOAD_INVALID.name': 'Broken message',
-  'errorTaxonomy.PAYLOAD_INVALID.meaning': 'A required fact is missing, or the same message arrived with different contents.',
-  'errorTaxonomy.PAYLOAD_INVALID.action': 'Find who sent it and fix the sender; resolve this one with the reason.',
+  'errorTaxonomy.PAYLOAD_INVALID.meaning':
+    'A required fact is missing, or the same message arrived with different contents.',
+  'errorTaxonomy.PAYLOAD_INVALID.action':
+    'Find who sent it and fix the sender; resolve this one with the reason.',
   'errorTaxonomy.DOMAIN_REJECTED.name': 'Refused by the rules',
-  'errorTaxonomy.DOMAIN_REJECTED.meaning': 'It would break a rule, or the thing it changes has moved on.',
-  'errorTaxonomy.DOMAIN_REJECTED.action': 'Usually nothing to redo: read the error, then resolve with what you found.',
+  'errorTaxonomy.DOMAIN_REJECTED.meaning':
+    'It would break a rule, or the thing it changes has moved on.',
+  'errorTaxonomy.DOMAIN_REJECTED.action':
+    'Usually nothing to redo: read the error, then resolve with what you found.',
   'errorTaxonomy.AUTHORIZATION_REJECTED.name': 'Refused: wrong tenant or identity',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning': 'The message named a tenant, place or service identity it had no right to.',
-  'errorTaxonomy.AUTHORIZATION_REJECTED.action': 'Treat it as a security question: find out why before anything is retried.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.meaning':
+    'The message named a tenant, place or service identity it had no right to.',
+  'errorTaxonomy.AUTHORIZATION_REJECTED.action':
+    'Treat it as a security question: find out why before anything is retried.',
   'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.name': 'Provider may have done it',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning': 'The provider may have accepted it; a blind retry can charge a customer twice.',
-  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action': 'Check with the provider first, then retry or resolve with the evidence.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.meaning':
+    'The provider may have accepted it; a blind retry can charge a customer twice.',
+  'errorTaxonomy.UNCERTAIN_EXTERNAL_OUTCOME.action':
+    'Check with the provider first, then retry or resolve with the evidence.',
   'errorTaxonomy.UNKNOWN.name': 'Not classified',
-  'errorTaxonomy.UNKNOWN.meaning': 'The cause is not one of the shapes the platform classifies with confidence.',
-  'errorTaxonomy.UNKNOWN.action': 'Read the error text; if a pattern shows, it deserves a category of its own.',
-  'sandbox.lead': 'Try an adapter against a provider’s test endpoint before a restaurant depends on it: every installation pointed at a sandbox, with the same connection check a live one gets.',
+  'errorTaxonomy.UNKNOWN.meaning':
+    'The cause is not one of the shapes the platform classifies with confidence.',
+  'errorTaxonomy.UNKNOWN.action':
+    'Read the error text; if a pattern shows, it deserves a category of its own.',
+  'sandbox.lead':
+    'Try an adapter against a provider’s test endpoint before a restaurant depends on it: every installation pointed at a sandbox, with the same connection check a live one gets.',
   'sandbox.environments.title': 'Sandbox endpoints',
   'sandbox.environments.empty': 'No provider has an approved sandbox endpoint.',
   'sandbox.installations.title': 'Installations on a sandbox',
-  'sandbox.installations.empty': 'Nothing is installed against a sandbox endpoint. Install one for a test tenant from Installations.',
+  'sandbox.installations.empty':
+    'Nothing is installed against a sandbox endpoint. Install one for a test tenant from Installations.',
   'sandbox.column.endpoint': 'Endpoint',
-  'sandbox.contractNote': 'Replaying recorded provider traffic against each adapter is part of the contract-test suite and runs on every build.',
+  'sandbox.contractNote':
+    'Replaying recorded provider traffic against each adapter is part of the contract-test suite and runs on every build.',
   'common.reason': 'Reason, recorded in the audit log',
   'common.cancel': 'Cancel',
   'common.chooseColleague': 'Choose a colleague',
@@ -813,7 +912,8 @@ export const en = {
   'entitlements.column.mode': 'Mode',
   'entitlements.column.source': 'Source',
   'entitlements.override.title': 'Grant a time-bounded override',
-  'entitlements.override.lead': 'Changes one entitlement for this tenant until a set date, without changing the plan. Every override expires.',
+  'entitlements.override.lead':
+    'Changes one entitlement for this tenant until a set date, without changing the plan. Every override expires.',
   'entitlements.override.key': 'Entitlement key',
   'entitlements.override.limit': 'New limit',
   'entitlements.override.validUntil': 'Valid until',
@@ -830,17 +930,21 @@ export const en = {
   'entitlements.start.trialDays': 'Trial days (optional)',
   'entitlements.start.submit': 'Start subscription',
   'entitlements.start.done': 'Subscription started.',
-  'entitlements.start.noPlans': 'No live plan version to put this tenant on. Activate one in the plan catalog first.',
+  'entitlements.start.noPlans':
+    'No live plan version to put this tenant on. Activate one in the plan catalog first.',
   'entitlements.transition.title': 'Change status',
   'entitlements.transition.to': 'New status',
   'entitlements.transition.choose': 'Choose a status',
-  'entitlements.transition.suspendHint': 'While suspended, the tenant cannot add more of anything the plan counts. Nothing is deleted.',
+  'entitlements.transition.suspendHint':
+    'While suspended, the tenant cannot add more of anything the plan counts. Nothing is deleted.',
   'entitlements.transition.suspensionReason': 'Why it is suspended (shown on the subscription)',
   'entitlements.transition.cancelAt': 'Ends on',
-  'entitlements.transition.terminalWarning': 'This ends the subscription for good. To continue, a new subscription has to be started.',
+  'entitlements.transition.terminalWarning':
+    'This ends the subscription for good. To continue, a new subscription has to be started.',
   'entitlements.transition.submit': 'Change status',
   'entitlements.transition.done': 'Subscription is now: {status}.',
-  'entitlements.transition.ended': 'This subscription has ended. Start a new one to put the tenant on a plan again.',
+  'entitlements.transition.ended':
+    'This subscription has ended. Start a new one to put the tenant on a plan again.',
   'entitlements.planSays': 'plan says: {mode}',
   'entitlements.usage.open': 'Open usage for this tenant →',
   'entitlements.override.chooseKey': 'Choose an entitlement',
@@ -862,8 +966,10 @@ export const en = {
   'fiscalization.retry.result': '{succeeded} succeeded, {failed} failed.',
 
   'fiscalReference.title': 'Fiscal reference',
-  'fiscalReference.lead': 'The imported ИКПУ/MXIK product classification reference, browsed by code or label.',
-  'fiscalReference.notLoaded': 'The official ИКПУ/MXIK list has never been imported. Every search below will find nothing until it is.',
+  'fiscalReference.lead':
+    'The imported ИКПУ/MXIK product classification reference, browsed by code or label.',
+  'fiscalReference.notLoaded':
+    'The official ИКПУ/MXIK list has never been imported. Every search below will find nothing until it is.',
   'fiscalReference.query': 'Search',
   'fiscalReference.empty': 'No match.',
   'fiscalReference.column.code': 'Code',
@@ -872,7 +978,8 @@ export const en = {
   'fiscalReference.column.packages': 'Default packages',
 
   'staff.title': 'Staff & roles',
-  'staff.lead': 'HorecaOS employees, roles, and tenant scoping — plus the queue where a second admin decides a pending grant or activation.',
+  'staff.lead':
+    'HorecaOS employees, roles, and tenant scoping — plus the queue where a second admin decides a pending grant or activation.',
   'staff.platformGrants.title': 'Platform-scope grants',
   'staff.platformGrants.empty': 'No platform-scope grants yet.',
   'staff.column.principal': 'Principal',
@@ -885,7 +992,8 @@ export const en = {
   'staff.grant.role': 'Role code',
   'staff.grant.action': 'Grant',
   'staff.grant.outcome.granted': 'Granted.',
-  'staff.grant.outcome.awaitingApproval': 'Awaiting a second signature — a policy governs this grant.',
+  'staff.grant.outcome.awaitingApproval':
+    'Awaiting a second signature — a policy governs this grant.',
   'staff.tenantGrant.title': 'Grant a role within a tenant',
   'staff.tenantGrant.lead': 'Scopes a principal into one tenant, brand, or location.',
   'staff.tenantGrant.success': 'Granted.',
@@ -905,7 +1013,8 @@ export const en = {
   'staff.grant.location': 'Location',
   'staff.grant.chooseLocation': 'Choose a location',
   'staff.approvals.title': 'Pending approvals',
-  'staff.approvals.lead': 'What is waiting for a second signature in one tenant, including onboarding activation.',
+  'staff.approvals.lead':
+    'What is waiting for a second signature in one tenant, including onboarding activation.',
   'staff.approvals.decisionReason': 'Decision reason (required to approve or decline)',
   'staff.approvals.column.action': 'Action',
   'staff.approvals.column.threshold': 'Threshold',
@@ -923,7 +1032,8 @@ export const en = {
   'capabilityRegistry.column.action': 'Action',
 
   'secrets.title': 'Secrets',
-  'secrets.lead': 'Provider credentials by tenant, and when each was last rotated. Values are never shown.',
+  'secrets.lead':
+    'Provider credentials by tenant, and when each was last rotated. Values are never shown.',
   'secrets.empty': 'No installations yet.',
   'secrets.column.credential': 'Credential',
   'secrets.column.rotated': 'Last rotated',
@@ -961,16 +1071,17 @@ export const en = {
   'auditLog.detail.change': 'What changed',
   'auditLog.detail.noChange': 'No change document was recorded.',
 
-
   'referenceData.title': 'Reference data',
-  'referenceData.lead': 'The countries the platform trades in, the languages the consoles ship, each country’s public holidays, and the time buckets orders are reported in.',
+  'referenceData.lead':
+    'The countries the platform trades in, the languages the consoles ship, each country’s public holidays, and the time buckets orders are reported in.',
   'referenceData.countries': 'Countries',
   'referenceData.column.country': 'Country',
   'referenceData.column.currency': 'Default currency',
   'referenceData.column.timezone': 'Default timezone',
   'referenceData.locales': 'Locales',
   'referenceData.holidays': 'Public holidays',
-  'referenceData.holidaysNote': 'Fixed dates recur every year. Holidays that move with the lunar calendar, such as Ramazon and Qurbon Hayit, are entered for the year they fall in once announced.',
+  'referenceData.holidaysNote':
+    'Fixed dates recur every year. Holidays that move with the lunar calendar, such as Ramazon and Qurbon Hayit, are entered for the year they fall in once announced.',
   'referenceData.holiday.add': 'Add a holiday',
   'referenceData.holiday.name': 'Name',
   'referenceData.holiday.everyYear': 'every year',
@@ -978,12 +1089,14 @@ export const en = {
   'referenceData.holiday.remove': 'Remove',
   'referenceData.holiday.none': 'No holidays recorded.',
   'referenceData.sla': 'Order time buckets',
-  'referenceData.slaNote': 'Every order is counted in one of these, from placing it to handing it over. Fixed per release (set {version}), so past charts keep their meaning.',
+  'referenceData.slaNote':
+    'Every order is counted in one of these, from placing it to handing it over. Fixed per release (set {version}), so past charts keep their meaning.',
   'referenceData.bucket.range': '{from} to {to} minutes',
   'referenceData.bucket.over': '{from} minutes or more',
 
   'migrationRuns.title': 'Migration runs',
-  'migrationRuns.lead': 'Moving tenants over from the legacy system. A program holds scopes, each one tenant, brand or branch and one capability, and every scope walks the same path to retirement.',
+  'migrationRuns.lead':
+    'Moving tenants over from the legacy system. A program holds scopes, each one tenant, brand or branch and one capability, and every scope walks the same path to retirement.',
   'migrationRuns.program.name': 'Program name',
   'migrationRuns.program.source': 'Source environment',
   'migrationRuns.program.target': 'Target environment',
@@ -1025,7 +1138,8 @@ export const en = {
   'migrationRuns.move.done': 'Scope moved to: {state}.',
   'migrationRuns.move.resume': 'Resume',
   'migrationRuns.move.resumed': 'Scope resumed where it left off.',
-  'migrationRuns.move.rollbackWarning': 'Rolling back returns writes to the legacy system. The HorecaOS copy is kept and keeps being fed.',
+  'migrationRuns.move.rollbackWarning':
+    'Rolling back returns writes to the legacy system. The HorecaOS copy is kept and keeps being fed.',
   'migrationRuns.move.toCutover': 'Ready: decide the cutover on the checklist →',
   'migrationRuns.runs.title': 'Runs',
   'migrationRuns.runs.empty': 'No runs over this scope yet.',
@@ -1040,7 +1154,8 @@ export const en = {
   'migrationRuns.run.start': 'Start run',
   'migrationRuns.run.finish': 'End run',
   'migrationRuns.run.finishSubmit': 'End run',
-  'migrationRuns.run.finishHint': 'After this the run’s figures are fixed; a correction is a new remediation run.',
+  'migrationRuns.run.finishHint':
+    'After this the run’s figures are fixed; a correction is a new remediation run.',
   'migrationRuns.run.checksum': 'SHA-256 of the output (optional)',
   'migrationRuns.run.finished': 'Run ended: {status}.',
   'migrationRuns.quarantine.title': 'Held back for a decision',
@@ -1096,12 +1211,16 @@ export const en = {
   'migration.resolution.ACCEPTED_NOT_MIGRATABLE': 'Accepted as not migratable',
 
   'globalLookup.title': 'Global lookup',
-  'globalLookup.lead': 'Paste any identifier to find what it is and whose it is, across every tenant.',
+  'globalLookup.lead':
+    'Paste any identifier to find what it is and whose it is, across every tenant.',
   'globalLookup.search': 'Search',
-  'globalLookup.placeholder': 'An id, order number, courier reference, provider reference, or tenant name',
-  'globalLookup.hint': 'Matches are exact, except tenant names. Customers and couriers are shown by id only; open the tenant to see more.',
+  'globalLookup.placeholder':
+    'An id, order number, courier reference, provider reference, or tenant name',
+  'globalLookup.hint':
+    'Matches are exact, except tenant names. Customers and couriers are shown by id only; open the tenant to see more.',
   'globalLookup.phone.title': 'Find a customer by phone',
-  'globalLookup.phone.lead': 'Which tenants know this number as a customer. The answer is the tenant and the account id, never a name; the lookup is recorded with your reason.',
+  'globalLookup.phone.lead':
+    'Which tenants know this number as a customer. The answer is the tenant and the account id, never a name; the lookup is recorded with your reason.',
   'globalLookup.phone.number': 'Phone number',
   'globalLookup.phone.none': 'No tenant knows this number ({tenants} searched).',
   'globalLookup.phone.account': 'account {id}',
@@ -1129,7 +1248,6 @@ export const en = {
   'globalLookup.matched.PARTNER_REFERENCE': 'Partner’s order reference',
   'globalLookup.notFound': 'Nothing matches that exactly.',
 
-
   'tenantIdentity.title': 'Identity & realm',
   'tenantIdentity.lead': 'This tenant’s link to its sign-in organization.',
   'tenantIdentity.organization.title': 'Keycloak organization',
@@ -1137,15 +1255,18 @@ export const en = {
   'tenantIdentity.status': 'Tenant status',
   'tenantIdentity.notLinked': 'No Keycloak organization has been linked to this tenant yet.',
   'tenantIdentity.link.title': 'Link an existing organization',
-  'tenantIdentity.link.lead': 'Onboarding normally creates and links the organization. Link one by hand only if it already exists in the sign-in service — a link cannot be changed afterwards.',
+  'tenantIdentity.link.lead':
+    'Onboarding normally creates and links the organization. Link one by hand only if it already exists in the sign-in service — a link cannot be changed afterwards.',
   'tenantIdentity.link.organizationId': 'Organization id, from the sign-in service',
   'tenantIdentity.link.submit': 'Link',
   'tenantIdentity.link.submitting': 'Linking…',
   'tenantIdentity.link.done': 'Linked.',
-  'tenantIdentity.gap': 'Staff and courier sign-in settings are fixed at deployment and are not shown here. Differences found between HorecaOS and the sign-in service appear in the Audit log.',
+  'tenantIdentity.gap':
+    'Staff and courier sign-in settings are fixed at deployment and are not shown here. Differences found between HorecaOS and the sign-in service appear in the Audit log.',
 
   'configurationPolicy.title': 'Configuration & policy',
-  'configurationPolicy.lead': 'Resolve any setting at any level, and see where its value came from.',
+  'configurationPolicy.lead':
+    'Resolve any setting at any level, and see where its value came from.',
   'configurationPolicy.picker.title': 'Resolve a key',
   'configurationPolicy.picker.key': 'Key',
   'configurationPolicy.picker.keyPlaceholder': 'Choose a key…',
@@ -1176,8 +1297,10 @@ export const en = {
   'configurationPolicy.write.notSettableAtScope':
     'This key cannot be set at this scope. It is settable at: {scopes}.',
   'configurationPolicy.write.scopeBanner': 'You are about to set {code} at {scope}.',
-  'configurationPolicy.write.note.trackRetentionFloor': 'The platform refuses to start if a stored value for this setting is shorter than the settlement period plus the dispute window. The change applies at once; only a later restart is at risk.',
-  'configurationPolicy.write.note.auditRetention': 'One of two audit retention defaults still awaiting legal sign-off. Lowering it shortens how long audit evidence is protected before it is archived.',
+  'configurationPolicy.write.note.trackRetentionFloor':
+    'The platform refuses to start if a stored value for this setting is shorter than the settlement period plus the dispute window. The change applies at once; only a later restart is at risk.',
+  'configurationPolicy.write.note.auditRetention':
+    'One of two audit retention defaults still awaiting legal sign-off. Lowering it shortens how long audit evidence is protected before it is archived.',
   'configurationPolicy.write.explicitNull': 'Explicit null (deliberately unset here)',
   'configurationPolicy.write.value': 'Value',
   'configurationPolicy.write.invalidValue': "Enter a value matching this key's type.",
@@ -1189,7 +1312,8 @@ export const en = {
     'Saved. The result above now shows what the platform resolves after this write.',
 
   'contractsVersions.title': 'Contracts & versions',
-  'contractsVersions.lead': 'Which adapter version each provider’s installations run, and every event this build can publish with its schema version.',
+  'contractsVersions.lead':
+    'Which adapter version each provider’s installations run, and every event this build can publish with its schema version.',
   'contractsVersions.gap': 'Deprecations are not listed: no adapter has been retired yet.',
   'contractsVersions.column.event': 'Event',
   'contractsVersions.column.module': 'Producing module',
@@ -1205,11 +1329,9 @@ export const en = {
   'contractsVersions.adapters.unchecked': 'not checked yet',
   'contractsVersions.events.title': 'Event contracts',
 
-
-
-
   'planCatalog.title': 'Plan catalog',
-  'planCatalog.lead': 'Every plan and every version of it. A draft goes live only when someone other than its author activates it; a live version never changes.',
+  'planCatalog.lead':
+    'Every plan and every version of it. A draft goes live only when someone other than its author activates it; a live version never changes.',
   'planCatalog.empty': 'No plans registered yet.',
   'planCatalog.column.price': 'Price',
   'planCatalog.column.billingPeriod': 'Billing period',
@@ -1226,12 +1348,14 @@ export const en = {
   'planCatalog.draft.trialDays': 'Trial days',
   'planCatalog.draft.deposit': 'Activation deposit',
   'planCatalog.draft.discount': '{months}-month term, % off',
-  'planCatalog.draft.termsInvalid': 'A trial is 1 to 90 days, a deposit an amount, and a term discount 0.01 to 50 percent, offered on a monthly plan only.',
+  'planCatalog.draft.termsInvalid':
+    'A trial is 1 to 90 days, a deposit an amount, and a term discount 0.01 to 50 percent, offered on a monthly plan only.',
   'entitlements.start.term': 'Term',
   'entitlements.start.monthToMonth': 'Month to month',
   'entitlements.start.termOption': '{months} months, {percent}% off',
   'entitlements.subscription.termMonths': '{months} months',
-  'moduleCatalog.lead': 'Modules sold beside the plans, each on its own unit: per tenant, per brand, per branch, per unit such as a kiosk, or once. A module can switch on features the plan leaves off. One person drafts it, another puts it on sale, and its price never changes after that.',
+  'moduleCatalog.lead':
+    'Modules sold beside the plans, each on its own unit: per tenant, per brand, per branch, per unit such as a kiosk, or once. A module can switch on features the plan leaves off. One person drafts it, another puts it on sale, and its price never changes after that.',
   'moduleCatalog.empty': 'No modules yet.',
   'moduleCatalog.draft.open': 'Draft a module',
   'moduleCatalog.draft.title': 'New module',
@@ -1273,7 +1397,8 @@ export const en = {
   'moduleCatalog.tenant.quantity': 'How many',
   'moduleCatalog.tenant.add': 'Add',
   'moduleCatalog.tenant.added': '{code} added.',
-  'statements.lead': 'What a tenant owes for a month under its plan and modules, before tax: the plan, each module on its own unit, and usage beyond what the plan includes. Preview any month; issue one once it has ended, then export it for accounting. A wrong statement is voided and issued again.',
+  'statements.lead':
+    'What a tenant owes for a month under its plan and modules, before tax: the plan, each module on its own unit, and usage beyond what the plan includes. Preview any month; issue one once it has ended, then export it for accounting. A wrong statement is voided and issued again.',
   'statements.preview.title': 'Month preview',
   'statements.preview.month': 'Month',
   'statements.preview.nothing': 'Nothing is billable for this month.',
@@ -1304,12 +1429,17 @@ export const en = {
   'statements.void.submit': 'Void the statement',
   'statements.void.done': 'Statement {number} voided.',
   'statements.wallet.title': 'Prepaid wallet',
-  'statements.wallet.body': 'Not built. How tenants pay HorecaOS, and how money paid in advance is taxed, are not decided yet, so there is no balance, top-up or credit expiry to show.',
-  'dunning.lead': 'Every tenant that is late paying or suspended, how long it has been there, and what each stage restricts. Nothing moves a tenant by itself: after two weeks late an incident asks a person to decide.',
+  'statements.wallet.body':
+    'Not built. How tenants pay HorecaOS, and how money paid in advance is taxed, are not decided yet, so there is no balance, top-up or credit expiry to show.',
+  'dunning.lead':
+    'Every tenant that is late paying or suspended, how long it has been there, and what each stage restricts. Nothing moves a tenant by itself: after two weeks late an incident asks a person to decide.',
   'dunning.stage.planApplies': 'Everything in the plan and its modules works.',
-  'dunning.stage.planLapses': 'The plan and its modules no longer apply; features fall back to defaults.',
-  'dunning.stage.additionsBlocked': 'Nothing more can be added: no new branch, product or user. Nothing is deleted.',
-  'dunning.review': 'A tenant late for two weeks raises an incident under Alerts, and again every two weeks while it stays late.',
+  'dunning.stage.planLapses':
+    'The plan and its modules no longer apply; features fall back to defaults.',
+  'dunning.stage.additionsBlocked':
+    'Nothing more can be added: no new branch, product or user. Nothing is deleted.',
+  'dunning.review':
+    'A tenant late for two weeks raises an incident under Alerts, and again every two weeks while it stays late.',
   'dunning.empty': 'No tenant is late paying.',
   'dunning.column.stage': 'Stage',
   'dunning.column.plan': 'Plan',
@@ -1331,31 +1461,36 @@ export const en = {
   'planCatalog.register.cancel': 'Cancel',
   'planCatalog.register.title': 'New plan',
   'planCatalog.register.code': 'Code',
-  'planCatalog.register.codeHint': 'Capital letters, digits and underscores, e.g. NETWORK. It cannot be changed later.',
+  'planCatalog.register.codeHint':
+    'Capital letters, digits and underscores, e.g. NETWORK. It cannot be changed later.',
   'planCatalog.register.name': 'Name',
   'planCatalog.register.submit': 'Register plan',
   'planCatalog.register.done': 'Plan {code} registered. Draft its first version below.',
   'planCatalog.draft.open': 'Draft a new version',
   'planCatalog.draft.cancel': 'Close',
-  'planCatalog.draft.prefilled': 'Filled in from v{version}. Change only what is different; v{version} itself stays as it is.',
+  'planCatalog.draft.prefilled':
+    'Filled in from v{version}. Change only what is different; v{version} itself stays as it is.',
   'planCatalog.draft.first': 'The plan’s first version.',
   'planCatalog.draft.currency': 'Currency',
-  'planCatalog.draft.priceInvalid': 'Enter the price as a whole amount, with decimals only where the currency has them.',
+  'planCatalog.draft.priceInvalid':
+    'Enter the price as a whole amount, with decimals only where the currency has them.',
   'planCatalog.draft.include': 'Include',
   'planCatalog.draft.feature': 'feature',
   'planCatalog.draft.noOverage': 'none',
-  'planCatalog.draft.linesHint': 'A key left out falls back to its safe default, which never refuses anything.',
+  'planCatalog.draft.linesHint':
+    'A key left out falls back to its safe default, which never refuses anything.',
   'planCatalog.draft.submit': 'Save draft',
   'planCatalog.draft.done': 'New draft of {code} saved. Someone other than you has to activate it.',
   'planCatalog.activate.open': 'Activate…',
-  'planCatalog.activate.warning': 'Activation cannot be undone. The price and entitlements of this version become fixed, and it can be offered to tenants.',
+  'planCatalog.activate.warning':
+    'Activation cannot be undone. The price and entitlements of this version become fixed, and it can be offered to tenants.',
   'planCatalog.activate.ownDraft': 'You drafted this version, so someone else has to activate it.',
   'planCatalog.activate.confirm': 'Activate v{version}',
   'planCatalog.activate.done': '{code} v{version} is live.',
 
-
   'usageMetering.title': 'Metering & usage',
-  'usageMetering.lead': 'What one tenant used, per entitlement and period. A figure is corrected by adding an adjustment, never by editing what was measured.',
+  'usageMetering.lead':
+    'What one tenant used, per entitlement and period. A figure is corrected by adding an adjustment, never by editing what was measured.',
   'usageMetering.empty': 'No metered usage recorded for this tenant.',
   'usageMetering.column.period': 'Period',
   'usageMetering.column.measured': 'Measured',
@@ -1364,20 +1499,19 @@ export const en = {
   'usageMetering.rebuild.action': 'Recompute totals from the ledger',
   'usageMetering.rebuild.hint': 'Safe at any time: no recorded movement changes.',
   'usageMetering.rebuild.clean': 'Every total matched the ledger.',
-  'usageMetering.rebuild.diverged': 'Totals that disagreed with the ledger and were corrected: {count}. Worth finding out why:',
+  'usageMetering.rebuild.diverged':
+    'Totals that disagreed with the ledger and were corrected: {count}. Worth finding out why:',
   'usageMetering.adjust.open': 'Adjust',
-  'usageMetering.adjust.lead': 'Adds a signed correction with a reason and a second name. What was measured stays as it was.',
+  'usageMetering.adjust.lead':
+    'Adds a signed correction with a reason and a second name. What was measured stays as it was.',
   'usageMetering.adjust.delta': 'Change (e.g. -3 or 5)',
   'usageMetering.adjust.source': 'Source reference (optional)',
   'usageMetering.adjust.submit': 'Record adjustment',
   'usageMetering.adjust.done': 'Adjustment recorded.',
 
-
-
-
-
   'accessDebugger.title': 'Effective access debugger',
-  'accessDebugger.lead': 'What a person or service may do, and why — the same decision the server makes on every request.',
+  'accessDebugger.lead':
+    'What a person or service may do, and why — the same decision the server makes on every request.',
   'accessDebugger.subject': 'Subject',
   'accessDebugger.tenantId': 'Tenant id (optional)',
   'accessDebugger.brandId': 'Brand id (optional)',
@@ -1393,8 +1527,6 @@ export const en = {
   'accessDebugger.column.scope': 'Scope',
   'accessDebugger.column.role': 'Role',
   'accessDebugger.column.capabilities': 'Capabilities',
-
-
 
   'policyDefaults.title': 'Policy defaults',
   'policyDefaults.lead': 'Platform-level defaults that tenants see and inherit.',
@@ -1415,7 +1547,8 @@ export const en = {
   'idMappingExplorer.column.created': 'Recorded',
 
   'dualRunComparison.title': 'Dual-run comparison',
-  'dualRunComparison.lead': 'Legacy output next to HorecaOS output, rule by rule, for one reconciliation run.',
+  'dualRunComparison.lead':
+    'Legacy output next to HorecaOS output, rule by rule, for one reconciliation run.',
   'dualRunComparison.search': 'Search',
   'dualRunComparison.empty': 'No reconciliation results recorded for this run.',
   'dualRunComparison.column.rule': 'Rule',
@@ -1428,16 +1561,19 @@ export const en = {
   'dualRunComparison.noRuns': 'This scope has no reconciliation runs yet.',
 
   'cutoverChecklist.title': 'Cutover checklist',
-  'cutoverChecklist.lead': 'Go or no-go for each scope of a program, and the decision itself: approve, refuse, or roll back.',
+  'cutoverChecklist.lead':
+    'Go or no-go for each scope of a program, and the decision itself: approve, refuse, or roll back.',
   'cutoverChecklist.scopes.title': 'Scopes',
   'cutoverChecklist.column.readiness': 'Readiness',
   'cutoverChecklist.readiness.go': 'Go',
   'cutoverChecklist.readiness.blocked': 'Blocked',
   'cutoverChecklist.readiness.pending': 'In progress',
   'cutoverChecklist.decide': 'Decide…',
-  'cutoverChecklist.decideLead': 'HorecaOS takes over this scope’s writes when you approve. The checks run again at that moment.',
+  'cutoverChecklist.decideLead':
+    'HorecaOS takes over this scope’s writes when you approve. The checks run again at that moment.',
   'cutoverChecklist.requestedBy': 'Requested by',
-  'cutoverChecklist.requestedByHint': 'The colleague who asked for this window, never you: you are recorded as the one deciding.',
+  'cutoverChecklist.requestedByHint':
+    'The colleague who asked for this window, never you: you are recorded as the one deciding.',
   'cutoverChecklist.evidence': 'What the decision rests on',
   'cutoverChecklist.evidenceKey': 'Name',
   'cutoverChecklist.evidenceValue': 'Value',
@@ -1448,14 +1584,17 @@ export const en = {
   'cutoverChecklist.approved': 'Cutover approved for {tenant}.',
   'cutoverChecklist.refused': 'Cutover refused for {tenant}; the scope stays where it is.',
   'cutoverChecklist.rollback': 'Roll back…',
-  'cutoverChecklist.rollbackWarning': 'Rolling back returns writes to the legacy system. The HorecaOS copy is kept and keeps being fed.',
+  'cutoverChecklist.rollbackWarning':
+    'Rolling back returns writes to the legacy system. The HorecaOS copy is kept and keeps being fed.',
   'cutoverChecklist.rollbackConfirm': 'Roll back',
   'cutoverChecklist.rolledBack': 'Rolled back for {tenant}: writes are back on the legacy system.',
 
   'tenantIssueQueue.title': 'Tenant issue queue',
-  'tenantIssueQueue.lead': 'Open problems for one tenant, with the evidence and, where there is one, the decision that closes each.',
+  'tenantIssueQueue.lead':
+    'Open problems for one tenant, with the evidence and, where there is one, the decision that closes each.',
   'tenantIssueQueue.credentials.title': 'Credentials due to be rotated',
-  'tenantIssueQueue.credentials.rule': 'Providers do not say when a credential expires, so one is due when it has not been rotated for {days} days.',
+  'tenantIssueQueue.credentials.rule':
+    'Providers do not say when a credential expires, so one is due when it has not been rotated for {days} days.',
   'tenantIssueQueue.credentials.empty': 'Every credential was rotated recently.',
   'tenantIssueQueue.credentials.rotated': 'last rotated {days} days ago',
   'tenantIssueQueue.credentials.never': 'never rotated, set up {days} days ago',
@@ -1469,18 +1608,22 @@ export const en = {
   'tenantIssueQueue.fiscal.fullScreen': 'Open in Fiscalization operations →',
   'tenantIssueQueue.pos.title': 'Orders waiting on a POS decision',
   'tenantIssueQueue.pos.empty': 'No orders stuck between HorecaOS and the POS.',
-  'tenantIssueQueue.pos.lead': 'The order was sent to the till but no reply came back. Ask the POS first; if it cannot tell, decide from what it found.',
+  'tenantIssueQueue.pos.lead':
+    'The order was sent to the till but no reply came back. Ask the POS first; if it cannot tell, decide from what it found.',
   'tenantIssueQueue.pos.venue': 'Venue',
   'tenantIssueQueue.pos.sent': 'Sent',
   'tenantIssueQueue.pos.stateColumn': 'Status',
   'tenantIssueQueue.pos.state.UNCERTAIN': 'POS not asked yet',
   'tenantIssueQueue.pos.state.AWAITING_OPERATOR': 'Needs a decision',
   'tenantIssueQueue.pos.ask': 'Ask the POS',
-  'tenantIssueQueue.pos.asked': 'The POS was read. If it recognised the order, the export is settled; otherwise it now waits for a decision.',
-  'tenantIssueQueue.pos.askFailed': 'The POS could not be read: {detail}. Try again later; nothing was re-sent.',
+  'tenantIssueQueue.pos.asked':
+    'The POS was read. If it recognised the order, the export is settled; otherwise it now waits for a decision.',
+  'tenantIssueQueue.pos.askFailed':
+    'The POS could not be read: {detail}. Try again later; nothing was re-sent.',
   'tenantIssueQueue.pos.decide': 'Decide…',
   'tenantIssueQueue.pos.noCandidates': 'The POS has no order that resembles this one.',
-  'tenantIssueQueue.pos.candidatesLead': 'Orders at the POS that resemble this one. Only a matching HorecaOS reference proves it is ours.',
+  'tenantIssueQueue.pos.candidatesLead':
+    'Orders at the POS that resemble this one. Only a matching HorecaOS reference proves it is ours.',
   'tenantIssueQueue.pos.posOrder': 'POS order',
   'tenantIssueQueue.pos.evidence': 'Why it might be ours',
   'tenantIssueQueue.pos.match.reference': 'Carries our reference: this is our order',
@@ -1512,7 +1655,8 @@ export const en = {
   'error.RESOURCE_CONFLICT': 'That conflicts with something already recorded.',
   'error.STALE_VERSION': 'Somebody changed this while you were editing. Reload and try again.',
   'error.IDEMPOTENCY_KEY_REUSED': 'This looks like a different request sent with an old retry key.',
-  'error.IDEMPOTENCY_KEY_IN_PROGRESS': 'The same request is still running. It will not be applied twice.',
+  'error.IDEMPOTENCY_KEY_IN_PROGRESS':
+    'The same request is still running. It will not be applied twice.',
   'error.PRICE_CHANGED': 'The price changed while this was open. Check it and confirm again.',
   'error.UNSUPPORTED_MEDIA_TYPE': 'That file type is not accepted.',
   'error.RATE_LIMIT_EXCEEDED': 'Too many requests. Wait a moment and try again.',
@@ -1520,8 +1664,10 @@ export const en = {
     'This account needs one more step before it can sign in. Contact a platform administrator.',
   'error.INTERNAL_ERROR': 'Something failed on the platform. It has been recorded.',
   'error.NETWORK_UNREACHABLE': 'The platform could not be reached.',
-  'error.UNRECOGNISED_ERROR_RESPONSE': 'The platform answered in a way this console did not understand.',
-  'error.SECOND_APPROVER_REQUIRED': 'Recorded. A second platform admin has to approve it; it is waiting under Staff & roles.',
+  'error.UNRECOGNISED_ERROR_RESPONSE':
+    'The platform answered in a way this console did not understand.',
+  'error.SECOND_APPROVER_REQUIRED':
+    'Recorded. A second platform admin has to approve it; it is waiting under Staff & roles.',
   'error.APPROVAL_POLICY_REQUIRED': 'This action needs an approval policy set up first.',
   'error.UNPROCESSABLE_STATE': 'That cannot be done in the state this is in now.',
   'error.SESSION_EXPIRED': 'Your session has expired. Sign in again.',

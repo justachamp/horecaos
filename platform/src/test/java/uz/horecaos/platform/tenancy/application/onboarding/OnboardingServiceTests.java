@@ -180,19 +180,102 @@ class OnboardingServiceTests {
     void everyStepIsMaterialised() {
         UUID runId = startRun();
 
-        var steps = jdbc.sql("""
+        var steps = materialisedSteps(runId);
+
+        assertThat(steps).hasSize(OnboardingStep.values().length);
+        // As of 2026-08-30 every step has a handler and none is materialised
+        // BLOCKED by design any more; TENANT_ACTIVATE is the only one still
+        // never claimed by a worker, and only once the scheduler reaches it.
+        // SAMPLE_MENU_PUBLISH (ADR 0099) is the one step a run chooses, and
+        // this run did not ask for it.
+        assertThat(steps)
+                .filteredOn(step -> !step.startsWith("SAMPLE_MENU_PUBLISH"))
+                .allMatch(step -> step.endsWith("=PENDING"));
+        assertThat(steps).contains("SAMPLE_MENU_PUBLISH=SKIPPED");
+    }
+
+    // ------------------------------------------------------- ADR 0099: the one optional step
+
+    /**
+     * A declined sample menu is materialised {@code SKIPPED}, not omitted. ADR
+     * 0008 already settled the argument for blocked steps — "a template that
+     * silently skips a check reads exactly like one that passed it" — and a run
+     * whose step list is simply missing a step cannot tell its reader that the
+     * choice was ever offered.
+     */
+    @Test
+    void aRunThatDidNotAskForASampleMenuStillCarriesTheStepAsSkipped() {
+        UUID runId = startRun();
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("SKIPPED=NOT_REQUESTED");
+    }
+
+    @Test
+    void aRunThatAskedForASampleMenuMaterialisesTheStepPending() {
+        UUID runId = startRunWithSampleMenu(true);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("PENDING=null");
+    }
+
+    /** Absent means no: a caller that predates the field must not start planting sample catalogs. */
+    @Test
+    void anInputWithoutTheFieldAtAllIsANo() {
+        UUID runId = service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("SKIPPED=NOT_REQUESTED");
+    }
+
+    /**
+     * The two properties that make {@code SKIPPED} safe: {@code claimNextStep}
+     * takes only {@code PENDING}, and {@code outstandingRequiredSteps} counts
+     * only required steps. A skipped sample menu therefore neither runs nor
+     * blocks {@code READY} — asserted by draining a whole run to completion with
+     * no {@code SAMPLE_MENU_PUBLISH} handler registered anywhere.
+     */
+    @Test
+    void aSkippedSampleMenuNeitherRunsNorBlocksReady() {
+        UUID runId = startRun();
+        drain(runId);
+
+        assertThat(runStatus(runId)).isEqualTo("READY");
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH"))
+                .as("the step must be untouched by the drain, not completed by it")
+                .isEqualTo("SKIPPED=NOT_REQUESTED");
+        assertThat(attempts(runId, "SAMPLE_MENU_PUBLISH")).isZero();
+    }
+
+    /** The choice is on the run's audit fact, so "who asked for this" is answerable. */
+    @Test
+    void theSampleMenuChoiceIsOnTheStartedAuditFact() {
+        UUID runId = startRunWithSampleMenu(true);
+
+        assertThat(jdbc.sql("""
+                SELECT change_document::text FROM audit.audit_events
+                 WHERE action_code = 'tenant.onboarding_started' AND target_id = :runId
+                """).param("runId", runId).query(String.class).single())
+                .contains("sampleMenu")
+                .contains("true");
+    }
+
+    private List<String> materialisedSteps(UUID runId) {
+        return jdbc.sql("""
                 SELECT step_key, status FROM tenant.onboarding_steps
                  WHERE run_id = :runId ORDER BY sequence_number
                 """)
                 .param("runId", runId)
                 .query((rs, n) -> rs.getString("step_key") + "=" + rs.getString("status"))
                 .list();
+    }
 
-        assertThat(steps).hasSize(OnboardingStep.values().length);
-        // As of 2026-08-30 every step has a handler and none is materialised
-        // BLOCKED by design any more; TENANT_ACTIVATE is the only one still
-        // never claimed by a worker, and only once the scheduler reaches it.
-        assertThat(steps).allMatch(step -> step.endsWith("=PENDING"));
+    private String stepStatus(UUID runId, String stepKey) {
+        return jdbc.sql("""
+                SELECT status, last_error_code FROM tenant.onboarding_steps
+                 WHERE run_id = :runId AND step_key = :stepKey
+                """)
+                .param("runId", runId)
+                .param("stepKey", stepKey)
+                .query((rs, n) -> rs.getString("status") + "=" + rs.getString("last_error_code"))
+                .single();
     }
 
     /**
@@ -796,6 +879,21 @@ class OnboardingServiceTests {
                 TEMPLATE,
                 1,
                 Map.of("ownerEmail", "owner@acme.example", "defaultConfiguration", Map.of("locale", "uz")),
+                ADMIN);
+    }
+
+    private UUID startRunWithSampleMenu(boolean sampleMenu) {
+        return service.startRun(
+                TENANT,
+                TEMPLATE,
+                1,
+                Map.of(
+                        "ownerEmail",
+                        "owner@acme.example",
+                        "sampleMenu",
+                        sampleMenu,
+                        "defaultConfiguration",
+                        Map.of("locale", "uz")),
                 ADMIN);
     }
 

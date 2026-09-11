@@ -52,9 +52,11 @@ const HINTS: Readonly<Record<string, { readonly key: MessageKey; readonly link?:
   NO_LOCATION: { key: 'onboarding.hint.NO_LOCATION', link: 'brands' },
   NO_MERCHANT_BINDING: { key: 'onboarding.hint.NO_MERCHANT_BINDING' },
   NO_PUBLISHED_MENU: { key: 'onboarding.hint.NO_PUBLISHED_MENU' },
+  NOT_REQUESTED: { key: 'onboarding.hint.NOT_REQUESTED' },
   OWNER_NOT_SUPPLIED: { key: 'onboarding.hint.OWNER_NOT_SUPPLIED' },
   POS_BINDING_UNHEALTHY: { key: 'onboarding.hint.POS_BINDING_UNHEALTHY', link: 'installations' },
   QUOTE_REFUSED: { key: 'onboarding.hint.QUOTE_REFUSED' },
+  SAMPLE_MENU_REJECTED: { key: 'onboarding.hint.SAMPLE_MENU_REJECTED' },
   SERVICEABILITY_UNAVAILABLE: { key: 'onboarding.hint.SERVICEABILITY_UNAVAILABLE' },
   TENANT_MISSING: { key: 'onboarding.hint.TENANT_MISSING' },
   TRANSIENT_INFRASTRUCTURE: { key: 'onboarding.hint.TRANSIENT_INFRASTRUCTURE' },
@@ -64,6 +66,7 @@ const STEP_NAMES: ReadonlySet<string> = new Set([
   'KEYCLOAK_ORGANIZATION_RECONCILE',
   'TENANT_OWNER_LINK_OR_INVITE',
   'DEFAULT_CONFIGURATION_APPLY',
+  'SAMPLE_MENU_PUBLISH',
   'BRANDS_AND_LOCATIONS_VALIDATE',
   'PAYMENT_CONFIGURATION_VALIDATE',
   'DELIVERY_CONFIGURATION_VALIDATE',
@@ -125,6 +128,15 @@ export class TenantOnboarding {
   protected readonly resending = signal(false);
   protected readonly resent = signal(false);
   protected readonly invitationLocales: readonly InvitationLocale[] = ['uz', 'ru', 'en'];
+
+  /**
+   * Whether to plant a sample menu (ADR 0099). On by default for a new tenant:
+   * the platform wants to see its own storefront answer before the tenant is
+   * ready to author anything, and the tenant replaces it later. The server
+   * treats an absent field as a no, so the default lives here rather than there
+   * -- a caller that predates the field must not start planting sample catalogs.
+   */
+  protected readonly sampleMenu = signal(true);
   protected readonly actionError = signal<string | null>(null);
 
   protected readonly resumeReason = signal('');
@@ -325,6 +337,7 @@ export class TenantOnboarding {
         undefined,
         this.selectedTemplate()?.id,
         this.ownerLocale(),
+        this.sampleMenu(),
       );
       this.runId.set(runId);
       this.validation.set(null);
