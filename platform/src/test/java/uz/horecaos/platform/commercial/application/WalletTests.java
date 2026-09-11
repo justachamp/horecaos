@@ -186,6 +186,24 @@ class WalletTests {
                 .isEmpty();
     }
 
+    @Test
+    void aTransferIsRecordedOnceHoweverOftenItIsTyped() {
+        recordTransfer(1_000_000, "MT103-1");
+
+        assertThatThrownBy(() -> recordTransfer(1_000_000, "MT103-1"))
+                .as("the same bank reference twice is one transfer recorded twice, not two transfers")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("already recorded");
+        assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(1_000_000);
+
+        recordTransfer(1_000_000, "MT103-2");
+
+        assertThat(wallet.balances(PILOT).paidMinor())
+                .as("a different transfer of the same size is a different transfer")
+                .isEqualTo(2_000_000);
+        assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(ledgerSum(WalletEntry.PAID));
+    }
+
     // ------------------------------------------------------------ settlement
 
     @Test

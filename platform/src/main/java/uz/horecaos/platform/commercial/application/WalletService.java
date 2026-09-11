@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -125,6 +126,10 @@ public class WalletService {
      * Records a bank transfer HorecaOS finance received (ADR 0095, item 2).
      * One person's audited act, like issuing a statement — not a correction,
      * and not maker-checker.
+     *
+     * <p>The bank's reference identifies one transfer, so recording the same
+     * reference twice for a tenant is refused: the second record would credit
+     * money that never arrived and pay statements nobody paid.
      */
     @Transactional
     public UUID recordTransfer(
@@ -143,7 +148,7 @@ public class WalletService {
         wallet.lockBilling(tenantId, clock.instant());
         Instant now = clock.instant();
         UUID id = Ids.newId();
-        wallet.append(new WalletEntry(
+        appendMoneyIn(new WalletEntry(
                 id,
                 tenantId,
                 WalletEntry.PAID,
@@ -199,7 +204,7 @@ public class WalletService {
 
         Instant now = clock.instant();
         UUID id = Ids.newId();
-        wallet.append(new WalletEntry(
+        appendMoneyIn(new WalletEntry(
                 id,
                 tenantId,
                 WalletEntry.PAID,
@@ -676,7 +681,7 @@ public class WalletService {
         if (!(outcome instanceof CardCharger.Outcome.Succeeded succeeded)) {
             return 0;
         }
-        wallet.append(new WalletEntry(
+        appendMoneyIn(new WalletEntry(
                 Ids.newId(),
                 tenantId,
                 WalletEntry.PAID,
@@ -765,6 +770,24 @@ public class WalletService {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Appends money in, turning the database's refusal of a reference already
+     * recorded for this tenant into a conflict the recorder can read.
+     *
+     * <p>V0211's unique index is what actually holds the line, because two
+     * people recording the same transfer at the same moment would both read an
+     * empty ledger before either wrote to it.
+     */
+    private void appendMoneyIn(WalletEntry entry) {
+        try {
+            wallet.append(entry);
+        } catch (DuplicateKeyException alreadyRecorded) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That reference is already recorded for this tenant; money in is recorded once");
+        }
+    }
 
     /** {@code null} when the approval let the caller proceed; the outcome to return otherwise. */
     private static @Nullable WalletChangeOutcome notYetDecided(ApprovalOutcome approval) {

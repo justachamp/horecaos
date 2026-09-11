@@ -99,6 +99,14 @@ COMMENT ON TABLE commercial.wallet_entries IS
 CREATE INDEX ix_wallet_entry_tenant ON commercial.wallet_entries (tenant_id, created_at);
 CREATE INDEX ix_wallet_entry_statement ON commercial.wallet_entries (statement_id) WHERE statement_id IS NOT NULL;
 CREATE INDEX ix_wallet_entry_grant ON commercial.wallet_entries (grant_id) WHERE grant_id IS NOT NULL;
+-- Money in is recorded once. A bank reference identifies one transfer and a
+-- provider reference one charge, so the same reference arriving twice for a
+-- tenant is a transfer recorded twice -- which credits money that never came
+-- and pays statements nobody paid. The database refuses it; the service turns
+-- the refusal into a conflict the recorder can read.
+CREATE UNIQUE INDEX ux_wallet_entry_money_in_reference
+    ON commercial.wallet_entries (tenant_id, external_reference)
+    WHERE entry_type IN ('TOP_UP', 'DEPOSIT');
 -- Live bonus grants, earliest expiry first: exactly the order a statement is
 -- paid from bonus money in (ADR 0095 item 3).
 CREATE INDEX ix_wallet_entry_live_grants ON commercial.wallet_entries (tenant_id, expires_at)
