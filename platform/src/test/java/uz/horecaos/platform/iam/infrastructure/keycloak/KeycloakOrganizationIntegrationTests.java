@@ -132,7 +132,11 @@ class KeycloakOrganizationIntegrationTests {
                 secrets, clock, BASE_URL, REALM, "horecaos-provisioning", "local");
         directory = configuration.organizationDirectory(
                 secrets, clock, BASE_URL, REALM, "horecaos-identity-reader", "local");
-        accounts = configuration.staffAccounts(secrets, clock, BASE_URL, REALM, "horecaos-provisioning", "local");
+        // The sixth argument is the sign-in client whose offline grants a
+        // password reset revokes (ADR 0098), not a second credential for this
+        // bean: it authenticates as horecaos-provisioning either way.
+        accounts = configuration.staffAccounts(
+                secrets, clock, BASE_URL, REALM, "horecaos-provisioning", "horecaos-staff-login", "local");
 
         // Same reasoning as StaffLoginKeycloakConfiguration: no bearer token of
         // its own, so a plain RestClient rather than KeycloakConfiguration's.
@@ -212,6 +216,126 @@ class KeycloakOrganizationIntegrationTests {
         assertThat(user).containsEntry("firstName", "Dilnoza").containsEntry("lastName", "Karimova");
         assertThat(staffLogin.signIn(email, password)).isInstanceOf(TokenOutcome.Issued.class);
         assertThat(accounts.find("no-such-subject-" + alias)).isEmpty();
+    }
+
+    /**
+     * ADR 0098 against the live realm, and the one assertion this whole record
+     * turns on.
+     *
+     * <p>A reset sets the password and <em>nothing else</em> — not the name,
+     * not the verified flag, which is the only thing separating
+     * {@code setPassword} from {@code completeSetup} — and then ends every
+     * session the account holds. That last step is why this runs against a real
+     * Keycloak rather than a stub: the obvious admin call for it,
+     * {@code POST /users/{id}/logout}, answers {@code 204} and leaves a staff
+     * refresh token working, because ADR 0062's direct grant asks for
+     * {@code offline_access} and admin logout does not touch offline sessions.
+     * A stub written from the same assumption as the code would have agreed
+     * with it. This signs in for real, refreshes for real, and refuses to pass
+     * unless the refresh actually stops working.
+     */
+    @Test
+    void aPasswordResetChangesOnlyThePasswordAndEndsEverySession() {
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(UUID.randomUUID(), alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        String email = alias + "@example.test";
+        var membership = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
+        usersToRemove.add(membership.subjectId());
+
+        accounts.completeSetup(membership.subjectId(), "Dilnoza", "Karimova", "the-first-passphrase-" + alias);
+
+        assertThatThrownBy(() -> accounts.setPassword(membership.subjectId(), "short"))
+                .as("the realm's policy refuses a short one here exactly as it does on setup")
+                .isInstanceOfSatisfying(
+                        StaffAccounts.PasswordRejectedException.class,
+                        refused -> assertThat(refused.policy()).startsWith("invalidPassword"));
+
+        // Signed in on another device, before the reset, with the old password.
+        var signedInElsewhere = staffLogin.signIn(email, "the-first-passphrase-" + alias);
+        assertThat(signedInElsewhere).isInstanceOf(TokenOutcome.Issued.class);
+        String refreshToken = ((TokenOutcome.Issued) signedInElsewhere).refreshToken();
+        assertThat(staffLogin.refresh(refreshToken))
+                .as("the other device's session is live before the reset, or the test after it proves nothing")
+                .isInstanceOf(TokenOutcome.Issued.class);
+
+        String chosen = "a-reset-passphrase-" + alias;
+        accounts.setPassword(membership.subjectId(), chosen);
+
+        Map<String, Object> user = Objects.requireNonNull(admin.get()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, membership.subjectId())
+                .retrieve()
+                .body(MAP));
+        assertThat(user)
+                .as("a reset must not rewrite a name the person set themselves")
+                .containsEntry("firstName", "Dilnoza")
+                .containsEntry("lastName", "Karimova");
+        assertThat(user)
+                .as("nor quietly mark an address verified because somebody opened a link")
+                .containsEntry("emailVerified", true);
+
+        accounts.logoutEverywhere(membership.subjectId());
+
+        assertThat(staffLogin.refresh(refreshToken))
+                .as("whoever held the old password keeps an offline refresh token until this is revoked, "
+                        + "and POST /users/{id}/logout alone does not revoke it")
+                .isInstanceOf(TokenOutcome.Refused.class);
+        assertThat(staffLogin.signIn(email, "the-first-passphrase-" + alias))
+                .as("and the old password itself is gone")
+                .isInstanceOf(TokenOutcome.Refused.class);
+        assertThat(staffLogin.signIn(email, chosen))
+                .as("while the staff member signs in with what they just chose")
+                .isInstanceOf(TokenOutcome.Issued.class);
+    }
+
+    /**
+     * A login resolves an account exactly or not at all (ADR 0098).
+     *
+     * <p>Keycloak's user search is an infix match by default, so {@code
+     * findByLogin} passes {@code exact=true} on both lookups. Without it a
+     * fragment of somebody's address resolves to them and a reset link goes to
+     * an account the requester never named — which, on an endpoint that
+     * answers 202 to everyone, nobody would ever be told about. Asserted
+     * against the live realm because the behaviour being relied on is
+     * Keycloak's, not this adapter's.
+     */
+    @Test
+    void aPartialLoginResolvesNobody() {
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(UUID.randomUUID(), alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        String email = alias + "@example.test";
+        var membership = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
+        usersToRemove.add(membership.subjectId());
+
+        assertThat(accounts.findByLogin(email))
+                .as("the whole address resolves, or every assertion below would pass against an empty realm")
+                .isPresent();
+        assertThat(accounts.findByLogin(alias.substring(0, alias.length() - 2)))
+                .as("a prefix of the address must resolve nobody")
+                .isEmpty();
+        assertThat(accounts.findByLogin("example.test"))
+                .as("nor a fragment every account in the realm shares")
+                .isEmpty();
+        assertThat(accounts.findByLogin("  " + email + "  "))
+                .as("surrounding space is the requester's typing, not part of the login")
+                .isPresent();
+        assertThat(accounts.findByLogin("   ")).isEmpty();
+    }
+
+    /** An account with nothing to revoke: Keycloak's 404 there is success, not a failure to report. */
+    @Test
+    void endingTheSessionsOfAnAccountThatHasNoneIsNotAnError() {
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(UUID.randomUUID(), alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        var membership = provisioner.ensureMembership(new OrganizationProvisioner.EnsureMembership(
+                organization.organizationId(), alias + "@example.test", null));
+        usersToRemove.add(membership.subjectId());
+
+        accounts.logoutEverywhere(membership.subjectId());
     }
 
     @Test
