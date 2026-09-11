@@ -1,7 +1,6 @@
 package uz.horecaos.platform.iam.application.passwordresets;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
@@ -35,6 +34,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts.ProviderUnreachableException;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
 import uz.horecaos.platform.iam.api.mail.StaffEmail;
 import uz.horecaos.platform.iam.api.mail.StaffEmailSender;
@@ -140,7 +140,9 @@ class PasswordResetFlowTests {
         assertThat(inspection.locale()).isEqualTo("uz");
         assertThat(store.forSubject(SUBJECT).orElseThrow().openedAt()).isNotNull();
 
-        resets.accept(token, "a-long-enough-passphrase", "corr");
+        assertThat(resets.accept(token, "a-long-enough-passphrase", "corr"))
+                .as("what the console puts on the confirmation card, rather than a sentence it assumes")
+                .isTrue();
 
         assertThat(accounts.passwords).containsEntry(SUBJECT, "a-long-enough-passphrase");
         assertThat(accounts.loggedOut).containsExactly(SUBJECT);
@@ -362,12 +364,25 @@ class PasswordResetFlowTests {
         assertThat(accounts.passwords).isEmpty();
     }
 
+    /**
+     * What "spends nothing" has to mean, stated column by column.
+     *
+     * <p>Half an hour passes between the send and the refusal on purpose. The
+     * link is put back by writing the values the accept read, and at {@code now
+     * == sentAt} a {@code restoreSent} that recomputed the expiry from the
+     * clock instead would write the identical instant: the assertion would hold
+     * against an implementation that renews the hour on every refused password,
+     * which is a link-lifetime bypass anybody can drive by submitting passwords
+     * the realm dislikes.
+     */
     @Test
-    @DisplayName("a refused password spends nothing: the link still works and no session is ended")
+    @DisplayName("a refused password spends nothing: the same link, the same hour, and no session ended")
     void aRefusedPasswordChangesNothing() {
         resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
         relay.runOnce();
         String token = tokenIn(mailer.last().text());
+        var sent = store.forSubject(SUBJECT).orElseThrow();
+        clock.advance(Duration.ofMinutes(30));
         accounts.refuse = true;
 
         assertThatThrownBy(() -> resets.accept(token, "short", "corr"))
@@ -376,7 +391,17 @@ class PasswordResetFlowTests {
                         refused -> assertThat(refused.properties())
                                 .containsEntry("policy", "invalidPasswordMinLengthMessage"));
 
-        assertThat(store.forSubject(SUBJECT).orElseThrow().status()).isEqualTo("SENT");
+        var after = store.forSubject(SUBJECT).orElseThrow();
+        assertThat(after.status()).isEqualTo("SENT");
+        assertThat(after.tokenHash())
+                .as("the link put back is the link that was presented, not a new one")
+                .isEqualTo(sent.tokenHash());
+        assertThat(after.expiresAt())
+                .as("and it keeps the hour it had: a password the realm refuses must not buy another")
+                .isEqualTo(sent.expiresAt());
+        assertThat(after.acceptedAt())
+                .as("a row that is SENT while still carrying the instant it was spent is neither state")
+                .isNull();
         assertThat(accounts.loggedOut)
                 .as("ending sessions for a reset that was then refused would sign out somebody who asked for nothing")
                 .isEmpty();
@@ -387,24 +412,224 @@ class PasswordResetFlowTests {
     }
 
     /**
+     * The other half of putting a link back: the case where it must not
+     * happen.
+     *
+     * <p>Spending leaves the row {@code ACCEPTED}, and the upsert requeues an
+     * accepted row whatever the cooldown says -- so between the spend and a
+     * policy refusal the account's owner can ask again and have a second link
+     * on its way. Restoring the first link over that would resurrect a link
+     * the owner's own request had just revoked, which is why {@code
+     * restoreSent} guards on the {@code accepted_at} the spend wrote. Nothing
+     * asserted the branch where that guard matches nothing.
+     *
+     * <p>What the caller is told stays the policy refusal, deliberately: it is
+     * true of the password they typed, and the link that now matters is the
+     * one arriving in their mailbox rather than the one they clicked.
+     */
+    @Test
+    @DisplayName("a refusal cannot put a link back over a request that already replaced it")
+    void aRefusalDoesNotStompAFreshRequest() {
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+        relay.runOnce();
+        String first = tokenIn(mailer.last().text());
+        accounts.refuse = true;
+        accounts.duringPasswordWrite = () -> resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+
+        assertThatThrownBy(() -> resets.accept(first, "short", "corr"))
+                .as("the password really was refused, and that is what the person who typed it is told")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties())
+                                .containsEntry("policy", "invalidPasswordMinLengthMessage"));
+
+        var row = store.forSubject(SUBJECT).orElseThrow();
+        assertThat(row.status())
+                .as("the owner's fresh request owns the row now; the refusal has nothing to put back")
+                .isEqualTo("QUEUED");
+        assertThat(row.tokenHash())
+                .as("a restored hash here would revive a link the owner's own request revoked")
+                .isNull();
+
+        relay.runOnce();
+        String second = tokenIn(mailer.last().text());
+        assertThat(second).isNotEqualTo(first);
+        accounts.refuse = false;
+        assertThatThrownBy(() -> resets.accept(first, "a-long-enough-passphrase", "corr"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        dead -> assertThat(dead.properties()).containsEntry("reason", "INVALID"));
+        assertThat(resets.accept(second, "a-long-enough-passphrase", "corr"))
+                .as("and the link the owner is holding is the way back")
+                .isTrue();
+    }
+
+    /**
+     * The window the whole reordering exists for: the link is spent, and then
+     * the password write fails with something that is <em>not</em> a policy
+     * refusal.
+     *
+     * <p>Nothing asserted this, and the edit that breaks it is a kind one --
+     * "restore the link so they can try again". It is the same edit the old
+     * code made by accident: the row goes back to {@code SENT} with its hash,
+     * and a token whose password may already have changed stays live for the
+     * rest of its hour for anyone who can read that mailbox, after the platform
+     * has told the caller the reset failed. The fake writes the password and
+     * <em>then</em> throws, because that is the half of the ambiguity that
+     * matters; a fake that threw first would let this test pass while asserting
+     * the comfortable case.
+     */
+    @Test
+    @DisplayName("a password write that fails after landing leaves the link spent, and says so in the trail")
+    void aFailedPasswordWriteDoesNotResurrectTheLink() {
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        accounts.passwordWriteFails = true;
+
+        assertThatThrownBy(() -> resets.accept(token, "a-long-enough-passphrase", "corr"))
+                .as("the caller is told it failed, because from here nobody can say whether it did")
+                .isInstanceOf(RuntimeException.class);
+
+        var row = store.forSubject(SUBJECT).orElseThrow();
+        assertThat(row.status()).isEqualTo("ACCEPTED");
+        assertThat(row.tokenHash())
+                .as("a restored hash would make a link whose password may already have changed live again")
+                .isNull();
+
+        accounts.passwordWriteFails = false;
+        assertThatThrownBy(() -> resets.accept(token, "another-long-passphrase", "corr"))
+                .as("and the spend holds on its own terms, not because the fake is still throwing")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties()).containsEntry("reason", "INVALID"));
+
+        assertThat(accounts.loggedOut)
+                .as("no session is ended for a password the platform cannot say was set")
+                .isEmpty();
+        assertThat(facts)
+                .extracting(StaffSecurityFact::actionCode)
+                .as("nothing may claim the password was set, and the dead end has to be somewhere")
+                .doesNotContain("iam.password_reset.accepted")
+                .contains("iam.password_reset.password_not_set");
+    }
+
+    /**
+     * The other half, and the only failure after the spend that may put the
+     * link back: one that never reached Keycloak at all.
+     *
+     * <p>A refused connection proves the account is exactly as it was, so the
+     * person whose reset met an outage between two keystrokes presses the
+     * button again rather than going back to ask for a new link -- which would
+     * clear the hash of the good link they are holding. The distinction is a
+     * narrow exception type from the port, not a guess about a message: every
+     * ambiguous failure takes the branch above.
+     */
+    @Test
+    @DisplayName("a password write that never left puts the link back, so the same link still works")
+    void aPasswordWriteThatNeverLeftPutsTheLinkBack() {
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        var sent = store.forSubject(SUBJECT).orElseThrow();
+        clock.advance(Duration.ofMinutes(30));
+        accounts.passwordWriteNeverLeaves = true;
+
+        assertThatThrownBy(() -> resets.accept(token, "a-long-enough-passphrase", "corr"))
+                .isInstanceOf(ProviderUnreachableException.class);
+
+        var after = store.forSubject(SUBJECT).orElseThrow();
+        assertThat(after.status()).isEqualTo("SENT");
+        assertThat(after.tokenHash()).isEqualTo(sent.tokenHash());
+        assertThat(after.expiresAt())
+                .as("an outage must not extend the link either")
+                .isEqualTo(sent.expiresAt());
+        assertThat(facts)
+                .extracting(StaffSecurityFact::actionCode)
+                .as("nothing was spent and nothing was written, so there is no dead end to record")
+                .doesNotContain("iam.password_reset.password_not_set");
+
+        accounts.passwordWriteNeverLeaves = false;
+        assertThat(resets.accept(token, "a-long-enough-passphrase", "corr"))
+                .as("and the link the person is still holding works")
+                .isTrue();
+        assertThat(accounts.passwords).containsEntry(SUBJECT, "a-long-enough-passphrase");
+    }
+
+    /**
+     * A link replaced while an accept is waiting on Keycloak.
+     *
+     * <p>The row is keyed by subject and reused, and an accept reads it by hash
+     * and then makes an admin round trip before spending it. Keycloak's budget
+     * is three seconds to connect and ten to read, so that gap is long enough
+     * for the account's owner -- who never got the first email, or got it and
+     * asked again -- to post the request endpoint, for the upsert to requeue
+     * the row and for the relay to email a second link.
+     *
+     * <p>Guarded on the row id alone, the stalled accept then finds {@code
+     * SENT} and spends a token it never held: the owner's brand-new link, dead
+     * on its first click, with an ordinary {@code accepted} fact to explain it.
+     */
+    @Test
+    @DisplayName("an accept whose link was replaced while it waited spends nothing, and the new link still works")
+    void anAcceptCannotSpendALinkItNeverHeld() {
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+        relay.runOnce();
+        String first = tokenIn(mailer.last().text());
+
+        clock.advance(PasswordResetService.REQUEST_COOLDOWN);
+        accounts.duringAccountRead = () -> {
+            resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+            relay.runOnce();
+        };
+
+        assertThatThrownBy(() -> resets.accept(first, "a-long-enough-passphrase", "corr"))
+                .as("the link it read is gone, so it has nothing to spend")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties()).containsEntry("reason", "INVALID"));
+
+        String second = tokenIn(mailer.last().text());
+        assertThat(second).isNotEqualTo(first);
+        var row = store.forSubject(SUBJECT).orElseThrow();
+        assertThat(row.status()).isEqualTo("SENT");
+        assertThat(row.tokenHash())
+                .as("the owner's newest link is untouched, not spent by somebody else's stalled accept")
+                .isEqualTo(PasswordResetService.hash(second));
+        assertThat(accounts.passwords)
+                .as("and no password was written for a link that was never spendable")
+                .isEmpty();
+        assertThat(resets.inspect(second).console()).isEqualTo("OPERATIONS");
+    }
+
+    /**
      * The failure this is about used to unwind the whole accept: the password
      * had already changed at Keycloak, the row went back to {@code SENT} with
      * its hash restored, no audit fact was written at all, and the staff member
      * was told it failed. A revocation that cannot be completed is an operator's
      * problem, recorded as one -- not a reason to tell somebody their new
      * password did not take.
+     *
+     * <p>It is also the caller's problem, which is what the returned boolean is
+     * for. The operator standing at the till is the only person who is present
+     * and motivated at that moment; a page that tells them every other session
+     * has ended, while the dismissed employee's offline token keeps minting
+     * access tokens, is the one outcome ADR 0098's own rejection table calls
+     * worse than not revoking at all.
      */
     @Test
-    @DisplayName("a revocation that fails leaves the password changed, the link spent, and says so in the trail")
+    @DisplayName("a revocation that fails leaves the password changed, the link spent, and tells the caller so")
     void aFailedLogoutDoesNotUndoTheReset() {
         resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
         relay.runOnce();
         String token = tokenIn(mailer.last().text());
         accounts.logoutFails = true;
 
-        assertThatCode(() -> resets.accept(token, "a-long-enough-passphrase", "corr"))
-                .as("the password did change, so the caller is not told the reset failed")
-                .doesNotThrowAnyException();
+        // Not doesNotThrowAnyException(): the password did change, so this must
+        // return rather than raise -- and what it returns is the whole point.
+        assertThat(resets.accept(token, "a-long-enough-passphrase", "corr"))
+                .as("the caller is told what could not be done, instead of a page asserting it was")
+                .isFalse();
 
         assertThat(accounts.passwords).containsEntry(SUBJECT, "a-long-enough-passphrase");
         assertThat(store.forSubject(SUBJECT).orElseThrow().status()).isEqualTo("ACCEPTED");
@@ -674,8 +899,39 @@ class PasswordResetFlowTests {
         private volatile boolean unavailable;
         private volatile boolean logoutFails;
 
+        /**
+         * Keycloak answers the password write with a 502 or a read timeout --
+         * <em>after</em> the write has landed.
+         *
+         * <p>The order in {@link #setPassword} is the whole point of the flag
+         * and is not an implementation detail: an admin reset-password call
+         * that fails on the response is ambiguous by construction, and the
+         * dangerous half of that ambiguity is the half where the password did
+         * change. A fake that threw before writing would let a test assert
+         * "nothing happened", which is exactly the belief that made the old
+         * ordering resurrect spent links.
+         */
+        private volatile boolean passwordWriteFails;
+
+        /** The other half: a call that never left, so the account is provably as it was. */
+        private volatile boolean passwordWriteNeverLeaves;
+
         /** When set, {@link #find} waits here for the other thread, pinning the interleaving. */
         private volatile @org.jspecify.annotations.Nullable CyclicBarrier arriveBeforeAnswering;
+
+        /**
+         * Run inside {@link #find}, which is where an accept spends its one
+         * admin round trip before touching the row again -- the window in which
+         * the account's owner can ask for and receive a replacement link.
+         */
+        private volatile @org.jspecify.annotations.Nullable Runnable duringAccountRead;
+
+        /**
+         * Run inside {@link #setPassword}, which is where an accept waits with
+         * its link already spent -- the window in which a fresh request can
+         * requeue the row that the refusal below would otherwise put back.
+         */
+        private volatile @org.jspecify.annotations.Nullable Runnable duringPasswordWrite;
 
         void put(String subject, String email, String username) {
             accounts.put(subject, new StaffAccount(subject, email, false, true));
@@ -701,6 +957,11 @@ class PasswordResetFlowTests {
                     throw new IllegalStateException(never);
                 }
             }
+            Runnable meanwhile = duringAccountRead;
+            if (meanwhile != null) {
+                duringAccountRead = null;
+                meanwhile.run();
+            }
             return Optional.ofNullable(accounts.get(subjectId));
         }
 
@@ -725,11 +986,26 @@ class PasswordResetFlowTests {
 
         @Override
         public void setPassword(String subjectId, String password) {
+            Runnable meanwhile = duringPasswordWrite;
+            if (meanwhile != null) {
+                duringPasswordWrite = null;
+                meanwhile.run();
+            }
             if (refuse) {
                 throw new PasswordRejectedException("invalidPasswordMinLengthMessage");
             }
+            if (passwordWriteNeverLeaves) {
+                throw new ProviderUnreachableException(
+                        "The password write never reached Keycloak",
+                        new java.net.ConnectException("Connection refused"));
+            }
             passwordWrites.incrementAndGet();
             passwords.put(subjectId, password);
+            if (passwordWriteFails) {
+                // Written, then the answer lost: the state the platform cannot
+                // tell apart from "never written", and must assume it is in.
+                throw new IllegalStateException("Keycloak did not answer the password write");
+            }
         }
 
         @Override

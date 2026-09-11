@@ -1964,6 +1964,10 @@ export interface PasswordResetAcceptRequest {
   token: string;
 }
 
+export interface PasswordResetAcceptance {
+  sessionsEnded?: boolean;
+}
+
 export interface PasswordResetRequest {
   locale?: string;
   login: string;
@@ -3188,7 +3192,7 @@ export interface Operations {
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_2": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "requestOperations": { method: "POST"; path: "/api/v1/operations/auth/password-resets"; request: { parameters: Record<string, never>; body: PasswordResetRequest }; responses: { "200": unknown } };
-  "acceptOperations": { method: "POST"; path: "/api/v1/operations/auth/password-resets/accept"; request: { parameters: Record<string, never>; body: PasswordResetAcceptRequest }; responses: { "200": unknown } };
+  "acceptOperations": { method: "POST"; path: "/api/v1/operations/auth/password-resets/accept"; request: { parameters: Record<string, never>; body: PasswordResetAcceptRequest }; responses: { "200": PasswordResetAcceptance } };
   "inspectOperations": { method: "POST"; path: "/api/v1/operations/auth/password-resets/inspect"; request: { parameters: Record<string, never>; body: PasswordResetTokenRequest }; responses: { "200": ResetInspection } };
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };

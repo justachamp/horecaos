@@ -1,14 +1,19 @@
 package uz.horecaos.platform.iam.infrastructure.keycloak;
 
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
@@ -223,18 +228,49 @@ class KeycloakStaffAccounts implements StaffAccounts {
      * The one write both password paths share: a permanent password, and a
      * refused one raised as {@link PasswordRejectedException} so the account is
      * left exactly as it was.
+     *
+     * <p>The second narrow exception is {@link ProviderUnreachableException},
+     * and it is raised for exactly one thing: a request that never left this
+     * process. A password reset spends its link before this call, so the caller
+     * has to decide afterwards whether the link may come back, and it may only
+     * when the write provably did not happen. A refused connection or a host
+     * that does not resolve prove that; a read timeout or a 5xx prove nothing
+     * and are deliberately left to propagate as themselves.
      */
     private void resetPassword(String subjectId, String password) {
-        client.put()
-                .uri("/admin/realms/{realm}/users/{id}/reset-password", realm, subjectId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("type", "password", "value", password, "temporary", false))
-                .retrieve()
-                .onStatus(status -> status.value() == HttpStatus.BAD_REQUEST.value(), (request, response) -> {
-                    throw new PasswordRejectedException(
-                            policyOf(response.getBody().readAllBytes()));
-                })
-                .toBodilessEntity();
+        try {
+            client.put()
+                    .uri("/admin/realms/{realm}/users/{id}/reset-password", realm, subjectId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("type", "password", "value", password, "temporary", false))
+                    .retrieve()
+                    .onStatus(status -> status.value() == HttpStatus.BAD_REQUEST.value(), (request, response) -> {
+                        throw new PasswordRejectedException(
+                                policyOf(response.getBody().readAllBytes()));
+                    })
+                    .toBodilessEntity();
+        } catch (ResourceAccessException unreachable) {
+            if (neverLeft(unreachable.getCause())) {
+                throw new ProviderUnreachableException("The password write never reached Keycloak", unreachable);
+            }
+            throw unreachable;
+        }
+    }
+
+    /**
+     * Whether the transport failure proves the request was never delivered.
+     *
+     * <p>Only these three. A {@link java.net.SocketTimeoutException} is
+     * deliberately absent even though most of them are connect timeouts: the
+     * same type is thrown when a response never arrives, and a write whose
+     * response was lost is a write that may have landed. The conservative
+     * reading costs somebody a link; the permissive one leaves a spent link
+     * live.
+     */
+    private static boolean neverLeft(@Nullable Throwable cause) {
+        return cause instanceof ConnectException
+                || cause instanceof UnknownHostException
+                || cause instanceof NoRouteToHostException;
     }
 
     /**

@@ -151,12 +151,28 @@ twice in the same minute therefore gets one email, not two, and is told nothing
 about it — if they are sure the first never arrived, they ask again five
 minutes later.
 
-Two audit action codes are worth knowing when a reset is in question, in
-`audit.audit_events`: `iam.password_reset.request_suppressed` is a request the
-cooldown turned into a no-op, and a burst of them for one account is somebody
-hammering that address rather than the account holder being unlucky;
+Three audit action codes are worth knowing when a reset is in question, in
+`audit.audit_events`.
+
+`iam.password_reset.request_suppressed` is a request the cooldown turned into a
+no-op, and a burst of them for one account is somebody hammering that address
+rather than the account holder being unlucky.
+
 `iam.password_reset.sessions_not_ended` means a password *was* reset but the
 account's other sessions could not be ended — the new password works, and until
 somebody acts on it a device that was signed in before the reset may still be.
 End that account's sessions from Keycloak's admin console, and check the
-application log for the ERROR line beside it.
+application log for the ERROR line beside it. The person who reset the password
+was told this too, on the page: their card says the other sessions could not be
+ended and asks them to sign out on their other devices. So expect them to have
+tried, and expect a call; this fact is how the pattern becomes visible, not how
+the news first travels.
+
+`iam.password_reset.password_not_set` is the awkward one: the link was spent and
+the identity provider never answered the password write, so **nobody can say
+whether the password changed** — a `502` or a read timeout looks the same from
+here either way. The link stays spent deliberately, because one that came back
+would be live for an account whose password may already be new. Ask the account
+holder to try the password they chose. If it works, nothing is wrong beyond the
+scare; if it does not, they ask for a new link, which works normally. Either way
+the ERROR line beside it names what Keycloak did.

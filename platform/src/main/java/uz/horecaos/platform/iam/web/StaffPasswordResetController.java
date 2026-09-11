@@ -14,7 +14,6 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -119,8 +118,9 @@ public class StaffPasswordResetController {
             summary = "Set a new control-plane password",
             description = "Sets the password at the identity provider, spends the link and ends every "
                     + "other session the account holds. The realm's password policy applies; a refusal "
-                    + "names the rule. Answers 204.")
-    public ResponseEntity<Void> acceptControlPlane(
+                    + "names the rule. Answers 200 with sessionsEnded, which is false when the password "
+                    + "was set and the other sessions could not be ended.")
+    public PasswordResetAcceptance acceptControlPlane(
             @Valid @RequestBody PasswordResetAcceptRequest body, HttpServletRequest request) {
         return accept(body, request);
     }
@@ -130,8 +130,9 @@ public class StaffPasswordResetController {
             summary = "Set a new operations password",
             description = "Sets the password at the identity provider, spends the link and ends every "
                     + "other session the account holds. The realm's password policy applies; a refusal "
-                    + "names the rule. Answers 204.")
-    public ResponseEntity<Void> acceptOperations(
+                    + "names the rule. Answers 200 with sessionsEnded, which is false when the password "
+                    + "was set and the other sessions could not be ended.")
+    public PasswordResetAcceptance acceptOperations(
             @Valid @RequestBody PasswordResetAcceptRequest body, HttpServletRequest request) {
         return accept(body, request);
     }
@@ -152,10 +153,10 @@ public class StaffPasswordResetController {
         return resets.inspect(body.token());
     }
 
-    private ResponseEntity<Void> accept(PasswordResetAcceptRequest body, HttpServletRequest request) {
+    private PasswordResetAcceptance accept(PasswordResetAcceptRequest body, HttpServletRequest request) {
         limit("iam.password-reset.accept", request);
-        resets.accept(body.token(), body.password(), UUID.randomUUID().toString());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+        return new PasswordResetAcceptance(
+                resets.accept(body.token(), body.password(), UUID.randomUUID().toString()));
     }
 
     private void limit(String operation, HttpServletRequest request) {
@@ -215,4 +216,25 @@ public class StaffPasswordResetController {
             return "PasswordResetAcceptRequest[token=<redacted>, password=<redacted>]";
         }
     }
+
+    /**
+     * What a successful accept answers: the password is set, and whether every
+     * other session of the account was actually ended (ADR 0098).
+     *
+     * <p>One shape for every success, rather than a bare 204 for the ordinary
+     * case and a body for the unusual one: two success shapes on one operation
+     * is worse for the generated typed clients than one, and the whole reason
+     * this body exists is that a console must be able to say the truthful thing
+     * without guessing. When the revocation fails the platform still succeeded
+     * -- the password did change -- but "every other session has been ended" is
+     * then false, and the person reading it is the only one present who could
+     * act on it. The {@code sessions_not_ended} audit fact stays where it is,
+     * for an operator; this boolean is for the person at the screen.
+     *
+     * <p>A boolean and nothing more. The endpoint is unauthenticated, so the
+     * exception class, the status Keycloak answered and every other detail of
+     * the failure belong in the log line and the fact, not in a body anybody
+     * holding a link can read.
+     */
+    public record PasswordResetAcceptance(boolean sessionsEnded) {}
 }

@@ -89,11 +89,21 @@ is not a recovery, it is a second key cut for the same lock.
 5. **Accepting spends the link first, then sets the password, then ends every
    other session — which takes two admin calls.** The order is the security
    property and it is not the obvious one. The link is spent in a transaction
-   of its own, by a conditional `UPDATE … WHERE status = 'SENT'` that commits
-   before Keycloak is asked for anything; of two concurrent accepts exactly one
+   of its own, by a conditional
+   `UPDATE … WHERE status = 'SENT' AND token_hash = :hash` that commits before
+   Keycloak is asked for anything; of two concurrent accepts exactly one
    matches it, and the loser is told the link is invalid before it has changed
    any password. Only then is the password set, outside any transaction, and
    only then are the sessions ended, also outside any transaction.
+
+   The hash in that predicate is not redundant with the row id, because the row
+   is keyed by `subject_id` and reused. An accept reads the row by hash and then
+   spends one admin round trip reading the account, and Keycloak's budget is
+   three seconds to connect and ten to read; inside that gap the account's owner
+   can ask again, the upsert can requeue the row and the relay can email a
+   second link. Guarded on the id alone, the stalled accept would then find
+   `SENT` and spend a token it never held — the owner's brand-new link, dead on
+   its first click, with an ordinary `accepted` fact to explain it.
 
    Spending first is what keeps a later failure from resurrecting the link.
    With the revocation inside the accept's transaction, a read timeout or a
@@ -106,15 +116,43 @@ is not a recovery, it is a second key cut for the same lock.
    any of that. It is logged at ERROR, the accepted fact carries
    `sessionsEnded: false` rather than a hard-coded `true`, a second
    `iam.password_reset.sessions_not_ended` fact is recorded for an operator to
-   act on, and the answer is still `204` — because the password did change, and
+   act on, and the accept still succeeds — because the password did change, and
    telling the person otherwise would invite them to retry a link that no
    longer exists.
 
-   The one failure that restores the link is a password the realm's policy
-   refuses, which provably changed nothing at Keycloak: somebody who typed a
-   password the realm dislikes has to be able to type another one rather than
-   go and ask for a new link. Every other failure after the spend leaves the
-   link spent, which is the safe direction at the price of asking again.
+   **It succeeds with `200 {"sessionsEnded": boolean}`, not a bare `204`, and
+   that boolean is the point.** The operator standing at the till is the only
+   person who is present and motivated at that moment; an audit fact reaches
+   somebody else days later. A confirmation card that asserts "every other
+   session has been ended" while a dismissed employee's offline refresh token
+   keeps minting access tokens is precisely the shape this record's own
+   rejection table calls *worse than none* — a revocation that reports success
+   and revokes nothing. One success shape rather than two (a `204` here and a
+   body there) because the operation has one generated typed client per console
+   and a monomorphic response is what keeps it readable. The body carries the
+   boolean and nothing else: the endpoint is unauthenticated, so the exception
+   class and the status Keycloak answered stay in the log line and the fact.
+
+   **Two failures restore the link, and both provably changed nothing at
+   Keycloak.** A password the realm's policy refuses, because somebody who
+   typed a password the realm dislikes has to be able to type another one
+   rather than go and ask for a new link — asking again would clear the stored
+   hash of the good link they are holding. And a write that never reached
+   Keycloak at all: a refused connection or a host that does not resolve, which
+   the adapter raises as a narrow `ProviderUnreachableException` and nothing
+   else does.
+
+   **Every other failure after the spend leaves the link spent**, and that is
+   not caution but the only honest reading. A read timeout or a `502` on an
+   admin `reset-password` call says nothing about whether the password changed,
+   and a link restored on one of those is a live token for an account whose
+   password may already be new, for the rest of its hour, for anybody who can
+   read that mailbox — after the caller has been told the reset failed. The
+   dead end is recorded as `iam.password_reset.password_not_set` and raised,
+   never swallowed: a credential that may or may not have changed on a link
+   that is now permanently spent is at least as alertable as a revocation that
+   failed, and answering success for a password that never changed is the one
+   outcome worse than asking again.
 
    With the link spent, the platform calls `POST /users/{id}/logout`
    *and* `DELETE /users/{id}/consents/{staff-login-client}`. The second is
@@ -134,13 +172,23 @@ is not a recovery, it is a second key cut for the same lock.
    accounts; the second bounds an attack on one. Neither substitutes for the
    other: a distributed scan spends one request per address, and one address
    can ask about a thousand accounts.
-7. **No pooled database connection is held across a call to Keycloak, on any
-   of the six paths.** Every one is a short transaction, then the remote call,
-   then another short transaction; the row is never held under `FOR UPDATE`
-   across an admin call. The pool is ten connections wide and shared by every
-   module, so a transaction spanning the identity provider's 3 s connect and
-   10 s read turns a Keycloak brownout into a platform-wide outage — reachable,
-   here, by ten anonymous requests for a login nobody holds.
+7. **No pooled database connection is held across a call to Keycloak.** Every
+   path is a short transaction, then the remote call, then another short
+   transaction; the row is never held under `FOR UPDATE` across an admin call.
+   The pool is ten connections wide and shared by every module, so a
+   transaction spanning the identity provider's 3 s connect and 10 s read turns
+   a Keycloak brownout into a platform-wide outage — reachable, here, by ten
+   anonymous requests for a login nobody holds.
+
+   `ExternalCallTransactionBoundaryTests` pins this for all three request-thread
+   entry points and every Keycloak call each of them makes: the login search on
+   `request`, the account read `inspect` and `accept` share, the password write
+   and the revocation. It runs them through a real Spring context on purpose,
+   because the property under test is what `@Transactional` does when the proxy
+   is in place, and every other test of this service builds it with `new`, where
+   the annotation is inert. The relay's own account read is not covered there
+   and does not need to be: it runs on a scheduled worker rather than a request
+   thread, and holds nothing while it waits.
 8. **The request endpoint's audit facts are attributed to the surface, not to
    the account they name.** Nobody is authenticated there, so recording the
    staff member as the actor would let a stranger who knows an address write
@@ -240,16 +288,28 @@ is not a recovery, it is a second key cut for the same lock.
 - The cooldown bounds replacement, not volume over a day: a slow drip outside
   the window still delivers a mail every five minutes. A per-subject send
   budget over a longer window would close that and is not in this record.
-- A revocation that fails leaves offline grants live until an operator acts on
-  the `iam.password_reset.sessions_not_ended` fact. The platform does not
-  re-drive it; the reset itself is complete, and the outstanding revocation is
-  an alert rather than a queue. If those facts ever appear in numbers, the
-  answer is a retry on the relay, not a rollback of the reset.
-- A failure after the link is spent and before the password is set — Keycloak
-  unreachable in that window — costs the person their link: they ask again.
-  The alternative, leaving the link live until the password has certainly
-  changed, is what allowed a failed revocation to resurrect a spent link, and
-  that is the worse of the two.
+- A revocation that fails leaves offline grants live, and two people are told:
+  the account holder, on the confirmation card, because `sessionsEnded` comes
+  back with the `200`; and an operator, through the
+  `iam.password_reset.sessions_not_ended` fact. Neither is asked to wait for the
+  other — the person at the screen can sign their other devices out now, which
+  is the only remediation available at that moment, and the fact is what makes
+  a pattern of these visible later. The platform does not re-drive the
+  revocation; the reset itself is complete, and the outstanding revocation is an
+  alert rather than a queue. If those facts ever appear in numbers, the answer
+  is a retry on the relay, not a rollback of the reset.
+- A failure after the link is spent and before the password is certainly set —
+  a read timeout or a `502` in that window — costs the person their link: they
+  ask again, and `iam.password_reset.password_not_set` records that nobody can
+  say whether the password changed. The alternative, leaving the link live until
+  the password has certainly changed, is what allowed a failed revocation to
+  resurrect a spent link, and that is the worse of the two. The narrow
+  exception is a call that never left, which restores the link precisely because
+  it establishes that nothing happened.
+- The residual timing oracle on the request endpoint is accepted rather than
+  closed: a login that resolves commits a transaction and one that does not
+  never opens one. The Identity provider section above says why every way of
+  removing it is worse than the one bit it discloses.
 
 ## Specification
 
@@ -274,7 +334,8 @@ identity provider, and control-plane staff belong to no organization at all:
 Expired is not a state: it is `SENT` with `expires_at` in the past, read at
 the moment it matters. `GRANT SELECT, INSERT, UPDATE` to
 `horecaos_application`; every step after the insert is a conditional `UPDATE`,
-and those conditions are the concurrency control — `WHERE status = 'SENT'` on
+and those conditions are the concurrency control —
+`WHERE status = 'SENT' AND token_hash = :hash` on
 the spend, `WHERE status = 'QUEUED' AND attempts = :attempt` on the relay's
 writes, and the cooldown on the upsert. No row is held under `FOR UPDATE`
 across a call to Keycloak.
@@ -290,6 +351,20 @@ that already creates these accounts:
   same two admin round trips as one that does not: work that differs between
   the two is the same disclosure the uniform `202` refuses, measured with a
   stopwatch.
+
+  That closes the identity provider's share of the cost and not the database's,
+  and this record says so rather than claiming more. A login that resolves goes
+  on to open a transaction and commit an upsert and an audit insert; one that
+  resolves nobody answers without touching the pool. The residual is accepted:
+  a single-digit-millisecond local commit hiding inside the variance of two
+  Keycloak admin round trips, behind a ten-a-minute per-address limit, for one
+  bit — "this staff login exists". Every way of closing it is worse than the
+  leak. A sentinel write pollutes a table with a unique `subject_id` and a live
+  relay reading it; a bare `SELECT` on the empty branch matches neither the WAL
+  write nor the commit, so it would shrink the delta while adding code that
+  claims to have removed it; and a fixed latency floor parks a request thread on
+  an unauthenticated endpoint. Handing the whole call to a bounded executor
+  would close it honestly and is the option to revisit if the bit ever matters.
 - `findByLogin(usernameOrEmail)` — the above, then the account read; exact
   username first, then exact email; empty when neither resolves or the account
   has no address. Used by the relay and by the masked login on `inspect`.
@@ -303,6 +378,16 @@ that already creates these accounts:
 - `setPassword(subjectId, password)` — the `reset-password` admin call and
   nothing else. It must not touch `firstName`, `lastName` or `emailVerified`,
   which is what separates it from ADR 0097's `completeSetup`.
+  `KeycloakStaffAccountsWriteTests` holds it to exactly one request against a
+  mock server, and `completeSetup`'s three beside it, so the separation is a
+  property something fails on rather than a comment — the live class that also
+  asserts it skips wherever the realm has not had
+  `infra/keycloak/assign-service-account-roles.sh` run against it.
+
+  It raises `ProviderUnreachableException` for one thing only: a request that
+  never left, which a refused connection or an unresolvable host establishes and
+  a read timeout does not. That narrowness is what a spent link's fate turns on
+  under Decision 5, so a lost answer is deliberately left ambiguous.
 - `logoutEverywhere(subjectId)` — `POST /admin/realms/{realm}/users/{id}/logout`
   for the regular sessions, then
   `DELETE /admin/realms/{realm}/users/{id}/consents/{staff-login-client}` for
@@ -321,7 +406,10 @@ Public, unauthenticated, on both staff prefixes (`{console}` is
   body, answering which console, the masked login and the expiry, or `404`
   with a reason of `INVALID` or `EXPIRED`.
 - `POST /api/v1/{console}/auth/password-resets/accept` — `{token, password}`,
-  answering `204`.
+  answering `200 {"sessionsEnded": boolean}` in every success case. `false`
+  means the password was set and the account's other sessions could not be
+  ended; it is not a failure, and the console shows a different confirmation
+  rather than an error.
 
 Each is permitted one path at a time in `SecurityConfiguration` with the
 reason, exempted by exact path in `EndpointCapabilityDeclarationTests` (both
@@ -354,6 +442,14 @@ situation worse:
   has been ended" card is the one place the person is told about the surprise
   this record names below, and it carries the link to sign in; setting that
   stage and navigating away on the next tick showed it to nobody.
+- **The confirmation has two variants, and the page reads which from the
+  response rather than assuming.** `sessionsEnded: false` shows the second: the
+  password is set, the other sessions could *not* be ended, sign out on the
+  other devices and contact support if that is not possible. Both are success
+  cards — the form is gone and the link to sign in is there — because the
+  password did change. The signal backing the variant starts at `false` and has
+  to be granted by the response, so a path that forgot to set it shows the
+  cautious card rather than a false assurance.
 
 ### Configuration
 

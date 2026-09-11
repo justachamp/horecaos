@@ -97,7 +97,9 @@ public class JdbcPasswordResetStore {
      * <p>No {@code FOR UPDATE}: nothing that follows this read stays in the
      * same transaction, because what follows it is Keycloak. The single-use
      * rule is enforced instead by {@link #markAccepted}, whose {@code WHERE
-     * status = 'SENT'} only one of two concurrent accepts can match.
+     * status = 'SENT' AND token_hash = :hash} only one of two concurrent
+     * accepts can match -- and which no accept can match at all once a fresh
+     * request has replaced the link this read resolved.
      */
     public Optional<Row> byTokenHash(String tokenHash) {
         return jdbc.sql("SELECT " + COLUMNS + """
@@ -190,31 +192,61 @@ public class JdbcPasswordResetStore {
                 .update();
     }
 
-    /** The first time the link was opened; later opens change nothing. */
-    public void markOpened(UUID id, Instant now) {
+    /**
+     * The first time the link was opened; later opens change nothing.
+     *
+     * <p>{@code token_hash} for the same reason {@link #markAccepted} takes it:
+     * the row is keyed by subject and reused, so between the read that resolved
+     * this token and this write a fresh request can have replaced the link.
+     * Stamping {@code opened_at} on a link nobody has opened is cosmetic where
+     * spending one is not, but the asymmetry is worse than the line it saves.
+     */
+    public void markOpened(UUID id, String tokenHash, Instant now) {
         jdbc.sql("""
                 UPDATE iam.password_resets
                    SET opened_at = :now, version = version + 1
-                 WHERE id = :id AND status = 'SENT' AND opened_at IS NULL
-                """).param("id", id).param("now", utc(now)).update();
+                 WHERE id = :id AND status = 'SENT' AND token_hash = :hash AND opened_at IS NULL
+                """)
+                .param("id", id)
+                .param("hash", tokenHash)
+                .param("now", utc(now))
+                .update();
     }
 
     /**
-     * Spends the link: the hash goes, so the same token can never be used again.
+     * Spends <em>the link that was presented</em>: its hash goes, so that token
+     * can never be used again.
      *
      * <p>{@code WHERE status = 'SENT'} is the accept path's whole concurrency
      * control. Two accepts of one token race here and exactly one wins, and it
      * wins <em>before</em> either has asked Keycloak for anything, which is why
      * the row no longer has to be held under {@code FOR UPDATE} across the
      * calls that follow.
+     *
+     * <p>{@code AND token_hash = :hash} is what makes that sentence true across
+     * a <em>replacement</em> rather than only between two holders of one token.
+     * The row is keyed by {@code subject_id} and reused, and the caller reads it
+     * by hash and then makes an admin round trip before arriving here -- long
+     * enough for the account's owner to ask again, for the upsert to requeue the
+     * row and for the relay to send a second link. Guarding on the id alone, the
+     * stalled accept would find {@code SENT} and spend a token it never held:
+     * the owner's fresh link, minutes old, dead on its first click, with a
+     * perfectly ordinary {@code accepted} fact to explain it. Symmetric with
+     * {@link #restoreSent}, which guards itself the same way on {@code
+     * accepted_at}.
      */
-    public boolean markAccepted(UUID id, Instant now) {
+    public boolean markAccepted(UUID id, String tokenHash, Instant now) {
         return jdbc.sql("""
                         UPDATE iam.password_resets
                            SET status = 'ACCEPTED', token_hash = NULL, expires_at = NULL, accepted_at = :now,
                                opened_at = COALESCE(opened_at, :now), version = version + 1
-                         WHERE id = :id AND status = 'SENT'
-                        """).param("id", id).param("now", utc(now)).update() > 0;
+                         WHERE id = :id AND status = 'SENT' AND token_hash = :hash
+                        """)
+                        .param("id", id)
+                        .param("hash", tokenHash)
+                        .param("now", utc(now))
+                        .update()
+                > 0;
     }
 
     /**
@@ -226,6 +258,9 @@ public class JdbcPasswordResetStore {
      * new link. Guarded by the {@code accepted_at} this spend wrote, so a fresh
      * request that requeued the row in between is not stomped; when the guard
      * matches nothing the link simply stays spent, which is the safe direction.
+     * A requeue that happened <em>before</em> the spend cannot reach here at
+     * all: {@link #markAccepted} guards on the presented hash, so the accept is
+     * refused as invalid rather than arriving with a link to put back.
      *
      * @param acceptedAt the instant {@link #markAccepted} stamped, naming that spend
      */

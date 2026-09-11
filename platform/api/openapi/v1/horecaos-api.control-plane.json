@@ -4965,6 +4965,14 @@
         "required" : [ "password", "token" ],
         "type" : "object"
       },
+      "PasswordResetAcceptance" : {
+        "properties" : {
+          "sessionsEnded" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "PasswordResetRequest" : {
         "properties" : {
           "locale" : {
@@ -8353,7 +8361,7 @@
     },
     "/api/v1/control-plane/auth/password-resets/accept" : {
       "post" : {
-        "description" : "Sets the password at the identity provider, spends the link and ends every other session the account holds. The realm's password policy applies; a refusal names the rule. Answers 204.",
+        "description" : "Sets the password at the identity provider, spends the link and ends every other session the account holds. The realm's password policy applies; a refusal names the rule. Answers 200 with sessionsEnded, which is false when the password was set and the other sessions could not be ended.",
         "operationId" : "acceptControlPlane",
         "requestBody" : {
           "content" : {
@@ -8367,6 +8375,13 @@
         },
         "responses" : {
           "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PasswordResetAcceptance"
+                }
+              }
+            },
             "description" : "OK"
           }
         },

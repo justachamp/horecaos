@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -128,18 +129,35 @@ class StaffPasswordResetControllerTests {
         }
     }
 
+    /**
+     * One success shape, carrying the one thing the console cannot otherwise
+     * know.
+     *
+     * <p>A revocation that fails is not a failed reset -- the password did
+     * change -- so this answers rather than raising. But the page that then
+     * says "every other session has been ended" is saying it to the only person
+     * present who could act on its being false, which is why the answer is 200
+     * with {@code sessionsEnded} rather than a bare 204. Both values are
+     * asserted on the wire: a handler that hard-coded {@code true} would
+     * satisfy a test that only drove the happy path, and the false one is the
+     * case that matters.
+     */
     @Test
-    @DisplayName("setting a new password is reachable with no bearer token, on both prefixes, and answers 204")
+    @DisplayName("setting a new password is reachable with no bearer token, on both prefixes, and answers 200 saying "
+            + "whether the other sessions were ended")
     void acceptingALinkIsUnauthenticated() throws Exception {
+        when(resets.accept(anyString(), anyString(), anyString())).thenReturn(true);
         for (String prefix : new String[] {"control-plane", "operations"}) {
-            int status = mvc.perform(post("/api/v1/%s/auth/password-resets/accept".formatted(prefix))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"token\":\"%s\",\"password\":\"a-long-enough-passphrase\"}".formatted(TOKEN)))
-                    .andReturn()
-                    .getResponse()
-                    .getStatus();
-            assertThat(status).as(prefix).isEqualTo(204);
+            MvcResult result = acceptLink(prefix, "127.0.0.1");
+            assertThat(result.getResponse().getStatus()).as(prefix).isEqualTo(200);
+            assertThat(result.getResponse().getContentAsString()).as(prefix).isEqualTo("{\"sessionsEnded\":true}");
         }
+
+        when(resets.accept(anyString(), anyString(), anyString())).thenReturn(false);
+        assertThat(acceptLink("operations", "127.0.0.1").getResponse().getContentAsString())
+                .as("a reset whose revocation failed still succeeded, and still has to say so")
+                .isEqualTo("{\"sessionsEnded\":false}");
+
         verify(resets, never()).inspect(anyString());
     }
 
@@ -233,15 +251,78 @@ class StaffPasswordResetControllerTests {
         assertThat(requestReset("203.0.113.8", "cashier").getResponse().getStatus())
                 .as("the bucket is the caller's, not the endpoint's: one scanner must not lock everybody out")
                 .isEqualTo(202);
-        assertThat(mvc.perform(post("/api/v1/operations/auth/password-resets/inspect")
-                                .with(from("203.0.113.7"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"token\":\"%s\"}".formatted(TOKEN)))
-                        .andReturn()
-                        .getResponse()
-                        .getStatus())
+        assertThat(inspectLink("203.0.113.7").getResponse().getStatus())
                 .as("inspecting carries its own bucket, so a spent request budget cannot block a real link")
                 .isEqualTo(200);
+    }
+
+    /**
+     * The bucket the token-holding endpoints carry, which nothing asserted.
+     *
+     * <p>The method above proves the three buckets are <em>separate</em> and is
+     * blind to whether two of them exist: its closing assertion posts one
+     * inspect and expects 200, which is also what an endpoint with its {@code
+     * limit(...)} deleted answers. Delete {@code limit("iam.password-reset
+     * .inspect", ...)} and every test in the repository stayed green, leaving
+     * one caller free to walk tokens without cost.
+     *
+     * <p>A fresh address per method, never reused: the bucket key is the hash
+     * of the caller's address, the limiter is a singleton in a cached Spring
+     * context, and 203.0.113.7's inspect budget is load-bearing for the test
+     * above.
+     */
+    @Test
+    @DisplayName("the eleventh inspect in a minute from one address is refused before the service is reached")
+    void inspectingCarriesALimitOfItsOwn() throws Exception {
+        when(resets.inspect(anyString()))
+                .thenReturn(new ResetInspection("OPERATIONS", "d***a@example.uz", "2026-09-11T10:00:00Z", "ru"));
+
+        for (int attempt = 1; attempt <= 10; attempt++) {
+            assertThat(inspectLink("203.0.113.9").getResponse().getStatus())
+                    .as("attempt %d", attempt)
+                    .isEqualTo(200);
+        }
+
+        MvcResult refused = inspectLink("203.0.113.9");
+        assertThat(refused.getResponse().getStatus()).isEqualTo(429);
+        assertThat(refused.getResponse().getContentAsString()).contains("retryAfterSeconds");
+        // The status alone would also be satisfied by a service that threw; the
+        // property is that the eleventh is stopped in front of the service.
+        verify(resets, times(10)).inspect(anyString());
+
+        assertThat(requestReset("203.0.113.9", "cashier").getResponse().getStatus())
+                .as("and a spent inspect budget must not cost that caller the ability to ask for a link")
+                .isEqualTo(202);
+    }
+
+    /**
+     * An unauthenticated password write, unthrottled.
+     *
+     * <p>Possession of a 256-bit emailed token is what authorises this, so an
+     * unlimited accept is not a guessing surface; it is an anonymous lever on
+     * Keycloak's password writes, which is reason enough. As above, deleting
+     * the {@code limit(...)} call left the suite green.
+     */
+    @Test
+    @DisplayName("the eleventh accept in a minute from one address is refused before the service is reached")
+    void acceptingCarriesALimitOfItsOwn() throws Exception {
+        when(resets.accept(anyString(), anyString(), anyString())).thenReturn(true);
+
+        for (int attempt = 1; attempt <= 10; attempt++) {
+            assertThat(acceptLink("operations", "203.0.113.10").getResponse().getStatus())
+                    .as("attempt %d", attempt)
+                    .isEqualTo(200);
+        }
+
+        MvcResult refused = acceptLink("operations", "203.0.113.10");
+        assertThat(refused.getResponse().getStatus()).isEqualTo(429);
+        assertThat(refused.getResponse().getContentAsString()).contains("retryAfterSeconds");
+        // An eleventh password write must not reach the identity provider at all.
+        verify(resets, times(10)).accept(anyString(), anyString(), anyString());
+
+        assertThat(requestReset("203.0.113.10", "cashier").getResponse().getStatus())
+                .as("somebody who mistyped a password ten times can still ask for a new link")
+                .isEqualTo(202);
     }
 
     private MvcResult requestReset(String address, String login) throws Exception {
@@ -249,6 +330,22 @@ class StaffPasswordResetControllerTests {
                         .with(from(address))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"login\":\"%s\",\"locale\":\"ru\"}".formatted(login)))
+                .andReturn();
+    }
+
+    private MvcResult inspectLink(String address) throws Exception {
+        return mvc.perform(post("/api/v1/operations/auth/password-resets/inspect")
+                        .with(from(address))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"%s\"}".formatted(TOKEN)))
+                .andReturn();
+    }
+
+    private MvcResult acceptLink(String prefix, String address) throws Exception {
+        return mvc.perform(post("/api/v1/%s/auth/password-resets/accept".formatted(prefix))
+                        .with(from(address))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"%s\",\"password\":\"a-long-enough-passphrase\"}".formatted(TOKEN)))
                 .andReturn();
     }
 

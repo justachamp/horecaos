@@ -1586,6 +1586,10 @@ export interface PasswordResetAcceptRequest {
   token: string;
 }
 
+export interface PasswordResetAcceptance {
+  sessionsEnded?: boolean;
+}
+
 export interface PasswordResetRequest {
   locale?: string;
   login: string;
@@ -2648,7 +2652,7 @@ export interface Operations {
   "platformPending": { method: "GET"; path: "/api/v1/control-plane/approval-requests"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<PlatformPendingApprovalResponse> } };
   "board": { method: "GET"; path: "/api/v1/control-plane/arrears"; request: { parameters: Record<string, never> }; responses: { "200": ArrearsBoardView } };
   "requestControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets"; request: { parameters: Record<string, never>; body: PasswordResetRequest }; responses: { "200": unknown } };
-  "acceptControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets/accept"; request: { parameters: Record<string, never>; body: PasswordResetAcceptRequest }; responses: { "200": unknown } };
+  "acceptControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets/accept"; request: { parameters: Record<string, never>; body: PasswordResetAcceptRequest }; responses: { "200": PasswordResetAcceptance } };
   "inspectControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/password-resets/inspect"; request: { parameters: Record<string, never>; body: PasswordResetTokenRequest }; responses: { "200": ResetInspection } };
   "signInControlPlane": { method: "POST"; path: "/api/v1/control-plane/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutControlPlane": { method: "DELETE"; path: "/api/v1/control-plane/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };

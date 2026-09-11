@@ -60,6 +60,10 @@ public interface StaffAccounts {
      * stale address would quietly become trusted.
      *
      * @throws PasswordRejectedException when the realm's password policy refuses it
+     * @throws ProviderUnreachableException when the call never left, so the
+     *     account is provably unchanged. Any other failure -- a read timeout, a
+     *     5xx -- is ambiguous by construction and must be treated as though the
+     *     password may already have changed.
      */
     void setPassword(String subjectId, String password);
 
@@ -81,6 +85,32 @@ public interface StaffAccounts {
         public String toString() {
             return "StaffAccount[subjectId=" + subjectId + ", email=<redacted>, emailVerified=" + emailVerified
                     + ", hasPassword=" + hasPassword + "]";
+        }
+    }
+
+    /**
+     * The call never reached the identity provider, so nothing it would have
+     * written was written (ADR 0098).
+     *
+     * <p>Narrow on purpose, and the narrowness is the point. A password reset
+     * spends its one-time link <em>before</em> Keycloak is asked for anything,
+     * so a failure afterwards leaves the platform deciding whether the link may
+     * safely come back. It may only when the password provably did not change,
+     * and almost no failure proves that: a read timeout, a 502, a connection
+     * reset mid-response all leave a write that may well have landed, and
+     * restoring a link on one of those makes a token whose password has already
+     * changed live again for the rest of its hour, for anybody who can read that
+     * mailbox.
+     *
+     * <p>So an implementation raises this <em>only</em> for a failure that
+     * establishes the request was never delivered -- a refused connection, a
+     * host that does not resolve. Everything else stays an ordinary
+     * {@link RuntimeException} and is treated as possibly-written.
+     */
+    final class ProviderUnreachableException extends RuntimeException {
+
+        public ProviderUnreachableException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 

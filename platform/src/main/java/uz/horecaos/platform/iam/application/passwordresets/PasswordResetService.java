@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts.ProviderUnreachableException;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
@@ -46,7 +47,10 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * transaction. The pool is ten connections wide and shared by every module, so
  * a transaction that spans a three-second connect and a ten-second read turns a
  * Keycloak brownout into a platform-wide outage -- on endpoints that need no
- * token at all. {@code ExternalCallTransactionBoundaryTests} asserts it.
+ * token at all. {@code ExternalCallTransactionBoundaryTests} asserts it for all
+ * three entry points here, on every Keycloak call each of them makes: the
+ * login search, the account read that {@code inspect} and {@code accept} share,
+ * the password write and the revocation.
  */
 @Service
 public class PasswordResetService {
@@ -118,10 +122,24 @@ public class PasswordResetService {
      *
      * <p>The identity provider is asked <em>outside</em> the transaction, and
      * it is asked for a subject id rather than an account: the two extra admin
-     * round trips {@code findByLogin} would make are pure waste here, and the
-     * symmetry of {@link StaffAccounts#findSubjectIdByLogin} is what keeps a
-     * login that names an account from costing measurably more than one that
-     * does not.
+     * round trips {@code findByLogin} would make are pure waste here, and
+     * {@link StaffAccounts#findSubjectIdByLogin} issues both of its searches
+     * either way, so the identity provider's share of the cost is the same for
+     * a login that names an account and one that does not.
+     *
+     * <p>The database's share is <em>not</em>, and saying so is the honest
+     * version of a claim this paragraph used to make. A login that resolves
+     * goes on to open a transaction and commit an upsert and an audit insert;
+     * one that resolves nobody returns from the line below without touching the
+     * pool. That residual is accepted rather than closed (ADR 0098): the
+     * difference is a single-digit-millisecond local commit hiding inside the
+     * variance of two Keycloak admin round trips, behind a ten-a-minute
+     * per-address limit, and it discloses one bit -- "this staff login exists".
+     * The alternatives are worse than the leak: a sentinel write pollutes a
+     * table with a unique subject and a live relay, a bare select on the empty
+     * branch matches neither the write nor the commit and would merely look
+     * like a fix, and a fixed latency floor parks a request thread on an
+     * unauthenticated endpoint.
      *
      * <p>An identity provider that cannot be reached is swallowed rather than
      * raised. The endpoint answers 202 whatever happens, so raising here would
@@ -192,7 +210,7 @@ public class PasswordResetService {
     public ResetInspection inspect(String token) {
         Instant now = clock.instant();
         Row row = live(token, now);
-        store.markOpened(row.id(), now);
+        store.markOpened(row.id(), Objects.requireNonNull(row.tokenHash()), now);
         return new ResetInspection(
                 row.console(),
                 maskedLogin(row.subjectId()),
@@ -210,9 +228,11 @@ public class PasswordResetService {
      *
      * <ol>
      *   <li>the row is read and checked live;
-     *   <li>{@code markAccepted} spends it -- {@code WHERE status = 'SENT'},
-     *       so of two concurrent accepts exactly one proceeds and the loser is
-     *       told the link is invalid before it has changed any password;
+     *   <li>{@code markAccepted} spends it -- {@code WHERE status = 'SENT' AND
+     *       token_hash = :hash}, so of two concurrent accepts exactly one
+     *       proceeds and the loser is told the link is invalid before it has
+     *       changed any password, and an accept whose link a fresh request
+     *       replaced while this one was waiting on Keycloak spends nothing;
      *   <li>{@code setPassword} runs outside any transaction;
      *   <li>{@code logoutEverywhere} runs outside any transaction, and its
      *       failure is logged and audited, never propagated.
@@ -226,31 +246,49 @@ public class PasswordResetService {
      * reset failed when it had not. Now the only thing a failed revocation can
      * do is be recorded.
      *
-     * <p>The one exception is a password the realm's policy refuses, which
-     * provably changed nothing at Keycloak: that restores the link, because a
-     * person who typed a password the realm dislikes has to be able to type
-     * another one. Every other failure after the spend leaves the link spent
-     * -- the safe direction, at the price of asking again.
+     * <p><b>Two failures put the link back, and both are failures that provably
+     * changed nothing at Keycloak.</b> A password the realm's policy refuses,
+     * because somebody who typed a password the realm dislikes has to be able
+     * to type another one; and a write that never reached Keycloak at all
+     * ({@link StaffAccounts.ProviderUnreachableException} -- a refused
+     * connection, a host that does not resolve), because a person whose reset
+     * met an outage between two keystrokes should be able to press the button
+     * again rather than go and ask for a new link.
+     *
+     * <p><b>Every other failure after the spend leaves the link spent</b>, and
+     * that is not caution, it is the only honest reading: a read timeout or a
+     * 502 on an admin reset-password call says nothing about whether the
+     * password changed, and a link restored on one of those is a live token for
+     * an account whose password may already be new, for the rest of its hour,
+     * for anyone who can read that mailbox. It is recorded as {@code
+     * iam.password_reset.password_not_set} -- a credential that may or may not
+     * have changed, on a link that is now permanently spent, is at least as
+     * alertable as a revocation that failed -- and raised, never swallowed: a
+     * success answer for a password that never changed is the one thing worse.
      *
      * <p>Ending the sessions goes last and separately because a reset that is
      * refused must not sign out somebody who asked for nothing, and because the
      * password change is the part the staff member is waiting for: when the
-     * revocation fails the answer is still 204, with {@code sessionsEnded} false
-     * on the accepted fact and a {@code sessions_not_ended} fact beside it for
-     * an operator to act on. Telling the caller it failed would be false --
-     * their password did change -- and would invite them to retry a link that
-     * no longer exists.
+     * revocation fails this still answers, with {@code sessionsEnded} false on
+     * the accepted fact, a {@code sessions_not_ended} fact beside it for an
+     * operator, and the same false returned to the caller so the console can
+     * tell the one person who is present and motivated. Raising instead would
+     * be false -- their password did change -- and would invite them to retry a
+     * link that no longer exists.
+     *
+     * @return whether every other session of the account was actually ended
      */
-    public void accept(String token, String password, String correlationId) {
+    public boolean accept(String token, String password, String correlationId) {
         Instant now = clock.instant();
         Row row = live(token, now);
+        String presented = Objects.requireNonNull(row.tokenHash());
         if (accounts.find(row.subjectId()).isEmpty()) {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND,
                     "This account no longer exists. Ask for a new link.",
                     Map.of("reason", "ACCOUNT_MISSING"));
         }
-        if (!store.markAccepted(row.id(), now)) {
+        if (!store.markAccepted(row.id(), presented, now)) {
             // Somebody else spent it, or a fresh request replaced it, between
             // the read above and here. Nothing was changed at Keycloak.
             throw invalid();
@@ -258,12 +296,25 @@ public class PasswordResetService {
         try {
             accounts.setPassword(row.subjectId(), password);
         } catch (PasswordRejectedException refused) {
-            store.restoreSent(
-                    row.id(), Objects.requireNonNull(row.tokenHash()), Objects.requireNonNull(row.expiresAt()), now);
+            // The result is deliberately not read. When a fresh request
+            // requeued the row between the spend and this refusal, the guard
+            // matches nothing and the link stays spent -- and the caller is
+            // still told what is true of what they typed, because the password
+            // was refused and the link they now have is the newer one.
+            store.restoreSent(row.id(), presented, Objects.requireNonNull(row.expiresAt()), now);
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "The password does not meet the policy",
                     Map.of("field", "password", "policy", refused.policy()));
+        } catch (ProviderUnreachableException never) {
+            // The call did not leave, so the account is exactly as it was and
+            // the link can be the same link. The narrow type is what earns this
+            // branch; an ordinary RuntimeException falls through below.
+            store.restoreSent(row.id(), presented, Objects.requireNonNull(row.expiresAt()), now);
+            throw never;
+        } catch (RuntimeException unset) {
+            recordPasswordNotSet(row, unset, correlationId, now);
+            throw unset;
         }
 
         boolean sessionsEnded = endSessions(row, correlationId, now);
@@ -274,6 +325,36 @@ public class PasswordResetService {
                 row.id(),
                 "The staff member set a new password from the emailed link (ADR 0098)",
                 Map.of("status", "ACCEPTED", "sessionsEnded", sessionsEnded),
+                correlationId,
+                now));
+        return sessionsEnded;
+    }
+
+    /**
+     * The dead end: a link spent for a password that may or may not have been
+     * written.
+     *
+     * <p>Recorded rather than repaired. Nobody -- not this process, not an
+     * operator reading it later -- can say from here whether the password
+     * changed, so there is nothing to undo and nothing to retry; what an
+     * operator can do is ask the account holder whether their new password
+     * works and set one by hand if it does not, which needs the fact to exist.
+     */
+    private void recordPasswordNotSet(Row row, RuntimeException failed, String correlationId, Instant now) {
+        log.error(
+                "A reset link was spent and the password write then failed; the link stays spent "
+                        + "(reset {}, correlation {})",
+                row.id(),
+                correlationId,
+                failed);
+        audit.record(StaffSecurityFact.byStaffMember(
+                "iam.password_reset.password_not_set",
+                row.subjectId(),
+                "iam.password_reset",
+                row.id(),
+                "The link was spent and the identity provider did not answer the password write; "
+                        + "whether the password changed is unknown (ADR 0098)",
+                Map.of("status", "ACCEPTED", "failure", failed.getClass().getSimpleName()),
                 correlationId,
                 now));
     }
