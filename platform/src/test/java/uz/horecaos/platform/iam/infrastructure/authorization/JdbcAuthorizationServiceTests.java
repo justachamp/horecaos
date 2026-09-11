@@ -276,6 +276,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.AUDIENCE_READ,
                 Capability.COMMERCIAL_PLAN_READ,
                 Capability.COMMERCIAL_USAGE_READ,
+                // ADR 0095: a suspended tenant is exactly the tenant that needs
+                // to read its own wallet -- what it paid, what HorecaOS granted,
+                // and which statement is still due. Reading takes nothing out.
+                Capability.COMMERCIAL_WALLET_READ,
                 Capability.LOYALTY_READ,
                 Capability.REFERRAL_READ,
                 Capability.REPORTING_READ,
