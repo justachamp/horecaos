@@ -915,6 +915,33 @@ public enum Capability {
     COMMERCIAL_STATEMENT_ISSUE("commercial.statement.issue", "commercial", "statement.issue"),
 
     /**
+     * ADR 0095: a tenant's own paid and bonus balances, its ledger, its live
+     * bonus grants, each statement's paid and due amounts, and its payment
+     * method.
+     *
+     * <p>Composed into tenant roles, like {@link #COMMERCIAL_USAGE_READ}: a
+     * tenant asking why a statement is still due is owed the ledger that
+     * answers it, not only the total.
+     */
+    COMMERCIAL_WALLET_READ("commercial.wallet.read", "commercial", "wallet.read"),
+
+    /**
+     * ADR 0095: recording a bank transfer or a subscription's activation
+     * deposit, proposing a wallet adjustment, bonus grant or refund, and
+     * changing a tenant's payment method.
+     *
+     * <p>HorecaOS staff only, like {@link #COMMERCIAL_STATEMENT_ISSUE}: a
+     * tenant that could grant itself a bonus or record its own transfer would
+     * be deciding what it owes. Recording a transfer is one person's audited
+     * act, like issuing a statement; an adjustment, a bonus grant and a
+     * refund are proposed under this capability and approved by a different
+     * holder of it through the ADR 0027 approval model (see
+     * {@code uz.horecaos.platform.audit.api.ApprovalAction.WALLET_ADJUSTMENT})
+     * — nothing moves until they are.
+     */
+    COMMERCIAL_WALLET_MANAGE("commercial.wallet.manage", "commercial", "wallet.manage"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *

@@ -37,22 +37,33 @@ public class JdbcSubscriptionStore {
     }
 
     public void insert(Subscription subscription, Instant now) {
-        insert(subscription, 1, now);
+        insert(subscription, 1, 0, now);
     }
 
     /** Writes a new subscription sold on a term of {@code termMonths} (ADR 0093); 1 is month to month. */
     public void insert(Subscription subscription, int termMonths, Instant now) {
+        insert(subscription, termMonths, 0, now);
+    }
+
+    /**
+     * Writes a new subscription, recording {@code depositDueMinor} as owing
+     * when its plan version sells an activation deposit (ADR 0095, item 6);
+     * zero for a version that sells none. Paying it clears the column back to
+     * zero — see {@link #clearDepositDue}.
+     */
+    public void insert(Subscription subscription, int termMonths, long depositDueMinor, Instant now) {
         jdbc.sql("""
                 INSERT INTO commercial.subscriptions (
                     id, tenant_id, plan_version_id, status, start_at, trial_end_at,
                     current_period_start, current_period_end, external_billing_reference,
-                    version, status_changed_at, term_months, created_at, updated_at)
+                    version, status_changed_at, term_months, deposit_due_minor, created_at, updated_at)
                 VALUES (
                     :id, :tenantId, :planVersionId, :status, :startAt, :trialEndAt,
                     :periodStart, :periodEnd, :externalReference,
-                    1, :now, :termMonths, :now, :now)
+                    1, :now, :termMonths, :depositDueMinor, :now, :now)
                 """)
                 .param("termMonths", termMonths)
+                .param("depositDueMinor", depositDueMinor)
                 .param("id", subscription.id())
                 .param("tenantId", subscription.tenantId())
                 .param("planVersionId", subscription.planVersionId())
@@ -64,6 +75,26 @@ public class JdbcSubscriptionStore {
                 .param("externalReference", subscription.externalBillingReference())
                 .param("now", utc(now))
                 .update();
+    }
+
+    /** What a tenant's live subscription still owes as its activation deposit; zero when none or already paid. */
+    public long liveDepositDue(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT deposit_due_minor FROM commercial.subscriptions
+                         WHERE tenant_id = :tenantId AND status NOT IN ('TERMINATED', 'EXPIRED')
+                        """)
+                .param("tenantId", tenantId)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
+    }
+
+    /** Clears a subscription's deposit due to zero once it is paid (ADR 0095). */
+    public void clearDepositDue(UUID tenantId, UUID subscriptionId) {
+        jdbc.sql("""
+                        UPDATE commercial.subscriptions SET deposit_due_minor = 0
+                         WHERE tenant_id = :tenantId AND id = :id
+                        """).param("tenantId", tenantId).param("id", subscriptionId).update();
     }
 
     public Optional<Subscription> findLive(UUID tenantId) {

@@ -142,7 +142,10 @@ public class SubscriptionService {
                 null,
                 1);
 
-        subscriptions.insert(subscription, termMonths, now);
+        // ADR 0095, item 6: an activation deposit becomes due the moment the
+        // subscription starts. Paying it is a wallet top-up, not a statement
+        // line -- see WalletService.recordDeposit.
+        subscriptions.insert(subscription, termMonths, terms.activationDepositMinor(), now);
 
         EntitlementSnapshot snapshot = entitlements.snapshot(tenantId);
         Map<String, Object> change = new HashMap<>();

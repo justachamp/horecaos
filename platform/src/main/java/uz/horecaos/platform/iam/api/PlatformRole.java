@@ -281,6 +281,9 @@ public enum PlatformRole {
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0095: the owner's own wallet -- both balances, the ledger,
+                    // live bonus grants and each statement's paid and due amounts.
+                    COMMERCIAL_WALLET_READ,
                     IAM_GRANT_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
@@ -486,6 +489,8 @@ public enum PlatformRole {
                     COMMERCIAL_OVERRIDE_APPROVE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0095: finance is who answers "why is this still due".
+                    COMMERCIAL_WALLET_READ,
                     REPORTING_READ,
                     AUDIT_READ)),
 

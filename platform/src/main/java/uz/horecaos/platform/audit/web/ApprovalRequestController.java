@@ -98,9 +98,13 @@ public class ApprovalRequestController {
         return pendingResponse(tenantId, actionCode, limit);
     }
 
-    /** The actions HorecaOS staff decide across tenants (ADR 0090). */
-    static final List<String> PLATFORM_ACTIONS =
-            List.of(ApprovalAction.TENANT_COUNTRY_CHANGE.code(), ApprovalAction.TENANT_ACTIVATE.code());
+    /** The actions HorecaOS staff decide across tenants (ADR 0090, ADR 0095). */
+    static final List<String> PLATFORM_ACTIONS = List.of(
+            ApprovalAction.TENANT_COUNTRY_CHANGE.code(),
+            ApprovalAction.TENANT_ACTIVATE.code(),
+            ApprovalAction.WALLET_ADJUSTMENT.code(),
+            ApprovalAction.WALLET_BONUS_GRANT.code(),
+            ApprovalAction.WALLET_REFUND.code());
 
     @GetMapping("/api/v1/control-plane/approval-requests")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.PLATFORM)
