@@ -449,6 +449,50 @@ class ApprovalRequestEndpointTests {
                 .contains("\"amountMinor\":\"-50000\"");
     }
 
+    /**
+     * ADR 0095: the tenant is on the whole approval lifecycle, the refusal
+     * included.
+     *
+     * <p>A refusal is the one decision that writes no wallet entry, so the
+     * subject on its change document is the only thing that attributes it to a
+     * tenant at all — the fact is filed at PLATFORM scope, where {@code
+     * audit_events.tenant_id} is null by construction. Both existing tests of
+     * this fact raise TENANT-scope rows, whose {@code subject_tenant_id} is
+     * null, and assert only that one row was written: the branch that puts the
+     * subject on the document is never taken, and deleting it leaves the suite
+     * green while an attempt to sign a refund of this tenant's money becomes
+     * attributable to nobody.
+     */
+    @Test
+    void aRefusedPlatformDecisionStillNamesTheTenantWhoseAccountItConcerns() throws Exception {
+        grantPlatform(PLATFORM_MAKER);
+        UUID requestId =
+                platformPendingRequest(PLATFORM_MAKER, Capability.COMMERCIAL_WALLET_MANAGE, WALLET_ACTION, TENANT);
+
+        MvcResult refused = mvc.perform(post("/api/v1/control-plane/approval-requests/" + requestId + "/decision")
+                        .with(tokenFor(PLATFORM_MAKER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-platform-refused")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approveBody()))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("the maker raised it, so four eyes refuses them however much capability they hold")
+                .isEqualTo(403);
+        assertThat(status(requestId)).isEqualTo("PENDING");
+        assertThat(jdbc.sql("""
+                        SELECT change_document->>'subjectTenantId' FROM audit.audit_events
+                         WHERE action_code = 'approval.decision.refused' AND actor_subject = :subject
+                        """)
+                        .param("subject", PLATFORM_MAKER)
+                        .query(String.class)
+                        .single())
+                .as("filed at PLATFORM scope, so audit_events.tenant_id is null; without the subject on "
+                        + "the document an attempt to sign a refund of this tenant's money is attributable "
+                        + "to no tenant anywhere, and it leaves no wallet entry to be found by (ADR 0095)")
+                .isEqualTo(TENANT.toString());
+    }
+
     @Test
     void aTenantsOwnRequestIsNotReachableFromThePlatformDecisionRoute() throws Exception {
         grantPlatform(PLATFORM_CHECKER);
