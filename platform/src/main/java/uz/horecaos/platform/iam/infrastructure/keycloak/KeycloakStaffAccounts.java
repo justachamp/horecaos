@@ -71,33 +71,59 @@ class KeycloakStaffAccounts implements StaffAccounts {
                 hasPassword));
     }
 
+    /** The account a login resolves to: {@link #findSubjectIdByLogin}, then read. */
+    @Override
+    public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
+        return findSubjectIdByLogin(usernameOrEmail).flatMap(id -> find(id));
+    }
+
     /**
-     * Exact user name first, then exact email (ADR 0098).
+     * Exact user name and exact email, both searched, the user name preferred
+     * (ADR 0098).
      *
      * <p>{@code exact=true} on both, because Keycloak's default search is a
      * prefix match across several attributes: without it, "dil" would resolve
      * to somebody, and a reset link would go to an account the requester never
      * named. More than one match is treated as no match for the same reason --
      * the platform will not guess whose password is being reset.
+     *
+     * <p>Both searches run even when the first one hits. The {@code or(...)}
+     * that short-circuited made a login matching a user name cost one admin
+     * search and one matching nothing cost two, on an endpoint that exists to
+     * answer identically for both; two searches either way is a difference
+     * nobody outside can measure.
      */
     @Override
-    public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
+    public Optional<String> findSubjectIdByLogin(String usernameOrEmail) {
         String login = usernameOrEmail.strip();
         if (login.isEmpty()) {
             return Optional.empty();
         }
-        return exactlyOne("username", login)
-                .or(() -> exactlyOne("email", login))
-                .flatMap(id -> find(id));
+        Optional<String> byUsername = exactlyOne("username", login);
+        Optional<String> byEmail = exactlyOne("email", login);
+        return byUsername.or(() -> byEmail);
     }
 
+    /**
+     * The login goes out as a URI variable, never as a literal.
+     *
+     * <p>{@code queryParam(attribute, value)} leaves a {@code +} raw -- it is
+     * an allowed sub-delimiter in a query component -- and Keycloak's Vert.x
+     * query parsing decodes a raw {@code +} as a space, so a plus-addressed
+     * account ({@code ops+kassa@acme.uz}, which is also its user name) is
+     * searched for as {@code ops kassa@acme.uz} and resolves nobody. On an
+     * endpoint that answers 202 to everyone, that account could never recover
+     * and nobody would ever be told why. The variable form percent-encodes it.
+     * {@code UriUtils.encodeQueryParam} does not help here: it leaves {@code +}
+     * alone, and pre-encoding then passing a literal double-encodes.
+     */
     private Optional<String> exactlyOne(String attribute, String value) {
         List<Map<String, Object>> found = client.get()
                 .uri(builder -> builder.path("/admin/realms/{realm}/users")
-                        .queryParam(attribute, value)
+                        .queryParam(attribute, "{login}")
                         .queryParam("exact", true)
                         .queryParam("max", 2)
-                        .build(realm))
+                        .build(realm, value))
                 .retrieve()
                 .body(LIST);
         if (found == null || found.size() != 1) {

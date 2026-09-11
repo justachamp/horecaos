@@ -27,6 +27,23 @@ public interface StaffAccounts {
     Optional<StaffAccount> findByLogin(String usernameOrEmail);
 
     /**
+     * The subject a login resolves to, and nothing else about the account
+     * (ADR 0098).
+     *
+     * <p>Exists so that asking for a password reset costs the identity
+     * provider the same work whether or not the login names anybody.
+     * {@link #findByLogin} is two searches for a login nobody holds and four
+     * round trips for one that resolves, because it goes on to read the
+     * account; the request path needs only the subject, and the difference
+     * between two round trips and four is measurable from outside on an
+     * endpoint whose whole purpose is to answer identically either way.
+     *
+     * <p>An implementation must therefore do the same work in both cases,
+     * rather than short-circuiting as soon as one lookup hits.
+     */
+    Optional<String> findSubjectIdByLogin(String usernameOrEmail);
+
+    /**
      * Sets the account's name and a permanent password and marks its address
      * verified -- the owner proved it by opening the link sent there.
      *

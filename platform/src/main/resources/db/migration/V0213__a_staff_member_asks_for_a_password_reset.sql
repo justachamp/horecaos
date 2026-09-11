@@ -5,6 +5,14 @@
 -- puts it back in the queue, so the link already sent stops working and no
 -- number of requests can accumulate live links for one account.
 --
+-- What that rule does *not* bound is how many emails a repeated request
+-- produces: each requeue is another send. The request endpoint is
+-- unauthenticated, so the upsert carries a cooldown in its own ON CONFLICT
+-- ... WHERE -- a link sent within the last few minutes and still live is left
+-- alone, and the request is a silent no-op. Without it, anybody who knows a
+-- staff address can post it every few seconds and each post both kills the
+-- link its owner is holding and queues another email to them.
+--
 -- It holds no address -- that lives in Keycloak and is read when the email is
 -- sent -- and never the token itself: the relay makes the token at send time,
 -- emails it, and keeps only its SHA-256 (ADR 0009, ADR 0029), so nobody who
@@ -63,7 +71,10 @@ CREATE INDEX ix_password_resets_due ON iam.password_resets (next_attempt_at) WHE
 COMMENT ON TABLE iam.password_resets IS
     'ADR 0098. A staff member''s password reset. No address, and only the hash of the one-time token.';
 
--- UPDATE is not optional here: the accept path locks the row it is about with
--- FOR UPDATE so an accept and a fresh request cannot cross, and PostgreSQL
--- requires UPDATE on a table a statement locks for update.
+-- UPDATE is not optional here: every step after the insert is a conditional
+-- UPDATE. Those conditions are the concurrency control -- the accept spends
+-- the link with WHERE status = 'SENT', which only one of two concurrent
+-- accepts can match, and it does so before either has called Keycloak. No
+-- row lock is held across a remote call, deliberately: the pool is ten
+-- connections wide and shared by every module.
 GRANT SELECT, INSERT, UPDATE ON iam.password_resets TO horecaos_application;

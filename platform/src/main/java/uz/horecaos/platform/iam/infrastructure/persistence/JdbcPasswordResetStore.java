@@ -25,7 +25,10 @@ import org.springframework.stereotype.Repository;
  * queued once and resent by a person; a reset is requested by whoever is at
  * the screen, so the insert is an upsert that puts an existing row back in the
  * queue and clears its hash. That single statement is the whole
- * "one live reset per account" rule.
+ * "one live reset per account" rule, and its {@code WHERE} is the whole
+ * cooldown: both are decided by the database rather than by a read the caller
+ * makes first, because the caller is unauthenticated and two of them can be in
+ * flight at once.
  */
 @Repository
 public class JdbcPasswordResetStore {
@@ -42,16 +45,28 @@ public class JdbcPasswordResetStore {
     }
 
     /**
-     * Queues a reset for this account, replacing whatever was outstanding.
+     * Queues a reset for this account, replacing whatever was outstanding --
+     * unless a link that was delivered moments ago is still live.
      *
-     * <p>The link already emailed stops working the moment this runs, because
-     * the hash it would be matched against is cleared in the same statement.
-     * A reset already accepted is reopened rather than refused: forgetting a
-     * password twice is an ordinary thing to do.
+     * <p>The replacement is what makes "one live reset per account" true: the
+     * hash the older link would be matched against is cleared in the same
+     * statement. The exception is the cooldown, and it exists because the
+     * endpoint in front of this is unauthenticated: without it, anybody who
+     * knows a staff address can post it every few seconds, and each post both
+     * kills the link the person is holding and queues another email to them.
+     * A row that is already queued, failed, accepted or holding an expired
+     * link is requeued as before; only a link sent inside {@code
+     * cooldownCutoff} and still live survives a second ask.
      *
-     * @return the row's id, whether this call created it or requeued it
+     * <p>The test is in the statement's own {@code WHERE} rather than in a
+     * read the caller makes first, because two unauthenticated requests can be
+     * in flight at once: at READ COMMITTED both would see "no cooldown", and
+     * the second would still overwrite the first's link.
+     *
+     * @return the row's id, or empty when the cooldown left a live link alone
      */
-    public UUID request(UUID id, String subjectId, String console, String locale, Instant now) {
+    public Optional<UUID> request(
+            UUID id, String subjectId, String console, String locale, Instant now, Instant cooldownCutoff) {
         return jdbc.sql("""
                         INSERT INTO iam.password_resets (
                             id, subject_id, console, locale, status, next_attempt_at, requested_at)
@@ -61,6 +76,9 @@ public class JdbcPasswordResetStore {
                                expires_at = NULL, attempts = 0, next_attempt_at = :now, last_error_code = NULL,
                                requested_at = :now, sent_at = NULL, opened_at = NULL, accepted_at = NULL,
                                version = iam.password_resets.version + 1
+                         WHERE iam.password_resets.status <> 'SENT'
+                            OR iam.password_resets.expires_at <= :now
+                            OR iam.password_resets.sent_at <= :cooldownCutoff
                         RETURNING id
                         """)
                 .param("id", id)
@@ -68,16 +86,23 @@ public class JdbcPasswordResetStore {
                 .param("console", console)
                 .param("locale", locale)
                 .param("now", utc(now))
+                .param("cooldownCutoff", utc(cooldownCutoff))
                 .query(UUID.class)
-                .single();
+                .optional();
     }
 
-    /** The reset a link names, locked so an accept and a fresh request cannot cross. */
-    public Optional<Row> byTokenHashForUpdate(String tokenHash) {
+    /**
+     * The reset a link names.
+     *
+     * <p>No {@code FOR UPDATE}: nothing that follows this read stays in the
+     * same transaction, because what follows it is Keycloak. The single-use
+     * rule is enforced instead by {@link #markAccepted}, whose {@code WHERE
+     * status = 'SENT'} only one of two concurrent accepts can match.
+     */
+    public Optional<Row> byTokenHash(String tokenHash) {
         return jdbc.sql("SELECT " + COLUMNS + """
                           FROM iam.password_resets
                          WHERE token_hash = :hash
-                         FOR UPDATE
                         """)
                 .param("hash", tokenHash)
                 .query(JdbcPasswordResetStore::map)
@@ -174,7 +199,15 @@ public class JdbcPasswordResetStore {
                 """).param("id", id).param("now", utc(now)).update();
     }
 
-    /** Spends the link: the hash goes, so the same token can never be used again. */
+    /**
+     * Spends the link: the hash goes, so the same token can never be used again.
+     *
+     * <p>{@code WHERE status = 'SENT'} is the accept path's whole concurrency
+     * control. Two accepts of one token race here and exactly one wins, and it
+     * wins <em>before</em> either has asked Keycloak for anything, which is why
+     * the row no longer has to be held under {@code FOR UPDATE} across the
+     * calls that follow.
+     */
     public boolean markAccepted(UUID id, Instant now) {
         return jdbc.sql("""
                         UPDATE iam.password_resets
@@ -182,6 +215,33 @@ public class JdbcPasswordResetStore {
                                opened_at = COALESCE(opened_at, :now), version = version + 1
                          WHERE id = :id AND status = 'SENT'
                         """).param("id", id).param("now", utc(now)).update() > 0;
+    }
+
+    /**
+     * Puts back a link that was spent for a password the realm then refused.
+     *
+     * <p>A policy refusal is the one failure after the spend that provably
+     * changed nothing at Keycloak, and somebody who typed a password the realm
+     * dislikes has to be able to type another one rather than go and ask for a
+     * new link. Guarded by the {@code accepted_at} this spend wrote, so a fresh
+     * request that requeued the row in between is not stomped; when the guard
+     * matches nothing the link simply stays spent, which is the safe direction.
+     *
+     * @param acceptedAt the instant {@link #markAccepted} stamped, naming that spend
+     */
+    public boolean restoreSent(UUID id, String tokenHash, Instant expiresAt, Instant acceptedAt) {
+        return jdbc.sql("""
+                        UPDATE iam.password_resets
+                           SET status = 'SENT', token_hash = :hash, expires_at = :expiresAt,
+                               accepted_at = NULL, version = version + 1
+                         WHERE id = :id AND status = 'ACCEPTED' AND accepted_at = :acceptedAt
+                        """)
+                        .param("id", id)
+                        .param("hash", tokenHash)
+                        .param("expiresAt", utc(expiresAt))
+                        .param("acceptedAt", utc(acceptedAt))
+                        .update()
+                > 0;
     }
 
     private static Row map(ResultSet row, int number) throws SQLException {

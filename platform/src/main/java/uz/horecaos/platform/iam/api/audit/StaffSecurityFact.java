@@ -21,13 +21,15 @@ import org.jspecify.annotations.Nullable;
  * identifier the identity provider issued, which is what the audit trail keys
  * an actor by everywhere else.
  *
- * @param staffSubjectId the staff member, when a person acted; null when the platform did
- * @param systemJob the job, when the platform acted; null when a person did
+ * @param staffSubjectId the staff member, when a person acted; null otherwise
+ * @param systemJob the job, when the platform acted on a schedule; null otherwise
+ * @param service the surface, when an unauthenticated caller acted through it; null otherwise
  */
 public record StaffSecurityFact(
         String actionCode,
         @Nullable String staffSubjectId,
         @Nullable String systemJob,
+        @Nullable String service,
         String targetType,
         UUID targetId,
         String because,
@@ -43,15 +45,24 @@ public record StaffSecurityFact(
         Objects.requireNonNull(correlationId, "A correlation id is required (ADR 0027)");
         Objects.requireNonNull(occurredAt, "An instant is required");
         changed = Map.copyOf(Objects.requireNonNull(changed, "A changed map is required"));
-        if ((staffSubjectId == null) == (systemJob == null)) {
-            // Either a person did this or the platform did. "Both" is a fact
-            // nobody can act on, and "neither" is an actor-less audit record,
-            // which ADR 0027 does not have a shape for.
-            throw new IllegalArgumentException("A fact is attributed to a staff member or to a system job, not both");
+        long attributions = (staffSubjectId == null ? 0 : 1) + (systemJob == null ? 0 : 1) + (service == null ? 0 : 1);
+        if (attributions != 1) {
+            // A person did this, or the platform did on a schedule, or an
+            // unauthenticated caller did through one of its surfaces. "More
+            // than one" is a fact nobody can act on, and "none" is an
+            // actor-less audit record, which ADR 0027 has no shape for.
+            throw new IllegalArgumentException(
+                    "A fact is attributed to a staff member, a system job or a service, and to exactly one of them");
         }
     }
 
-    /** Something the staff member themselves caused. */
+    /**
+     * Something the staff member themselves caused.
+     *
+     * <p>Only where the platform has evidence that they did: a session, or
+     * possession of a one-time token emailed to their own address. An
+     * unauthenticated caller naming an account is {@link #byService}.
+     */
     public static StaffSecurityFact byStaffMember(
             String actionCode,
             String subjectId,
@@ -62,7 +73,7 @@ public record StaffSecurityFact(
             String correlationId,
             Instant occurredAt) {
         return new StaffSecurityFact(
-                actionCode, subjectId, null, targetType, targetId, because, changed, correlationId, occurredAt);
+                actionCode, subjectId, null, null, targetType, targetId, because, changed, correlationId, occurredAt);
     }
 
     /** Something the platform did on its own, on a schedule. */
@@ -76,6 +87,31 @@ public record StaffSecurityFact(
             String correlationId,
             Instant occurredAt) {
         return new StaffSecurityFact(
-                actionCode, null, job, targetType, targetId, because, changed, correlationId, occurredAt);
+                actionCode, null, job, null, targetType, targetId, because, changed, correlationId, occurredAt);
+    }
+
+    /**
+     * Something an unauthenticated caller asked one of the platform's own
+     * surfaces to do (ADR 0098).
+     *
+     * <p>The actor is the surface, because that is all the platform knows. A
+     * reset requested from a sign-in page names an account, but nobody proved
+     * they hold it -- recording the account's own subject as the actor would
+     * let a stranger write, ten times a minute, an append-only record saying
+     * that the person whose address they typed asked for this themselves.
+     * The account is still reachable from the fact: the target is the reset
+     * row, which carries the subject.
+     */
+    public static StaffSecurityFact byService(
+            String actionCode,
+            String service,
+            String targetType,
+            UUID targetId,
+            String because,
+            Map<String, Object> changed,
+            String correlationId,
+            Instant occurredAt) {
+        return new StaffSecurityFact(
+                actionCode, null, null, service, targetType, targetId, because, changed, correlationId, occurredAt);
     }
 }

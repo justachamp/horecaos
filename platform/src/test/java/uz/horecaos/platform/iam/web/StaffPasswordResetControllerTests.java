@@ -30,6 +30,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.application.passwordresets.PasswordResetService;
 import uz.horecaos.platform.iam.application.passwordresets.PasswordResetService.ResetInspection;
@@ -195,6 +196,67 @@ class StaffPasswordResetControllerTests {
         assertThat(unknown.getResponse().getHeaderNames())
                 .as("a header that appeared only for a real account would enumerate just as well as a body")
                 .containsExactlyInAnyOrderElementsOf(known.getResponse().getHeaderNames());
+    }
+
+    /**
+     * The only thing bounding a scan across the whole staff population.
+     *
+     * <p>The one-live-reset rule in the store bounds an attack on a single
+     * account and nothing about a walk through a list of logins; this limit is
+     * that bound, and until now nothing asserted it. Changing
+     * {@code strictPerMinute(10)} to a limit nobody reaches, or deleting the
+     * {@code limit(...)} call from the request handler, left every test in the
+     * repository green.
+     *
+     * <p>The remote address is set per test on purpose: the bucket key is the
+     * hash of the caller's address, and the other methods in this class already
+     * spend permits on MockMvc's constant {@code 127.0.0.1} for the same
+     * operation.
+     */
+    @Test
+    @DisplayName("the eleventh request in a minute from one address is refused, and only for that address")
+    void aScanIsRefusedOnceItPassesTenAMinute() throws Exception {
+        for (int attempt = 1; attempt <= 10; attempt++) {
+            assertThat(requestReset("203.0.113.7", "cashier-" + attempt)
+                            .getResponse()
+                            .getStatus())
+                    .as("attempt %d", attempt)
+                    .isEqualTo(202);
+        }
+
+        MvcResult refused = requestReset("203.0.113.7", "cashier-11");
+        assertThat(refused.getResponse().getStatus()).isEqualTo(429);
+        assertThat(refused.getResponse().getContentAsString())
+                .as("a caller that is told to come back needs to be told when")
+                .contains("retryAfterSeconds");
+
+        assertThat(requestReset("203.0.113.8", "cashier").getResponse().getStatus())
+                .as("the bucket is the caller's, not the endpoint's: one scanner must not lock everybody out")
+                .isEqualTo(202);
+        assertThat(mvc.perform(post("/api/v1/operations/auth/password-resets/inspect")
+                                .with(from("203.0.113.7"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"token\":\"%s\"}".formatted(TOKEN)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("inspecting carries its own bucket, so a spent request budget cannot block a real link")
+                .isEqualTo(200);
+    }
+
+    private MvcResult requestReset(String address, String login) throws Exception {
+        return mvc.perform(post("/api/v1/operations/auth/password-resets")
+                        .with(from(address))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"login\":\"%s\",\"locale\":\"ru\"}".formatted(login)))
+                .andReturn();
+    }
+
+    private static RequestPostProcessor from(String address) {
+        return request -> {
+            request.setRemoteAddr(address);
+            return request;
+        };
     }
 
     /** Avoids contacting a real issuer; this test exercises the MVC chain, not Keycloak. */

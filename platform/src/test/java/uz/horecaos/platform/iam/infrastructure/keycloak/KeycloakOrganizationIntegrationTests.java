@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -246,6 +247,17 @@ class KeycloakOrganizationIntegrationTests {
 
         accounts.completeSetup(membership.subjectId(), "Dilnoza", "Karimova", "the-first-passphrase-" + alias);
 
+        // completeSetup verifies the address, because the owner proved it by
+        // opening a link sent there. Put it back: asserting after the reset
+        // that the flag is *true* on an account where it was already true
+        // proves nothing about a reset that sets it, which is the direction
+        // ADR 0098 rules out. A reset landing on a never-verified address is a
+        // real state -- findByLogin resolves any account, set up or not.
+        unverify(membership.subjectId());
+        assertThat(accounts.find(membership.subjectId()).orElseThrow().emailVerified())
+                .as("the fixture is unverified before the reset, or the assertion after it cannot fail")
+                .isFalse();
+
         assertThatThrownBy(() -> accounts.setPassword(membership.subjectId(), "short"))
                 .as("the realm's policy refuses a short one here exactly as it does on setup")
                 .isInstanceOfSatisfying(
@@ -273,7 +285,10 @@ class KeycloakOrganizationIntegrationTests {
                 .containsEntry("lastName", "Karimova");
         assertThat(user)
                 .as("nor quietly mark an address verified because somebody opened a link")
-                .containsEntry("emailVerified", true);
+                .containsEntry("emailVerified", false);
+        assertThat(user.get("requiredActions"))
+                .as("nor push a required action onto the account, which would meet it with a Keycloak page")
+                .isIn(null, List.of());
 
         accounts.logoutEverywhere(membership.subjectId());
 
@@ -323,6 +338,38 @@ class KeycloakOrganizationIntegrationTests {
                 .as("surrounding space is the requester's typing, not part of the login")
                 .isPresent();
         assertThat(accounts.findByLogin("   ")).isEmpty();
+    }
+
+    /**
+     * A plus-addressed staff account can ask for a reset like anybody else.
+     *
+     * <p>Against the live realm because the behaviour being relied on is
+     * Keycloak's own query decoding: a {@code +} passed as a literal query
+     * value survives Spring untouched and Keycloak reads it as a space, so the
+     * search asks for an address nobody holds. The endpoint still answers 202,
+     * no email is ever sent, and by design nobody is told -- that account can
+     * never recover without an administrator. A stub written from the same
+     * assumption as the adapter would agree with it.
+     */
+    @Test
+    void aPlusAddressedLoginResolvesItsOwnAccount() {
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(UUID.randomUUID(), alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        String plusAddress = alias + "+kassa@example.test";
+        var membership = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), plusAddress, null));
+        usersToRemove.add(membership.subjectId());
+
+        assertThat(accounts.findSubjectIdByLogin(plusAddress))
+                .as("the whole address, plus and all, resolves the account it names")
+                .contains(membership.subjectId());
+        assertThat(accounts.findByLogin(plusAddress))
+                .as("and so does the read that goes through it")
+                .isPresent();
+        assertThat(accounts.findSubjectIdByLogin(plusAddress.replace('+', ' ')))
+                .as("while the address a raw plus would be decoded as resolves nobody")
+                .isEmpty();
     }
 
     /** An account with nothing to revoke: Keycloak's 404 there is success, not a failure to report. */
@@ -698,6 +745,28 @@ class KeycloakOrganizationIntegrationTests {
         } catch (RuntimeException unavailable) {
             return List.of();
         }
+    }
+
+    /**
+     * Puts an account's address back to unverified.
+     *
+     * <p>Setup, not behaviour under test: {@code completeSetup} verifies the
+     * address, and a reset must leave whatever it finds alone. Asserting that
+     * on an account that is already verified asserts nothing.
+     */
+    private void unverify(String subjectId) {
+        Map<String, Object> current = Objects.requireNonNull(admin.get()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, subjectId)
+                .retrieve()
+                .body(MAP));
+        Map<String, Object> unverified = new LinkedHashMap<>(current);
+        unverified.put("emailVerified", false);
+        admin.put()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, subjectId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(unverified)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     /**

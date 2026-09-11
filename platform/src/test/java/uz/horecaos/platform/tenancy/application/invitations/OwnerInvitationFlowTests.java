@@ -343,12 +343,17 @@ class OwnerInvitationFlowTests {
             return Optional.ofNullable(accounts.get(subjectId));
         }
 
-        /** ADR 0098's three. An invitation uses none of them; PasswordResetFlowTests covers them. */
+        /** ADR 0098's four. An invitation uses none of them; PasswordResetFlowTests covers them. */
         @Override
         public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
             return accounts.values().stream()
                     .filter(account -> account.email().equals(usernameOrEmail))
                     .findFirst();
+        }
+
+        @Override
+        public Optional<String> findSubjectIdByLogin(String usernameOrEmail) {
+            return findByLogin(usernameOrEmail).map(StaffAccount::subjectId);
         }
 
         @Override

@@ -47,11 +47,22 @@ class RecordedStaffSecurityAudit implements StaffSecurityAudit {
                 .build());
     }
 
+    /**
+     * {@code SERVICE} rather than {@code SYSTEM_JOB} for a surface: ADR 0027's
+     * {@code Type} exists so a job is never mistaken for a person, and a
+     * request an anonymous caller made through a sign-in page is neither. The
+     * storefront's pre-authentication paths already record {@code
+     * ActorRef.service("storefront-verification")} for the same reason.
+     */
     private static ActorRef actorOf(StaffSecurityFact fact) {
         String subjectId = fact.staffSubjectId();
         if (subjectId != null) {
             return ActorRef.user(subjectId, null);
         }
-        return ActorRef.systemJob(Objects.requireNonNull(fact.systemJob(), "one attribution or the other"));
+        String service = fact.service();
+        if (service != null) {
+            return ActorRef.service(service);
+        }
+        return ActorRef.systemJob(Objects.requireNonNull(fact.systemJob(), "one attribution or another"));
     }
 }

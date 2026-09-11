@@ -43,8 +43,12 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.iam.application.passwordresets.PasswordResetService;
+import uz.horecaos.platform.iam.application.passwordresets.StaffConsole;
+import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.media.application.MediaAssetService;
@@ -133,6 +137,7 @@ class ExternalCallTransactionBoundaryTests {
         jdbc.sql("TRUNCATE TABLE tenant.onboarding_templates CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+        jdbc.sql("TRUNCATE TABLE iam.password_resets").update();
         jdbc.sql("TRUNCATE TABLE audit.approval_requests CASCADE").update();
         seedTenantAndTemplate();
 
@@ -222,6 +227,76 @@ class ExternalCallTransactionBoundaryTests {
                 .as("setOrganizationEnabled is an HTTPS call to Keycloak; a transaction around it "
                         + "would hold a pooled connection for however long Keycloak takes to answer")
                 .isFalse();
+    }
+
+    /**
+     * The password reset endpoints need no token at all, which makes this the
+     * cheapest way there is to park the pool: ten concurrent requests for a
+     * login nobody holds used to check out all ten connections and hold them
+     * across two Keycloak searches apiece, issuing no SQL whatsoever.
+     */
+    @Test
+    @DisplayName("asking for a password reset resolves the login with no connection checked out")
+    void passwordResetRequestDoesNotHoldAConnection() {
+        WatchfulAccounts accounts = context.getBean(WatchfulAccounts.class);
+        PasswordResetService resets = context.getBean(PasswordResetService.class);
+
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "caller-address-hash");
+
+        assertThat(accounts.lookups).isEqualTo(1);
+        assertThat(accounts.insideTransaction)
+                .as("findSubjectIdByLogin is two admin round trips on a 3s/10s timeout; a transaction "
+                        + "around it holds one of ten pooled connections for the whole wait")
+                .isFalse();
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.password_resets")
+                        .query(Integer.class)
+                        .single())
+                .as("and the row it then writes is committed")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("setting the new password and ending the sessions happen with no connection checked out")
+    void passwordResetAcceptDoesNotHoldAConnection() {
+        WatchfulAccounts accounts = context.getBean(WatchfulAccounts.class);
+        PasswordResetService resets = context.getBean(PasswordResetService.class);
+        String token = "a-token-only-the-email-would-have-carried";
+        seedSentReset(token);
+
+        resets.accept(token, "a-long-enough-passphrase", "correlation");
+
+        assertThat(accounts.passwordWrites).isEqualTo(1);
+        assertThat(accounts.insideTransactionOnWrite)
+                .as("a row lock held across reset-password and logout is the same outage with a token attached")
+                .isFalse();
+        assertThat(accounts.insideTransactionOnLogout).isFalse();
+        assertThat(jdbc.sql("SELECT status FROM iam.password_resets")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ACCEPTED");
+    }
+
+    private void seedSentReset(String token) {
+        jdbc.sql("""
+                        INSERT INTO iam.password_resets
+                            (id, subject_id, console, locale, status, token_hash, expires_at, requested_at, sent_at)
+                        VALUES (:id, 'cashier-subject', 'OPERATIONS', 'ru', 'SENT', :hash, :expiresAt, :now, :now)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("hash", sha256(token))
+                .param("expiresAt", NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC))
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private static String sha256(String value) {
+        try {
+            return java.util.HexFormat.of()
+                    .formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
     }
 
     @Test
@@ -477,6 +552,18 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
+        WatchfulAccounts watchfulAccounts() {
+            return new WatchfulAccounts();
+        }
+
+        @Bean
+        PasswordResetService passwordResetService(
+                JdbcClient client, WatchfulAccounts accounts, TransactionTemplate transactions, Clock clock) {
+            return new PasswordResetService(
+                    new JdbcPasswordResetStore(client), accounts, fact -> {}, transactions, clock);
+        }
+
+        @Bean
         WatchfulProvider watchfulProvider() {
             return new WatchfulProvider();
         }
@@ -591,6 +678,49 @@ class ExternalCallTransactionBoundaryTests {
         public void setOrganizationEnabled(String organizationId, boolean enabled) {
             calls++;
             insideTransaction = TransactionSynchronizationManager.isActualTransactionActive();
+        }
+    }
+
+    /** Stands in for the Keycloak staff-accounts adapter, whose every method is an admin round trip. */
+    static final class WatchfulAccounts implements StaffAccounts {
+
+        private int lookups;
+        private int passwordWrites;
+        private boolean insideTransaction;
+        private boolean insideTransactionOnWrite;
+        private boolean insideTransactionOnLogout;
+
+        @Override
+        public Optional<StaffAccount> find(String subjectId) {
+            return Optional.of(new StaffAccount(subjectId, "dilnoza.karimova@example.uz", false, true));
+        }
+
+        @Override
+        public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
+            throw new UnsupportedOperationException("The request path resolves a subject, not an account");
+        }
+
+        @Override
+        public Optional<String> findSubjectIdByLogin(String usernameOrEmail) {
+            lookups++;
+            insideTransaction = TransactionSynchronizationManager.isActualTransactionActive();
+            return Optional.of("cashier-subject");
+        }
+
+        @Override
+        public void setPassword(String subjectId, String password) {
+            passwordWrites++;
+            insideTransactionOnWrite = TransactionSynchronizationManager.isActualTransactionActive();
+        }
+
+        @Override
+        public void logoutEverywhere(String subjectId) {
+            insideTransactionOnLogout = TransactionSynchronizationManager.isActualTransactionActive();
+        }
+
+        @Override
+        public void completeSetup(String subjectId, String firstName, String lastName, String password) {
+            throw new UnsupportedOperationException("Not reached by these tests");
         }
     }
 

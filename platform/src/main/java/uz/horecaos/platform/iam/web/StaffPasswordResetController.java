@@ -57,10 +57,12 @@ public class StaffPasswordResetController {
     /**
      * Ten a minute per caller address.
      *
-     * <p>The per-account cap is not here: it is the one-live-reset rule in the
-     * store, which no number of requests can get around. This limit bounds the
-     * other attack — one machine walking a list of logins to see which ones
-     * produce email.
+     * <p>This limit bounds one machine walking a list of logins to see which
+     * ones produce email. It is not the per-account cap and cannot be: a
+     * distributed scan spends one request per address. What bounds an attack on
+     * a single account is in the store — one live reset per account, and the
+     * cooldown in the upsert that keeps a link already delivered from being
+     * replaced by one a stranger triggered (ADR 0098 Decision 3).
      */
     private static final RateLimiter.Policy LIMIT = RateLimiter.Policy.strictPerMinute(10);
 
@@ -137,8 +139,11 @@ public class StaffPasswordResetController {
     private ResponseEntity<Void> requestReset(
             PasswordResetRequest body, StaffConsole console, HttpServletRequest request) {
         limit("iam.password-reset.request", request);
-        resets.request(
-                body.login().strip(), console, body.locale(), UUID.randomUUID().toString());
+        // The correlation id here is the hashed caller address rather than a
+        // value minted per request: nobody on this path is authenticated, and
+        // what an investigator reading a burst of these facts needs to join
+        // them by is the machine that asked. The login never travels with them.
+        resets.request(body.login().strip(), console, body.locale(), callerKey(request));
         return ResponseEntity.accepted().build();
     }
 

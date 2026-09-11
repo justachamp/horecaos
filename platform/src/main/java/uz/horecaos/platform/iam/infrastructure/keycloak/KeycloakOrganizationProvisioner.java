@@ -230,12 +230,20 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
                 && members.stream().anyMatch(member -> subjectId.equals(String.valueOf(member.get("id"))));
     }
 
+    /**
+     * The address goes out as a URI variable, never as a literal: a raw
+     * {@code +} survives {@code queryParam} and Keycloak reads it as a space,
+     * so a plus-addressed owner would be searched for under an address nobody
+     * holds -- here, that means a created account cannot be read back and the
+     * onboarding step fails as drift. Same fix as
+     * {@code KeycloakStaffAccounts.exactlyOne} (ADR 0098).
+     */
     private Optional<String> findUserByEmail(String email) {
         List<Map<String, Object>> users = client.get()
                 .uri(builder -> builder.path("/admin/realms/{realm}/users")
-                        .queryParam("email", email)
+                        .queryParam("email", "{email}")
                         .queryParam("exact", true)
-                        .build(realm))
+                        .build(realm, email))
                 .retrieve()
                 .body(LIST);
         return users == null || users.isEmpty()
