@@ -39,7 +39,13 @@ public class PlatformFiscalController {
                 .map(row -> new PlatformBlockedDocument(
                         row.document().tenantId(),
                         row.tenantName(),
-                        FiscalDocumentController.BlockedDocumentResponse.of(row.document())))
+                        // Cross-tenant by design (ADR 0084); the order-number
+                        // projection FiscalDocumentController's own worklist
+                        // resolves through OrderDirectory is a tenant-scoped
+                        // read this board deliberately does not reach for
+                        // every tenant on one poll -- tenantName already
+                        // tells this row's reader which restaurant it is.
+                        FiscalDocumentController.BlockedDocumentResponse.of(row.document(), null)))
                 .toList();
     }
 

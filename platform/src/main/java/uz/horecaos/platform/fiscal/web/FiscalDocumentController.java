@@ -30,6 +30,7 @@ import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycl
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -60,10 +61,12 @@ public class FiscalDocumentController {
 
     private final FiscalDocumentService documents;
     private final CurrentActor currentActor;
+    private final OrderDirectory orders;
 
-    public FiscalDocumentController(FiscalDocumentService documents, CurrentActor currentActor) {
+    public FiscalDocumentController(FiscalDocumentService documents, CurrentActor currentActor, OrderDirectory orders) {
         this.documents = documents;
         this.currentActor = currentActor;
+        this.orders = orders;
     }
 
     @GetMapping("/documents/blocked")
@@ -85,7 +88,7 @@ public class FiscalDocumentController {
         }
 
         List<BlockedDocumentResponse> rows = documents.blocked(tenantId, reasonCode, limit).stream()
-                .map(BlockedDocumentResponse::of)
+                .map(row -> BlockedDocumentResponse.of(row, publicOrderNumberOf(tenantId, row.orderId())))
                 .toList();
 
         return ResponseEntity.ok(new BlockedWorklistResponse(
@@ -105,9 +108,24 @@ public class FiscalDocumentController {
     public ResponseEntity<List<BlockedDocumentResponse>> forOrder(
             @PathVariable UUID tenantId, @PathVariable UUID orderId) {
 
+        String publicOrderNumber = publicOrderNumberOf(tenantId, orderId);
         return ResponseEntity.ok(documents.forOrder(tenantId, orderId).stream()
-                .map(BlockedDocumentResponse::of)
+                .map(row -> BlockedDocumentResponse.of(row, publicOrderNumber))
                 .toList());
+    }
+
+    /**
+     * The order's own display number, read through {@link OrderDirectory} rather
+     * than stored on the fiscal document itself: an order is renamed nowhere, so
+     * this is a live read, not a snapshot the two aggregates could disagree on.
+     * Null for a document whose order the tenant predicate does not resolve
+     * (deleted test data, never a real gap) -- the worklist still needs to render
+     * the row, so this is a display fallback rather than a thrown error.
+     */
+    private @Nullable String publicOrderNumberOf(UUID tenantId, UUID orderId) {
+        return orders.summary(tenantId, orderId)
+                .map(OrderDirectory.OrderSummary::publicOrderNumber)
+                .orElse(null);
     }
 
     @GetMapping("/coverage")
@@ -260,6 +278,12 @@ public class FiscalDocumentController {
     /**
      * One document on the worklist, or one document of an order.
      *
+     * @param publicOrderNumber the order's own display number -- what a caller
+     *                          searched by and what a receipt or a phone call
+     *                          names -- never its {@code orderId}, which nobody
+     *                          outside this console has ever seen. Null only when
+     *                          the order itself cannot be resolved (see {@link
+     *                          #publicOrderNumberOf})
      * @param hasEvidence whether the tax authority's identifiers are on the row.
      *                    Whether, not what: the identifiers themselves are ADR 0029
      *                    evidence and are not a worklist's business
@@ -267,6 +291,7 @@ public class FiscalDocumentController {
     public record BlockedDocumentResponse(
             UUID documentId,
             UUID orderId,
+            @Nullable String publicOrderNumber,
             UUID legalEntityId,
             String documentType,
             String responsibility,
@@ -281,10 +306,11 @@ public class FiscalDocumentController {
             @Nullable Instant reportingDeadlineAt,
             @Nullable Instant blockedAt) {
 
-        public static BlockedDocumentResponse of(FiscalDocumentRow row) {
+        public static BlockedDocumentResponse of(FiscalDocumentRow row, @Nullable String publicOrderNumber) {
             return new BlockedDocumentResponse(
                     row.id(),
                     row.orderId(),
+                    publicOrderNumber,
                     row.legalEntityId(),
                     row.documentType(),
                     row.responsibility(),
