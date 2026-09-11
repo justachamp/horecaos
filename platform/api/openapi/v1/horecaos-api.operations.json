@@ -14837,6 +14837,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings/{locationId}/removal" : {
       "post" : {
+        "description" : "Scoped to the branch named in the path: the manager of the branch a courier is leaving can release the binding without holding the roster across the whole tenant. A tenant-wide grant still covers it (ADR 0025).",
         "operationId" : "unbindCourierFromBranch",
         "parameters" : [ {
           "in" : "path",

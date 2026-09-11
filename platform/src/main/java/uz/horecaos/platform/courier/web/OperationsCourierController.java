@@ -304,8 +304,15 @@ public class OperationsCourierController {
     }
 
     @PostMapping("/couriers/{courierId}/branch-bindings/{locationId}/removal")
-    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
-    @Operation(summary = "Unbind a courier from a branch")
+    @RequiresCapability(
+            value = Capability.COURIER_ENGAGEMENT_MANAGE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Unbind a courier from a branch",
+            description = "Scoped to the branch named in the path: the manager of the branch a "
+                    + "courier is leaving can release the binding without holding the roster "
+                    + "across the whole tenant. A tenant-wide grant still covers it (ADR 0025).")
     public ResponseEntity<Void> unbindCourierFromBranch(
             @PathVariable UUID tenantId,
             @PathVariable UUID courierId,
