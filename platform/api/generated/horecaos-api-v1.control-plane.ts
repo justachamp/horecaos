@@ -1497,6 +1497,11 @@ export interface OwnerInvitationView {
   timeline?: Array<OwnerInvitationEventView>;
 }
 
+export interface OwnerStateView {
+  state?: string;
+  tenantId?: string;
+}
+
 export interface OwnershipView {
   capability?: "TENANCY" | "IDENTITY" | "CUSTOMERS" | "MEDIA" | "CATALOG" | "INVENTORY" | "PRICING" | "ORDERS" | "PAYMENTS" | "FULFILLMENT" | "NOTIFICATIONS" | "CONFIGURATION" | "REPORTING";
   legacyMayWrite?: boolean;
@@ -2698,6 +2703,7 @@ export interface Operations {
   "currentDefault": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/default"; request: { parameters: Record<string, never> }; responses: { "200": TemplateView } };
   "get_6": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
   "overview": { method: "GET"; path: "/api/v1/control-plane/owner-invitations"; request: { parameters: { query: { state?: "QUEUED" | "SENT" | "ACCEPTED" | "NOT_NEEDED" | "FAILED" | "EXPIRED" | "NONE" | "OUTSTANDING" } } }; responses: { "200": Array<OwnerInvitationOverviewRow> } };
+  "waiting": { method: "GET"; path: "/api/v1/control-plane/owner-invitations/waiting"; request: { parameters: Record<string, never> }; responses: { "200": Array<OwnerStateView> } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
   "health_1": { method: "GET"; path: "/api/v1/control-plane/platform-health"; request: { parameters: Record<string, never> }; responses: { "200": PlatformHealth } };
   "matrix": { method: "GET"; path: "/api/v1/control-plane/pos-capability-matrix"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterCapabilities> } };

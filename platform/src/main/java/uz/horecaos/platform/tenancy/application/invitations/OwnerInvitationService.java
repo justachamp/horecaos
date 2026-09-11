@@ -67,6 +67,15 @@ public class OwnerInvitationService implements OwnerInvitations {
     public static final String NONE = "NONE";
 
     /**
+     * A tenant with no owner at all yet: no invitation, and no onboarding run
+     * that linked one. Not a stored status, and not a state the overview shows
+     * -- there is nobody to chase -- but the one the directory's column has to
+     * be able to say, because the alternative is saying nothing and being read
+     * as "the owner is fine".
+     */
+    public static final String NO_OWNER = "NO_OWNER";
+
+    /**
      * At most this many tenants come back from the overview. Each row costs one
      * identity-provider read to resolve its recipient, so the page is bounded
      * by that and not by what a screen would like.
@@ -79,6 +88,16 @@ public class OwnerInvitationService implements OwnerInvitations {
      * owner, at which point onboarding has a bigger problem than a page size.
      */
     public static final int OVERVIEW_LIMIT = 200;
+
+    /**
+     * At most this many tenants come back from the address-free projection. It
+     * is not the overview's cap and is not there for the overview's reason:
+     * this query resolves no recipient and costs one database read for the
+     * page, so the cap is only the bound any list needs. A tenant beyond it is
+     * absent from the answer, and absent means "no claim" to the one screen
+     * that reads this.
+     */
+    public static final int OWNER_STATE_LIMIT = 1000;
 
     /** Why an operator is shown a staff address, recorded on every reveal (ADR 0029). */
     static final String RECIPIENT_PURPOSE = "tenancy.onboarding.invitation.recipient";
@@ -239,6 +258,34 @@ public class OwnerInvitationService implements OwnerInvitations {
     }
 
     /**
+     * Where every unarchived tenant's owner stands, as an identifier and a
+     * state and nothing else (ADR 0100).
+     *
+     * <p>This is the whole reason the projection exists rather than a flag on
+     * {@link #overview}: no {@code subject_id} leaves the database on this
+     * path, so no address is read from the identity provider, none reaches a
+     * response body, and no reveal fact is recorded. A screen that renders a
+     * marker asks this; only the screen that renders an address asks the
+     * overview. Read-only, and deliberately so -- there is nothing here to
+     * reveal.
+     *
+     * <p>Four answers, and the caller must be able to tell them apart: {@link
+     * #NO_OWNER} for a tenant nobody has linked or invited an owner for yet,
+     * {@code ACCEPTED} for an owner who set up their account, {@code
+     * NOT_NEEDED} for one who already had a password, and everything else --
+     * {@link #NONE}, {@code QUEUED}, {@code SENT}, {@code FAILED}, {@code
+     * EXPIRED} -- for an owner still to be chased.
+     */
+    @Transactional(readOnly = true)
+    public List<OwnerStateView> ownerStates() {
+        Instant now = clock.instant();
+        return store.ownerStates(OWNER_STATE_LIMIT).stream()
+                .map(row -> new OwnerStateView(
+                        row.tenantId(), row.ownerKnown() ? stateOf(row.status(), row.expiresAt(), now) : NO_OWNER))
+                .toList();
+    }
+
+    /**
      * Sends the invitation again, with a new link. The one already sent stops
      * working at once, whether or not the new one is ever delivered.
      */
@@ -308,7 +355,16 @@ public class OwnerInvitationService implements OwnerInvitations {
         Instant now = clock.instant();
         UUID id = Ids.newId();
         String by = actor.subject() == null ? "unknown" : actor.subject();
-        store.queueIfAbsent(id, tenantId, subjectId, language, by, now);
+        if (!store.queueIfAbsent(id, tenantId, subjectId, language, by, now)) {
+            // Two operators sending a tenant's first invitation at once: the
+            // loser inserted nothing, so the identifier it minted names no row
+            // and the event below would fail its foreign key. Say what happened
+            // instead, the way the requeue check above does.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "An invitation for this owner was just queued by somebody else",
+                    Map.of("reason", "ALREADY_QUEUED"));
+        }
         events.append(new JdbcOwnerInvitationEventStore.Entry(
                 tenantId,
                 id,
@@ -631,6 +687,15 @@ public class OwnerInvitationService implements OwnerInvitations {
                     + (recipient == null ? "none" : "<redacted>") + ", emailMasked=" + emailMasked + "]";
         }
     }
+
+    /**
+     * Where one tenant's owner stands, with no recipient in it and none read to
+     * produce it (ADR 0100).
+     *
+     * @param state {@link #NO_OWNER}, {@link #NONE}, or a stored status with
+     *        {@code EXPIRED} substituted for a sent link whose time is up
+     */
+    public record OwnerStateView(UUID tenantId, String state) {}
 
     /** What an owner holding a live link is shown. */
     public record InvitationInspection(

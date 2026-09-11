@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
@@ -22,6 +23,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -98,7 +101,15 @@ class OwnerInvitationOverviewTests {
         JdbcOwnerInvitationEventStore events = new JdbcOwnerInvitationEventStore(jdbc);
         invitations = new OwnerInvitationService(store, events, accounts, authorization, facts::add, clock);
         mailer = new RecordingMailer();
-        relay = new OwnerInvitationRelay(store, events, accounts, mailer, facts::add, clock, "https://ops.test/");
+        relay = new OwnerInvitationRelay(
+                store,
+                events,
+                accounts,
+                mailer,
+                facts::add,
+                new TransactionTemplate(new JdbcTransactionManager(db.dataSource())),
+                clock,
+                "https://ops.test/");
 
         accepted = tenant("accepted-co", "Accepted & Co", "ACTIVE");
         waiting = tenant("waiting-co", "Waiting Kafe", "PROVISIONING");
@@ -202,6 +213,12 @@ class OwnerInvitationOverviewTests {
                     .as("one fact per screen load, saying how many and never which")
                     .containsExactly(Map.entry("revealedCount", 3));
             assertThat(fact.changeDocument().toString()).doesNotContain("example.uz");
+            assertThat(fact.capabilityUsed())
+                    .as("under which capability a staff address was read, or the attribution says nothing")
+                    .isEqualTo(Capability.TENANT_ONBOARDING_MANAGE.code());
+            assertThat(fact.scope())
+                    .as("a cross-tenant read is recorded at platform scope, where it was authorised")
+                    .isEqualTo(ResourceScope.platform());
         });
     }
 
@@ -242,7 +259,141 @@ class OwnerInvitationOverviewTests {
                 .containsExactlyInAnyOrder("waiting-co", "never-told-co");
     }
 
+    /**
+     * The urgency order is the screen's whole argument for existing, and three
+     * of its seven ranks used to be all that was ever asserted. A reshuffle that
+     * sent FAILED to the bottom -- the one row an operator opens this screen to
+     * find -- would have been invisible.
+     */
+    @Test
+    @DisplayName("every rank is ordered, from the worst news to the tenants that are done")
+    void theOrderRunsFromTheWorstNewsToTheDone() {
+        invited("failed-co", "Failed Choyxona", "failed-owner", "failed@example.uz");
+        invited("not-needed-co", "Not Needed Kafe", "not-needed-owner", "not-needed@example.uz");
+        accounts.put("not-needed-owner", "not-needed@example.uz", true);
+        mailer.next = mail -> "failed@example.uz".equals(mail.to())
+                ? new MailOutcome.Rejected("ADDRESS_REJECTED")
+                : new MailOutcome.Sent();
+
+        relay.runOnce();
+        invitations.accept(tokenFor("anvar@example.uz"), "Anvar", "Anvarov", "a-long-enough-passphrase", "corr");
+        clock.advance(OwnerInvitationService.LINK_LIFETIME.plus(Duration.ofMinutes(1)));
+
+        // Sent after the advance, so its own link is live while the fixture's
+        // has run out: a state the same clock cannot produce twice.
+        invited("sent-co", "Sent Osh", "sent-owner", "sent@example.uz");
+        relay.runOnce();
+        invited("queued-co", "Queued Non", "queued-owner", "queued@example.uz");
+
+        assertThat(invitations.overview(null, ONBOARDER, "corr"))
+                .extracting(OwnerInvitationOverviewRow::state)
+                .containsExactly(
+                        "FAILED", "EXPIRED", OwnerInvitationService.NONE, "QUEUED", "SENT", "NOT_NEEDED", "ACCEPTED");
+    }
+
+    @Test
+    @DisplayName("tenants in one state are listed alphabetically")
+    void tenantsInOneStateAreAlphabetical() {
+        // Inserted last-first, so a list that did not sort would hand them back
+        // in this order.
+        invited("zulfiya-co", "Zulfiya Osh", "zulfiya-owner", "zulfiya@example.uz");
+        invited("alisher-co", "Alisher Kafe", "alisher-owner", "alisher@example.uz");
+
+        assertThat(invitations.overview("QUEUED", ONBOARDER, "corr"))
+                .extracting(OwnerInvitationOverviewRow::tenantName)
+                .containsExactly("Accepted & Co", "Alisher Kafe", "Waiting Kafe", "Zulfiya Osh");
+        assertThat(store.overview(200))
+                .extracting(JdbcOwnerInvitationStore.OverviewRow::tenantName)
+                .as("the query's half of the same guarantee: alphabetical inside each settled/unsettled half")
+                .containsSubsequence("Accepted & Co", "Alisher Kafe", "Waiting Kafe", "Zulfiya Osh");
+    }
+
+    /**
+     * NOT_NEEDED is the only state the relay alone can produce, and the only one
+     * no fixture reached: an owner who gained a password between the queue and
+     * the send. It has to behave like ACCEPTED everywhere, or the screen an
+     * operator opens to find work lists people who can already sign in.
+     */
+    @Test
+    @DisplayName("an owner who already had a password is settled, like one who accepted")
+    void aNotNeededTenantIsSettledLikeAnAcceptedOne() {
+        invited("settled-co", "Settled Choyxona", "settled-owner", "settled@example.uz");
+        accounts.put("settled-owner", "settled@example.uz", true);
+        relay.runOnce();
+
+        assertThat(invitations.overview(OwnerInvitationService.OUTSTANDING, ONBOARDER, "corr"))
+                .extracting(OwnerInvitationOverviewRow::tenantSlug)
+                .as("nobody has to chase an owner who can already sign in")
+                .doesNotContain("settled-co");
+        assertThat(invitations.overview("NOT_NEEDED", ONBOARDER, "corr"))
+                .extracting(OwnerInvitationOverviewRow::tenantSlug)
+                .containsExactly("settled-co");
+        assertThat(store.overview(2))
+                .extracting(JdbcOwnerInvitationStore.OverviewRow::tenantSlug)
+                .as("settled sorts last, so the cap takes it before a tenant that still needs an owner")
+                .doesNotContain("settled-co");
+    }
+
+    /**
+     * ADR 0100: the directory marks which tenants are waiting and renders no
+     * address at all, so it must be able to ask without one being read. A
+     * projection that fetched the addresses and dropped them would put every
+     * outstanding owner's address in a response body nobody reads, and would
+     * record a reveal of people no human was shown.
+     */
+    @Test
+    @DisplayName("the address-free projection tells the four cases apart, and reads no address to do it")
+    void theProjectionAnswersWithoutAnAddress() {
+        UUID nothingYet = tenant("nothing-yet", "Nothing Yet", "PROVISIONING");
+        UUID settled = invited("settled-co", "Settled Choyxona", "settled-owner", "settled@example.uz");
+        accounts.put("settled-owner", "settled@example.uz", true);
+        relay.runOnce();
+        invitations.accept(tokenFor("anvar@example.uz"), "Anvar", "Anvarov", "a-long-enough-passphrase", "corr");
+
+        authorization.grant("operator", Capability.TENANT_ONBOARDING_MANAGE, ResourceScope.platform());
+        facts.clear();
+        accounts.reads = 0;
+
+        var states = invitations.ownerStates();
+
+        assertThat(stateOf(states, nothingYet))
+                .as("nobody has linked or invited an owner, which is not the same as an owner who is fine")
+                .isEqualTo(OwnerInvitationService.NO_OWNER);
+        assertThat(stateOf(states, neverTold)).isEqualTo(OwnerInvitationService.NONE);
+        assertThat(stateOf(states, waiting)).isEqualTo("SENT");
+        assertThat(stateOf(states, accepted)).isEqualTo("ACCEPTED");
+        assertThat(stateOf(states, settled)).isEqualTo("NOT_NEEDED");
+        assertThat(states)
+                .extracting(OwnerInvitationService.OwnerStateView::tenantId)
+                .as("an archived tenant is nobody's work here either")
+                .doesNotContain(archived);
+
+        assertThat(accounts.reads)
+                .as("no address is fetched, rather than fetched and dropped")
+                .isZero();
+        assertThat(facts)
+                .as("no reveal, so the count of the reveals that matter keeps its meaning")
+                .isEmpty();
+        assertThat(states.toString()).doesNotContain("example.uz");
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private static String stateOf(List<OwnerInvitationService.OwnerStateView> states, UUID tenantId) {
+        return states.stream()
+                .filter(state -> state.tenantId().equals(tenantId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no state for " + tenantId))
+                .state();
+    }
+
+    /** A tenant, an owner without a password, and an invitation queued for them. */
+    private UUID invited(String slug, String displayName, String subjectId, String email) {
+        UUID id = tenant(slug, displayName, "PROVISIONING");
+        accounts.put(subjectId, email, false);
+        invitations.inviteIfNeeded(id, subjectId, "ru", UUID.randomUUID());
+        return id;
+    }
 
     private static OwnerInvitationOverviewRow row(List<OwnerInvitationOverviewRow> rows, String slug) {
         return rows.stream()
@@ -330,12 +481,16 @@ class OwnerInvitationOverviewTests {
     private static final class FakeAccounts implements StaffAccounts {
         private final Map<String, StaffAccount> accounts = new HashMap<>();
 
+        /** How many times the identity provider was asked for an address. */
+        private int reads;
+
         void put(String subject, String email, boolean hasPassword) {
             accounts.put(subject, new StaffAccount(subject, email, false, hasPassword));
         }
 
         @Override
         public Optional<StaffAccount> find(String subjectId) {
+            reads++;
             return Optional.ofNullable(accounts.get(subjectId));
         }
 
@@ -349,10 +504,16 @@ class OwnerInvitationOverviewTests {
     private static final class RecordingMailer implements PlatformMailer {
         private final List<OutgoingMail> sent = new ArrayList<>();
 
+        /** Per address, so one pass of the relay can produce more than one outcome. */
+        private Function<OutgoingMail, MailOutcome> next = mail -> new MailOutcome.Sent();
+
         @Override
         public MailOutcome send(OutgoingMail mail) {
-            sent.add(mail);
-            return new MailOutcome.Sent();
+            MailOutcome outcome = next.apply(mail);
+            if (!(outcome instanceof MailOutcome.NotConfigured)) {
+                sent.add(mail);
+            }
+            return outcome;
         }
 
         @Override

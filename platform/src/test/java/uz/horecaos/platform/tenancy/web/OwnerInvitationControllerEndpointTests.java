@@ -64,6 +64,9 @@ class OwnerInvitationControllerEndpointTests {
     private static final String ADMIN = "owner-invitation-platform-admin";
     private static final String SUPPORT = "owner-invitation-platform-support";
 
+    /** Neither platform role: two tenant-scoped grants, one per tenant. */
+    private static final String TENANT_OPERATOR = "owner-invitation-tenant-operator";
+
     private static final String OVERVIEW = "/api/v1/control-plane/owner-invitations";
 
     // NullAway does not recognise @DynamicPropertySource as a field initializer the way
@@ -138,6 +141,111 @@ class OwnerInvitationControllerEndpointTests {
                                 """).query(String.class).single())
                 .contains("\"revealedCount\": 2")
                 .doesNotContain("example.uz");
+        assertThat(jdbc.sql("""
+                                SELECT capability_used || '|' || scope_type || '|' || coalesce(scope_id::text, 'none')
+                                  FROM audit.audit_events
+                                 WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
+                                """).query(String.class).single())
+                .as("a reveal that does not say under which capability, or where, attributes nothing")
+                .isEqualTo(Capability.TENANT_ONBOARDING_MANAGE.code() + "|PLATFORM|none");
+    }
+
+    /**
+     * The reveal on the tenant's own panel, which the mask test below cannot
+     * reach: it is the direction ADR 0100's exit criterion turns on, and the
+     * only assertion that pins {@code OwnerInvitationView}'s serialized shape
+     * and the tenant-scope authorization behind it at the same time.
+     */
+    @Test
+    @DisplayName("the onboarding capability reads the whole address off the tenant's own panel, and leaves a fact")
+    void theOnboardingCapabilitySeesTheWholeAddressOnThePanel() throws Exception {
+        MvcResult panel = mvc.perform(get("/api/v1/control-plane/tenants/" + WAITING + "/owner-invitation")
+                        .with(tokenFor(ADMIN)))
+                .andReturn();
+
+        assertThat(panel.getResponse().getStatus()).isEqualTo(200);
+        assertThat(panel.getResponse().getContentAsString())
+                .contains("\"recipient\":\"dilnoza.karimova@example.uz\"")
+                .as("the mask stays alongside it")
+                .contains("\"emailMasked\":\"d***a@example.uz\"");
+
+        assertThat(jdbc.sql("""
+                                SELECT change_document::text FROM audit.audit_events
+                                 WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
+                                """).query(String.class).list())
+                .singleElement(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+                .contains("\"revealedCount\": 1")
+                .doesNotContain("example.uz");
+        assertThat(jdbc.sql("""
+                                SELECT capability_used || '|' || scope_type || '|' || coalesce(scope_id::text, 'none')
+                                  FROM audit.audit_events
+                                 WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
+                                """).query(String.class).single())
+                .as("recorded on the tenant, so an auditor asking who read this tenant's owner address finds it")
+                .isEqualTo(Capability.TENANT_ONBOARDING_MANAGE.code() + "|TENANT|" + WAITING);
+    }
+
+    /**
+     * The gate is per tenant, not per capability. One principal, two
+     * tenant-scoped grants: an administrator's on the tenant it is onboarding,
+     * and a finance role's -- which reads tenants and never invitations -- on
+     * the other.
+     */
+    @Test
+    @DisplayName("a tenant-scoped operator reads the address on the tenant it holds it for, and the mask elsewhere")
+    void aTenantScopedOperatorSeesOneAddressAndNotTheOther() throws Exception {
+        grantTenant(TENANT_OPERATOR, PlatformRole.TENANT_ADMIN, WAITING);
+        grantTenant(TENANT_OPERATOR, PlatformRole.TENANT_FINANCE, ACCEPTED);
+
+        MvcResult here = mvc.perform(get("/api/v1/control-plane/tenants/" + WAITING + "/owner-invitation")
+                        .with(tokenFor(TENANT_OPERATOR)))
+                .andReturn();
+        assertThat(here.getResponse().getStatus()).isEqualTo(200);
+        assertThat(here.getResponse().getContentAsString()).contains("\"recipient\":\"dilnoza.karimova@example.uz\"");
+
+        MvcResult elsewhere = mvc.perform(get("/api/v1/control-plane/tenants/" + ACCEPTED + "/owner-invitation")
+                        .with(tokenFor(TENANT_OPERATOR)))
+                .andReturn();
+        assertThat(elsewhere.getResponse().getStatus()).isEqualTo(200);
+        assertThat(elsewhere.getResponse().getContentAsString())
+                .as("reading a tenant is not reading its owner, one tenant at a time")
+                .contains("\"emailMasked\":\"a***r@example.uz\"")
+                .doesNotContain("\"recipient\":\"anvar@example.uz\"");
+    }
+
+    /**
+     * ADR 0100 decision 6: the tenant directory marks which owners are not set
+     * up and renders no address, so it reads a projection that has none to
+     * render. The assertion that matters is the absence of a reveal fact --
+     * a directory page view that recorded one would dilute the count until
+     * "who has seen this owner's address" could not be answered at all.
+     */
+    @Test
+    @DisplayName("the address-free projection carries states only, and records no reveal")
+    void theWaitingProjectionRevealsNothing() throws Exception {
+        MvcResult waiting =
+                mvc.perform(get(OVERVIEW + "/waiting").with(tokenFor(ADMIN))).andReturn();
+
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(200);
+        assertThat(waiting.getResponse().getContentAsString())
+                .contains("\"tenantId\":\"" + WAITING + "\"")
+                .contains("\"state\":\"SENT\"")
+                .contains("\"state\":\"ACCEPTED\"")
+                .as("no address reaches the browser for a column that renders a marker")
+                .doesNotContain("example.uz");
+
+        assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code LIKE '%recipient_revealed'")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was revealed, so nothing is recorded")
+                .isZero();
+
+        assertThat(mvc.perform(get(OVERVIEW + "/waiting").with(tokenFor(SUPPORT)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("the same gate as the overview it replaces on that screen")
+                .isEqualTo(403);
     }
 
     @Test
@@ -273,6 +381,28 @@ class OwnerInvitationControllerEndpointTests {
                 // JdbcAuthorizationService.grantsFor compares valid_from against this JVM's
                 // Clock.systemUTC(), and under concurrent fork load the container's own
                 // wall clock can momentarily skew against it.
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * A grant on one tenant. Unlike {@link #grantPlatform}, the table insists a
+     * non-platform scope carries both {@code scope_id} and {@code tenant_id}
+     * (V0008's {@code ck_grant_scope_id}), which is why this cannot reuse it.
+     */
+    private void grantTenant(String subject, PlatformRole role, UUID tenantId) {
+        jdbc.sql("""
+                        INSERT INTO iam.grants
+                            (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                             status, granted_by, reason, valid_from)
+                        VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :tenantId,
+                                'ACTIVE', 'test-fixture', 'owner invitation endpoint test', :validFrom)
+                        ON CONFLICT DO NOTHING
+                        """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + tenantId).getBytes(UTF_8)))
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

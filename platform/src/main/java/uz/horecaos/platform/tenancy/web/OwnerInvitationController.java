@@ -22,6 +22,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.OwnerInvitationOverviewRow;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.OwnerInvitationView;
+import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.OwnerStateView;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -36,6 +37,12 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * into onboarding in the first place -- and the reveal is audited. Everybody
  * else gets ADR 0097's mask. The link itself is never shown to anybody but the
  * owner, in their email.
+ *
+ * <p>A screen that wants to mark which tenants are still waiting, and renders
+ * no address at all, asks {@code /owner-invitations/waiting} instead: it
+ * resolves no recipient, so it reads no address rather than reading one and
+ * dropping it, and it leaves no reveal fact behind to dilute the count of the
+ * ones that matter.
  */
 @RestController
 @Tag(
@@ -90,6 +97,19 @@ public class OwnerInvitationController {
                             })
                     String state) {
         return invitations.overview(state, actor(), correlationId());
+    }
+
+    @GetMapping("/api/v1/control-plane/owner-invitations/waiting")
+    @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, scope = ScopeType.PLATFORM)
+    @Operation(
+            summary = "Where every tenant's owner stands, without the addresses",
+            description = "An identifier and a state per unarchived tenant, for a screen that renders a marker "
+                    + "rather than a recipient. No address is read from the identity provider on this path, "
+                    + "none is returned, and no reveal is recorded -- which is why it is a separate projection "
+                    + "and not a flag on the overview. NO_OWNER means no owner has been linked or invited yet; "
+                    + "a tenant this does not list is a tenant the caller knows nothing about.")
+    public List<OwnerStateView> waiting() {
+        return invitations.ownerStates();
     }
 
     @PostMapping("/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend")

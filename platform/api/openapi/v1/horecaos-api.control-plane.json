@@ -4715,6 +4715,18 @@
         },
         "type" : "object"
       },
+      "OwnerStateView" : {
+        "properties" : {
+          "state" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OwnershipView" : {
         "properties" : {
           "capability" : {
@@ -9678,6 +9690,29 @@
           }
         },
         "summary" : "Every tenant's owner invitation",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
+    "/api/v1/control-plane/owner-invitations/waiting" : {
+      "get" : {
+        "description" : "An identifier and a state per unarchived tenant, for a screen that renders a marker rather than a recipient. No address is read from the identity provider on this path, none is returned, and no reveal is recorded -- which is why it is a separate projection and not a flag on the overview. NO_OWNER means no owner has been linked or invited yet; a tenant this does not list is a tenant the caller knows nothing about.",
+        "operationId" : "waiting",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/OwnerStateView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where every tenant's owner stands, without the addresses",
         "tags" : [ "Tenant onboarding" ]
       }
     },
