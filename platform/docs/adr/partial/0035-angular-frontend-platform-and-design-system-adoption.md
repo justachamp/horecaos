@@ -20,8 +20,22 @@
   `tokens.css` sits under each Angular app's own tree and
   `mobile/design-tokens/tokens.css` under Flutter's, with no `sync-tokens`
   script or drift check policing the copies, and neither Angular app carries
-  an ESLint configuration. No shared Angular component library exists in any
-  app — `control-plane/src/design-system` still holds only `tokens.css`.
+  an ESLint configuration. A shared Angular component library now exists in
+  exactly one app, and none of it is published: ADR 0101 gave the operations
+  console `frontend/operations/src/app/shared/ui/`, with eleven of the
+  primitives this record's component-gap table calls "Required throughout" —
+  `Modal`, `Drawer`, `ConfirmDialog`, `ActionMenu`, `SplitPane`, `Toast`,
+  `InlineAlert`, `EmptyState`, `DeniedState`, `LockedState`, and the
+  `StatusPill` overlay and dual-state variant — each with its own spec, each
+  built against `tokens.css` rather than local values, and each with two
+  migrated call sites and no more. Everything else in that table is still
+  absent (`DataTable`, `DataGrid`, `MatrixGrid`, `Combobox`, the money and
+  time inputs, `LocalizedFieldGroup`, `MediaUploader`, `ImportWizard`,
+  `SecretInput`, `Chart`, `Board`, the map components, `PhoneFrame`), and the
+  other three applications have none of it —
+  `control-plane/src/design-system` still holds only `tokens.css`. This
+  record's "package registry for the published design system" open input is
+  therefore still open and is what ADR 0101 defers to it.
   Server-side Telegram `initData` verification is built —
   `TelegramMiniAppInitDataVerifier` (ADR 0063), consumed by a real, tested,
   capability-scoped `StorefrontTelegramLinkController` — but the specific
