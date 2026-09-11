@@ -270,10 +270,52 @@ class ExternalCallTransactionBoundaryTests {
                 .as("a row lock held across reset-password and logout is the same outage with a token attached")
                 .isFalse();
         assertThat(accounts.insideTransactionOnLogout).isFalse();
+        // Accepting reads the account before it spends the link, which is a
+        // third Keycloak call on this path and was unwatched until now.
+        assertThat(accounts.accountReads).isEqualTo(1);
+        assertThat(accounts.insideTransactionOnAccountRead).isFalse();
         assertThat(jdbc.sql("SELECT status FROM iam.password_resets")
                         .query(String.class)
                         .single())
                 .isEqualTo("ACCEPTED");
+    }
+
+    /**
+     * The third reset operation, and the cheapest of the three to abuse.
+     *
+     * <p>{@code inspect} needs no token of the platform's, only the emailed
+     * one, and it calls Keycloak to mask the login. Putting {@code
+     * @Transactional} back on it -- where it sat before this wave, and where a
+     * reader who notices two statements around a remote call might well put it
+     * again -- changes nothing any other test can see: {@code markOpened}
+     * guards itself, the masked read swallows its own failures, and every other
+     * test of this service builds it with {@code new}, where the annotation is
+     * inert. It would park one of ten pooled connections for Keycloak's three
+     * second connect and ten second read, ten anonymous opens wide.
+     */
+    @Test
+    @DisplayName("opening the emailed link masks the account with no connection checked out")
+    void passwordResetInspectDoesNotHoldAConnection() {
+        WatchfulAccounts accounts = context.getBean(WatchfulAccounts.class);
+        PasswordResetService resets = context.getBean(PasswordResetService.class);
+        String token = "a-token-only-the-email-would-have-carried";
+        seedSentReset(token);
+
+        var inspection = resets.inspect(token);
+
+        assertThat(inspection.maskedLogin())
+                .as("the Keycloak call really happened, so the flag below is about something")
+                .isEqualTo("d***a@example.uz");
+        assertThat(accounts.accountReads).isEqualTo(1);
+        assertThat(accounts.insideTransactionOnAccountRead)
+                .as("a transaction around the mask holds a pooled connection for however long "
+                        + "Keycloak takes, on an endpoint that needs no token at all")
+                .isFalse();
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.password_resets WHERE opened_at IS NOT NULL")
+                        .query(Integer.class)
+                        .single())
+                .as("and the open is committed before the remote call rather than with it")
+                .isEqualTo(1);
     }
 
     private void seedSentReset(String token) {
@@ -686,12 +728,22 @@ class ExternalCallTransactionBoundaryTests {
 
         private int lookups;
         private int passwordWrites;
+        private int accountReads;
         private boolean insideTransaction;
         private boolean insideTransactionOnWrite;
         private boolean insideTransactionOnLogout;
+        private boolean insideTransactionOnAccountRead;
 
+        /**
+         * The counter is not decoration. A refactor that stopped calling this
+         * at all -- dropping the masked login, say -- leaves the flag below
+         * {@code false} and would let the inspect test pass for the wrong
+         * reason, having proved nothing about a call nobody makes.
+         */
         @Override
         public Optional<StaffAccount> find(String subjectId) {
+            accountReads++;
+            insideTransactionOnAccountRead = TransactionSynchronizationManager.isActualTransactionActive();
             return Optional.of(new StaffAccount(subjectId, "dilnoza.karimova@example.uz", false, true));
         }
 

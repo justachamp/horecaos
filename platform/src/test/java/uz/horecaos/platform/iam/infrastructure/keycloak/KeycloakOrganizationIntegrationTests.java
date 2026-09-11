@@ -40,12 +40,21 @@ import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver
  * {@link KeycloakConfiguration} rather than a copy of it.
  *
  * <p>It skips — loudly, naming the reason — when Keycloak is absent or when its
- * realm does not grant the service accounts the roles ADR 0009 specifies. As of
- * writing, the checked-in realm export declares both clients and maps no
- * {@code realm-management} roles onto either service account, so every Admin API
- * call returns 403 and this class skips. That is a finding about the realm, not
- * a reason to weaken the test: the moment the export carries the role mappings
- * the ADR already records as verified, every assertion below runs for real.
+ * realm does not grant the service accounts the roles ADR 0009 specifies. The
+ * checked-in realm export declares both clients and maps no
+ * {@code realm-management} roles onto either service account; what grants them
+ * is {@code infra/keycloak/assign-service-account-roles.sh}, which a local
+ * {@code make up} run applies and a bare import does not. Against a realm that
+ * has had it run, every assertion below runs for real; against one that has
+ * not, every Admin API call returns 403 and the class aborts.
+ *
+ * <p>That difference is why {@code KeycloakStaffAccountsWriteTests} exists
+ * beside this class rather than instead of it. The properties a reset turns on
+ * that a skipped assertion cannot protect — that {@code setPassword} makes one
+ * call and never marks an address verified, that {@code logoutEverywhere} makes
+ * two — are pinned there against a mock server as well, so an edit that breaks
+ * them fails somewhere even where no Keycloak is running. What only this class
+ * can show is that Keycloak itself behaves as the adapter assumes.
  */
 class KeycloakOrganizationIntegrationTests {
 
