@@ -319,9 +319,11 @@ the state filter, the projection revealing nothing, a platform-support caller
 refused both lists, and 401 for an anonymous one.
 Angular specs cover the new screen, the extended panel, the directory column in
 each of its five renderings, that the directory asks the projection and never
-the overview, and that it asks nothing at all without the capability. A router
-spec asserts, as a rule over the whole file, that no literal path is declared
-behind a parameterised one that would swallow it.
+the overview, and that it asks nothing at all without the capability. Two
+router specs assert, over every array of sibling routes in the file including
+nested `children`, that no path — literal or itself parameterised — is declared
+behind a parameterised one that would swallow it, and that `**`, which swallows
+everything, is last in its array.
 
 ## Rollout and rollback
 

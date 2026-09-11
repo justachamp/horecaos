@@ -50,9 +50,12 @@ export const routes: Routes = [
       },
       // Both of these come before `tenants/:tenantId`, or the router reads
       // "invitations" and "configuration" as tenant identifiers and neither
-      // screen is ever reached. `declares every literal path before the
-      // parameterised path that would swallow it` in app.routes.spec.ts
-      // enforces this for every pair in the file, not just these two.
+      // screen is ever reached. `declares every path before the parameterised
+      // one that would swallow it` in app.routes.spec.ts enforces this for
+      // every pair of siblings, in this array and in any nested one — a
+      // parameterised path is a victim there too, so `tenants/:tenantId/:x`
+      // declared above `tenants/:tenantId/onboarding` fails it — and a
+      // companion spec keeps `**` last, since it swallows whatever follows it.
       {
         path: 'tenants/invitations',
         canActivate: [requiresCapability('TENANT_ONBOARDING_MANAGE')],

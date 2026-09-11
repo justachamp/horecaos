@@ -27,6 +27,9 @@ const TENANT_A: TenantSummaryView = {
   businessType: 'RESTAURANT',
 };
 
+/** Where the owner column sends an operator when there is something to chase. */
+const ONBOARDING = '/tenants/tenant-a/onboarding';
+
 class FakeTenantsApi {
   readonly listTenants = vi.fn<() => Promise<Page<TenantSummaryView>>>();
   readonly createTenant = vi.fn<() => Promise<TenantView>>();
@@ -262,35 +265,50 @@ describe('TenantDirectory', () => {
    * Four different things, four different words. "Set up" used to be what the
    * screen said about every tenant the list did not mention -- including one
    * created a minute earlier that had no owner at all.
+   *
+   * The link is the fourth column here because the two cells that carry one are
+   * the two an operator has somewhere to go from, and `data-owner` sits on the
+   * `<td>`: swapping the `<a>` inside for a `<span class="muted">`, the shape
+   * the three settled cases use, changes neither the marker nor the text. The
+   * NO_OWNER cell is the one that matters most and was the one nothing watched.
    */
   it.each([
-    ['SENT', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d'],
-    ['NONE', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d'],
-    ['ACCEPTED', 'ready', '\u0421\u043e\u0437\u0434\u0430\u043d'],
+    ['SENT', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d', ONBOARDING],
+    ['NONE', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d', ONBOARDING],
+    ['ACCEPTED', 'ready', '\u0421\u043e\u0437\u0434\u0430\u043d', null],
     [
       'NOT_NEEDED',
       'notNeeded',
       '\u041d\u0435 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f',
+      null,
     ],
     [
       'NO_OWNER',
       'none',
       '\u0412\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 \u043d\u0435\u0442',
+      ONBOARDING,
     ],
-  ])('says what the server said about an owner in state %s', async (state, marker, text) => {
-    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-    api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state }]);
+  ])(
+    'says what the server said about an owner in state %s',
+    async (state, marker, text, href) => {
+      api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+      api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state }]);
 
-    fixture = TestBed.createComponent(TenantDirectory);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
+      fixture = TestBed.createComponent(TenantDirectory);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
 
-    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
-    expect(owner.dataset['owner']).toBe(marker);
-    expect(owner.textContent?.trim()).toBe(text);
-  });
+      const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+      expect(owner.dataset['owner']).toBe(marker);
+      expect(owner.textContent?.trim()).toBe(text);
+      // `?? null` and not the bare optional chain: with no anchor the chain is
+      // `undefined`, and `expect(undefined).toBe(null)` fails the two rows that
+      // are correct exactly because they have no link.
+      expect(owner.querySelector('a')?.getAttribute('href') ?? null).toBe(href);
+    },
+  );
 
   it('leaves a dash for a tenant the projection does not mention', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
@@ -305,6 +323,7 @@ describe('TenantDirectory', () => {
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
     expect(owner.dataset['owner']).toBeUndefined();
     expect(owner.textContent?.trim()).toBe('\u2014');
+    expect(owner.querySelector('a'), 'a dash is not a link to a screen this caller may not read').toBeNull();
   });
 
   /**
@@ -326,6 +345,7 @@ describe('TenantDirectory', () => {
 
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
     expect(owner.textContent?.trim()).toBe('\u2014');
+    expect(owner.querySelector('a'), 'a refused read leaves a dash, not a link').toBeNull();
     expect(fixture.nativeElement.querySelector('.state.error')).toBeNull();
   });
 

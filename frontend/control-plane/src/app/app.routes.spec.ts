@@ -17,6 +17,23 @@ function pathsOf(children: readonly Route[]): string[] {
   return children.map((child) => `/${child.path}`.replace(/^\/$/, '/'));
 }
 
+/**
+ * Every array the router matches within: the top level, the shell's children,
+ * and any `children` a future route grows of its own.
+ *
+ * The router matches one level at a time, so each array is its own ordering
+ * problem and a path in one is never in competition with a path in another —
+ * which is why this collects arrays rather than flattening the paths together.
+ * The rules below then run once per array, and the top-level array comes under
+ * them for the first time.
+ */
+function routeArrays(declared: readonly Route[]): (readonly Route[])[] {
+  return [
+    declared,
+    ...declared.flatMap((route) => (route.children ? routeArrays(route.children) : [])),
+  ];
+}
+
 describe('routes', () => {
   it('gives every routed section a router entry', () => {
     const routed = pathsOf(consoleRoutes);
@@ -35,27 +52,57 @@ describe('routes', () => {
    *
    * Asserted as a rule rather than for today's two literals, so the next screen
    * added under a parameterised prefix cannot vanish the same way.
+   *
+   * A partly parameterised path is a victim like any other: `tenants/:tenantId`
+   * declared above `tenants/:tenantId/onboarding` is harmless — different
+   * lengths — but `tenants/:tenantId/:section` above it swallows five sibling
+   * screens, and while this loop skipped every candidate containing a `:` it
+   * said nothing about that. The whole `tenants/:tenantId` family, which is
+   * where this wave's screens live, was checked zero times.
    */
-  it('declares every literal path before the parameterised path that would swallow it', () => {
-    const paths = consoleRoutes.map((route) => route.path ?? '');
-    const swallows = (pattern: string, literal: string): boolean => {
+  it('declares every path before the parameterised one that would swallow it', () => {
+    const swallows = (pattern: string, candidate: string): boolean => {
       const parts = pattern.split('/');
-      const segments = literal.split('/');
+      const segments = candidate.split('/');
       return (
         parts.length === segments.length &&
         parts.some((part) => part.startsWith(':')) &&
+        // A `:param` in the earlier pattern matches whatever sits in the same
+        // position of the candidate, literal or `:param` alike: the router does
+        // not care which, it simply stops at the first pattern that matches.
         parts.every((part, index) => part.startsWith(':') || part === segments[index])
       );
     };
 
-    for (const [index, literal] of paths.entries()) {
-      if (literal.includes(':') || literal === '**' || literal === '') {
-        continue;
+    for (const siblings of routeArrays(routes)) {
+      const paths = siblings.map((route) => route.path ?? '');
+      for (const [index, candidate] of paths.entries()) {
+        if (candidate === '**' || candidate === '') {
+          continue;
+        }
+        const shadow = paths.findIndex(
+          (other, other_index) => other_index < index && swallows(other, candidate),
+        );
+        expect(shadow, `'${candidate}' is unreachable behind '${paths[shadow]}'`).toBe(-1);
       }
-      const shadow = paths.findIndex(
-        (other, other_index) => other_index < index && swallows(other, literal),
-      );
-      expect(shadow, `'${literal}' is unreachable behind '${paths[shadow]}'`).toBe(-1);
+    }
+  });
+
+  /**
+   * The sibling hole the same traversal exposes. `**` has no `:` in it, so the
+   * check above cannot see it as a swallower — and it swallows everything.
+   * Anything declared after it is unreachable no matter what it is called.
+   */
+  it('declares the catch-all last in its own array, where it swallows nothing', () => {
+    for (const siblings of routeArrays(routes)) {
+      const paths = siblings.map((route) => route.path ?? '');
+      const catchAll = paths.indexOf('**');
+      if (catchAll >= 0) {
+        expect(
+          catchAll,
+          `routes are declared after '**' and cannot be reached: ${paths.slice(catchAll + 1).join(', ')}`,
+        ).toBe(paths.length - 1);
+      }
     }
   });
 
