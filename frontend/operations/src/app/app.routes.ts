@@ -36,6 +36,20 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/invite-page').then((m) => m.InvitePage),
   },
   {
+    // ADR 0098: asking for a password reset. Outside the guard for the reason
+    // the three routes above it are -- somebody who cannot sign in has no
+    // session to present, and this is the page they came for.
+    path: 'forgot-password',
+    loadComponent: () =>
+      import('./features/auth/forgot-password-page').then((m) => m.ForgotPasswordPage),
+  },
+  {
+    // ADR 0098: the emailed link lands here, with the token in the fragment.
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
+  },
+  {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     canActivate: [authGuard],

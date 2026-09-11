@@ -35,11 +35,14 @@ export const messagesRu: MessageCatalogue = {
   'support.banner.view': 'Поддержка HorecaOS · только просмотр',
   'support.banner.assist': 'Поддержка HorecaOS · помощь в работе',
   'support.banner.until': 'до {time}',
-  'support.banner.none': 'Открытой сессии поддержки нет; экраны будут отказывать, пока её не откроют',
+  'support.banner.none':
+    'Открытой сессии поддержки нет; экраны будут отказывать, пока её не откроют',
   'support.banner.leave': 'Выйти',
-  'settings.supportVisits.lead': 'Каждый вход сотрудника поддержки HorecaOS в ваш аккаунт: какой был доступ, зачем и чем закончилось. Идущий визит можно завершить здесь — доступ пропадёт сразу.',
+  'settings.supportVisits.lead':
+    'Каждый вход сотрудника поддержки HorecaOS в ваш аккаунт: какой был доступ, зачем и чем закончилось. Идущий визит можно завершить здесь — доступ пропадёт сразу.',
   'settings.supportVisits.loading': 'Загружаем визиты…',
-  'settings.supportVisits.denied': 'Визиты поддержки видят только владелец и администраторы аккаунта.',
+  'settings.supportVisits.denied':
+    'Визиты поддержки видят только владелец и администраторы аккаунта.',
   'settings.supportVisits.empty': 'Никто из поддержки HorecaOS не входил в ваш аккаунт.',
   'settings.supportVisits.openUntil': 'Идёт, до {time}',
   'settings.supportVisits.endedAt': 'Завершён {time}',
@@ -319,15 +322,54 @@ export const messagesRu: MessageCatalogue = {
   'invite.submitting': 'Сохраняем…',
   'invite.signingIn': 'Учётная запись готова. Выполняем вход…',
   'invite.invalid.title': 'Эта ссылка недействительна',
-  'invite.invalid.body': 'Возможно, ею уже воспользовались или её заменило новое приглашение. Если вы уже задали пароль, войдите.',
+  'invite.invalid.body':
+    'Возможно, ею уже воспользовались или её заменило новое приглашение. Если вы уже задали пароль, войдите.',
   'invite.expired.title': 'Срок действия ссылки истёк',
-  'invite.expired.body': 'Ссылка из приглашения действует 72 часа. Попросите команду HorecaOS отправить новую.',
+  'invite.expired.body':
+    'Ссылка из приглашения действует 72 часа. Попросите команду HorecaOS отправить новую.',
   'invite.toSignIn': 'Перейти ко входу',
   'invite.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
   'invite.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
   'invite.policy.history': 'Выберите пароль, который вы не использовали недавно.',
   'invite.policy.other': 'Пароль не подходит под правила. Выберите другой.',
   'invite.failed': 'Не удалось настроить учётную запись. Попробуйте ещё раз чуть позже.',
+
+  'login.forgotPassword': 'Забыли пароль?',
+
+  'forgotPassword.title': 'Восстановление пароля',
+  'forgotPassword.lead': 'Введите имя пользователя или email — мы отправим ссылку.',
+  'forgotPassword.login': 'Имя пользователя или email',
+  'forgotPassword.submit': 'Отправить ссылку',
+  'forgotPassword.submitting': 'Отправляем…',
+  'forgotPassword.sent.title': 'Проверьте почту',
+  'forgotPassword.sent.body':
+    'Если учётная запись существует, письмо уже в пути. Ссылка действует 60 минут.',
+  'forgotPassword.toSignIn': 'Вернуться ко входу',
+  'forgotPassword.failed': 'Не удалось отправить запрос. Попробуйте ещё раз чуть позже.',
+
+  'resetPassword.loading': 'Проверяем ссылку…',
+  'resetPassword.title': 'Задайте новый пароль',
+  'resetPassword.forAccount': 'Для {account}',
+  'resetPassword.password': 'Новый пароль',
+  'resetPassword.passwordRule': 'Не короче {count} символов и не совпадает с вашим email.',
+  'resetPassword.confirm': 'Повторите пароль',
+  'resetPassword.mismatch': 'Пароли не совпадают.',
+  'resetPassword.submit': 'Сохранить пароль',
+  'resetPassword.submitting': 'Сохраняем…',
+  'resetPassword.done.title': 'Пароль сохранён',
+  'resetPassword.done.body': 'Все остальные сеансы завершены. Войдите с новым паролем.',
+  'resetPassword.invalid.title': 'Эта ссылка недействительна',
+  'resetPassword.invalid.body':
+    'Возможно, ею уже воспользовались или её заменил новый запрос. Запросите новую.',
+  'resetPassword.expired.title': 'Срок действия ссылки истёк',
+  'resetPassword.expired.body': 'Ссылка для сброса действует 60 минут. Запросите новую.',
+  'resetPassword.askAgain': 'Запросить новую ссылку',
+  'resetPassword.toSignIn': 'Перейти ко входу',
+  'resetPassword.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
+  'resetPassword.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
+  'resetPassword.policy.history': 'Выберите пароль, который вы не использовали недавно.',
+  'resetPassword.policy.other': 'Пароль не подходит под правила. Выберите другой.',
+  'resetPassword.failed': 'Не удалось сохранить пароль. Попробуйте ещё раз чуть позже.',
 
   'notBuilt.title': 'Ещё не построено',
   'notBuilt.body': 'Раздел описан, но экранов пока нет. Спецификация: {spec}.',
@@ -2039,7 +2081,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Понятно',
   'marketing.promoCodes.form.name': 'Название (для этого списка)',
   'marketing.promoCodes.form.code': 'Код, который вводит клиент',
-  'marketing.promoCodes.form.code.hint': '4-32 буквы или цифры. Показывается один раз после сохранения.',
+  'marketing.promoCodes.form.code.hint':
+    '4-32 буквы или цифры. Показывается один раз после сохранения.',
   'marketing.promoCodes.form.shape': 'Вид скидки',
   'marketing.promoCodes.form.percent': 'Процент от заказа, %',
   'marketing.promoCodes.form.amount': 'Сумма скидки от заказа',
@@ -2507,7 +2550,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.supportVisits': 'Визиты поддержки HorecaOS',
   'settings.home.description.dataPrivacy':
     'Хранение данных, согласие, запросы субъектов данных и кто смотрел личные данные клиента.',
-  'settings.home.description.supportVisits': 'Кто из поддержки HorecaOS входил в ваш аккаунт, когда и зачем',
+  'settings.home.description.supportVisits':
+    'Кто из поддержки HorecaOS входил в ваш аккаунт, когда и зачем',
   'settings.dataPrivacy.title': 'Данные и приватность',
   'settings.dataPrivacy.lead':
     'Как долго ресторан хранит персональные данные, что здесь значит согласие, и кто смотрел собственные слова клиента.',

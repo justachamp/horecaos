@@ -40,9 +40,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'support.banner.until': '{time} gacha',
   'support.banner.none': 'Ochiq yordam sessiyasi yo‘q; u ochilmaguncha ekranlar rad etadi',
   'support.banner.leave': 'Chiqish',
-  'settings.supportVisits.lead': 'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
+  'settings.supportVisits.lead':
+    'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
   'settings.supportVisits.loading': 'Tashriflar yuklanmoqda…',
-  'settings.supportVisits.denied': 'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
+  'settings.supportVisits.denied':
+    'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
   'settings.supportVisits.empty': 'HorecaOS yordamidan hech kim hisobingizga kirmagan.',
   'settings.supportVisits.openUntil': 'Davom etmoqda, {time} gacha',
   'settings.supportVisits.endedAt': '{time} da tugagan',
@@ -324,15 +326,55 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.submitting': 'Saqlanmoqda…',
   'invite.signingIn': 'Hisobingiz tayyor. Tizimga kirilmoqda…',
   'invite.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
-  'invite.invalid.body': 'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
+  'invite.invalid.body':
+    'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
   'invite.expired.title': 'Havolaning muddati tugagan',
-  'invite.expired.body': 'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
+  'invite.expired.body':
+    'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
   'invite.toSignIn': 'Kirish sahifasiga o‘tish',
   'invite.policy.length': 'Parol juda qisqa: kamida 12 ta belgi bo‘lsin.',
   'invite.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasin.',
   'invite.policy.history': 'Yaqinda ishlatmagan parolingizni tanlang.',
   'invite.policy.other': 'Bu parol qoidalarga mos emas. Boshqasini tanlang.',
   'invite.failed': 'Hisobni sozlab bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.',
+
+  'login.forgotPassword': 'Parolni unutdingizmi?',
+
+  'forgotPassword.title': 'Parolni tiklash',
+  'forgotPassword.lead': 'Foydalanuvchi nomi yoki email manzilingizni kiriting — havola yuboramiz.',
+  'forgotPassword.login': 'Foydalanuvchi nomi yoki email',
+  'forgotPassword.submit': 'Havola yuborish',
+  'forgotPassword.submitting': 'Yuborilmoqda…',
+  'forgotPassword.sent.title': 'Pochtangizni tekshiring',
+  'forgotPassword.sent.body':
+    'Agar hisob mavjud bo‘lsa, xat yo‘lda. Havola 60 daqiqa davomida ishlaydi.',
+  'forgotPassword.toSignIn': 'Kirish sahifasiga qaytish',
+  'forgotPassword.failed': 'So‘rovni yuborib bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.',
+
+  'resetPassword.loading': 'Havola tekshirilmoqda…',
+  'resetPassword.title': 'Yangi parol tanlang',
+  'resetPassword.forAccount': '{account} uchun',
+  'resetPassword.password': 'Yangi parol',
+  'resetPassword.passwordRule':
+    'Kamida {count} ta belgi va email manzilingiz bilan bir xil bo‘lmasin.',
+  'resetPassword.confirm': 'Parolni takrorlang',
+  'resetPassword.mismatch': 'Parollar mos kelmadi.',
+  'resetPassword.submit': 'Parolni saqlash',
+  'resetPassword.submitting': 'Saqlanmoqda…',
+  'resetPassword.done.title': 'Parol saqlandi',
+  'resetPassword.done.body': 'Barcha boshqa seanslar yakunlandi. Yangi parol bilan kiring.',
+  'resetPassword.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
+  'resetPassword.invalid.body':
+    'Ehtimol, undan foydalanilgan yoki yangi so‘rov uni almashtirgan. Yangisini so‘rang.',
+  'resetPassword.expired.title': 'Havola muddati tugagan',
+  'resetPassword.expired.body': 'Tiklash havolasi 60 daqiqa ishlaydi. Yangisini so‘rang.',
+  'resetPassword.askAgain': 'Yangi havola so‘rash',
+  'resetPassword.toSignIn': 'Kirish sahifasiga o‘tish',
+  'resetPassword.policy.length': 'Parol juda qisqa: kamida 12 ta belgi kerak.',
+  'resetPassword.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasligi kerak.',
+  'resetPassword.policy.history': 'Yaqinda ishlatmagan parolni tanlang.',
+  'resetPassword.policy.other': 'Bu parol qoidalarga mos emas. Boshqasini tanlang.',
+  'resetPassword.failed': 'Parolni saqlab bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.',
 
   'notBuilt.title': 'Hali qurilmagan',
   'notBuilt.body': 'Boʻlim tavsiflangan, lekin ekranlar yoʻq. Spetsifikatsiya: {spec}.',
@@ -2049,7 +2091,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Tushunarli',
   'marketing.promoCodes.form.name': 'Nomi (ushbu ro‘yxat uchun)',
   'marketing.promoCodes.form.code': 'Mijoz kiritadigan kod',
-  'marketing.promoCodes.form.code.hint': '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
+  'marketing.promoCodes.form.code.hint':
+    '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
   'marketing.promoCodes.form.shape': 'Chegirma turi',
   'marketing.promoCodes.form.percent': 'Buyurtmadan foiz, %',
   'marketing.promoCodes.form.amount': 'Buyurtmadan chegirma summasi',
@@ -2521,7 +2564,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.supportVisits': 'HorecaOS yordami tashriflari',
   'settings.home.description.dataPrivacy':
     'Saqlash muddatlari, rozilik, ma’lumot subyekti so‘rovlari va mijoz shaxsiy ma’lumotini kim ko‘rgani.',
-  'settings.home.description.supportVisits': 'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
+  'settings.home.description.supportVisits':
+    'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
   'settings.dataPrivacy.title': 'Ma’lumotlar va maxfiylik',
   'settings.dataPrivacy.lead':
     'Restoran shaxsiy ma’lumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning o‘z so‘zlarini kim ko‘rgan.',

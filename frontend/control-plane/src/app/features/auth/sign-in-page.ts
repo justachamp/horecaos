@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
@@ -25,6 +25,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
  */
 @Component({
   selector: 'app-sign-in-page',
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -61,6 +62,14 @@ import { I18nService } from '../../core/i18n/i18n.service';
         <button type="submit" class="q-body submit" [disabled]="!canSubmit()">
           {{ loading() ? i18n.t('login.submitting') : i18n.t('login.submit') }}
         </button>
+
+        <!--
+          ADR 0098. Below the button rather than beside the password field: an
+          operator reaches for it after a failed attempt, not before one.
+        -->
+        <a class="q-body-sm forgot" routerLink="/forgot-password">{{
+          i18n.t('login.forgotPassword')
+        }}</a>
       </form>
     </div>
   `,
@@ -155,6 +164,12 @@ import { I18nService } from '../../core/i18n/i18n.service';
       background: var(--q-surface-2);
       color: var(--q-ink-subtle);
       cursor: default;
+    }
+
+    .forgot {
+      margin-top: 16px;
+      color: var(--q-primary);
+      text-align: center;
     }
   `,
 })

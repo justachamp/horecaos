@@ -27,6 +27,20 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0098: asking for a password reset, and the page the emailed link
+    // lands on. Both outside the shell and outside `authGuard`, for the reason
+    // `/login` is: somebody who cannot sign in has no session to present, and
+    // these are the pages they came for.
+    path: 'forgot-password',
+    loadComponent: () =>
+      import('./features/auth/forgot-password-page').then((m) => m.ForgotPasswordPage),
+  },
+  {
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
+  },
+  {
     path: '',
     component: ConsoleShell,
     canActivate: [authGuard],
@@ -56,8 +70,7 @@ export const routes: Routes = [
       {
         path: 'tenants/:tenantId/brands',
         canActivate: [requiresCapability('BRAND_READ')],
-        loadComponent: () =>
-          import('./features/tenants/tenant-brands').then((m) => m.TenantBrands),
+        loadComponent: () => import('./features/tenants/tenant-brands').then((m) => m.TenantBrands),
       },
       {
         path: 'tenants/:tenantId/legal-entities',
@@ -107,7 +120,9 @@ export const routes: Routes = [
         path: 'providers/installations',
         canActivate: [requiresCapability('INTEGRATION_INSTALLATION_MANAGE')],
         loadComponent: () =>
-          import('./features/providers/installations-explorer').then((m) => m.InstallationsExplorer),
+          import('./features/providers/installations-explorer').then(
+            (m) => m.InstallationsExplorer,
+          ),
       },
       {
         path: 'providers/contracts',
@@ -152,14 +167,12 @@ export const routes: Routes = [
       {
         path: 'commerce/entitlements',
         canActivate: [requiresCapability('COMMERCIAL_PLAN_READ')],
-        loadComponent: () =>
-          import('./features/commerce/entitlements').then((m) => m.Entitlements),
+        loadComponent: () => import('./features/commerce/entitlements').then((m) => m.Entitlements),
       },
       {
         path: 'commerce/plans',
         canActivate: [requiresCapability('COMMERCIAL_PLAN_READ')],
-        loadComponent: () =>
-          import('./features/commerce/plan-catalog').then((m) => m.PlanCatalog),
+        loadComponent: () => import('./features/commerce/plan-catalog').then((m) => m.PlanCatalog),
       },
       {
         path: 'commerce/modules',
@@ -269,7 +282,9 @@ export const routes: Routes = [
         path: 'platform-config/notification-providers',
         canActivate: [requiresCapability('PLATFORM_ADMIN')],
         loadComponent: () =>
-          import('./features/platform-config/notification-providers').then((m) => m.NotificationProviders),
+          import('./features/platform-config/notification-providers').then(
+            (m) => m.NotificationProviders,
+          ),
       },
       {
         path: 'platform-config/policy-defaults',
@@ -308,8 +323,7 @@ export const routes: Routes = [
       {
         path: 'support/lookup',
         canActivate: [requiresCapability('TENANT_READ')],
-        loadComponent: () =>
-          import('./features/support/global-lookup').then((m) => m.GlobalLookup),
+        loadComponent: () => import('./features/support/global-lookup').then((m) => m.GlobalLookup),
       },
       {
         path: 'support/issue-queue',

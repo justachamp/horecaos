@@ -140,4 +140,13 @@ describe('SignInPage', () => {
     expect(submitButton().disabled).toBe(false);
     expect(submitButton().textContent?.trim()).toBe('Sign in');
   });
+  it('offers the way out for somebody who cannot remember their password (ADR 0098)', () => {
+    const link = fixture.nativeElement.querySelector('a[href="/forgot-password"]');
+
+    expect(
+      link,
+      'without this link the reset flow is unreachable from the only screen that needs it',
+    ).not.toBeNull();
+    expect(link.textContent.trim()).toBe('Forgot password?');
+  });
 });
