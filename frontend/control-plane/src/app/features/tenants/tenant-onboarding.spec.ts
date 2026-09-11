@@ -466,6 +466,32 @@ describe('TenantOnboarding', () => {
     );
   });
 
+  it('does not ask for a sample menu when this is a restart rather than a first run', async () => {
+    // RUN is FAILED, so the start panel is showing over an ended run. A tenant
+    // on its second run has usually been authoring in between, and the server's
+    // own decline only sees a *published* menu -- a draft is invisible to it. So
+    // the box is off unless the operator deliberately ticks it.
+    await createWith(RUN);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      false,
+    );
+  });
+
   it('starts without a sample menu when the operator clears the box', async () => {
     await createWith(null);
     api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
@@ -520,6 +546,15 @@ describe('TenantOnboarding', () => {
     // Named, not left as a raw enum key, and the hint says what happened.
     expect(fixture.nativeElement.textContent).toContain(ru['onboarding.step.SAMPLE_MENU_PUBLISH']);
     expect(fixture.nativeElement.textContent).toContain(ru['onboarding.hint.NOT_REQUESTED']);
+
+    // detail: null is what the server really writes for a declined row -- it
+    // writes the code and nothing else, precisely so a Russian operator is not
+    // shown the translated hint followed by an untranslated English copy of it.
+    // The raw caption falls back to the code, the way every unhinted code reads.
+    expect(fixture.nativeElement.textContent).toContain('NOT_REQUESTED');
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'No sample menu was asked for when this run was started',
+    );
   });
 
   it('explains a sample menu the catalogue refused to publish', async () => {
