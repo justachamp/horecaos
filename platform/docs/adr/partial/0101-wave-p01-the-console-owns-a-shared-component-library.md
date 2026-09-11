@@ -6,13 +6,31 @@
   record names (`q-modal`, `q-drawer`, `q-confirm-dialog`, `q-action-menu`,
   `q-split-pane`, `q-toast-host` with its `Toasts` service, `q-inline-alert`,
   `q-empty-state`, `q-denied-state`, `q-locked-state`, `q-status-pill`), each
-  with its own spec. Migration is deliberately two call sites per component and
-  no more: the two hand-written dialogs, the two master-detail pages, the order
-  queue's status badge, one toast host in the shell, and one denied/empty pair.
+  with its own spec and its own migration test. Migration is deliberately two
+  call sites per component and no more: `create-customer-dialog` and
+  `order-reason-dialog` for `q-modal`; `orders-page` and `inbox-page` for
+  `q-split-pane`; the order queue's status badge and the inbox's needs-reply
+  row for `q-status-pill`; `customers-page` and `inbox-list` for
+  `q-empty-state` and `q-denied-state`; `customers-page` and
+  `create-customer-dialog` for `q-inline-alert`; `customers-page` and
+  `order-queue` for the `Toasts` service, against the single host in
+  `shell.html` that the wave mounts once by design.
   Not built: the remaining ~63 hand-written `denied` branches and the fourteen
-  other templates carrying `aria-modal="true"`, which each owning wave migrates;
-  `q-action-menu` has no migrated call site at all, because the only two in the
-  application are the order board's row overflow menus and wave `P05` owns them.
+  other templates carrying `aria-modal="true"`, which each owning wave migrates.
+  Not built, and each for a stated reason rather than for lack of time — four
+  of the eleven have **no** migrated call site. `q-action-menu`: the only two
+  menus in the application are the order board's row overflow and the order
+  detail pane's, and wave `P05` owns both (gap-map row `1.1e`), so migrating
+  them here would collide with a wave running alongside this one.
+  `q-drawer`: the console's master-detail pattern is a docked split, not a
+  floating panel — `shell.ts`'s own rule is that the queue is never hidden —
+  so nothing in the application today is drawer-shaped. `q-confirm-dialog`:
+  every "are you sure?" in this console carries a reason field, a channel
+  picker or an amount, which makes each of them `q-modal` material; a pure
+  two-button confirmation has no instance yet. `q-locked-state`: the two
+  screens that distinguish `ENTITLEMENT_REQUIRED` today — `segments-page` and
+  `campaign-detail-pane` — are migrated by the wave that makes refusal
+  legible, which the gap map assigns elsewhere.
   Not built: the second half of this decision — publishing the library as a
   package the control plane and the storefronts can consume.
 - Date proposed: 2026-09-11
@@ -263,11 +281,15 @@ is added, and no capability is minted.
 - [x] `shared/ui/` with the eleven primitives and `overlay.ts`
 - [x] A spec per component
 - [x] `q-toast-host` mounted once in `shell.html`
-- [x] Two call sites per component, and no more
+- [x] Two call sites per component, and no more, for the seven that have any
+- [x] A migration test per component, proving both of its call sites render
 - [x] `ui.*` keys in all three catalogues with real ru and uz-Latn translations
 - [ ] The remaining thirteen hand-written dialogs — each owning wave
 - [ ] The remaining ~63 hand-written `denied` branches — each owning wave
 - [ ] `q-action-menu`'s first call site — wave `P05`
+- [ ] `q-locked-state`'s first call site — the wave that makes refusal legible
+- [ ] `q-drawer`'s and `q-confirm-dialog`'s first call sites — the first wave
+      that adds a floating panel or a field-free confirmation
 - [ ] `overlay.ts`'s body replaced by the CDK's focus trap, if `P03` lands it
 
 ## Exit criteria

@@ -26,9 +26,13 @@
   primitives this record's component-gap table calls "Required throughout" —
   `Modal`, `Drawer`, `ConfirmDialog`, `ActionMenu`, `SplitPane`, `Toast`,
   `InlineAlert`, `EmptyState`, `DeniedState`, `LockedState`, and the
-  `StatusPill` overlay and dual-state variant — each with its own spec, each
-  built against `tokens.css` rather than local values, and each with two
-  migrated call sites and no more. Everything else in that table is still
+  `StatusPill` overlay and dual-state variant — each with its own spec and
+  each built against `tokens.css` rather than local values. Seven of them
+  carry the two migrated call sites that wave allowed itself and no more;
+  `Drawer`, `ConfirmDialog`, `ActionMenu` and `LockedState` carry none,
+  because the console has nothing of their shape to migrate yet or the
+  screens that do belong to a later wave — ADR 0101 names each case.
+  Everything else in that table is still
   absent (`DataTable`, `DataGrid`, `MatrixGrid`, `Combobox`, the money and
   time inputs, `LocalizedFieldGroup`, `MediaUploader`, `ImportWizard`,
   `SecretInput`, `Chart`, `Board`, the map components, `PhoneFrame`), and the
