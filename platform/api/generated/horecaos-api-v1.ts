@@ -2309,6 +2309,28 @@ export interface InstallationView {
   status?: string;
 }
 
+export interface InvitationAcceptRequest {
+  firstName: string;
+  lastName: string;
+  password: string;
+  token: string;
+}
+
+export interface InvitationAccepted {
+  signInName?: string;
+}
+
+export interface InvitationInspection {
+  emailMasked?: string;
+  expiresAt?: string;
+  locale?: string;
+  tenantName?: string;
+}
+
+export interface InvitationTokenRequest {
+  token: string;
+}
+
 export interface ItemResponse {
   applied?: boolean;
   item?: ItemView;
@@ -2870,6 +2892,7 @@ export interface OnboardingControllerRunView {
 
 export interface OnboardingControllerStartRequest {
   ownerEmail?: string;
+  ownerLocale?: string;
   ownerSubjectId?: string;
   templateId?: string;
 }
@@ -3274,6 +3297,24 @@ export interface OverrideRequest {
   limit?: number;
   reason: string;
   validUntil: string;
+}
+
+export interface OwnerInvitationResendRequest {
+  locale?: string;
+  reason: string;
+}
+
+export interface OwnerInvitationView {
+  acceptedAt?: string;
+  attempts?: number;
+  emailMasked?: string;
+  expiresAt?: string;
+  lastErrorCode?: string;
+  locale?: string;
+  openedAt?: string;
+  queuedAt?: string;
+  sentAt?: string;
+  state?: string;
 }
 
 export interface OwnershipView {
@@ -5951,6 +5992,8 @@ export interface Operations {
   "categories_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
   "archive": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
+  "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
+  "resend": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
   "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };
@@ -5992,6 +6035,8 @@ export interface Operations {
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
+  "accept_2": { method: "POST"; path: "/api/v1/operations/invitations/accept"; request: { parameters: Record<string, never>; body: InvitationAcceptRequest }; responses: { "200": InvitationAccepted } };
+  "inspect": { method: "POST"; path: "/api/v1/operations/invitations/inspect"; request: { parameters: Record<string, never>; body: InvitationTokenRequest }; responses: { "200": InvitationInspection } };
   "operationsPending": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PagePendingApprovalResponse } };
   "operationsDecide": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: ApprovalRequestControllerDecisionRequest }; responses: { "200": ApprovalRequestControllerDecisionResponse } };
   "operationsSearch": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/audit-events"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; actorSubject?: string; auditClass?: string; correlationId?: string; from?: string; limit?: number; outcome?: string; scopeId?: string; scopeType?: string; targetId?: string; to?: string } } }; responses: { "200": PageAuditEventView } };

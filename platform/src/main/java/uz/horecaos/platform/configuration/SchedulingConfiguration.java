@@ -196,7 +196,7 @@ public class SchedulingConfiguration {
      * and trust {@code SchedulerPoolSizeTests}, which counts them, over the
      * number written here.
      */
-    static final int DEFAULT_POOL_SIZE = 55;
+    static final int DEFAULT_POOL_SIZE = 56;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

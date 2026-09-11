@@ -280,6 +280,23 @@ horecaos:
       url: ${HORECAOS_OPENBAO_URL:http://localhost:8200}
       token: ${HORECAOS_OPENBAO_TOKEN:}
       mount: ${HORECAOS_OPENBAO_MOUNT:horecaos}
+  # ADR 0097: the platform's own email, over SMTP submission to a hosted
+  # provider. With no host set nothing is sent, and whatever wanted to send
+  # waits and says so, instead of failing. The password is never a value
+  # here: HORECAOS_MAIL_SMTP_PASSWORD_REF names it in the secrets manager,
+  # for example horecaos:production:provider_notification:platform:smtp.
+  mail:
+    from: ${HORECAOS_MAIL_FROM:}
+    smtp:
+      host: ${HORECAOS_MAIL_SMTP_HOST:}
+      port: ${HORECAOS_MAIL_SMTP_PORT:587}
+      # STARTTLS on 587, TLS on 465; NONE only for a local catcher such as Mailpit.
+      security: ${HORECAOS_MAIL_SMTP_SECURITY:STARTTLS}
+      username: ${HORECAOS_MAIL_SMTP_USERNAME:}
+      password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
+  # Where the staff apps are served, for links the platform writes into email.
+  frontends:
+    operations-origin: ${HORECAOS_OPERATIONS_ORIGIN:http://localhost:4200}
   partner:
     # ADR 0040. A reference, never a value, per ADR 0028.
     #

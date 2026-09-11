@@ -481,7 +481,12 @@ class OnboardingFullRunIntegrationTests {
 
         return List.of(
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, tenants),
-                new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner, authority),
+                new OnboardingStepHandlers.TenantOwnerLinkOrInvite(
+                        provisioner,
+                        authority,
+                        uz.horecaos.platform.support.TestProtection.envelope(),
+                        (tenantId, subjectId, locale, runId) ->
+                                uz.horecaos.platform.tenancy.application.invitations.OwnerInvitations.NOT_NEEDED),
                 new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, policyAuthor),
                 new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants),
                 new OnboardingStepHandlers.PaymentConfigurationValidate(

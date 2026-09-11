@@ -112,6 +112,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!-- ADR 0097: the platform's own email, over SMTP submission. The
+             starter brings Jakarta Mail and JavaMailSenderImpl; nothing is
+             auto-configured from spring.mail.*, because the password is an
+             ADR 0028 secret reference resolved at send time (MailConfiguration). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

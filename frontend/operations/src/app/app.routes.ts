@@ -30,6 +30,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0097: an invited owner setting up their account. Outside the guard
+    // for the same reason as /login -- the visitor has no password yet.
+    path: 'invite',
+    loadComponent: () => import('./features/auth/invite-page').then((m) => m.InvitePage),
+  },
+  {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     canActivate: [authGuard],
@@ -445,7 +451,9 @@ export const routes: Routes = [
           {
             path: 'promo-codes',
             loadComponent: () =>
-              import('./features/marketing/promo-codes/promo-codes-page').then((m) => m.PromoCodesPage),
+              import('./features/marketing/promo-codes/promo-codes-page').then(
+                (m) => m.PromoCodesPage,
+              ),
           },
           // 6.3 Loyalty (ADR 0046, wave 44): the last tier-3 Marketing row
           // this wave built, alongside 6.4 Campaigns' own real backend.

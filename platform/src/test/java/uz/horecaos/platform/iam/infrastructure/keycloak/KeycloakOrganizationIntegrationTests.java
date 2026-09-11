@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -84,6 +85,7 @@ class KeycloakOrganizationIntegrationTests {
 
     private OrganizationProvisioner provisioner;
     private OrganizationDirectory directory;
+    private StaffAccounts accounts;
     private StaffDirectGrantClient staffLogin;
     private String alias;
 
@@ -130,6 +132,7 @@ class KeycloakOrganizationIntegrationTests {
                 secrets, clock, BASE_URL, REALM, "horecaos-provisioning", "local");
         directory = configuration.organizationDirectory(
                 secrets, clock, BASE_URL, REALM, "horecaos-identity-reader", "local");
+        accounts = configuration.staffAccounts(secrets, clock, BASE_URL, REALM, "horecaos-provisioning", "local");
 
         // Same reasoning as StaffLoginKeycloakConfiguration: no bearer token of
         // its own, so a plain RestClient rather than KeycloakConfiguration's.
@@ -162,6 +165,53 @@ class KeycloakOrganizationIntegrationTests {
         organizationsToRemove.forEach(id -> delete("/admin/realms/{realm}/organizations/" + id));
         usersToRemove.clear();
         organizationsToRemove.clear();
+    }
+
+    /**
+     * ADR 0097 against the live realm: an owner onboarding created with no
+     * password sets one through the invitation, the realm's policy refuses a
+     * short one without touching the account, and the owner then signs in on
+     * ADR 0062's direct grant -- the exact path the operations console uses.
+     */
+    @Test
+    void anInvitedOwnerSetsUpTheirAccountAndThenSignsIn() {
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(UUID.randomUUID(), alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        String email = alias + "@example.test";
+        var membership = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
+        usersToRemove.add(membership.subjectId());
+
+        StaffAccounts.StaffAccount before =
+                accounts.find(membership.subjectId()).orElseThrow();
+        assertThat(before.email()).isEqualTo(email);
+        assertThat(before.hasPassword())
+                .as("onboarding creates the account without one")
+                .isFalse();
+        assertThat(before.emailVerified()).isFalse();
+
+        assertThatThrownBy(() -> accounts.completeSetup(membership.subjectId(), "Dilnoza", "Karimova", "short"))
+                .isInstanceOfSatisfying(
+                        StaffAccounts.PasswordRejectedException.class,
+                        refused -> assertThat(refused.policy()).startsWith("invalidPassword"));
+        assertThat(accounts.find(membership.subjectId()).orElseThrow().hasPassword())
+                .as("a refused password leaves the account exactly as it was")
+                .isFalse();
+
+        String password = "a-long-enough-passphrase-" + alias;
+        accounts.completeSetup(membership.subjectId(), "Dilnoza", "Karimova", password);
+
+        StaffAccounts.StaffAccount after = accounts.find(membership.subjectId()).orElseThrow();
+        assertThat(after.hasPassword()).isTrue();
+        assertThat(after.emailVerified()).isTrue();
+        Map<String, Object> user = Objects.requireNonNull(admin.get()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, membership.subjectId())
+                .retrieve()
+                .body(MAP));
+        assertThat(user).containsEntry("firstName", "Dilnoza").containsEntry("lastName", "Karimova");
+        assertThat(staffLogin.signIn(email, password)).isInstanceOf(TokenOutcome.Issued.class);
+        assertThat(accounts.find("no-such-subject-" + alias)).isEmpty();
     }
 
     @Test

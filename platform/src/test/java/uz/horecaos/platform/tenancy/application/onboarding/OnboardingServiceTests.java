@@ -909,7 +909,12 @@ class OnboardingServiceTests {
             OrganizationProvisioner provisioner, JdbcTenantControlPlaneStore store, JdbcClient jdbc) {
         List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, store),
-                new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner, NO_OP_GRANTOR),
+                new OnboardingStepHandlers.TenantOwnerLinkOrInvite(
+                        provisioner,
+                        NO_OP_GRANTOR,
+                        uz.horecaos.platform.support.TestProtection.envelope(),
+                        (tenantId, subjectId, locale, runId) ->
+                                uz.horecaos.platform.tenancy.application.invitations.OwnerInvitations.NOT_NEEDED),
                 new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, NO_OP_POLICY_AUTHOR),
                 new OnboardingStepHandlers.BrandsAndLocationsValidate(store)));
         for (OnboardingStep step : new OnboardingStep[] {

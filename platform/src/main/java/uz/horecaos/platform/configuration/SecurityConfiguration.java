@@ -261,6 +261,16 @@ public class SecurityConfiguration {
                                 "/api/v1/control-plane/auth/sessions/current",
                                 "/api/v1/operations/auth/sessions/current")
                         .permitAll()
+                        // ADR 0097: an invited owner setting up their account. They have
+                        // no password yet, so there is no session to authenticate with;
+                        // what authorises both calls is the one-time token in the body,
+                        // checked against the hash the invitation relay kept.
+                        // StaffInvitationController rate-limits both per caller.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/operations/invitations/inspect",
+                                "/api/v1/operations/invitations/accept")
+                        .permitAll()
                         // ADR 0079: a kitchen display device with no credential of its
                         // own asking for one. Unauthenticated for the same reason the
                         // storefront's pre-account identity endpoints above are: there

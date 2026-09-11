@@ -3949,6 +3949,68 @@
         },
         "type" : "object"
       },
+      "InvitationAcceptRequest" : {
+        "properties" : {
+          "firstName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lastName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 128,
+            "minLength" : 12,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "firstName", "lastName", "password", "token" ],
+        "type" : "object"
+      },
+      "InvitationAccepted" : {
+        "properties" : {
+          "signInName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "InvitationInspection" : {
+        "properties" : {
+          "emailMasked" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "InvitationTokenRequest" : {
+        "properties" : {
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "token" ],
+        "type" : "object"
+      },
       "ItemResponse" : {
         "properties" : {
           "applied" : {
@@ -10304,6 +10366,66 @@
         },
         "summary" : "Refresh an operations session",
         "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/operations/invitations/accept" : {
+      "post" : {
+        "description" : "Sets the owner's name and password at the identity provider, marks their address verified and spends the link. The realm's password policy applies; a refusal names the rule.",
+        "operationId" : "accept_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvitationAcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitationAccepted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set up the invited account",
+        "tags" : [ "Staff invitations" ]
+      }
+    },
+    "/api/v1/operations/invitations/inspect" : {
+      "post" : {
+        "description" : "Whose invitation it is and where it was sent, masked. Answers not-found with a reason of INVALID or EXPIRED for a link that cannot be used.",
+        "operationId" : "inspect",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvitationTokenRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitationInspection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read an invitation before accepting it",
+        "tags" : [ "Staff invitations" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
@@ -24354,6 +24476,9 @@
   }, {
     "description" : "Opening and closing the window in which a courier's position is collected",
     "name" : "Courier duty and telemetry"
+  }, {
+    "description" : "An invited owner sets up their account (ADR 0097)",
+    "name" : "Staff invitations"
   }, {
     "description" : "The ADR 0065 write-only door: values enter, only references leave",
     "name" : "Secret ingress"

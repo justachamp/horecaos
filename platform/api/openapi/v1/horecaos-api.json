@@ -7311,6 +7311,68 @@
         },
         "type" : "object"
       },
+      "InvitationAcceptRequest" : {
+        "properties" : {
+          "firstName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lastName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 128,
+            "minLength" : 12,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "firstName", "lastName", "password", "token" ],
+        "type" : "object"
+      },
+      "InvitationAccepted" : {
+        "properties" : {
+          "signInName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "InvitationInspection" : {
+        "properties" : {
+          "emailMasked" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "InvitationTokenRequest" : {
+        "properties" : {
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "token" ],
+        "type" : "object"
+      },
       "ItemResponse" : {
         "properties" : {
           "applied" : {
@@ -9041,6 +9103,11 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "ownerLocale" : {
+            "maxLength" : 8,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "ownerSubjectId" : {
             "maxLength" : 255,
             "minLength" : 0,
@@ -10376,6 +10443,58 @@
           }
         },
         "required" : [ "approvedBy", "entitlementKey", "reason", "validUntil" ],
+        "type" : "object"
+      },
+      "OwnerInvitationResendRequest" : {
+        "properties" : {
+          "locale" : {
+            "maxLength" : 8,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "OwnerInvitationView" : {
+        "properties" : {
+          "acceptedAt" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "emailMasked" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "lastErrorCode" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "openedAt" : {
+            "type" : "string"
+          },
+          "queuedAt" : {
+            "type" : "string"
+          },
+          "sentAt" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "OwnershipView" : {
@@ -25382,6 +25501,67 @@
         "tags" : [ "Order outcome reasons" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/owner-invitation" : {
+      "get" : {
+        "description" : "Queued, sent, opened, accepted, not needed, failed or expired, with when and why. The address is masked.",
+        "operationId" : "view",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnerInvitationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant owner's invitation",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend" : {
+      "post" : {
+        "description" : "With a new link: the one already sent stops working at once. Refused once the owner has set up their account.",
+        "operationId" : "resend",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OwnerInvitationResendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send the owner's invitation again",
+        "tags" : [ "Tenant onboarding" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/pos-exports" : {
       "get" : {
         "description" : "Exports whose outcome the platform could not establish. An empty list is the ordinary state; a growing one means a till or a network is unwell.",
@@ -27078,6 +27258,66 @@
         },
         "summary" : "Refresh an operations session",
         "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/operations/invitations/accept" : {
+      "post" : {
+        "description" : "Sets the owner's name and password at the identity provider, marks their address verified and spends the link. The realm's password policy applies; a refusal names the rule.",
+        "operationId" : "accept_2",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvitationAcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitationAccepted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set up the invited account",
+        "tags" : [ "Staff invitations" ]
+      }
+    },
+    "/api/v1/operations/invitations/inspect" : {
+      "post" : {
+        "description" : "Whose invitation it is and where it was sent, masked. Answers not-found with a reason of INVALID or EXPIRED for a link that cannot be used.",
+        "operationId" : "inspect",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvitationTokenRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitationInspection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read an invitation before accepting it",
+        "tags" : [ "Staff invitations" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
@@ -46004,6 +46244,9 @@
     "description" : "Entity-mapping crosswalk and reconciliation results (ADR 0024)",
     "name" : "Migration evidence"
   }, {
+    "description" : "An invited owner sets up their account (ADR 0097)",
+    "name" : "Staff invitations"
+  }, {
     "description" : "The ADR 0065 write-only door: values enter, only references leave",
     "name" : "Secret ingress"
   }, {
@@ -46030,6 +46273,9 @@
   }, {
     "description" : "A tenant's own versioned distance bands and peak-hour rules (ADR 0037)",
     "name" : "Delivery tariffs"
+  }, {
+    "description" : "Owner invitation state and resend (ADR 0097)",
+    "name" : "Tenant onboarding"
   }, {
     "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
     "name" : "Order acceptance policy"

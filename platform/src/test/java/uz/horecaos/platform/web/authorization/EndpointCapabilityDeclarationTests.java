@@ -83,6 +83,7 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
+                    || isStaffInvitationEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
@@ -133,6 +134,7 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
+                    || isStaffInvitationEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
@@ -331,6 +333,23 @@ class EndpointCapabilityDeclarationTests {
             }
         }
         return false;
+    }
+
+    /**
+     * ADR 0097: an invited owner reading and accepting their invitation.
+     *
+     * <p>The identical reasoning {@link #isStaffAuthEndpoint} states: the owner
+     * has no password, so no session, so no capability could be held and
+     * {@code IdempotencyInterceptor} has no subject to scope a key by. What
+     * authorises both is the one-time token in the body, checked against the
+     * hash the relay kept; accepting spends it, so a replay finds nothing to
+     * accept. Both are rate-limited per caller. Exact paths, as everywhere
+     * here.
+     */
+    private static boolean isStaffInvitationEndpoint(Method handler) {
+        String path = pathOf(handler);
+        return path.equals("/api/v1/operations/invitations/inspect")
+                || path.equals("/api/v1/operations/invitations/accept");
     }
 
     /**

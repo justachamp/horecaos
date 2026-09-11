@@ -12,6 +12,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -57,6 +58,25 @@ public class KeycloakConfiguration {
         // and a reader that borrowed this one would hold `manage-organizations`
         // on a timer.
         return new KeycloakOrganizationProvisioner(client, new KeycloakOrganizationDirectory(client, realm), realm);
+    }
+
+    /**
+     * A staff member's own account (ADR 0097), on the provisioning credential:
+     * it created the account, and it is the one holding {@code manage-users},
+     * which setting a password needs.
+     */
+    @Bean
+    StaffAccounts staffAccounts(
+            SecretResolver secrets,
+            Clock clock,
+            @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
+            @Value("${horecaos.keycloak.realm:horecaos}") String realm,
+            @Value("${horecaos.keycloak.provisioning-client-id:horecaos-provisioning}") String clientId,
+            @Value("${horecaos.environment:local}") String environment) {
+
+        return new KeycloakStaffAccounts(
+                authenticatedClient(secrets, clock, baseUrl, realm, clientId, "provisioning-secret", environment),
+                realm);
     }
 
     /**

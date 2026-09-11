@@ -439,7 +439,12 @@ class OnboardingOutboxIntegrationTests {
                 uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor) {
             List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
                     new OnboardingStepHandlers.KeycloakOrganizationReconcile(organizations, tenants),
-                    new OnboardingStepHandlers.TenantOwnerLinkOrInvite(organizations, authority),
+                    new OnboardingStepHandlers.TenantOwnerLinkOrInvite(
+                            organizations,
+                            authority,
+                            uz.horecaos.platform.support.TestProtection.envelope(),
+                            (tenantId, subjectId, locale, runId) ->
+                                    uz.horecaos.platform.tenancy.application.invitations.OwnerInvitations.NOT_NEEDED),
                     new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, policyAuthor),
                     new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants)));
             for (OnboardingStep step : new OnboardingStep[] {

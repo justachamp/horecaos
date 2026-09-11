@@ -1370,6 +1370,7 @@ export interface OnboardingControllerRunView {
 
 export interface OnboardingControllerStartRequest {
   ownerEmail?: string;
+  ownerLocale?: string;
   ownerSubjectId?: string;
   templateId?: string;
 }
@@ -1445,6 +1446,24 @@ export interface OverrideRequest {
   limit?: number;
   reason: string;
   validUntil: string;
+}
+
+export interface OwnerInvitationResendRequest {
+  locale?: string;
+  reason: string;
+}
+
+export interface OwnerInvitationView {
+  acceptedAt?: string;
+  attempts?: number;
+  emailMasked?: string;
+  expiresAt?: string;
+  lastErrorCode?: string;
+  locale?: string;
+  openedAt?: string;
+  queuedAt?: string;
+  sentAt?: string;
+  state?: string;
 }
 
 export interface OwnershipView {
@@ -2781,6 +2800,8 @@ export interface Operations {
   "categories_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
   "archive": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
+  "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
+  "resend": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
   "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };

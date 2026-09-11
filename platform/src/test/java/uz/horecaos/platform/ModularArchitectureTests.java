@@ -28,6 +28,7 @@ class ModularArchitectureTests {
             "iam",
             "inventory",
             "loyalty",
+            "mail",
             "marketing",
             "media",
             "notifications",
