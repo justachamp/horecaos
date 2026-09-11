@@ -130,7 +130,15 @@
               <td>{{ typeLabel(row.order) }}</td>
               <td class="order-queue__num-col q-mono q-tnum">{{ formatTotal(row.order) }}</td>
               <td>
-                <span class="status-badge">{{ statusLabel(row.order.status) }}</span>
+                <!-- Status and lateness in one object rather than two visual
+                     systems on opposite sides of the row (ADR 0101, X.15). The
+                     status word is never replaced by the overlay: a READY order
+                     that has gone late still reads READY. -->
+                <q-status-pill
+                  [label]="statusLabel(row.order.status)"
+                  [overlayLabel]="severityOverlay(row.severity)"
+                  overlayTone="danger"
+                />
               </td>
               <td class="order-queue__actions-col" data-testid="order-row-actions">
                 <div class="row-actions">

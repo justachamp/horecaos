@@ -5,6 +5,7 @@ import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
+import { ToastHost } from '../shared/ui/toast-host';
 import { NAVIGATION } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
@@ -45,7 +46,7 @@ import { SupportBanner } from './support-banner';
  */
 @Component({
   selector: 'q-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner, ToastHost],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

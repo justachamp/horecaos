@@ -131,8 +131,14 @@ describe('CustomersPage', () => {
     await flushMicrotasks();
     deniedFixture.detectChanges();
 
-    expect((deniedFixture.nativeElement as HTMLElement).textContent).toContain(
-      'No location in scope',
-    );
+    // The shared denied state (ADR 0101), not this screen's own sentence: it
+    // names the capability the operator is missing and who can grant it, which
+    // is the whole difference between a wall and a dead end.
+    const deniedHost = deniedFixture.nativeElement as HTMLElement;
+    expect(deniedHost.querySelector('[data-testid="customers-denied"]')).not.toBeNull();
+    expect(
+      deniedHost.querySelector('[data-testid="q-denied-state-capability"]')?.textContent?.trim(),
+    ).toBe('CUSTOMER_READ');
+    expect(deniedHost.textContent).toContain('A manager who can edit staff roles can grant it.');
   });
 });

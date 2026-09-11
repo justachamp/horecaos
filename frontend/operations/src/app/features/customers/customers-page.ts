@@ -7,6 +7,10 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { formatDate } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DeniedState } from '../../shared/ui/denied-state';
+import { EmptyState } from '../../shared/ui/empty-state';
+import { InlineAlert } from '../../shared/ui/inline-alert';
+import { Toasts } from '../../shared/ui/toast';
 import { describeApiError } from '../orders/order-errors';
 import { CreateCustomerDialog, CreateCustomerSubmission } from './create-customer-dialog';
 import { customerStatusLabel } from './customer-status';
@@ -34,7 +38,7 @@ const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-customers-page',
-  imports: [TPipe, RouterOutlet, CreateCustomerDialog],
+  imports: [TPipe, RouterOutlet, CreateCustomerDialog, InlineAlert, DeniedState, EmptyState],
   templateUrl: './customers-page.html',
   styleUrl: './customers-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,6 +49,7 @@ export class CustomersPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly toasts = inject(Toasts);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -193,6 +198,11 @@ export class CustomersPage {
         displayName: submission.displayName || null,
       });
       this.createDialogOpen.set(false);
+      // Announced through the shell's toast host rather than in the dialog: the
+      // dialog is already closed by this line, and the navigation two lines
+      // below replaces the screen behind it (ADR 0101, row `X.17`). The
+      // sentence carries no phone and no name — ADR 0029.
+      this.toasts.show({ message: this.i18n.t('customers.create.done'), tone: 'success' });
       await this.load();
       await this.loadCounts();
       void this.router.navigate([accountId], { relativeTo: this.route });

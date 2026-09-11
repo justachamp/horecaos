@@ -149,7 +149,7 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
 
-    const badge = harness.routeNativeElement!.querySelector('.status-badge');
+    const badge = harness.routeNativeElement!.querySelector('[data-testid="q-status-pill-status"]');
     expect(badge?.textContent?.trim()).toBe('Preparing');
   });
 
@@ -172,9 +172,9 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=all');
     await flushMicrotasks();
 
-    const badges = [...harness.routeNativeElement!.querySelectorAll('.status-badge')].map((b) =>
-      b.textContent?.trim(),
-    );
+    const badges = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="q-status-pill-status"]'),
+    ].map((b) => b.textContent?.trim());
     expect(badges).toHaveLength(12);
     expect(badges).not.toContain('');
   });
@@ -186,7 +186,7 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=all');
     await flushMicrotasks();
 
-    const badge = harness.routeNativeElement!.querySelector('.status-badge');
+    const badge = harness.routeNativeElement!.querySelector('[data-testid="q-status-pill-status"]');
     expect(badge?.textContent?.trim()).toBe('ON_HOLD_FOR_STOCK');
   });
 });

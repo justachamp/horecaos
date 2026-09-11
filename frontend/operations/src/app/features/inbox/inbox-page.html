@@ -1,4 +1,7 @@
-<div class="inbox" [class.inbox--docked]="docked()">
+<!-- Same split as `orders-page.html`, and now literally the same component
+     rather than a second copy of the same CSS (ADR 0101). The section key is
+     `inbox`, so widening the order detail says nothing about this one. -->
+<q-split-pane sectionKey="inbox" [docked]="docked()" [handleLabel]="'ui.splitPane.handle' | t">
   <section class="queue" [attr.aria-label]="'inbox.title' | t">
     <header class="queue__head">
       <h1 class="q-subhead">{{ 'inbox.title' | t }}</h1>
@@ -9,9 +12,12 @@
     </div>
   </section>
 
-  <!-- Same dock pattern as `orders-page.html` — see its own comment for why
-       the outlet stays mounted rather than behind an @if. -->
-  <aside class="dock" data-testid="inbox-dock" [attr.aria-hidden]="docked() ? null : 'true'">
+  <aside
+    qSplitDetail
+    class="dock"
+    data-testid="inbox-dock"
+    [attr.aria-hidden]="docked() ? null : 'true'"
+  >
     <router-outlet (activate)="docked.set(true)" (deactivate)="docked.set(false)" />
   </aside>
-</div>
+</q-split-pane>

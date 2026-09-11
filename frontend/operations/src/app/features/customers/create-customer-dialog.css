@@ -1,28 +1,8 @@
-.dialog__backdrop {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(22, 22, 22, 0.5);
-  z-index: 50;
-}
-
-.dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 360px;
-  max-width: calc(100vw - 32px);
-  padding: 20px;
-  background: var(--q-canvas);
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-}
-
-.dialog__title {
-  margin: 0;
-}
+/* The backdrop, the panel and the button row moved to `q-modal`, and the error
+ * band to `q-inline-alert` (ADR 0101). What is left is this dialog's own two
+ * fields — projected into the modal, and still styled from here, because
+ * emulated encapsulation stamps projected content with the declaring
+ * component's attribute rather than the host's. */
 
 .dialog__field {
   display: flex;
@@ -37,18 +17,10 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   font-family: var(--q-font-sans);
-  font-size: 14px;
 }
 
 .dialog__error {
   color: var(--q-error-text);
-}
-
-.dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
 }
 
 .dialog__dismiss,
@@ -57,14 +29,14 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);
+  color: var(--q-ink);
   cursor: pointer;
-  font-size: 14px;
 }
 
 .dialog__confirm {
   border-color: var(--q-primary);
   background: var(--q-primary);
-  color: #fff;
+  color: var(--q-inverse-ink);
 }
 
 .dialog__confirm:disabled,

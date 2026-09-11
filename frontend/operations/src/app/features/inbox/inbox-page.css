@@ -3,24 +3,15 @@
   height: 100%;
 }
 
-/* Grid, not flex — see `orders-page.css`'s identical comment on why the dock's
- * width must be fixed rather than content-derived. */
-.inbox {
-  display: grid;
-  grid-template-columns: 1fr 0;
-  height: 100%;
-  min-width: 0;
-}
-
-.inbox--docked {
-  grid-template-columns: minmax(0, 1fr) 420px;
-}
+/* The grid and the dock column are `q-split-pane`'s now — see
+ * `orders-page.css`'s identical note. */
 
 .queue {
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 .queue__head {
@@ -42,18 +33,7 @@
 }
 
 .dock {
-  border-left: 1px solid var(--q-hairline);
+  display: block;
   background: var(--q-canvas);
-  overflow-y: auto;
   min-width: 0;
-}
-
-.inbox:not(.inbox--docked) .dock {
-  display: none;
-}
-
-@media (max-width: 1100px) {
-  .inbox--docked {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 38%);
-  }
 }

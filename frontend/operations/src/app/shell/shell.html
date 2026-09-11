@@ -119,3 +119,8 @@
     </main>
   </div>
 </div>
+
+<!-- Mounted once, outside the routed outlet, so a confirmation survives both
+     the dialog that raised it closing and the navigation a successful mutation
+     usually triggers (ADR 0101). Its two live regions are always in the DOM. -->
+<q-toast-host />

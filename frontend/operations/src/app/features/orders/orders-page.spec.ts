@@ -58,7 +58,7 @@ describe('OrdersPage', () => {
     const host: HTMLElement = harness.routeNativeElement!;
 
     expect(host.querySelector('[data-testid="queue-body"]')).not.toBeNull();
-    expect(host.querySelector('.orders--docked')).toBeNull();
+    expect(host.querySelector('.q-split--docked')).toBeNull();
     expect(host.querySelector('[data-testid="order-dock"]')?.getAttribute('aria-hidden')).toBe(
       'true',
     );
@@ -72,7 +72,7 @@ describe('OrdersPage', () => {
     // turns the detail into a modal or a full-page route.
     expect(host.querySelector('[data-testid="queue-body"]')).not.toBeNull();
     expect(host.querySelector('q-order-detail-pane')).not.toBeNull();
-    expect(host.querySelector('.orders--docked')).not.toBeNull();
+    expect(host.querySelector('.q-split--docked')).not.toBeNull();
   });
 
   it('binds the order id from the URL, so a detail link is shareable', async () => {

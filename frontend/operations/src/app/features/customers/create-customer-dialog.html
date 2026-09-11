@@ -1,56 +1,54 @@
-<div class="dialog__backdrop" data-testid="create-customer-dialog">
-  <div
-    class="dialog"
-    role="dialog"
-    aria-modal="true"
-    [attr.aria-label]="'customers.create.title' | t"
-  >
-    <h2 class="q-emphasis dialog__title">{{ 'customers.create.title' | t }}</h2>
-
-    <label class="dialog__field">
-      <span class="q-body-sm">{{ 'customers.create.phone' | t }}</span>
-      <input
-        type="text"
-        class="dialog__input"
-        [value]="phone()"
-        (input)="setPhone($any($event.target).value)"
-        placeholder="+998901112233"
-        [attr.aria-invalid]="phoneMissing() ? 'true' : null"
-        data-testid="create-customer-phone"
-      />
-      @if (phoneMissing()) {
-        <span class="q-caption dialog__error">{{ 'customers.create.phoneRequired' | t }}</span>
-      }
-    </label>
-
-    <label class="dialog__field">
-      <span class="q-body-sm">{{ 'customers.create.displayName' | t }}</span>
-      <input
-        type="text"
-        class="dialog__input"
-        [value]="displayName()"
-        (input)="setDisplayName($any($event.target).value)"
-        data-testid="create-customer-name"
-      />
-    </label>
-
-    @if (errorMessage(); as message) {
-      <p class="q-body-sm dialog__error" role="alert">{{ message }}</p>
+<!-- Chrome is `q-modal` and the failure band is `q-inline-alert` (ADR 0101).
+     The fields, the validation and every `data-testid` are unchanged. -->
+<q-modal
+  [title]="'customers.create.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="close()"
+  data-testid="create-customer-dialog"
+>
+  <label class="dialog__field">
+    <span class="q-body-sm">{{ 'customers.create.phone' | t }}</span>
+    <input
+      type="text"
+      class="dialog__input q-body-sm"
+      [value]="phone()"
+      (input)="setPhone($any($event.target).value)"
+      placeholder="+998901112233"
+      [attr.aria-invalid]="phoneMissing() ? 'true' : null"
+      data-testid="create-customer-phone"
+    />
+    @if (phoneMissing()) {
+      <span class="q-caption dialog__error">{{ 'customers.create.phoneRequired' | t }}</span>
     }
+  </label>
 
-    <div class="dialog__actions">
-      <button type="button" class="dialog__dismiss" (click)="close()" [disabled]="busy()">
-        {{ 'customers.create.cancel' | t }}
-      </button>
-      <button
-        type="button"
-        class="dialog__confirm"
-        (click)="submit()"
-        [disabled]="busy()"
-        data-testid="create-customer-confirm"
-      >
-        {{ busy() ? ('customers.create.saving' | t) : ('customers.create.confirm' | t) }}
-      </button>
-    </div>
-  </div>
-</div>
+  <label class="dialog__field">
+    <span class="q-body-sm">{{ 'customers.create.displayName' | t }}</span>
+    <input
+      type="text"
+      class="dialog__input q-body-sm"
+      [value]="displayName()"
+      (input)="setDisplayName($any($event.target).value)"
+      data-testid="create-customer-name"
+    />
+  </label>
+
+  @if (errorMessage(); as message) {
+    <q-inline-alert severity="error" [text]="message" />
+  }
+
+  <ng-container qModalActions>
+    <button type="button" class="dialog__dismiss q-body-sm" (click)="close()" [disabled]="busy()">
+      {{ 'customers.create.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="create-customer-confirm"
+    >
+      {{ busy() ? ('customers.create.saving' | t) : ('customers.create.confirm' | t) }}
+    </button>
+  </ng-container>
+</q-modal>

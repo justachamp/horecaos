@@ -1,4 +1,7 @@
-<div class="orders" [class.orders--docked]="docked()">
+<!-- The grid, the fixed dock width and the 1100px fallback moved to
+     `q-split-pane` (ADR 0101), which adds what five hand-written copies of them
+     never had: a drag handle and a width this section remembers. -->
+<q-split-pane sectionKey="orders" [docked]="docked()" [handleLabel]="'ui.splitPane.handle' | t">
   <section class="queue" [attr.aria-label]="'orders.title' | t">
     <header class="queue__head">
       <h1 class="q-subhead">{{ 'orders.title' | t }}</h1>
@@ -32,12 +35,16 @@
     </div>
   </section>
 
-  <!-- The dock. Collapsed to zero width by CSS while no detail route is active,
-       so an empty dock never takes width from the queue. The outlet itself stays
-       mounted rather than being wrapped in a @if: an outlet that is created and
-       destroyed cannot report its own activation, which is what drives the
-       layout. -->
-  <aside class="dock" data-testid="order-dock" [attr.aria-hidden]="docked() ? null : 'true'">
+  <!-- The dock. The outlet stays mounted rather than being wrapped in an @if:
+       an outlet that is created and destroyed cannot report its own
+       activation, which is what drives the layout. `q-split-pane` collapses
+       the column itself while `docked` is false. -->
+  <aside
+    qSplitDetail
+    class="dock"
+    data-testid="order-dock"
+    [attr.aria-hidden]="docked() ? null : 'true'"
+  >
     <router-outlet (activate)="docked.set(true)" (deactivate)="docked.set(false)" />
   </aside>
-</div>
+</q-split-pane>

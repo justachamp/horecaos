@@ -14,6 +14,9 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DeniedState } from '../../shared/ui/denied-state';
+import { EmptyState } from '../../shared/ui/empty-state';
+import { StatusPill } from '../../shared/ui/status-pill';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { InboxApi } from './inbox-api';
 import { ConversationSummaryResponse } from './inbox-conversation';
@@ -39,7 +42,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-inbox-list',
-  imports: [TPipe],
+  imports: [TPipe, StatusPill, DeniedState, EmptyState],
   templateUrl: './inbox-list.html',
   styleUrl: './inbox-list.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
