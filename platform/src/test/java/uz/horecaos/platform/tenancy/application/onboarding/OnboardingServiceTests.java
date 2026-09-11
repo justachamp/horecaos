@@ -140,7 +140,12 @@ class OnboardingServiceTests {
                 transactions,
                 allHandlers(provisioner, store, jdbc),
                 recorder,
-                new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry()),
+                new JdbcApprovalService(
+                        jdbc,
+                        recorder,
+                        clock,
+                        new SimpleMeterRegistry(),
+                        JsonMapper.builder().build()),
                 published,
                 mapper,
                 clock,
@@ -216,7 +221,8 @@ class OnboardingServiceTests {
                         jdbc,
                         new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
                         clock,
-                        new SimpleMeterRegistry()),
+                        new SimpleMeterRegistry(),
+                        JsonMapper.builder().build()),
                 published,
                 JsonMapper.builder().build(),
                 clock,
@@ -303,7 +309,8 @@ class OnboardingServiceTests {
                         jdbc,
                         new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
                         clock,
-                        new SimpleMeterRegistry())
+                        new SimpleMeterRegistry(),
+                        JsonMapper.builder().build())
                 .decide(
                         requestId,
                         uz.horecaos.platform.audit.api.ApprovalService.Decision.APPROVE,

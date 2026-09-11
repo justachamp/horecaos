@@ -1,7 +1,7 @@
 # ADR 0095: A tenant's wallet keeps paid money and bonus money apart
 
 - Decision status: Proposed
-- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, and `WalletBonusExpirySweeper`; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; twenty-nine cases in `WalletTests` and two racing ones in `WalletConcurrencyTests` against the migrated schema; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured", so a CARD tenant's remainder stays due exactly as an INVOICE one does
+- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request and V0214's card charge attempts; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, and `WalletBonusExpirySweeper`; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; thirty-seven cases in `WalletTests` and two racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured", so a CARD tenant's remainder stays due exactly as an INVOICE one does
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: the platform owner decided on 2026-09-11 that tenants pay by invoice and bank transfer, from a prepaid wallet or by card; that bonus money HorecaOS grants is kept apart from money a tenant paid, is spent first and lapses on a date set per grant; that paid money never lapses and is refunded when a tenant leaves; that every manual change needs a proposer and a different approver; and that the activation deposit is credited to the first statement. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
@@ -107,10 +107,30 @@ As built on 2026-09-11.
 - `commercial.wallet_entries`: tenant, money kind (`PAID`/`BONUS`), entry type
   (`TOP_UP`, `DEPOSIT`, `BONUS_GRANT`, `BONUS_EXPIRY`, `STATEMENT_PAYMENT`,
   `STATEMENT_REVERSAL`, `ADJUSTMENT`, `REFUND`, `DEPOSIT_REVERSAL`), signed
-  amount in minor units, currency, the statement or grant it concerns, the
-  external reference, reason, who recorded it and who approved it. `BEFORE
-  UPDATE OR DELETE` raises; the application role is granted `SELECT, INSERT`
-  and nothing else, so neither stop depends on the other.
+  amount in minor units, currency, the statement, grant or subscription it
+  concerns, the external reference, reason, who recorded it and who approved
+  it. `BEFORE UPDATE OR DELETE` raises; the application role is granted
+  `SELECT, INSERT` and nothing else, so neither stop depends on the other.
+- **A deposit names the obligation it cleared.** `subscription_id` is non-null
+  on exactly `DEPOSIT` and `DEPOSIT_REVERSAL` (`ck_wallet_entry_subscription_ref`)
+  and carries a composite foreign key on `(tenant_id, subscription_id)`, so a
+  deposit can never name another tenant's subscription. Paying a deposit does
+  two things — it appends PAID money and it clears one subscription's
+  `deposit_due_minor` — and the reversal has to undo both, on the same row.
+  Without the column it re-armed whichever subscription was live when it ran,
+  which is not the same row for a tenant that changed plans in between: plan
+  A's 500 000 was written over plan B's 5 000 000 by an assignment, erasing
+  four and a half million of a real obligation with nothing anywhere to show it
+  (no statement carries a deposit line, and the ledger records money rather
+  than obligations). The reversal now reads the deposit's own
+  `subscription_id`, refuses when that subscription is terminal — an
+  obligation that no longer exists is a staff decision, taken as an
+  `ADJUSTMENT` with a name on it — refuses when its plan version's currency is
+  not the deposit's, and restores **additively** (`deposit_due_minor =
+  deposit_due_minor + :amount`) under the billing lock, with
+  `ck_subscription_deposit_due >= 0` as the floor. The audit fact carries the
+  subscription and the obligation's from/to, because that move is the one fact
+  the ledger cannot reconstruct.
 - **Four eyes on the row itself.** `ck_wallet_entry_four_eyes` refuses a row
   whose `approved_by` equals its `recorded_by`, as every other money table in
   this schema does (V0033, V0201). The approval model already forbids a maker
@@ -128,12 +148,23 @@ As built on 2026-09-11.
   keeps verbatim what the recorder typed, so the two can never disagree.
   Normalising narrows the hole rather than closing it — "MT103-7" against
   "MT1037-A" still passes — so one recorder per statement, reconciled against
-  the bank feed, remains the real control.
+  the bank feed, remains the real control. It buys that by accepting a rare
+  false refusal the other way: two genuinely different wires whose references
+  differ only in case, spacing, hyphens or a leading `#` ("MT1037" in
+  September, "MT-1037" in October) are one key, and the second is refused. That
+  is the cheaper mistake — a refusal is visible to the recorder and a double
+  credit is not — and the refusal says which of the two happened and names the
+  reference already on file, rather than telling the recorder that a string
+  they cannot find in the ledger is already there. The recovery stays inside
+  the same one-person audited path: record the second wire under a reference
+  that tells it apart ("MT-1037 wire 2 of 12 Oct"), which keeps the bank's own
+  string on the money, instead of a maker-checker `ADJUSTMENT` that would carry
+  no bank reference at all.
 - **`DEPOSIT_REVERSAL`** takes back an activation deposit recorded against the
   wrong tenant: PAID money leaving, naming the deposit's own reference (unique
-  among reversals for the tenant, so one deposit is taken back once), behind
-  maker-checker, and restoring `subscriptions.deposit_due_minor` in the same
-  locked transaction. A plain downward `ADJUSTMENT` mends only the ledger: the
+  among reversals for the tenant, so one deposit is taken back once) and the
+  deposit's own `subscription_id`, behind maker-checker, and restoring that
+  subscription's `deposit_due_minor` in the same locked transaction. A plain downward `ADJUSTMENT` mends only the ledger: the
   flag stays at zero, so the tenant's real deposit can never be recorded
   (`recordDeposit` refuses when nothing is due) and is never billed either,
   because the statement carries no deposit line. Refused when the paid balance
@@ -165,6 +196,45 @@ As built on 2026-09-11.
   whose balances are money on hand, and a second table would be a second place
   for the same fact to drift from the subscription it belongs to. It is a
   due-or-not flag on the subscription, and no statement draft reads it.
+- **A platform approval says whose account it moves** (V0212).
+  `audit.approval_requests` gains `subject_tenant_id` and `subject_json`.
+  Deliberately not `tenant_id`: that column is the routing key — the tenant
+  worklist, the tenant decision route, the `ON CONFLICT (tenant_id,
+  action_code, parameters_hash)` dedup and the consume predicate are all keyed
+  on it — and a wallet decision has to stay out of all four, which is the whole
+  point of item 4's platform scope. But every other field such a row carried
+  was constant for the action or one-way: `scope_id` is null,
+  `threshold_description` is the sentence the policy froze onto every request
+  of that action, the maker's reason is withheld under ADR 0029, and
+  `parameters_hash` is a one-way digest. So a refund of fifty million from one
+  tenant and a refund of five million from another reached the approver's queue
+  as two rows differing only in a timestamp, and the second signature was given
+  blind. The subject holds identifiers and integer minor units only — tenant,
+  entry type, money kind, the **signed** amount as it will reach the ledger,
+  currency, and the grant or payout reference where one applies — never the
+  maker's prose, so ADR 0029 is untouched.
+  **It is emitted by `ApprovalParameters.sign()` from the same pass over the
+  command record that produces the digest**, with `withholding(...)` naming
+  what the hash covers but a console must not show, exactly as `excluding(...)`
+  names what the hash does not cover. A projection derived any other way — a
+  detail lookup that re-derives the command from current state, say — would not
+  be bound to the signature, and a maker could get one thing signed and execute
+  another. The display name is resolved when the row is read, not frozen onto
+  it, so it is the one field that cannot go stale.
+- **`commercial.card_charge_attempts`** (V0214): one row per attempt to charge
+  a tenant's card, written before the provider is called, and the row's id is
+  the idempotency key the provider is handed. The key used to be the statement
+  id, justified as "one statement is charged for its remainder at most once per
+  attempt" — true within one settlement pass and false across them, because
+  settlement re-runs on every transfer, deposit, approved grant and upward
+  correction and charges whatever is still owed. A statement declined at
+  1 000 000 and then part-paid by a 400 000 transfer came back under the same
+  key for 600 000, which is the one thing a provider-side idempotency key must
+  never do: a provider honouring keys replays the stale decline forever, so the
+  statement can never be collected by card however good the card becomes, or
+  replays an earlier success for a different amount and the wallet credits
+  money nobody took. Inert while `NotConfiguredCardCharger` is the only
+  adapter, and the contract a real one will be built against.
 - Approval policies for `commercial.wallet.adjustment`,
   `commercial.wallet.bonus-grant`, `commercial.wallet.refund` and
   `commercial.wallet.deposit-reversal`, seeded at `PLATFORM` scope and
@@ -240,7 +310,25 @@ As built on 2026-09-11.
   `POST /control-plane/approval-requests/{requestId}/decision`, which this wave
   adds: a `PLATFORM`-scope request carries no tenant, so neither the tenant's
   own worklist nor its decision route can reach it, and the platform route
-  cannot reach a tenant's own requests either.
+  cannot reach a tenant's own requests either. Each row on that read carries
+  `subjectTenantId`, `subjectTenantName` and `subject` — the proposal in the
+  canonical form the parameters hash covers — so the approver reads whose
+  account the money leaves and how much before signing, and can open that
+  tenant's wallet from the row.
+- **The tenant is on the whole approval lifecycle, not only on the executed
+  change.** `.at(scope)` stays the request's own scope, because that is what
+  routes the decision and what the approver's capability is judged at, so
+  `audit.audit_events.tenant_id` is null on `approval.requested`,
+  `approval.approve`, `approval.decline`, `approval.consumed` and
+  `approval.decision.refused`. A change that moved money was still findable —
+  the wallet entry carries the tenant, the maker, the approver and the request
+  id — but a proposal that was declined, lapsed, or on which an approver was
+  refused for a missing capability writes no wallet entry at all, and was
+  therefore attributable to no tenant anywhere. ADR 0027's model allows the
+  answer without touching the scope: the subject tenant goes in each fact's
+  change document, which holds structured identifiers and never the maker's
+  prose, and the request row keeps `subject_tenant_id` beside it. Routing,
+  dedup, consumption and the capability check are all unchanged.
 - Control plane: the Invoices & wallet screen carries the spendable bonus with
   the ledger balance beside it, the paid balance, the ledger with a load-more
   control and a caption that stops claiming the balance is the sum of the rows
@@ -248,7 +336,16 @@ As built on 2026-09-11.
   method with its change action, and the sentence that card charging is not
   connected. A correction accepts the minus sign its own placeholder asks for.
   A proposed change answers that nothing has moved and links to Approvals,
-  where a row carrying no tenant is decided through the platform route.
+  where a row carrying no tenant is decided through the platform route — and
+  names, on the row itself, the tenant whose account it moves and the signed
+  amount, with a link to that tenant. The queue's lead says the queue carries
+  money decisions rather than only residency and activation paperwork, and
+  every action code and ledger entry type has a label in all three catalogues.
+  Both keys are built by string concatenation and cast, which defeats the
+  keyof-typeof completeness check the written-out keys get, so both call sites
+  fall back to the raw code rather than to the empty string: `I18nService.t`
+  has no per-key English fallback by design, and a blank cell on a decision
+  that removes paid money is the worst of the three outcomes.
 
 ## Rollout and rollback
 
@@ -266,6 +363,10 @@ them. Rolling back leaves the ledger in place and unread.
 - [x] Control-plane wallet and payment screens
 - [x] Reversal of a deposit recorded against the wrong tenant, behind maker-checker
 - [x] The lock proved against PostgreSQL by two racing transactions
+- [x] A deposit names the subscription it cleared; a reversal re-arms that one
+      or refuses, additively and in its own currency
+- [x] A platform approval carries its subject, and every lifecycle fact names
+      the tenant
 
 ## Exit criteria
 

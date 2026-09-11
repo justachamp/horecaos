@@ -115,12 +115,25 @@ public final class ApprovalParameters {
         return skip;
     }
 
+    /**
+     * A hash and the projection of it a checker is shown, taken from one pass
+     * over the same components.
+     *
+     * <p>The two are returned together rather than separately because that is
+     * the whole guarantee: what the approvals console renders is derived from
+     * the components the signature covers, so a maker cannot get one thing
+     * signed and execute another.
+     */
+    public record Signed(String hash, ApprovalSubject subject) {}
+
     /** Accumulates the material and hashes it. */
     public static final class Builder {
 
         private final @Nullable Record command;
         private final Map<String, Object> extra = new LinkedHashMap<>();
         private @Nullable Set<String> excluded;
+        private @Nullable Set<String> withheld;
+        private @Nullable String subjectTenantComponent;
 
         private Builder(@Nullable Record command) {
             this.command = command;
@@ -154,8 +167,93 @@ public final class ApprovalParameters {
             return this;
         }
 
+        /**
+         * Names the covered components a checker must <em>not</em> be shown.
+         *
+         * <p>The mirror image of {@link #excluding(String...)}, one step later:
+         * these stay inside the hash and stay off every console. What belongs
+         * here is prose — the maker's own {@code reason}, which is a sentence a
+         * person typed about a named customer and which ADR 0029 keeps out of
+         * logs, metrics and consoles alike.
+         *
+         * <p>Required before {@link #sign()}, with no arguments when every
+         * covered component may be shown, for the reason
+         * {@link #excluding(String...)} is required before {@link #hash()}:
+         * silence about what is withheld is how prose reaches a screen that was
+         * never allowed to hold it.
+         */
+        public Builder withholding(String... names) {
+            withheld = new LinkedHashSet<>(Arrays.asList(names));
+            return this;
+        }
+
+        /**
+         * Names the covered component holding the tenant whose account this
+         * decision concerns.
+         *
+         * <p>It has to be a component the hash covers: a subject the signature
+         * does not bind is a label, not evidence.
+         */
+        public Builder about(String componentName) {
+            subjectTenantComponent = Objects.requireNonNull(componentName, "A subject component name is required");
+            return this;
+        }
+
         /** The lower-case SHA-256 hex an {@link ApprovalRequestCommand} takes. */
         public String hash() {
+            return walk(null);
+        }
+
+        /**
+         * The hash and what the checker is shown, from one pass over the same
+         * components.
+         *
+         * <p>Requires {@link #excluding(String...)} and
+         * {@link #withholding(String...)} to have been called, and
+         * {@link #about(String)} where the decision concerns one tenant.
+         */
+        public Signed sign() {
+            if (withheld == null) {
+                throw new IllegalStateException("Call withholding(...) before sign(), with no arguments when every "
+                        + "covered component may be shown to the checker. Silence about what is "
+                        + "withheld is how a maker's prose reaches a console ADR 0029 keeps it off.");
+            }
+            Map<String, String> display = new LinkedHashMap<>();
+            String hash = walk(display);
+            for (String name : withheld) {
+                if (!isKnownSegment(name)) {
+                    throw new IllegalArgumentException(
+                            "Nothing named %s is hashed here, so withholding it says nothing; the segments are %s"
+                                    .formatted(name, knownSegments()));
+                }
+            }
+            return new Signed(hash, new ApprovalSubject(subjectTenantId(), display));
+        }
+
+        private @Nullable UUID subjectTenantId() {
+            if (subjectTenantComponent == null) {
+                return null;
+            }
+            Object value = segmentValue(subjectTenantComponent);
+            if (value == null) {
+                return null;
+            }
+            if (!(value instanceof UUID tenantId)) {
+                throw new IllegalArgumentException("The subject component %s is a %s; a subject tenant is a UUID"
+                        .formatted(subjectTenantComponent, value.getClass().getName()));
+            }
+            return tenantId;
+        }
+
+        /**
+         * One pass over the material, appending the hash segments and — when
+         * {@code display} is given — the projection of them a checker is shown.
+         *
+         * <p>One loop on purpose. Two would be two places for a component to be
+         * covered by the hash and absent from the console, or the other way
+         * round, which is the exact failure both halves exist to prevent.
+         */
+        private String walk(@Nullable Map<String, String> display) {
             StringBuilder material = new StringBuilder();
             if (command != null) {
                 if (excluded == null) {
@@ -169,11 +267,65 @@ public final class ApprovalParameters {
                     if (excluded.contains(component.getName())) {
                         continue;
                     }
-                    append(material, component.getName(), read(component, command));
+                    Object value = read(component, command);
+                    append(material, component.getName(), value);
+                    show(display, component.getName(), value);
                 }
             }
-            extra.forEach((name, value) -> append(material, name, value));
+            extra.forEach((name, value) -> {
+                append(material, name, value);
+                show(display, name, value);
+            });
             return digest(material.toString());
+        }
+
+        private void show(@Nullable Map<String, String> display, String name, @Nullable Object value) {
+            if (display == null || withheld == null || withheld.contains(name)) {
+                return;
+            }
+            String rendered = canonical(name, value);
+            if (rendered != null) {
+                display.put(name, rendered);
+            }
+        }
+
+        private boolean isKnownSegment(String name) {
+            return extra.containsKey(name)
+                    || (command != null
+                            && Arrays.stream(recordType(command).getRecordComponents())
+                                    .anyMatch(component -> component.getName().equals(name)));
+        }
+
+        private List<String> knownSegments() {
+            List<String> names = new java.util.ArrayList<>();
+            if (command != null) {
+                Arrays.stream(recordType(command).getRecordComponents())
+                        .map(RecordComponent::getName)
+                        .forEach(names::add);
+            }
+            names.addAll(extra.keySet());
+            return names;
+        }
+
+        private @Nullable Object segmentValue(String name) {
+            if (command != null) {
+                for (RecordComponent component : recordType(command).getRecordComponents()) {
+                    if (component.getName().equals(name)) {
+                        if (excluded != null && excluded.contains(name)) {
+                            throw new IllegalArgumentException(
+                                    "%s is excluded from the hash, so it cannot be what the request is about: "
+                                                    .formatted(name)
+                                            + "a subject the signature does not bind is a label, not evidence");
+                        }
+                        return read(component, command);
+                    }
+                }
+            }
+            if (extra.containsKey(name)) {
+                return extra.get(name);
+            }
+            throw new IllegalArgumentException(
+                    "Nothing named %s is hashed here; the segments are %s".formatted(name, knownSegments()));
         }
 
         private static @Nullable Object read(RecordComponent component, Record command) {

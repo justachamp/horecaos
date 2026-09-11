@@ -5,6 +5,23 @@
 -- (see CLAUDE.md), and this table is built so the database itself refuses to
 -- reopen it: no UPDATE, no DELETE, not even to the application role.
 
+-- The deposit becomes due the moment a subscription with one starts (ADR
+-- 0093/0095, decided 2026-09-11: "credit the first statement"). Paying it is
+-- a DEPOSIT top-up in the wallet, which clears this back to zero; the
+-- statement no longer bills a DEPOSIT line at all.
+ALTER TABLE commercial.subscriptions
+    ADD COLUMN deposit_due_minor bigint NOT NULL DEFAULT 0,
+    ADD CONSTRAINT ck_subscription_deposit_due CHECK (deposit_due_minor >= 0),
+    -- A wallet entry names the subscription whose deposit it paid, and the
+    -- reference is composite so a deposit entry can never point at another
+    -- tenant's subscription. A foreign key needs a unique constraint on
+    -- exactly its own columns, and uq_subscription_live_per_tenant (V0033) is
+    -- a partial index on one of them, which satisfies nothing.
+    ADD CONSTRAINT uq_subscription_tenant_id UNIQUE (tenant_id, id);
+
+COMMENT ON COLUMN commercial.subscriptions.deposit_due_minor IS
+    'ADR 0095. Set to the plan version''s activation deposit when the subscription starts; cleared to zero when the deposit is recorded as a wallet top-up, and added back when an approved DEPOSIT_REVERSAL takes back the deposit that cleared this very subscription. Not a balance -- the wallet ledger is the only source of truth for money moved; this is a due-or-not flag a statement''s draft never reads.';
+
 CREATE TABLE commercial.wallet_entries (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
@@ -25,6 +42,18 @@ CREATE TABLE commercial.wallet_entries (
     grant_id uuid,
     -- A BONUS_GRANT entry's own lapse date. Null on every other type.
     expires_at timestamptz,
+    -- The subscription whose activation deposit a DEPOSIT paid, carried again
+    -- by the DEPOSIT_REVERSAL that takes that deposit back. Null on every
+    -- other type.
+    --
+    -- Without it a reversal had nothing to aim at and re-armed whichever
+    -- subscription was live *now*: a tenant that changed plans between the
+    -- mis-recorded deposit and the approved reversal had the new plan's
+    -- obligation overwritten by the old plan's amount, silently, with no
+    -- statement line and no ledger row that could show it. The obligation and
+    -- the money are one act, so the row that records the money names the
+    -- obligation it cleared.
+    subscription_id uuid,
     -- The bank's reference (a transfer or the deposit), a refund's payout
     -- reference, or a card charge's provider reference. Never a card number
     -- (ADR 0028): only a reference ever reaches this column.
@@ -53,6 +82,8 @@ CREATE TABLE commercial.wallet_entries (
         REFERENCES commercial.statements (tenant_id, id),
     CONSTRAINT fk_wallet_entry_grant FOREIGN KEY (tenant_id, grant_id)
         REFERENCES commercial.wallet_entries (tenant_id, id),
+    CONSTRAINT fk_wallet_entry_subscription FOREIGN KEY (tenant_id, subscription_id)
+        REFERENCES commercial.subscriptions (tenant_id, id),
     CONSTRAINT ck_wallet_entry_money_kind CHECK (money_kind IN ('PAID', 'BONUS')),
     CONSTRAINT ck_wallet_entry_type CHECK (entry_type IN (
         'TOP_UP', 'DEPOSIT', 'BONUS_GRANT', 'BONUS_EXPIRY', 'STATEMENT_PAYMENT',
@@ -81,6 +112,12 @@ CREATE TABLE commercial.wallet_entries (
     ),
     CONSTRAINT ck_wallet_entry_expiry CHECK (
         (entry_type = 'BONUS_GRANT') = (expires_at IS NOT NULL)
+    ),
+    -- A deposit and its reversal name the subscription the obligation belongs
+    -- to; nothing else does. Stated as an equality rather than as "not null
+    -- for a deposit", so a later entry type cannot quietly acquire one.
+    CONSTRAINT ck_wallet_entry_subscription_ref CHECK (
+        (entry_type IN ('DEPOSIT', 'DEPOSIT_REVERSAL')) = (subscription_id IS NOT NULL)
     ),
     -- Money in is a positive entry; a statement payment, an expiry, a refund
     -- and the reversal of a deposit recorded in error always take money away.
@@ -123,6 +160,8 @@ COMMENT ON TABLE commercial.wallet_entries IS
 CREATE INDEX ix_wallet_entry_tenant ON commercial.wallet_entries (tenant_id, created_at);
 CREATE INDEX ix_wallet_entry_statement ON commercial.wallet_entries (statement_id) WHERE statement_id IS NOT NULL;
 CREATE INDEX ix_wallet_entry_grant ON commercial.wallet_entries (grant_id) WHERE grant_id IS NOT NULL;
+CREATE INDEX ix_wallet_entry_subscription ON commercial.wallet_entries (tenant_id, subscription_id)
+    WHERE subscription_id IS NOT NULL;
 -- Money in is recorded once. A bank reference identifies one transfer and a
 -- provider reference one charge, so the same reference arriving twice for a
 -- tenant is a transfer recorded twice -- which credits money that never came
@@ -134,6 +173,18 @@ CREATE INDEX ix_wallet_entry_grant ON commercial.wallet_entries (grant_id) WHERE
 -- reads those as two transfers. Normalising narrows the hole rather than
 -- closing it -- "MT103-7" against "MT1037-A" still passes -- so one recorder
 -- per statement, reconciled against the bank feed, stays the real control.
+--
+-- It trades that narrowing for a rare false refusal in the other direction:
+-- two genuinely different wires whose references differ only in case, spaces,
+-- hyphens or a leading '#' ("MT1037" in September, "MT-1037" in October) are
+-- one key here and the second is refused. That is the cheaper mistake -- a
+-- refusal is visible to the recorder, a double credit is not -- and it is
+-- recoverable without leaving this table: record the second wire under a
+-- reference that tells it apart from the first ("MT-1037 wire 2 of 12 Oct"),
+-- which is still one person's audited TOP_UP carrying the bank's own string
+-- verbatim. WalletService says which of the two happened, and names the
+-- reference already on file, so the recorder is never told to look for a
+-- string that is not there.
 CREATE UNIQUE INDEX ux_wallet_entry_money_in_reference
     ON commercial.wallet_entries (tenant_id, external_reference_normalised)
     WHERE entry_type IN ('TOP_UP', 'DEPOSIT');
@@ -197,17 +248,6 @@ COMMENT ON TABLE commercial.tenant_billing IS
     'ADR 0095. How a tenant is collected: INVOICE waits for a bank transfer, WALLET waits for a top-up, CARD is charged automatically once a merchant account exists. Staff-changeable with a reason; also the lock every wallet mutation takes so the append-only ledger never needs a row lock of its own.';
 
 GRANT SELECT, INSERT, UPDATE ON commercial.tenant_billing TO horecaos_application;
-
--- The deposit becomes due the moment a subscription with one starts (ADR
--- 0093/0095, decided 2026-09-11: "credit the first statement"). Paying it is
--- a DEPOSIT top-up in the wallet, which clears this back to zero; the
--- statement no longer bills a DEPOSIT line at all.
-ALTER TABLE commercial.subscriptions
-    ADD COLUMN deposit_due_minor bigint NOT NULL DEFAULT 0,
-    ADD CONSTRAINT ck_subscription_deposit_due CHECK (deposit_due_minor >= 0);
-
-COMMENT ON COLUMN commercial.subscriptions.deposit_due_minor IS
-    'ADR 0095. Set to the plan version''s activation deposit when the subscription starts; cleared to zero when the deposit is recorded as a wallet top-up, and restored when an approved DEPOSIT_REVERSAL takes a deposit recorded in error back. Not a balance -- the wallet ledger is the only source of truth for money moved; this is a due-or-not flag a statement''s draft never reads.';
 
 -- ADR 0027: four actions that move a tenant's money by hand, each proposed
 -- by one person and approved by a different one. Seeded at platform scope so

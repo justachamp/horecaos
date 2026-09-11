@@ -313,7 +313,12 @@ class OnboardingOutboxIntegrationTests {
 
         @Bean
         ApprovalService approvalService(JdbcClient jdbc, AuditRecorder recorder, Clock clock) {
-            return new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry());
+            return new JdbcApprovalService(
+                    jdbc,
+                    recorder,
+                    clock,
+                    new SimpleMeterRegistry(),
+                    JsonMapper.builder().build());
         }
 
         @Bean

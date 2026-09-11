@@ -111,14 +111,18 @@ class ApprovalDecisionServiceTests {
 
         clock = new MutableClock(Instant.parse("2026-08-20T10:00:00Z"));
         approvals = new JdbcApprovalService(
-                jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
-                clock, new SimpleMeterRegistry());
+                jdbc,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         authorization = new StubAuthorization();
         decisions = new ApprovalDecisionService(
                 jdbc,
                 approvals,
                 authorization,
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                JsonMapper.builder().build(),
                 clock);
 
         insertTenant(TENANT, "tenant-decide-one");

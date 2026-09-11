@@ -13,6 +13,12 @@ import org.jspecify.annotations.Nullable;
  * for {@link #ADJUSTMENT}. A balance is the SUM of a tenant's entries of one
  * kind; none is stored beside them, and no entry is ever changed once
  * written — the database refuses both at the trigger that backs this type.
+ *
+ * <p>{@code subscriptionId} is carried by a {@link #DEPOSIT} and by the
+ * {@link #DEPOSIT_REVERSAL} that takes it back, and by nothing else: an
+ * activation deposit clears one subscription's obligation, and the reversal has
+ * to re-arm that one rather than whichever subscription happens to be live when
+ * it runs.
  */
 public record WalletEntry(
         UUID id,
@@ -23,6 +29,7 @@ public record WalletEntry(
         String currency,
         @Nullable UUID statementId,
         @Nullable UUID grantId,
+        @Nullable UUID subscriptionId,
         @Nullable Instant expiresAt,
         @Nullable String externalReference,
         String reason,

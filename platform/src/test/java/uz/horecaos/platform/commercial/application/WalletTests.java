@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
@@ -38,9 +39,12 @@ import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.StatementLine;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
+import uz.horecaos.platform.commercial.domain.Subscription;
+import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
 import uz.horecaos.platform.commercial.infrastructure.NotConfiguredCardCharger;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
@@ -136,6 +140,7 @@ class WalletTests {
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("""
                 TRUNCATE TABLE commercial.wallet_entries, commercial.tenant_billing,
+                    commercial.card_charge_attempts,
                     commercial.statement_lines, commercial.statements, commercial.subscriptions,
                     commercial.usage_events, commercial.usage_aggregates, commercial.usage_adjustments,
                     commercial.entitlement_overrides, commercial.tenant_modules, commercial.modules,
@@ -167,10 +172,22 @@ class WalletTests {
         JdbcStatementStore statementStore = new JdbcStatementStore(jdbc);
         JdbcWalletStore walletStore = new JdbcWalletStore(jdbc);
 
-        approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry());
+        approvals = new JdbcApprovalService(
+                jdbc,
+                audit,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         meters = new SimpleMeterRegistry();
         wallet = new WalletService(
-                walletStore, subscriptionStore, approvals, new NotConfiguredCardCharger(), audit, meters, clock);
+                walletStore,
+                subscriptionStore,
+                new JdbcCardChargeAttemptStore(jdbc),
+                approvals,
+                new NotConfiguredCardCharger(),
+                audit,
+                meters,
+                clock);
         EntitlementQueryService entitlements = new EntitlementQueryService(
                 subscriptionStore,
                 planStore,
@@ -680,6 +697,74 @@ class WalletTests {
     }
 
     @Test
+    void aPlatformWalletRequestSaysWhoseAccountItMovesAndWhatItProposes() {
+        recordTransfer(50_000_000, "MT103-BIG");
+        WalletChangeOutcome first =
+                inTx(() -> wallet.proposeRefund(PILOT, 50_000_000, "PAYOUT-BIG", MAKER, "the tenant left", "corr"));
+        UUID requestId = Objects.requireNonNull(first.approvalRequestId());
+
+        assertThat(jdbc.sql("SELECT subject_tenant_id FROM audit.approval_requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(UUID.class)
+                        .optional())
+                .as("the row's own tenant_id stays null so the tenant can neither read nor sign it; this is "
+                        + "the only field that says whose fifty million is leaving")
+                .contains(PILOT);
+        assertThat(jdbc.sql("SELECT subject_json::text FROM audit.approval_requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
+                .as("and what is proposed, as the components the parameters hash covers")
+                .contains("\"amountMinor\": \"-50000000\"")
+                .contains("\"currency\": \"UZS\"")
+                .contains("\"payoutReference\": \"PAYOUT-BIG\"")
+                .contains("\"entryType\": \"REFUND\"")
+                .contains("\"moneyKind\": \"PAID\"");
+        assertThat(jdbc.sql("SELECT subject_json::text FROM audit.approval_requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
+                .as("never the maker's prose, which ADR 0029 keeps off every console")
+                .doesNotContain("the tenant left");
+
+        // A second proposal, of a very different size, against the other tenant:
+        // the two rows an approver could not tell apart before this.
+        recordTransfer(RIVAL, 5_000_000, "MT103-SMALL");
+        WalletChangeOutcome other =
+                inTx(() -> wallet.proposeRefund(RIVAL, 5_000_000, "PAYOUT-SMALL", MAKER, "the tenant left", "corr"));
+        UUID otherId = Objects.requireNonNull(other.approvalRequestId());
+
+        assertThat(subjectOf(otherId))
+                .as("whose money, and how much, on each row rather than on neither")
+                .containsEntry("tenantId", RIVAL.toString())
+                .containsEntry("amountMinor", "-5000000");
+        assertThat(subjectOf(requestId)).containsEntry("tenantId", PILOT.toString());
+    }
+
+    @Test
+    void everyApprovalLifecycleFactNamesTheTenantWhoseAccountItConcerns() {
+        recordTransfer(100_000, "MT103-LIFE");
+        WalletChangeOutcome first =
+                inTx(() -> wallet.proposeRefund(PILOT, 100_000, "PAYOUT-LIFE", MAKER, "the tenant left", "corr"));
+        UUID requestId = Objects.requireNonNull(first.approvalRequestId());
+        inTxDo(() -> approvals.decide(requestId, ApprovalService.Decision.APPROVE, CHECKER, "checked"));
+        inTx(() -> wallet.proposeRefund(PILOT, 100_000, "PAYOUT-LIFE", MAKER, "the tenant left", "corr"));
+
+        assertThat(lifecycleFactsNaming(PILOT))
+                .as("the facts are filed at PLATFORM scope, so audit_events.tenant_id is null on every one "
+                        + "of them; a proposal that is declined, lapses, or is refused for a missing "
+                        + "capability writes no wallet entry either, and was attributable to no tenant at all")
+                .containsExactlyInAnyOrder("approval.requested", "approval.approve", "approval.consumed");
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM audit.audit_events
+                         WHERE action_code LIKE 'approval.%' AND tenant_id IS NOT NULL
+                        """).query(Long.class).single())
+                .as("and the routing is unchanged: none of them acquired a tenant_id, which would put the "
+                        + "request back in the tenant's own worklist")
+                .isZero();
+    }
+
+    @Test
     void aRefundCannotTakeThePaidBalanceBelowZero() {
         recordTransfer(100_000, "MT103-4");
 
@@ -834,20 +919,19 @@ class WalletTests {
         assertThat(depositDue(subscriptionId))
                 .as("the deposit becomes due the moment the subscription starts")
                 .isEqualTo(500_000);
-        assertThat(wallet.activationDepositDueMinor(PILOT))
-                .as("and is readable before anyone tries to record it -- a statement no longer names it, "
-                        + "so a refusal on the record-deposit endpoint used to be the only way to find out")
-                .isEqualTo(500_000);
 
         inTx(() -> wallet.recordDeposit(PILOT, "MT103-DEP", MAKER, "the activation deposit", "corr"));
 
         assertThat(depositDue(subscriptionId)).isZero();
-        assertThat(wallet.activationDepositDueMinor(PILOT)).isZero();
         assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(500_000);
         assertThat(wallet.ledger(PILOT, null, 10)).singleElement().satisfies(entry -> {
             assertThat(entry.entryType()).isEqualTo(WalletEntry.DEPOSIT);
             assertThat(entry.moneyKind()).isEqualTo(WalletEntry.PAID);
             assertThat(entry.externalReference()).isEqualTo("MT103-DEP");
+            assertThat(entry.subscriptionId())
+                    .as("the row that clears an obligation names the obligation it cleared, so the "
+                            + "reversal has something to aim at other than whatever is live later")
+                    .isEqualTo(subscriptionId);
         });
         assertThatThrownBy(() -> inTx(() -> wallet.recordDeposit(PILOT, "MT103-DEP", MAKER, "again", "corr")))
                 .isInstanceOf(ApiException.class)
@@ -936,6 +1020,176 @@ class WalletTests {
     }
 
     @Test
+    void aReversalReArmsTheSubscriptionTheDepositClearedAndRefusesWhenThatOneIsGone() {
+        clock.set(START);
+        UUID planA = activePlan("BASIC", "UZS", new PlanTerms(null, 500_000, Map.of()), MONTHLY);
+        UUID first = inTx(() -> subscriptions.start(PILOT, planA, null, MAKER, "the pilot", "corr"));
+        UUID misposted = inTx(() -> wallet.recordDeposit(PILOT, "MT103-RIVALS", MAKER, "the deposit", "corr"));
+        assertThat(depositDue(first)).isZero();
+
+        // The tenant changes plans. SubscriptionStatus.allowedNext documents this
+        // as the way back from TERMINATED: a new subscription, with its own, much
+        // larger activation deposit.
+        terminate(PILOT);
+        UUID planB = activePlan("LARGE", "UZS", new PlanTerms(null, 5_000_000, Map.of()), MONTHLY);
+        UUID second = inTx(() -> subscriptions.start(PILOT, planB, null, MAKER, "the bigger plan", "corr"));
+        assertThat(depositDue(second)).isEqualTo(5_000_000);
+        long entries = ledgerSize();
+
+        assertThatThrownBy(() -> applyChange(() ->
+                        wallet.proposeDepositReversal(PILOT, misposted, MAKER, "recorded for the wrong tenant", "c")))
+                .as("re-arming whichever subscription is live now would write plan A's 500 000 over plan B's "
+                        + "5 000 000 -- and nothing would show it, because no statement carries a deposit "
+                        + "line and the ledger records money rather than obligations")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("is TERMINATED, so there is no obligation left to re-arm");
+
+        assertThat(depositDue(second))
+                .as("plan B's own obligation stands untouched, in full")
+                .isEqualTo(5_000_000);
+        assertThat(depositDue(first)).isZero();
+        assertThat(ledgerSize()).as("and a refused reversal writes nothing").isEqualTo(entries);
+        assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(500_000).isEqualTo(ledgerSum(WalletEntry.PAID));
+    }
+
+    @Test
+    void aReversalNeverMakesASecondDepositCollectableOnASubscriptionThatPaidItsOwn() {
+        clock.set(START);
+        UUID planA = activePlan("BASIC", "UZS", new PlanTerms(null, 500_000, Map.of()), MONTHLY);
+        UUID first = inTx(() -> subscriptions.start(PILOT, planA, null, MAKER, "the pilot", "corr"));
+        UUID paid = inTx(() -> wallet.recordDeposit(PILOT, "MT103-FIRST", MAKER, "the deposit", "corr"));
+
+        terminate(PILOT);
+        UUID planB = activePlan("LARGE", "UZS", new PlanTerms(null, 5_000_000, Map.of()), MONTHLY);
+        UUID second = inTx(() -> subscriptions.start(PILOT, planB, null, MAKER, "the bigger plan", "corr"));
+        recordTransfer(PILOT, 5_000_000, "MT103-FUNDS");
+        inTx(() -> wallet.recordDeposit(PILOT, "MT103-SECOND", MAKER, "the new deposit", "corr"));
+        assertThat(depositDue(second))
+                .as("plan B's own deposit is genuinely paid")
+                .isZero();
+
+        // The bank recalls the first wire: a legitimate reversal of a deposit
+        // that really was paid, against a subscription that has since ended.
+        assertThatThrownBy(() ->
+                        applyChange(() -> wallet.proposeDepositReversal(PILOT, paid, MAKER, "the bank recalled", "c")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("no obligation left to re-arm");
+
+        assertThat(depositDue(second))
+                .as("a tenant that has already paid plan B's deposit must not be asked for it a second time")
+                .isZero();
+        assertThat(depositDue(first)).isZero();
+        assertThatThrownBy(() -> inTx(() -> wallet.recordDeposit(PILOT, "MT103-THIRD", MAKER, "again?", "corr")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("no activation deposit due");
+    }
+
+    @Test
+    void aDepositThatHasAlreadyPaidAStatementIsNotReversibleUntilTheStatementIsVoided() {
+        clock.set(START);
+        UUID versionId = activePlan("BASIC", "UZS", new PlanTerms(null, 500_000, Map.of()), MONTHLY);
+        UUID subscriptionId = inTx(() -> subscriptions.start(PILOT, versionId, null, MAKER, "the pilot", "corr"));
+        UUID deposit = inTx(() -> wallet.recordDeposit(PILOT, "MT103-DEP", MAKER, "the deposit", "corr"));
+
+        clock.set(CLOSE);
+        UUID september = inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"))
+                .statementId();
+        assertThat(wallet.balances(PILOT).paidMinor())
+                .as("the deposit paid the statement, so there is nothing left to take back")
+                .isZero();
+        long entries = ledgerSize();
+
+        WalletChangeOutcome proposed =
+                inTx(() -> wallet.proposeDepositReversal(PILOT, deposit, MAKER, "misposted", "corr"));
+        UUID requestId = Objects.requireNonNull(proposed.approvalRequestId());
+        inTxDo(() -> approvals.decide(requestId, ApprovalService.Decision.APPROVE, CHECKER, "checked"));
+
+        assertThatThrownBy(() -> inTx(() -> wallet.proposeDepositReversal(PILOT, deposit, MAKER, "misposted", "corr")))
+                .as("without this guard the ledger commits a paid balance of -500 000 that no UPDATE and no "
+                        + "DELETE can mend, and the refund guard compares against a negative balance forever")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("a reversal cannot take it below zero")
+                .hasMessageContaining("Void the statements it paid first");
+
+        assertThat(ledgerSize()).as("a refused reversal writes nothing").isEqualTo(entries);
+        assertThat(wallet.balances(PILOT).paidMinor()).isZero().isEqualTo(ledgerSum(WalletEntry.PAID));
+        assertThat(depositDue(subscriptionId))
+                .as("and the obligation is not re-armed on a deposit still spent")
+                .isZero();
+        assertThat(requestStatus(requestId))
+                .as("refused before the signature is spent, so the remedy below needs no second one")
+                .isEqualTo("APPROVED");
+
+        inTxDo(() -> statements.voidStatement(PILOT, september, MAKER, "the plan was wrong", "corr"));
+        assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(500_000);
+
+        inTx(() -> wallet.proposeDepositReversal(PILOT, deposit, MAKER, "misposted", "corr"));
+
+        assertThat(wallet.balances(PILOT).paidMinor()).isZero().isEqualTo(ledgerSum(WalletEntry.PAID));
+        assertThat(depositDue(subscriptionId))
+                .as("and the remedy the refusal names actually works")
+                .isEqualTo(500_000);
+    }
+
+    @Test
+    void aSecondGenuineWireWhoseReferenceNormalisesOntoTheFirstIsRefusedByName() {
+        recordTransfer(1_000_000, "MT1037");
+
+        assertThatThrownBy(() -> recordTransfer(1_200_000, "MT-1037"))
+                .as("the recorder is not told to look for a string that is not in the ledger: they typed "
+                        + "MT-1037, what is on file is MT1037, and the refusal has to say so or the money "
+                        + "the tenant really paid goes uncredited into arrears")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("A different reference, \"MT1037\", is already recorded")
+                .hasMessageContaining("record it under a reference that tells it apart");
+
+        recordTransfer(1_200_000, "MT-1037 wire 2 of 12 Oct");
+
+        assertThat(wallet.balances(PILOT).paidMinor())
+                .as("and the recovery the refusal names needs no adjustment and no second signature")
+                .isEqualTo(2_200_000)
+                .isEqualTo(ledgerSum(WalletEntry.PAID));
+        assertThat(wallet.ledger(PILOT, null, 10))
+                .extracting(WalletEntry::externalReference)
+                .as("both wires keep verbatim what the recorder typed")
+                .containsExactlyInAnyOrder("MT1037", "MT-1037 wire 2 of 12 Oct");
+    }
+
+    @Test
+    void theLedgerRefusesARowNamingOnePersonAsBothRecorderAndApprover() {
+        assertThatThrownBy(() -> jdbc.sql("""
+                                INSERT INTO commercial.wallet_entries (
+                                    id, tenant_id, money_kind, entry_type, amount_minor, currency,
+                                    reason, recorded_by, approved_by, approval_request_id)
+                                VALUES (:id, :tenant, 'PAID', 'ADJUSTMENT', 50000, 'UZS',
+                                    'a correction nobody else signed', 'finance-1', 'finance-1', :request)
+                                """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenant", PILOT)
+                        .param("request", UUID.randomUUID())
+                        .update())
+                .as("the constraint is the second stop; the service writing the request's own requestedBy "
+                        + "rather than the acting subject is the first, and neither depends on the other")
+                .hasMessageContaining("ck_wallet_entry_four_eyes");
+
+        jdbc.sql("""
+                        INSERT INTO commercial.wallet_entries (
+                            id, tenant_id, money_kind, entry_type, amount_minor, currency,
+                            reason, recorded_by, approved_by, approval_request_id)
+                        VALUES (:id, :tenant, 'PAID', 'ADJUSTMENT', 50000, 'UZS',
+                            'a correction a second person signed', 'finance-1', 'finance-2', :request)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", PILOT)
+                .param("request", UUID.randomUUID())
+                .update();
+
+        assertThat(ledgerSize())
+                .as("the refusal is about the two names being the same, not about the row being malformed")
+                .isEqualTo(1);
+    }
+
+    @Test
     void aPlainCorrectionOfAMispostedDepositIsNotTheRemedy() {
         clock.set(START);
         UUID versionId = activePlan("BASIC", "UZS", new PlanTerms(null, 500_000, Map.of()), MONTHLY);
@@ -980,7 +1234,11 @@ class WalletTests {
                     .isEqualTo(MONTHLY - 200_000);
             assertThat(charge.cardTokenReference()).isEqualTo("vault:pilot-card");
             assertThat(charge.currency()).isEqualTo("UZS");
-            assertThat(charge.idempotencyKey()).isEqualTo(september.toString());
+            assertThat(charge.idempotencyKey())
+                    .as("one attempt, one key: the row commercial.card_charge_attempts wrote before the "
+                            + "provider was called, never the statement id -- a statement is charged at "
+                            + "different amounts across settlement passes")
+                    .isEqualTo(chargeAttemptFor(september));
         });
         assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
         assertThat(statementPayment("2026-09").dueMinor()).isZero();
@@ -998,6 +1256,57 @@ class WalletTests {
                         .as("the provider's own reference is what proves the charge happened")
                         .isEqualTo("CLICK-42"));
         assertThat(auditedActions()).contains("commercial.wallet.card_charged");
+        assertThat(meters.get("commercial.wallet.card_charge")
+                        .tag("outcome", "succeeded")
+                        .counter()
+                        .count())
+                .as("the denominator of the rate an outage alert divides by: without the success arm one "
+                        + "decline reads as 100% failure and a working provider is invisible")
+                .isEqualTo(1.0);
+        assertThat(meters.find("commercial.wallet.card_charge")
+                        .tag("outcome", "failed")
+                        .counter())
+                .as("and the success path does not double-count into another arm")
+                .isNull();
+    }
+
+    @Test
+    void aSecondChargeForADifferentRemainderCarriesADifferentIdempotencyKey() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:pilot-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        RecordingCharger declining = new RecordingCharger(new CardCharger.Outcome.Failed("DECLINED"));
+        inTx(() -> walletChargingWith(declining).applyAvailableFunds(PILOT));
+        assertThat(declining.charges)
+                .singleElement()
+                .satisfies(charge -> assertThat(charge.amountMinor()).isEqualTo(MONTHLY));
+
+        // A transfer arrives, so the next pass owes less -- and used to hand the
+        // provider a smaller amount under the statement id it had already
+        // declined 1 200 000 under.
+        recordTransfer(400_000, "MT103-PART");
+        RecordingCharger succeeding = new RecordingCharger(new CardCharger.Outcome.Succeeded("CLICK-77"));
+        inTx(() -> walletChargingWith(succeeding).applyAvailableFunds(PILOT));
+
+        assertThat(succeeding.charges).singleElement().satisfies(charge -> {
+            assertThat(charge.amountMinor())
+                    .as("the remainder after the transfer, not the whole statement")
+                    .isEqualTo(MONTHLY - 400_000);
+            assertThat(charge.idempotencyKey())
+                    .as("a provider honouring keys would either replay the decline forever or replay a "
+                            + "success for an amount nobody charged; a key that identifies the attempt "
+                            + "cannot do either")
+                    .isNotEqualTo(declining.charges.getFirst().idempotencyKey());
+        });
+        assertThat(jdbc.sql("""
+                        SELECT outcome || ':' || amount_minor FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :id ORDER BY attempted_at, amount_minor DESC
+                        """).param("id", PILOT).query(String.class).list())
+                .as("and each attempt is on the record with what it asked for and what came back")
+                .contains("FAILED:" + MONTHLY, "SUCCEEDED:" + (MONTHLY - 400_000));
     }
 
     @Test
@@ -1105,6 +1414,7 @@ class WalletTests {
         return new WalletService(
                 new JdbcWalletStore(jdbc),
                 new JdbcSubscriptionStore(jdbc),
+                new JdbcCardChargeAttemptStore(jdbc),
                 approvals,
                 charger,
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
@@ -1117,6 +1427,7 @@ class WalletTests {
         return new WalletService(
                 new JdbcWalletStore(jdbc),
                 new JdbcSubscriptionStore(jdbc),
+                new JdbcCardChargeAttemptStore(jdbc),
                 approvals,
                 new NotConfiguredCardCharger(),
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
@@ -1352,9 +1663,62 @@ class WalletTests {
                         """).query(String.class).list();
     }
 
+    /** What the checker's console is shown about one request, as stored beside it. */
+    private Map<String, String> subjectOf(UUID requestId) {
+        String json = jdbc.sql("SELECT subject_json::text FROM audit.approval_requests WHERE id = :id")
+                .param("id", requestId)
+                .query(String.class)
+                .single();
+        return JsonMapper.builder().build().readValue(json, new TypeReference<Map<String, String>>() {});
+    }
+
+    /** Every approval lifecycle fact whose change document names this tenant as the subject. */
+    private List<String> lifecycleFactsNaming(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT action_code FROM audit.audit_events
+                         WHERE action_code LIKE 'approval.%'
+                           AND change_document->>'subjectTenantId' = :tenantId
+                        """)
+                .param("tenantId", tenantId.toString())
+                .query(String.class)
+                .list();
+    }
+
     private String requestStatus(UUID requestId) {
         return jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
                 .param("id", requestId)
+                .query(String.class)
+                .single();
+    }
+
+    /** Ends the tenant's live subscription, the way a plan change does (SubscriptionStatus.allowedNext). */
+    private void terminate(UUID tenantId) {
+        Subscription live =
+                subscriptions.live(tenantId).orElseThrow(() -> new AssertionError("No live subscription to terminate"));
+        inTxDo(() -> subscriptions.transition(
+                tenantId,
+                SubscriptionStatus.TERMINATED,
+                live.version(),
+                null,
+                null,
+                MAKER,
+                "the tenant moved to another plan",
+                "corr"));
+    }
+
+    /**
+     * The successful attempt recorded for a statement, whose id is the key the
+     * provider was handed. There may be earlier ones: the fixture wallet's own
+     * NotConfigured charger asks once at issue time, which is itself an attempt
+     * and is recorded as one.
+     */
+    private String chargeAttemptFor(UUID statementId) {
+        return jdbc.sql("""
+                        SELECT id::text FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :tenant AND statement_id = :statement AND outcome = 'SUCCEEDED'
+                        """)
+                .param("tenant", PILOT)
+                .param("statement", statementId)
                 .query(String.class)
                 .single();
     }

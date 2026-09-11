@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -99,8 +100,16 @@ public class ApprovalRequestController {
         return pendingResponse(tenantId, actionCode, limit);
     }
 
-    /** The actions HorecaOS staff decide across tenants (ADR 0090, ADR 0095). */
-    static final List<String> PLATFORM_ACTIONS = List.of(
+    /**
+     * The actions HorecaOS staff decide across tenants (ADR 0090, ADR 0095).
+     *
+     * <p>Public so a test can assert it covers every {@code PLATFORM}-scope
+     * policy the migrations seed. It is the only filter
+     * {@link ApprovalDecisionService#pendingAcrossTenants} applies, and a code
+     * missing from it is a request nobody can find in any queue — the tenant
+     * worklist is keyed on a tenant such a row does not carry.
+     */
+    public static final List<String> PLATFORM_ACTIONS = List.of(
             ApprovalAction.TENANT_COUNTRY_CHANGE.code(),
             ApprovalAction.TENANT_ACTIVATE.code(),
             ApprovalAction.WALLET_ADJUSTMENT.code(),
@@ -113,10 +122,14 @@ public class ApprovalRequestController {
     @Operation(
             summary = "Platform decisions waiting for a second signature, in every tenant",
             description = "A change of a tenant's country, a tenant's activation and the wallet changes "
-                    + "HorecaOS proposes against a tenant's account, oldest first. A row carrying a tenant "
-                    + "is decided through that tenant's own decision route; a PLATFORM-scope row carries no "
-                    + "tenant and is decided through the platform route beside this one. The maker's reason "
-                    + "is not returned, for the same reason as the tenant queue.")
+                    + "HorecaOS proposes against a tenant's account — a correction, a bonus grant, a refund "
+                    + "of paid money or the reversal of a deposit recorded in error — oldest first. A row "
+                    + "carrying a tenant is decided through that tenant's own decision route; a "
+                    + "PLATFORM-scope row carries no tenant and is decided through the platform route beside "
+                    + "this one. Such a row still names whose account it moves and what it proposes, in "
+                    + "subjectTenantId, subjectTenantName and subject, taken from the same command the "
+                    + "parameters hash covers. The maker's reason is not returned, for the same reason as "
+                    + "the tenant queue.")
     List<PlatformPendingApprovalResponse> platformPending(@RequestParam(required = false) Integer limit) {
         return decisions.pendingAcrossTenants(PLATFORM_ACTIONS, Page.limitOrDefault(limit), subject()).stream()
                 .map(waiting -> new PlatformPendingApprovalResponse(
@@ -239,9 +252,26 @@ public class ApprovalRequestController {
     /**
      * One request waiting for a second signature, as returned to a console.
      *
-     * @param mayDecide whether the caller could decide this row. False for the
-     *                  caller's own requests however senior they are, so a console
-     *                  can grey the button rather than offer one that answers 403
+     * @param mayDecide          whether the caller could decide this row. False for
+     *                           the caller's own requests however senior they are, so
+     *                           a console can grey the button rather than offer one
+     *                           that answers 403
+     * @param subjectTenantId    whose account a decision HorecaOS raised concerns,
+     *                           or null where the row's own tenant already says so.
+     *                           A {@code PLATFORM}-scope row deliberately carries no
+     *                           {@code tenant_id} — that is what keeps it out of the
+     *                           tenant's worklist — so this is the only field on it
+     *                           that identifies the account, and a queue without it
+     *                           showed two refunds of very different sizes as two
+     *                           rows differing only in a timestamp
+     * @param subjectTenantName  that tenant's display name, resolved as the row is
+     *                           read
+     * @param subject            what is proposed, in the canonical form the
+     *                           parameters hash covers — entry type, money kind,
+     *                           signed amount in minor units, currency, and the
+     *                           grant or reference where one applies. Empty where
+     *                           the action records none. Never the maker's prose,
+     *                           which stays withheld under ADR 0029
      */
     public record PendingApprovalResponse(
             UUID id,
@@ -255,7 +285,10 @@ public class ApprovalRequestController {
             String requestedBy,
             java.time.Instant requestedAt,
             java.time.Instant expiresAt,
-            boolean mayDecide) {
+            boolean mayDecide,
+            @Nullable UUID subjectTenantId,
+            @Nullable String subjectTenantName,
+            Map<String, String> subject) {
 
         static PendingApprovalResponse of(PendingApproval view) {
             return new PendingApprovalResponse(
@@ -270,7 +303,10 @@ public class ApprovalRequestController {
                     view.requestedBy(),
                     view.requestedAt(),
                     view.expiresAt(),
-                    view.mayDecide());
+                    view.mayDecide(),
+                    view.subjectTenantId(),
+                    view.subjectTenantName(),
+                    view.subject());
         }
     }
 

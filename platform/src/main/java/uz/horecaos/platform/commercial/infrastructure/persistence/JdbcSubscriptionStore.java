@@ -122,9 +122,9 @@ public class JdbcSubscriptionStore {
     }
 
     /**
-     * Makes the activation deposit due again, after an approved
-     * {@code DEPOSIT_REVERSAL} took back a deposit recorded against the wrong
-     * tenant (ADR 0095, item 6).
+     * Makes the activation deposit due again on the subscription the reversed
+     * deposit cleared, after an approved {@code DEPOSIT_REVERSAL} took it back
+     * (ADR 0095, item 6).
      *
      * <p>Without this, {@link #clearDepositDue} is a one-way flag: the ledger
      * can be put right, because a reversal is an entry like any other, but the
@@ -132,16 +132,79 @@ public class JdbcSubscriptionStore {
      * nothing is due any more and the statement stopped billing a deposit line.
      * The amount restored is the amount the reversal took back, which is the
      * amount the mis-record cleared.
+     *
+     * <p><strong>An addition, not an assignment.</strong> It was an assignment,
+     * against whichever subscription was live at the moment the reversal ran,
+     * and the two mistakes compounded: a tenant that started a second
+     * subscription between the mis-recorded deposit and the approved reversal
+     * had the new plan's obligation <em>replaced</em> by the old plan's amount —
+     * four and a half million of a real obligation erased with nothing on any
+     * statement or in any ledger to show it. The caller now names the
+     * subscription the deposit cleared and refuses when it is no longer live, so
+     * the row this touches is already at zero and the addition changes nothing
+     * in the happy path. It is here so a future mis-targeting can only ever be
+     * additive, with {@code ck_subscription_deposit_due >= 0} as the floor.
+     *
+     * @return whether the row named was there to update — false means the
+     *         caller aimed at a subscription that is not this tenant's, which
+     *         has to be loud rather than a silent no-op
      */
-    public void restoreDepositDue(UUID tenantId, UUID subscriptionId, long depositDueMinor) {
-        jdbc.sql("""
-                        UPDATE commercial.subscriptions SET deposit_due_minor = :depositDueMinor
+    public boolean restoreDepositDue(UUID tenantId, UUID subscriptionId, long depositDueMinor) {
+        return jdbc.sql("""
+                        UPDATE commercial.subscriptions
+                           SET deposit_due_minor = deposit_due_minor + :depositDueMinor
+                         WHERE tenant_id = :tenantId AND id = :id
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("id", subscriptionId)
+                        .param("depositDueMinor", depositDueMinor)
+                        .update()
+                == 1;
+    }
+
+    /** One of the tenant's subscriptions by id, live or terminal; empty when the id is not this tenant's. */
+    public Optional<Subscription> findById(UUID tenantId, UUID subscriptionId) {
+        return jdbc.sql(SELECT + """
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", subscriptionId)
+                .query(JdbcSubscriptionStore::map)
+                .optional();
+    }
+
+    /**
+     * The currency one named subscription's plan version is priced in, which is
+     * the currency its activation deposit is named in.
+     *
+     * <p>{@link #livePlanCurrency} answers the same question for whichever
+     * subscription is live; a reversal has to ask it of the subscription the
+     * deposit actually cleared, which need not be the same row.
+     */
+    public Optional<String> planCurrencyOf(UUID tenantId, UUID subscriptionId) {
+        return jdbc.sql("""
+                        SELECT v.currency
+                          FROM commercial.subscriptions s
+                          JOIN commercial.plan_versions v ON v.id = s.plan_version_id
+                         WHERE s.tenant_id = :tenantId AND s.id = :id
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", subscriptionId)
+                .query(String.class)
+                .optional();
+    }
+
+    /** What one named subscription still owes as its activation deposit. */
+    public long depositDueOf(UUID tenantId, UUID subscriptionId) {
+        return jdbc.sql("""
+                        SELECT deposit_due_minor FROM commercial.subscriptions
                          WHERE tenant_id = :tenantId AND id = :id
                         """)
                 .param("tenantId", tenantId)
                 .param("id", subscriptionId)
-                .param("depositDueMinor", depositDueMinor)
-                .update();
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
     }
 
     public Optional<Subscription> findLive(UUID tenantId) {

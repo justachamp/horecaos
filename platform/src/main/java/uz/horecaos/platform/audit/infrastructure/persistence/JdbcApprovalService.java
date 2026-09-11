@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalAction.MissingPolicyMode;
@@ -28,6 +30,7 @@ import uz.horecaos.platform.audit.api.ApprovalGrant;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
+import uz.horecaos.platform.audit.api.ApprovalSubject;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -84,6 +87,7 @@ public class JdbcApprovalService implements ApprovalService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final MeterRegistry meters;
+    private final ObjectMapper objectMapper;
 
     /**
      * Tenant, action code and scope combinations already reported unresolved in
@@ -99,11 +103,13 @@ public class JdbcApprovalService implements ApprovalService {
      */
     private final Set<String> alreadyWarned = ConcurrentHashMap.newKeySet();
 
-    public JdbcApprovalService(JdbcClient jdbc, AuditRecorder audit, Clock clock, MeterRegistry meters) {
+    public JdbcApprovalService(
+            JdbcClient jdbc, AuditRecorder audit, Clock clock, MeterRegistry meters, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.clock = clock;
         this.meters = meters;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -120,7 +126,7 @@ public class JdbcApprovalService implements ApprovalService {
                 throw new ApiException(
                         ErrorCode.APPROVAL_POLICY_REQUIRED,
                         "A configured approval policy is required for " + command.actionCode(),
-                        java.util.Map.of(
+                        Map.of(
                                 "actionCode", command.actionCode(),
                                 "scope", command.scope().type().name()));
             }
@@ -179,7 +185,7 @@ public class JdbcApprovalService implements ApprovalService {
     public void decide(UUID requestId, Decision decision, ActorRef approver, String reason) {
         RequestRow request = jdbc.sql("""
                 SELECT id, status, requested_by, decided_by, decision_reason, tenant_id,
-                       scope_type, scope_id, action_code, expires_at, version
+                       scope_type, scope_id, action_code, expires_at, version, subject_tenant_id
                   FROM audit.approval_requests WHERE id = :id
                 """)
                 .param("id", requestId)
@@ -220,6 +226,7 @@ public class JdbcApprovalService implements ApprovalService {
                 .at(scopeOf(request))
                 .target("ApprovalRequest", requestId)
                 .because(reason)
+                .changed(subjectDocument(request.subjectTenantId()))
                 .underApproval(requestId)
                 .correlatedBy(requestId.toString())
                 .occurredAt(clock.instant())
@@ -305,16 +312,20 @@ public class JdbcApprovalService implements ApprovalService {
                 INSERT INTO audit.approval_requests (
                     id, tenant_id, action_code, parameters_hash, scope_type, scope_id,
                     policy_id, policy_is_platform, policy_version, threshold_description,
-                    status, requested_by, requested_at, reason, expires_at)
+                    status, requested_by, requested_at, reason, expires_at,
+                    subject_tenant_id, subject_json)
                 VALUES (
                     :id, :tenantId, :actionCode, :hash, :scopeType, :scopeId,
                     :policyId, :policyIsPlatform, :policyVersion, :threshold,
-                    'PENDING', :requestedBy, :now, :reason, :expiresAt)
+                    'PENDING', :requestedBy, :now, :reason, :expiresAt,
+                    :subjectTenantId, CAST(:subjectJson AS jsonb))
                 ON CONFLICT (tenant_id, action_code, parameters_hash)
                     WHERE status = 'PENDING'
                     DO NOTHING
                 """)
                 .param("id", requestId)
+                .param("subjectTenantId", subjectTenantId(command))
+                .param("subjectJson", subjectJson(command))
                 .param("tenantId", command.scope().tenantId())
                 .param("actionCode", command.actionCode())
                 .param("hash", command.parametersHash())
@@ -352,12 +363,42 @@ public class JdbcApprovalService implements ApprovalService {
                 .at(command.scope())
                 .target("ApprovalRequest", requestId)
                 .because(command.reason())
+                .changed(subjectDocument(subjectTenantId(command)))
                 .underApproval(requestId)
                 .correlatedBy(requestId.toString())
                 .occurredAt(now)
                 .build());
 
         return new ApprovalOutcome.Pending(requestId);
+    }
+
+    private static @Nullable UUID subjectTenantId(ApprovalRequestCommand command) {
+        return command.subject() == null ? null : command.subject().tenantId();
+    }
+
+    private @Nullable String subjectJson(ApprovalRequestCommand command) {
+        ApprovalSubject subject = command.subject();
+        if (subject == null || subject.detail().isEmpty()) {
+            return null;
+        }
+        return objectMapper.writeValueAsString(subject.detail());
+    }
+
+    /**
+     * The one thing a lifecycle fact cannot otherwise say: whose account the
+     * decision was about.
+     *
+     * <p>{@code .at(scope)} stays the request's own scope, because that is what
+     * routes the decision and what the approver's capability is judged at, and a
+     * {@code PLATFORM} scope has no tenant in it. So the fact's {@code tenant_id}
+     * is null and a search of that tenant's activity used to return nothing for a
+     * proposal that was declined, lapsed, or refused for a missing capability —
+     * exactly the proposals that leave no wallet entry behind to be found by.
+     * Naming the tenant in the change document is what ADR 0027's model allows
+     * here: it is a structured identifier, never the maker's prose.
+     */
+    private static Map<String, Object> subjectDocument(@Nullable UUID subjectTenantId) {
+        return subjectTenantId == null ? Map.of() : Map.of("subjectTenantId", subjectTenantId.toString());
     }
 
     /**
@@ -527,6 +568,7 @@ public class JdbcApprovalService implements ApprovalService {
                 // decision; what this fact adds is that the signature was spent,
                 // so it says that and nothing about a customer.
                 .because("The approved action was executed under this approval")
+                .changed(subjectDocument(request.subjectTenantId()))
                 .underApproval(request.id())
                 .correlatedBy(request.id().toString())
                 .occurredAt(now)
@@ -566,7 +608,7 @@ public class JdbcApprovalService implements ApprovalService {
     private Optional<RequestRow> findRequest(ApprovalRequestCommand command, Instant now) {
         return jdbc.sql("""
                 SELECT id, status, requested_by, decided_by, decision_reason, tenant_id,
-                       scope_type, scope_id, action_code, expires_at, version
+                       scope_type, scope_id, action_code, expires_at, version, subject_tenant_id
                   FROM audit.approval_requests
                  WHERE action_code = :actionCode
                    AND parameters_hash = :hash
@@ -605,7 +647,8 @@ public class JdbcApprovalService implements ApprovalService {
                 resultSet.getObject("scope_id", UUID.class),
                 resultSet.getString("action_code"),
                 resultSet.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                resultSet.getLong("version"));
+                resultSet.getLong("version"),
+                resultSet.getObject("subject_tenant_id", UUID.class));
     }
 
     /**
@@ -632,5 +675,6 @@ public class JdbcApprovalService implements ApprovalService {
             UUID scopeId,
             String actionCode,
             Instant expiresAt,
-            long version) {}
+            long version,
+            @Nullable UUID subjectTenantId) {}
 }

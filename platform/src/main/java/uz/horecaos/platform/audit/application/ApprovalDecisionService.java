@@ -13,6 +13,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -82,10 +84,13 @@ public class ApprovalDecisionService {
 
     private static final String PENDING = "PENDING";
 
+    private static final TypeReference<Map<String, String>> SUBJECT_DETAIL = new TypeReference<>() {};
+
     private final JdbcClient jdbc;
     private final ApprovalService approvals;
     private final AuthorizationService authorization;
     private final AuditRecorder audit;
+    private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public ApprovalDecisionService(
@@ -93,11 +98,13 @@ public class ApprovalDecisionService {
             ApprovalService approvals,
             AuthorizationService authorization,
             AuditRecorder audit,
+            ObjectMapper objectMapper,
             Clock clock) {
         this.jdbc = jdbc;
         this.approvals = approvals;
         this.authorization = authorization;
         this.audit = audit;
+        this.objectMapper = objectMapper;
         this.clock = clock;
     }
 
@@ -125,9 +132,12 @@ public class ApprovalDecisionService {
                 SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
                        r.scope_type, r.scope_id, r.threshold_description,
                        r.policy_version, r.requested_by, r.requested_at, r.expires_at,
+                       r.subject_tenant_id, r.subject_json::text AS subject_json,
+                       subject.display_name AS subject_tenant_name,
                        p.required_approver_capability
                   FROM audit.approval_requests r
                   JOIN audit.approval_policies p ON p.id = r.policy_id
+                  LEFT JOIN tenant.tenants subject ON subject.id = r.subject_tenant_id
                  WHERE r.tenant_id = :tenantId
                    AND r.status = 'PENDING'
                    AND r.expires_at > :now
@@ -148,7 +158,7 @@ public class ApprovalDecisionService {
         }
 
         return statement.query(ApprovalDecisionService::mapRequest).list().stream()
-                .map(row -> PendingApproval.of(row, mayDecide(row, subject)))
+                .map(row -> PendingApproval.of(row, mayDecide(row, subject), subjectOf(row)))
                 .toList();
     }
 
@@ -179,9 +189,12 @@ public class ApprovalDecisionService {
                         SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
                                r.scope_type, r.scope_id, r.threshold_description,
                                r.policy_version, r.requested_by, r.requested_at, r.expires_at,
+                               r.subject_tenant_id, r.subject_json::text AS subject_json,
+                               subject.display_name AS subject_tenant_name,
                                p.required_approver_capability
                           FROM audit.approval_requests r
                           JOIN audit.approval_policies p ON p.id = r.policy_id
+                          LEFT JOIN tenant.tenants subject ON subject.id = r.subject_tenant_id
                          WHERE r.action_code IN (:actionCodes)
                            AND r.status = 'PENDING'
                            AND r.expires_at > :now
@@ -194,7 +207,8 @@ public class ApprovalDecisionService {
                 .query(ApprovalDecisionService::mapRequest)
                 .list()
                 .stream()
-                .map(row -> new TenantPendingApproval(row.tenantId(), PendingApproval.of(row, mayDecide(row, subject))))
+                .map(row -> new TenantPendingApproval(
+                        row.tenantId(), PendingApproval.of(row, mayDecide(row, subject), subjectOf(row))))
                 .toList();
     }
 
@@ -333,6 +347,13 @@ public class ApprovalDecisionService {
         document.put("requestAction", request.actionCode());
         document.put("requiredApproverCapability", request.requiredApproverCapability());
         document.put("policyVersion", request.policyVersion());
+        if (request.subjectTenantId() != null) {
+            // The fact is filed at the request's own scope, which for a wallet
+            // decision is PLATFORM and therefore carries no tenant_id. Without
+            // this line a refused attempt to sign a refund of one tenant's money
+            // is attributable to no tenant at all.
+            document.put("subjectTenantId", request.subjectTenantId().toString());
+        }
 
         audit.record(AuditFact.of("approval.decision.refused", AuditClass.SECURITY)
                 .by(approver)
@@ -361,9 +382,12 @@ public class ApprovalDecisionService {
                        r.scope_type, r.scope_id, r.threshold_description,
                        r.policy_version, r.status, r.requested_by, r.requested_at,
                        r.expires_at, r.decided_by, r.decided_at,
+                       r.subject_tenant_id, r.subject_json::text AS subject_json,
+                       subject.display_name AS subject_tenant_name,
                        p.required_approver_capability
                   FROM audit.approval_requests r
                   JOIN audit.approval_policies p ON p.id = r.policy_id
+                  LEFT JOIN tenant.tenants subject ON subject.id = r.subject_tenant_id
                  WHERE r.id = :id AND r.tenant_id IS NOT DISTINCT FROM :tenantId
                 """)
                 .param("id", requestId)
@@ -413,6 +437,23 @@ public class ApprovalDecisionService {
         };
     }
 
+    /**
+     * What the request proposes, as the console shows it.
+     *
+     * <p>Read back rather than re-derived: the stored document was written from
+     * the same pass over the command that produced the parameters hash, so it is
+     * the one projection guaranteed to describe the signature being given. A
+     * console that asked the action's own service what the command "would be"
+     * now would be showing a second, unbound answer.
+     */
+    private Map<String, String> subjectOf(RequestRow row) {
+        String json = row.subjectJson();
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        return objectMapper.readValue(json, SUBJECT_DETAIL);
+    }
+
     private static RequestRow mapRequest(java.sql.ResultSet rs, int rowNumber) throws java.sql.SQLException {
         return new RequestRow(
                 rs.getObject("id", UUID.class),
@@ -429,7 +470,10 @@ public class ApprovalDecisionService {
                 rs.getObject("requested_at", OffsetDateTime.class).toInstant(),
                 rs.getObject("expires_at", OffsetDateTime.class).toInstant(),
                 null,
-                null);
+                null,
+                rs.getObject("subject_tenant_id", UUID.class),
+                rs.getString("subject_tenant_name"),
+                rs.getString("subject_json"));
     }
 
     private static RequestRow mapRequestWithDecision(java.sql.ResultSet rs, int rowNumber)
@@ -450,7 +494,10 @@ public class ApprovalDecisionService {
                 rs.getObject("requested_at", OffsetDateTime.class).toInstant(),
                 rs.getObject("expires_at", OffsetDateTime.class).toInstant(),
                 rs.getString("decided_by"),
-                decidedAt == null ? null : decidedAt.toInstant());
+                decidedAt == null ? null : decidedAt.toInstant(),
+                rs.getObject("subject_tenant_id", UUID.class),
+                rs.getString("subject_tenant_name"),
+                rs.getString("subject_json"));
     }
 
     private record RequestRow(
@@ -468,7 +515,10 @@ public class ApprovalDecisionService {
             Instant requestedAt,
             Instant expiresAt,
             @Nullable String decidedBy,
-            @Nullable Instant decidedAt) {}
+            @Nullable Instant decidedAt,
+            @Nullable UUID subjectTenantId,
+            @Nullable String subjectTenantName,
+            @Nullable String subjectJson) {}
 
     /**
      * One request waiting for a second signature.
@@ -485,6 +535,20 @@ public class ApprovalDecisionService {
      * @param mayDecide                 whether the caller reading this list could
      *                                  decide this row — false for their own
      *                                  requests, whatever they hold
+     * @param subjectTenantId           whose account this decision concerns, for a
+     *                                  decision HorecaOS raised about one tenant.
+     *                                  Distinct from the row's own tenant, which a
+     *                                  {@code PLATFORM}-scope request leaves null so
+     *                                  that tenant's worklist can never reach it
+     * @param subjectTenantName         that tenant's display name, resolved when the
+     *                                  row is read rather than frozen onto it — a
+     *                                  name that was copied at request time would be
+     *                                  the one field on this row that could be stale
+     * @param subject                   what is proposed, as the components the
+     *                                  parameters hash covers: entry type, money
+     *                                  kind, signed amount, currency, and the grant
+     *                                  or reference where one applies. Never the
+     *                                  maker's prose (ADR 0029)
      */
     public record PendingApproval(
             UUID id,
@@ -498,9 +562,12 @@ public class ApprovalDecisionService {
             String requestedBy,
             Instant requestedAt,
             Instant expiresAt,
-            boolean mayDecide) {
+            boolean mayDecide,
+            @Nullable UUID subjectTenantId,
+            @Nullable String subjectTenantName,
+            Map<String, String> subject) {
 
-        private static PendingApproval of(RequestRow row, boolean mayDecide) {
+        private static PendingApproval of(RequestRow row, boolean mayDecide, Map<String, String> subject) {
             return new PendingApproval(
                     row.id(),
                     row.actionCode(),
@@ -513,7 +580,10 @@ public class ApprovalDecisionService {
                     row.requestedBy(),
                     row.requestedAt(),
                     row.expiresAt(),
-                    mayDecide);
+                    mayDecide,
+                    row.subjectTenantId(),
+                    row.subjectTenantName(),
+                    subject);
         }
     }
 

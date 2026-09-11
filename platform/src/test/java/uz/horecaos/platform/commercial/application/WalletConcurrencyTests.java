@@ -39,6 +39,7 @@ import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
 import uz.horecaos.platform.commercial.infrastructure.NotConfiguredCardCharger;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
@@ -146,10 +147,16 @@ class WalletConcurrencyTests {
         JdbcStatementStore statementStore = new JdbcStatementStore(jdbc);
         JdbcWalletStore walletStore = new JdbcWalletStore(jdbc);
 
-        approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry());
+        approvals = new JdbcApprovalService(
+                jdbc,
+                audit,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         wallet = new WalletService(
                 walletStore,
                 subscriptionStore,
+                new JdbcCardChargeAttemptStore(jdbc),
                 approvals,
                 new NotConfiguredCardCharger(),
                 audit,

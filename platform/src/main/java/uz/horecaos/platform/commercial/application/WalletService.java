@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore.ExpiredGrantRef;
@@ -94,6 +96,7 @@ public class WalletService {
 
     private final JdbcWalletStore wallet;
     private final JdbcSubscriptionStore subscriptions;
+    private final JdbcCardChargeAttemptStore attempts;
     private final ApprovalService approvals;
     private final CardCharger cardCharger;
     private final AuditRecorder audit;
@@ -103,6 +106,7 @@ public class WalletService {
     public WalletService(
             JdbcWalletStore wallet,
             JdbcSubscriptionStore subscriptions,
+            JdbcCardChargeAttemptStore attempts,
             ApprovalService approvals,
             CardCharger cardCharger,
             AuditRecorder audit,
@@ -110,6 +114,7 @@ public class WalletService {
             Clock clock) {
         this.wallet = wallet;
         this.subscriptions = subscriptions;
+        this.attempts = attempts;
         this.approvals = approvals;
         this.cardCharger = cardCharger;
         this.audit = audit;
@@ -141,21 +146,6 @@ public class WalletService {
         return wallet.liveGrants(tenantId, clock.instant()).stream()
                 .mapToLong(BonusGrantBalance::remainingMinor)
                 .sum();
-    }
-
-    /**
-     * What the tenant's live subscription still owes as its activation deposit,
-     * in the minor units of the plan version that sells it; zero when none is
-     * due or it has been paid.
-     *
-     * <p>Read so the obligation is visible somewhere. It used to be written at
-     * {@code SubscriptionService.start} and read by nothing but
-     * {@link #recordDeposit}: the statement stopped billing a deposit line
-     * (ADR 0095, item 6), so a tenant received no document naming it and staff
-     * learned whether one was due from a 400 on the record-deposit endpoint.
-     */
-    public long activationDepositDueMinor(UUID tenantId) {
-        return subscriptions.liveDepositDue(tenantId);
     }
 
     public List<BonusGrantBalance> liveGrants(UUID tenantId) {
@@ -211,6 +201,7 @@ public class WalletService {
                 WalletEntry.TOP_UP,
                 amountMinor,
                 wallet.currencyOf(tenantId),
+                null,
                 null,
                 null,
                 null,
@@ -289,6 +280,9 @@ public class WalletService {
                 walletCurrency,
                 null,
                 null,
+                // The obligation this money clears, recorded on the row that
+                // clears it. A reversal re-arms this subscription and no other.
+                live.id(),
                 null,
                 bankReference,
                 reason,
@@ -356,14 +350,22 @@ public class WalletService {
                         ErrorCode.VALIDATION_FAILED, "That bonus grant has lapsed; grant a new one instead");
             }
         }
-        AdjustmentCommand command = new AdjustmentCommand(tenantId, moneyKind, grantId, amountMinor, reason);
+        AdjustmentCommand command =
+                new AdjustmentCommand(tenantId, moneyKind, grantId, amountMinor, wallet.currencyOf(tenantId), reason);
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command)
+                .and("entryType", WalletEntry.ADJUSTMENT)
+                .excluding()
+                .withholding("reason")
+                .about("tenantId")
+                .sign();
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_ADJUSTMENT.code(),
-                ApprovalParameters.of(command).excluding().hash(),
+                signed.hash(),
                 ResourceScope.platform(),
                 actor,
                 reason,
-                ApprovalRequestCommand.DEFAULT_VALIDITY));
+                ApprovalRequestCommand.DEFAULT_VALIDITY,
+                signed.subject()));
 
         WalletChangeOutcome awaiting = notYetDecided(approval);
         if (awaiting != null) {
@@ -393,6 +395,7 @@ public class WalletService {
                 wallet.currencyOf(tenantId),
                 null,
                 grantId,
+                null,
                 null,
                 null,
                 reason,
@@ -430,14 +433,23 @@ public class WalletService {
         if (expiresAt == null || !expiresAt.isAfter(now)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A bonus grant expires in the future");
         }
-        BonusGrantCommand command = new BonusGrantCommand(tenantId, amountMinor, expiresAt, reason);
+        BonusGrantCommand command =
+                new BonusGrantCommand(tenantId, amountMinor, expiresAt, wallet.currencyOf(tenantId), reason);
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command)
+                .and("entryType", WalletEntry.BONUS_GRANT)
+                .and("moneyKind", WalletEntry.BONUS)
+                .excluding()
+                .withholding("reason")
+                .about("tenantId")
+                .sign();
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_BONUS_GRANT.code(),
-                ApprovalParameters.of(command).excluding().hash(),
+                signed.hash(),
                 ResourceScope.platform(),
                 actor,
                 reason,
-                ApprovalRequestCommand.DEFAULT_VALIDITY));
+                ApprovalRequestCommand.DEFAULT_VALIDITY,
+                signed.subject()));
 
         WalletChangeOutcome awaiting = notYetDecided(approval);
         if (awaiting != null) {
@@ -456,6 +468,7 @@ public class WalletService {
                 WalletEntry.BONUS_GRANT,
                 amountMinor,
                 wallet.currencyOf(tenantId),
+                null,
                 null,
                 null,
                 expiresAt,
@@ -503,14 +516,23 @@ public class WalletService {
         if (payoutReference == null || payoutReference.isBlank()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A refund names the payout it left on");
         }
-        RefundCommand command = new RefundCommand(tenantId, amountMinor, payoutReference, reason);
+        RefundCommand command =
+                new RefundCommand(tenantId, -amountMinor, payoutReference, wallet.currencyOf(tenantId), reason);
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command)
+                .and("entryType", WalletEntry.REFUND)
+                .and("moneyKind", WalletEntry.PAID)
+                .excluding()
+                .withholding("reason")
+                .about("tenantId")
+                .sign();
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_REFUND.code(),
-                ApprovalParameters.of(command).excluding().hash(),
+                signed.hash(),
                 ResourceScope.platform(),
                 actor,
                 reason,
-                ApprovalRequestCommand.DEFAULT_VALIDITY));
+                ApprovalRequestCommand.DEFAULT_VALIDITY,
+                signed.subject()));
 
         WalletChangeOutcome awaiting = notYetDecided(approval);
         if (awaiting != null) {
@@ -537,6 +559,7 @@ public class WalletService {
                 WalletEntry.REFUND,
                 -amountMinor,
                 wallet.currencyOf(tenantId),
+                null,
                 null,
                 null,
                 null,
@@ -593,15 +616,27 @@ public class WalletService {
         WalletEntry deposit = wallet.findEntryOfType(tenantId, depositEntryId, WalletEntry.DEPOSIT)
                 .orElseThrow(() ->
                         new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "That tenant has no such recorded deposit"));
+        UUID subscriptionId = Objects.requireNonNull(
+                deposit.subscriptionId(),
+                "V0211's ck_wallet_entry_subscription_ref makes a DEPOSIT name the subscription it cleared");
 
-        DepositReversalCommand command = new DepositReversalCommand(tenantId, depositEntryId, reason);
+        DepositReversalCommand command = new DepositReversalCommand(
+                tenantId, depositEntryId, subscriptionId, -deposit.amountMinor(), deposit.currency(), reason);
+        ApprovalParameters.Signed signed = ApprovalParameters.of(command)
+                .and("entryType", WalletEntry.DEPOSIT_REVERSAL)
+                .and("moneyKind", WalletEntry.PAID)
+                .excluding()
+                .withholding("reason")
+                .about("tenantId")
+                .sign();
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.WALLET_DEPOSIT_REVERSAL.code(),
-                ApprovalParameters.of(command).excluding().hash(),
+                signed.hash(),
                 ResourceScope.platform(),
                 actor,
                 reason,
-                ApprovalRequestCommand.DEFAULT_VALIDITY));
+                ApprovalRequestCommand.DEFAULT_VALIDITY,
+                signed.subject()));
 
         WalletChangeOutcome awaiting = notYetDecided(approval);
         if (awaiting != null) {
@@ -609,6 +644,9 @@ public class WalletService {
         }
 
         wallet.lockBilling(tenantId, clock.instant());
+        // Every refusal below runs under the lock and before the signature is
+        // spent, so each leaves the approval unspent for a retry once whatever
+        // it names has been put right.
         long paid = wallet.paidBalance(tenantId);
         if (paid < deposit.amountMinor()) {
             throw new ApiException(
@@ -617,6 +655,44 @@ public class WalletService {
                                     + "Void the statements it paid first, which gives the money back.")
                             .formatted(paid, deposit.amountMinor()),
                     Map.of("paidBalanceMinor", paid, "depositMinor", deposit.amountMinor()));
+        }
+        Subscription obligation = subscriptions
+                .findById(tenantId, subscriptionId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "The subscription this deposit paid is not this tenant's"));
+        if (obligation.status().isTerminal()) {
+            // Never retarget. Re-arming whichever subscription is live now is
+            // how the old plan's 500 000 replaced the new plan's 5 000 000 with
+            // nothing anywhere to show it: the statement carries no deposit
+            // line, the ledger records money and not obligations, and the live
+            // read only ever sees the survivor. A reversal that has no live
+            // obligation to give back to is a decision for a person to take as
+            // an ADJUSTMENT, with their name on it.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    ("The subscription this deposit paid is %s, so there is no obligation left to re-arm. "
+                                    + "Correct the ledger with an adjustment instead, which says so on the row.")
+                            .formatted(obligation.status().name()),
+                    Map.of(
+                            "subscriptionId",
+                            subscriptionId.toString(),
+                            "status",
+                            obligation.status().name()));
+        }
+        String obligationCurrency = subscriptions
+                .planCurrencyOf(tenantId, subscriptionId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "The subscription this deposit paid names no plan version"));
+        if (!obligationCurrency.equals(deposit.currency())) {
+            // deposit_due_minor is copied verbatim from the plan version and
+            // carries no currency of its own, so writing a som figure onto a
+            // dollar obligation records a face value in the wrong money.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    ("The deposit was recorded in %s and the obligation is priced in %s; a reversal restores "
+                                    + "the obligation in its own currency only")
+                            .formatted(deposit.currency(), obligationCurrency),
+                    Map.of("depositCurrency", deposit.currency(), "obligationCurrency", obligationCurrency));
         }
         approval.consume();
 
@@ -632,6 +708,7 @@ public class WalletService {
                 deposit.currency(),
                 null,
                 null,
+                subscriptionId,
                 null,
                 deposit.externalReference(),
                 reason,
@@ -642,17 +719,28 @@ public class WalletService {
 
         // Same transaction, under the same lock: the entry and the obligation
         // it re-arms are one act, and a crash between them is the drift this
-        // whole path was written to end.
-        subscriptions
-                .findLive(tenantId)
-                .ifPresent(live -> subscriptions.restoreDepositDue(tenantId, live.id(), deposit.amountMinor()));
+        // whole path was written to end. Onto the subscription the deposit
+        // cleared, by id, and additively -- see restoreDepositDue.
+        long dueBefore = subscriptions.depositDueOf(tenantId, subscriptionId);
+        if (!subscriptions.restoreDepositDue(tenantId, subscriptionId, deposit.amountMinor())) {
+            throw new IllegalStateException(
+                    "The subscription read a moment ago under this lock could not be re-armed: " + subscriptionId);
+        }
 
         audit.record(AuditFact.of("commercial.wallet.deposit_reversed", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("amountMinor", deposit.amountMinor(), "reversedEntryId", depositEntryId.toString()))
+                // The obligation move is the one fact the ledger cannot
+                // reconstruct: it records money, and deposit_due_minor is not
+                // money. Which subscription, and from what to what.
+                .changed(Map.of(
+                        "amountMinor", deposit.amountMinor(),
+                        "reversedEntryId", depositEntryId.toString(),
+                        "subscriptionId", subscriptionId.toString(),
+                        "depositDueFromMinor", dueBefore,
+                        "depositDueToMinor", dueBefore + deposit.amountMinor()))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -753,6 +841,7 @@ public class WalletService {
                         grant.grantId(),
                         null,
                         null,
+                        null,
                         "statement %s paid from a bonus grant".formatted(statement.number()),
                         SYSTEM_SETTLEMENT,
                         null,
@@ -772,6 +861,7 @@ public class WalletService {
                         -draw,
                         currency,
                         statement.statementId(),
+                        null,
                         null,
                         null,
                         null,
@@ -822,6 +912,7 @@ public class WalletService {
                     draw.grantId(),
                     null,
                     null,
+                    null,
                     "statement %s was voided; what it drew is given back".formatted(statementNumber),
                     SYSTEM_SETTLEMENT,
                     null,
@@ -864,12 +955,13 @@ public class WalletService {
         if (billing.paymentMethod() != PaymentMethod.CARD) {
             return 0;
         }
-        CardCharger.Outcome outcome = cardCharger.charge(
-                tenantId,
-                billing.cardTokenReference(),
-                amountMinor,
-                currency,
-                statement.statementId().toString());
+        // One attempt, one row, and the row's id is the key the provider is
+        // handed. Written before the call, so the key is durable before
+        // anything can be charged under it.
+        UUID attemptId = Ids.newId();
+        attempts.begin(attemptId, tenantId, statement.statementId(), amountMinor, currency, now);
+        CardCharger.Outcome outcome =
+                cardCharger.charge(tenantId, billing.cardTokenReference(), amountMinor, currency, attemptId.toString());
         CardCharger.Outcome.Succeeded succeeded;
         switch (outcome) {
             case CardCharger.Outcome.Succeeded success -> succeeded = success;
@@ -894,6 +986,7 @@ public class WalletService {
                         .correlatedBy(statement.statementId().toString())
                         .occurredAt(now)
                         .build());
+                attempts.settle(attemptId, "FAILED", failed.reason(), now);
                 countCardCharge("failed");
                 return 0;
             }
@@ -901,10 +994,12 @@ public class WalletService {
                 // The expected answer until a merchant agreement exists, so it is
                 // counted and not logged: a WARN per CARD tenant per statement
                 // would drown the decline it has to be told apart from.
+                attempts.settle(attemptId, "NOT_CONFIGURED", null, now);
                 countCardCharge("not_configured");
                 return 0;
             }
         }
+        attempts.settle(attemptId, "SUCCEEDED", succeeded.providerReference(), now);
         countCardCharge("succeeded");
         audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
                 .by(ActorRef.systemJob("wallet-settlement"))
@@ -926,6 +1021,7 @@ public class WalletService {
                 null,
                 null,
                 null,
+                null,
                 succeeded.providerReference(),
                 "card charge for statement %s".formatted(statement.number()),
                 SYSTEM_CARD_CHARGER,
@@ -940,6 +1036,7 @@ public class WalletService {
                 -amountMinor,
                 currency,
                 statement.statementId(),
+                null,
                 null,
                 null,
                 null,
@@ -993,6 +1090,7 @@ public class WalletService {
                 grantId,
                 null,
                 null,
+                null,
                 "the bonus grant lapsed at its expiry",
                 SYSTEM_BONUS_EXPIRY,
                 null,
@@ -1023,13 +1121,67 @@ public class WalletService {
      * empty ledger before either wrote to it.
      */
     private void appendMoneyIn(WalletEntry entry) {
+        String reference = Objects.requireNonNull(
+                entry.externalReference(), "V0211's ck_wallet_entry_reference makes money in carry one");
+        wallet.findMoneyInByNormalisedReference(entry.tenantId(), normalise(reference), uniqueAmong(entry.entryType()))
+                .ifPresent(onFile -> {
+                    throw alreadyRecorded(reference, onFile.externalReference());
+                });
         try {
             wallet.append(entry);
-        } catch (DuplicateKeyException alreadyRecorded) {
+        } catch (DuplicateKeyException raced) {
+            // Two recorders inside the same millisecond, one of whom read the
+            // ledger before the other wrote to it. The check above cannot see
+            // that and the index can, so the index keeps the last word; the
+            // message is the plainer one because there is nothing on file to
+            // name yet from this transaction's point of view.
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT,
                     "That reference is already recorded for this tenant; money in is recorded once");
         }
+    }
+
+    /**
+     * Which entry types the reference has to be unique among, mirroring V0211's
+     * two partial indexes: money in is unique among money in, and a deposit
+     * reversal among deposit reversals — a reversal names the very deposit it
+     * takes back, so the two must not collide with each other.
+     */
+    private static List<String> uniqueAmong(String entryType) {
+        return WalletEntry.DEPOSIT_REVERSAL.equals(entryType)
+                ? List.of(WalletEntry.DEPOSIT_REVERSAL)
+                : List.of(WalletEntry.TOP_UP, WalletEntry.DEPOSIT);
+    }
+
+    /**
+     * Tells a recorder which of two different things happened.
+     *
+     * <p>Uniqueness is on the normalised reference (V0211), so a second,
+     * genuinely different wire whose reference differs from an earlier one only
+     * in case, spacing, hyphens or a leading '#' is refused as well as a
+     * re-typed one. Reported as "that reference is already recorded" it sent the
+     * recorder to search the ledger for a string that is not in it, and the
+     * money the tenant really paid went uncredited while its statement aged into
+     * arrears. So the refusal names what is on file and says what to do: the
+     * endpoint takes the reference verbatim, so a reference that tells the two
+     * wires apart records the second one as the one-person audited transfer it
+     * is, rather than laundering it through a maker-checker adjustment that
+     * would carry no bank reference at all.
+     */
+    private static ApiException alreadyRecorded(String typed, @Nullable String onFile) {
+        if (typed.equals(onFile)) {
+            return new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That reference is already recorded for this tenant; money in is recorded once");
+        }
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                ("A different reference, \"%s\", is already recorded for this tenant and matches this one once "
+                                + "case, spacing, hyphens and a leading '#' are ignored, so money in is already "
+                                + "recorded once. If this is a second, genuine transfer, record it under a "
+                                + "reference that tells it apart from that one.")
+                        .formatted(onFile),
+                Map.of("recordedReference", onFile == null ? "" : onFile, "typedReference", typed));
     }
 
     /** {@code null} when the approval let the caller proceed; the outcome to return otherwise. */
@@ -1126,14 +1278,34 @@ public class WalletService {
 
     // ------------------------------------------------------------- approval hashes
 
+    // What the approval is bound to, and -- through ApprovalParameters.sign()
+    // -- what the checker's console renders, from one pass over the same
+    // components. amountMinor is the SIGNED amount as it will reach the ledger
+    // in every one of the four, so the row the approver reads and the row the
+    // ledger ends up holding say the same thing; the public methods keep taking
+    // a positive amount where an operator types one, and negate it here.
+
     private record AdjustmentCommand(
-            UUID tenantId, String moneyKind, @Nullable UUID grantId, long amountMinor, String reason) {}
+            UUID tenantId,
+            String moneyKind,
+            @Nullable UUID grantId,
+            long amountMinor,
+            String currency,
+            String reason) {}
 
-    private record BonusGrantCommand(UUID tenantId, long amountMinor, Instant expiresAt, String reason) {}
+    private record BonusGrantCommand(
+            UUID tenantId, long amountMinor, Instant expiresAt, String currency, String reason) {}
 
-    private record RefundCommand(UUID tenantId, long amountMinor, String payoutReference, String reason) {}
+    private record RefundCommand(
+            UUID tenantId, long amountMinor, String payoutReference, String currency, String reason) {}
 
-    private record DepositReversalCommand(UUID tenantId, UUID depositEntryId, String reason) {}
+    private record DepositReversalCommand(
+            UUID tenantId,
+            UUID depositEntryId,
+            UUID subscriptionId,
+            long amountMinor,
+            String currency,
+            String reason) {}
 
     /** What a manual change did: applied, waiting for a second signature, or declined. */
     public record WalletChangeOutcome(

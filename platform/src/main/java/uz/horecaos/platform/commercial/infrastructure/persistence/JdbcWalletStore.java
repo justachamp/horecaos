@@ -117,6 +117,7 @@ public class JdbcWalletStore {
         params.put("currency", entry.currency());
         params.put("statementId", entry.statementId());
         params.put("grantId", entry.grantId());
+        params.put("subscriptionId", entry.subscriptionId());
         params.put("expiresAt", utc(entry.expiresAt()));
         params.put("externalReference", entry.externalReference());
         params.put("reason", entry.reason());
@@ -128,12 +129,12 @@ public class JdbcWalletStore {
         jdbc.sql("""
                         INSERT INTO commercial.wallet_entries (
                             id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
-                            grant_id, expires_at, external_reference, reason, recorded_by, approved_by,
-                            approval_request_id, created_at)
+                            grant_id, subscription_id, expires_at, external_reference, reason, recorded_by,
+                            approved_by, approval_request_id, created_at)
                         VALUES (
                             :id, :tenantId, :moneyKind, :entryType, :amount, :currency, :statementId,
-                            :grantId, :expiresAt, :externalReference, :reason, :recordedBy, :approvedBy,
-                            :approvalRequestId, :now)
+                            :grantId, :subscriptionId, :expiresAt, :externalReference, :reason, :recordedBy,
+                            :approvedBy, :approvalRequestId, :now)
                         """).params(params).update();
     }
 
@@ -158,8 +159,8 @@ public class JdbcWalletStore {
     public List<WalletEntry> ledger(UUID tenantId, @Nullable UUID afterId, int limit) {
         return jdbc.sql("""
                         SELECT id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
-                               grant_id, expires_at, external_reference, reason, recorded_by, approved_by,
-                               approval_request_id, created_at
+                               grant_id, subscription_id, expires_at, external_reference, reason, recorded_by,
+                               approved_by, approval_request_id, created_at
                           FROM commercial.wallet_entries
                          WHERE tenant_id = :tenantId
                            AND (:afterId::uuid IS NULL OR (created_at, id) < (
@@ -218,14 +219,48 @@ public class JdbcWalletStore {
     public Optional<WalletEntry> findEntryOfType(UUID tenantId, UUID entryId, String entryType) {
         return jdbc.sql("""
                         SELECT id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
-                               grant_id, expires_at, external_reference, reason, recorded_by, approved_by,
-                               approval_request_id, created_at
+                               grant_id, subscription_id, expires_at, external_reference, reason, recorded_by,
+                               approved_by, approval_request_id, created_at
                           FROM commercial.wallet_entries
                          WHERE tenant_id = :tenantId AND id = :entryId AND entry_type = :entryType
                         """)
                 .param("tenantId", tenantId)
                 .param("entryId", entryId)
                 .param("entryType", entryType)
+                .query(JdbcWalletStore::entry)
+                .optional();
+    }
+
+    /**
+     * The tenant's entry of one of {@code entryTypes} already holding this
+     * normalised reference, if there is one.
+     *
+     * <p>Read before money in is appended, under the tenant's billing lock that
+     * already serialises every writer of this tenant's wallet, so the answer is
+     * authoritative rather than advisory. It exists so the refusal can say which
+     * of two very different things happened: the recorder re-typed a reference
+     * that is on file, or a genuinely different wire normalises onto one that
+     * is. The second used to be reported as the first, sending the recorder to
+     * search the ledger for a string that is not in it.
+     *
+     * <p>The unique indexes remain the stop that actually holds: this query is a
+     * better message, not a substitute for a constraint.
+     */
+    public Optional<WalletEntry> findMoneyInByNormalisedReference(
+            UUID tenantId, String normalisedReference, List<String> entryTypes) {
+        return jdbc.sql("""
+                        SELECT id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
+                               grant_id, subscription_id, expires_at, external_reference, reason, recorded_by,
+                               approved_by, approval_request_id, created_at
+                          FROM commercial.wallet_entries
+                         WHERE tenant_id = :tenantId
+                           AND entry_type IN (:entryTypes)
+                           AND external_reference_normalised = :reference
+                         LIMIT 1
+                        """)
+                .param("tenantId", tenantId)
+                .param("entryTypes", entryTypes)
+                .param("reference", normalisedReference)
                 .query(JdbcWalletStore::entry)
                 .optional();
     }
@@ -411,6 +446,7 @@ public class JdbcWalletStore {
                 row.getString("currency"),
                 row.getObject("statement_id", UUID.class),
                 row.getObject("grant_id", UUID.class),
+                row.getObject("subscription_id", UUID.class),
                 instant(row, "expires_at"),
                 row.getString("external_reference"),
                 row.getString("reason"),

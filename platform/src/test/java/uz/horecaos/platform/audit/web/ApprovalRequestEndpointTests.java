@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -405,6 +406,49 @@ class ApprovalRequestEndpointTests {
         assertThat(status(requestId)).isEqualTo("APPROVED");
     }
 
+    /**
+     * ADR 0095: every wallet action HorecaOS raises reaches the queue an
+     * approver actually works from.
+     *
+     * <p>The two halves of the PLATFORM-scope design were each proven in
+     * isolation and never joined for the new action. {@code WalletService} writes
+     * {@code ResourceScope.platform()}, so the row carries no tenant and the
+     * tenant worklist — keyed on one — can never show it;
+     * {@code PLATFORM_ACTIONS} is the only filter that can, and it is a hand-kept
+     * literal list. Drop a code from it and the request is raised PENDING,
+     * invisible in both queues, and the misposted deposit sits in the wrong
+     * tenant's wallet until it lapses and the maker starts over.
+     */
+    @Test
+    void everyWalletActionReachesThePlatformQueue() throws Exception {
+        grantPlatform(PLATFORM_MAKER);
+        grantPlatform(PLATFORM_CHECKER);
+        List<String> walletActions = List.of(
+                "commercial.wallet.adjustment",
+                "commercial.wallet.bonus-grant",
+                "commercial.wallet.refund",
+                "commercial.wallet.deposit-reversal");
+        for (String actionCode : walletActions) {
+            platformPendingRequest(PLATFORM_MAKER, Capability.COMMERCIAL_WALLET_MANAGE, actionCode, TENANT);
+        }
+
+        String body = mvc.perform(get("/api/v1/control-plane/approval-requests").with(tokenFor(PLATFORM_CHECKER)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(walletActions)
+                .allSatisfy(actionCode -> assertThat(body)
+                        .as("%s is raised at platform scope and listed nowhere else", actionCode)
+                        .contains(actionCode));
+        assertThat(body)
+                .as("and each row says whose account it moves and what it proposes, so the second "
+                        + "signature is not given on an action code and a timestamp alone")
+                .contains("\"subjectTenantId\":\"" + TENANT + "\"")
+                .contains("\"subjectTenantName\":\"Display\"")
+                .contains("\"amountMinor\":\"-50000\"");
+    }
+
     @Test
     void aTenantsOwnRequestIsNotReachableFromThePlatformDecisionRoute() throws Exception {
         grantPlatform(PLATFORM_CHECKER);
@@ -427,6 +471,11 @@ class ApprovalRequestEndpointTests {
 
     /** A request HorecaOS raised about a tenant's account, at platform scope and carrying no tenant. */
     private UUID platformPendingRequest(String requestedBy, Capability approverCapability) {
+        return platformPendingRequest(requestedBy, approverCapability, WALLET_ACTION, null);
+    }
+
+    private UUID platformPendingRequest(
+            String requestedBy, Capability approverCapability, String actionCode, @Nullable UUID subjectTenantId) {
         UUID policyId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO audit.approval_policies
@@ -437,7 +486,7 @@ class ApprovalRequestEndpointTests {
                         :approver, :now, 1, 'platform-admin')
                 """)
                 .param("id", policyId)
-                .param("actionCode", WALLET_ACTION)
+                .param("actionCode", actionCode)
                 .param("approver", approverCapability.code())
                 .param("now", clock.instant().minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
                 .update();
@@ -447,14 +496,18 @@ class ApprovalRequestEndpointTests {
                 INSERT INTO audit.approval_requests (
                     id, tenant_id, action_code, parameters_hash, scope_type, scope_id,
                     policy_id, policy_is_platform, policy_version, threshold_description,
-                    status, requested_by, requested_at, reason, expires_at)
+                    status, requested_by, requested_at, reason, expires_at,
+                    subject_tenant_id, subject_json)
                 VALUES (:id, NULL, :actionCode, :hash, 'PLATFORM', NULL,
                         :policyId, true, 1, 'Every refund of a tenant''s paid money', 'PENDING',
-                        :requestedBy, :now, 'The tenant left', :expiresAt)
+                        :requestedBy, :now, 'The tenant left', :expiresAt,
+                        :subjectTenantId,
+                        CAST('{"amountMinor":"-50000","currency":"UZS"}' AS jsonb))
                 """)
                 .param("id", requestId)
-                .param("actionCode", WALLET_ACTION)
-                .param("hash", "c".repeat(64))
+                .param("subjectTenantId", subjectTenantId)
+                .param("actionCode", actionCode)
+                .param("hash", UUID.randomUUID().toString().replace("-", "") + "c".repeat(32))
                 .param("policyId", policyId)
                 .param("requestedBy", requestedBy)
                 .param("now", clock.instant().atOffset(ZoneOffset.UTC))

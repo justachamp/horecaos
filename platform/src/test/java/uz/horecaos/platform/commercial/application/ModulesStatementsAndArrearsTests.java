@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -39,12 +40,15 @@ import uz.horecaos.platform.commercial.domain.StatementLine;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.infrastructure.NotConfiguredCardCharger;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcArrearsStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore;
+import uz.horecaos.platform.commercial.web.CommercialControlPlaneController;
+import uz.horecaos.platform.commercial.web.CommercialControlPlaneController.SubscriptionResponse;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
@@ -79,6 +83,8 @@ class ModulesStatementsAndArrearsTests {
     private ModuleCatalogService modules;
     private StatementService statements;
     private ArrearsService arrears;
+    private WalletService wallet;
+    private CommercialControlPlaneController controlPlane;
 
     @BeforeAll
     static void startDatabase() {
@@ -124,10 +130,16 @@ class ModulesStatementsAndArrearsTests {
         JdbcModuleStore moduleStore = new JdbcModuleStore(jdbc);
         JdbcStatementStore statementStore = new JdbcStatementStore(jdbc);
         JdbcWalletStore walletStore = new JdbcWalletStore(jdbc);
-        ApprovalService approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry());
-        WalletService wallet = new WalletService(
+        ApprovalService approvals = new JdbcApprovalService(
+                jdbc,
+                audit,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
+        wallet = new WalletService(
                 walletStore,
                 subscriptionStore,
+                new JdbcCardChargeAttemptStore(jdbc),
                 approvals,
                 new NotConfiguredCardCharger(),
                 audit,
@@ -144,6 +156,7 @@ class ModulesStatementsAndArrearsTests {
         statements = new StatementService(
                 subscriptionStore, planStore, moduleStore, statementStore, usageStore, wallet, audit, clock);
         arrears = new ArrearsService(new JdbcArrearsStore(jdbc), statementStore);
+        controlPlane = new CommercialControlPlaneController(plans, subscriptions, entitlements, metering);
     }
 
     // ------------------------------------------------------------- modules
@@ -407,6 +420,38 @@ class ModulesStatementsAndArrearsTests {
         assertThat(live.status()).isEqualTo(SubscriptionStatus.TRIALING);
         assertThat(live.trialEndAt()).isEqualTo(JULY.plus(java.time.Duration.ofDays(14)));
         assertThat(subscriptions.termMonths(live.id())).isEqualTo(1);
+    }
+
+    /**
+     * ADR 0095 item 6 took the deposit line off the statement, which left the
+     * amount owed written on {@code subscriptions.deposit_due_minor} and
+     * readable in exactly one place: this response. Nothing tested that place.
+     * The service delegate was proven twice over and the one line that wires it
+     * to the console not at all — and the wiring is where it can go wrong
+     * silently, because {@code liveDepositDue} takes a tenant id and answers
+     * zero, not an error, for a subscription id.
+     */
+    @Test
+    void theSubscriptionReadTheConsoleUsesNamesTheActivationDepositStillOwed() {
+        UUID versionId = activeTermsPlan();
+        subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
+
+        SubscriptionResponse owing =
+                Objects.requireNonNull(controlPlane.subscription(PILOT).getBody());
+
+        assertThat(owing.activationDepositDueMinor())
+                .as("a tenant owing an activation deposit sees nothing owed anywhere else")
+                .isEqualTo(500_000);
+        assertThat(owing.termMonths())
+                .as("and the term beside it, which reaches the response through the same wiring")
+                .isEqualTo(12);
+
+        wallet.recordDeposit(PILOT, "MT103-DEP", AUTHOR, "the activation deposit", "corr");
+
+        assertThat(Objects.requireNonNull(controlPlane.subscription(PILOT).getBody())
+                        .activationDepositDueMinor())
+                .as("and stops saying so the moment it is recorded")
+                .isZero();
     }
 
     @Test

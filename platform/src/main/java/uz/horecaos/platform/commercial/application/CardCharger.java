@@ -30,11 +30,25 @@ public interface CardCharger {
      *                           is on file yet; an adapter answers {@code
      *                           Failed} or {@code NotConfigured} for that,
      *                           never a charge
-     * @param idempotencyKey     stable per attempt (the statement id is enough,
-     *                           since one statement is charged for its
-     *                           remainder at most once per attempt), so a
-     *                           retried call never risks a second charge once
-     *                           a real adapter exists
+     * @param idempotencyKey     identifies one charge attempt, and nothing
+     *                           coarser: the same key is re-sent only when
+     *                           retrying that same attempt for that same
+     *                           amount, and a charge for a different amount
+     *                           always carries a new one. It is the id of a
+     *                           {@code commercial.card_charge_attempts} row
+     *                           written before this call. A provider may treat
+     *                           key reuse with changed parameters as an error,
+     *                           or may replay the earlier result, and both are
+     *                           fatal here — which is why this is no longer the
+     *                           statement id. That was justified as "one
+     *                           statement is charged for its remainder at most
+     *                           once per attempt", true within one settlement
+     *                           pass and false across them: settlement runs
+     *                           again on every transfer, deposit, approved
+     *                           grant and upward correction and charges
+     *                           whatever is still owed, so one declined
+     *                           statement, part-paid by a transfer, came back
+     *                           under the same key for a smaller amount
      */
     Outcome charge(
             UUID tenantId,
