@@ -289,6 +289,7 @@ export interface BlockedDocumentResponse {
   legalEntityId?: string;
   orderId?: string;
   providerType?: string;
+  publicOrderNumber?: string;
   reasonCode?: string;
   reasonNote?: string;
   reportingDeadlineAt?: string;

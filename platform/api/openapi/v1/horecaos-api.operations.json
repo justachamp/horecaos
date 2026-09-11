@@ -1180,6 +1180,9 @@
           "providerType" : {
             "type" : "string"
           },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
           "reasonCode" : {
             "type" : "string"
           },
@@ -5826,6 +5829,51 @@
               "$ref" : "#/components/schemas/OrderRowResponse"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderNumberLookupResponse" : {
+        "properties" : {
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "matches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderNumberMatchResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderNumberMatchResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
           }
         },
         "type" : "object"
@@ -23867,6 +23915,44 @@
         "tags" : [ "Operations notifications" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/orders/by-number" : {
+      "get" : {
+        "description" : "Newest first. Usually one row; more than one names a genuine ambiguity -- the same number at two branches, or the same branch on two different days -- for the caller to resolve by branch or date, never by guessing the first.",
+        "operationId" : "byNumber",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "publicOrderNumber",
+          "required" : true,
+          "schema" : {
+            "maxLength" : 24,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderNumberLookupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every order at this tenant carrying this public order number",
+        "tags" : [ "Order lookup" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
       "get" : {
         "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number.",
@@ -24440,6 +24526,9 @@
   }, {
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
+  }, {
+    "description" : "Resolving a public order number to the order(s) it names",
+    "name" : "Order lookup"
   }, {
     "description" : "The merchant's own plan, entitlements, and usage",
     "name" : "Commercial"

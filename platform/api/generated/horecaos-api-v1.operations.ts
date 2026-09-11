@@ -372,6 +372,7 @@ export interface BlockedDocumentResponse {
   legalEntityId?: string;
   orderId?: string;
   providerType?: string;
+  publicOrderNumber?: string;
   reasonCode?: string;
   reasonNote?: string;
   reportingDeadlineAt?: string;
@@ -1831,6 +1832,21 @@ export interface OrderListResponse {
   maybeMore?: boolean;
   provenance?: ProvenanceResponse;
   rows?: Array<OrderRowResponse>;
+}
+
+export interface OrderNumberLookupResponse {
+  count?: number;
+  matches?: Array<OrderNumberMatchResponse>;
+}
+
+export interface OrderNumberMatchResponse {
+  brandId?: string;
+  createdAt?: string;
+  locationId?: string;
+  orderId?: string;
+  publicOrderNumber?: string;
+  status?: string;
+  total?: ApiMoney;
 }
 
 export interface OrderPaymentResponse {
@@ -3454,6 +3470,7 @@ export interface Operations {
   "forOrder": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/orders/{orderId}"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<NotificationSummary> } };
   "detail": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}"; request: { parameters: { path: { notificationId: string; tenantId: string } } }; responses: { "200": NotificationResponse } };
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
+  "byNumber": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/by-number"; request: { parameters: { path: { tenantId: string }; query: { publicOrderNumber: string } } }; responses: { "200": OrderNumberLookupResponse } };
   "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
   "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
