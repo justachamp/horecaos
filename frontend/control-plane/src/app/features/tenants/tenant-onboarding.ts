@@ -5,12 +5,27 @@ import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
 import {
+  InvitationLocale,
   OnboardingRunView,
   OnboardingTemplateSuggestion,
   OnboardingTemplateView,
+  OwnerInvitationView,
   TenantsApi,
   ValidationOutcome,
 } from './tenants-api';
+
+/** Why an invitation is waiting or stopped, in the operator's words (ADR 0097). */
+const INVITATION_HINTS: ReadonlySet<string> = new Set([
+  'MAIL_NOT_CONFIGURED',
+  'SMTP_UNAVAILABLE',
+  'SMTP_AUTHENTICATION',
+  'SMTP_SECRET_MISSING',
+  'ADDRESS_REJECTED',
+  'ADDRESS_INVALID',
+  'OWNER_ACCOUNT_MISSING',
+  'IDENTITY_UNAVAILABLE',
+  'EXPIRED',
+]);
 
 /** Where each failure is fixed, when it is fixed in this console. */
 type HintLink = 'brands' | 'legal-entities' | 'identity' | 'installations';
@@ -23,6 +38,7 @@ type HintLink = 'brands' | 'legal-entities' | 'identity' | 'installations';
  */
 const HINTS: Readonly<Record<string, { readonly key: MessageKey; readonly link?: HintLink }>> = {
   AWAITING_ORGANIZATION: { key: 'onboarding.hint.AWAITING_ORGANIZATION' },
+  OWNER_EMAIL_UNREADABLE: { key: 'onboarding.hint.OWNER_EMAIL_UNREADABLE' },
   IDENTITY_DRIFT: { key: 'onboarding.hint.IDENTITY_DRIFT', link: 'identity' },
   ITEM_NOT_AVAILABLE_TO_SELL: { key: 'onboarding.hint.ITEM_NOT_AVAILABLE_TO_SELL' },
   MEDIA_NOT_AVAILABLE: { key: 'onboarding.hint.MEDIA_NOT_AVAILABLE' },
@@ -101,6 +117,14 @@ export class TenantOnboarding {
 
   protected readonly starting = signal(false);
   protected readonly ownerEmail = signal('');
+  /** The owner's invitation language, starting from the operator's own. */
+  protected readonly ownerLocale = signal<InvitationLocale>('ru');
+  protected readonly invitation = signal<OwnerInvitationView | null>(null);
+  protected readonly resendReason = signal('');
+  protected readonly resendLocale = signal<InvitationLocale | ''>('');
+  protected readonly resending = signal(false);
+  protected readonly resent = signal(false);
+  protected readonly invitationLocales: readonly InvitationLocale[] = ['uz', 'ru', 'en'];
   protected readonly actionError = signal<string | null>(null);
 
   protected readonly resumeReason = signal('');
@@ -133,6 +157,8 @@ export class TenantOnboarding {
   );
 
   constructor() {
+    const locale = this.i18n.locale();
+    this.ownerLocale.set(locale === 'uz-Latn' ? 'uz' : locale === 'en' ? 'en' : 'ru');
     void this.load();
   }
 
@@ -148,6 +174,7 @@ export class TenantOnboarding {
     } finally {
       this.loading.set(false);
     }
+    await this.loadInvitation();
     try {
       const suggestion = await this.tenantsApi.suggestedOnboardingTemplate(this.tenantId);
       this.suggestion.set(suggestion);
@@ -163,6 +190,51 @@ export class TenantOnboarding {
       // Listing every template needs platform scope; without it there is
       // nothing to choose between, and the suggestion stands.
       this.templates.set([]);
+    }
+  }
+
+  private async loadInvitation(): Promise<void> {
+    try {
+      this.invitation.set(await this.tenantsApi.ownerInvitation(this.tenantId));
+    } catch {
+      // The run itself still renders; only the invitation panel is missing.
+      this.invitation.set(null);
+    }
+  }
+
+  protected invitationHint(view: OwnerInvitationView): MessageKey | null {
+    const code = view.state === 'EXPIRED' ? 'EXPIRED' : view.lastErrorCode;
+    return code !== null && INVITATION_HINTS.has(code)
+      ? (`onboarding.invitation.hint.${code}` as MessageKey)
+      : null;
+  }
+
+  protected when(instant: string | null): string {
+    return instant === null ? '' : this.i18n.dateTime(new Date(instant));
+  }
+
+  protected async resendInvitation(event: Event): Promise<void> {
+    event.preventDefault();
+    const reason = this.resendReason().trim();
+    if (reason.length === 0 || this.resending()) {
+      return;
+    }
+    this.resending.set(true);
+    this.resent.set(false);
+    this.actionError.set(null);
+    try {
+      await this.tenantsApi.resendOwnerInvitation(
+        this.tenantId,
+        reason,
+        this.resendLocale() || undefined,
+      );
+      this.resendReason.set('');
+      this.resent.set(true);
+      await this.loadInvitation();
+    } catch (error) {
+      this.actionError.set(this.i18n.describe(error as ApiError));
+    } finally {
+      this.resending.set(false);
     }
   }
 
@@ -243,10 +315,12 @@ export class TenantOnboarding {
         this.ownerEmail().trim() || undefined,
         undefined,
         this.selectedTemplate()?.id,
+        this.ownerLocale(),
       );
       this.runId.set(runId);
       this.validation.set(null);
       await this.reloadRun();
+      await this.loadInvitation();
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));
     } finally {

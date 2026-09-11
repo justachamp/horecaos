@@ -10,6 +10,7 @@ import {
   OnboardingRunView,
   OnboardingTemplateSuggestion,
   OnboardingTemplateView,
+  OwnerInvitationView,
   ValidationOutcome,
 } from './tenants-api';
 import { TenantOnboarding } from './tenant-onboarding';
@@ -70,6 +71,12 @@ class FakeTenantsApi {
   readonly cancelOnboarding = vi.fn<(...args: unknown[]) => Promise<void>>();
   readonly suggestedOnboardingTemplate = vi.fn<() => Promise<OnboardingTemplateSuggestion>>();
   readonly onboardingTemplates = vi.fn<() => Promise<OnboardingTemplateView[]>>();
+  readonly ownerInvitation = vi
+    .fn<() => Promise<OwnerInvitationView | null>>()
+    .mockResolvedValue(null);
+  readonly resendOwnerInvitation = vi
+    .fn<(...args: unknown[]) => Promise<void>>()
+    .mockResolvedValue(undefined);
 }
 
 describe('TenantOnboarding', () => {
@@ -84,11 +91,13 @@ describe('TenantOnboarding', () => {
       matched: false,
     },
     templates: OnboardingTemplateView[] = [DEFAULT],
+    invitation: OwnerInvitationView | null = null,
   ): Promise<void> {
     api = new FakeTenantsApi();
     api.currentOnboardingRun.mockResolvedValue(run);
     api.suggestedOnboardingTemplate.mockResolvedValue(suggestion);
     api.onboardingTemplates.mockResolvedValue(templates);
+    api.ownerInvitation.mockResolvedValue(invitation);
     localStorage.clear();
 
     await TestBed.configureTestingModule({
@@ -154,6 +163,7 @@ describe('TenantOnboarding', () => {
       undefined,
       undefined,
       'template-2',
+      'ru',
     );
   });
 
@@ -182,7 +192,67 @@ describe('TenantOnboarding', () => {
       undefined,
       undefined,
       'template-2',
+      'ru',
     );
+  });
+
+  it('shows the owner invitation waiting for mail, and resends it with a reason in another language', async () => {
+    const waiting: OwnerInvitationView = {
+      state: 'QUEUED',
+      emailMasked: 'd***a@example.uz',
+      locale: 'ru',
+      attempts: 0,
+      lastErrorCode: 'MAIL_NOT_CONFIGURED',
+      queuedAt: '2026-09-11T04:00:00Z',
+      sentAt: null,
+      openedAt: null,
+      acceptedAt: null,
+      expiresAt: null,
+    };
+    await createWith(RUN, undefined, undefined, waiting);
+    await settle();
+
+    const invitation = panel(ru['onboarding.invitation.title']);
+    expect(invitation.textContent).toContain(ru['onboarding.invitation.state.QUEUED']);
+    expect(invitation.textContent).toContain('d***a@example.uz');
+    expect(invitation.textContent).toContain(ru['onboarding.invitation.hint.MAIL_NOT_CONFIGURED']);
+
+    const reason = invitation.querySelector('input[name="resendReason"]') as HTMLInputElement;
+    reason.value = 'the owner asked for Uzbek';
+    reason.dispatchEvent(new Event('input'));
+    const language = invitation.querySelector('select[name="resendLocale"]') as HTMLSelectElement;
+    language.value = 'uz';
+    language.dispatchEvent(new Event('change'));
+    await settle();
+    (invitation.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.resendOwnerInvitation).toHaveBeenCalledWith(
+      'tenant-1',
+      'the owner asked for Uzbek',
+      'uz',
+    );
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.invitation.resent']);
+  });
+
+  it('offers no resend once the owner has accepted', async () => {
+    await createWith(RUN, undefined, undefined, {
+      state: 'ACCEPTED',
+      emailMasked: 'd***a@example.uz',
+      locale: 'ru',
+      attempts: 1,
+      lastErrorCode: null,
+      queuedAt: '2026-09-11T04:00:00Z',
+      sentAt: '2026-09-11T04:01:00Z',
+      openedAt: '2026-09-11T05:00:00Z',
+      acceptedAt: '2026-09-11T05:02:00Z',
+      expiresAt: '2026-09-14T04:01:00Z',
+    });
+    await settle();
+
+    const invitation = panel(ru['onboarding.invitation.title']);
+    expect(invitation.textContent).toContain(ru['onboarding.invitation.state.ACCEPTED']);
+    expect(invitation.querySelector('form')).toBeNull();
   });
 
   it('renders every step with its status', async () => {

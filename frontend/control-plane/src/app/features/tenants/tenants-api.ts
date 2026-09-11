@@ -230,6 +230,24 @@ export interface OnboardingTemplateSuggestion {
   readonly matched: boolean;
 }
 
+/** The language an owner's invitation is written in. */
+export type InvitationLocale = 'uz' | 'ru' | 'en';
+
+/** OwnerInvitationService.OwnerInvitationView (ADR 0097). The address is masked by the server. */
+export interface OwnerInvitationView {
+  readonly state:
+    'QUEUED' | 'SENT' | 'ACCEPTED' | 'NOT_NEEDED' | 'FAILED' | 'EXPIRED' | (string & {});
+  readonly emailMasked: string | null;
+  readonly locale: InvitationLocale | (string & {});
+  readonly attempts: number;
+  readonly lastErrorCode: string | null;
+  readonly queuedAt: string;
+  readonly sentAt: string | null;
+  readonly openedAt: string | null;
+  readonly acceptedAt: string | null;
+  readonly expiresAt: string | null;
+}
+
 /** OnboardingService.ActivationOutcome. */
 export interface ActivationOutcome {
   readonly activated: boolean;
@@ -493,12 +511,43 @@ export class TenantsApi {
     ownerEmail?: string,
     ownerSubjectId?: string,
     templateId?: string,
+    ownerLocale?: InvitationLocale,
   ): Promise<{ runId: string }> {
     return firstValueFrom(
       this.api.post<{ runId: string }>(
         `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs`,
-        { ownerEmail, ownerSubjectId, templateId },
+        { ownerEmail, ownerSubjectId, templateId, ownerLocale },
       ),
+    );
+  }
+
+  /** The owner's invitation (ADR 0097), or null when onboarding has not queued one. */
+  async ownerInvitation(tenantId: string): Promise<OwnerInvitationView | null> {
+    try {
+      return await firstValueFrom(
+        this.api.get<OwnerInvitationView>(
+          `/api/v1/control-plane/tenants/${tenantId}/owner-invitation`,
+        ),
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === 'RESOURCE_NOT_FOUND') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** Sends it again with a new link; the one already sent stops working. */
+  async resendOwnerInvitation(
+    tenantId: string,
+    reason: string,
+    locale?: InvitationLocale,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<unknown>(`/api/v1/control-plane/tenants/${tenantId}/owner-invitation/resend`, {
+        reason,
+        locale,
+      }),
     );
   }
 

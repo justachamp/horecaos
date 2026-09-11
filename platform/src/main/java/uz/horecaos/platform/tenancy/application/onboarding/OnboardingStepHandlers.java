@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -16,6 +17,8 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
@@ -25,6 +28,7 @@ import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitations;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.Location;
@@ -129,10 +133,18 @@ public final class OnboardingStepHandlers {
 
         private final OrganizationProvisioner organizations;
         private final TenantOwnerAuthorityGrantor authority;
+        private final FieldProtection protection;
+        private final OwnerInvitations invitations;
 
-        public TenantOwnerLinkOrInvite(OrganizationProvisioner organizations, TenantOwnerAuthorityGrantor authority) {
+        public TenantOwnerLinkOrInvite(
+                OrganizationProvisioner organizations,
+                TenantOwnerAuthorityGrantor authority,
+                FieldProtection protection,
+                OwnerInvitations invitations) {
             this.organizations = organizations;
             this.authority = authority;
+            this.protection = protection;
+            this.invitations = invitations;
         }
 
         @Override
@@ -142,8 +154,17 @@ public final class OnboardingStepHandlers {
 
         @Override
         public StepResult execute(StepContext context) {
-            Object email = context.input().get("ownerEmail");
-            Object subject = context.input().get("ownerSubjectId");
+            String email;
+            try {
+                email = ownerEmail(context);
+            } catch (FieldProtection.ProtectionIntegrityException unreadable) {
+                // A ciphertext that will not decrypt for this tenant is a
+                // security event, not a transient one: retrying cannot help,
+                // and a person has to look at where it came from.
+                return StepResult.failed(
+                        "OWNER_EMAIL_UNREADABLE", "The owner's address does not decrypt for this tenant");
+            }
+            String subject = present(context.input().get("ownerSubjectId"));
 
             if (email == null && subject == null) {
                 return StepResult.failed("OWNER_NOT_SUPPLIED", "An owner email or an existing subject id is required");
@@ -160,10 +181,8 @@ public final class OnboardingStepHandlers {
                 // change's scope and the fields are not yet annotated @Nullable
                 // there.
                 @SuppressWarnings("NullAway")
-                var membership = organizations.ensureMembership(new OrganizationProvisioner.EnsureMembership(
-                        String.valueOf(organizationId),
-                        email == null ? null : String.valueOf(email),
-                        subject == null ? null : String.valueOf(subject)));
+                var membership = organizations.ensureMembership(
+                        new OrganizationProvisioner.EnsureMembership(String.valueOf(organizationId), email, subject));
 
                 // Granted after membership succeeds, and never before: a grant
                 // for a subject Keycloak has not actually linked would be
@@ -174,16 +193,54 @@ public final class OnboardingStepHandlers {
                 authority.grantTenantOwner(
                         context.tenantId(), membership.subjectId(), "Tenant onboarding: owner linked (ADR 0009)");
 
+                // ADR 0097: an account with no password gets an invitation. Queued
+                // once; a retry of this step finds it queued and sends nothing new.
+                String invitation = invitations.inviteIfNeeded(
+                        context.tenantId(),
+                        membership.subjectId(),
+                        OnboardingInputs.locale(present(context.input().get(OnboardingInputs.OWNER_LOCALE))),
+                        context.runId());
+
                 // The subject id, never the invitation token: ADR 0009 forbids
                 // storing anything that could be replayed to gain access.
                 return StepResult.completed(
-                        Map.of("subjectId", membership.subjectId(), "created", membership.created()),
+                        Map.of(
+                                "subjectId",
+                                membership.subjectId(),
+                                "created",
+                                membership.created(),
+                                "invitation",
+                                invitation),
                         membership.subjectId());
             } catch (OrganizationProvisioner.OrganizationDriftException drift) {
                 return StepResult.failed("IDENTITY_DRIFT", drift.getMessage());
             } catch (RuntimeException transientFailure) {
                 return StepResult.retry("TRANSIENT_INFRASTRUCTURE", transientFailure.getMessage());
             }
+        }
+
+        /**
+         * The owner's address: decrypted from the protected input, or read from
+         * the clear one a run started before ADR 0097 still carries.
+         */
+        private @Nullable String ownerEmail(StepContext context) {
+            String sealed = present(context.input().get(OnboardingInputs.OWNER_EMAIL_PROTECTED));
+            if (sealed != null) {
+                return protection.reveal(
+                        context.tenantId(),
+                        ProtectedValue.deserialize(sealed),
+                        OnboardingInputs.ownerEmailRecord(context.tenantId()),
+                        "tenancy.onboarding.owner-invitation");
+            }
+            return present(context.input().get(OnboardingInputs.LEGACY_OWNER_EMAIL));
+        }
+
+        private static @Nullable String present(@Nullable Object value) {
+            if (value == null) {
+                return null;
+            }
+            String text = String.valueOf(value).strip();
+            return text.isEmpty() ? null : text;
         }
     }
 

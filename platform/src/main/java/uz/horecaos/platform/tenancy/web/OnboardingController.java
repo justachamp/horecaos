@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.tenancy.application.onboarding.OnboardingInputs;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingService;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingTemplateService;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingTemplateService.TemplateView;
@@ -43,16 +46,19 @@ public class OnboardingController {
     private final OnboardingTemplateService templates;
     private final JdbcClient jdbc;
     private final CurrentActor currentActor;
+    private final FieldProtection protection;
 
     public OnboardingController(
             OnboardingService onboarding,
             OnboardingTemplateService templates,
             JdbcClient jdbc,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            FieldProtection protection) {
         this.onboarding = onboarding;
         this.templates = templates;
         this.jdbc = jdbc;
         this.currentActor = currentActor;
+        this.protection = protection;
     }
 
     @PostMapping
@@ -67,14 +73,29 @@ public class OnboardingController {
                 ? templates.suggestedFor(businessTypeOf(tenantId)).template()
                 : templates.get(request.templateId());
 
+        // ADR 0029: the owner's address is personal data and every step's input
+        // is stored, so it is kept encrypted, bound to this tenant, until the
+        // owner step has used it to create the account (ADR 0097).
+        String ownerEmail =
+                request.ownerEmail() == null ? "" : request.ownerEmail().strip();
+        String protectedEmail = ownerEmail.isEmpty()
+                ? ""
+                : protection
+                        .protect(tenantId, DataClass.PERSONAL, OnboardingInputs.ownerEmailRecord(tenantId), ownerEmail)
+                        .serialize();
         UUID runId = onboarding.startRun(
                 tenantId,
                 template.id(),
                 template.version(),
                 Map.of(
-                        "ownerEmail", request.ownerEmail() == null ? "" : request.ownerEmail(),
-                        "ownerSubjectId", request.ownerSubjectId() == null ? "" : request.ownerSubjectId(),
-                        "defaultConfiguration", template.defaultConfiguration()),
+                        OnboardingInputs.OWNER_EMAIL_PROTECTED,
+                        protectedEmail,
+                        "ownerSubjectId",
+                        request.ownerSubjectId() == null ? "" : request.ownerSubjectId(),
+                        OnboardingInputs.OWNER_LOCALE,
+                        OnboardingInputs.locale(request.ownerLocale()),
+                        "defaultConfiguration",
+                        template.defaultConfiguration()),
                 actor());
 
         return ResponseEntity.ok(Map.of("runId", runId));
@@ -248,7 +269,16 @@ public class OnboardingController {
     public record StartRequest(
             UUID templateId,
             @Size(max = 320) String ownerEmail,
-            @Size(max = 255) String ownerSubjectId) {}
+            @Size(max = 255) String ownerSubjectId,
+            /* The language the owner's invitation is written in: uz, ru or en (ADR 0097). */
+            @Size(max = 8) String ownerLocale) {
+
+        /** A record's generated {@code toString} would print the owner's address. */
+        @Override
+        public String toString() {
+            return "StartRequest[templateId=" + templateId + ", ownerEmail=<redacted>]";
+        }
+    }
 
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
