@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
@@ -174,6 +175,36 @@ class LiveBoardCountsTests {
     }
 
     @Test
+    @DisplayName("the window's own edges are cut correctly: `from` is inside today, `to` is not")
+    void theWindowsOwnEdgesAreCutCorrectly() {
+        // Derived from the board's own window rather than a second hardcoded
+        // tashkent(...) call, so this stays coupled to whatever
+        // BusinessDayService actually computes rather than to a number this
+        // test happens to agree with it about.
+        var window = board.forLocation(TENANT, BRAND, CHILONZOR, OrderCountsPeriod.BUSINESS_DAY)
+                .window();
+        Instant from = requireNonNull(window.from());
+        Instant to = requireNonNull(window.to());
+
+        // Closed exactly on the window's inclusive lower edge: `>=` keeps it in.
+        insertOrder("AT_FROM", CHILONZOR, "CANCELLED", from.minus(Duration.ofHours(1)), from);
+        // Closed exactly on the window's exclusive upper edge: `<` keeps it out.
+        insertOrder("AT_TO", CHILONZOR, "CANCELLED", from.minus(Duration.ofHours(1)), to);
+
+        var today = board.forLocation(TENANT, BRAND, CHILONZOR, OrderCountsPeriod.BUSINESS_DAY);
+        assertThat(today.counts().cancelled())
+                .as("a `>` in place of `>=`, or a `<=` in place of `<`, would move this number")
+                .isEqualTo(1);
+
+        clock.advance(Duration.ofHours(24));
+        var nextDay = board.forLocation(TENANT, BRAND, CHILONZOR, OrderCountsPeriod.BUSINESS_DAY);
+        assertThat(nextDay.window().from()).isEqualTo(to);
+        assertThat(nextDay.counts().cancelled())
+                .as("the order closed exactly at `to` belongs to the next window, not this one")
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("completed is cut on when the order closed, total on when it arrived")
     void theTwoHistoricalCountersAreCutOnTheirOwnTimestamps() {
         // Placed on the previous trading day, finished on this one.
@@ -281,7 +312,7 @@ class LiveBoardCountsTests {
     }
 
     @Test
-    @DisplayName("a brand read never reaches another tenant's or another brand's orders")
+    @DisplayName("a brand read never reaches another brand's orders, even within the same tenant")
     void theBrandReadIsScopedToItsOwnBrand() {
         UUID otherBrand = UUID.fromString("018fa011-3000-7000-8000-0000000000b2");
         UUID otherLocation = UUID.fromString("018fa011-3000-7000-8000-0000000000c9");
@@ -307,6 +338,54 @@ class LiveBoardCountsTests {
                 .containsExactly(CHILONZOR);
         assertThat(slices(brand.mix(), MixSliceRow.CHANNEL))
                 .containsExactly(new MixSliceRow(MixSliceRow.CHANNEL, "TELEGRAM", 1));
+    }
+
+    /**
+     * The tenant boundary, on its own — {@link #theBrandReadIsScopedToItsOwnBrand}
+     * proves brand_id scoping and nothing about tenant_id, because every order in
+     * this class otherwise belongs to {@link #TENANT}.
+     *
+     * <p>{@code counts}, {@code countsByLocation} and {@code activeMix} each build
+     * their {@code WHERE} as {@code tenant_id = :tenantId AND brand_id = :brandId}
+     * inline; a copy/paste that dropped or mis-bound {@code tenant_id} would pass
+     * every other test in this file. This wires up a genuinely second tenant —
+     * its own brand, branch, customer, channel and publication, none of it
+     * borrowed from {@link #seedTenancy()} — and reads TENANT's board with the
+     * other tenant's order sitting in the same table.
+     *
+     * <p>It does not additionally reuse the other tenant's brand/location ids
+     * for TENANT's own brand/location: {@code tenant.brands.id} and {@code
+     * tenant.locations.id} are each a bare {@code PRIMARY KEY}, so two tenants
+     * cannot hold a row with the same id, and {@code ordering.orders}' own
+     * foreign keys are composite on {@code (tenant_id, brand_id[, location_id])}
+     * — a brand or location id, once it exists, already names exactly one
+     * tenant. What this test still catches, and what an id-collision variant
+     * could not catch any harder given that guarantee, is the {@code WHERE}
+     * clause being dropped or corrupted wholesale rather than merely missing
+     * its {@code tenant_id} conjunct.
+     */
+    @Test
+    @DisplayName("neither the brand read nor the location read ever reaches another tenant's orders")
+    void theLiveBoardIsScopedToItsOwnTenant() {
+        OtherTenant other = seedOtherTenant();
+
+        insertOrder("MINE", CHILONZOR, "PREPARING", tashkent(11, 18, 0), null);
+        insertOrderForOtherTenant(other, "THEIRS", tashkent(11, 18, 1));
+
+        var brand = board.forBrand(TENANT, BRAND, OrderCountsPeriod.BUSINESS_DAY);
+        var location = board.forLocation(TENANT, BRAND, CHILONZOR, OrderCountsPeriod.BUSINESS_DAY);
+
+        assertThat(brand.totals().totalNonTerminal())
+                .as("counts() must filter on tenant_id, not merely on brand_id")
+                .isEqualTo(1);
+        assertThat(brand.locations())
+                .as("countsByLocation() must filter on tenant_id too")
+                .extracting(JdbcOrderStore.LocationCountsRow::locationId)
+                .containsExactly(CHILONZOR);
+        assertThat(slices(brand.mix(), MixSliceRow.CHANNEL))
+                .as("activeMix() must filter on tenant_id too")
+                .containsExactly(new MixSliceRow(MixSliceRow.CHANNEL, "TELEGRAM", 1));
+        assertThat(location.counts().totalNonTerminal()).isEqualTo(1);
     }
 
     // ------------------------------------------------------------ fixtures
@@ -461,6 +540,148 @@ class LiveBoardCountsTests {
                 .param("t", TENANT)
                 .param("b", BRAND)
                 .param("cat", catalogId)
+                .update();
+    }
+
+    /** A second tenant's ids, wired independently of {@link #seedTenancy()}. */
+    private record OtherTenant(
+            UUID tenantId, UUID brandId, UUID locationId, UUID customerId, UUID channelId, UUID publicationId) {}
+
+    /**
+     * A whole second tenant — its own brand, branch, customer, sales channel,
+     * catalog and publication — so {@link #theLiveBoardIsScopedToItsOwnTenant}
+     * can insert a real order under it with no fixture borrowed from {@link
+     * #TENANT}.
+     */
+    private OtherTenant seedOtherTenant() {
+        UUID otherTenant = UUID.fromString("018fa011-3000-7000-8000-0000000000e0");
+        UUID otherBrand = UUID.fromString("018fa011-3000-7000-8000-0000000000e1");
+        UUID otherLocation = UUID.fromString("018fa011-3000-7000-8000-0000000000e2");
+        UUID otherCustomer = UUID.fromString("018fa011-3000-7000-8000-0000000000e3");
+
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, 'live-board-other-tenant', 'Legal', 'Other Tenant', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", otherTenant).update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :t, 'OTH', 'oth', 'Other brand', 'ACTIVE', 0)
+                """).param("id", otherBrand).param("t", otherTenant).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :t, :b, 'OTH', 'oth-branch', 'Other branch', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", otherLocation)
+                .param("t", otherTenant)
+                .param("b", otherBrand)
+                .update();
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name,
+                    identity_policy_version, version)
+                VALUES (:id, :t, 'ACTIVE', 'Other customer', 1, 1)
+                """).param("id", otherCustomer).param("t", otherTenant).update();
+
+        UUID otherChannel = derived("channel:other-tenant");
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
+                    status, guest_orders_allowed)
+                VALUES (:id, :t, 'TELEGRAM', 'TELEGRAM', 'TELEGRAM', 'ACTIVE', false)
+                """).param("id", otherChannel).param("t", otherTenant).update();
+
+        UUID otherCatalog = derived("catalog:other-tenant");
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
+                """)
+                .param("id", otherCatalog)
+                .param("t", otherTenant)
+                .param("b", otherBrand)
+                .update();
+
+        UUID otherPublication = derived("publication:other-tenant");
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
+                    status, content_hash, activated_at)
+                VALUES (:id, :t, :b, :cat, 'TELEGRAM', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", otherPublication)
+                .param("t", otherTenant)
+                .param("b", otherBrand)
+                .param("cat", otherCatalog)
+                .update();
+
+        return new OtherTenant(otherTenant, otherBrand, otherLocation, otherCustomer, otherChannel, otherPublication);
+    }
+
+    /** One order under {@code other}'s tenant, delivery, in progress ({@code PREPARING}). */
+    private void insertOrderForOtherTenant(OtherTenant other, String seed, Instant createdAt) {
+        UUID orderId = derived("order:" + seed);
+        UUID cartId = derived("cart:" + seed);
+        UUID quoteId = derived("quote:" + seed);
+
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    customer_account_id, fulfillment_mode, currency, status, expires_at, converted_order_id)
+                VALUES (:id, :t, :b, :loc, :ch, :cust, 'DELIVERY', 'UZS', 'CONVERTED', :expires, :orderId)
+                """)
+                .param("id", cartId)
+                .param("t", other.tenantId())
+                .param("b", other.brandId())
+                .param("loc", other.locationId())
+                .param("ch", other.channelId())
+                .param("cust", other.customerId())
+                .param("expires", createdAt.atOffset(ZoneOffset.UTC))
+                .param("orderId", orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, customer_account_id,
+                    currency, status, catalog_publication_id, calculation_version, context_hash,
+                    subtotal_minor, tax_minor, fee_minor, discount_minor, total_minor, expires_at, accepted_at)
+                VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
+                    50000, 0, 0, 0, 50000, :expires, :accepted)
+                """)
+                .param("id", quoteId)
+                .param("t", other.tenantId())
+                .param("b", other.brandId())
+                .param("loc", other.locationId())
+                .param("cust", other.customerId())
+                .param("pub", other.publicationId())
+                .param("hash", "hash-" + seed)
+                .param("expires", createdAt.atOffset(ZoneOffset.UTC))
+                .param("accepted", createdAt.atOffset(ZoneOffset.UTC))
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id, location_id,
+                    channel_id, channel_code_snapshot, customer_account_id, fulfillment_mode,
+                    acceptance_mode_snapshot, approval_channel_snapshot, status, currency,
+                    subtotal_minor, tax_minor, discount_minor, fee_minor, total_minor,
+                    pricing_quote_id, pricing_context_hash, catalog_publication_id, cart_id,
+                    idempotency_key, version, created_at, confirmed_at, closed_at)
+                VALUES (:id, :number, :t, :b, :loc, :ch,
+                    (SELECT code FROM tenant.sales_channels WHERE id = :ch), :cust, 'DELIVERY',
+                    'AUTO_CONFIRM', 'NONE', 'PREPARING', 'UZS',
+                    50000, 0, 0, 0, 50000,
+                    :quote, :hash, :pub, :cart,
+                    :key, 1, :createdAt, :confirmedAt, null)
+                """)
+                .param("id", orderId)
+                .param("number", seed)
+                .param("t", other.tenantId())
+                .param("b", other.brandId())
+                .param("loc", other.locationId())
+                .param("ch", other.channelId())
+                .param("cust", other.customerId())
+                .param("quote", quoteId)
+                .param("hash", "hash-" + seed)
+                .param("pub", other.publicationId())
+                .param("cart", cartId)
+                .param("key", "idem-" + seed)
+                .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
+                .param("confirmedAt", createdAt.plusSeconds(60).atOffset(ZoneOffset.UTC))
                 .update();
     }
 

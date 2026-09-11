@@ -196,6 +196,50 @@ describe('LiveBoard: one request per tick', () => {
     expect(get).toHaveBeenCalledTimes(1);
     expect(get.mock.calls[0][0]).toBe(LOCATION_COUNTS);
   });
+
+  it('retries the brand read once the refusal is stale, so a grant widened while the board is open is not stuck behind a reload', async () => {
+    vi.useFakeTimers();
+    try {
+      let brandAttempts = 0;
+      const { board, get } = configure([
+        {
+          match: BRAND_COUNTS,
+          response: () => {
+            const first = brandAttempts === 0;
+            brandAttempts += 1;
+            return first ? denied() : ok(brandBoard({ totals: counts({ totalNonTerminal: 9 }) }))();
+          },
+        },
+        { match: LOCATION_COUNTS, response: ok(locationBoard({ totalNonTerminal: 4 })) },
+        {
+          match: '/locations/l1',
+          response: ok({ id: 'l1', displayName: 'Own branch', status: 'ACTIVE' }),
+        },
+        { match: ROSTER, response: denied },
+      ]);
+
+      const first = await board.load(SCOPE);
+      expect(first.counts.totalNonTerminal).toBe(4); // 403 on the brand read, fell back to the location one
+
+      // Still well inside the TTL: the refusal is trusted and the brand
+      // endpoint is not asked again.
+      get.mockClear();
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+      const stillRefused = await board.load(SCOPE);
+      expect(get.mock.calls.map((call) => call[0])).not.toContain(BRAND_COUNTS);
+      expect(stillRefused.counts.totalNonTerminal).toBe(4);
+
+      // Past the TTL: the widened grant (or a lapsed misconfiguration) gets a
+      // real chance to answer instead of being silently skipped forever.
+      get.mockClear();
+      await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+      const recovered = await board.load(SCOPE);
+      expect(get.mock.calls[0][0]).toBe(BRAND_COUNTS);
+      expect(recovered.counts.totalNonTerminal).toBe(9);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('LiveBoard: the counters and the period', () => {

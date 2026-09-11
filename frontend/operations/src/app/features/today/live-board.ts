@@ -125,12 +125,17 @@ interface BranchRoster {
  * `MIX_FETCH_LIMIT = 200` page silently under-counted above that ceiling and
  * had no flag to say so; there is no page left to truncate.
  *
- * **Which grant you hold decides which endpoint answers, once.** A brand-scoped
- * principal gets the whole board. A location-scoped one — the common pilot
- * shape — is refused the brand read (ADR 0025: a scope covers downwards, never
- * up) and falls back to their own branch's counts. That refusal is remembered
- * for the rest of the session, because re-asking a question already answered
- * 403 every ten seconds would put the request count straight back to two.
+ * **Which grant you hold decides which endpoint answers, mostly.** A
+ * brand-scoped principal gets the whole board. A location-scoped one — the
+ * common pilot shape — is refused the brand read (ADR 0025: a scope covers
+ * downwards, never up) and falls back to their own branch's counts. That
+ * refusal is remembered for {@link REFUSAL_TTL_MS}, because re-asking a
+ * question already answered 403 every ten seconds would put the request count
+ * straight back to two — but it is not remembered forever: this board runs
+ * unattended on a wallboard for a whole shift, a grant can be widened while it
+ * is open, and nobody is there to reload the tab. Once the TTL passes the next
+ * tick tries the brand read again, the same way {@link #readRoster}'s failure
+ * is deliberately left uncached, below.
  *
  * **What this cannot build, and does not pretend to.** An operator leaderboard
  * needs a human name for `acceptedByActorId`, and nothing in the platform
@@ -142,8 +147,16 @@ interface BranchRoster {
 export class LiveBoard {
   private readonly api = inject(ApiClient);
 
-  /** Brands whose brand-scoped read has already answered 403. Never re-asked. */
-  private readonly brandReadRefused = new Set<string>();
+  /**
+   * How long a brand's 403 is trusted before the next tick tries the brand
+   * read again. Well below a shift length — the whole reason this is bounded —
+   * and well above the 10s tick interval, so a refusal that is still true does
+   * not turn into a retry storm.
+   */
+  private static readonly REFUSAL_TTL_MS = 5 * 60 * 1000;
+
+  /** Brand id → when its brand-scoped read last answered 403. Expires after {@link REFUSAL_TTL_MS}. */
+  private readonly brandReadRefused = new Map<string, number>();
 
   /** Roster reads in flight or settled, by brand — see {@link branchRoster}. Failures are not cached. */
   private readonly rosters = new Map<string, Promise<BranchRoster>>();
@@ -156,7 +169,10 @@ export class LiveBoard {
   // ------------------------------------------------------------- the board
 
   private async readBoard(scope: LocationScope): Promise<BoardRead> {
-    if (!this.brandReadRefused.has(scope.brandId)) {
+    const refusedAt = this.brandReadRefused.get(scope.brandId);
+    const refusalIsStale =
+      refusedAt === undefined || Date.now() - refusedAt >= LiveBoard.REFUSAL_TTL_MS;
+    if (refusalIsStale) {
       try {
         return fromBrand(
           await this.get<BrandCountsResponse>(operationsPaths.brandOrderCounts(scope)),
@@ -165,7 +181,7 @@ export class LiveBoard {
         if (!(error instanceof ApiError) || error.status !== 403) {
           throw error;
         }
-        this.brandReadRefused.add(scope.brandId);
+        this.brandReadRefused.set(scope.brandId, Date.now());
       }
     }
     return fromLocation(
