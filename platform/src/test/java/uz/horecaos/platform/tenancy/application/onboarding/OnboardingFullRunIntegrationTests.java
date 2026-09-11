@@ -211,9 +211,20 @@ class OnboardingFullRunIntegrationTests {
         assertThat(steps)
                 .as("every step but TENANT_ACTIVATE — parked awaiting platform approval by design — completes")
                 .filteredOn(entry -> !entry.getKey().equals("TENANT_ACTIVATE"))
+                // SAMPLE_MENU_PUBLISH (ADR 0099) is the one optional step, and this
+                // tenant authors a real menu of its own. Asserted below rather than
+                // merely excluded: the point of this run is that a tenant which does
+                // its own catalogue work is untouched by the sample-menu option.
+                .filteredOn(entry -> !entry.getKey().equals("SAMPLE_MENU_PUBLISH"))
                 .allSatisfy(entry -> assertThat(entry.getValue())
                         .as(entry.getKey() + " last_error: " + lastErrorOf(runId, entry.getKey()))
                         .isEqualTo("COMPLETED"));
+
+        assertThat(steps)
+                .as("a run that did not ask for a sample menu carries the step, skipped, and is not held up by it")
+                .filteredOn(entry -> entry.getKey().equals("SAMPLE_MENU_PUBLISH"))
+                .extracting(Map.Entry::getValue)
+                .containsExactly("SKIPPED");
 
         assertThat(steps)
                 .filteredOn(entry -> entry.getKey().equals("TENANT_ACTIVATE"))
