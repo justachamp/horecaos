@@ -48,13 +48,22 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/tenants/tenant-directory').then((m) => m.TenantDirectory),
       },
-      // Before `tenants/:tenantId`, or the router would read "invitations" as a
-      // tenant identifier and this screen would never be reached.
+      // Both of these come before `tenants/:tenantId`, or the router reads
+      // "invitations" and "configuration" as tenant identifiers and neither
+      // screen is ever reached. `declares every literal path before the
+      // parameterised path that would swallow it` in app.routes.spec.ts
+      // enforces this for every pair in the file, not just these two.
       {
         path: 'tenants/invitations',
         canActivate: [requiresCapability('TENANT_ONBOARDING_MANAGE')],
         loadComponent: () =>
           import('./features/tenants/owner-invitations').then((m) => m.OwnerInvitations),
+      },
+      {
+        path: 'tenants/configuration',
+        canActivate: [requiresCapability('PLATFORM_ADMIN')],
+        loadComponent: () =>
+          import('./features/tenants/configuration-policy').then((m) => m.ConfigurationPolicy),
       },
       {
         path: 'tenants/:tenantId',
@@ -89,12 +98,6 @@ export const routes: Routes = [
         canActivate: [requiresCapability('SUPPORT_SESSION_READ')],
         loadComponent: () =>
           import('./features/tenants/tenant-impersonation').then((m) => m.TenantImpersonation),
-      },
-      {
-        path: 'tenants/configuration',
-        canActivate: [requiresCapability('PLATFORM_ADMIN')],
-        loadComponent: () =>
-          import('./features/tenants/configuration-policy').then((m) => m.ConfigurationPolicy),
       },
 
       // IA §3 Providers
