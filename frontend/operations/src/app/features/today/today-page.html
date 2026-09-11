@@ -66,6 +66,10 @@
       </div>
     </section>
 
+    @if (periodLabel(); as label) {
+      <p class="today__period q-caption" data-testid="today-period">{{ label }}</p>
+    }
+
     <section class="today__mixes">
       <div class="mix-card" data-testid="today-source-mix">
         <h2 class="q-emphasis">{{ 'today.mix.source.title' | t }}</h2>

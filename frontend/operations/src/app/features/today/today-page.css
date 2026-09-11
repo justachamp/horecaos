@@ -130,7 +130,15 @@
 .today__counters {
   display: flex;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
+}
+
+/* The window «Отменено» and «Завершено» were cut to — a counter nobody can
+   date is a counter nobody can act on. Sits under the band it qualifies, not
+   inside a card, because it qualifies both of them. */
+.today__period {
+  margin: 0 0 24px;
+  color: var(--q-ink-subtle);
 }
 
 .counter-card {
