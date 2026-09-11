@@ -29,8 +29,35 @@ public interface SampleMenuPricingPort {
      * priority so any book the tenant later authors wins, sets a VAT profile
      * when the brand has none, and activates. Does nothing at all when the
      * tenant's own prices already cover every variant.
+     *
+     * @throws SamplePricingRefusedException when pricing refuses permanently; the
+     *     caller must not retry it
      */
     SamplePricing priceSample(UUID tenantId, UUID brandId, String currency, List<SampleVariantPrice> prices);
+
+    /**
+     * Pricing refused the sample book, permanently.
+     *
+     * <p>Declared on the port rather than letting {@code
+     * PriceAuthoringService.PriceBookLifecycleException} escape, so the
+     * onboarding step can tell a permanent refusal from a transient one without
+     * reaching past this interface into {@code pricing.application} — the
+     * boundary ADR 0099 chose these three ports to protect.
+     *
+     * <p>The refusal that actually happens: the tenant has already activated its
+     * own {@code BRAND}-scope book at priority 0 with an overlapping window, and
+     * the sample's own priority-0 book ties with it. A caller that mapped this to
+     * a retry would burn every attempt on a condition no amount of waiting fixes
+     * — the same reasoning behind the step's {@code NO_CHANNEL} pre-check. An
+     * {@code OptimisticLockingFailureException} from two writers racing is
+     * deliberately *not* wrapped: that one is genuinely transient and has to keep
+     * its retry.
+     */
+    class SamplePricingRefusedException extends RuntimeException {
+        public SamplePricingRefusedException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 
     /** One sample item and what it costs, in integer minor units of the tenant's currency. */
     record SampleVariantPrice(UUID variantId, long amountMinor) {}

@@ -34,6 +34,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.configuration.Ids;
 
 /**
  * Catalog persistence (ADR 0016).
@@ -359,6 +360,49 @@ public class JdbcCatalogStore {
                 .param("status", status.name())
                 .param("modes", fulfillmentModes)
                 .update();
+    }
+
+    /**
+     * Creates an offering only where there is none, leaving any existing row —
+     * whatever its status — exactly as it is.
+     *
+     * <p>The sibling of {@link #upsertOffering}, for the one caller that must not
+     * overwrite: the ADR 0099 sample-menu installer, which runs again on every
+     * retry and on every later run for the same tenant. An operator who set a
+     * sample dish {@code UNAVAILABLE} or {@code HIDDEN} has made a decision this
+     * must respect, exactly as {@code StockListingPortAdapter.ensureListed}
+     * already respects a deliberately sold-out stock item.
+     *
+     * <p>{@code ON CONFLICT DO NOTHING} on the natural key rather than a read
+     * first: one statement, no race, and — unlike {@link #offeringsForLocation},
+     * which filters {@code status <> 'HIDDEN'} in SQL — a {@code HIDDEN} row
+     * counts as present rather than reading as absent and being re-created
+     * {@code AVAILABLE}.
+     *
+     * @return whether this call created the row
+     */
+    public boolean insertOfferingIfAbsent(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            String fulfillmentModes) {
+        return jdbc.sql("""
+                        INSERT INTO catalog.location_offerings (
+                            id, tenant_id, brand_id, location_id, variant_id, status, fulfillment_modes)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :status, :modes)
+                        ON CONFLICT (location_id, variant_id) DO NOTHING
+                        """)
+                        .param("id", Ids.newId())
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("locationId", locationId)
+                        .param("variantId", variantId)
+                        .param("status", status.name())
+                        .param("modes", fulfillmentModes)
+                        .update()
+                == 1;
     }
 
     // --------------------------------------------------- fiscal classification

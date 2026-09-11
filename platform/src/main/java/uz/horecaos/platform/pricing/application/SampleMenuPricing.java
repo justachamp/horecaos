@@ -2,6 +2,7 @@ package uz.horecaos.platform.pricing.application;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -77,36 +78,58 @@ public class SampleMenuPricing implements SampleMenuPricingPort {
         UUID priceBookId = existing.map(JdbcPricingStore.PriceBookSummaryRow::id)
                 .orElseGet(() -> createSampleBook(tenantId, brandId, currency));
 
-        // A previous attempt that got as far as pricing everything is not priced
-        // again: setPrice closes the open row and opens a new one, so re-running
-        // it would leave a price history a tenant never made. An attempt that
-        // stopped halfway does re-set all of them, which costs a few superseded
-        // rows in a book nobody has seen yet.
-        int priced = 0;
-        if (store.openPriceCount(tenantId, brandId, priceBookId) < prices.size()) {
-            for (SampleVariantPrice price : prices) {
-                authoring.setPrice(
-                        tenantId, brandId, priceBookId, PriceableType.VARIANT, price.variantId(), price.amountMinor());
-                priced++;
+        int priced;
+        try {
+            // A previous attempt that got as far as pricing everything is not
+            // priced again: setPrice closes the open row and opens a new one, so
+            // re-running it would leave a price history a tenant never made. An
+            // attempt that stopped halfway does re-set all of them, which costs a
+            // few superseded rows in a book nobody has seen yet.
+            priced = 0;
+            if (store.openPriceCount(tenantId, brandId, priceBookId) < prices.size()) {
+                for (SampleVariantPrice price : prices) {
+                    authoring.setPrice(
+                            tenantId,
+                            brandId,
+                            priceBookId,
+                            PriceableType.VARIANT,
+                            price.variantId(),
+                            price.amountMinor());
+                    priced++;
+                }
             }
-        }
 
-        // Without a tax profile every cart in the brand refuses with
-        // NO_TAX_PROFILE, which is what ACTIVATION_SMOKE_TEST's quote would hit.
-        // Only when the brand has none: a rate the tenant already chose is not
-        // this step's to overwrite.
-        if (authoring.taxProfile(tenantId, brandId, JURISDICTION).isEmpty()) {
-            authoring.setTaxProfile(tenantId, brandId, JURISDICTION, PricingEngine.TaxMode.INCLUSIVE, VAT_BASIS_POINTS);
-        }
+            // Without a tax profile every cart in the brand refuses with
+            // NO_TAX_PROFILE, which is what ACTIVATION_SMOKE_TEST's quote would
+            // hit. Only when the brand has none: a rate the tenant already chose
+            // is not this step's to overwrite. The rate is Uzbekistan's, which is
+            // safe only because the step refuses any tenant whose currency is not
+            // UZS (SAMPLE_MENU_UNSUPPORTED_CURRENCY); note that the profile
+            // outlives the sample — nothing retires it when the tenant publishes
+            // its own menu, and ADR 0099 says so.
+            if (authoring.taxProfile(tenantId, brandId, JURISDICTION).isEmpty()) {
+                authoring.setTaxProfile(
+                        tenantId, brandId, JURISDICTION, PricingEngine.TaxMode.INCLUSIVE, VAT_BASIS_POINTS);
+            }
 
-        PriceAuthoringService.PriceBook book = authoring.require(tenantId, brandId, priceBookId);
-        if (book.status() == PriceAuthoringService.Status.DRAFT) {
-            authoring.activate(
-                    tenantId,
-                    brandId,
-                    priceBookId,
-                    book.version(),
-                    ActorRef.systemJob("onboarding-sample-menu-publish"));
+            PriceAuthoringService.PriceBook book = authoring.require(tenantId, brandId, priceBookId);
+            if (book.status() == PriceAuthoringService.Status.DRAFT) {
+                authoring.activate(
+                        tenantId,
+                        brandId,
+                        priceBookId,
+                        book.version(),
+                        ActorRef.systemJob("onboarding-sample-menu-publish"));
+            }
+        } catch (PriceAuthoringService.PriceBookLifecycleException refusal) {
+            // Permanent, and re-thrown as the port's own type so the onboarding
+            // step can fail honestly rather than retrying five times. The one
+            // that happens in practice is a tie with the tenant's own BRAND-scope
+            // book at priority 0 — the consequence ADR 0099 already records from
+            // the other direction. Narrow on purpose: an optimistic-locking
+            // failure from two writers racing is transient and stays a retry.
+            throw new SamplePricingRefusedException(
+                    Objects.requireNonNullElse(refusal.getMessage(), "Pricing refused the sample price book"), refusal);
         }
 
         log.info("Sample price book {} for brand {}: priced {}, created={}", priceBookId, brandId, priced, created);

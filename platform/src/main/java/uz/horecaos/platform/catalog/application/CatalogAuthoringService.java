@@ -337,6 +337,32 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * Offers a variant at a location only if nothing already says otherwise.
+     *
+     * <p>{@link #setOffering}'s create-only sibling, for a machine that runs
+     * again: the ADR 0099 sample-menu installer re-asserts its offerings on
+     * every retry and on every later run for the same tenant, and last-write-wins
+     * there would silently undo an operator who had taken a sample dish off. An
+     * existing row — {@code AVAILABLE}, {@code UNAVAILABLE} or {@code HIDDEN},
+     * and whatever fulfilment modes it was narrowed to — is somebody's decision
+     * and is left alone. The console's own toggle keeps {@link #setOffering},
+     * which genuinely wants last-write-wins.
+     *
+     * @return whether this call created the offering
+     */
+    @Transactional
+    public boolean offerIfAbsent(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            List<String> fulfillmentModes) {
+        return store.insertOfferingIfAbsent(
+                tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+    }
+
+    /**
      * The same offering toggle as {@link #setOffering}, plus the ADR 0027
      * audit fact it never wrote: whether a location sells a variant at all
      * is a menu-structure decision, distinct from the ADR 0060 stop-list

@@ -107,14 +107,20 @@ public class SampleMenuService implements SampleMenuPort {
         Map<String, UUID> categories = ensureCategories(tenantId, brandId, catalogId, locale);
         Map<String, UUID> variantsBySku = ensureProducts(tenantId, brandId, catalogId, locale, categories);
 
-        // Re-asserted on every attempt rather than only on the attempt that
-        // created the product: a location added to the brand between two runs
-        // must start offering the sample too, and upsertOffering is a natural-key
-        // upsert, so re-asserting costs one statement and cannot duplicate.
+        // Created where missing on every attempt, and never overwritten. A
+        // location added to the brand between two runs must start offering the
+        // sample too — that is why this is re-run at all — but an operator who
+        // set a sample dish UNAVAILABLE or HIDDEN has made a decision, and
+        // re-asserting AVAILABLE over it would put a dish back on that somebody
+        // had taken off. Exactly the rule StockListingPortAdapter.ensureListed
+        // already applies to a deliberately sold-out stock item.
+        int offeringsCreated = 0;
         for (UUID locationId : locationIds) {
             for (UUID variantId : variantsBySku.values()) {
-                authoring.setOffering(
-                        tenantId, brandId, locationId, variantId, OfferingStatus.AVAILABLE, FULFILLMENT_MODES);
+                if (authoring.offerIfAbsent(
+                        tenantId, brandId, locationId, variantId, OfferingStatus.AVAILABLE, FULFILLMENT_MODES)) {
+                    offeringsCreated++;
+                }
             }
         }
 
@@ -127,15 +133,23 @@ public class SampleMenuService implements SampleMenuPort {
         }
 
         log.info(
-                "Sample menu {} for brand {}: {} products, {} categories, {} location(s), created={}",
+                "Sample menu {} for brand {}: {} products, {} categories, {} location(s), "
+                        + "{} offering(s) created, created={}",
                 catalogId,
                 brandId,
                 variants.size(),
                 categories.size(),
                 locationIds.size(),
+                offeringsCreated,
                 created);
         return new SampleMenu(
-                catalogId, SAMPLE_CATALOG_CODE, categories.size(), variants.size(), List.copyOf(variants), created);
+                catalogId,
+                SAMPLE_CATALOG_CODE,
+                categories.size(),
+                variants.size(),
+                List.copyOf(variants),
+                offeringsCreated,
+                created);
     }
 
     @Override

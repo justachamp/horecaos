@@ -32,8 +32,12 @@ public interface SampleMenuPort {
      * Creates the sample draft, or returns the one that is already there.
      *
      * <p>Every item is offered {@code AVAILABLE} for pickup and delivery at
-     * every location given. Nothing is published: publishing is {@link
-     * #publishSample}, after the variants have prices.
+     * every location given — but only where no offering exists yet. An offering
+     * row is operator state: a sample dish somebody set {@code UNAVAILABLE} or
+     * {@code HIDDEN} stays that way through every later attempt and every later
+     * run, the same rule {@code StockListingPort.ensureListed} applies to a
+     * deliberately sold-out stock item. Nothing is published: publishing is
+     * {@link #publishSample}, after the variants have prices.
      *
      * <p>The authoring locale is deliberately not a parameter. Catalog
      * validation requires a name in the locale {@code CatalogSnapshotLoader}
@@ -61,8 +65,14 @@ public interface SampleMenuPort {
     /**
      * The sample draft, as it now stands.
      *
-     * @param variants what needs a price, with the amount the sample suggests
-     * @param created  false when a previous attempt had already built it
+     * @param variants          what needs a price, with the amount the sample
+     *                          suggests
+     * @param offeringsCreated  how many location offerings this call created,
+     *                          zero on an attempt that found every one already
+     *                          there. Recorded in the step's result snapshot so
+     *                          a run says when it touched offerings, which is
+     *                          the only place the answer is visible
+     * @param created           false when a previous attempt had already built it
      */
     record SampleMenu(
             UUID catalogId,
@@ -70,6 +80,7 @@ public interface SampleMenuPort {
             int categories,
             int products,
             List<SampleVariant> variants,
+            int offeringsCreated,
             boolean created) {}
 
     /** One sellable sample item and what it should cost, in minor units. */

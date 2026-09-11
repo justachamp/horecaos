@@ -79,6 +79,14 @@ class SampleMenuPublishStepTests {
 
     private static final int SAMPLE_CATEGORIES = 4;
 
+    /**
+     * What "sample" is called in each locale the content carries. A list of
+     * entries rather than a {@code Map}, so a failure names the locale in a
+     * deterministic order.
+     */
+    private static final List<Map.Entry<String, String>> SAMPLE_PREFIXES =
+            List.of(Map.entry("uz", "Namuna"), Map.entry("ru", "Образец"), Map.entry("en", "Sample"));
+
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
@@ -162,6 +170,7 @@ class SampleMenuPublishStepTests {
                         "products",
                         "variants",
                         "locations",
+                        "offeringsCreated",
                         "stockItemsListed",
                         "pricesSet",
                         "channel",
@@ -189,13 +198,18 @@ class SampleMenuPublishStepTests {
         // names says "sample" in its own language. That naming is the only thing
         // standing between a tenant that activated on the sample and a customer
         // ordering from it, so it is asserted rather than assumed.
-        for (String locale : List.of("uz", "ru", "en")) {
-            List<String> names = translatedNames(locale);
-            assertThat(names)
+        //
+        // Each locale against its own prefix, not against all three: an OR over
+        // the three is satisfied by Uzbek text under the "ru" key, which is
+        // exactly the copy-paste SampleMenuContent's fourteen hand-written
+        // Map.of literals invite — and which getOrDefault(locale, uz) would also
+        // write silently for a locale key somebody dropped.
+        for (Map.Entry<String, String> expected : SAMPLE_PREFIXES) {
+            String locale = expected.getKey();
+            assertThat(translatedNames(locale))
                     .as("names in %s", locale)
                     .hasSize(SAMPLE_PRODUCTS + SAMPLE_CATEGORIES)
-                    .allMatch(name ->
-                            name.startsWith("Namuna") || name.startsWith("Образец") || name.startsWith("Sample"));
+                    .allMatch(name -> name.startsWith(expected.getValue()));
         }
     }
 
@@ -230,6 +244,57 @@ class SampleMenuPublishStepTests {
     }
 
     /**
+     * The operator's own decision survives the machine running again.
+     *
+     * <p>The re-assert exists so that a location added between two runs starts
+     * offering the sample. It must not also mean that an operator who took a
+     * sample dish off the storefront finds it back on after the next run —
+     * {@code StockListingPortAdapter.ensureListed} already refuses to overwrite a
+     * deliberately sold-out stock item, and an offering row is the same kind of
+     * state.
+     */
+    @Test
+    @DisplayName("an offering an operator turned off is not turned back on by a later attempt")
+    void leavesAnOperatorsOwnOfferingStatusAlone() {
+        assertThat(handler().execute(context()).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+
+        List<UUID> variants = sampleVariantIds();
+        // HIDDEN and UNAVAILABLE mean different things to the storefront — one
+        // drops the dish, the other greys it out — and neither is this step's to
+        // revoke. HIDDEN specifically is the one a read-then-write would get
+        // wrong, because offeringsForLocation filters it out in SQL and it would
+        // read as absent.
+        setOfferingStatus(variants.get(0), "HIDDEN");
+        setOfferingStatus(variants.get(1), "UNAVAILABLE");
+
+        StepResult second = handler().execute(context());
+
+        assertThat(second.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+        assertThat(second.result())
+                .as("nothing was missing, so nothing was created")
+                .containsEntry("offeringsCreated", 0);
+        assertThat(offeringStatus(variants.get(0))).isEqualTo("HIDDEN");
+        assertThat(offeringStatus(variants.get(1))).isEqualTo("UNAVAILABLE");
+        assertThat(countAllOfferings()).isEqualTo(SAMPLE_PRODUCTS);
+        assertThat(countOfferings()).isEqualTo(SAMPLE_PRODUCTS - 2);
+    }
+
+    /** The other half of the same rule: a location with no offering yet does get one. */
+    @Test
+    @DisplayName("a location added between two runs starts offering the sample")
+    void createsOfferingsForALocationAddedLater() {
+        assertThat(handler().execute(context()).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+
+        UUID second = UUID.randomUUID();
+        insertLocation(second, brandId, "MAIN02");
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.result()).containsEntry("offeringsCreated", SAMPLE_PRODUCTS);
+        assertThat(countAllOfferings()).isEqualTo(SAMPLE_PRODUCTS * 2);
+    }
+
+    /**
      * The half-finished attempt, which is the case idempotency actually exists
      * for: the step died after the catalog and before the publication, and the
      * one that follows has to finish the job rather than start a second one.
@@ -249,6 +314,12 @@ class SampleMenuPublishStepTests {
         assertThat(result.result().get("catalogId")).isEqualTo(catalogId.toString());
         assertThat(countCatalogs()).isEqualTo(1);
         assertThat(countProducts()).isEqualTo(SAMPLE_PRODUCTS);
+        assertThat(countStockItems())
+                .as("a resumed attempt owes the stock rows the dead one never wrote")
+                .isEqualTo(SAMPLE_PRODUCTS);
+        assertThat(countOpenPrices())
+                .as("and the prices, which nothing else here would notice were missing")
+                .isEqualTo(SAMPLE_PRODUCTS);
         assertThat(publishedCatalogCode()).contains(SampleMenuPort.SAMPLE_CATALOG_CODE);
     }
 
@@ -285,7 +356,8 @@ class SampleMenuPublishStepTests {
     void theSampleMenuIsReadableThroughTheStorefront() {
         assertThat(handler().execute(context()).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
 
-        for (String locale : List.of("uz", "ru", "en")) {
+        for (Map.Entry<String, String> expected : SAMPLE_PREFIXES) {
+            String locale = expected.getKey();
             Optional<StorefrontCatalogQuery.StorefrontMenu> menu =
                     storefront().menuFor(tenantId, brandId, locationId, locale, CHANNEL_CODE);
 
@@ -294,8 +366,18 @@ class SampleMenuPublishStepTests {
                     menu.orElseThrow().products();
             assertThat(products).hasSize(SAMPLE_PRODUCTS);
             assertThat(products).allSatisfy(product -> {
+                // The locale's own prefix, not merely "not blank": a name missing
+                // from the publication snapshot comes back as an arbitrary other
+                // locale's text rather than as null (StorefrontCatalogQuery falls
+                // back to the first entry it has), so isNotBlank cannot tell a
+                // real per-locale read from a fallback and this can.
                 assertThat(product.name())
-                        .as("a customer must see a name in their own language")
+                        .as("a %s customer must see a %s name, not a fallback", locale, locale)
+                        .startsWith(expected.getValue());
+                // description() has no fallback at all — a dropped locale key
+                // shows up here as a null nothing else would notice.
+                assertThat(product.description())
+                        .as("a %s customer must see a %s description", locale, locale)
                         .isNotBlank();
                 assertThat(product.variants()).isNotEmpty();
                 // A published, offered, priced item. A null price here is the
@@ -328,6 +410,101 @@ class SampleMenuPublishStepTests {
 
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
         assertThat(result.errorCode()).isEqualTo("NO_CHANNEL");
+    }
+
+    /**
+     * A channel row exists after it is archived, so {@code isEmpty()} was not
+     * enough: the step wrote the whole sample and then {@code publish} threw for
+     * the archived channel, which {@code OnboardingService} maps to
+     * {@code RETRY/TRANSIENT_INFRASTRUCTURE} — the exact shape the pre-check
+     * exists to prevent, five attempts long.
+     */
+    @Test
+    @DisplayName("an archived storefront channel fails NO_CHANNEL before anything is written")
+    void failsWhenTheStorefrontChannelIsArchived() {
+        jdbc.sql("UPDATE tenant.sales_channels SET status = 'ARCHIVED' WHERE tenant_id = :tenantId")
+                .param("tenantId", tenantId)
+                .update();
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("NO_CHANNEL");
+        assertThat(countCatalogs())
+                .as("the pre-check's whole point is that nothing is written first")
+                .isZero();
+    }
+
+    /**
+     * {@code SampleMenuContent}'s amounts are whole som from
+     * {@code tools/seed-data/horecaos-tenant.json}, and nothing converts them.
+     * Stamped onto another currency they publish a menu that is wrong by an
+     * exchange rate as the platform's own proof that a tenant works.
+     */
+    @Test
+    @DisplayName("a tenant that does not trade in UZS is refused rather than priced in the wrong money")
+    void failsWhenTheTenantDoesNotTradeInTheSamplesCurrency() {
+        // KZT is a market this platform declares (Markets.KZ), so this is a
+        // tenant that can exist rather than a synthetic one.
+        setTenantCurrency("KZT");
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("SAMPLE_MENU_UNSUPPORTED_CURRENCY");
+        assertThat(countCatalogs()).isZero();
+        assertThat(countPriceBooks()).isZero();
+        assertThat(countTaxProfiles())
+                .as("and the hard-coded Uzbek VAT profile is not written for a tenant it does not describe")
+                .isZero();
+    }
+
+    /**
+     * The refusal the tie produces is permanent, and a permanent condition
+     * mapped to {@code RETRY} is five wasted attempts ending in a
+     * {@code TRANSIENT_INFRASTRUCTURE} whose console hint tells the operator it
+     * retries on its own.
+     */
+    @Test
+    @DisplayName("a tenant's own live price book at priority 0 fails permanently, not as a retry")
+    void failsWhenTheSampleBookTiesWithTheTenantsOwn() {
+        seedTenantsOwnLivePriceBookAtPriorityZero();
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome())
+                .as("RETRY here would burn every attempt on a condition waiting cannot fix")
+                .isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("SAMPLE_PRICING_REFUSED");
+        assertThat(publishedCatalogCode())
+                .as("and nothing is published on a sample that could not be priced")
+                .isEmpty();
+    }
+
+    /**
+     * The currency the book carries is the one the caller passed, not a constant.
+     *
+     * <p>Asserted on the port rather than through the handler, because the
+     * handler now refuses any tenant whose currency is not UZS — so a {@code
+     * createSampleBook} that ignored its {@code currency} parameter would be
+     * invisible from that side.
+     */
+    @Test
+    @DisplayName("the sample price book carries the currency it was given, not one this module chose")
+    void pricesTheSampleInTheCurrencyItIsGiven() {
+        SampleMenuPort.SampleMenu menu = catalogPort().installSample(tenantId, brandId, List.of(locationId));
+
+        pricingPort()
+                .priceSample(
+                        tenantId,
+                        brandId,
+                        "KZT",
+                        menu.variants().stream()
+                                .map(variant -> new SampleMenuPricingPort.SampleVariantPrice(
+                                        variant.variantId(), variant.amountMinor()))
+                                .toList());
+
+        assertThat(priceCurrencies()).containsExactly("KZT");
     }
 
     @Test
@@ -425,7 +602,11 @@ class SampleMenuPublishStepTests {
     }
 
     private SampleMenuPricingPort pricingPort() {
-        PriceAuthoringService priceAuthoring = new PriceAuthoringService(
+        return new SampleMenuPricing(priceAuthoring(), pricingStore(), CLOCK);
+    }
+
+    private PriceAuthoringService priceAuthoring() {
+        return new PriceAuthoringService(
                 pricingStore(),
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 new JdbcSalesChannelStore(jdbc),
@@ -439,7 +620,6 @@ class SampleMenuPublishStepTests {
                     throw new IllegalStateException(
                             "SAMPLE_MENU_PUBLISH runs from the scheduler and must never read a request actor");
                 });
-        return new SampleMenuPricing(priceAuthoring, pricingStore(), CLOCK);
     }
 
     private StockListingPort stockPort() {
@@ -511,6 +691,15 @@ class SampleMenuPublishStepTests {
                 + "WHERE tenant_id = :tenantId AND status = 'AVAILABLE'");
     }
 
+    /** Every offering whatever its status, which is what "nothing was duplicated" needs. */
+    private int countAllOfferings() {
+        return count("SELECT count(*) FROM catalog.location_offerings WHERE tenant_id = :tenantId");
+    }
+
+    private int countTaxProfiles() {
+        return count("SELECT count(*) FROM pricing.tax_profiles WHERE tenant_id = :tenantId");
+    }
+
     private int countStockItems() {
         return count("SELECT count(*) FROM inventory.stock_items WHERE tenant_id = :tenantId");
     }
@@ -574,6 +763,37 @@ class SampleMenuPublishStepTests {
                 """).param("tenantId", tenantId).query(String.class).optional();
     }
 
+    /** The sample's variants in SKU order, so a test can name one of them. */
+    private List<UUID> sampleVariantIds() {
+        return jdbc.sql("SELECT id FROM catalog.variants WHERE tenant_id = :tenantId ORDER BY sku")
+                .param("tenantId", tenantId)
+                .query(UUID.class)
+                .list();
+    }
+
+    private void setOfferingStatus(UUID variantId, String status) {
+        int updated = jdbc.sql("""
+                UPDATE catalog.location_offerings SET status = :status, version = version + 1
+                 WHERE tenant_id = :tenantId AND variant_id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("variantId", variantId)
+                .param("status", status)
+                .update();
+        assertThat(updated).as("the fixture has to change a row that exists").isEqualTo(1);
+    }
+
+    private String offeringStatus(UUID variantId) {
+        return jdbc.sql("""
+                SELECT status FROM catalog.location_offerings
+                 WHERE tenant_id = :tenantId AND variant_id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("variantId", variantId)
+                .query(String.class)
+                .single();
+    }
+
     private Optional<UUID> brandOfSampleCatalog() {
         return jdbc.sql("SELECT brand_id FROM catalog.catalogs WHERE tenant_id = :tenantId AND code = :code")
                 .param("tenantId", tenantId)
@@ -593,6 +813,61 @@ class SampleMenuPublishStepTests {
                 .param("id", tenantId)
                 .param("slug", "t-" + tenantId.toString().substring(0, 8))
                 .update();
+    }
+
+    private void setTenantCurrency(String currency) {
+        jdbc.sql("UPDATE tenant.tenants SET default_currency = :currency WHERE id = :id")
+                .param("id", tenantId)
+                .param("currency", currency)
+                .update();
+    }
+
+    /**
+     * The tenant's own {@code BRAND}-scope book, live, at priority 0 — which is
+     * what {@code PriceAuthoringController} writes when a create request simply
+     * omits {@code priority}, not an exotic setup.
+     */
+    private void seedTenantsOwnLivePriceBookAtPriorityZero() {
+        CatalogAuthoringService catalogAuthoring = authoring();
+        UUID catalogId = catalogAuthoring.createCatalog(tenantId, brandId, "MAIN", "Main menu", "uz");
+        CatalogAuthoringService.ProductCreated product = catalogAuthoring.createProduct(
+                tenantId,
+                brandId,
+                catalogId,
+                "MAIN-PLOV",
+                "Plov",
+                null,
+                "uz",
+                "MAIN-PLOV",
+                "PORTION",
+                uz.horecaos.platform.catalog.domain.FiscalClassification.unclassified(),
+                null);
+
+        PriceAuthoringService prices = priceAuthoring();
+        PriceAuthoringService.PriceBook book = prices.create(
+                tenantId,
+                brandId,
+                new PriceAuthoringService.NewPriceBook("The tenant's own prices", "UZS", null, null, 0));
+        prices.assign(
+                tenantId,
+                brandId,
+                book.id(),
+                PriceAuthoringService.AssignmentScope.BRAND,
+                null,
+                new PriceAuthoringService.Assignment(0, null, null));
+        prices.setPrice(
+                tenantId,
+                brandId,
+                book.id(),
+                uz.horecaos.platform.pricing.application.PriceableType.VARIANT,
+                product.defaultVariantId(),
+                40_000L);
+        prices.activate(
+                tenantId,
+                brandId,
+                book.id(),
+                prices.require(tenantId, brandId, book.id()).version(),
+                uz.horecaos.platform.audit.api.ActorRef.systemJob("test-fixture"));
     }
 
     private void insertBrand(UUID id, String code) {

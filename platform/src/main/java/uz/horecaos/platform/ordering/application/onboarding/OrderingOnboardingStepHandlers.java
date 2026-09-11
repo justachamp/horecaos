@@ -65,6 +65,15 @@ public final class OrderingOnboardingStepHandlers {
      */
     private static final String STOREFRONT_CHANNEL = "STOREFRONT";
 
+    /**
+     * The currency {@code SampleMenuContent}'s amounts are authored in (ADR
+     * 0099). Whole som, at the platform's UZS exponent of zero — not ISO 4217's
+     * two, which both money modules deliberately refuse to use. Nothing converts
+     * them, so this is the only currency the sample menu can honestly be priced
+     * in; see {@code SampleMenuPublish.execute}'s refusal.
+     */
+    private static final String SAMPLE_CURRENCY = "UZS";
+
     private OrderingOnboardingStepHandlers() {}
 
     /**
@@ -138,10 +147,20 @@ public final class OrderingOnboardingStepHandlers {
             // whose storefront channel was never seeded would retry a permanent
             // condition until a human noticed. Named the same way
             // ACTIVATION_SMOKE_TEST names it, because it is the same gap.
-            if (channels.byCode(tenantId, STOREFRONT_CHANNEL).isEmpty()) {
+            //
+            // Existence is not enough: a channel exists after it is archived, and
+            // publish refuses an archived one by throwing — the very shape this
+            // check exists to avoid. sellable() is ACTIVATION_SMOKE_TEST's own
+            // predicate, and it is also stricter than publish (which tolerates
+            // INACTIVE): a storefront the tenant has switched off should fail
+            // here, once and honestly, rather than pass CATALOG_READINESS_VALIDATE
+            // on a menu published to a dead channel and fail at step 12.
+            Optional<SalesChannel> storefront = channels.byCode(tenantId, STOREFRONT_CHANNEL);
+            if (storefront.isEmpty() || !storefront.get().sellable()) {
                 return StepResult.failed(
                         "NO_CHANNEL",
-                        "The tenant has no %s channel to publish a sample menu to".formatted(STOREFRONT_CHANNEL));
+                        "The tenant has no active %s channel to publish a sample menu to"
+                                .formatted(STOREFRONT_CHANNEL));
             }
 
             Optional<UUID> sampleCatalogId = catalog.sampleCatalogId(tenantId, brandId);
@@ -154,16 +173,42 @@ public final class OrderingOnboardingStepHandlers {
                         null);
             }
 
+            // The sample's prices are whole som, copied from
+            // tools/seed-data/horecaos-tenant.json, and nothing converts them.
+            // Stamping them onto another currency would publish a menu that is
+            // wrong by an exchange rate — 38 000 GEL for a plate of plov — as the
+            // platform's own proof that the tenant works, so a tenant that trades
+            // in anything else is refused rather than served a wrong menu. It also
+            // keeps the hard-coded Uzbek VAT profile SampleMenuPricing writes off
+            // tenants it does not describe. A per-market price table is the way to
+            // lift this, when KZ or GE actually onboards (ADR 0099).
+            String currency = currencyOf(tenantId);
+            if (!SAMPLE_CURRENCY.equals(currency)) {
+                return StepResult.failed(
+                        "SAMPLE_MENU_UNSUPPORTED_CURRENCY",
+                        "The sample menu's prices are authored in %s; this tenant trades in %s"
+                                .formatted(SAMPLE_CURRENCY, currency));
+            }
+
             SampleMenuPort.SampleMenu menu = catalog.installSample(tenantId, brandId, locationIds);
 
-            SampleMenuPricingPort.SamplePricing priced = pricing.priceSample(
-                    tenantId,
-                    brandId,
-                    currencyOf(tenantId),
-                    menu.variants().stream()
-                            .map(variant -> new SampleMenuPricingPort.SampleVariantPrice(
-                                    variant.variantId(), variant.amountMinor()))
-                            .toList());
+            SampleMenuPricingPort.SamplePricing priced;
+            try {
+                priced = pricing.priceSample(
+                        tenantId,
+                        brandId,
+                        currency,
+                        menu.variants().stream()
+                                .map(variant -> new SampleMenuPricingPort.SampleVariantPrice(
+                                        variant.variantId(), variant.amountMinor()))
+                                .toList());
+            } catch (SampleMenuPricingPort.SamplePricingRefusedException refused) {
+                // Permanent: pricing will refuse the same way on every attempt.
+                // Without this the thrown handler becomes RETRY, and the operator
+                // is told by TRANSIENT_INFRASTRUCTURE's own hint that it retries
+                // on its own — which it does, five times, and then stops.
+                return StepResult.failed("SAMPLE_PRICING_REFUSED", refused.getMessage());
+            }
 
             // An item with no stock row reads as unavailable rather than
             // available, so a menu that is published, offered and priced still
@@ -203,6 +248,12 @@ public final class OrderingOnboardingStepHandlers {
             result.put("products", menu.products());
             result.put("variants", menu.variants().size());
             result.put("locations", locationIds.size());
+            // Beside stockItemsListed and for the same reason: both ports create
+            // only what is missing, so a run record that says nothing about them
+            // cannot tell "there was nothing to do" from "something was
+            // overwritten". Zero on a retry that found every offering already
+            // there, including ones an operator had hidden.
+            result.put("offeringsCreated", menu.offeringsCreated());
             result.put("stockItemsListed", listed);
             result.put("pricesSet", priced.priced());
             result.put("channel", STOREFRONT_CHANNEL);
