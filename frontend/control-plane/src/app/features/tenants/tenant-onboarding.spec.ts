@@ -235,6 +235,42 @@ describe('TenantOnboarding', () => {
     expect(fixture.nativeElement.textContent).toContain(ru['onboarding.invitation.resent']);
   });
 
+  it('offers a first invitation when the owner was linked before invitations existed', async () => {
+    const linked: OnboardingRunView = {
+      ...RUN,
+      steps: [
+        {
+          stepKey: 'TENANT_OWNER_LINK_OR_INVITE',
+          phase: 'PROVISIONING',
+          status: 'COMPLETED',
+          required: true,
+          attemptCount: 1,
+          errorCode: null,
+          detail: null,
+          externalReference: 'owner-subject',
+        },
+        ...RUN.steps,
+      ],
+    };
+    await createWith(linked);
+    await settle();
+
+    const invitation = panel(ru['onboarding.invitation.title']);
+    expect(invitation.textContent).toContain(ru['onboarding.invitation.none']);
+    const reason = invitation.querySelector('input[name="resendReason"]') as HTMLInputElement;
+    reason.value = 'onboarded before invitations';
+    reason.dispatchEvent(new Event('input'));
+    await settle();
+    (invitation.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.resendOwnerInvitation).toHaveBeenCalledWith(
+      'tenant-1',
+      'onboarded before invitations',
+      'ru',
+    );
+  });
+
   it('offers no resend once the owner has accepted', async () => {
     await createWith(RUN, undefined, undefined, {
       state: 'ACCEPTED',

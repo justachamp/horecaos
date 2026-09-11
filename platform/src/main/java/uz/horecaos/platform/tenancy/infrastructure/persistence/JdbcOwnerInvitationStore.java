@@ -201,6 +201,26 @@ public class JdbcOwnerInvitationStore {
                         """).param("id", id).param("now", utc(now)).update() > 0;
     }
 
+    /**
+     * The owner the tenant's most recent onboarding linked, from the owner
+     * step's external reference -- the Keycloak subject, never a token (ADR
+     * 0009). For a tenant onboarded before invitations existed, this is how
+     * the platform finds whom to invite.
+     */
+    public Optional<String> ownerFromOnboarding(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT s.external_reference
+                          FROM tenant.onboarding_steps s
+                          JOIN tenant.onboarding_runs r ON r.id = s.run_id
+                         WHERE r.tenant_id = :tenantId
+                           AND s.step_key = 'TENANT_OWNER_LINK_OR_INVITE'
+                           AND s.status = 'COMPLETED'
+                           AND s.external_reference IS NOT NULL
+                         ORDER BY r.started_at DESC
+                         LIMIT 1
+                        """).param("tenantId", tenantId).query(String.class).optional();
+    }
+
     /** The name an invitation is written in; the tenant's own display name. */
     public String tenantName(UUID tenantId) {
         return jdbc.sql("SELECT display_name FROM tenant.tenants WHERE id = :tenantId")

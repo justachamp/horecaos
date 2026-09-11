@@ -529,6 +529,8 @@ export const ru: Messages = {
   'onboarding.invitation.locale.ru': 'Русский',
   'onboarding.invitation.locale.en': 'Английский',
   'onboarding.invitation.resend': 'Отправить снова',
+  'onboarding.invitation.none': 'Учётная запись владельца была привязана до появления приглашений, поэтому письмо не отправлялось. Отправьте его, чтобы владелец мог задать пароль.',
+  'onboarding.invitation.send': 'Отправить приглашение',
   'onboarding.invitation.resending': 'Отправляем…',
   'onboarding.invitation.resent': 'Снова в очереди с новой ссылкой. Прежняя ссылка больше не работает.',
   'onboarding.invitation.hint.MAIL_NOT_CONFIGURED': 'Почта на этом стенде ещё не настроена. Приглашение уйдёт, как только её настроят.',

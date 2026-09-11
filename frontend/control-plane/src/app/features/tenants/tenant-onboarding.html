@@ -280,6 +280,39 @@
         }
       }
     </section>
+  } @else if (ownerLinked(run())) {
+    <section class="panel invitation" data-state="NONE">
+      <h2 class="q-subhead">{{ i18n.t('onboarding.invitation.title') }}</h2>
+      <p class="q-body-sm muted">{{ i18n.t('onboarding.invitation.none') }}</p>
+      <form class="inlineForm resendForm" (submit)="resendInvitation($event)">
+        <input
+          class="q-body-sm"
+          name="resendReason"
+          [placeholder]="i18n.t('onboarding.invitation.resendReason')"
+          [value]="resendReason()"
+          (input)="resendReason.set($any($event.target).value)"
+        />
+        <select
+          class="q-body-sm"
+          name="resendLocale"
+          [value]="resendLocale()"
+          (change)="resendLocale.set($any($event.target).value)"
+        >
+          @for (locale of invitationLocales; track locale) {
+            <option [value]="locale" [selected]="locale === (resendLocale() || ownerLocale())">
+              {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+            </option>
+          }
+        </select>
+        <button type="submit" [disabled]="resending() || resendReason().trim().length === 0">
+          {{
+            resending()
+              ? i18n.t('onboarding.invitation.resending')
+              : i18n.t('onboarding.invitation.send')
+          }}
+        </button>
+      </form>
+    </section>
   }
 
   @if (canStartNew(run())) {

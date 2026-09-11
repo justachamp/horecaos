@@ -54,9 +54,10 @@ public class OwnerInvitationController {
     @PostMapping("/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend")
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
     @Operation(
-            summary = "Send the owner's invitation again",
-            description = "With a new link: the one already sent stops working at once. Refused once the "
-                    + "owner has set up their account.")
+            summary = "Send the owner's invitation, or send it again",
+            description = "With a new link: one already sent stops working at once. For a tenant onboarded "
+                    + "before invitations existed, sends the first one to the owner its onboarding linked. "
+                    + "Refused once the owner has set up their account.")
     public ResponseEntity<Void> resend(
             @PathVariable UUID tenantId, @Valid @RequestBody OwnerInvitationResendRequest body) {
         invitations.resend(tenantId, body.locale(), actor(), body.reason(), correlationId());

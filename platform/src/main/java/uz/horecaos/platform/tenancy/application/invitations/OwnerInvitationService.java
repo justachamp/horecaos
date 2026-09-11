@@ -110,9 +110,12 @@ public class OwnerInvitationService implements OwnerInvitations {
      */
     @Transactional
     public void resend(UUID tenantId, @Nullable String locale, ActorRef actor, String reason, String correlationId) {
-        Row row = store.latestFor(tenantId)
-                .orElseThrow(
-                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This tenant has no owner invitation"));
+        Optional<Row> existing = store.latestFor(tenantId);
+        if (existing.isEmpty()) {
+            inviteFirst(tenantId, locale, actor, reason, correlationId);
+            return;
+        }
+        Row row = existing.get();
         if ("ACCEPTED".equals(row.status())) {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT, "The owner has already set up their account; they sign in instead");
@@ -129,6 +132,44 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .target("tenant.owner_invitation", row.id())
                 .because(reason)
                 .changed(Map.of("previousStatus", row.status(), "locale", language))
+                .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
+                .correlatedBy(correlationId)
+                .occurredAt(now)
+                .build());
+    }
+
+    /**
+     * The first invitation for a tenant onboarded before invitations existed:
+     * its owner step completed and linked an owner, and nobody was told. The
+     * owner is the one that step linked; an owner who already has a password
+     * signs in and is not invited.
+     */
+    private void inviteFirst(
+            UUID tenantId, @Nullable String locale, ActorRef actor, String reason, String correlationId) {
+        String subjectId = store.ownerFromOnboarding(tenantId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        "This tenant's onboarding has not linked an owner yet",
+                        Map.of("reason", "NO_OWNER")));
+        boolean hasPassword =
+                accounts.find(subjectId).map(StaffAccount::hasPassword).orElse(false);
+        if (hasPassword) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "The owner already has a password; they sign in",
+                    Map.of("reason", "ALREADY_SET_UP"));
+        }
+        String language = locale != null && LOCALES.contains(locale) ? locale : "ru";
+        Instant now = clock.instant();
+        UUID id = Ids.newId();
+        String by = actor.subject() == null ? "unknown" : actor.subject();
+        store.queueIfAbsent(id, tenantId, subjectId, language, by, now);
+        audit.record(AuditFact.of("tenant.owner_invitation.queued", AuditClass.SECURITY)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("tenant.owner_invitation", id)
+                .because(reason)
+                .changed(Map.of("locale", language, "firstInvitation", true))
                 .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

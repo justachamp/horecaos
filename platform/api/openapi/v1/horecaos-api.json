@@ -25532,7 +25532,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend" : {
       "post" : {
-        "description" : "With a new link: the one already sent stops working at once. Refused once the owner has set up their account.",
+        "description" : "With a new link: one already sent stops working at once. For a tenant onboarded before invitations existed, sends the first one to the owner its onboarding linked. Refused once the owner has set up their account.",
         "operationId" : "resend",
         "parameters" : [ {
           "in" : "path",
@@ -25558,7 +25558,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Send the owner's invitation again",
+        "summary" : "Send the owner's invitation, or send it again",
         "tags" : [ "Tenant onboarding" ]
       }
     },
