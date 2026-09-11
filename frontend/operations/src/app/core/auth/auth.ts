@@ -204,6 +204,21 @@ export class Auth {
     this.scheduleRefresh(session.accessTokenExpiresAt);
   }
 
+  /**
+   * Ends this tab's session and only this tab's, without telling Keycloak.
+   *
+   * For the reset page (ADR 0098): accepting a reset revokes that account's
+   * sessions server-side, but the tab the emailed link was opened in may have
+   * restored a session at boot and still holds a usable access token for the
+   * rest of its short life — the "shared terminal somebody stayed signed in
+   * on" the reset exists for. Deliberately not {@link logout}, whose
+   * revocation call would end a session that can belong to a different
+   * operator than the one whose password was just reset.
+   */
+  forgetLocalSession(): void {
+    this.clearLocally();
+  }
+
   private clearLocally(): void {
     this.cancelScheduledRefresh();
     this.tokens.clear();

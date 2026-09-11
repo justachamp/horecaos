@@ -6,9 +6,10 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { Auth } from '../../core/auth/auth';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -17,7 +18,7 @@ import { PasswordResetsApi, ResetInspection } from './password-resets-api';
 /** The realm's own rule (Keycloak `length(12)`), checked here first so the operator is told before submitting. */
 const MIN_PASSWORD_LENGTH = 12;
 
-type Stage = 'loading' | 'invalid' | 'expired' | 'form' | 'done';
+type Stage = 'loading' | 'invalid' | 'expired' | 'retry' | 'form' | 'done';
 
 /**
  * Where a staff member sets the password they asked to reset (ADR 0098).
@@ -34,8 +35,9 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'form' | 'done';
  * Unlike the invite page it does **not** sign the operator in afterwards. It
  * cannot: accepting ends every session the account holds, which is the point
  * of a reset, and a console that signed itself straight back in would be
- * racing the revocation it just asked for. It sends them to `/login` to use
- * the password they chose, which also proves to them that it works.
+ * racing the revocation it just asked for. It ends this tab's own session
+ * instead and stops on a card that says every other session has ended, with a
+ * link to sign in with the password they chose.
  */
 @Component({
   selector: 'q-reset-password-page',
@@ -59,6 +61,19 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'form' | 'done';
           @case ('expired') {
             <h1 class="q-title heading">{{ 'resetPassword.expired.title' | t }}</h1>
             <p class="q-body muted">{{ 'resetPassword.expired.body' | t }}</p>
+            <a class="q-body link" routerLink="/forgot-password">{{
+              'resetPassword.askAgain' | t
+            }}</a>
+          }
+          @case ('retry') {
+            <h1 class="q-title heading">{{ 'resetPassword.retry.title' | t }}</h1>
+            <p class="q-body muted">{{ 'resetPassword.retry.body' | t }}</p>
+            @if (errorKey(); as key) {
+              <p class="q-body-sm error" role="alert">{{ key | t }}</p>
+            }
+            <button type="button" class="q-body submit" [disabled]="busy()" (click)="retry()">
+              {{ 'resetPassword.retry.action' | t }}
+            </button>
             <a class="q-body link" routerLink="/forgot-password">{{
               'resetPassword.askAgain' | t
             }}</a>
@@ -233,7 +248,7 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'form' | 'done';
 export class ResetPasswordPage implements OnInit {
   private readonly resets = inject(PasswordResetsApi);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
   private readonly i18n = inject(I18n);
 
   protected readonly minLength = MIN_PASSWORD_LENGTH;
@@ -263,13 +278,46 @@ export class ResetPasswordPage implements OnInit {
       this.stage.set('invalid');
       return;
     }
+    await this.inspectToken();
+  }
+
+  /** Re-runs the check with the token still in hand; the link was never spent. */
+  protected async retry(): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    this.stage.set('loading');
+    await this.inspectToken();
+  }
+
+  /**
+   * Only the platform saying so means the link is dead.
+   *
+   * A rate-limited request from a venue behind one address, a gateway 502, or
+   * a till whose link dropped for one round trip says nothing about the link —
+   * and telling the operator it "cannot be used" pushes them to ask for
+   * another, which clears the stored hash of the perfectly good link they are
+   * holding. `submit()` has always drawn this distinction; `ngOnInit` used to
+   * collapse it.
+   */
+  private async inspectToken(): Promise<void> {
+    this.busy.set(true);
     try {
       const inspection = await this.resets.inspect(this.token);
       this.i18n.setLocale(localeFor(inspection.locale));
       this.inspection.set(inspection);
+      this.errorKey.set(null);
       this.stage.set('form');
     } catch (failure) {
-      this.stage.set(reasonOf(failure) === 'EXPIRED' ? 'expired' : 'invalid');
+      const reason = reasonOf(failure);
+      if (reason === 'EXPIRED' || reason === 'INVALID') {
+        this.stage.set(reason === 'EXPIRED' ? 'expired' : 'invalid');
+      } else {
+        this.errorKey.set(messageFor(failure));
+        this.stage.set('retry');
+      }
+    } finally {
+      this.busy.set(false);
     }
   }
 
@@ -287,8 +335,19 @@ export class ResetPasswordPage implements OnInit {
     this.errorKey.set(null);
     try {
       await this.resets.accept(this.token, this.password());
+      // The account's sessions were just revoked at Keycloak, but this tab may
+      // have restored one at boot — `provideAppInitializer` redeems whatever
+      // refresh token sessionStorage holds, on every route including this one
+      // — and would otherwise keep a usable access token for the rest of its
+      // short life on exactly the shared till the reset exists for. Local
+      // only: `logout()` would revoke a refresh token that can belong to
+      // whoever else was signed in on this terminal.
+      this.auth.forgetLocalSession();
+      // No navigation. The 'done' card is where the operator is told every
+      // other session has ended (ADR 0098 calls that the surprise), and a
+      // redirect on the next tick would make it unreadable; the card carries
+      // the link to sign in.
       this.stage.set('done');
-      void this.router.navigateByUrl('/login');
     } catch (failure) {
       const reason = reasonOf(failure);
       if (reason === 'EXPIRED' || reason === 'INVALID') {

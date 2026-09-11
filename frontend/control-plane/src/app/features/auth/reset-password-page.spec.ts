@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem';
+import { AuthService } from '../../core/auth/auth.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { en } from '../../core/i18n/messages.en';
@@ -29,9 +30,15 @@ class FakeResets {
   readonly accept = vi.fn<(token: string, password: string) => Promise<void>>();
 }
 
+/** Only the one method the page may call: signing out at the platform would end somebody else's session. */
+class FakeAuth {
+  readonly forgetLocalSession = vi.fn();
+}
+
 describe('ResetPasswordPage', () => {
   let fixture: ComponentFixture<ResetPasswordPage>;
   let resets: FakeResets;
+  let auth: FakeAuth;
   let router: Router;
 
   async function open(fragment: string | null): Promise<void> {
@@ -41,6 +48,7 @@ describe('ResetPasswordPage', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: PasswordResetsApi, useValue: resets },
+        { provide: AuthService, useValue: auth },
         { provide: ActivatedRoute, useValue: { snapshot: { fragment } } },
       ],
     }).compileComponents();
@@ -86,6 +94,7 @@ describe('ResetPasswordPage', () => {
 
   beforeEach(() => {
     resets = new FakeResets();
+    auth = new FakeAuth();
     localStorage.clear();
   });
 
@@ -125,7 +134,7 @@ describe('ResetPasswordPage', () => {
    * because somebody opened a link — the two things ADR 0098 keeps
    * `setPassword` apart from `completeSetup` to avoid.
    */
-  it('sends only the token and the password, then hands the operator to sign-in', async () => {
+  it('sends only the token and the password, then ends this tab and confirms', async () => {
     resets.inspect.mockResolvedValue(INSPECTION);
     resets.accept.mockResolvedValue(undefined);
     await open(`token=${TOKEN}`);
@@ -135,7 +144,15 @@ describe('ResetPasswordPage', () => {
 
     expect(resets.accept).toHaveBeenCalledWith(TOKEN, 'a-long-enough-passphrase');
     expect(resets.accept.mock.calls[0]).toHaveLength(2);
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+    // The tab may have restored a session at boot, and the access token it
+    // already holds outlives the revocation the accept performed.
+    expect(auth.forgetLocalSession).toHaveBeenCalled();
+    // The card the operator is actually shown, rather than a stage the next
+    // statement discards: this is the only place they are told that every
+    // other device has been signed out.
+    expect(text()).toContain(en['resetPassword.done.body']);
+    expect(text()).toContain(en['resetPassword.toSignIn']);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
   it('names the password rule the identity provider refused, and keeps the form', async () => {
@@ -170,6 +187,41 @@ describe('ResetPasswordPage', () => {
     await open(null);
     expect(resets.inspect).not.toHaveBeenCalled();
     expect(text()).toContain(en['resetPassword.invalid.title']);
+  });
+
+  /**
+   * A blip is not a dead link. Saying "this link cannot be used" sends the
+   * operator to ask for another one, and that request clears the stored hash
+   * of the perfectly good link they are holding — so a moment of bad wifi
+   * costs them the recovery they were in the middle of.
+   */
+  it('offers a retry when the platform cannot be reached, and keeps the token', async () => {
+    localStorage.setItem('horecaos.control-plane.locale', 'en');
+    resets.inspect.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK_UNREACHABLE' }));
+    await open(`token=${TOKEN}`);
+
+    expect(text()).not.toContain(en['resetPassword.invalid.title']);
+    expect(text()).toContain(en['resetPassword.retry.title']);
+    expect(text()).toContain(en['error.NETWORK_UNREACHABLE']);
+
+    resets.inspect.mockResolvedValue(INSPECTION);
+    fixture.nativeElement.querySelector('button[type="button"]').click();
+    await settle();
+
+    expect(resets.inspect).toHaveBeenCalledTimes(2);
+    expect(resets.inspect).toHaveBeenLastCalledWith(TOKEN);
+    expect(submitButton()).not.toBeNull();
+  });
+
+  it('names a refused rate limit rather than calling a live link dead', async () => {
+    localStorage.setItem('horecaos.control-plane.locale', 'en');
+    resets.inspect.mockRejectedValue(
+      new ApiError({ status: 429, code: 'RATE_LIMIT_EXCEEDED', retryAfterSeconds: 30 }),
+    );
+    await open(`token=${TOKEN}`);
+
+    expect(text()).toContain(en['error.RATE_LIMIT_EXCEEDED']);
+    expect(text()).not.toContain(en['resetPassword.invalid.title']);
   });
 
   it('falls back to the invalid state when a link is spent between opening and submitting', async () => {

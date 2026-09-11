@@ -368,6 +368,10 @@ export const messagesUzLatn: MessageCatalogue = {
     'Ehtimol, undan foydalanilgan yoki yangi so‘rov uni almashtirgan. Yangisini so‘rang.',
   'resetPassword.expired.title': 'Havola muddati tugagan',
   'resetPassword.expired.body': 'Tiklash havolasi 60 daqiqa ishlaydi. Yangisini so‘rang.',
+  'resetPassword.retry.title': 'Havolani tekshirib bo‘lmadi',
+  'resetPassword.retry.body':
+    'Bu HorecaOS bilan aloqadagi nosozlik, havolada muammo yo‘q. U hali ishlaydi — qayta urinib ko‘ring.',
+  'resetPassword.retry.action': 'Qayta urinish',
   'resetPassword.askAgain': 'Yangi havola so‘rash',
   'resetPassword.toSignIn': 'Kirish sahifasiga o‘tish',
   'resetPassword.policy.length': 'Parol juda qisqa: kamida 12 ta belgi kerak.',

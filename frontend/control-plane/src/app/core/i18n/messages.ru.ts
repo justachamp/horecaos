@@ -238,6 +238,10 @@ export const ru: Messages = {
     'Возможно, ею уже воспользовались или её заменил новый запрос. Запросите новую.',
   'resetPassword.expired.title': 'Срок действия ссылки истёк',
   'resetPassword.expired.body': 'Ссылка для сброса действует 60 минут. Запросите новую.',
+  'resetPassword.retry.title': 'Не удалось проверить ссылку',
+  'resetPassword.retry.body':
+    'Это сбой связи с HorecaOS, а не проблема со ссылкой. Она ещё действует — попробуйте ещё раз.',
+  'resetPassword.retry.action': 'Попробовать снова',
   'resetPassword.askAgain': 'Запросить новую ссылку',
   'resetPassword.toSignIn': 'Перейти ко входу',
   'resetPassword.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',

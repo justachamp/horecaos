@@ -3,8 +3,10 @@ import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem-details';
+import { Auth } from '../../core/auth/auth';
 import { I18n } from '../../core/i18n/i18n';
 import { messagesEn } from '../../core/i18n/messages.en';
+import { messagesRu } from '../../core/i18n/messages.ru';
 import { PasswordResetsApi, ResetInspection } from './password-resets-api';
 import { ResetPasswordPage } from './reset-password-page';
 
@@ -23,9 +25,15 @@ class FakeResets {
   readonly accept = vi.fn<(token: string, password: string) => Promise<void>>();
 }
 
+/** Only the one method the page may call: `logout()` would revoke whoever else's session this till holds. */
+class FakeAuth {
+  readonly forgetLocalSession = vi.fn();
+}
+
 describe('ResetPasswordPage', () => {
   let fixture: ComponentFixture<ResetPasswordPage>;
   let resets: FakeResets;
+  let auth: FakeAuth;
   let router: Router;
 
   async function open(fragment: string | null): Promise<void> {
@@ -34,6 +42,7 @@ describe('ResetPasswordPage', () => {
       providers: [
         provideRouter([]),
         { provide: PasswordResetsApi, useValue: resets },
+        { provide: Auth, useValue: auth },
         { provide: ActivatedRoute, useValue: { snapshot: { fragment } } },
       ],
     }).compileComponents();
@@ -80,6 +89,7 @@ describe('ResetPasswordPage', () => {
 
   beforeEach(() => {
     resets = new FakeResets();
+    auth = new FakeAuth();
   });
 
   // I18n persists the locale to localStorage, and jsdom shares that storage
@@ -117,7 +127,7 @@ describe('ResetPasswordPage', () => {
    * and marking an address verified because somebody opened a link — the two
    * things ADR 0098 separates `setPassword` from `completeSetup` to avoid.
    */
-  it('sends only the token and the password, then hands the operator to sign-in', async () => {
+  it('sends only the token and the password, then ends this tab and confirms', async () => {
     resets.inspect.mockResolvedValue(INSPECTION);
     resets.accept.mockResolvedValue(undefined);
     await open(`token=${TOKEN}`);
@@ -127,7 +137,15 @@ describe('ResetPasswordPage', () => {
 
     expect(resets.accept).toHaveBeenCalledWith(TOKEN, 'a-long-enough-passphrase');
     expect(resets.accept.mock.calls[0]).toHaveLength(2);
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+    // A till the operator stayed signed in on is exactly the case the reset
+    // exists for; the tab's own access token outlives the revocation.
+    expect(auth.forgetLocalSession).toHaveBeenCalled();
+    // And the card is shown rather than set and immediately navigated away
+    // from: it is the only place the operator learns their other devices were
+    // signed out.
+    expect(text()).toContain(messagesEn['resetPassword.done.body']);
+    expect(text()).toContain(messagesEn['resetPassword.toSignIn']);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
   it('names the password rule the identity provider refused, and keeps the form', async () => {
@@ -162,6 +180,41 @@ describe('ResetPasswordPage', () => {
     await open(null);
     expect(resets.inspect).not.toHaveBeenCalled();
     expect(text()).toContain('Эта ссылка недействительна');
+  });
+
+  /**
+   * A venue behind one address can trip the per-caller limit on inspect, and a
+   * till's link drops for a round trip often enough. Neither says anything
+   * about the link — and telling the operator it "cannot be used" sends them
+   * to ask for another, which clears the stored hash of the one they hold.
+   */
+  it('offers a retry when the platform cannot be reached, and keeps the token', async () => {
+    resets.inspect.mockRejectedValueOnce(
+      new ApiError('NETWORK_UNREACHABLE', 0, { status: 0 }, 'c-4'),
+    );
+    await open(`token=${TOKEN}`);
+
+    expect(text()).not.toContain(messagesRu['resetPassword.invalid.title']);
+    expect(text()).toContain(messagesRu['resetPassword.retry.title']);
+    expect(text()).toContain(messagesRu['error.NETWORK_UNREACHABLE']);
+
+    resets.inspect.mockResolvedValue(INSPECTION);
+    fixture.nativeElement.querySelector('button[type="button"]').click();
+    await settle();
+
+    expect(resets.inspect).toHaveBeenCalledTimes(2);
+    expect(resets.inspect).toHaveBeenLastCalledWith(TOKEN);
+    expect(submitButton()).not.toBeNull();
+  });
+
+  it('names a refused rate limit rather than calling a live link dead', async () => {
+    resets.inspect.mockRejectedValue(
+      new ApiError('RATE_LIMIT_EXCEEDED', 429, { status: 429, retryAfterSeconds: 30 }, 'c-5'),
+    );
+    await open(`token=${TOKEN}`);
+
+    expect(text()).toContain(messagesRu['error.RATE_LIMIT_EXCEEDED']);
+    expect(text()).not.toContain(messagesRu['resetPassword.invalid.title']);
   });
 
   it('falls back to the invalid state when a link is spent between opening and submitting', async () => {

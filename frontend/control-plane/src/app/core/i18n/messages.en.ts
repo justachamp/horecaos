@@ -251,6 +251,10 @@ export const en = {
     'It may already have been used, or a newer request replaced it. Ask for a new one.',
   'resetPassword.expired.title': 'This link has expired',
   'resetPassword.expired.body': 'Reset links work for 60 minutes. Ask for a new one.',
+  'resetPassword.retry.title': 'We could not check your link',
+  'resetPassword.retry.body':
+    'This is a problem reaching HorecaOS, not a problem with the link. It is still good — try again.',
+  'resetPassword.retry.action': 'Try again',
   'resetPassword.askAgain': 'Ask for a new link',
   'resetPassword.toSignIn': 'Go to sign in',
   'resetPassword.policy.length': 'The password is too short: use at least 12 characters.',
