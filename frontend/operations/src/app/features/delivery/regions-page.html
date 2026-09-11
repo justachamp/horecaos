@@ -1,0 +1,209 @@
+<div class="regions">
+  <div class="regions__toolbar">
+    <h1 class="q-subhead">{{ 'delivery.regions.title' | t }}</h1>
+    <button type="button" class="regions__create" (click)="openCreateForm()">
+      {{ 'delivery.regions.create.action' | t }}
+    </button>
+  </div>
+  <p class="q-caption regions__hint">{{ 'delivery.regions.hint' | t }}</p>
+
+  @if (loading()) {
+    <div class="regions__skeleton" [attr.aria-label]="'delivery.regions.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="regions__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="regions__denied" data-testid="regions-denied">
+      <p class="q-body-sm">{{ 'delivery.regions.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="regions__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <table class="regions__table">
+      <thead>
+        <tr>
+          <th>{{ 'delivery.regions.column.code' | t }}</th>
+          <th>{{ 'delivery.regions.column.name' | t }}</th>
+          <th>{{ 'delivery.regions.column.owner' | t }}</th>
+          <th>{{ 'delivery.regions.column.box' | t }}</th>
+          <th>{{ 'delivery.regions.column.status' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (region of regions(); track region.regionId) {
+          <tr data-testid="region-row">
+            <td class="q-mono">{{ region.code }}</td>
+            <td data-testid="region-name">{{ regionName(region) }}</td>
+            <td>
+              @if (region.platform) {
+                <span class="status-badge" data-testid="region-platform">
+                  {{ 'delivery.regions.owner.platform' | t }}
+                </span>
+              } @else {
+                <span class="status-badge">{{ 'delivery.regions.owner.tenant' | t }}</span>
+              }
+            </td>
+            <td class="q-tnum regions__box">
+              {{ region.bboxSwLat }}, {{ region.bboxSwLon }} → {{ region.bboxNeLat }},
+              {{ region.bboxNeLon }}
+            </td>
+            <td>{{ statusKey(region.status) | t }}</td>
+            <td class="regions__action-col">
+              @if (!region.platform && region.status === 'ACTIVE') {
+                <button
+                  type="button"
+                  data-testid="region-edit"
+                  [disabled]="submitting()"
+                  (click)="openEditForm(region)"
+                >
+                  {{ 'delivery.regions.edit.action' | t }}
+                </button>
+                <button
+                  type="button"
+                  data-testid="region-archive"
+                  [disabled]="submitting()"
+                  (click)="archive(region)"
+                >
+                  {{ 'delivery.regions.archive.action' | t }}
+                </button>
+              } @else if (region.platform) {
+                <span class="q-caption">{{ 'delivery.regions.owner.readOnly' | t }}</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6">
+              <p class="q-body-sm" data-testid="regions-empty">
+                {{ 'delivery.regions.empty' | t }}
+              </p>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (showForm()) {
+    <div class="dialog-backdrop" (click)="closeForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">
+          {{ (editing() ? 'delivery.regions.edit.title' : 'delivery.regions.create.title') | t }}
+        </h2>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.regions.field.code' | t }}</span>
+          <input
+            type="text"
+            data-testid="region-code"
+            [value]="code()"
+            (input)="code.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.regions.field.nameRu' | t }}</span>
+          <input type="text" [value]="nameRu()" (input)="nameRu.set($any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.regions.field.nameUz' | t }}</span>
+          <input type="text" [value]="nameUz()" (input)="nameUz.set($any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.regions.field.nameEn' | t }}</span>
+          <input type="text" [value]="nameEn()" (input)="nameEn.set($any($event.target).value)" />
+        </label>
+
+        <p class="q-caption">{{ 'delivery.regions.field.boxHint' | t }}</p>
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.swLat' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              data-testid="region-sw-lat"
+              [value]="swLat()"
+              (input)="swLat.set(+$any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.swLon' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              [value]="swLon()"
+              (input)="swLon.set(+$any($event.target).value)"
+            />
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.neLat' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              data-testid="region-ne-lat"
+              [value]="neLat()"
+              (input)="neLat.set(+$any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.neLon' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              [value]="neLon()"
+              (input)="neLon.set(+$any($event.target).value)"
+            />
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.centreLat' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              [value]="centreLat()"
+              (input)="centreLat.set(+$any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.regions.field.centreLon' | t }}</span>
+            <input
+              type="number"
+              step="0.000001"
+              [value]="centreLon()"
+              (input)="centreLon.set(+$any($event.target).value)"
+            />
+          </label>
+        </div>
+
+        @if (formError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        @if (problems().length > 0) {
+          <ul class="dialog__problems" data-testid="region-problems">
+            @for (problem of problems(); track problem) {
+              <li class="q-body-sm">{{ problem }}</li>
+            }
+          </ul>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeForm()">{{ 'delivery.dialog.cancel' | t }}</button>
+          <button
+            type="button"
+            data-testid="region-submit"
+            [disabled]="!canSubmit()"
+            (click)="submit()"
+          >
+            {{ 'delivery.regions.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

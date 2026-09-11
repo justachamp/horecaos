@@ -1,0 +1,189 @@
+.regions {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow: auto;
+}
+
+.regions__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.regions__hint {
+  margin: 4px 0 12px;
+  color: var(--q-ink-muted);
+  max-width: 70ch;
+}
+
+.regions__create {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.regions__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.regions__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.regions__table td {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.regions__box {
+  color: var(--q-ink-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.regions__action-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.regions__action-col button {
+  margin-left: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.regions__action-col button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.regions__denied,
+.regions__skeleton {
+  padding: 16px;
+}
+
+.regions__denied {
+  text-align: center;
+  padding: 32px;
+}
+
+.regions__skeleton-row {
+  height: 32px;
+  margin-bottom: 8px;
+  background: var(--q-surface-1);
+}
+
+.regions__error-band {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 40%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.dialog {
+  background: var(--q-canvas);
+  padding: 20px;
+  width: 460px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: var(--q-radius);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  flex: 1;
+}
+
+/* The four corners read as two pairs, because that is how a box is checked:
+   south-west against north-east, not one number at a time. */
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field input {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dialog__error {
+  color: var(--q-error-text);
+  margin: 0 0 8px;
+}
+
+.dialog__problems {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--q-error-text);
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog__actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dialog__actions button:last-child {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.dialog__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
