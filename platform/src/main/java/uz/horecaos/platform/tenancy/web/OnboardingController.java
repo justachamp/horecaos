@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,11 +59,13 @@ public class OnboardingController {
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
     @Operation(
             summary = "Start an onboarding run",
-            description = "Omit templateId to use the platform's current default template (Gap B).")
+            description = "Omit templateId to use the template suited to the tenant's business type, "
+                    + "or the platform's default when none suits it (ADR 0090).")
     ResponseEntity<Map<String, Object>> start(@PathVariable UUID tenantId, @Valid @RequestBody StartRequest request) {
 
-        TemplateView template =
-                request.templateId() == null ? templates.currentDefault() : templates.get(request.templateId());
+        TemplateView template = request.templateId() == null
+                ? templates.suggestedFor(businessTypeOf(tenantId)).template()
+                : templates.get(request.templateId());
 
         UUID runId = onboarding.startRun(
                 tenantId,
@@ -75,6 +78,24 @@ public class OnboardingController {
                 actor());
 
         return ResponseEntity.ok(Map.of("runId", runId));
+    }
+
+    @GetMapping("/suggested-template")
+    @RequiresCapability(Capability.TENANT_ONBOARDING_MANAGE)
+    @Operation(
+            summary = "The template a new run would start under",
+            description = "The newest active template naming the tenant's business type, or the "
+                    + "platform's default when none does. The console pre-selects it (ADR 0090).")
+    OnboardingTemplateService.Suggestion suggestedTemplate(@PathVariable UUID tenantId) {
+        return templates.suggestedFor(businessTypeOf(tenantId));
+    }
+
+    private @Nullable String businessTypeOf(UUID tenantId) {
+        return jdbc.sql("SELECT business_type FROM tenant.tenants WHERE id = :tenantId")
+                .param("tenantId", tenantId)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     @GetMapping("/current")

@@ -324,6 +324,50 @@ class ModulesStatementsAndArrearsTests {
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L));
     }
 
+    /**
+     * ADR 0093 as decided on 2026-09-11: leaving a term early repays the term
+     * discount received. Started mid-July on a twelve-month term, charged for
+     * July (partly in trial, so in full), August and September, terminated in
+     * September: three charges at 1 080 000 instead of 1 200 000 repay 3 x 120 000,
+     * on September's statement and no other.
+     */
+    @Test
+    void leavingATwelveMonthTermEarlyRepaysTheDiscountInTheMonthItEnded() {
+        UUID versionId = activeTermsPlan();
+        subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
+        clock.set(Instant.parse("2026-09-05T09:00:00Z"));
+        subscriptions.transition(
+                PILOT, SubscriptionStatus.TERMINATED, 1, null, null, AUTHOR, "the restaurant closed", "corr");
+        clock.set(Instant.parse("2026-10-02T09:00:00Z"));
+
+        Statement september = statements.draft(PILOT, "2026-09");
+        assertThat(september.lines())
+                .extracting(StatementLine::kind, StatementLine::quantity, StatementLine::unitPriceMinor)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("PLAN", 1L, 1_080_000L),
+                        org.assertj.core.groups.Tuple.tuple("EARLY_EXIT", 3L, 120_000L));
+        assertThat(september.lines().getLast().description()).contains("12-month term early, 10% term discount");
+        assertThat(september.totalMinor()).isEqualTo(1_080_000L + 360_000L);
+
+        assertThat(statements.draft(PILOT, "2026-08").lines())
+                .as("the repayment is billed once, in the month the subscription ended")
+                .extracting(StatementLine::kind)
+                .containsExactly("PLAN");
+    }
+
+    @Test
+    void endingAMonthToMonthSubscriptionRepaysNothing() {
+        UUID versionId = activeTermsPlan();
+        subscriptions.start(PILOT, versionId, null, 1, AUTHOR, "month to month", "corr");
+        clock.set(Instant.parse("2026-09-05T09:00:00Z"));
+        subscriptions.transition(PILOT, SubscriptionStatus.TERMINATED, 1, null, null, AUTHOR, "closed", "corr");
+        clock.set(Instant.parse("2026-10-02T09:00:00Z"));
+
+        assertThat(statements.draft(PILOT, "2026-09").lines())
+                .extracting(StatementLine::kind)
+                .containsExactly("PLAN");
+    }
+
     @Test
     void aSubscriptionTakesThePlansTrialAndOnlyATermThePlanOffers() {
         UUID versionId = activeTermsPlan();

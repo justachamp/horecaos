@@ -199,7 +199,7 @@ export interface DraftModuleRequest {
 /** One charge on a statement. */
 export interface StatementLineView {
   readonly lineNumber: number;
-  readonly kind: 'PLAN' | 'MODULE' | 'OVERAGE' | (string & {});
+  readonly kind: 'PLAN' | 'MODULE' | 'OVERAGE' | 'DEPOSIT' | 'EARLY_EXIT' | (string & {});
   readonly referenceCode: string;
   readonly description: string;
   readonly quantity: number;

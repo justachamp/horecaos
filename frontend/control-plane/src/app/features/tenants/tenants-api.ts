@@ -218,12 +218,23 @@ export interface OnboardingTemplateView {
   readonly status: string;
   readonly description: string;
   readonly requiredSteps: readonly string[];
+  /** The business types this version suits (ADR 0090); empty for the default. */
+  readonly businessTypes: readonly string[];
+}
+
+/** OnboardingTemplateService.Suggestion: the template a new run is pre-set to, and why. */
+export interface OnboardingTemplateSuggestion {
+  readonly template: OnboardingTemplateView;
+  readonly businessType: string | null;
+  /** True when a template names the tenant's business type; false when the default was taken. */
+  readonly matched: boolean;
 }
 
 /** OnboardingService.ActivationOutcome. */
 export interface ActivationOutcome {
   readonly activated: boolean;
-  readonly outcome: 'ACTIVATED' | 'AWAITING_APPROVAL' | 'NOT_READY' | 'READINESS_INCOMPLETE' | (string & {});
+  readonly outcome:
+    'ACTIVATED' | 'AWAITING_APPROVAL' | 'NOT_READY' | 'READINESS_INCOMPLETE' | (string & {});
   readonly outstandingRequired: readonly string[];
   readonly approvalRequestId: string | null;
 }
@@ -268,9 +279,12 @@ export class TenantsApi {
   /** Platform admins only. A tenant's link is permanent: a different organization is refused. */
   async linkKeycloakOrganization(tenantId: string, organizationId: string): Promise<TenantView> {
     return firstValueFrom(
-      this.api.put<TenantView>(`/api/v1/control-plane/tenants/${tenantId}/identity/keycloak-organization`, {
-        organizationId,
-      }),
+      this.api.put<TenantView>(
+        `/api/v1/control-plane/tenants/${tenantId}/identity/keycloak-organization`,
+        {
+          organizationId,
+        },
+      ),
     );
   }
 
@@ -322,9 +336,13 @@ export class TenantsApi {
     request: CreateOperatingUnitRequest,
   ): Promise<BrandView> {
     return firstValueFrom(
-      this.api.put<BrandView>(`/api/v1/control-plane/tenants/${tenantId}/brands/${brand.id}`, request, {
-        expectedVersion: brand.version,
-      }),
+      this.api.put<BrandView>(
+        `/api/v1/control-plane/tenants/${tenantId}/brands/${brand.id}`,
+        request,
+        {
+          expectedVersion: brand.version,
+        },
+      ),
     );
   }
 
@@ -399,7 +417,11 @@ export class TenantsApi {
     );
   }
 
-  async activateLocation(tenantId: string, brandId: string, locationId: string): Promise<LocationView> {
+  async activateLocation(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+  ): Promise<LocationView> {
     return firstValueFrom(
       this.api.post<LocationView>(
         `/api/v1/control-plane/tenants/${tenantId}/brands/${brandId}/locations/${locationId}/activate`,
@@ -423,9 +445,7 @@ export class TenantsApi {
 
   async getLegalEntities(tenantId: string): Promise<LegalEntityView[]> {
     return firstValueFrom(
-      this.api.get<LegalEntityView[]>(
-        `/api/v1/control-plane/tenants/${tenantId}/legal-entities`,
-      ),
+      this.api.get<LegalEntityView[]>(`/api/v1/control-plane/tenants/${tenantId}/legal-entities`),
     );
   }
 
@@ -472,12 +492,29 @@ export class TenantsApi {
     tenantId: string,
     ownerEmail?: string,
     ownerSubjectId?: string,
+    templateId?: string,
   ): Promise<{ runId: string }> {
     return firstValueFrom(
       this.api.post<{ runId: string }>(
         `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs`,
-        { ownerEmail, ownerSubjectId },
+        { ownerEmail, ownerSubjectId, templateId },
       ),
+    );
+  }
+
+  /** The template a new run for this tenant would start under (ADR 0090). */
+  async suggestedOnboardingTemplate(tenantId: string): Promise<OnboardingTemplateSuggestion> {
+    return firstValueFrom(
+      this.api.get<OnboardingTemplateSuggestion>(
+        `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs/suggested-template`,
+      ),
+    );
+  }
+
+  /** Every template version; needs platform scope. */
+  async onboardingTemplates(): Promise<OnboardingTemplateView[]> {
+    return firstValueFrom(
+      this.api.get<OnboardingTemplateView[]>('/api/v1/control-plane/onboarding-templates'),
     );
   }
 
@@ -522,14 +559,13 @@ export class TenantsApi {
   /** Refused once the run is ACTIVE or FAILED: a failed run is resumed, never abandoned. */
   async cancelOnboarding(tenantId: string, runId: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.post<unknown>(`/api/v1/control-plane/tenants/${tenantId}/onboarding-runs/${runId}/cancel`, {
-        reason,
-      }),
+      this.api.post<unknown>(
+        `/api/v1/control-plane/tenants/${tenantId}/onboarding-runs/${runId}/cancel`,
+        {
+          reason,
+        },
+      ),
     );
-  }
-
-  async defaultOnboardingTemplate(): Promise<OnboardingTemplateView> {
-    return firstValueFrom(this.api.get<OnboardingTemplateView>('/api/v1/control-plane/onboarding-templates/default'));
   }
 
   async activateOnboarding(

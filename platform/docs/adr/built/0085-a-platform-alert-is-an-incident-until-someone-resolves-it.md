@@ -1,10 +1,10 @@
 # ADR 0085: A platform alert is an incident until someone resolves it
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — V0199's `notifications.control_plane_alerts`, `JdbcControlPlaneAlertStore`, `ControlPlaneAlertService` keeping every raised alert, `ControlPlaneIncidentController` (list, acknowledge, resolve, each audited), tested against the migrated schema; the control-plane alerts and incidents screen. Paging to a phone stays with the monitoring stack
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0023, ADR 0025, ADR 0027, ADR 0058
 - Supersedes / Superseded by: —
 - Open inputs: none

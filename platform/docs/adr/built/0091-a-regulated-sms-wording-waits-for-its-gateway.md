@@ -1,13 +1,13 @@
 # ADR 0091: A regulated SMS wording waits for its gateway
 
-- Decision status: Proposed
-- Implementation status: Built — V0204's `provider_review` on `notifications.template_versions`, `TemplateProviderReviewService`, `TemplateProviderReviewController`, the withholding in `NotificationEligibilityService` with its two suppression reasons, `NotificationProviderRegistryController`, tested in `TemplateProviderReviewServiceTests` and `PaymentAndQuietHoursNotificationTests`; the control-plane notification providers screen. Nothing marks a wording as needing approval by itself
+- Decision status: Accepted
+- Implementation status: Built — V0204's `provider_review` on `notifications.template_versions`, `TemplateProviderReviewService`, `TemplateProviderReviewController`, the withholding in `NotificationEligibilityService` with its two suppression reasons, `NotificationProviderRegistryController`, tested in `TemplateProviderReviewServiceTests` and `PaymentAndQuietHoursNotificationTests`; the control-plane notification providers screen. V0208's `moderates_wordings` on the approved endpoints, set for VAS, and new SMS versions starting `PENDING` through `JdbcTemplateStore.smsWordingAwaitsGateway`, tested in `SmsWordingModerationTests`
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0020, ADR 0026, ADR 0028, ADR 0029
 - Supersedes / Superseded by: —
-- Open inputs: which gateways moderate texts, so marking a wording could become automatic for them (operations, per gateway)
+- Open inputs: closed 2026-09-11: the VAS gateway is treated as moderating, so every new SMS wording for it waits for its approval. A new gateway is marked as moderating or not when its endpoint is approved
 
 ## Context
 
@@ -24,9 +24,14 @@ assuming every gateway needs it.
 1. An SMS template version carries where it stands with its gateway: not
    needing approval (every existing and new version), waiting, approved or
    refused.
-2. HorecaOS staff mark a version as waiting when its gateway moderates texts,
-   and record the answer: an approval names the gateway's reference, a refusal
-   says what the gateway objected to. Each step is audited.
+2. An approved gateway endpoint records whether it moderates texts. A new SMS
+   version starts waiting, marked by the platform rather than a person, when
+   the tenant sends SMS through a moderating endpoint, or has no SMS gateway
+   bound yet while any approved endpoint moderates. HorecaOS staff can mark any
+   version as waiting too, and record the answer: an approval names the
+   gateway's reference, a refusal says what the gateway objected to. Each step
+   is audited. The VAS gateway is marked as moderating, by the platform
+   owner's decision of 2026-09-11.
 3. A version waiting or refused is not sent. The message is suppressed with a
    reason saying which, instead of failing at the gateway once per customer.
    An approved version, or one that never needed approval, sends as before.

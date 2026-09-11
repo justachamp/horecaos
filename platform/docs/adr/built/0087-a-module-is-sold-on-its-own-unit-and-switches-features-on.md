@@ -1,13 +1,13 @@
 # ADR 0087: A module is sold on its own unit and switches features on
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — V0201's `commercial.modules` and `commercial.tenant_modules` with the activation trigger, `ModuleCatalogService`, `CommercialModuleController`, module features in `EntitlementResolution` with `EntitlementSource.MODULE`, tested against the migrated schema in `ModulesStatementsAndArrearsTests` and in `EntitlementBoundaryTests`; the control-plane module catalog. A module never raises a counted limit
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0021, ADR 0025, ADR 0027
 - Supersedes / Superseded by: —
-- Open inputs: which modules HorecaOS sells and at what price (product, finance) — the catalog is empty until someone drafts one
+- Open inputs: none left open on the structure. Which modules HorecaOS sells and at what price is content, not structure: product and finance draft them in the console, where a second person activates each one
 
 ## Context
 

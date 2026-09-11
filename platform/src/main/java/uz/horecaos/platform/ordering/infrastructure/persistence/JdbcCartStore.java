@@ -615,4 +615,41 @@ public class JdbcCartStore {
             return "CartFulfillmentRow[cart=%s]".formatted(cartId);
         }
     }
+
+    /**
+     * Deletes carts that never became an order and have not been touched since
+     * {@code cutoff} (ADR 0092, decided 2026-09-11), their lines and
+     * destination with them through the cascades V0022 and V0056 declare.
+     *
+     * <p>A cart an order names is kept whatever its status says: it is that
+     * order's history, and {@code fk_order_cart} would refuse the delete
+     * anyway. A converted cart is never even read. Batch-limited and
+     * lock-skipping, so two replicas split the work instead of queueing on it;
+     * the application role holds UPDATE on this table, which the lock needs.
+     *
+     * @return how many carts were deleted -- a count, never which or whose
+     */
+    public int deleteAbandoned(Instant cutoff, int batchSize) {
+        return jdbc.sql("""
+                WITH doomed AS (
+                    SELECT c.id, c.tenant_id
+                      FROM ordering.carts c
+                     WHERE c.status <> 'CONVERTED'
+                       AND c.updated_at < :cutoff
+                       AND c.expires_at < :cutoff
+                       AND NOT EXISTS (
+                           SELECT 1 FROM ordering.orders o
+                            WHERE o.tenant_id = c.tenant_id AND o.cart_id = c.id)
+                     ORDER BY c.updated_at
+                     LIMIT :batchSize
+                     FOR UPDATE OF c SKIP LOCKED
+                )
+                DELETE FROM ordering.carts c
+                 USING doomed
+                 WHERE c.id = doomed.id AND c.tenant_id = doomed.tenant_id
+                """)
+                .param("cutoff", java.time.OffsetDateTime.ofInstant(cutoff, java.time.ZoneOffset.UTC))
+                .param("batchSize", batchSize)
+                .update();
+    }
 }

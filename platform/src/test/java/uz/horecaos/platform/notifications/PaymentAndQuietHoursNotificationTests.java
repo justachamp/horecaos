@@ -586,6 +586,11 @@ class PaymentAndQuietHoursNotificationTests {
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Body")));
         int versionNumber = templates.addVersion(tenantId, templateId, wordings, Map.of("reasonCode", "string"));
+        // The migrated endpoints include the VAS gateway, which moderates
+        // wordings (ADR 0091, V0208), so a new SMS version starts PENDING and
+        // sends nothing until its approval is recorded -- as it must be in
+        // production before this tenant's customers hear from it.
+        setProviderReview(tenantId, "APPROVED");
         templates.activate(tenantId, templateId, versionNumber, "copy-approver");
     }
 

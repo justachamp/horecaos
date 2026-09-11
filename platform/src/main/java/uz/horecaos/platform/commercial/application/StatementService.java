@@ -156,6 +156,7 @@ public class StatementService {
                         1,
                         terms.activationDepositMinor()));
             }
+            addEarlyExit(lines, subscription, version, terms, termMonths, reference, month, zone, start, end);
             addOverage(lines, tenantId, version, periodKey, start, end);
         }
 
@@ -325,6 +326,68 @@ public class StatementService {
                 }
             }
         }
+    }
+
+    /**
+     * The term discount repaid when a subscription ends before its term does
+     * (ADR 0093, decided 2026-09-11).
+     *
+     * <p>Billed once, on the statement for the month it ended in: every charge
+     * made at the discounted price, from the first month to this one, repays
+     * the difference between the full price and the one it was charged at. A
+     * month wholly in trial was charged nothing and repays nothing. A plan
+     * change is an end and a start today, so it repays too.
+     */
+    private static void addEarlyExit(
+            List<StatementLine> lines,
+            Subscription subscription,
+            PlanVersion version,
+            PlanTerms terms,
+            int termMonths,
+            String reference,
+            YearMonth month,
+            ZoneId zone,
+            Instant start,
+            Instant end) {
+        Instant endedAt = subscription.endedAt();
+        int discount = terms.discountFor(termMonths);
+        if (endedAt == null || endedAt.isBefore(start) || !endedAt.isBefore(end) || discount == 0) {
+            return;
+        }
+        Instant termEnd =
+                subscription.startAt().atZone(zone).plusMonths(termMonths).toInstant();
+        if (!endedAt.isBefore(termEnd)) {
+            return;
+        }
+        long repaidPerCharge = version.priceMinor() - terms.monthlyPriceOn(version.priceMinor(), termMonths);
+        long charges = discountedCharges(version, subscription, month, zone);
+        if (repaidPerCharge <= 0 || charges == 0) {
+            return;
+        }
+        lines.add(StatementLine.of(
+                lines.size() + 1,
+                StatementLine.EARLY_EXIT,
+                reference,
+                "%s v%d: left the %d-month term early, %s%% term discount repaid"
+                        .formatted(version.planCode(), version.versionNumber(), termMonths, percent(discount)),
+                charges,
+                repaidPerCharge));
+    }
+
+    /** How many times the plan was charged, trial months aside, from its first month to {@code last}. */
+    static long discountedCharges(PlanVersion version, Subscription subscription, YearMonth last, ZoneId zone) {
+        Instant trialEnd = subscription.trialEndAt();
+        long charges = 0;
+        for (YearMonth month = YearMonth.from(subscription.startAt().atZone(zone));
+                !month.isAfter(last);
+                month = month.plusMonths(1)) {
+            Instant monthEnd = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant();
+            boolean wholeMonthInTrial = trialEnd != null && !trialEnd.isBefore(monthEnd);
+            if (chargedIn(version, subscription, month, zone) && !wholeMonthInTrial) {
+                charges++;
+            }
+        }
+        return charges;
     }
 
     private static long included(PlanEntitlement line, @Nullable EntitlementOverride override, Instant at) {

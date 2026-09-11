@@ -23,13 +23,14 @@ import uz.horecaos.platform.web.api.ApiException;
 class OnboardingTemplateServiceTests {
 
     private static TestDatabase.Handle db;
+    private static JdbcClient jdbc;
     private static OnboardingTemplateService service;
 
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is required for this test");
         db = TestDatabase.migrated();
-        JdbcClient jdbc = JdbcClient.create(db.dataSource());
+        jdbc = JdbcClient.create(db.dataSource());
         service = new OnboardingTemplateService(jdbc, JsonMapper.builder().build());
     }
 
@@ -102,5 +103,54 @@ class OnboardingTemplateServiceTests {
         assertThat(service.list())
                 .extracting(OnboardingTemplateService.TemplateView::code)
                 .contains("default");
+    }
+
+    /**
+     * ADR 0090 as decided on 2026-09-11: a business type pre-selects the
+     * template that names it, and every other type falls back to the default.
+     * The default names no type, so without the second template every
+     * suggestion here would be the default and the first assertion could not
+     * tell a match from a fallback.
+     */
+    @Test
+    void aBusinessTypeSuggestsTheTemplateThatNamesItAndOtherwiseTheDefault() {
+        UUID darkKitchen = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.onboarding_templates
+                    (id, code, version, status, description, required_steps, default_configuration,
+                     business_types, created_by)
+                VALUES (:id, 'dark-kitchen', 1, 'ACTIVE', 'delivery only', '[]'::jsonb, '{}'::jsonb,
+                        ARRAY['DARK_KITCHEN'], 'test')
+                """).param("id", darkKitchen).update();
+        try {
+            var suggested = service.suggestedFor("DARK_KITCHEN");
+            assertThat(suggested.template().id()).isEqualTo(darkKitchen);
+            assertThat(suggested.matched()).isTrue();
+            assertThat(suggested.template().businessTypes()).containsExactly("DARK_KITCHEN");
+
+            var fallback = service.suggestedFor("CAFE");
+            assertThat(fallback.template().code()).isEqualTo("default");
+            assertThat(fallback.matched()).isFalse();
+            assertThat(fallback.template().businessTypes())
+                    .as("the default is what every type falls back to, not a choice any type made")
+                    .isEmpty();
+
+            assertThat(service.suggestedFor(null).template().code()).isEqualTo("default");
+        } finally {
+            jdbc.sql("DELETE FROM tenant.onboarding_templates WHERE id = :id")
+                    .param("id", darkKitchen)
+                    .update();
+        }
+    }
+
+    @Test
+    void aTemplateCannotClaimABusinessTypeNoTenantCanHave() {
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO tenant.onboarding_templates
+                            (id, code, version, status, description, required_steps, default_configuration,
+                             business_types, created_by)
+                        VALUES (:id, 'casino', 1, 'DRAFT', 'no', '[]'::jsonb, '{}'::jsonb, ARRAY['CASINO'], 'test')
+                        """).param("id", UUID.randomUUID()).update())
+                .hasMessageContaining("ck_onboarding_template_business_types");
     }
 }

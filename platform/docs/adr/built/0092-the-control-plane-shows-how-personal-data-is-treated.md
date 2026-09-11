@@ -1,13 +1,13 @@
 # ADR 0092: The control plane shows how personal data is treated
 
-- Decision status: Proposed
-- Implementation status: Built — `DataProtectionController` reading the data classes, every `*_encrypted` column from the database catalog, the retention rules with their enforcing jobs, `customer.erasure_requests` and the audit trail's reveals and exports, tested in `DataProtectionControllerTests`; the control-plane PII and data classification screen. Abandoned carts and courier applicant records have no retention rule, and the screen says so
+- Decision status: Accepted
+- Implementation status: Built — `DataProtectionController` reading the data classes, every `*_encrypted` column from the database catalog, the retention rules with their enforcing jobs, `customer.erasure_requests` and the audit trail's reveals and exports, tested in `DataProtectionControllerTests`; the control-plane PII and data classification screen. V0209 and the `CartRetentionSweeper` and `CourierApplicantRetentionSweeper` that enforce the two rules decided on 2026-09-11, tested in `CartRetentionSweeperTests` and `CourierApplicantRetentionSweeperTests`
 - Date proposed: 2026-09-11
-- Date decided: —
-- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
+- Date decided: 2026-09-11
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
 - Depends on: ADR 0027, ADR 0029, ADR 0042, ADR 0044, ADR 0059
 - Supersedes / Superseded by: —
-- Open inputs: retention for abandoned carts and courier applicant records (legal, product)
+- Open inputs: closed 2026-09-11: a cart that never became an order is deleted 90 days after it was last touched, and a courier application nobody verified is erased 12 months after it was last touched. Counsel should confirm both periods
 
 ## Context
 
@@ -19,8 +19,10 @@ did not exist, when most of them did, spread across five modules.
 
 ## Decision
 
-The control plane reads one overview from what enforces each part, and adds no
-new rule:
+The control plane reads one overview from what enforces each part. It adds
+no rule of its own; the two rules the first version listed as missing were
+decided by the platform owner on 2026-09-11 and are enforced by their modules
+(item 6):
 
 1. **Classes.** The data classes and what each requires: encrypted at rest,
    and whether a value may appear in an event or a log.
@@ -33,6 +35,16 @@ new rule:
    their tenant and how long they have waited.
 5. **Egress.** Reveals and exports of personal data in the last 30 days, by
    kind, counted from the audit trail.
+
+6. **The two missing rules.** A cart that never became an order is deleted
+   90 days after it was last touched and after it expired; a converted cart,
+   or one an order names, is an order's history and is never touched. A
+   courier who applied and was never verified, never on a shift and never
+   paid is erased 12 months after their record was last touched: the name is
+   overwritten with a tombstone and the courier archived. The courier module
+   has no rejection step, so an application nobody verified in that time is
+   treated as a rejected one; a verified courier's record is their settlement
+   history and is not an applicant record.
 
 Nothing in it names a customer: counts, identifiers and column names only.
 

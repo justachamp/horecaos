@@ -638,4 +638,76 @@ public class JdbcCourierStore {
     static @Nullable OffsetDateTime utc(@Nullable Instant value) {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
+
+    // ------------------------------------------------------ applicant retention
+
+    /**
+     * Couriers who applied and were never verified, untouched since {@code
+     * cutoff} (ADR 0092, decided 2026-09-11), claimed for erasure.
+     *
+     * <p>Never verified means no engagement of theirs carries a verification,
+     * and no shift or ledger entry names them -- a person who was paid is a
+     * courier with a settlement history, not an applicant, whatever their
+     * engagement says now. Locks the courier row only; the application role
+     * holds UPDATE on it.
+     */
+    public List<ApplicantRef> claimUnverifiedApplicants(Instant cutoff, int batchSize) {
+        return jdbc.sql("""
+                SELECT c.tenant_id, c.id
+                  FROM fulfillment.couriers c
+                 WHERE c.status = 'ACTIVE'
+                   AND c.updated_at < :cutoff
+                   AND NOT EXISTS (
+                       SELECT 1 FROM fulfillment.courier_engagements e
+                        WHERE e.tenant_id = c.tenant_id AND e.courier_id = c.id
+                          AND (e.registration_verified_at IS NOT NULL OR e.updated_at >= :cutoff))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM fulfillment.courier_shifts s
+                        WHERE s.tenant_id = c.tenant_id AND s.courier_id = c.id)
+                   AND NOT EXISTS (
+                       SELECT 1 FROM fulfillment.courier_ledger_entries l
+                        WHERE l.tenant_id = c.tenant_id AND l.courier_id = c.id)
+                 ORDER BY c.updated_at
+                 LIMIT :batchSize
+                 FOR UPDATE OF c SKIP LOCKED
+                """)
+                .param("cutoff", utc(cutoff))
+                .param("batchSize", batchSize)
+                .query((row, number) ->
+                        new ApplicantRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * Overwrites an applicant's name with a tombstone, archives them, and
+     * ends every engagement they opened. The tombstone is protected like any
+     * name, so a later reveal reads as exactly what happened.
+     */
+    public void eraseApplicant(UUID tenantId, UUID courierId, String protectedTombstone, LocalDate today, Instant now) {
+        jdbc.sql("""
+                UPDATE fulfillment.couriers
+                   SET protected_full_name = :tombstone, status = 'ARCHIVED',
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :courierId
+                """)
+                .param("tombstone", protectedTombstone)
+                .param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .update();
+        jdbc.sql("""
+                UPDATE fulfillment.courier_engagements
+                   SET status = 'ENDED', engaged_until = GREATEST(engaged_from, CAST(:today AS date)),
+                       protected_registration_ref = NULL, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
+                """)
+                .param("today", today)
+                .param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .update();
+    }
+
+    /** A courier identity without its row -- what the cross-tenant applicant sweep claims. */
+    public record ApplicantRef(UUID tenantId, UUID courierId) {}
 }
