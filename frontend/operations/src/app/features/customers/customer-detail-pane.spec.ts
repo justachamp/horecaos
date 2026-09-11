@@ -63,6 +63,8 @@ describe('CustomerDetailPane', () => {
       revealDateOfBirth: vi.fn().mockResolvedValue(null),
       revealAddresses: vi.fn().mockResolvedValue([]),
       consentHistory: vi.fn().mockResolvedValue([]),
+      recordConsent: vi.fn().mockResolvedValue(undefined),
+      eligibility: vi.fn().mockResolvedValue({ eligible: true, refusalReason: null }),
       loyaltyBalances: vi.fn().mockResolvedValue([]),
       ordersPage: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       revealBlacklistHistory: vi.fn().mockResolvedValue([]),
@@ -126,6 +128,47 @@ describe('CustomerDetailPane', () => {
       { displayName: 'Dilnoza K.', preferredLocale: 'ru', preferredTimezone: 'Asia/Tashkent' },
       3,
     );
+  });
+
+  /**
+   * Pins the fix for the consent form that could not make anyone
+   * contactable: it used to post no `brandId`, a lowercase free-text
+   * `'marketing'` purpose, and a null `channel`, while `currentConsent`
+   * matches brand, purpose and channel exactly.
+   */
+  it('records consent with the operator’s own brand, a constrained purpose and channel, and no fabricated policy version', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const consentTab = Array.from(host.querySelectorAll('.tab')).find(
+      (tab) => tab.textContent?.trim() === 'Consent',
+    ) as HTMLButtonElement;
+    consentTab.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Purpose and channel are pickers, not free text — the policy version is
+    // the only text input this form has, and it starts blank rather than
+    // carrying a fabricated default.
+    const versionInput = host.querySelector('.form input') as HTMLInputElement;
+    expect(versionInput.value).toBe('');
+    versionInput.value = 'privacy-policy-2026-03';
+    versionInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const recordButton = Array.from(host.querySelectorAll('.form__actions button')).find((b) =>
+      b.textContent?.includes('Record'),
+    ) as HTMLButtonElement;
+    recordButton.click();
+    await flushMicrotasks();
+
+    expect(api['recordConsent']).toHaveBeenCalledWith(SCOPE, 'customer-1', {
+      brandId: SCOPE.brandId,
+      purpose: 'MARKETING_PROMOTIONS',
+      channel: 'SMS',
+      decision: 'GRANTED',
+      policyVersion: 'privacy-policy-2026-03',
+      source: 'SUPPORT_AGENT',
+    });
   });
 
   it('shows the denied state when the operator has no location in scope', async () => {
