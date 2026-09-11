@@ -76,13 +76,19 @@
   text-align: right;
 }
 
-.tariffs__action-col button {
+.tariffs__action-col button,
+.editor__head button,
+.editor__row button {
   padding: 4px 10px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
   font-size: 13px;
+}
+
+.tariffs__action-col button + button {
+  margin-left: 6px;
 }
 
 .status-badge {
@@ -153,7 +159,8 @@
   gap: 8px;
 }
 
-.field input {
+.field input,
+.field select {
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
@@ -197,4 +204,106 @@
   background: var(--q-surface-1);
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
+}
+
+/* ---------------------------------------------------------------- ADR 0101 */
+
+.dialog--wide {
+  width: 720px;
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field-row .field {
+  flex: 1;
+}
+
+.field select {
+  background: var(--q-canvas);
+  color: inherit;
+}
+
+.editor {
+  margin-bottom: 16px;
+  border-top: 1px solid var(--q-hairline);
+  padding-top: 12px;
+}
+
+.editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor__head h3 {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.editor__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.editor__cell {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 13px;
+}
+
+/* The band-set column is text where its neighbours are numbers, and a blank
+   one means the base table — worth the extra width so it is not mistaken for
+   an empty number. */
+.editor__cell--set {
+  flex: 1.4;
+}
+
+.tariff-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tariff-detail__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--q-ink-muted);
+}
+
+.tariff-detail h3 {
+  margin: 4px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+/* ROAD mode with no routing answer prices from an inflated straight line and
+   stamps RADIUS_FALLBACK on the resolution. ADR 0101: render it, do not hide
+   it — an operator who thinks routing is working prices differently from one
+   who knows the number is approximate. */
+.tariff-detail__fallback,
+.dialog__warning {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--q-warning-tint, var(--q-surface-1));
+  color: var(--q-warning-text, var(--q-ink-muted));
+  border-radius: var(--q-radius);
+}
+
+.dialog__warning {
+  margin-bottom: 8px;
+}
+
+.dialog__problems,
+.tariffs__problems {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--q-error-text);
 }
