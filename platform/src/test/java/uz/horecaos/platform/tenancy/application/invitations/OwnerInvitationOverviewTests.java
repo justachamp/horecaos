@@ -416,6 +416,26 @@ class OwnerInvitationOverviewTests {
             public void completeSetup(String subjectId, String firstName, String lastName, String password) {
                 throw new UnsupportedOperationException("nothing under test sets a password");
             }
+
+            @Override
+            public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<String> findSubjectIdByLogin(String usernameOrEmail) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void setPassword(String subjectId, String password) {
+                throw new UnsupportedOperationException("not part of this test");
+            }
+
+            @Override
+            public void logoutEverywhere(String subjectId) {
+                throw new UnsupportedOperationException("not part of this test");
+            }
         };
         OwnerInvitationService watchedService = new OwnerInvitationService(
                 store,
@@ -664,6 +684,26 @@ class OwnerInvitationOverviewTests {
         public void completeSetup(String subjectId, String firstName, String lastName, String password) {
             StaffAccount account = java.util.Objects.requireNonNull(accounts.get(subjectId));
             accounts.put(subjectId, new StaffAccount(subjectId, account.email(), true, true));
+        }
+
+        @Override
+        public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<String> findSubjectIdByLogin(String usernameOrEmail) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void setPassword(String subjectId, String password) {
+            throw new UnsupportedOperationException("not part of this test");
+        }
+
+        @Override
+        public void logoutEverywhere(String subjectId) {
+            throw new UnsupportedOperationException("not part of this test");
         }
     }
 

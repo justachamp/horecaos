@@ -271,6 +271,26 @@ public class SecurityConfiguration {
                                 "/api/v1/operations/invitations/inspect",
                                 "/api/v1/operations/invitations/accept")
                         .permitAll()
+                        // ADR 0098: a staff member who forgot their password. The
+                        // same category as the two paths above and ADR 0062's six:
+                        // somebody who cannot sign in has no session to present, so
+                        // requiring one would refuse exactly the visitor these exist
+                        // for. The request path is authorised by nothing at all and
+                        // answers 202 to every caller, so it discloses nothing to an
+                        // anonymous one; inspect and accept are authorised by the
+                        // one-time token in the body, checked against the hash the
+                        // relay kept. StaffPasswordResetController rate-limits all
+                        // three per caller address, and the store caps a single
+                        // account at one live reset.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/auth/password-resets",
+                                "/api/v1/control-plane/auth/password-resets/inspect",
+                                "/api/v1/control-plane/auth/password-resets/accept",
+                                "/api/v1/operations/auth/password-resets",
+                                "/api/v1/operations/auth/password-resets/inspect",
+                                "/api/v1/operations/auth/password-resets/accept")
+                        .permitAll()
                         // ADR 0079: a kitchen display device with no credential of its
                         // own asking for one. Unauthenticated for the same reason the
                         // storefront's pre-account identity endpoints above are: there

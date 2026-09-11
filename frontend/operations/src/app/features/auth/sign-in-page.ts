@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';
@@ -24,7 +24,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
  */
 @Component({
   selector: 'q-sign-in-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   template: `
     <div class="page">
       <form class="card" (submit)="submit($event)">
@@ -60,6 +60,14 @@ import { TPipe } from '../../core/i18n/t.pipe';
         <button type="submit" class="q-body submit" [disabled]="!canSubmit()">
           {{ (loading() ? 'login.submitting' : 'login.submit') | t }}
         </button>
+
+        <!--
+          ADR 0098. Below the button rather than beside the password field: an
+          operator reaches for it after a failed attempt, not before one.
+        -->
+        <a class="q-body-sm forgot" routerLink="/forgot-password">{{
+          'login.forgotPassword' | t
+        }}</a>
       </form>
     </div>
   `,
@@ -154,6 +162,12 @@ import { TPipe } from '../../core/i18n/t.pipe';
       background: var(--q-surface-2);
       color: var(--q-ink-subtle);
       cursor: default;
+    }
+
+    .forgot {
+      margin-top: 16px;
+      color: var(--q-primary);
+      text-align: center;
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

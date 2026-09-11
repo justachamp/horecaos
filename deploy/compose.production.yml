@@ -368,8 +368,12 @@ services:
       HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
       HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
       # Where an invitation's link points: the operations console the owner
-      # sets their password in.
+      # sets their password in. The control-plane origin is here for ADR 0098's
+      # password reset, which comes back to whichever console asked for it —
+      # a control-plane operator sent to the operations console would land
+      # somewhere they may have no access to at all.
       HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN}
+      HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN}
 
       HORECAOS_SECRETS_PROVIDER: openbao
       HORECAOS_OPENBAO_URL: http://openbao:8200

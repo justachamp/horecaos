@@ -72,11 +72,15 @@ public class KeycloakConfiguration {
             @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
             @Value("${horecaos.keycloak.realm:horecaos}") String realm,
             @Value("${horecaos.keycloak.provisioning-client-id:horecaos-provisioning}") String clientId,
+            @Value("${horecaos.keycloak.staff-login-client-id:horecaos-staff-login}") String staffLoginClientId,
             @Value("${horecaos.environment:local}") String environment) {
 
         return new KeycloakStaffAccounts(
                 authenticatedClient(secrets, clock, baseUrl, realm, clientId, "provisioning-secret", environment),
-                realm);
+                realm,
+                // Not this bean's own credential: the client whose offline
+                // grants a password reset revokes (ADR 0098).
+                staffLoginClientId);
     }
 
     /**

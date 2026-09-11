@@ -84,6 +84,7 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
+                    || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
@@ -135,6 +136,7 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
+                    || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)) {
                 continue;
@@ -350,6 +352,45 @@ class EndpointCapabilityDeclarationTests {
         String path = pathOf(handler);
         return path.equals("/api/v1/operations/invitations/inspect")
                 || path.equals("/api/v1/operations/invitations/accept");
+    }
+
+    /**
+     * ADR 0098: a staff member who forgot their password, on both staff
+     * prefixes — three paths apiece, for the reason
+     * {@link uz.horecaos.platform.iam.web.StaffSessionController}'s own doc
+     * gives about ADR 0057 surface groups.
+     *
+     * <p>The identical reasoning {@link #isStaffAuthEndpoint} and
+     * {@link #isStaffInvitationEndpoint} state, and one more besides. None of
+     * the four authorization strategies describes any of the six: somebody who
+     * has forgotten their password holds no session, so no capability, and
+     * {@code IdempotencyInterceptor} has no subject to scope a key by. The
+     * request path is authorised by nothing and deliberately so — it answers
+     * 202 to every caller, so an anonymous one learns nothing it could not have
+     * assumed; inspect and accept are authorised by the one-time token in the
+     * body, checked against the hash the relay kept.
+     *
+     * <p>Replay is not a hazard on any of the three. A repeated request
+     * requeues one row and replaces its own link rather than accumulating
+     * anything; a repeated inspect changes nothing after the first opened-at; a
+     * repeated accept finds a spent link. ADR 0033 rate-limits all three per
+     * caller instead, which is the control that matters for a surface anyone
+     * can reach.
+     *
+     * <p>Exact paths rather than a prefix, the same discipline every other
+     * exemption here keeps: the next endpoint added under {@code .../auth/} is
+     * not quietly exempted along with these six.
+     */
+    private static boolean isStaffPasswordResetEndpoint(Method handler) {
+        String path = pathOf(handler);
+        for (String prefix : new String[] {"/api/v1/control-plane/auth", "/api/v1/operations/auth"}) {
+            if (path.equals(prefix + "/password-resets")
+                    || path.equals(prefix + "/password-resets/inspect")
+                    || path.equals(prefix + "/password-resets/accept")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

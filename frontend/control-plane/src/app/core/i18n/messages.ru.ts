@@ -210,6 +210,50 @@ export const ru: Messages = {
   'login.submitting': 'Выполняется вход…',
   'login.invalidCredentials': 'Неверное имя пользователя или пароль.',
 
+  'login.forgotPassword': 'Забыли пароль?',
+
+  'forgotPassword.title': 'Восстановление пароля',
+  'forgotPassword.lead': 'Введите имя пользователя или email — мы отправим ссылку.',
+  'forgotPassword.login': 'Имя пользователя или email',
+  'forgotPassword.submit': 'Отправить ссылку',
+  'forgotPassword.submitting': 'Отправляем…',
+  'forgotPassword.sent.title': 'Проверьте почту',
+  'forgotPassword.sent.body':
+    'Если учётная запись существует, письмо уже в пути. Ссылка действует 60 минут.',
+  'forgotPassword.toSignIn': 'Вернуться ко входу',
+  'forgotPassword.failed': 'Не удалось отправить запрос. Попробуйте ещё раз чуть позже.',
+
+  'resetPassword.loading': 'Проверяем ссылку…',
+  'resetPassword.title': 'Задайте новый пароль',
+  'resetPassword.forAccount': 'Для {account}',
+  'resetPassword.password': 'Новый пароль',
+  'resetPassword.passwordRule': 'Не короче {count} символов и не совпадает с вашим email.',
+  'resetPassword.confirm': 'Повторите пароль',
+  'resetPassword.mismatch': 'Пароли не совпадают.',
+  'resetPassword.submit': 'Сохранить пароль',
+  'resetPassword.submitting': 'Сохраняем…',
+  'resetPassword.done.title': 'Пароль сохранён',
+  'resetPassword.done.body': 'Все остальные сеансы завершены. Войдите с новым паролем.',
+  'resetPassword.doneSessionsNotEnded.title': 'Пароль сохранён, но другие сеансы ещё активны',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Новый пароль работает. Завершить остальные сеансы не удалось — выйдите из аккаунта на всех других устройствах, а если это невозможно, обратитесь в поддержку.',
+  'resetPassword.invalid.title': 'Эта ссылка недействительна',
+  'resetPassword.invalid.body':
+    'Возможно, ею уже воспользовались или её заменил новый запрос. Запросите новую.',
+  'resetPassword.expired.title': 'Срок действия ссылки истёк',
+  'resetPassword.expired.body': 'Ссылка для сброса действует 60 минут. Запросите новую.',
+  'resetPassword.retry.title': 'Не удалось проверить ссылку',
+  'resetPassword.retry.body':
+    'Это сбой связи с HorecaOS, а не проблема со ссылкой. Она ещё действует — попробуйте ещё раз.',
+  'resetPassword.retry.action': 'Попробовать снова',
+  'resetPassword.askAgain': 'Запросить новую ссылку',
+  'resetPassword.toSignIn': 'Перейти ко входу',
+  'resetPassword.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
+  'resetPassword.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
+  'resetPassword.policy.history': 'Выберите пароль, который вы не использовали недавно.',
+  'resetPassword.policy.other': 'Пароль не подходит под правила. Выберите другой.',
+  'resetPassword.failed': 'Не удалось сохранить пароль. Попробуйте ещё раз чуть позже.',
+
   'state.denied.title': 'У вас нет доступа к этому разделу',
   'state.denied.body':
     'Доступ выдаётся по правам. Запросите у администратора платформы право, которое нужно этому разделу.',

@@ -218,6 +218,56 @@ export const en = {
   // wording is deliberately as uninformative about which one happened.
   'login.invalidCredentials': 'Incorrect username or password.',
 
+  'login.forgotPassword': 'Forgot password?',
+
+  // ADR 0098: a staff member who forgot their password.
+  'forgotPassword.title': 'Reset your password',
+  'forgotPassword.lead': 'Enter your username or email address and we will send you a link.',
+  'forgotPassword.login': 'Username or email',
+  'forgotPassword.submit': 'Send the link',
+  'forgotPassword.submitting': 'Sending…',
+  'forgotPassword.sent.title': 'Check your email',
+  // One sentence for every outcome. The platform answers a login that names an
+  // account and one that does not identically (ADR 0098), so there is nothing
+  // more specific this screen could honestly say -- and saying more would turn
+  // an unauthenticated endpoint into a directory of who works here.
+  'forgotPassword.sent.body':
+    'If the account exists, an email is on its way. The link works for 60 minutes.',
+  'forgotPassword.toSignIn': 'Back to sign in',
+  'forgotPassword.failed': 'The request could not be sent. Try again in a moment.',
+
+  'resetPassword.loading': 'Checking your link…',
+  'resetPassword.title': 'Choose a new password',
+  'resetPassword.forAccount': 'For {account}',
+  'resetPassword.password': 'New password',
+  'resetPassword.passwordRule': 'At least {count} characters, and not your email address.',
+  'resetPassword.confirm': 'Repeat the password',
+  'resetPassword.mismatch': 'The two passwords are different.',
+  'resetPassword.submit': 'Set the password',
+  'resetPassword.submitting': 'Saving…',
+  'resetPassword.done.title': 'Your password is set',
+  'resetPassword.done.body': 'Every other session has been ended. Sign in with your new password.',
+  'resetPassword.doneSessionsNotEnded.title':
+    'Your password is set, but other sessions are still open',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Your new password works. We could not end your other sessions — sign out on every other device you are signed in on, and contact support if you cannot.',
+  'resetPassword.invalid.title': 'This link cannot be used',
+  'resetPassword.invalid.body':
+    'It may already have been used, or a newer request replaced it. Ask for a new one.',
+  'resetPassword.expired.title': 'This link has expired',
+  'resetPassword.expired.body': 'Reset links work for 60 minutes. Ask for a new one.',
+  'resetPassword.retry.title': 'We could not check your link',
+  'resetPassword.retry.body':
+    'This is a problem reaching HorecaOS, not a problem with the link. It is still good — try again.',
+  'resetPassword.retry.action': 'Try again',
+  'resetPassword.askAgain': 'Ask for a new link',
+  'resetPassword.toSignIn': 'Go to sign in',
+  'resetPassword.policy.length': 'The password is too short: use at least 12 characters.',
+  'resetPassword.policy.notEmail': 'The password must not be your email address.',
+  'resetPassword.policy.history': 'Choose a password you have not used recently.',
+  'resetPassword.policy.other': 'This password does not meet the rules. Choose another.',
+  'resetPassword.failed': 'The password could not be set. Try again in a moment.',
+
   'state.denied.title': 'You do not have access to this section',
   'state.denied.body':
     'Access is granted per capability. Ask a platform administrator for the capability this section needs.',

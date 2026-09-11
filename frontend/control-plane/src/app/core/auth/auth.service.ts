@@ -194,6 +194,21 @@ export class AuthService extends AccessTokenSource {
     this.scheduleRefresh(session.accessTokenExpiresAt);
   }
 
+  /**
+   * Ends this tab's session and only this tab's, without telling Keycloak.
+   *
+   * For the reset page (ADR 0098): accepting a reset revokes that account's
+   * sessions server-side, but the tab the link was opened in may have restored
+   * somebody's session at boot and still holds a usable access token for the
+   * rest of its short life. Deliberately not {@link signOut}, which would
+   * revoke a refresh token that can belong to a different operator than the
+   * one whose password was just reset — on a shared back-office machine that
+   * would end a session the reset had nothing to do with.
+   */
+  forgetLocalSession(): void {
+    this.clearLocally();
+  }
+
   private clearLocally(): void {
     this.cancelScheduledRefresh();
     this.tokens.clear();

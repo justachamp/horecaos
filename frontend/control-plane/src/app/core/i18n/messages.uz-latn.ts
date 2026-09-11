@@ -211,6 +211,51 @@ export const uzLatn: Messages = {
   'login.submitting': 'Kirilmoqda…',
   'login.invalidCredentials': 'Foydalanuvchi nomi yoki parol noto‘g‘ri.',
 
+  'login.forgotPassword': 'Parolni unutdingizmi?',
+
+  'forgotPassword.title': 'Parolni tiklash',
+  'forgotPassword.lead': 'Foydalanuvchi nomi yoki email manzilingizni kiriting — havola yuboramiz.',
+  'forgotPassword.login': 'Foydalanuvchi nomi yoki email',
+  'forgotPassword.submit': 'Havola yuborish',
+  'forgotPassword.submitting': 'Yuborilmoqda…',
+  'forgotPassword.sent.title': 'Pochtangizni tekshiring',
+  'forgotPassword.sent.body':
+    'Agar hisob mavjud bo‘lsa, xat yo‘lda. Havola 60 daqiqa davomida ishlaydi.',
+  'forgotPassword.toSignIn': 'Kirish sahifasiga qaytish',
+  'forgotPassword.failed': 'So‘rovni yuborib bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.',
+
+  'resetPassword.loading': 'Havola tekshirilmoqda…',
+  'resetPassword.title': 'Yangi parol tanlang',
+  'resetPassword.forAccount': '{account} uchun',
+  'resetPassword.password': 'Yangi parol',
+  'resetPassword.passwordRule':
+    'Kamida {count} ta belgi va email manzilingiz bilan bir xil bo‘lmasin.',
+  'resetPassword.confirm': 'Parolni takrorlang',
+  'resetPassword.mismatch': 'Parollar mos kelmadi.',
+  'resetPassword.submit': 'Parolni saqlash',
+  'resetPassword.submitting': 'Saqlanmoqda…',
+  'resetPassword.done.title': 'Parol saqlandi',
+  'resetPassword.done.body': 'Barcha boshqa seanslar yakunlandi. Yangi parol bilan kiring.',
+  'resetPassword.doneSessionsNotEnded.title': 'Parol saqlandi, lekin boshqa seanslar hali ochiq',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Yangi parol ishlaydi. Boshqa seanslarni yakunlab bo‘lmadi — barcha boshqa qurilmalarda hisobdan chiqing, agar imkoni bo‘lmasa, qo‘llab-quvvatlash xizmatiga murojaat qiling.',
+  'resetPassword.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
+  'resetPassword.invalid.body':
+    'Ehtimol, undan foydalanilgan yoki yangi so‘rov uni almashtirgan. Yangisini so‘rang.',
+  'resetPassword.expired.title': 'Havola muddati tugagan',
+  'resetPassword.expired.body': 'Tiklash havolasi 60 daqiqa ishlaydi. Yangisini so‘rang.',
+  'resetPassword.retry.title': 'Havolani tekshirib bo‘lmadi',
+  'resetPassword.retry.body':
+    'Bu HorecaOS bilan aloqadagi nosozlik, havolada muammo yo‘q. U hali ishlaydi — qayta urinib ko‘ring.',
+  'resetPassword.retry.action': 'Qayta urinish',
+  'resetPassword.askAgain': 'Yangi havola so‘rash',
+  'resetPassword.toSignIn': 'Kirish sahifasiga o‘tish',
+  'resetPassword.policy.length': 'Parol juda qisqa: kamida 12 ta belgi kerak.',
+  'resetPassword.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasligi kerak.',
+  'resetPassword.policy.history': 'Yaqinda ishlatmagan parolni tanlang.',
+  'resetPassword.policy.other': 'Bu parol qoidalarga mos emas. Boshqasini tanlang.',
+  'resetPassword.failed': 'Parolni saqlab bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.',
+
   'state.denied.title': 'Bu bo‘limga ruxsatingiz yo‘q',
   'state.denied.body':
     'Ruxsat huquqlar bo‘yicha beriladi. Bu bo‘lim uchun kerakli huquqni platforma administratoridan so‘rang.',

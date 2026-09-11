@@ -1,0 +1,493 @@
+# ADR 0098: A staff member who forgot their password asks for a reset
+
+- Decision status: Proposed
+- Implementation status: Partial — the whole flow is built and tested: `iam.password_resets` (V0213) with the request cooldown in its upsert, the relay and its email in uz/ru/en, `findSubjectIdByLogin`/`findByLogin`/`setPassword`/`logoutEverywhere` over Keycloak, three endpoints on each staff prefix, and both consoles' sign-in link, request page and reset page. What is missing is not code: ADR 0097's open input is still open, so no deployment has a mail provider and nothing has actually been delivered to a staff member. Resets queue and wait, and the requester sees the same answer as everyone else
+- Date proposed: 2026-09-11
+- Date decided: —
+- Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
+- Depends on: ADR 0025, ADR 0028, ADR 0029, ADR 0033, ADR 0062, ADR 0097
+- Supersedes / Superseded by: —
+- Open inputs: whether a reset should also clear an account's outstanding Keycloak required actions, or leave an account that was never set up to the ADR 0097 invitation instead (platform owner); whether sixty minutes is the right link lifetime for an operator working a shift, or whether it should be shorter on the control plane than on operations (platform owner)
+
+## Context
+
+Staff sign in on a first-party page inside each console (ADR 0062): the
+browser never reaches Keycloak, so Keycloak's own "forgot password" link is
+not on any screen a staff member can see. The realm has no mail server of its
+own either, which is why ADR 0097 gave the platform SMTP and an invitation
+relay in the first place.
+
+The consequence today is that a cashier who forgets their password cannot get
+back in at all. Somebody with Keycloak admin access has to set a password for
+them by hand and then tell them what it is — over a channel nobody chose, with
+a value nobody rotates. That is the exact operation ADR 0028 exists to
+prevent, performed by the people most likely to be trusted with it.
+
+ADR 0097 already built everything the flow needs except the flow: a `mail`
+module that sends over SMTP, a one-time token whose hash alone is stored, an
+expiry, a retrying relay with backoff, a first-party page that sets a password
+through Keycloak's admin API, and a control plane that can see whether the
+email went. Its own Consequences section says so — "the same mail module and
+token mechanism serve a staff 'forgot password' next."
+
+Two forces make the shape non-obvious.
+
+**Enumeration.** A reset request takes a login. Any answer that differs
+between "this account exists" and "it does not" turns the endpoint into a
+directory of the platform's staff, on an endpoint that is unauthenticated by
+necessity. ADR 0062 already made sign-in answer identically for a wrong
+password and an unknown username for this reason; a reset request that says
+"no such user" would give back what sign-in refuses to.
+
+**A reset is a credential change, not a login.** Whoever holds the link can
+set the password of an account they have not otherwise proven they hold. The
+holder of a *previous* password — a dismissed employee, a shared terminal
+somebody stayed signed in on — keeps a live Keycloak session and a refresh
+token that outlives the password change, because Keycloak does not end
+sessions when a password is reset. So the reset has to end them, or the reset
+is not a recovery, it is a second key cut for the same lock.
+
+## Decision
+
+1. **One request endpoint per console, always answering the same way.** A
+   staff member asks from the sign-in page of whichever console they use, by
+   username or email address. The platform answers `202 Accepted` with no
+   body, always: for a live account, an account that does not exist, an
+   account with no address, and an account whose reset was already queued. The
+   page says "if the account exists, an email is on its way" and nothing more
+   specific, because nothing more specific is known to it.
+2. **A reset is a row in `iam.password_resets`, never a token.** When the
+   login resolves to a Keycloak account with an address, the platform queues a
+   reset: the subject, the console it was asked from, the locale, a status,
+   attempts and a next attempt. A relay makes the token at send time, emails
+   it, and keeps only its SHA-256 with a sixty-minute expiry. The table holds
+   no address and no token, exactly as `tenant.owner_invitations` does.
+3. **One live reset per account, the newest wins, and a short cooldown
+   protects the one already delivered.** A second request replaces the first:
+   the row is reused, the stored hash is cleared, and the link already sent
+   stops working at once. Asking twice therefore cannot accumulate live links.
+   It *can* produce a second email, though — a requeue is another send — and
+   the endpoint is unauthenticated, so "asking twice" is something a stranger
+   who knows a staff address can do every few seconds: each request would kill
+   the link its owner is holding and queue another email to them, indefinitely,
+   within the per-address rate limit and from one machine. So the upsert
+   carries the cooldown in its own `ON CONFLICT … WHERE`: a link sent within
+   the last five minutes and still live is left alone and the request is a
+   silent no-op, recorded as `iam.password_reset.request_suppressed` because a
+   burst of them is the abuse itself. Anything else — queued, failed, accepted,
+   or a link already expired — requeues as before, so somebody who genuinely
+   never received the first email is served once the five minutes pass. The
+   test is in the statement rather than in a read the service makes first,
+   because two unauthenticated requests can be in flight at once. The caller is
+   told none of this: `202`, always.
+4. **The link opens the console it was asked from.** `/reset-password#token=…`
+   on the operations origin or the control-plane origin, the token in the
+   fragment so that it reaches no server or proxy log. The page inspects the
+   token, then accepts it with a new password and nothing else — no name, no
+   email, no verified flag. Keycloak's password policy applies and a refusal
+   names the rule, the way ADR 0097's invite page already does.
+5. **Accepting spends the link first, then sets the password, then ends every
+   other session — which takes two admin calls.** The order is the security
+   property and it is not the obvious one. The link is spent in a transaction
+   of its own, by a conditional
+   `UPDATE … WHERE status = 'SENT' AND token_hash = :hash` that commits before
+   Keycloak is asked for anything; of two concurrent accepts exactly one
+   matches it, and the loser is told the link is invalid before it has changed
+   any password. Only then is the password set, outside any transaction, and
+   only then are the sessions ended, also outside any transaction.
+
+   The hash in that predicate is not redundant with the row id, because the row
+   is keyed by `subject_id` and reused. An accept reads the row by hash and then
+   spends one admin round trip reading the account, and Keycloak's budget is
+   three seconds to connect and ten to read; inside that gap the account's owner
+   can ask again, the upsert can requeue the row and the relay can email a
+   second link. Guarded on the id alone, the stalled accept would then find
+   `SENT` and spend a token it never held — the owner's brand-new link, dead on
+   its first click, with an ordinary `accepted` fact to explain it.
+
+   Spending first is what keeps a later failure from resurrecting the link.
+   With the revocation inside the accept's transaction, a read timeout or a
+   `502` from Keycloak rolled the spend back *after* the password had already
+   changed: the row went back to `SENT` with its hash restored, so the one-time
+   link stayed usable for the rest of its hour by anyone who could read that
+   mailbox; the `iam.password_reset.accepted` fact was rolled back with it, so
+   a staff credential changed with no evidence anywhere; and the caller was
+   told the reset had failed when it had not. A failed revocation now cannot do
+   any of that. It is logged at ERROR, the accepted fact carries
+   `sessionsEnded: false` rather than a hard-coded `true`, a second
+   `iam.password_reset.sessions_not_ended` fact is recorded for an operator to
+   act on, and the accept still succeeds — because the password did change, and
+   telling the person otherwise would invite them to retry a link that no
+   longer exists.
+
+   **It succeeds with `200 {"sessionsEnded": boolean}`, not a bare `204`, and
+   that boolean is the point.** The operator standing at the till is the only
+   person who is present and motivated at that moment; an audit fact reaches
+   somebody else days later. A confirmation card that asserts "every other
+   session has been ended" while a dismissed employee's offline refresh token
+   keeps minting access tokens is precisely the shape this record's own
+   rejection table calls *worse than none* — a revocation that reports success
+   and revokes nothing. One success shape rather than two (a `204` here and a
+   body there) because the operation has one generated typed client per console
+   and a monomorphic response is what keeps it readable. The body carries the
+   boolean and nothing else: the endpoint is unauthenticated, so the exception
+   class and the status Keycloak answered stay in the log line and the fact.
+
+   **Two failures restore the link, and both provably changed nothing at
+   Keycloak.** A password the realm's policy refuses, because somebody who
+   typed a password the realm dislikes has to be able to type another one
+   rather than go and ask for a new link — asking again would clear the stored
+   hash of the good link they are holding. And a write that never reached
+   Keycloak at all: a refused connection or a host that does not resolve, which
+   the adapter raises as a narrow `ProviderUnreachableException` and nothing
+   else does.
+
+   **Every other failure after the spend leaves the link spent**, and that is
+   not caution but the only honest reading. A read timeout or a `502` on an
+   admin `reset-password` call says nothing about whether the password changed,
+   and a link restored on one of those is a live token for an account whose
+   password may already be new, for the rest of its hour, for anybody who can
+   read that mailbox — after the caller has been told the reset failed. The
+   dead end is recorded as `iam.password_reset.password_not_set` and raised,
+   never swallowed: a credential that may or may not have changed on a link
+   that is now permanently spent is at least as alertable as a revocation that
+   failed, and answering success for a password that never changed is the one
+   outcome worse than asking again.
+
+   With the link spent, the platform calls `POST /users/{id}/logout`
+   *and* `DELETE /users/{id}/consents/{staff-login-client}`. The second is
+   not belt and braces: ADR 0062's direct grant asks for `offline_access`, so
+   a staff refresh token is an **offline** token, and Keycloak's admin logout
+   removes only regular sessions. Probed against the live 26.7 realm while
+   this record was written — sign in, refresh, `POST .../logout` answers
+   `204`, refresh again, still `200`. Deleting the consent for the sign-in
+   client is what revokes the offline grants; verified on two devices at once,
+   both refresh tokens refused afterwards, and the account able to sign in
+   again immediately with the new password. A `404` from that call
+   ("Consent nor offline token not found") is success: it is the state the
+   reset is trying to reach.
+6. **Two limits, not one.** The request endpoint is rate-limited per caller
+   address through ADR 0033, and the cooldown above caps what any number of
+   requests can produce for a single account. The first bounds a scan across
+   accounts; the second bounds an attack on one. Neither substitutes for the
+   other: a distributed scan spends one request per address, and one address
+   can ask about a thousand accounts.
+7. **No pooled database connection is held across a call to Keycloak.** Every
+   path is a short transaction, then the remote call, then another short
+   transaction; the row is never held under `FOR UPDATE` across an admin call.
+   The pool is ten connections wide and shared by every module, so a
+   transaction spanning the identity provider's 3 s connect and 10 s read turns
+   a Keycloak brownout into a platform-wide outage — reachable, here, by ten
+   anonymous requests for a login nobody holds.
+
+   `ExternalCallTransactionBoundaryTests` pins this for all three request-thread
+   entry points and every Keycloak call each of them makes: the login search on
+   `request`, the account read `inspect` and `accept` share, the password write
+   and the revocation. It runs them through a real Spring context on purpose,
+   because the property under test is what `@Transactional` does when the proxy
+   is in place, and every other test of this service builds it with `new`, where
+   the annotation is inert. The relay's own account read is not covered there
+   and does not need to be: it runs on a scheduled worker rather than a request
+   thread, and holds nothing while it waits.
+8. **The request endpoint's audit facts are attributed to the surface, not to
+   the account they name.** Nobody is authenticated there, so recording the
+   staff member as the actor would let a stranger who knows an address write
+   append-only evidence that its owner asked for this themselves. The actor is
+   `ActorRef.service("staff-password-reset-request")`, the correlation id is
+   the hashed caller address, and the account is still reachable from the fact
+   because the target is the reset row, which carries the subject. Accepting is
+   different and *is* attributed to the staff member: possession of the emailed
+   token is evidence about them. The storefront's pre-authentication paths
+   already settled this the same way.
+
+## Alternatives considered
+
+| Option | Why not chosen | Revisit when |
+|---|---|---|
+| Keycloak's own "Forgot password?" — its `execute-actions-email` or the login page's reset link | ADR 0062 removed the redirect that would take a staff member to a Keycloak page at all, so the link has nowhere to appear; Keycloak's mail settings are a second mail configuration to keep correct, its templates have no Uzbek, and neither console could say whether a reset was sent or used | Staff sign-in moves back to Keycloak's hosted pages |
+| A different answer for an unknown login, so the page can say "we have no account with that address" | Turns an unauthenticated endpoint into a staff directory, and gives away precisely what ADR 0062 makes sign-in refuse to give away | Never |
+| Reuse `tenant.owner_invitations` for resets too | Its unique key is one row per tenant and owner, and a reset has no tenant: control-plane staff belong to no organization. Overloading the table would also make "the owner never finished onboarding" and "an operator forgot their password" the same row, with one status machine for two different stories | Never |
+| A reset that also sets the name and verified flag, like ADR 0097's accept | A reset is not a setup. Marking an address verified because somebody opened a link is defensible for an invitation the platform sent to an address it chose; doing it on every reset would let a stale address quietly become "verified", and overwriting a name the person themselves set is a silent edit nobody asked for | Never |
+| Leave other sessions alone and rely on the access token's own expiry | A Keycloak refresh token outlives the password change by design, so "I reset my password" would not remove the person the reset was performed because of | Never |
+| `POST /users/{id}/logout` on its own, as this record first proposed | It answers `204` and leaves every staff refresh token working, because they are offline tokens and admin logout does not touch offline sessions. A revocation that reports success and revokes nothing is worse than none: the staff member is told the other sessions are gone | Staff sign-in stops requesting `offline_access` |
+| Drop `offline_access` from the staff sign-in scope, so ordinary logout suffices | The scope is there so a console survives a browser restart (`StaffDirectGrantClient`); removing it would sign every operator out whenever they close the tab, to simplify a call that is made once per reset | The consoles gain another way to survive a restart |
+| List the account's offline sessions and delete them one by one | Needs `view-clients` to resolve the client's UUID first, which the provisioning service account deliberately does not hold — probed live, it answers `403`. Two calls become four and a new role grant | The provisioning credential gains client-read roles for another reason |
+| Send the link to the address the requester typed | Accepts an address from an unauthenticated caller and mails a credential to it; the address the platform sends to must be the one Keycloak already holds for that subject | Never |
+| A single shared `/api/v1/staff/auth/password-resets` path for both consoles | ADR 0057's invariant is that every published path belongs to exactly one surface group, so one shared path would land in neither console's generated client; ADR 0062's sign-in endpoints are duplicated per prefix for the same reason | ADR 0057 gains a shared staff surface group |
+
+## Consequences
+
+### Positive
+
+- A staff member who forgets their password recovers without anyone opening
+  Keycloak, and without a password travelling over a chat message.
+- The mail module, the token mechanism, the backoff and the page shape are
+  ADR 0097's, already built and already tested; this record adds a table, a
+  relay, three endpoints per console and two pages per console.
+- Ending every other session makes the reset a real revocation, so it is also
+  the answer to "somebody still has my password".
+
+### Negative
+
+- Nothing is delivered until ADR 0097's open input is closed: a sending
+  provider, its DNS records and its password. Until then a reset queues and
+  waits, and the requester sees the same "an email is on its way" as everyone
+  else — a deliberately uninformative answer that is also uninformative when
+  mail is genuinely not configured. The runbook is where an operator finds
+  that out.
+- A staff account with no email address in Keycloak cannot recover this way at
+  all, and cannot be told so. Those accounts need an administrator.
+- Ending every session signs the person out of every device they were using,
+  including the ones they still hold. That is the point, and it is still a
+  surprise the first time.
+- `iam` gains **two** outbound ports of its own rather than calling the
+  modules that serve them, because `iam` turns out to be further down the
+  stack than it looks and both calls would close a cycle Spring Modulith
+  refuses.
+  - `StaffEmailSender`, because the `mail` module already reads its SMTP
+    password through `iam`'s secret manager. The port duplicates a small
+    outcome type.
+  - `StaffSecurityAudit`, because the `audit` module already depends on
+    `iam` in several places: `AuditFact` is scoped by an
+    `iam.api.ResourceScope`, and the approval services are built on `iam`'s
+    `AuthorizationService` and `CurrentActor`. This one was found the way
+    such things usually are — the first implementation called
+    `AuditRecorder` directly and `ModularArchitectureTests` reported
+    `audit -> iam -> audit`.
+
+  Both ports are narrow and shaped to what `iam` needs, and the adapters sit
+  in the module that already depends on `iam`. The alternative — moving the
+  secret seam out of `mail`, and `ResourceScope` out of `iam`, so that both
+  become true leaves — is the better fix and a much larger one than this
+  record.
+
+### Accepted trade-offs
+
+- The relay reads the address from Keycloak on every send, a network call per
+  email, so that the platform stores no copy. ADR 0097's trade-off, unchanged.
+- Sixty minutes is shorter than an invitation's seventy-two hours, because a
+  reset is asked for by somebody sitting at the screen, while an invitation
+  waits for somebody who does not know it is coming.
+- An access token already issued survives the reset for the rest of its own
+  short lifetime. It is a self-contained JWT and nothing server-side
+  invalidates one; what the reset removes is the ability to get another. The
+  alternative is a realm-wide not-before push on every reset, which would sign
+  out every staff member of every tenant to end one person's session.
+- Revoking the consent also clears the account's recorded consent for the
+  sign-in client, not only its offline tokens. Nothing turns on that here —
+  the realm does not require consent for a first-party client — but it is a
+  second effect of a call made for the first.
+- The uniform `202` means a mistyped address produces silence rather than a
+  correction. The page says so in as many words.
+- The cooldown means somebody who asks twice in quick succession — because the
+  first email has not arrived yet — is answered `202` and gets nothing. Five
+  minutes is the compromise: long enough to make a stranger's replacement of a
+  live link pointless, short enough that a person who really did not receive
+  the first email is not left waiting. They are not told which of the two
+  happened, for the same reason nothing else on this endpoint is.
+- The cooldown bounds replacement, not volume over a day: a slow drip outside
+  the window still delivers a mail every five minutes. A per-subject send
+  budget over a longer window would close that and is not in this record.
+- A revocation that fails leaves offline grants live, and two people are told:
+  the account holder, on the confirmation card, because `sessionsEnded` comes
+  back with the `200`; and an operator, through the
+  `iam.password_reset.sessions_not_ended` fact. Neither is asked to wait for the
+  other — the person at the screen can sign their other devices out now, which
+  is the only remediation available at that moment, and the fact is what makes
+  a pattern of these visible later. The platform does not re-drive the
+  revocation; the reset itself is complete, and the outstanding revocation is an
+  alert rather than a queue. If those facts ever appear in numbers, the answer
+  is a retry on the relay, not a rollback of the reset.
+- A failure after the link is spent and before the password is certainly set —
+  a read timeout or a `502` in that window — costs the person their link: they
+  ask again, and `iam.password_reset.password_not_set` records that nobody can
+  say whether the password changed. The alternative, leaving the link live until
+  the password has certainly changed, is what allowed a failed revocation to
+  resurrect a spent link, and that is the worse of the two. The narrow
+  exception is a call that never left, which restores the link precisely because
+  it establishes that nothing happened.
+- The residual timing oracle on the request endpoint is accepted rather than
+  closed: a login that resolves commits a transaction and one that does not
+  never opens one. The Identity provider section above says why every way of
+  removing it is worse than the one bit it discloses.
+
+## Specification
+
+### Schema (V0213)
+
+`iam.password_resets`, no tenant column — a staff account belongs to an
+identity provider, and control-plane staff belong to no organization at all:
+
+| Column | Why |
+|---|---|
+| `id` | `Ids.newId()` |
+| `subject_id` | the Keycloak subject; `UNIQUE`, which is the one-live-reset rule, and the conflict the cooldown's `WHERE` decides |
+| `console` | `CONTROL_PLANE` or `OPERATIONS`; which origin the link points at |
+| `locale` | `uz`, `ru` or `en`, from the requesting page |
+| `status` | `QUEUED`, `SENT`, `ACCEPTED`, `FAILED` |
+| `token_hash` | SHA-256 hex, `UNIQUE`, null unless `SENT` |
+| `expires_at` | sixty minutes from the send |
+| `attempts`, `next_attempt_at`, `last_error_code` | the relay's own state |
+| `requested_at`, `sent_at`, `opened_at`, `accepted_at` | when each step happened |
+| `version` | optimistic lock |
+
+Expired is not a state: it is `SENT` with `expires_at` in the past, read at
+the moment it matters. `GRANT SELECT, INSERT, UPDATE` to
+`horecaos_application`; every step after the insert is a conditional `UPDATE`,
+and those conditions are the concurrency control —
+`WHERE status = 'SENT' AND token_hash = :hash` on
+the spend, `WHERE status = 'QUEUED' AND attempts = :attempt` on the relay's
+writes, and the cooldown on the upsert. No row is held under `FOR UPDATE`
+across a call to Keycloak.
+
+### Identity provider
+
+`StaffAccounts` gains three operations, all on the provisioning credential
+that already creates these accounts:
+
+- `findSubjectIdByLogin(usernameOrEmail)` — the subject and nothing else, for
+  the request path, which has no use for the address. Both searches are made
+  whether or not the first hits, so a login that names an account costs the
+  same two admin round trips as one that does not: work that differs between
+  the two is the same disclosure the uniform `202` refuses, measured with a
+  stopwatch.
+
+  That closes the identity provider's share of the cost and not the database's,
+  and this record says so rather than claiming more. A login that resolves goes
+  on to open a transaction and commit an upsert and an audit insert; one that
+  resolves nobody answers without touching the pool. The residual is accepted:
+  a single-digit-millisecond local commit hiding inside the variance of two
+  Keycloak admin round trips, behind a ten-a-minute per-address limit, for one
+  bit — "this staff login exists". Every way of closing it is worse than the
+  leak. A sentinel write pollutes a table with a unique `subject_id` and a live
+  relay reading it; a bare `SELECT` on the empty branch matches neither the WAL
+  write nor the commit, so it would shrink the delta while adding code that
+  claims to have removed it; and a fixed latency floor parks a request thread on
+  an unauthenticated endpoint. Handing the whole call to a bounded executor
+  would close it honestly and is the option to revisit if the bit ever matters.
+- `findByLogin(usernameOrEmail)` — the above, then the account read; exact
+  username first, then exact email; empty when neither resolves or the account
+  has no address. Used by the relay and by the masked login on `inspect`.
+
+  Both pass the login as a URI variable rather than a literal query value. A
+  `+` is an allowed sub-delimiter, so a literal leaves it raw and Keycloak's
+  query parsing decodes a raw `+` as a space: a plus-addressed account —
+  `ops+kassa@acme.uz`, which is also its username — would be searched for under
+  an address nobody holds, resolve nobody, and never be told, because the
+  endpoint answers `202` to everyone.
+- `setPassword(subjectId, password)` — the `reset-password` admin call and
+  nothing else. It must not touch `firstName`, `lastName` or `emailVerified`,
+  which is what separates it from ADR 0097's `completeSetup`.
+  `KeycloakStaffAccountsWriteTests` holds it to exactly one request against a
+  mock server, and `completeSetup`'s three beside it, so the separation is a
+  property something fails on rather than a comment — the live class that also
+  asserts it skips wherever the realm has not had
+  `infra/keycloak/assign-service-account-roles.sh` run against it.
+
+  It raises `ProviderUnreachableException` for one thing only: a request that
+  never left, which a refused connection or an unresolvable host establishes and
+  a read timeout does not. That narrowness is what a spent link's fate turns on
+  under Decision 5, so a lost answer is deliberately left ambiguous.
+- `logoutEverywhere(subjectId)` — `POST /admin/realms/{realm}/users/{id}/logout`
+  for the regular sessions, then
+  `DELETE /admin/realms/{realm}/users/{id}/consents/{staff-login-client}` for
+  the offline ones, tolerating that call's `404`. The client id comes from
+  `horecaos.keycloak.staff-login-client-id`, the same property ADR 0062's
+  sign-in reads, because the grants being revoked are the ones it issued.
+
+### HTTP
+
+Public, unauthenticated, on both staff prefixes (`{console}` is
+`control-plane` or `operations`):
+
+- `POST /api/v1/{console}/auth/password-resets` — `{login, locale}`, always
+  `202` with no body.
+- `POST /api/v1/{console}/auth/password-resets/inspect` — `{token}` in the
+  body, answering which console, the masked login and the expiry, or `404`
+  with a reason of `INVALID` or `EXPIRED`.
+- `POST /api/v1/{console}/auth/password-resets/accept` — `{token, password}`,
+  answering `200 {"sessionsEnded": boolean}` in every success case. `false`
+  means the password was set and the account's other sessions could not be
+  ended; it is not a failure, and the console shows a different confirmation
+  rather than an error.
+
+Each is permitted one path at a time in `SecurityConfiguration` with the
+reason, exempted by exact path in `EndpointCapabilityDeclarationTests` (both
+loops), and rate-limited per caller address through ADR 0033.
+
+### Consoles
+
+Both consoles get a "Forgot password?" link on the sign-in page, a
+`/forgot-password` request page that always shows the same sentence, and a
+`/reset-password` page that mirrors ADR 0097's invite page — inspect, then a
+new password twice, then a named policy refusal.
+
+Three rules on the reset page, all of them about not making a recoverable
+situation worse:
+
+- **Only the platform saying so means the link is dead.** `RESOURCE_NOT_FOUND`
+  with a reason of `INVALID` or `EXPIRED` ends the flow; a rate-limited
+  request, a gateway `502` or a dropped round trip shows a retry that
+  re-inspects the token still in hand. Collapsing those into "this link cannot
+  be used" is not merely a wrong sentence: the only action it offers is asking
+  for a new link, which clears the stored hash of the live link the person is
+  holding.
+- **Accepting ends this tab's session too**, locally — the token store is
+  cleared, the refresh timer cancelled. The revocation at Keycloak cannot
+  reach an access token this tab already holds, and on a shared terminal the
+  tab may have restored a session at boot. Locally and not through the
+  console's own sign-out, because that would revoke a refresh token belonging
+  to whoever else was signed in on that machine.
+- **It ends on the confirmation, not on a redirect.** The "every other session
+  has been ended" card is the one place the person is told about the surprise
+  this record names below, and it carries the link to sign in; setting that
+  stage and navigating away on the next tick showed it to nobody.
+- **The confirmation has two variants, and the page reads which from the
+  response rather than assuming.** `sessionsEnded: false` shows the second: the
+  password is set, the other sessions could *not* be ended, sign out on the
+  other devices and contact support if that is not possible. Both are success
+  cards — the form is gone and the link to sign in is there — because the
+  password did change. The signal backing the variant starts at `false` and has
+  to be granted by the response, so a path that forgot to set it shows the
+  cautious card rather than a false assurance.
+
+### Configuration
+
+`horecaos.frontends.control-plane-origin`, beside the operations origin ADR
+0097 added, wired from `HORECAOS_CONTROL_PLANE_ORIGIN` in
+`deploy/compose.production.yml` (the variable already exists in
+`env.template` and the Caddyfile).
+
+## Rollout and rollback
+
+Additive: one table, three endpoints per prefix, two pages per console, one
+scheduled relay. With mail unconfigured, resets queue and wait exactly as
+invitations do. Rolling back leaves queued rows unread and changes no
+account; a reset already accepted has already happened at Keycloak and is not
+undone by rolling back the platform.
+
+## Implementation checklist
+
+- [x] `iam.password_resets` (V0213) and its store
+- [x] `StaffAccounts.findByLogin`, `setPassword`, `logoutEverywhere` over Keycloak
+- [x] Request, inspect and accept on both staff prefixes, permitted and rate-limited
+- [x] The relay, its token, expiry, replacement and backoff, and the email in uz/ru/en
+- [x] `horecaos.frontends.control-plane-origin` wired through deployment
+- [x] Both consoles: the sign-in link, the request page and the reset page,
+      with a retryable transient failure and a confirmation that is shown
+- [x] Runbook: password resets ride the same mail settings
+- [ ] A mail provider, so that a reset actually arrives (ADR 0097's open input, not this record's)
+
+## Exit criteria
+
+A staff member who asks for a reset from either console's sign-in page
+receives an email whose link lets them set a new password, signs in with it,
+and finds that a session they had open elsewhere has been ended — while a
+request for a login that does not exist produces the same answer on screen and
+no email at all.
+
+## References
+
+- ADR 0097 (the mail module, the token mechanism, the invite page this mirrors)
+- ADR 0062 (first-party staff sign-in on two prefixes)
+- ADR 0028, ADR 0029, ADR 0033

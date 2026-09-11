@@ -11097,6 +11097,56 @@
         },
         "type" : "object"
       },
+      "PasswordResetAcceptRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 128,
+            "minLength" : 12,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "token" ],
+        "type" : "object"
+      },
+      "PasswordResetAcceptance" : {
+        "properties" : {
+          "sessionsEnded" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PasswordResetRequest" : {
+        "properties" : {
+          "locale" : {
+            "pattern" : "uz|ru|en",
+            "type" : "string"
+          },
+          "login" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "login" ],
+        "type" : "object"
+      },
+      "PasswordResetTokenRequest" : {
+        "properties" : {
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "token" ],
+        "type" : "object"
+      },
       "PathTotal" : {
         "properties" : {
           "costPath" : {
@@ -14088,6 +14138,23 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ResetInspection" : {
+        "properties" : {
+          "console" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "maskedLogin" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -18500,6 +18567,89 @@
         },
         "summary" : "Tenants in arrears, longest first",
         "tags" : [ "Arrears" ]
+      }
+    },
+    "/api/v1/control-plane/auth/password-resets" : {
+      "post" : {
+        "description" : "Always answers 202 with no body, whether or not the login names an account, so that this endpoint cannot be used to discover who has an account.",
+        "operationId" : "requestControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a control-plane password reset",
+        "tags" : [ "Staff password resets" ]
+      }
+    },
+    "/api/v1/control-plane/auth/password-resets/accept" : {
+      "post" : {
+        "description" : "Sets the password at the identity provider, spends the link and ends every other session the account holds. The realm's password policy applies; a refusal names the rule. Answers 200 with sessionsEnded, which is false when the password was set and the other sessions could not be ended.",
+        "operationId" : "acceptControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetAcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PasswordResetAcceptance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a new control-plane password",
+        "tags" : [ "Staff password resets" ]
+      }
+    },
+    "/api/v1/control-plane/auth/password-resets/inspect" : {
+      "post" : {
+        "description" : "Which console the link belongs to, the account masked, and when it stops working. Answers not-found with a reason of INVALID or EXPIRED.",
+        "operationId" : "inspectControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetTokenRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResetInspection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a control-plane reset link before using it",
+        "tags" : [ "Staff password resets" ]
       }
     },
     "/api/v1/control-plane/auth/sessions" : {
@@ -27338,6 +27488,89 @@
         },
         "summary" : "Close my shift",
         "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/operations/auth/password-resets" : {
+      "post" : {
+        "description" : "Always answers 202 with no body, whether or not the login names an account, so that this endpoint cannot be used to discover who has an account.",
+        "operationId" : "requestOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for an operations password reset",
+        "tags" : [ "Staff password resets" ]
+      }
+    },
+    "/api/v1/operations/auth/password-resets/accept" : {
+      "post" : {
+        "description" : "Sets the password at the identity provider, spends the link and ends every other session the account holds. The realm's password policy applies; a refusal names the rule. Answers 200 with sessionsEnded, which is false when the password was set and the other sessions could not be ended.",
+        "operationId" : "acceptOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetAcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PasswordResetAcceptance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a new operations password",
+        "tags" : [ "Staff password resets" ]
+      }
+    },
+    "/api/v1/operations/auth/password-resets/inspect" : {
+      "post" : {
+        "description" : "Which console the link belongs to, the account masked, and when it stops working. Answers not-found with a reason of INVALID or EXPIRED.",
+        "operationId" : "inspectOperations",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetTokenRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResetInspection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read an operations reset link before using it",
+        "tags" : [ "Staff password resets" ]
       }
     },
     "/api/v1/operations/auth/sessions" : {
@@ -46310,6 +46543,9 @@
   }, {
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"
+  }, {
+    "description" : "A staff member who forgot their password (ADR 0098)",
+    "name" : "Staff password resets"
   }, {
     "description" : "Named, reusable opening timetables",
     "name" : "Service schedules"

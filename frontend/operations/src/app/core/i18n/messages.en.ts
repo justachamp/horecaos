@@ -50,9 +50,11 @@ export const messagesEn = {
   'support.banner.until': 'until {time}',
   'support.banner.none': 'No open support session here; screens will refuse until one is opened',
   'support.banner.leave': 'Leave',
-  'settings.supportVisits.lead': 'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
+  'settings.supportVisits.lead':
+    'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
   'settings.supportVisits.loading': 'Loading visits…',
-  'settings.supportVisits.denied': 'Only the account’s owner and administrators can see support visits.',
+  'settings.supportVisits.denied':
+    'Only the account’s owner and administrators can see support visits.',
   'settings.supportVisits.empty': 'Nobody from HorecaOS support has entered your account.',
   'settings.supportVisits.openUntil': 'In progress, until {time}',
   'settings.supportVisits.endedAt': 'Ended {time}',
@@ -339,15 +341,67 @@ export const messagesEn = {
   'invite.submitting': 'Setting up…',
   'invite.signingIn': 'Your account is ready. Signing you in…',
   'invite.invalid.title': 'This link cannot be used',
-  'invite.invalid.body': 'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
+  'invite.invalid.body':
+    'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
   'invite.expired.title': 'This link has expired',
-  'invite.expired.body': 'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
+  'invite.expired.body':
+    'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
   'invite.toSignIn': 'Go to sign in',
   'invite.policy.length': 'The password is too short: use at least 12 characters.',
   'invite.policy.notEmail': 'The password must not be your email address.',
   'invite.policy.history': 'Choose a password you have not used recently.',
   'invite.policy.other': 'This password does not meet the rules. Choose another.',
   'invite.failed': 'Your account could not be set up. Try again in a moment.',
+
+  'login.forgotPassword': 'Forgot password?',
+
+  // ADR 0098: a staff member who forgot their password.
+  'forgotPassword.title': 'Reset your password',
+  'forgotPassword.lead': 'Enter your username or email address and we will send you a link.',
+  'forgotPassword.login': 'Username or email',
+  'forgotPassword.submit': 'Send the link',
+  'forgotPassword.submitting': 'Sending…',
+  'forgotPassword.sent.title': 'Check your email',
+  // One sentence for every outcome. The platform answers a login that names an
+  // account and one that does not identically (ADR 0098), so there is nothing
+  // more specific this screen could honestly say -- and saying more would turn
+  // an unauthenticated endpoint into a directory of who works here.
+  'forgotPassword.sent.body':
+    'If the account exists, an email is on its way. The link works for 60 minutes.',
+  'forgotPassword.toSignIn': 'Back to sign in',
+  'forgotPassword.failed': 'The request could not be sent. Try again in a moment.',
+
+  'resetPassword.loading': 'Checking your link…',
+  'resetPassword.title': 'Choose a new password',
+  'resetPassword.forAccount': 'For {account}',
+  'resetPassword.password': 'New password',
+  'resetPassword.passwordRule': 'At least {count} characters, and not your email address.',
+  'resetPassword.confirm': 'Repeat the password',
+  'resetPassword.mismatch': 'The two passwords are different.',
+  'resetPassword.submit': 'Set the password',
+  'resetPassword.submitting': 'Saving…',
+  'resetPassword.done.title': 'Your password is set',
+  'resetPassword.done.body': 'Every other session has been ended. Sign in with your new password.',
+  'resetPassword.doneSessionsNotEnded.title':
+    'Your password is set, but other sessions are still open',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Your new password works. We could not end your other sessions — sign out on every other device you are signed in on, and contact support if you cannot.',
+  'resetPassword.invalid.title': 'This link cannot be used',
+  'resetPassword.invalid.body':
+    'It may already have been used, or a newer request replaced it. Ask for a new one.',
+  'resetPassword.expired.title': 'This link has expired',
+  'resetPassword.expired.body': 'Reset links work for 60 minutes. Ask for a new one.',
+  'resetPassword.retry.title': 'We could not check your link',
+  'resetPassword.retry.body':
+    'This is a problem reaching HorecaOS, not a problem with the link. It is still good — try again.',
+  'resetPassword.retry.action': 'Try again',
+  'resetPassword.askAgain': 'Ask for a new link',
+  'resetPassword.toSignIn': 'Go to sign in',
+  'resetPassword.policy.length': 'The password is too short: use at least 12 characters.',
+  'resetPassword.policy.notEmail': 'The password must not be your email address.',
+  'resetPassword.policy.history': 'Choose a password you have not used recently.',
+  'resetPassword.policy.other': 'This password does not meet the rules. Choose another.',
+  'resetPassword.failed': 'The password could not be set. Try again in a moment.',
 
   'notBuilt.title': 'Not built yet',
   'notBuilt.body':
@@ -2528,7 +2582,8 @@ export const messagesEn = {
   'settings.nav.supportVisits': 'HorecaOS support visits',
   'settings.home.description.dataPrivacy':
     'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
-  'settings.home.description.supportVisits': 'Who from HorecaOS support entered your account, when and why',
+  'settings.home.description.supportVisits':
+    'Who from HorecaOS support entered your account, when and why',
   'settings.dataPrivacy.title': 'Data & privacy',
   'settings.dataPrivacy.lead':
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',
