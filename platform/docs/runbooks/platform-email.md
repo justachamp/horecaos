@@ -142,4 +142,21 @@ Keycloak at all, and the login they typed matched no account (or matched more
 than one, which the platform treats as no match rather than guessing whose
 password to reset). Both are answered by looking the account up in Keycloak.
 A reset asked for again replaces the one before it, so there is never more than
-one live link per account and telling somebody to "just ask again" is safe.
+one live link per account and telling somebody to "just ask again" is safe —
+with one wrinkle worth knowing: a link that was emailed within the last five
+minutes and is still live is *not* replaced. That cooldown exists because the
+request endpoint takes anyone's word for a login, and without it a stranger
+could keep replacing the link a staff member is holding. Somebody who asks
+twice in the same minute therefore gets one email, not two, and is told nothing
+about it — if they are sure the first never arrived, they ask again five
+minutes later.
+
+Two audit action codes are worth knowing when a reset is in question, in
+`audit.audit_events`: `iam.password_reset.request_suppressed` is a request the
+cooldown turned into a no-op, and a burst of them for one account is somebody
+hammering that address rather than the account holder being unlucky;
+`iam.password_reset.sessions_not_ended` means a password *was* reset but the
+account's other sessions could not be ended — the new password works, and until
+somebody acts on it a device that was signed in before the reset may still be.
+End that account's sessions from Keycloak's admin console, and check the
+application log for the ERROR line beside it.
