@@ -14,13 +14,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.AuditClass;
-import uz.horecaos.platform.audit.api.AuditFact;
-import uz.horecaos.platform.audit.api.AuditRecorder;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
+import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
+import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
 import uz.horecaos.platform.iam.api.mail.StaffEmailSender;
 import uz.horecaos.platform.iam.api.mail.StaffEmailSender.Delivery;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
@@ -65,7 +62,7 @@ public class PasswordResetRelay {
     private final JdbcPasswordResetStore store;
     private final StaffAccounts accounts;
     private final StaffEmailSender mailer;
-    private final AuditRecorder audit;
+    private final StaffSecurityAudit audit;
     private final Clock clock;
     private final Map<StaffConsole, String> origins;
 
@@ -73,7 +70,7 @@ public class PasswordResetRelay {
             JdbcPasswordResetStore store,
             StaffAccounts accounts,
             StaffEmailSender mailer,
-            AuditRecorder audit,
+            StaffSecurityAudit audit,
             Clock clock,
             @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin,
             @Value("${horecaos.frontends.control-plane-origin:http://localhost:4300}") String controlPlaneOrigin) {
@@ -152,21 +149,18 @@ public class PasswordResetRelay {
         switch (delivery.status()) {
             case SENT -> {
                 if (store.markSent(row.id(), row.attempts(), PasswordResetService.hash(token), expiresAt, now)) {
-                    audit.record(AuditFact.of("iam.password_reset.sent", AuditClass.SECURITY)
-                            .by(ActorRef.systemJob("password-reset-relay"))
-                            .at(ResourceScope.platform())
-                            .target("iam.password_reset", row.id())
-                            .because("A staff member's password reset link was emailed (ADR 0098)")
-                            .changed(Map.of(
-                                    "attempt",
-                                    row.attempts(),
-                                    "console",
-                                    row.console(),
-                                    "expiresAt",
-                                    expiresAt.toString()))
-                            .correlatedBy(UUID.randomUUID().toString())
-                            .occurredAt(now)
-                            .build());
+                    audit.record(StaffSecurityFact.bySystemJob(
+                            "iam.password_reset.sent",
+                            "password-reset-relay",
+                            "iam.password_reset",
+                            row.id(),
+                            "A staff member's password reset link was emailed (ADR 0098)",
+                            Map.of(
+                                    "attempt", row.attempts(),
+                                    "console", row.console(),
+                                    "expiresAt", expiresAt.toString()),
+                            UUID.randomUUID().toString(),
+                            now));
                     return true;
                 }
                 return false;

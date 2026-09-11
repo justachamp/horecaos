@@ -25,8 +25,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
+import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
 import uz.horecaos.platform.iam.api.mail.StaffEmail;
 import uz.horecaos.platform.iam.api.mail.StaffEmailSender;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
@@ -59,7 +59,7 @@ class PasswordResetFlowTests {
     private MovableClock clock;
     private FakeAccounts accounts;
     private RecordingSender mailer;
-    private List<AuditFact> facts;
+    private List<StaffSecurityFact> facts;
     private JdbcPasswordResetStore store;
     private PasswordResetService resets;
     private PasswordResetRelay relay;
@@ -139,7 +139,7 @@ class PasswordResetFlowTests {
                         refused -> assertThat(refused.properties()).containsEntry("reason", "INVALID"));
 
         assertThat(facts)
-                .extracting(AuditFact::actionCode)
+                .extracting(StaffSecurityFact::actionCode)
                 .containsExactly(
                         "iam.password_reset.requested", "iam.password_reset.sent", "iam.password_reset.accepted");
     }

@@ -131,12 +131,26 @@ is not a recovery, it is a second key cut for the same lock.
 - Ending every session signs the person out of every device they were using,
   including the ones they still hold. That is the point, and it is still a
   surprise the first time.
-- `iam` gains an outbound mail port of its own (`StaffEmailSender`) rather
-  than calling `PlatformMailer` directly, because the `mail` module already
-  reads its SMTP password through `iam`'s secret manager and a direct call the
-  other way would make the two modules cyclic. The port duplicates a small
-  outcome type. The alternative — moving the secret seam out of `mail` so it
-  becomes a true leaf — is the better fix and a larger one than this record.
+- `iam` gains **two** outbound ports of its own rather than calling the
+  modules that serve them, because `iam` turns out to be further down the
+  stack than it looks and both calls would close a cycle Spring Modulith
+  refuses.
+  - `StaffEmailSender`, because the `mail` module already reads its SMTP
+    password through `iam`'s secret manager. The port duplicates a small
+    outcome type.
+  - `StaffSecurityAudit`, because the `audit` module already depends on
+    `iam` in several places: `AuditFact` is scoped by an
+    `iam.api.ResourceScope`, and the approval services are built on `iam`'s
+    `AuthorizationService` and `CurrentActor`. This one was found the way
+    such things usually are — the first implementation called
+    `AuditRecorder` directly and `ModularArchitectureTests` reported
+    `audit -> iam -> audit`.
+
+  Both ports are narrow and shaped to what `iam` needs, and the adapters sit
+  in the module that already depends on `iam`. The alternative — moving the
+  secret seam out of `mail`, and `ResourceScope` out of `iam`, so that both
+  become true leaves — is the better fix and a much larger one than this
+  record.
 
 ### Accepted trade-offs
 

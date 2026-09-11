@@ -14,15 +14,12 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.AuditClass;
-import uz.horecaos.platform.audit.api.AuditFact;
-import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
+import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
+import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore.Row;
 import uz.horecaos.platform.web.api.ApiException;
@@ -52,11 +49,11 @@ public class PasswordResetService {
 
     private final JdbcPasswordResetStore store;
     private final StaffAccounts accounts;
-    private final AuditRecorder audit;
+    private final StaffSecurityAudit audit;
     private final Clock clock;
 
     public PasswordResetService(
-            JdbcPasswordResetStore store, StaffAccounts accounts, AuditRecorder audit, Clock clock) {
+            JdbcPasswordResetStore store, StaffAccounts accounts, StaffSecurityAudit audit, Clock clock) {
         this.store = store;
         this.accounts = accounts;
         this.audit = audit;
@@ -91,15 +88,15 @@ public class PasswordResetService {
         Instant now = clock.instant();
         String language = locale != null && LOCALES.contains(locale) ? locale : "ru";
         UUID id = store.request(Ids.newId(), account.get().subjectId(), console.name(), language, now);
-        audit.record(AuditFact.of("iam.password_reset.requested", AuditClass.SECURITY)
-                .by(ActorRef.user(account.get().subjectId(), null))
-                .at(ResourceScope.platform())
-                .target("iam.password_reset", id)
-                .because("A staff member asked to reset their password from a sign-in page (ADR 0098)")
-                .changed(Map.of("console", console.name(), "locale", language))
-                .correlatedBy(correlationId)
-                .occurredAt(now)
-                .build());
+        audit.record(StaffSecurityFact.byStaffMember(
+                "iam.password_reset.requested",
+                account.get().subjectId(),
+                "iam.password_reset",
+                id,
+                "A staff member asked to reset their password from a sign-in page (ADR 0098)",
+                Map.of("console", console.name(), "locale", language),
+                correlationId,
+                now));
     }
 
     /**
@@ -155,15 +152,15 @@ public class PasswordResetService {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This link changed while it was being used");
         }
         accounts.logoutEverywhere(row.subjectId());
-        audit.record(AuditFact.of("iam.password_reset.accepted", AuditClass.SECURITY)
-                .by(ActorRef.user(row.subjectId(), null))
-                .at(ResourceScope.platform())
-                .target("iam.password_reset", row.id())
-                .because("The staff member set a new password from the emailed link (ADR 0098)")
-                .changed(Map.of("status", "ACCEPTED", "sessionsEnded", true))
-                .correlatedBy(correlationId)
-                .occurredAt(now)
-                .build());
+        audit.record(StaffSecurityFact.byStaffMember(
+                "iam.password_reset.accepted",
+                row.subjectId(),
+                "iam.password_reset",
+                row.id(),
+                "The staff member set a new password from the emailed link (ADR 0098)",
+                Map.of("status", "ACCEPTED", "sessionsEnded", true),
+                correlationId,
+                now));
     }
 
     /** SHA-256 of a token, hex; what the relay stores and what a presented token is compared by. */
