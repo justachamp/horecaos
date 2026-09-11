@@ -113,3 +113,25 @@
   border-radius: var(--q-radius);
   max-width: 640px;
 }
+
+.search {
+  display: block;
+  margin-top: 12px;
+}
+
+.search__input {
+  width: 100%;
+  max-width: 420px;
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: 14px;
+}
+
+.empty {
+  color: var(--q-ink-muted);
+  margin-top: 16px;
+}

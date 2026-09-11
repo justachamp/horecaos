@@ -5,8 +5,15 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { describeApiError } from '../orders/order-errors';
-import { CAPABILITY_SENTENCES, capabilityAreaName, sentenceLocale } from './capability-sentences';
+import { AccessRefusal, accessRefusal, describeApiError } from '../orders/order-errors';
+import { DeniedState } from '../../shared/ui/denied-state';
+import { LockedState } from '../../shared/ui/locked-state';
+import {
+  CAPABILITY_SENTENCES,
+  SentenceLocale,
+  capabilityAreaName,
+  sentenceLocale,
+} from './capability-sentences';
 import { GrantView, RoleDescriptor, ScopeDirectory, StaffApi } from './staff-api';
 import { roleDescription, roleLabel, scopeLevelLabel } from './staff-role-labels';
 
@@ -14,6 +21,28 @@ interface RoleRow {
   readonly role: RoleDescriptor;
   readonly holderCount: number;
   readonly areas: readonly string[];
+}
+
+/**
+ * Whether `role` has any business matching `needle` — capability search
+ * (operations IA §9.1, "9.1 itself contributes... capability search").
+ * Frontend-only over `capability-sentences.ts`, never `CapabilityRegistryController`,
+ * which is `PLATFORM_ADMIN`-gated and this screen's own operator cannot
+ * reach. Matches a capability's plain sentence in the operator's own
+ * language, or its raw wire code — an admin who already knows the code from
+ * `q-denied-state` should be able to paste it straight in.
+ */
+function matchesQuery(role: RoleDescriptor, needle: string, locale: SentenceLocale): boolean {
+  if (needle === '') {
+    return true;
+  }
+  return role.capabilities.some((code) => {
+    if (code.toLowerCase().includes(needle)) {
+      return true;
+    }
+    const sentence = CAPABILITY_SENTENCES[code]?.[locale];
+    return sentence !== undefined && sentence.toLowerCase().includes(needle);
+  });
 }
 
 interface Holder {
@@ -38,7 +67,7 @@ interface Holder {
  */
 @Component({
   selector: 'q-staff-roles-page',
-  imports: [TPipe],
+  imports: [TPipe, DeniedState, LockedState],
   templateUrl: './staff-roles-page.html',
   styleUrl: './staff-roles-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,7 +79,16 @@ export class StaffRolesPage {
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
+  /** No active tenant at all (a platform-scope session) — distinct from {@link refusal}. */
   protected readonly denied = signal(false);
+  /**
+   * ADR 0025's two refusal codes, from a live 403 on this screen's own
+   * calls (operations IA §9.1d) — see `accessRefusal`'s own doc. Rendered
+   * as `q-denied-state`/`q-locked-state`, never `staff.people.denied`'s flat
+   * sentence, which is what every one of the app's other sixty-five hand-
+   * written `denied` branches still fall back to.
+   */
+  protected readonly refusal = signal<AccessRefusal | null>(null);
   protected readonly loadError = signal<string | null>(null);
 
   private readonly roles = signal<readonly RoleDescriptor[]>([]);
@@ -58,10 +96,15 @@ export class StaffRolesPage {
   private readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   protected readonly expandedCode = signal<string | null>(null);
 
+  /** «Поиск» over the capability sentences a job carries — see `matchesQuery`'s own doc. */
+  protected readonly query = signal('');
+
   protected readonly rows = computed<readonly RoleRow[]>(() => {
     const locale = sentenceLocale(this.i18n.locale());
     const grants = this.grants().filter((g) => g.status === 'ACTIVE');
+    const needle = this.query().trim().toLowerCase();
     return this.roles()
+      .filter((role) => matchesQuery(role, needle, locale))
       .map((role) => ({
         role,
         holderCount: grants.filter((g) => g.roleCode === role.code).length,
@@ -94,6 +137,24 @@ export class StaffRolesPage {
 
   protected toggle(code: string): void {
     this.expandedCode.set(this.expandedCode() === code ? null : code);
+  }
+
+  protected onQueryInput(value: string): void {
+    this.query.set(value);
+  }
+
+  /**
+   * The «Сколько человек» count used to render as a `<button>` that only
+   * stopped the row's own click from opening the detail — a control that
+   * looked actionable and did nothing (`staff-roles-page.html:35-37`,
+   * flagged in the operations gap map). It opens the same «Кто занимает»
+   * detail the row itself opens, deterministically — `stopPropagation`
+   * still runs, so this is the row's own `toggle`, called once, not a second
+   * toggle racing the row's bubbled click.
+   */
+  protected onHolderCountClick(event: Event, code: string): void {
+    event.stopPropagation();
+    this.toggle(code);
   }
 
   protected canDoSentences(role: RoleDescriptor): readonly string[] {
@@ -168,10 +229,13 @@ export class StaffRolesPage {
       this.grants.set(grants);
       this.directory.set(directory);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        this.denied.set(true);
-      } else if (error instanceof ApiError) {
-        this.loadError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      if (error instanceof ApiError) {
+        const refusal = accessRefusal(error);
+        if (refusal) {
+          this.refusal.set(refusal);
+        } else {
+          this.loadError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+        }
       } else {
         throw error;
       }

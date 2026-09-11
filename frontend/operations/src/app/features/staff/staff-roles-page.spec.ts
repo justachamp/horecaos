@@ -4,6 +4,7 @@ import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { GrantView, RoleDescriptor, StaffApi } from './staff-api';
 import { StaffRolesPage } from './staff-roles-page';
@@ -44,9 +45,13 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-async function setUp(grants: readonly GrantView[]) {
+interface ApiOverrides {
+  readonly roles?: () => Promise<readonly RoleDescriptor[]>;
+}
+
+async function setUp(grants: readonly GrantView[], overrides: ApiOverrides = {}) {
   const api = {
-    roles: vi.fn().mockResolvedValue(ROLES),
+    roles: vi.fn(overrides.roles ?? (() => Promise.resolve(ROLES))),
     listGrants: vi.fn().mockResolvedValue(grants),
     scopeDirectory: vi.fn().mockResolvedValue({
       brands: [{ id: 'b1', displayName: 'Milliy' }],
@@ -107,5 +112,116 @@ describe('StaffRolesPage', () => {
     const holderRow = fixture.nativeElement.querySelector('.holders__row');
     expect(holderRow.textContent).toContain('staff-1');
     expect(holderRow.textContent).toContain('Chilonzor');
+  });
+
+  it('opens the holder detail when the holder count itself is clicked, instead of only stopping the click', async () => {
+    // The dead control the gap map flagged (staff-roles-page.html:35-37):
+    // this used to swallow the click and leave the row collapsed.
+    const fixture = await setUp([]);
+    const holderCount = fixture.nativeElement.querySelectorAll('.text-button')[1] as HTMLElement;
+
+    holderCount.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.detail-row')).not.toBeNull();
+
+    // And it closes the same detail on a second click, exactly like the row.
+    holderCount.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.detail-row')).toBeNull();
+  });
+
+  it('narrows the list to jobs matching a capability search, over the plain sentence', async () => {
+    const fixture = await setUp([]);
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="staff-roles-search"]',
+    ) as HTMLInputElement;
+
+    // "Заказы" (RU for "Orders") matches location-staff's `order.read`/`order.approve`
+    // sentences and not tenant-owner's `tenant.write`.
+    input.value = 'заказ';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const names = [...fixture.nativeElement.querySelectorAll('.row .q-emphasis')].map(
+      (e: Element) => e.textContent,
+    );
+    expect(names).toEqual(['Сотрудник филиала']);
+  });
+
+  it('also matches a pasted-in raw capability code, not only its sentence', async () => {
+    const fixture = await setUp([]);
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="staff-roles-search"]',
+    ) as HTMLInputElement;
+
+    input.value = 'iam.grant.manage';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const names = [...fixture.nativeElement.querySelectorAll('.row .q-emphasis')].map(
+      (e: Element) => e.textContent,
+    );
+    expect(names).toEqual(['Владелец']);
+  });
+
+  it('shows an honest empty state, naming the query, when nothing matches', async () => {
+    const fixture = await setUp([]);
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="staff-roles-search"]',
+    ) as HTMLInputElement;
+
+    input.value = 'nonexistent-capability';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.table')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('nonexistent-capability');
+  });
+
+  it('renders q-denied-state, naming the capability, on a live INSUFFICIENT_CAPABILITY refusal', async () => {
+    const fixture = await setUp([], {
+      roles: () =>
+        Promise.reject(
+          new ApiError(
+            ApiErrorCode.INSUFFICIENT_CAPABILITY,
+            403,
+            { status: 403, requiredCapability: 'IAM_GRANT_MANAGE', requiredScope: 'TENANT' },
+            'corr-1',
+          ),
+        ),
+    });
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="q-denied-state"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="q-denied-state-capability"]')?.textContent).toContain(
+      'IAM_GRANT_MANAGE',
+    );
+    expect(el.querySelector('.table')).toBeNull();
+  });
+
+  it('renders q-locked-state, naming the module, on ENTITLEMENT_REQUIRED', async () => {
+    // Nothing in `iam`/Staff is plan-gated today, so this screen never hits
+    // this branch in production — the assertion is that the template's own
+    // `refusal().kind === 'locked'` wiring is correct wherever `accessRefusal`
+    // classifies a refusal that way, not that Staff itself is entitlement-gated.
+    const fixture = await setUp([], {
+      roles: () =>
+        Promise.reject(
+          new ApiError(
+            ApiErrorCode.ENTITLEMENT_REQUIRED,
+            403,
+            { status: 403, entitlementKey: 'staff.directory.enabled' },
+            'corr-2',
+          ),
+        ),
+    });
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="q-locked-state"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="q-locked-state-module"]')?.textContent).toContain(
+      'staff.directory.enabled',
+    );
+    expect(el.querySelector('[data-testid="q-denied-state"]')).toBeNull();
   });
 });
