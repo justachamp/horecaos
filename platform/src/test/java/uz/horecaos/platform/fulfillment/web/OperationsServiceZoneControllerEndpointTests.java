@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.web;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -242,6 +243,81 @@ class OperationsServiceZoneControllerEndpointTests {
     }
 
     @Test
+    void aZoneCanBeListedByVersion_deactivatedAndUnbound() throws Exception {
+        // ADR 0101: before these three the console could only ever add. A wrong
+        // radius was live for ever and a branch bound to the wrong zone stayed
+        // bound, because "activate" was the only lifecycle verb with a surface.
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "lifecycle-draft");
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "lifecycle-activate"));
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/locations")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "lifecycle-bind")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"locationId\":\"" + LOCATION + "\"}"));
+
+        MvcResult versions = mvc.perform(
+                        get(zonesPath(TENANT) + "/" + zoneId + "/versions").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(versions.getResponse().getStatus()).isEqualTo(200);
+        assertThat(versions.getResponse().getContentAsString())
+                .contains("\"version\":1")
+                .contains("\"status\":\"ACTIVE\"")
+                .contains("\"shapeKind\":\"CIRCLE\"");
+
+        MvcResult unbound = mvc.perform(delete(zonesPath(TENANT) + "/" + zoneId + "/locations/" + LOCATION)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "lifecycle-unbind"))
+                .andReturn();
+        assertThat(unbound.getResponse().getStatus()).isEqualTo(204);
+
+        MvcResult deactivated = mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/deactivate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "lifecycle-deactivate"))
+                .andReturn();
+        assertThat(deactivated.getResponse().getStatus()).isEqualTo(200);
+        assertThat(deactivated.getResponse().getContentAsString()).contains("\"status\":\"RETIRED\"");
+
+        MvcResult detail = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId).with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(detail.getResponse().getContentAsString())
+                .as("no live version and no bound branch: the zone is visibly inert, not silently live")
+                .contains("\"activeVersion\":null")
+                .contains("\"boundLocationIds\":[]");
+
+        assertThat(auditActionCounts())
+                .containsEntry("delivery.zone.location.unbound", 1L)
+                .containsEntry("delivery.zone.version.deactivated", 1L);
+    }
+
+    @Test
+    void aBrandManagerCanUnbindButNotDeactivate() throws Exception {
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "split-draft");
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "split-activate"));
+
+        // Deactivation is DELIVERY_ZONE_ACTIVATE, deliberately: deciding a
+        // drawing stops governing is the same class of decision as deciding it
+        // starts, and the person who drew it is the last to notice it is wrong.
+        MvcResult refused = mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions/1/deactivate")
+                        .with(tokenFor(BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "split-deactivate"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString()).contains(Capability.DELIVERY_ZONE_ACTIVATE.code());
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.service_zone_versions WHERE zone_id = :zoneId")
+                        .param("zoneId", zoneId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
     void registeringAZoneWithoutAnIdempotencyKeyIsRejected() throws Exception {
         MvcResult result = mvc.perform(post(zonesPath(TENANT))
                         .with(tokenFor(OWNER))
@@ -257,6 +333,17 @@ class OperationsServiceZoneControllerEndpointTests {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    private void draftCircle(UUID zoneId, String idempotencyKey) throws Exception {
+        mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"circle":{"originLocationId":"%s","radiusMeters":3000},
+                         "priority":10,"currency":"UZS"}
+                        """.formatted(LOCATION)));
     }
 
     private UUID registerZone(String subject) throws Exception {

@@ -264,6 +264,89 @@ public class ServiceZoneService {
                 .build());
     }
 
+    /**
+     * Retires the live version of a zone and activates nothing in its place
+     * (ADR 0101).
+     *
+     * <p>The zone then covers nothing. That is the point, and it is ADR 0037's
+     * own safe direction — a zone that covers nothing is visibly inert, and an
+     * operator who has just discovered a wrong radius wants the wrong radius to
+     * stop applying now, not to stay live until a corrected one is drawn.
+     *
+     * @throws ZoneActivationRefusedException when the named version is not the
+     *                                        live one, which includes the case
+     *                                        where someone else retired it first
+     */
+    @Transactional
+    public void deactivate(UUID tenantId, UUID brandId, UUID zoneId, int version) {
+        if (store.zoneRole(tenantId, brandId, zoneId).isEmpty()) {
+            throw new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand");
+        }
+        VersionStatus status = store.versionStatus(tenantId, zoneId, version)
+                .orElseThrow(() ->
+                        new DeliveryResourceNotFoundException("Zone %s has no version %d".formatted(zoneId, version)));
+        if (status != VersionStatus.ACTIVE) {
+            throw new ZoneActivationRefusedException(
+                    List.of("Only the live version can be deactivated; this one is " + status));
+        }
+
+        Instant now = clock.instant();
+        if (store.deactivateVersion(tenantId, zoneId, version, now) != 1) {
+            throw new ZoneActivationRefusedException(List.of("This version was retired by someone else"));
+        }
+
+        audit.record(AuditFact.of("delivery.zone.version.deactivated", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ServiceZone", zoneId)
+                .targetVersion((long) version)
+                .because("Deactivated version %d of zone %s; the zone now covers nothing".formatted(version, zoneId))
+                .changed(Map.of("version", version))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
+    }
+
+    /**
+     * Stops a zone applying to a branch (ADR 0101).
+     *
+     * <p>Closes the binding's window rather than deleting the row: a fee
+     * resolution six weeks old names the binding that applied. An unbind of a
+     * branch that was not bound is refused rather than treated as a success,
+     * because the two look identical on the screen that asked and one of them
+     * means the operator clicked the wrong row.
+     */
+    @Transactional
+    public void unbindLocation(UUID tenantId, UUID brandId, UUID zoneId, UUID locationId) {
+        if (store.zoneRole(tenantId, brandId, zoneId).isEmpty()) {
+            throw new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand");
+        }
+        Instant now = clock.instant();
+        if (store.unbindLocation(tenantId, zoneId, locationId, now) < 1) {
+            throw new DeliveryResourceNotFoundException(
+                    "Location %s is not bound to zone %s".formatted(locationId, zoneId));
+        }
+
+        audit.record(AuditFact.of("delivery.zone.location.unbound", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ServiceZone", zoneId)
+                .because("Unbound location %s from zone %s".formatted(locationId, zoneId))
+                .changed(Map.of("locationId", locationId.toString()))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
+    }
+
+    /** Every version of one zone, newest first (§3.6's missing version history). */
+    @Transactional(readOnly = true)
+    public List<JdbcServiceZoneStore.ZoneVersionRow> listVersions(UUID tenantId, UUID brandId, UUID zoneId) {
+        if (store.zoneRole(tenantId, brandId, zoneId).isEmpty()) {
+            throw new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand");
+        }
+        return store.listVersions(tenantId, zoneId);
+    }
+
     /** Every zone this brand has registered (operations §3.6 Delivery zones). */
     @Transactional(readOnly = true)
     public List<JdbcServiceZoneStore.ZoneSummaryRow> listZones(UUID tenantId, UUID brandId) {

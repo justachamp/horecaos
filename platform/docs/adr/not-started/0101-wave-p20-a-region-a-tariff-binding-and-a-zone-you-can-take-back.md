@@ -272,7 +272,7 @@ unaffected. Rollback is reverting the branch.
 
 ## References
 
-- [ADR 0037](built/0037-delivery-zones-tariffs-and-fee-resolution.md) — zones, tariffs and fee resolution
+- [ADR 0037](../partial/0037-delivery-zones-tariffs-and-fee-resolution.md) — zones, tariffs and fee resolution
 - [ADR 0057](../built/0057-openapi-per-surface-document-groups.md) — the operations surface group
 - [ADR 0027](../built/0027-audit-evidence-and-approval-model.md) — the audit fact every region write leaves
 - `docs/operations-gap-map.md` PART C wave `P20`, rows `3.6`, `3.6b`, `3.6d`, `3.7`
