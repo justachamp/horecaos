@@ -46,3 +46,79 @@ tr.void td {
 .actions button + button {
   margin-left: 6px;
 }
+
+/* ---------------------------------------------------------- the wallet */
+
+.balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+  background: var(--q-surface, var(--q-canvas));
+}
+
+.cardNote {
+  margin: 0 0 12px;
+}
+
+.walletActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.walletForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.walletForm p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.walletForm input:not([type='date']) {
+  min-width: 220px;
+}
+
+.expires {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approvalsNote {
+  margin: 0 0 12px;
+}
+
+.grantsTitle,
+.ledgerTitle {
+  margin: 16px 0 8px;
+  color: var(--q-ink-subtle);
+}
+
+/* A statement with nothing left to pay should read as finished at a glance. */
+.due.settled {
+  color: var(--q-success-text);
+}
+
+.chip.bonus {
+  background: var(--q-info-tint, var(--q-warning-tint));
+  color: var(--q-info-text, var(--q-warning-text));
+}

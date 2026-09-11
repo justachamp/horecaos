@@ -225,6 +225,66 @@ export interface StatementView {
   readonly lines: readonly StatementLineView[];
 }
 
+/** A tenant's two balances and how it is collected (ADR 0095). */
+export interface WalletOverviewView {
+  readonly paidBalance: Money;
+  readonly bonusBalance: Money;
+  readonly paymentMethod: 'INVOICE' | 'WALLET' | 'CARD' | (string & {});
+  readonly cardTokenReference: string | null;
+}
+
+/** One entry of the append-only ledger. Nothing ever edits or deletes one. */
+export interface WalletEntryView {
+  readonly entryId: string;
+  readonly moneyKind: 'PAID' | 'BONUS' | (string & {});
+  readonly entryType:
+    | 'TOP_UP'
+    | 'DEPOSIT'
+    | 'BONUS_GRANT'
+    | 'BONUS_EXPIRY'
+    | 'STATEMENT_PAYMENT'
+    | 'STATEMENT_REVERSAL'
+    | 'ADJUSTMENT'
+    | 'REFUND'
+    | (string & {});
+  readonly amount: Money;
+  readonly statementId: string | null;
+  readonly grantId: string | null;
+  readonly expiresAt: string | null;
+  readonly externalReference: string | null;
+  readonly reason: string;
+  readonly recordedBy: string;
+  readonly approvedBy: string | null;
+  readonly createdAt: string;
+}
+
+/** A live bonus grant with what is left of it, earliest expiry first. */
+export interface BonusGrantView {
+  readonly grantId: string;
+  readonly granted: Money;
+  readonly remaining: Money;
+  readonly expiresAt: string;
+  readonly reason: string;
+}
+
+/** One issued statement's paid and due amounts, derived from the ledger. */
+export interface StatementPaymentView {
+  readonly statementId: string;
+  readonly number: string;
+  readonly periodKey: string;
+  readonly total: Money;
+  readonly paid: Money;
+  readonly due: Money;
+}
+
+/** What a proposed wallet change did: applied, waiting for a second signature, or declined. */
+export interface WalletChangeResponse {
+  readonly status: 'CHANGED' | 'AWAITING_APPROVAL' | 'DECLINED' | (string & {});
+  readonly approvalRequestId: string | null;
+}
+
+export const PAYMENT_METHODS = ['INVOICE', 'WALLET', 'CARD'] as const;
+
 /** What one arrears stage does to a tenant. */
 export interface ArrearsStageView {
   readonly status: string;
@@ -512,6 +572,117 @@ export class CommerceApi {
       this.api.post<void>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/statements/${statementId}/void`,
         { reason },
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------- wallet
+
+  /** Both balances and how the tenant is collected. */
+  async wallet(tenantId: string): Promise<WalletOverviewView> {
+    return firstValueFrom(this.api.get<WalletOverviewView>(`/api/v1/control-plane/tenants/${tenantId}/wallet`));
+  }
+
+  /** The ledger, newest first. One page is enough for a screen; the cursor is there for more. */
+  async walletLedger(tenantId: string, cursor?: string): Promise<{ items: WalletEntryView[]; nextCursor: string | null }> {
+    return firstValueFrom(
+      this.api.get<{ items: WalletEntryView[]; nextCursor: string | null }>(
+        `/api/v1/control-plane/tenants/${tenantId}/wallet/ledger`,
+        cursor === undefined ? undefined : { query: { cursor } },
+      ),
+    );
+  }
+
+  /** Live bonus grants with something left, earliest expiry first. */
+  async bonusGrants(tenantId: string): Promise<BonusGrantView[]> {
+    return firstValueFrom(
+      this.api.get<BonusGrantView[]>(`/api/v1/control-plane/tenants/${tenantId}/wallet/grants`),
+    );
+  }
+
+  /** Each issued statement's paid and due amounts, derived from the ledger. */
+  async statementPayments(tenantId: string): Promise<StatementPaymentView[]> {
+    return firstValueFrom(
+      this.api.get<StatementPaymentView[]>(`/api/v1/control-plane/tenants/${tenantId}/wallet/statements`),
+    );
+  }
+
+  /** One person's audited act: the bank reference is what proves it. */
+  async recordTransfer(
+    tenantId: string,
+    request: { readonly amountMinor: number; readonly bankReference: string; readonly reason: string },
+  ): Promise<{ entryId: string }> {
+    return firstValueFrom(
+      this.api.post<{ entryId: string }>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/transfers`,
+        request,
+      ),
+    );
+  }
+
+  /** Pays exactly what the live subscription's activation deposit still owes. */
+  async recordDeposit(
+    tenantId: string,
+    request: { readonly bankReference: string; readonly reason: string },
+  ): Promise<{ entryId: string }> {
+    return firstValueFrom(
+      this.api.post<{ entryId: string }>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/deposit`,
+        request,
+      ),
+    );
+  }
+
+  /** Proposed by one person; the identical call again after a different person approves applies it. */
+  async proposeWalletAdjustment(
+    tenantId: string,
+    request: {
+      readonly moneyKind: string;
+      readonly grantId?: string;
+      readonly amountMinor: number;
+      readonly reason: string;
+    },
+  ): Promise<WalletChangeResponse> {
+    return firstValueFrom(
+      this.api.post<WalletChangeResponse>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/adjustments`,
+        request,
+      ),
+    );
+  }
+
+  async proposeBonusGrant(
+    tenantId: string,
+    request: { readonly amountMinor: number; readonly expiresAt: string; readonly reason: string },
+  ): Promise<WalletChangeResponse> {
+    return firstValueFrom(
+      this.api.post<WalletChangeResponse>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/bonus-grants`,
+        request,
+      ),
+    );
+  }
+
+  async proposeRefund(
+    tenantId: string,
+    request: { readonly amountMinor: number; readonly payoutReference: string; readonly reason: string },
+  ): Promise<WalletChangeResponse> {
+    return firstValueFrom(
+      this.api.post<WalletChangeResponse>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/refunds`,
+        request,
+      ),
+    );
+  }
+
+  async setPaymentMethod(
+    tenantId: string,
+    request: { readonly paymentMethod: string; readonly cardTokenReference?: string; readonly reason: string },
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<void>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/payment-method`,
+        request,
       ),
     );
   }
