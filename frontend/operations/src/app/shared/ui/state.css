@@ -1,0 +1,46 @@
+/* The shape the three states share — and only the shape. They are three
+ * components on purpose (see `q-empty-state`'s doc); what they have in common
+ * is that each is a centred block of text where a table would have been.
+ *
+ * Loaded by all three through `styleUrls`, never as a global rule. */
+
+.q-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+.q-state__title {
+  margin: 0;
+  color: var(--q-ink);
+}
+
+.q-state__body {
+  margin: 0;
+  max-width: 42ch;
+}
+
+.q-state__capability {
+  color: var(--q-ink);
+}
+
+.q-state__actions:empty {
+  display: none;
+}
+
+.q-state__actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+/* A wall and an upsell read differently at a glance: the wall is neutral, the
+ * lock carries the informational tint that says "this is about your plan,
+ * not about you". Never colour alone — each one's first line says which it is. */
+.q-state--locked {
+  background: var(--q-info-tint);
+}
