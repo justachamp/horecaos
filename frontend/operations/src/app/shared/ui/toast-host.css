@@ -1,0 +1,60 @@
+/* Bottom-trailing corner, above everything except an overlay's scrim — a toast
+ * that covers the order board is a toast that hides the thing it is reporting
+ * about. */
+.q-toasts {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The container is a pass-through: only the toasts themselves take clicks, so
+   * an empty host never swallows a click on the screen behind it. */
+  pointer-events: none;
+}
+
+.q-toasts__region {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.q-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
+  padding: 10px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-inverse);
+  color: var(--q-inverse-ink);
+}
+
+.q-toast--success {
+  border-color: var(--q-success);
+}
+
+.q-toast--error {
+  border-color: var(--q-error);
+}
+
+.q-toast__message {
+  flex: 1;
+  min-width: 0;
+}
+
+.q-toast__dismiss {
+  border: none;
+  background: transparent;
+  color: var(--q-inverse-ink-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.q-toast__dismiss:hover {
+  color: var(--q-inverse-ink);
+}

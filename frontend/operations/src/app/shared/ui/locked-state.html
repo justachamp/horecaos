@@ -1,0 +1,18 @@
+<div class="q-state q-state--locked" role="status" data-testid="q-locked-state">
+  <p class="q-body q-state__title">{{ 'ui.locked.title' | t }}</p>
+
+  @if (module(); as code) {
+    <p class="q-body-sm q-state__body">
+      {{ 'ui.locked.module' | t }}
+      <code class="q-mono q-state__capability" data-testid="q-locked-state-module">{{ code }}</code>
+    </p>
+  }
+
+  <p class="q-body-sm q-state__body">{{ askKey() | t }}</p>
+
+  <!-- The buy CTA goes here when a tenant-scoped purchase endpoint exists.
+       There is none today; see this component's own doc. -->
+  <div class="q-state__actions">
+    <ng-content />
+  </div>
+</div>

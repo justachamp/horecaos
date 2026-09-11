@@ -1,0 +1,24 @@
+<div
+  class="q-overlay__backdrop q-modal__backdrop"
+  (mousedown)="onBackdropPress($event)"
+  (click)="onBackdropClick($event)"
+  data-testid="q-modal-backdrop"
+>
+  <div
+    #panel
+    class="q-overlay__panel q-modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-labelledby]="titleId"
+    tabindex="-1"
+    data-testid="q-modal"
+  >
+    <h2 class="q-emphasis q-overlay__title" [id]="titleId">{{ title() }}</h2>
+
+    <ng-content />
+
+    <div class="q-overlay__actions">
+      <ng-content select="[qModalActions]" />
+    </div>
+  </div>
+</div>

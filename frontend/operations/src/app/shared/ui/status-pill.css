@@ -1,0 +1,46 @@
+/* One border around one to three segments, divided by hairlines. The point of
+ * a single border is that the pill reads as one object: an operator glancing at
+ * a row sees "READY, late", not a status and, elsewhere, a warning. */
+
+.q-status-pill {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.q-status-pill__segment {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  color: var(--q-ink-muted);
+}
+
+.q-status-pill__segment + .q-status-pill__segment {
+  border-inline-start: 1px solid var(--q-hairline);
+}
+
+/* Tone is a tint plus its paired text colour, never colour alone: every
+ * segment carries its own word, so a pill is legible with no colour at all. */
+.q-status-pill__segment--info {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.q-status-pill__segment--success {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.q-status-pill__segment--warning {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.q-status-pill__segment--danger {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}

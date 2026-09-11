@@ -1,0 +1,54 @@
+/* Tint plus text colour from the generated pairs. Yellow is never text on
+ * white — `tokens.css` says so on the `--q-warning` line — which is why the
+ * warning band uses `--q-warning-text` and not `--q-warning`. */
+
+.q-inline-alert {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--q-radius);
+}
+
+.q-inline-alert__message {
+  flex: 1;
+  min-width: 0;
+}
+
+.q-inline-alert__reference {
+  color: var(--q-ink-subtle);
+}
+
+.q-inline-alert--info {
+  background: var(--q-info-tint);
+  border-color: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.q-inline-alert--success {
+  background: var(--q-success-tint);
+  border-color: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.q-inline-alert--warning {
+  background: var(--q-warning-tint);
+  border-color: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.q-inline-alert--error {
+  background: var(--q-error-tint);
+  border-color: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.q-inline-alert__dismiss {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}

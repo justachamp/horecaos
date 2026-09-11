@@ -1,0 +1,45 @@
+<span
+  class="q-status-pill"
+  [attr.aria-label]="accessibleName()"
+  role="img"
+  data-testid="q-status-pill"
+>
+  <span
+    class="q-status-pill__segment q-caption"
+    [class.q-status-pill__segment--info]="tone() === 'info'"
+    [class.q-status-pill__segment--success]="tone() === 'success'"
+    [class.q-status-pill__segment--warning]="tone() === 'warning'"
+    [class.q-status-pill__segment--danger]="tone() === 'danger'"
+    aria-hidden="true"
+    data-testid="q-status-pill-status"
+    >{{ label() }}</span
+  >
+
+  @if (secondaryLabel(); as secondary) {
+    <span
+      class="q-status-pill__segment q-status-pill__segment--secondary q-caption"
+      [class.q-status-pill__segment--info]="secondaryTone() === 'info'"
+      [class.q-status-pill__segment--success]="secondaryTone() === 'success'"
+      [class.q-status-pill__segment--warning]="secondaryTone() === 'warning'"
+      [class.q-status-pill__segment--danger]="secondaryTone() === 'danger'"
+      aria-hidden="true"
+      data-testid="q-status-pill-secondary"
+      >{{ secondary }}</span
+    >
+  }
+
+  <!-- The overlay. Independent of the status segment above it, which keeps its
+       own word and its own tone whatever this says. -->
+  @if (overlayLabel(); as overlay) {
+    <span
+      class="q-status-pill__segment q-status-pill__overlay q-caption"
+      [class.q-status-pill__segment--info]="overlayTone() === 'info'"
+      [class.q-status-pill__segment--success]="overlayTone() === 'success'"
+      [class.q-status-pill__segment--warning]="overlayTone() === 'warning'"
+      [class.q-status-pill__segment--danger]="overlayTone() === 'danger'"
+      aria-hidden="true"
+      data-testid="q-status-pill-overlay"
+      >{{ overlay }}</span
+    >
+  }
+</span>

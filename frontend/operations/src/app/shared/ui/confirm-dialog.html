@@ -1,0 +1,49 @@
+<div
+  class="q-overlay__backdrop q-confirm__backdrop"
+  (mousedown)="onBackdropPress($event)"
+  (click)="onBackdropClick($event)"
+  data-testid="q-confirm-backdrop"
+>
+  <div
+    #panel
+    class="q-overlay__panel q-confirm"
+    role="alertdialog"
+    aria-modal="true"
+    [attr.aria-labelledby]="titleId"
+    [attr.aria-describedby]="body() ? bodyId : null"
+    tabindex="-1"
+    data-testid="q-confirm-dialog"
+  >
+    <h2 class="q-emphasis q-overlay__title" [id]="titleId">{{ title() }}</h2>
+
+    @if (body(); as text) {
+      <p class="q-body-sm q-confirm__body" [id]="bodyId">{{ text }}</p>
+    }
+
+    <div class="q-overlay__actions">
+      <!-- Cancel first in document order so the focus trap's "first tabbable
+           descendant" rule lands the caret on it; `order` in the stylesheet
+           puts Confirm on the trailing edge where the console's other dialogs
+           already put it. -->
+      <button
+        type="button"
+        class="q-confirm__cancel q-body-sm"
+        (click)="cancel.emit()"
+        [disabled]="busy()"
+        data-testid="q-confirm-cancel"
+      >
+        {{ cancelLabel() }}
+      </button>
+      <button
+        type="button"
+        class="q-confirm__confirm q-body-sm"
+        [class.q-confirm__confirm--destructive]="tone() === 'destructive'"
+        (click)="confirm.emit()"
+        [disabled]="busy()"
+        data-testid="q-confirm-confirm"
+      >
+        {{ confirmLabel() }}
+      </button>
+    </div>
+  </div>
+</div>

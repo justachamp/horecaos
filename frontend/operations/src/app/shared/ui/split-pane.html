@@ -1,0 +1,30 @@
+<div
+  class="q-split"
+  [class.q-split--docked]="docked()"
+  [class.q-split--dragging]="dragging()"
+  [style.--q-split-secondary]="secondaryWidthCss()"
+  data-testid="q-split-pane"
+>
+  <div class="q-split__primary">
+    <ng-content />
+  </div>
+
+  <!-- A real separator, not a decorative rule: `role="separator"` with a
+       `tabindex` is the one widget role that is focusable without being a
+       control, which is exactly what a resize handle is. -->
+  <div
+    class="q-split__handle"
+    role="separator"
+    aria-orientation="vertical"
+    tabindex="0"
+    [attr.aria-label]="handleLabel()"
+    [attr.aria-valuenow]="secondaryWidth()"
+    (pointerdown)="onHandlePointerDown($event)"
+    (keydown)="onHandleKeydown($event)"
+    data-testid="q-split-pane-handle"
+  ></div>
+
+  <div class="q-split__secondary">
+    <ng-content select="[qSplitDetail]" />
+  </div>
+</div>

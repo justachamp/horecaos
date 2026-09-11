@@ -2627,4 +2627,21 @@ export const messagesRu: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Завершён',
   'orders.callCentre.callLog.type.MISSED': 'Пропущен',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Переведён',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  'ui.denied.title': 'Нет доступа к этому разделу',
+  'ui.denied.capability': 'Не хватает права:',
+  'ui.denied.ask': 'Выдать его может руководитель с доступом к ролям сотрудников.',
+  'ui.locked.title': 'Не входит в текущий тариф',
+  'ui.locked.module': 'Модуль:',
+  'ui.locked.ask': 'Владелец аккаунта может подключить его к тарифу.',
+  'ui.alert.dismiss': 'Скрыть сообщение',
+  'ui.toast.dismiss': 'Скрыть',
+  'ui.splitPane.handle': 'Изменить ширину панели',
+
+  'orders.action.applied': 'Заказ обновлён',
+  'customers.create.done': 'Клиент создан',
+
+  'orders.severity.pill.blocked': 'внимание',
+  'orders.severity.pill.late': 'опаздывает',
 };

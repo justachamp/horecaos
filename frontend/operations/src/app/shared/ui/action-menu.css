@@ -1,0 +1,62 @@
+.q-action-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.q-action-menu__trigger {
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.q-action-menu__trigger:hover:not(:disabled) {
+  border-color: var(--q-hairline);
+  color: var(--q-ink);
+}
+
+.q-action-menu__trigger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.q-action-menu__list {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 2px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px 0;
+  background: var(--q-canvas);
+  /* Hairline elevation, never a shadow. */
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.q-action-menu__item {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--q-ink);
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.q-action-menu__item:hover:not(:disabled) {
+  background: var(--q-surface-1);
+}
+
+.q-action-menu__item--destructive {
+  color: var(--q-error-text);
+}
+
+.q-action-menu__item:disabled {
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

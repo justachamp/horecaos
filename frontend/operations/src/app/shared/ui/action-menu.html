@@ -1,0 +1,41 @@
+<div class="q-action-menu">
+  <button
+    type="button"
+    class="q-action-menu__trigger"
+    [attr.aria-label]="triggerLabel()"
+    aria-haspopup="menu"
+    [attr.aria-expanded]="open()"
+    [disabled]="disabled()"
+    (click)="onTriggerClick()"
+    (keydown)="onTriggerKeydown($event)"
+    data-testid="q-action-menu-trigger"
+  >
+    <span aria-hidden="true">⋯</span>
+  </button>
+
+  @if (open()) {
+    <div
+      class="q-action-menu__list"
+      role="menu"
+      [attr.aria-label]="triggerLabel()"
+      (keydown)="onMenuKeydown($event)"
+      data-testid="q-action-menu-list"
+    >
+      @for (item of items(); track item.id; let i = $index) {
+        <button
+          #item
+          type="button"
+          role="menuitem"
+          class="q-action-menu__item q-body-sm"
+          [class.q-action-menu__item--destructive]="item.destructive === true"
+          [disabled]="item.disabled === true"
+          [attr.tabindex]="isActive(i) ? 0 : -1"
+          (click)="onItemClick(item)"
+          [attr.data-testid]="'q-action-menu-item-' + item.id"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </div>
+  }
+</div>

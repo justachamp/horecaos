@@ -1,0 +1,9 @@
+<div class="q-state" data-testid="q-empty-state">
+  <p class="q-body q-state__title">{{ titleKey() | t }}</p>
+  @if (bodyKey(); as key) {
+    <p class="q-body-sm q-state__body">{{ key | t }}</p>
+  }
+  <div class="q-state__actions">
+    <ng-content />
+  </div>
+</div>
