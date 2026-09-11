@@ -6,14 +6,22 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -139,23 +147,30 @@ public class JdbcCourierStore {
      * renders instead of vanishing from a manager's count.
      */
     public List<CourierRosterRow> listCouriers(UUID tenantId) {
-        return jdbc.sql("""
-                SELECT c.id, c.display_reference, c.status,
-                       c.courier_type_id, t.display_name AS type_name, t.vehicle_class,
-                       t.max_concurrent_assignments,
-                       e.id AS engagement_id, e.status AS engagement_status,
-                       e.warning_state, e.reverification_due_on
-                  FROM fulfillment.couriers c
-                  JOIN fulfillment.courier_types t
-                    ON t.tenant_id = c.tenant_id AND t.id = c.courier_type_id
-             LEFT JOIN fulfillment.courier_engagements e
-                    ON e.tenant_id = c.tenant_id AND e.courier_id = c.id AND e.status <> 'ENDED'
+        return jdbc.sql(SELECT_ROSTER + """
                  WHERE c.tenant_id = :tenantId
                  ORDER BY c.created_at DESC
                 """)
                 .param("tenantId", tenantId)
                 .query(JdbcCourierStore::mapRoster)
                 .list();
+    }
+
+    /**
+     * One roster row, for the detail pane behind the list (IA 3.3).
+     *
+     * <p>The same projection as {@link #listCouriers} rather than a wider one:
+     * opening a courier must not by itself show more about them than the list
+     * does. What the detail pane adds it adds through {@link
+     * #findComplianceSummary} — presence, not content — and through an explicit
+     * reveal.
+     */
+    public Optional<CourierRosterRow> findRosterEntry(UUID tenantId, UUID courierId) {
+        return jdbc.sql(SELECT_ROSTER + " WHERE c.tenant_id = :tenantId AND c.id = :courierId")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(JdbcCourierStore::mapRoster)
+                .optional();
     }
 
     /**
@@ -382,6 +397,316 @@ public class JdbcCourierStore {
                 .optional();
     }
 
+    // ------------------------------------------------------- the compliance file
+
+    /**
+     * Writes the fields this call carries and clears the ones it names, leaving
+     * every other field alone (IA 3.3).
+     *
+     * <p>Not a whole-row replace, and the reason is the screen rather than a
+     * preference. Nothing outside a reveal ever holds the plaintext of these
+     * columns, so a detail pane cannot re-send the eight fields it did not
+     * change; a replace would therefore erase a passport every time somebody
+     * corrected a plate. Clearing is consequently an explicit act with its own
+     * list, which is also the honest shape: "I no longer hold this document" is
+     * a different statement from "I am not sending it right now".
+     *
+     * <p>The column names are interpolated, and are safe to interpolate because
+     * the only source of one is {@link ComplianceField#column()} — a caller
+     * cannot reach this statement with a string it invented.
+     */
+    public void recordComplianceFile(
+            UUID tenantId,
+            UUID courierId,
+            Map<ComplianceField, String> protectedValues,
+            Set<ComplianceField> cleared,
+            @Nullable String vehicleFuelType,
+            @Nullable UUID photoMediaId,
+            String updatedBy,
+            Instant now) {
+
+        List<String> assignments = new ArrayList<>();
+        Map<String, Object> params = new HashMap<>();
+
+        int index = 0;
+        for (Map.Entry<ComplianceField, String> entry : protectedValues.entrySet()) {
+            String parameter = "field" + index++;
+            assignments.add(entry.getKey().column() + " = :" + parameter);
+            params.put(parameter, entry.getValue());
+        }
+        for (ComplianceField field : cleared) {
+            assignments.add(field.column() + " = NULL");
+        }
+        if (vehicleFuelType != null) {
+            assignments.add("vehicle_fuel_type = :fuelType");
+            params.put("fuelType", vehicleFuelType);
+        }
+        if (photoMediaId != null) {
+            assignments.add("photo_media_id = :photoMediaId");
+            params.put("photoMediaId", photoMediaId);
+        }
+        if (assignments.isEmpty()) {
+            // A call that changes nothing still must not stamp a provenance: it
+            // would read afterwards as though somebody had reviewed the file.
+            return;
+        }
+
+        assignments.add("compliance_updated_at = :now");
+        assignments.add("compliance_updated_by = :updatedBy");
+        assignments.add("version = version + 1");
+        assignments.add("updated_at = :now");
+        params.put("now", utc(now));
+        params.put("updatedBy", updatedBy);
+        params.put("tenantId", tenantId);
+        params.put("courierId", courierId);
+
+        jdbc.sql("UPDATE fulfillment.couriers SET " + String.join(", ", assignments)
+                        + " WHERE tenant_id = :tenantId AND id = :courierId")
+                .params(params)
+                .update();
+    }
+
+    /**
+     * Every ciphertext on file, read only where a reveal is about to happen.
+     *
+     * <p>The counterpart of {@link #readProtectedRegistrationRef} and separate
+     * from {@link #findComplianceSummary} for the same reason: "who may see a
+     * courier's passport" stays a question about the call sites of one method.
+     */
+    public Map<ComplianceField, String> readComplianceFile(UUID tenantId, UUID courierId) {
+        String columns = Arrays.stream(ComplianceField.values())
+                .map(ComplianceField::column)
+                .collect(Collectors.joining(", "));
+
+        return jdbc.sql("SELECT " + columns + " FROM fulfillment.couriers"
+                        + " WHERE tenant_id = :tenantId AND id = :courierId")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query((ResultSet rs, int rowNumber) -> {
+                    Map<ComplianceField, String> held = new EnumMap<>(ComplianceField.class);
+                    for (ComplianceField field : ComplianceField.values()) {
+                        String ciphertext = rs.getString(field.column());
+                        if (ciphertext != null) {
+                            held.put(field, ciphertext);
+                        }
+                    }
+                    return held;
+                })
+                .optional()
+                .orElseGet(() -> new EnumMap<>(ComplianceField.class));
+    }
+
+    /**
+     * What the detail pane reads: which fields are on file, never their
+     * contents.
+     *
+     * <p>Presence is not content, and the distinction is what lets a manager
+     * see an incomplete file — the whole point of IA 3.3's compliance worklist —
+     * without anybody exercising {@code courier.pii.reveal} to find out.
+     */
+    public Optional<ComplianceSummaryRow> findComplianceSummary(UUID tenantId, UUID courierId) {
+        String presence = Arrays.stream(ComplianceField.values())
+                .map(field -> "(" + field.column() + " IS NOT NULL) AS has_"
+                        + field.name().toLowerCase(Locale.ROOT))
+                .collect(Collectors.joining(", "));
+
+        return jdbc.sql("SELECT " + presence + ", vehicle_fuel_type, photo_media_id,"
+                        + " compliance_updated_at, compliance_updated_by"
+                        + " FROM fulfillment.couriers WHERE tenant_id = :tenantId AND id = :courierId")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query((ResultSet rs, int rowNumber) -> {
+                    Set<ComplianceField> onFile = EnumSet.noneOf(ComplianceField.class);
+                    for (ComplianceField field : ComplianceField.values()) {
+                        if (rs.getBoolean("has_" + field.name().toLowerCase(Locale.ROOT))) {
+                            onFile.add(field);
+                        }
+                    }
+                    OffsetDateTime updatedAt = rs.getObject("compliance_updated_at", OffsetDateTime.class);
+                    return new ComplianceSummaryRow(
+                            onFile,
+                            rs.getString("vehicle_fuel_type"),
+                            rs.getObject("photo_media_id", UUID.class),
+                            updatedAt == null ? null : updatedAt.toInstant(),
+                            rs.getString("compliance_updated_by"));
+                })
+                .optional();
+    }
+
+    // ------------------------------------------------------------------ groups
+
+    public void insertGroup(UUID id, UUID tenantId, String code, String displayName) {
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_groups (id, tenant_id, code, display_name, status)
+                VALUES (:id, :tenantId, :code, :displayName, 'ACTIVE')
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("displayName", displayName)
+                .update();
+    }
+
+    public List<CourierGroupRow> listGroups(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT g.id, g.code, g.display_name, g.status,
+                       (SELECT count(*) FROM fulfillment.courier_group_members m
+                         WHERE m.tenant_id = g.tenant_id AND m.group_id = g.id) AS member_count
+                  FROM fulfillment.courier_groups g
+                 WHERE g.tenant_id = :tenantId
+                 ORDER BY g.display_name
+                """)
+                .param("tenantId", tenantId)
+                .query((ResultSet rs, int rowNumber) -> new CourierGroupRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("display_name"),
+                        rs.getString("status"),
+                        rs.getInt("member_count")))
+                .list();
+    }
+
+    /** Archives a group. Its members stay listed so a past shift plan still reads. */
+    public boolean archiveGroup(UUID tenantId, UUID groupId, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.courier_groups
+                   SET status = 'ARCHIVED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :groupId AND status = 'ACTIVE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("groupId", groupId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Idempotent: joining a group somebody is already in is not an error. */
+    public boolean addToGroup(UUID tenantId, UUID groupId, UUID courierId, String addedBy, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO fulfillment.courier_group_members (tenant_id, group_id, courier_id, added_at, added_by)
+                VALUES (:tenantId, :groupId, :courierId, :now, :addedBy)
+                ON CONFLICT ON CONSTRAINT pk_courier_group_member DO NOTHING
+                """)
+                        .param("tenantId", tenantId)
+                        .param("groupId", groupId)
+                        .param("courierId", courierId)
+                        .param("addedBy", addedBy)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    public boolean removeFromGroup(UUID tenantId, UUID groupId, UUID courierId) {
+        return jdbc.sql("""
+                DELETE FROM fulfillment.courier_group_members
+                 WHERE tenant_id = :tenantId AND group_id = :groupId AND courier_id = :courierId
+                """)
+                        .param("tenantId", tenantId)
+                        .param("groupId", groupId)
+                        .param("courierId", courierId)
+                        .update()
+                == 1;
+    }
+
+    public List<CourierGroupRow> groupsOf(UUID tenantId, UUID courierId) {
+        return jdbc.sql("""
+                SELECT g.id, g.code, g.display_name, g.status, 0 AS member_count
+                  FROM fulfillment.courier_group_members m
+                  JOIN fulfillment.courier_groups g
+                    ON g.tenant_id = m.tenant_id AND g.id = m.group_id
+                 WHERE m.tenant_id = :tenantId AND m.courier_id = :courierId
+                 ORDER BY g.display_name
+                """)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query((ResultSet rs, int rowNumber) -> new CourierGroupRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("display_name"),
+                        rs.getString("status"),
+                        rs.getInt("member_count")))
+                .list();
+    }
+
+    // -------------------------------------------------------- branch bindings
+
+    /**
+     * Binds a courier to a branch. Re-binding an existing pair moves the primary
+     * flag rather than failing, because "make Chilonzor his main branch" is the
+     * same operator gesture as "bind him to Chilonzor" a second time.
+     */
+    public void bindToBranch(
+            UUID tenantId,
+            UUID courierId,
+            UUID brandId,
+            UUID locationId,
+            boolean primary,
+            String boundBy,
+            Instant now) {
+
+        if (primary) {
+            // One primary per courier is a partial unique index, so the old one
+            // is stood down first rather than colliding with the new one.
+            jdbc.sql("""
+                    UPDATE fulfillment.courier_branch_bindings
+                       SET is_primary = false
+                     WHERE tenant_id = :tenantId AND courier_id = :courierId AND is_primary
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("courierId", courierId)
+                    .update();
+        }
+
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_branch_bindings (
+                    id, tenant_id, courier_id, brand_id, location_id, is_primary, bound_at, bound_by)
+                VALUES (:id, :tenantId, :courierId, :brandId, :locationId, :primary, :now, :boundBy)
+                ON CONFLICT ON CONSTRAINT uq_courier_binding
+                DO UPDATE SET is_primary = EXCLUDED.is_primary, bound_at = EXCLUDED.bound_at,
+                              bound_by = EXCLUDED.bound_by
+                """)
+                .param("id", uz.horecaos.platform.configuration.Ids.newId())
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("primary", primary)
+                .param("boundBy", boundBy)
+                .param("now", utc(now))
+                .update();
+    }
+
+    public boolean unbindFromBranch(UUID tenantId, UUID courierId, UUID locationId) {
+        return jdbc.sql("""
+                DELETE FROM fulfillment.courier_branch_bindings
+                 WHERE tenant_id = :tenantId AND courier_id = :courierId AND location_id = :locationId
+                """)
+                        .param("tenantId", tenantId)
+                        .param("courierId", courierId)
+                        .param("locationId", locationId)
+                        .update()
+                == 1;
+    }
+
+    public List<BranchBindingRow> bindingsOf(UUID tenantId, UUID courierId) {
+        return jdbc.sql("""
+                SELECT b.location_id, b.brand_id, b.is_primary, l.display_name
+                  FROM fulfillment.courier_branch_bindings b
+                  JOIN tenant.locations l
+                    ON l.tenant_id = b.tenant_id AND l.brand_id = b.brand_id AND l.id = b.location_id
+                 WHERE b.tenant_id = :tenantId AND b.courier_id = :courierId
+                 ORDER BY b.is_primary DESC, l.display_name
+                """)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query((ResultSet rs, int rowNumber) -> new BranchBindingRow(
+                        rs.getObject("location_id", UUID.class),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getString("display_name"),
+                        rs.getBoolean("is_primary")))
+                .list();
+    }
+
     // --------------------------------------------------------- notification ladder
 
     /**
@@ -548,12 +873,52 @@ public class JdbcCourierStore {
     public record AdjustmentReasonRow(
             UUID id, UUID tenantId, String code, String kind, String outcomeBasis, String displayName, String status) {}
 
+    /**
+     * The compliance file as a screen may read it: which fields exist, and the
+     * two that are held in clear because they are not facts about a person.
+     *
+     * @param onFile which protected fields have a value — presence, never content
+     * @param updatedBy the IAM subject that last recorded the file, never a name
+     */
+    public record ComplianceSummaryRow(
+            Set<ComplianceField> onFile,
+            @Nullable String vehicleFuelType,
+            @Nullable UUID photoMediaId,
+            @Nullable Instant complianceUpdatedAt,
+            @Nullable String updatedBy) {}
+
+    /** @param memberCount zero when the row came from {@code groupsOf}, which does not count */
+    public record CourierGroupRow(UUID id, String code, String displayName, String status, int memberCount) {}
+
+    public record BranchBindingRow(UUID locationId, UUID brandId, String locationName, boolean primary) {}
+
     // ---------------------------------------------------------------- mapping
 
     private static final String SELECT_COURIER = """
             SELECT id, tenant_id, courier_type_id, principal_subject, display_reference,
                    protected_full_name, status, version
               FROM fulfillment.couriers
+            """;
+
+    /**
+     * The list projection, shared by the roster and by the detail pane.
+     *
+     * <p>Not one ciphertext column among them. Nine protected columns now sit on
+     * {@code fulfillment.couriers}, and {@code SELECT *} on this table would put
+     * a passport in every row of a screen a dispatcher keeps open all day; naming
+     * the columns is what makes that a deliberate act rather than an omission.
+     */
+    private static final String SELECT_ROSTER = """
+            SELECT c.id, c.display_reference, c.status,
+                   c.courier_type_id, t.display_name AS type_name, t.vehicle_class,
+                   t.max_concurrent_assignments,
+                   e.id AS engagement_id, e.status AS engagement_status,
+                   e.warning_state, e.reverification_due_on
+              FROM fulfillment.couriers c
+              JOIN fulfillment.courier_types t
+                ON t.tenant_id = c.tenant_id AND t.id = c.courier_type_id
+         LEFT JOIN fulfillment.courier_engagements e
+                ON e.tenant_id = c.tenant_id AND e.courier_id = c.id AND e.status <> 'ENDED'
             """;
 
     /**

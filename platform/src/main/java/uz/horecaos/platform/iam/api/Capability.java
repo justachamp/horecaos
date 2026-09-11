@@ -1197,6 +1197,26 @@ public enum Capability {
     COURIER_REGISTRATION_REVEAL("courier.registration.reveal", "courier", "registration.reveal"),
 
     /**
+     * ADR 0042 and ADR 0029: revealing a courier's compliance file — passport,
+     * ПИНФЛ, driving licence, vehicle registration and plate, home address,
+     * emergency contact, referral and notes (IA 3.3).
+     *
+     * <p>Not folded into {@link #COURIER_REGISTRATION_REVEAL}, whose own doc
+     * scopes it to the registration identifier for the accountant export. That
+     * is one number a bookkeeper needs on an invoice; this is the file, and it
+     * includes a national identifier and a third party's telephone number that
+     * nobody in accounts has any business reading. A single grant would have
+     * meant the person who produces the monthly export can also open where every
+     * rider lives, and neither of the two people involved would have noticed.
+     *
+     * <p>Modelled on {@link #CUSTOMER_PII_REVEAL} in every other respect: each
+     * use carries a declared purpose and is written as an ADR 0027 audit fact,
+     * and it is granted to a person for a reason rather than bundled into a
+     * role.
+     */
+    COURIER_PII_REVEAL("courier.pii.reveal", "courier", "pii-reveal"),
+
+    /**
      * ADR 0042: defining a vehicle class — its dispatch numbers, not its pay.
      * Separate from {@link #COURIER_RATECARD_MANAGE}: a type is what a courier
      * drives, a rate card is what they are paid, and the two are decided by

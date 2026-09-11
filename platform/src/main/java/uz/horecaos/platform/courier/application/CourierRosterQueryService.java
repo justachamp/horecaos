@@ -2,9 +2,13 @@ package uz.horecaos.platform.courier.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.BranchBindingRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.ComplianceSummaryRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierGroupRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierRosterRow;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 
@@ -43,6 +47,34 @@ public class CourierRosterQueryService {
                 .toList();
     }
 
+    /**
+     * One courier as the detail pane behind the roster reads them (IA 3.3).
+     *
+     * <p>Everything here is either already on the list row or is presence rather
+     * than content: which compliance fields exist, which groups the courier is
+     * in, which branches they ride for. Not one decrypted value — opening a
+     * courier shows a manager that the file is complete, and reading what is in
+     * it is the separate, audited act {@code courier.pii.reveal} gates.
+     */
+    public Optional<CourierDetail> detail(UUID tenantId, UUID courierId) {
+        return couriers.findRosterEntry(tenantId, courierId)
+                .map(row -> new CourierDetail(
+                        new RosterEntry(
+                                row,
+                                activeAssignments
+                                        .byCourier(tenantId, List.of(row.id()))
+                                        .getOrDefault(row.id(), 0)),
+                        couriers.findComplianceSummary(tenantId, courierId).orElseThrow(),
+                        couriers.groupsOf(tenantId, courierId),
+                        couriers.bindingsOf(tenantId, courierId)));
+    }
+
     /** @param activeAssignments carried orders right now; absent from the map reads as zero. */
     public record RosterEntry(CourierRosterRow courier, int activeAssignments) {}
+
+    public record CourierDetail(
+            RosterEntry entry,
+            ComplianceSummaryRow compliance,
+            List<CourierGroupRow> groups,
+            List<BranchBindingRow> branches) {}
 }
