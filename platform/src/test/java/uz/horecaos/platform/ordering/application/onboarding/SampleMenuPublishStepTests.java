@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.application.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -16,9 +17,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.catalog.api.SampleMenuPort;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
@@ -436,6 +439,36 @@ class SampleMenuPublishStepTests {
     }
 
     /**
+     * {@code INACTIVE} is the half of {@code sellable()} only this pre-check
+     * catches. {@code CatalogPublicationService} refuses {@code ARCHIVED} alone,
+     * so for an archived channel the pre-check merely converts a throw into a
+     * clean failure and an {@code ARCHIVED}-only mutant of the condition would
+     * still pass the test above. Without the {@code sellable()} half, a tenant
+     * that switched its storefront off gets the whole sample menu written and
+     * published to a dead channel, passes {@code CATALOG_READINESS_VALIDATE} on
+     * it — that step reads publication rows, never channel status — and only
+     * fails eight steps later at {@code ACTIVATION_SMOKE_TEST}, with a catalogue
+     * someone then has to un-publish.
+     */
+    @Test
+    @DisplayName("an inactive storefront channel fails NO_CHANNEL before anything is written")
+    void failsWhenTheStorefrontChannelIsInactive() {
+        jdbc.sql("""
+                UPDATE tenant.sales_channels SET status = 'INACTIVE'
+                 WHERE tenant_id = :tenantId AND code = :code
+                """).param("tenantId", tenantId).param("code", CHANNEL_CODE).update();
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("NO_CHANNEL");
+        assertThat(countCatalogs())
+                .as("nothing is published to a channel the tenant switched off")
+                .isZero();
+        assertThat(countOfferings()).isZero();
+    }
+
+    /**
      * {@code SampleMenuContent}'s amounts are whole som from
      * {@code tools/seed-data/horecaos-tenant.json}, and nothing converts them.
      * Stamped onto another currency they publish a menu that is wrong by an
@@ -476,6 +509,47 @@ class SampleMenuPublishStepTests {
                 .as("RETRY here would burn every attempt on a condition waiting cannot fix")
                 .isEqualTo(StepResult.Outcome.FAILED);
         assertThat(result.errorCode()).isEqualTo("SAMPLE_PRICING_REFUSED");
+        assertThat(publishedCatalogCode())
+                .as("and nothing is published on a sample that could not be priced")
+                .isEmpty();
+    }
+
+    /**
+     * The other side of that narrowness, which the tie test cannot see.
+     *
+     * <p>{@code SampleMenuPricing} catches {@code PriceBookLifecycleException}
+     * alone on purpose: {@code PriceAuthoringService.activate} throws
+     * {@code OptimisticLockingFailureException} — a sibling type, not a
+     * supertype — when two writers race, and any {@code DataAccessException}
+     * from {@code setPrice} is transient too. Widen either catch to
+     * {@code RuntimeException} and both are reported as a permanent
+     * {@code SAMPLE_PRICING_REFUSED}, spending none of the five retries that
+     * would have cleared it — and every existing test still passes, because
+     * {@code SamplePricingRefusedException} is itself a {@code RuntimeException}.
+     *
+     * <p>Driven through the real {@code SampleMenuPricing} rather than a stand-in
+     * port, because the port is what the widened catch would be behind: a
+     * stand-in throwing straight at the handler proves only the handler's own
+     * catch. The one thing stood in for is the losing compare-and-set itself —
+     * {@code activate} throws exactly this type, at
+     * {@code PriceAuthoringService:260}, when {@code activatePriceBook} finds the
+     * version moved.
+     *
+     * <p>Asserted as a throw rather than as {@code RETRY}: {@code execute} has no
+     * outer {@code try}, and it is {@code OnboardingService} that maps an escaped
+     * handler exception to {@code RETRY/TRANSIENT_INFRASTRUCTURE}.
+     */
+    @Test
+    @DisplayName("a transient pricing failure escapes to the runner instead of becoming a permanent refusal")
+    void aTransientPricingFailureIsNotReportedAsARefusal() {
+        SampleMenuPricingPort racing = new SampleMenuPricing(priceAuthoringThatLosesTheRace(), pricingStore(), CLOCK);
+        var handlerWithRacingPricing = new OrderingOnboardingStepHandlers.SampleMenuPublish(
+                jdbc, catalogPort(), racing, stockPort(), new JdbcSalesChannelStore(jdbc));
+
+        assertThatThrownBy(() -> handlerWithRacingPricing.execute(context()))
+                .as("a transient pricing failure must be retried, not turned into SAMPLE_PRICING_REFUSED")
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
         assertThat(publishedCatalogCode())
                 .as("and nothing is published on a sample that could not be priced")
                 .isEmpty();
@@ -620,6 +694,33 @@ class SampleMenuPublishStepTests {
                     throw new IllegalStateException(
                             "SAMPLE_MENU_PUBLISH runs from the scheduler and must never read a request actor");
                 });
+    }
+
+    /**
+     * The same service, except that its activation loses the compare-and-set —
+     * which is what a second writer produces and what
+     * {@code PriceAuthoringService.activate} throws for it. Everything up to the
+     * activation is the real thing, so the exception crosses the real
+     * {@code SampleMenuPricing} catch on its way out.
+     */
+    private PriceAuthoringService priceAuthoringThatLosesTheRace() {
+        JdbcPricingStore store = pricingStore();
+        return new PriceAuthoringService(
+                store,
+                new JdbcCatalogPricingContext(jdbc, "uz"),
+                new JdbcSalesChannelStore(jdbc),
+                CLOCK,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                event -> {},
+                () -> {
+                    throw new IllegalStateException("no request actor here either");
+                }) {
+            @Override
+            public PriceBook activate(
+                    UUID tenantId, UUID brandId, UUID priceBookId, int expectedVersion, ActorRef actor) {
+                throw new OptimisticLockingFailureException("The price book changed since it was read");
+            }
+        };
     }
 
     private StockListingPort stockPort() {
