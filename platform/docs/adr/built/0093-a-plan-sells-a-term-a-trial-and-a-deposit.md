@@ -1,7 +1,7 @@
 # ADR 0093: A plan sells a term, a trial and a deposit
 
 - Decision status: Accepted
-- Implementation status: Partial — V0205's `commercial.plan_version_terms` and `commercial.plan_term_discounts` with their activation trigger, `subscriptions.term_months`; `PlanTerms`, term-aware `PlanCatalogService`, `SubscriptionService` and `StatementService`, and V0206's `EARLY_EXIT` line repaying the discount when a term is left early, tested in `PlanTermsTests` and `ModulesStatementsAndArrearsTests`; the plan catalog's draft form and the entitlements screen's start form. The deposit is still billed as a statement line until the wallet (ADR 0095) holds it
+- Implementation status: Built — V0205's `commercial.plan_version_terms` and `commercial.plan_term_discounts` with their activation trigger, `subscriptions.term_months`; `PlanTerms`, term-aware `PlanCatalogService`, `SubscriptionService` and `StatementService`, and V0206's `EARLY_EXIT` line repaying the discount when a term is left early, tested in `PlanTermsTests` and `ModulesStatementsAndArrearsTests`; the plan catalog's draft form and the entitlements screen's start form. The deposit is now the wallet's (ADR 0095): V0211's `subscriptions.deposit_due_minor` makes it due when the subscription starts, paying it is a `DEPOSIT` top-up, the first statement is paid from it, and the statement bills no deposit line
 - Date proposed: 2026-09-11
 - Date decided: 2026-09-11
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day

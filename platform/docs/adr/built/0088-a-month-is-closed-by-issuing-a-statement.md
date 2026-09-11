@@ -1,7 +1,7 @@
 # ADR 0088: A month is closed by issuing a statement
 
 - Decision status: Accepted
-- Implementation status: Built — V0202's `commercial.statements` and `commercial.statement_lines` with their freeze triggers, `StatementService`, `CommercialStatementController` with CSV export, tested against the migrated schema in `ModulesStatementsAndArrearsTests` and `CommercialStatementCsvTests`; the control-plane statements screen. How a statement is paid, and the wallet, are ADR 0095's; sending it to Didox or Faktura.uz is ADR 0096's
+- Implementation status: Built — V0202's `commercial.statements` and `commercial.statement_lines` with their freeze triggers, `StatementService`, `CommercialStatementController` with CSV export, tested against the migrated schema in `ModulesStatementsAndArrearsTests` and `CommercialStatementCsvTests`; the control-plane statements screen. How a statement is paid is now ADR 0095's and built: issuing pays it from the tenant's wallet at once, voiding gives back what it drew, and the screen shows each statement's paid and due amounts, all derived from the ledger rather than stored on the frozen row. Sending it to Didox or Faktura.uz is ADR 0096's
 - Date proposed: 2026-09-11
 - Date decided: 2026-09-11
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
