@@ -24,6 +24,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -67,7 +69,9 @@ class OwnerInvitationFlowTests {
     private FakeAccounts accounts;
     private RecordingMailer mailer;
     private List<AuditFact> facts;
+    private JdbcOwnerInvitationStore store;
     private JdbcOwnerInvitationEventStore events;
+    private TransactionTemplate transactions;
     private FakeAuthorization authorization;
     private OwnerInvitationService invitations;
     private OwnerInvitationRelay relay;
@@ -94,11 +98,16 @@ class OwnerInvitationFlowTests {
         accounts = new FakeAccounts();
         mailer = new RecordingMailer();
         facts = new ArrayList<>();
-        JdbcOwnerInvitationStore store = new JdbcOwnerInvitationStore(jdbc);
+        store = new JdbcOwnerInvitationStore(jdbc);
         events = new JdbcOwnerInvitationEventStore(jdbc);
+        // A real transaction manager over the same DataSource the JdbcClient
+        // uses, so the relay's settle is a transaction here exactly as it is in
+        // the application: the rollback in theHistoryAndTheRowStandOrFallTogether
+        // is a genuine one and not a fixture's promise.
+        transactions = new TransactionTemplate(new JdbcTransactionManager(db.dataSource()));
         authorization = new FakeAuthorization();
         invitations = new OwnerInvitationService(store, events, accounts, authorization, facts::add, clock);
-        relay = new OwnerInvitationRelay(store, events, accounts, mailer, facts::add, clock, "https://ops.test/");
+        relay = relayWith(events);
 
         tenantId = UUID.randomUUID();
         jdbc.sql("""
@@ -222,10 +231,166 @@ class OwnerInvitationFlowTests {
         assertThat(view.attempts())
                 .as("nothing was attempted, so nothing was used up")
                 .isZero();
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("twelve identical waits are one line, or an unconfigured deployment writes 96 rows a day forever")
+                .containsExactly("QUEUED", "SEND_DEFERRED");
+        var deferred = timeline().getLast();
+        assertThat(deferred.outcomeCode()).isEqualTo("MAIL_NOT_CONFIGURED");
+        assertThat(deferred.attempt())
+                .as("nothing was attempted, so it belongs to no attempt -- and agrees with the 0 on the panel")
+                .isZero();
 
         mailer.next = mail -> new MailOutcome.Sent();
         relay.runOnce();
         assertThat(view().state()).isEqualTo("SENT");
+    }
+
+    /**
+     * The reason is what the line says, so a new reason is a new line: a resend
+     * clears {@code last_error_code}, and the wait that follows it is news
+     * again even though the wording has not changed.
+     */
+    @Test
+    @DisplayName("a deferral for the same reason is recorded once, and again after a resend clears it")
+    void aRepeatedDeferralIsOneLineUntilItsReasonChanges() {
+        mailer.next = mail -> new MailOutcome.NotConfigured();
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        relay.runOnce();
+        clock.advance(OwnerInvitationRelay.UNCONFIGURED_WAIT);
+        relay.runOnce();
+
+        invitations.resend(tenantId, null, ONBOARDER, "trying again once mail is on", "corr");
+        relay.runOnce();
+
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .containsExactly("QUEUED", "SEND_DEFERRED", "RESENT", "SEND_DEFERRED");
+    }
+
+    /**
+     * ADR 0100 decision 1: the history is written wherever the state changes,
+     * which only means anything if the two cannot come apart. The application
+     * role holds {@code SELECT, INSERT} on the events table, so a state write
+     * that committed without its line could never be corrected.
+     */
+    @Test
+    @DisplayName("a history write that fails takes the state write down with it, and the row comes due again")
+    void theHistoryAndTheRowStandOrFallTogether() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        OwnerInvitationRelay breaking = relayWith(new JdbcOwnerInvitationEventStore(jdbc) {
+            @Override
+            public void append(Entry entry) {
+                throw new IllegalStateException("the history write did not land");
+            }
+        });
+
+        assertThat(breaking.runOnce()).isZero();
+
+        assertThat(view().state())
+                .as("no SENT row without a SENT line: the send is rolled back and tried again")
+                .isEqualTo("QUEUED");
+        assertThat(view().sentAt()).isNull();
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .containsExactly("QUEUED");
+
+        clock.advance(OwnerInvitationRelay.LEASE.plusMinutes(1));
+        assertThat(relay.runOnce())
+                .as("the lease brings it back, and a working relay sends it")
+                .isEqualTo(1);
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .containsExactly("QUEUED", "SENT");
+    }
+
+    /**
+     * The guards on the state writes already refuse an outcome from a
+     * superseded attempt; the history has to refuse it too, or it keeps a claim
+     * about the invitation that was never true and cannot be taken back.
+     */
+    @Test
+    @DisplayName("an outcome a resend overtook changes nothing, and is not written into the history")
+    void anOvertakenOutcomeIsNotRecorded() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        mailer.next = mail -> {
+            // The operator resends while this send is in flight: the row is back
+            // in the queue at attempt zero before this attempt's outcome lands.
+            invitations.resend(tenantId, null, ONBOARDER, "the owner asked again", "corr");
+            return new MailOutcome.Rejected("ADDRESS_REJECTED");
+        };
+
+        assertThat(relay.runOnce()).isZero();
+
+        var view = view();
+        assertThat(view.state())
+                .as("the resend's queue stands; the overtaken failure did not land on it")
+                .isEqualTo("QUEUED");
+        assertThat(view.lastErrorCode()).isNull();
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("no SEND_FAILED for an attempt a resend had already replaced")
+                .containsExactly("QUEUED", "RESENT");
+    }
+
+    /**
+     * The one branch of the relay's switch that does not retry. A typed-wrong
+     * address is exactly what ADR 0100 was written to make visible, and
+     * retrying it for two hours would hide it behind QUEUED.
+     */
+    @Test
+    @DisplayName("a refused address fails at the first attempt and is never retried")
+    void aRejectedAddressFailsAtOnce() {
+        mailer.next = mail -> new MailOutcome.Rejected("ADDRESS_REJECTED");
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+
+        assertThat(relay.runOnce()).isZero();
+
+        var view = view();
+        assertThat(view.state()).isEqualTo("FAILED");
+        assertThat(view.attempts())
+                .as("a bounce is spent at once, not after eight tries")
+                .isEqualTo(1);
+        assertThat(view.lastErrorCode()).isEqualTo("ADDRESS_REJECTED");
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .containsExactly("QUEUED", "SEND_FAILED");
+        var failure = timeline().getLast();
+        assertThat(failure.outcomeCode()).isEqualTo("ADDRESS_REJECTED");
+        assertThat(failure.attempt()).isEqualTo(1);
+
+        clock.advance(Duration.ofHours(2));
+        assertThat(relay.runOnce()).as("nothing is claimed again").isZero();
+        assertThat(mailer.sent).hasSize(1);
+        assertThat(timeline()).hasSize(2);
+    }
+
+    /**
+     * The owner set a password some other way between the queue and the send.
+     * This is the only writer of a NOT_NEEDED event, so it is also the only
+     * thing that proves the value passes V0215's own CHECK constraint.
+     */
+    @Test
+    @DisplayName("an owner who gained a password before the send is not emailed, and the history says why")
+    void aQueuedInvitationIsDroppedOnceTheOwnerHasAPassword() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        accounts.put("owner-subject", "dilnoza.karimova@example.uz", true);
+
+        assertThat(relay.runOnce()).isZero();
+
+        assertThat(mailer.sent)
+                .as("nothing is emailed to somebody who can already sign in")
+                .isEmpty();
+        assertThat(view().state()).isEqualTo("NOT_NEEDED");
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .containsExactly("QUEUED", "NOT_NEEDED");
+        assertThat(timeline().getLast().attempt()).isEqualTo(1);
+
+        clock.advance(Duration.ofHours(2));
+        assertThat(relay.runOnce())
+                .as("a settled invitation is never claimed again")
+                .isZero();
     }
 
     @Test
@@ -424,6 +589,20 @@ class OwnerInvitationFlowTests {
         relay.runOnce();
         invitations.resend(tenantId, null, ONBOARDER, "dilnoza asked us to try again", "corr");
 
+        // The two rows whose actor_reference comes from a person -- OPENED and
+        // ACCEPTED -- have to be in the table for this assertion to bind, and a
+        // resend has just killed the first link, so the relay has to run again
+        // before there is a live one to open.
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        invitations.inspect(token);
+        invitations.accept(token, "Dilnoza", "Karimova", "a-long-enough-passphrase", "corr");
+
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("the fixture cannot quietly stop producing the rows this test exists to inspect")
+                .containsExactly("QUEUED", "SENT", "RESENT", "SENT", "OPENED", "ACCEPTED");
+
         assertThat(jdbc.sql("SELECT string_agg(row_to_json(e)::text, ' ') FROM tenant.owner_invitation_events e")
                         .query(String.class)
                         .single())
@@ -431,6 +610,12 @@ class OwnerInvitationFlowTests {
                 .doesNotContain("dilnoza.karimova")
                 .doesNotContain("example.uz")
                 .contains("RESENT");
+        assertThat(jdbc.sql("SELECT row_to_json(i)::text FROM tenant.owner_invitations i")
+                        .query(String.class)
+                        .single())
+                .as("nor does the row, after a resend and an accept have rewritten it")
+                .doesNotContain("dilnoza")
+                .doesNotContain("example.uz");
     }
 
     /**
@@ -465,6 +650,12 @@ class OwnerInvitationFlowTests {
             assertThat(fact.reason()).isEqualTo("tenancy.onboarding.invitation.recipient");
             assertThat(fact.changeDocument()).containsEntry("revealedCount", 1);
             assertThat(fact.changeDocument().toString()).doesNotContain("dilnoza");
+            assertThat(fact.capabilityUsed())
+                    .as("a reveal that does not name the capability it was made under attributes nothing")
+                    .isEqualTo(Capability.TENANT_ONBOARDING_MANAGE.code());
+            assertThat(fact.scope())
+                    .as("recorded where it was authorised: an auditor asking about this tenant must find it")
+                    .isEqualTo(ResourceScope.tenant(tenantId));
         });
     }
 
@@ -484,6 +675,11 @@ class OwnerInvitationFlowTests {
     }
 
     // ------------------------------------------------------------- fixtures
+
+    private OwnerInvitationRelay relayWith(JdbcOwnerInvitationEventStore eventStore) {
+        return new OwnerInvitationRelay(
+                store, eventStore, accounts, mailer, facts::add, transactions, clock, "https://ops.test/");
+    }
 
     /** The view an operator without the onboarding capability gets: masked, and no reveal fact. */
     private OwnerInvitationService.OwnerInvitationView view() {

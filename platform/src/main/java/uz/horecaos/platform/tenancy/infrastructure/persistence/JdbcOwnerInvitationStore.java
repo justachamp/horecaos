@@ -145,41 +145,50 @@ public class JdbcOwnerInvitationStore {
      * @param countsAsAttempt false when nothing was attempted -- no mail server
      *        configured -- so a deployment waiting for its mail settings does not
      *        use up the attempts a real outage would need
+     * @return true when this attempt was still the current one, so the retry
+     *         applied; false when a newer attempt or an operator's resend has
+     *         moved the row on
      */
-    public void markRetry(UUID id, int attempt, Instant nextAttemptAt, String errorCode, boolean countsAsAttempt) {
-        jdbc.sql("""
-                UPDATE tenant.owner_invitations
-                   SET next_attempt_at = :next, last_error_code = :code,
-                       attempts = CASE WHEN :counts THEN attempts ELSE attempts - 1 END,
-                       version = version + 1
-                 WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
-                """)
-                .param("id", id)
-                .param("attempt", attempt)
-                .param("next", utc(nextAttemptAt))
-                .param("code", errorCode)
-                .param("counts", countsAsAttempt)
-                .update();
+    public boolean markRetry(UUID id, int attempt, Instant nextAttemptAt, String errorCode, boolean countsAsAttempt) {
+        return jdbc.sql("""
+                        UPDATE tenant.owner_invitations
+                           SET next_attempt_at = :next, last_error_code = :code,
+                               attempts = CASE WHEN :counts THEN attempts ELSE attempts - 1 END,
+                               version = version + 1
+                         WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
+                        """)
+                        .param("id", id)
+                        .param("attempt", attempt)
+                        .param("next", utc(nextAttemptAt))
+                        .param("code", errorCode)
+                        .param("counts", countsAsAttempt)
+                        .update()
+                > 0;
     }
 
-    public void markFailed(UUID id, int attempt, String errorCode) {
-        jdbc.sql("""
-                UPDATE tenant.owner_invitations
-                   SET status = 'FAILED', next_attempt_at = NULL, last_error_code = :code, version = version + 1
-                 WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
-                """)
-                .param("id", id)
-                .param("attempt", attempt)
-                .param("code", errorCode)
-                .update();
+    /** @return true when this attempt was still the current one, so the failure applied */
+    public boolean markFailed(UUID id, int attempt, String errorCode) {
+        return jdbc.sql("""
+                        UPDATE tenant.owner_invitations
+                           SET status = 'FAILED', next_attempt_at = NULL, last_error_code = :code,
+                               version = version + 1
+                         WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
+                        """)
+                        .param("id", id)
+                        .param("attempt", attempt)
+                        .param("code", errorCode)
+                        .update()
+                > 0;
     }
 
-    public void markNotNeeded(UUID id, int attempt) {
-        jdbc.sql("""
-                UPDATE tenant.owner_invitations
-                   SET status = 'NOT_NEEDED', next_attempt_at = NULL, last_error_code = NULL, version = version + 1
-                 WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
-                """).param("id", id).param("attempt", attempt).update();
+    /** @return true when this attempt was still the current one, so the row was settled */
+    public boolean markNotNeeded(UUID id, int attempt) {
+        return jdbc.sql("""
+                                UPDATE tenant.owner_invitations
+                                   SET status = 'NOT_NEEDED', next_attempt_at = NULL, last_error_code = NULL,
+                                       version = version + 1
+                                 WHERE id = :id AND status = 'QUEUED' AND attempts = :attempt
+                                """).param("id", id).param("attempt", attempt).update() > 0;
     }
 
     /**
@@ -303,6 +312,58 @@ public class JdbcOwnerInvitationStore {
                 .list();
     }
 
+    /**
+     * Where every unarchived tenant's owner stands, and nothing else (ADR
+     * 0100): an identifier and a status, with no {@code subject_id} to resolve
+     * and therefore no identity-provider read and no address anywhere on the
+     * path.
+     *
+     * <p>Two differences from {@link #overview(int)} carry the whole point of
+     * having a second query. It selects no subject, so a caller cannot resolve
+     * an address from what it returns. And it keeps the tenant that has neither
+     * an invitation nor a linked owner -- which {@code overview} drops as
+     * nobody's work -- because a column that says nothing about a tenant it was
+     * never told about is the column that claimed an owner existed.
+     *
+     * @param limit a cap for the same reason any unbounded list has one, not
+     *        because a row is expensive: a tenant beyond it is simply absent,
+     *        and a caller that has to say something about an absent tenant must
+     *        say it does not know
+     */
+    public List<OwnerStateRow> ownerStates(int limit) {
+        return jdbc.sql("""
+                        SELECT t.id AS tenant_id, i.status, i.expires_at,
+                               (i.id IS NOT NULL OR o.external_reference IS NOT NULL) AS owner_known
+                          FROM tenant.tenants t
+                          LEFT JOIN LATERAL (
+                              SELECT oi.id, oi.status, oi.expires_at
+                                FROM tenant.owner_invitations oi
+                               WHERE oi.tenant_id = t.id
+                               ORDER BY oi.queued_at DESC, oi.id
+                               LIMIT 1) i ON true
+                          LEFT JOIN LATERAL (
+                              SELECT s.external_reference
+                                FROM tenant.onboarding_steps s
+                                JOIN tenant.onboarding_runs r ON r.id = s.run_id
+                               WHERE r.tenant_id = t.id
+                                 AND s.step_key = 'TENANT_OWNER_LINK_OR_INVITE'
+                                 AND s.status = 'COMPLETED'
+                                 AND s.external_reference IS NOT NULL
+                               ORDER BY r.started_at DESC
+                               LIMIT 1) o ON true
+                         WHERE t.status <> 'ARCHIVED'
+                         ORDER BY t.display_name, t.id
+                         LIMIT :limit
+                        """)
+                .param("limit", limit)
+                .query((row, number) -> new OwnerStateRow(
+                        java.util.Objects.requireNonNull(row.getObject("tenant_id", UUID.class)),
+                        row.getString("status"),
+                        instant(row, "expires_at"),
+                        row.getBoolean("owner_known")))
+                .list();
+    }
+
     /** The name an invitation is written in; the tenant's own display name. */
     public String tenantName(UUID tenantId) {
         return jdbc.sql("SELECT display_name FROM tenant.tenants WHERE id = :tenantId")
@@ -360,6 +421,21 @@ public class JdbcOwnerInvitationStore {
             @Nullable Instant openedAt,
             @Nullable Instant acceptedAt,
             @Nullable Instant expiresAt) {}
+
+    /**
+     * One tenant on the address-free projection: where its owner stands and
+     * nothing more.
+     *
+     * @param status the latest invitation's stored status, absent when the
+     *        tenant has no invitation row
+     * @param ownerKnown whether an owner exists to chase at all -- an
+     *        invitation, or an onboarding run that linked one
+     */
+    public record OwnerStateRow(
+            UUID tenantId,
+            @Nullable String status,
+            @Nullable Instant expiresAt,
+            boolean ownerKnown) {}
 
     /** One invitation. {@code tokenHash} is a SHA-256, never a token. */
     public record Row(
