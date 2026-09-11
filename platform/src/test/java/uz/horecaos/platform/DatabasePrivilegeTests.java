@@ -1024,6 +1024,32 @@ class DatabasePrivilegeTests {
                         live with the objects, and the next restore drops anything typed by hand.""").isEmpty();
     }
 
+    /**
+     * The scan above looks only at tables in {@link #OWNED_SCHEMAS}, so that set
+     * is the scan's coverage. It is read from the migrations; this holds the
+     * reading to the migrated database, so a schema created some way the
+     * pattern does not recognise shows up here as a gap in coverage instead of
+     * as a green scan that never looked.
+     */
+    @Test
+    @DisplayName("the privilege scan knows every schema the migrated database has")
+    void theScanKnowsEverySchemaTheDatabaseHas() {
+        List<String> inTheDatabase = owner.sql("""
+                SELECT nspname
+                  FROM pg_namespace
+                 WHERE nspname NOT LIKE 'pg\\_%'
+                   AND nspname NOT IN ('information_schema', 'public')
+                 ORDER BY 1
+                """).query(String.class).list();
+
+        assertThat(inTheDatabase)
+                .as("the query must find the schemas this is about, or the comparison is vacuous")
+                .contains("conversations", "ordering", "audit");
+        assertThat(OWNED_SCHEMAS)
+                .as("every schema in the database is one the scan reads, and no other")
+                .containsExactlyInAnyOrderElementsOf(inTheDatabase);
+    }
+
     // -----------------------------------------------------------------------
     // Every privilege the application's SQL does NOT hold and must not need
     // -----------------------------------------------------------------------
@@ -1246,6 +1272,49 @@ class DatabasePrivilegeTests {
 
         assertThat(statementPrivileges("""
                 jdbc.sql(""\"
+                        WITH doomed AS (
+                            SELECT m.id
+                              FROM conversations.conversation_messages m
+                              JOIN conversations.conversations c
+                                ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+                             WHERE m.occurred_at < (CAST(:now AS timestamptz) - (c.retention_months * INTERVAL '1 month'))
+                             ORDER BY m.occurred_at
+                             LIMIT :batchSize
+                             FOR UPDATE OF m SKIP LOCKED
+                        )
+                        DELETE FROM conversations.conversation_messages m
+                         USING doomed
+                         WHERE m.id = doomed.id
+                        ""\").update();
+                """))
+                .as("the retention sweep as it shipped: OF m, inside a CTE, locks the message "
+                        + "table, which needs the UPDATE no migration granted — and only that table")
+                .contains(new Requirement("conversations.conversation_messages", "UPDATE"))
+                .doesNotContain(new Requirement("conversations.conversations", "UPDATE"));
+
+        assertThat(statementPrivileges("""
+                jdbc.sql(""\"
+                        SELECT c.id, c.tenant_id
+                          FROM conversations.conversations c
+                         WHERE c.state = 'CLOSED'
+                           AND NOT EXISTS (
+                               SELECT 1 FROM conversations.conversation_messages m
+                                WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id
+                           )
+                         ORDER BY c.updated_at
+                         LIMIT :batchSize
+                         FOR UPDATE OF c SKIP LOCKED
+                        ""\")
+                """))
+                .as("a lock belongs to its own query: OF c locks the conversation, and the "
+                        + "message table read inside NOT EXISTS is only read")
+                .contains(
+                        new Requirement("conversations.conversations", "UPDATE"),
+                        new Requirement("conversations.conversation_messages", "SELECT"))
+                .doesNotContain(new Requirement("conversations.conversation_messages", "UPDATE"));
+
+        assertThat(statementPrivileges("""
+                jdbc.sql(""\"
                         DELETE FROM fulfillment.courier_positions_live live
                          USING fulfillment.courier_duty_sessions session
                          WHERE session.id = live.duty_session_id
@@ -1333,34 +1402,38 @@ class DatabasePrivilegeTests {
      * The schemas a migration creates. Anything else that looks like
      * {@code word.word} in a statement — {@code cp.table_name}, an alias, a JSON
      * path — is not a table of ours and is left alone.
+     *
+     * <p>Read from the migrations rather than kept by hand. It was a hand-kept
+     * list, and by V0205 it had fallen six schemas behind — {@code conversations},
+     * {@code legal}, {@code referral}, {@code reviews}, {@code support} and
+     * {@code voice} — so every statement against those schemas was skipped as
+     * "not ours", and the retention sweep's {@code FOR UPDATE OF m} on
+     * {@code conversations.conversation_messages} went to production without the
+     * UPDATE it needs and failed on every tick. A scan that decides what to look at
+     * from a list somebody has to remember to extend is a scan that quietly covers
+     * less every month; {@link #theScanKnowsEverySchemaTheDatabaseHas} holds this
+     * derivation to the migrated database, so it cannot drift the other way either.
      */
-    private static final Set<String> OWNED_SCHEMAS = Set.of(
-            "audit",
-            "catalog",
-            "commercial",
-            "courier",
-            "customer",
-            "dinein",
-            "fiscal",
-            "fulfillment",
-            "iam",
-            "integration",
-            "inventory",
-            "kitchen",
-            "loyalty",
-            "marketing",
-            "media",
-            "migration",
-            "notifications",
-            "ordering",
-            "partner",
-            "payments",
-            "platform",
-            "pos",
-            "pricing",
-            "reporting",
-            "telemetry",
-            "tenant");
+    private static final Set<String> OWNED_SCHEMAS = schemasTheMigrationsCreate();
+
+    private static Set<String> schemasTheMigrationsCreate() {
+        Pattern createSchema = Pattern.compile(
+                "\\bCREATE\\s+SCHEMA\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([a-z_][a-z_0-9]*)", Pattern.CASE_INSENSITIVE);
+        Set<String> schemas = new TreeSet<>();
+        try (Stream<Path> migrations = Files.list(Path.of("src", "main", "resources", "db", "migration"))) {
+            migrations
+                    .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .forEach(path -> {
+                        Matcher created = createSchema.matcher(read(path));
+                        while (created.find()) {
+                            schemas.add(created.group(1).toLowerCase(Locale.ROOT));
+                        }
+                    });
+        } catch (IOException unreadable) {
+            throw new UncheckedIOException(unreadable);
+        }
+        return Set.copyOf(schemas);
+    }
 
     private static final List<Map.Entry<Pattern, String>> STATEMENTS = List.of(
             Map.entry(
@@ -1510,7 +1583,7 @@ class DatabasePrivilegeTests {
      * a false alarm here is a migration writing a grant the code already needs.
      */
     private static List<String> lockedTables(String source, int at) {
-        String query = source.substring(Math.max(0, at - 3_000), at);
+        String query = sameLevel(source, at);
         int head = query.toUpperCase(Locale.ROOT).lastIndexOf("SELECT ");
         if (head >= 0) {
             query = query.substring(head);
@@ -1539,6 +1612,39 @@ class DatabasePrivilegeTests {
             }
         }
         return all;
+    }
+
+    /**
+     * The text of the query a locking clause closes, with every parenthesised
+     * part of it blanked out, read back from the clause to the parenthesis that
+     * opens the query — a CTE's {@code AS (}, or the {@code jdbc.sql(} around a
+     * text block.
+     *
+     * <p>A lock belongs to its own query, not to a subquery inside it.
+     * {@code ConversationRepository.claimClosedAndExpired} locks {@code OF c} and
+     * reads {@code conversation_messages} only inside a {@code NOT EXISTS
+     * (SELECT 1 ...)}; taking the nearest {@code SELECT} by text found the
+     * subquery's head, could not resolve {@code c}, and asked for UPDATE on the
+     * message table instead — a grant the query does not need, which is the kind
+     * of false alarm that gets a scan switched off.
+     */
+    private static String sameLevel(String source, int at) {
+        StringBuilder level = new StringBuilder();
+        int depth = 0;
+        for (int i = at - 1; i >= Math.max(0, at - 3_000); i--) {
+            char c = source.charAt(i);
+            if (c == ')') {
+                depth++;
+            } else if (c == '(') {
+                if (depth == 0) {
+                    break;
+                }
+                depth--;
+            } else if (depth == 0) {
+                level.append(c);
+            }
+        }
+        return level.reverse().toString();
     }
 
     private static Map<Requirement, String> requiredPrivileges() {
