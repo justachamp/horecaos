@@ -250,6 +250,7 @@ public class OperationsOrderController {
         List<String> statuses = status == null ? List.of() : status;
         statuses.forEach(OperationsOrderController::requireKnownStatus);
         requireKnownFulfillmentMode(fulfillmentMode);
+        requireSearchableReference(reference);
 
         return new JdbcOrderStore.OrderListQuery(
                 tenantId,
@@ -298,6 +299,24 @@ public class OperationsOrderController {
             // Dropping an unknown mode would answer "no orders" for a typo, which
             // reads to an operator as a branch that has stopped taking delivery.
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown fulfillment mode \"%s\"".formatted(mode));
+        }
+    }
+
+    /**
+     * A reference that normalises to nothing must not fall through to "no
+     * filter applied" ({@link JdbcOrderStore.OrderListQuery#normalisedReference()}
+     * turns it into {@code null}, indistinguishable from the caller never
+     * having supplied {@code reference} at all). Left unguarded, a search for
+     * {@code "#"} or {@code " - "} would answer with the location's entire
+     * board instead of the empty result a nonsense reference search should
+     * return — the opposite of what a filter parameter promises.
+     */
+    private static void requireSearchableReference(@Nullable String reference) {
+        if (reference == null || reference.isBlank()) {
+            return;
+        }
+        if (JdbcOrderStore.normalisedExternalReference(reference) == null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "This reference has nothing searchable in it");
         }
     }
 
