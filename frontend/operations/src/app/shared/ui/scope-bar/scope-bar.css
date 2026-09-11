@@ -1,0 +1,51 @@
+.scopeBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.scopeBar__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scopeBar__label {
+  color: var(--q-ink-subtle);
+  white-space: nowrap;
+}
+
+.scopeBar__select {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.scopeBar__select:disabled {
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.scopeBar__chip {
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.scopeBar__level {
+  margin-left: auto;
+  color: var(--q-ink-muted);
+}
+
+.scopeBar__level strong {
+  color: var(--q-ink);
+}

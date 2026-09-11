@@ -35,11 +35,14 @@ export const messagesRu: MessageCatalogue = {
   'support.banner.view': 'Поддержка HorecaOS · только просмотр',
   'support.banner.assist': 'Поддержка HorecaOS · помощь в работе',
   'support.banner.until': 'до {time}',
-  'support.banner.none': 'Открытой сессии поддержки нет; экраны будут отказывать, пока её не откроют',
+  'support.banner.none':
+    'Открытой сессии поддержки нет; экраны будут отказывать, пока её не откроют',
   'support.banner.leave': 'Выйти',
-  'settings.supportVisits.lead': 'Каждый вход сотрудника поддержки HorecaOS в ваш аккаунт: какой был доступ, зачем и чем закончилось. Идущий визит можно завершить здесь — доступ пропадёт сразу.',
+  'settings.supportVisits.lead':
+    'Каждый вход сотрудника поддержки HorecaOS в ваш аккаунт: какой был доступ, зачем и чем закончилось. Идущий визит можно завершить здесь — доступ пропадёт сразу.',
   'settings.supportVisits.loading': 'Загружаем визиты…',
-  'settings.supportVisits.denied': 'Визиты поддержки видят только владелец и администраторы аккаунта.',
+  'settings.supportVisits.denied':
+    'Визиты поддержки видят только владелец и администраторы аккаунта.',
   'settings.supportVisits.empty': 'Никто из поддержки HorecaOS не входил в ваш аккаунт.',
   'settings.supportVisits.openUntil': 'Идёт, до {time}',
   'settings.supportVisits.endedAt': 'Завершён {time}',
@@ -48,6 +51,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.supportVisits.reason': 'Почему вы завершаете',
   'settings.supportVisits.confirmEnd': 'Завершить сейчас',
   'settings.supportVisits.ended': 'Визит завершён; доступа больше нет.',
+  'settings.supportVisits.by': 'От {subject}',
+  'settings.supportVisits.ticket': 'Тикет {reference}',
   'shell.late.aria': 'Опаздывают заказов: {count}. Открыть очередь опозданий.',
   'shell.openOrders.aria': 'Активных заказов: {count}',
   'shell.account.signOut': 'Выйти',
@@ -319,9 +324,11 @@ export const messagesRu: MessageCatalogue = {
   'invite.submitting': 'Сохраняем…',
   'invite.signingIn': 'Учётная запись готова. Выполняем вход…',
   'invite.invalid.title': 'Эта ссылка недействительна',
-  'invite.invalid.body': 'Возможно, ею уже воспользовались или её заменило новое приглашение. Если вы уже задали пароль, войдите.',
+  'invite.invalid.body':
+    'Возможно, ею уже воспользовались или её заменило новое приглашение. Если вы уже задали пароль, войдите.',
   'invite.expired.title': 'Срок действия ссылки истёк',
-  'invite.expired.body': 'Ссылка из приглашения действует 72 часа. Попросите команду HorecaOS отправить новую.',
+  'invite.expired.body':
+    'Ссылка из приглашения действует 72 часа. Попросите команду HorecaOS отправить новую.',
   'invite.toSignIn': 'Перейти ко входу',
   'invite.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
   'invite.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
@@ -359,6 +366,31 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.readinessNotBuilt':
     'Панель готовности (что сейчас мешает принимать заказы) требует сквозного чтения нескольких модулей, которое не добавлено в этой волне. Откройте нужную группу ниже.',
   'settings.home.notBuiltBadge': 'Пока не реализовано',
+  'settings.home.readiness.title': 'Готов ли ресторан к приёму заказов?',
+  'settings.home.readiness.loading': 'Проверяем готовность…',
+  'settings.home.readiness.denied': 'Готовность видят только владелец и администраторы аккаунта.',
+  'settings.home.readiness.noRun': 'Для этого аккаунта нет записи об онбординге для проверки.',
+  'settings.home.readiness.allClear': 'Всё настроено для приёма заказов.',
+  'settings.home.readiness.code.NO_BRAND': 'У этого аккаунта пока нет бренда.',
+  'settings.home.readiness.code.NO_LOCATION':
+    'Ни у одного бренда нет филиала, поэтому заказ принять нельзя.',
+  'settings.home.readiness.code.NO_LEGAL_ENTITY': 'У филиала нет действующего юридического лица.',
+  'settings.home.readiness.code.NO_MERCHANT_BINDING':
+    'Филиал предлагает способ оплаты, за которым не стоит расчётный счёт.',
+  'settings.home.readiness.code.NO_DELIVERY_ZONE':
+    'Филиал предлагает доставку, но не привязана ни одна зона.',
+  'settings.home.readiness.code.NO_DELIVERY_TARIFF':
+    'У филиала есть зона доставки, но для неё не определён тариф.',
+  'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
+    'Подключение к POS настроено, но не работает.',
+  'settings.home.readiness.code.NO_PUBLISHED_MENU': 'У бренда нет опубликованного меню.',
+  'settings.home.readiness.code.NO_AVAILABLE_ITEM':
+    'В опубликованном меню бренда нет доступных позиций.',
+  'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
+    'Одно из используемых изображений ещё не готово.',
+  'settings.home.search.label': 'Найти настройку',
+  'settings.home.search.placeholder': 'Найти настройку (нажмите /)',
+  'settings.home.search.empty': 'Ничего не найдено по запросу «{query}».',
   'settings.home.description.brandProfile':
     'Как называется бренд и как он выглядит везде, где его видит клиент.',
   'settings.home.description.locations':
@@ -2039,7 +2071,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Понятно',
   'marketing.promoCodes.form.name': 'Название (для этого списка)',
   'marketing.promoCodes.form.code': 'Код, который вводит клиент',
-  'marketing.promoCodes.form.code.hint': '4-32 буквы или цифры. Показывается один раз после сохранения.',
+  'marketing.promoCodes.form.code.hint':
+    '4-32 буквы или цифры. Показывается один раз после сохранения.',
   'marketing.promoCodes.form.shape': 'Вид скидки',
   'marketing.promoCodes.form.percent': 'Процент от заказа, %',
   'marketing.promoCodes.form.amount': 'Сумма скидки от заказа',
@@ -2507,7 +2540,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.supportVisits': 'Визиты поддержки HorecaOS',
   'settings.home.description.dataPrivacy':
     'Хранение данных, согласие, запросы субъектов данных и кто смотрел личные данные клиента.',
-  'settings.home.description.supportVisits': 'Кто из поддержки HorecaOS входил в ваш аккаунт, когда и зачем',
+  'settings.home.description.supportVisits':
+    'Кто из поддержки HorecaOS входил в ваш аккаунт, когда и зачем',
   'settings.dataPrivacy.title': 'Данные и приватность',
   'settings.dataPrivacy.lead':
     'Как долго ресторан хранит персональные данные, что здесь значит согласие, и кто смотрел собственные слова клиента.',
@@ -2627,4 +2661,42 @@ export const messagesRu: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Завершён',
   'orders.callCentre.callLog.type.MISSED': 'Пропущен',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Переведён',
+
+  // ---- shared/ui q-scope-bar (settings.md §1.1, wave P31) ----
+  'scopeBar.brand': 'Бренд',
+  'scopeBar.location': 'Филиал',
+  'scopeBar.allLocations': 'Все филиалы',
+  'scopeBar.level': 'Уровень редактирования',
+  'scopeBar.level.BRAND': 'БРЕНД',
+  'scopeBar.level.LOCATION': 'ФИЛИАЛ',
+  'scopeBar.status.DRAFT': 'черновик',
+  'scopeBar.status.ACTIVE': 'активен',
+  'scopeBar.status.SUSPENDED': 'приостановлен',
+  'scopeBar.status.ARCHIVED': 'архив',
+
+  // ---- shared/ui q-inherited-field (settings.md §1.2, wave P31) ----
+  'inheritedField.state.loading': 'Загрузка…',
+  'inheritedField.state.setHere': 'Задано здесь',
+  'inheritedField.state.inherited': 'Наследуется',
+  'inheritedField.state.explicitUnset': 'Снято здесь',
+  'inheritedField.state.notSettable': 'Здесь не задаётся',
+  'inheritedField.source.platformDefault': 'Значение HorecaOS',
+  'inheritedField.source.brand': 'Из бренда',
+  'inheritedField.source.tenant': 'Из компании',
+  'inheritedField.action.setValue': 'Задать значение',
+  'inheritedField.action.revertToInherit': 'Вернуть наследование',
+  'inheritedField.action.edit': 'Изменить',
+  'inheritedField.action.override': 'Переопределить здесь',
+  'inheritedField.notSettable.brand': 'Задаётся на уровне бренда',
+  'inheritedField.notSettable.tenant': 'Задаётся на уровне компании',
+  'inheritedField.trace.title': 'Откуда взялось это значение',
+  'inheritedField.trace.close': 'Закрыть',
+  'inheritedField.trace.outcome.VALUE': 'Значение задано здесь',
+  'inheritedField.trace.outcome.NOT_SET': 'Не задано',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_CONTINUED': 'Снято здесь, наследование продолжается',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_TERMINATED': 'Снято здесь, наследование остановлено',
+  'inheritedField.trace.scope.LOCATION': 'Филиал',
+  'inheritedField.trace.scope.BRAND': 'Бренд',
+  'inheritedField.trace.scope.TENANT': 'Компания',
+  'inheritedField.trace.scope.PLATFORM': 'Платформа',
 };

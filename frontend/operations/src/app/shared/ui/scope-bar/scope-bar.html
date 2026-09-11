@@ -1,0 +1,43 @@
+<div class="scopeBar">
+  @if (showBrandPicker()) {
+    <label class="scopeBar__field">
+      <span class="scopeBar__label q-caption">{{ 'scopeBar.brand' | t }}</span>
+      <select
+        class="scopeBar__select q-body-sm"
+        [value]="selectedBrandId() ?? ''"
+        (change)="onBrandChange($any($event.target).value)"
+      >
+        @for (brand of brands(); track brand.id) {
+          <option [value]="brand.id">{{ brand.displayName }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  <label class="scopeBar__field">
+    <span class="scopeBar__label q-caption">{{ 'scopeBar.location' | t }}</span>
+    <select
+      class="scopeBar__select q-body-sm"
+      [value]="selectedLocationId() ?? ''"
+      [disabled]="locationDisabledReason() !== null"
+      (change)="onLocationChange($any($event.target).value)"
+    >
+      <option value="">{{ 'scopeBar.allLocations' | t }}</option>
+      @for (location of locations(); track location.id) {
+        <option [value]="location.id">
+          {{ location.displayName }}
+          @if (location.status && location.status !== 'ACTIVE') {
+            ({{ statusKey(location.status) | t }})
+          }
+        </option>
+      }
+    </select>
+    @if (locationDisabledReason(); as reason) {
+      <span class="scopeBar__chip q-caption">{{ reason }}</span>
+    }
+  </label>
+
+  <div class="scopeBar__level q-caption">
+    {{ 'scopeBar.level' | t }}: <strong>{{ levelKey() | t }}</strong>
+  </div>
+</div>

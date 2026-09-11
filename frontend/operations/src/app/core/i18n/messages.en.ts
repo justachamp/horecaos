@@ -50,9 +50,11 @@ export const messagesEn = {
   'support.banner.until': 'until {time}',
   'support.banner.none': 'No open support session here; screens will refuse until one is opened',
   'support.banner.leave': 'Leave',
-  'settings.supportVisits.lead': 'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
+  'settings.supportVisits.lead':
+    'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
   'settings.supportVisits.loading': 'Loading visits…',
-  'settings.supportVisits.denied': 'Only the account’s owner and administrators can see support visits.',
+  'settings.supportVisits.denied':
+    'Only the account’s owner and administrators can see support visits.',
   'settings.supportVisits.empty': 'Nobody from HorecaOS support has entered your account.',
   'settings.supportVisits.openUntil': 'In progress, until {time}',
   'settings.supportVisits.endedAt': 'Ended {time}',
@@ -61,6 +63,8 @@ export const messagesEn = {
   'settings.supportVisits.reason': 'Why you are ending it',
   'settings.supportVisits.confirmEnd': 'End now',
   'settings.supportVisits.ended': 'Visit ended; their access is gone.',
+  'settings.supportVisits.by': 'By {subject}',
+  'settings.supportVisits.ticket': 'Ticket {reference}',
   'shell.late.aria': '{count} orders are late. Open the late queue.',
   'shell.openOrders.aria': '{count} open orders',
   'shell.account.signOut': 'Sign out',
@@ -339,9 +343,11 @@ export const messagesEn = {
   'invite.submitting': 'Setting up…',
   'invite.signingIn': 'Your account is ready. Signing you in…',
   'invite.invalid.title': 'This link cannot be used',
-  'invite.invalid.body': 'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
+  'invite.invalid.body':
+    'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
   'invite.expired.title': 'This link has expired',
-  'invite.expired.body': 'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
+  'invite.expired.body':
+    'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
   'invite.toSignIn': 'Go to sign in',
   'invite.policy.length': 'The password is too short: use at least 12 characters.',
   'invite.policy.notEmail': 'The password must not be your email address.',
@@ -380,6 +386,32 @@ export const messagesEn = {
   'settings.home.readinessNotBuilt':
     "The readiness panel (what's blocking orders right now) needs a cross-module read this wave did not add. Open a group below instead.",
   'settings.home.notBuiltBadge': 'Not built yet',
+  'settings.home.readiness.title': 'Is this restaurant ready to trade?',
+  'settings.home.readiness.loading': 'Checking readiness…',
+  'settings.home.readiness.denied':
+    "Only the account's owner and administrators can see readiness.",
+  'settings.home.readiness.noRun': 'No onboarding record exists for this tenant to check.',
+  'settings.home.readiness.allClear': 'Everything is set up to take orders.',
+  'settings.home.readiness.code.NO_BRAND': 'This tenant has no brand yet.',
+  'settings.home.readiness.code.NO_LOCATION':
+    'No brand has a branch yet, so no order can be taken.',
+  'settings.home.readiness.code.NO_LEGAL_ENTITY': 'A branch has no active legal entity assigned.',
+  'settings.home.readiness.code.NO_MERCHANT_BINDING':
+    'A branch offers a payment method with no merchant account behind it.',
+  'settings.home.readiness.code.NO_DELIVERY_ZONE':
+    'A branch offers delivery with no delivery zone bound.',
+  'settings.home.readiness.code.NO_DELIVERY_TARIFF':
+    'A branch has a delivery zone but no tariff resolves for it.',
+  'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
+    'A POS connection is configured but not healthy.',
+  'settings.home.readiness.code.NO_PUBLISHED_MENU': 'A brand has no published menu.',
+  'settings.home.readiness.code.NO_AVAILABLE_ITEM':
+    "A brand's published menu has nothing available to order.",
+  'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
+    'A referenced photo or media file is not yet available.',
+  'settings.home.search.label': 'Find a setting',
+  'settings.home.search.placeholder': 'Find a setting (press /)',
+  'settings.home.search.empty': 'No setting matches "{query}".',
   'settings.home.description.brandProfile':
     'What the brand is called and what it looks like everywhere a customer sees it.',
   'settings.home.description.locations':
@@ -2528,7 +2560,8 @@ export const messagesEn = {
   'settings.nav.supportVisits': 'HorecaOS support visits',
   'settings.home.description.dataPrivacy':
     'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
-  'settings.home.description.supportVisits': 'Who from HorecaOS support entered your account, when and why',
+  'settings.home.description.supportVisits':
+    'Who from HorecaOS support entered your account, when and why',
   'settings.dataPrivacy.title': 'Data & privacy',
   'settings.dataPrivacy.lead':
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',
@@ -2646,6 +2679,44 @@ export const messagesEn = {
   'orders.callCentre.callLog.type.ENDED': 'Ended',
   'orders.callCentre.callLog.type.MISSED': 'Missed',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Transferred',
+
+  // ---- shared/ui q-scope-bar (settings.md §1.1, wave P31) ----
+  'scopeBar.brand': 'Brand',
+  'scopeBar.location': 'Location',
+  'scopeBar.allLocations': 'All locations',
+  'scopeBar.level': 'Editing level',
+  'scopeBar.level.BRAND': 'BRAND',
+  'scopeBar.level.LOCATION': 'LOCATION',
+  'scopeBar.status.DRAFT': 'draft',
+  'scopeBar.status.ACTIVE': 'active',
+  'scopeBar.status.SUSPENDED': 'suspended',
+  'scopeBar.status.ARCHIVED': 'archived',
+
+  // ---- shared/ui q-inherited-field (settings.md §1.2, wave P31) ----
+  'inheritedField.state.loading': 'Loading…',
+  'inheritedField.state.setHere': 'Set at this level',
+  'inheritedField.state.inherited': 'Inherited',
+  'inheritedField.state.explicitUnset': 'Unset here',
+  'inheritedField.state.notSettable': 'Not settable here',
+  'inheritedField.source.platformDefault': 'HorecaOS default',
+  'inheritedField.source.brand': 'From the brand',
+  'inheritedField.source.tenant': 'From the company',
+  'inheritedField.action.setValue': 'Set a value',
+  'inheritedField.action.revertToInherit': 'Revert to inherited',
+  'inheritedField.action.edit': 'Edit',
+  'inheritedField.action.override': 'Override here',
+  'inheritedField.notSettable.brand': 'Set at brand level',
+  'inheritedField.notSettable.tenant': 'Set at company level',
+  'inheritedField.trace.title': 'Where this value came from',
+  'inheritedField.trace.close': 'Close',
+  'inheritedField.trace.outcome.VALUE': 'Value set here',
+  'inheritedField.trace.outcome.NOT_SET': 'Not set',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_CONTINUED': 'Unset here, continues',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_TERMINATED': 'Unset here, stops',
+  'inheritedField.trace.scope.LOCATION': 'Location',
+  'inheritedField.trace.scope.BRAND': 'Brand',
+  'inheritedField.trace.scope.TENANT': 'Company',
+  'inheritedField.trace.scope.PLATFORM': 'Platform',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

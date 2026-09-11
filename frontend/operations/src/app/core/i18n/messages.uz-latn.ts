@@ -40,9 +40,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'support.banner.until': '{time} gacha',
   'support.banner.none': 'Ochiq yordam sessiyasi yo‘q; u ochilmaguncha ekranlar rad etadi',
   'support.banner.leave': 'Chiqish',
-  'settings.supportVisits.lead': 'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
+  'settings.supportVisits.lead':
+    'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
   'settings.supportVisits.loading': 'Tashriflar yuklanmoqda…',
-  'settings.supportVisits.denied': 'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
+  'settings.supportVisits.denied':
+    'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
   'settings.supportVisits.empty': 'HorecaOS yordamidan hech kim hisobingizga kirmagan.',
   'settings.supportVisits.openUntil': 'Davom etmoqda, {time} gacha',
   'settings.supportVisits.endedAt': '{time} da tugagan',
@@ -51,6 +53,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.supportVisits.reason': 'Nima uchun tugatyapsiz',
   'settings.supportVisits.confirmEnd': 'Hozir tugatish',
   'settings.supportVisits.ended': 'Tashrif tugadi; kirish yo‘q.',
+  'settings.supportVisits.by': '{subject} tomonidan',
+  'settings.supportVisits.ticket': 'Ariza {reference}',
   'shell.late.aria': 'Kechikkan buyurtmalar: {count}. Kechikkanlar navbatini ochish.',
   'shell.openOrders.aria': 'Faol buyurtmalar: {count}',
   'shell.account.signOut': 'Chiqish',
@@ -324,9 +328,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.submitting': 'Saqlanmoqda…',
   'invite.signingIn': 'Hisobingiz tayyor. Tizimga kirilmoqda…',
   'invite.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
-  'invite.invalid.body': 'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
+  'invite.invalid.body':
+    'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
   'invite.expired.title': 'Havolaning muddati tugagan',
-  'invite.expired.body': 'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
+  'invite.expired.body':
+    'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
   'invite.toSignIn': 'Kirish sahifasiga o‘tish',
   'invite.policy.length': 'Parol juda qisqa: kamida 12 ta belgi bo‘lsin.',
   'invite.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasin.',
@@ -364,6 +370,32 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.readinessNotBuilt':
     'Tayyorlik paneli (hozir buyurtmalarga nima xalaqit berayotgani) bir nechta modul boʻyicha oʻqishni talab qiladi — bu toʻlqinda qoʻshilmagan. Quyidan kerakli guruhni oching.',
   'settings.home.notBuiltBadge': 'Hali qurilmagan',
+  'settings.home.readiness.title': 'Restoran buyurtma qabul qilishga tayyormi?',
+  'settings.home.readiness.loading': 'Tayyorlik tekshirilmoqda…',
+  'settings.home.readiness.denied':
+    'Tayyorlikni faqat hisob egasi va administratorlar ko‘ra oladi.',
+  'settings.home.readiness.noRun': 'Bu tenant uchun tekshirish uchun onboarding yozuvi yo‘q.',
+  'settings.home.readiness.allClear': 'Buyurtma qabul qilish uchun hammasi sozlangan.',
+  'settings.home.readiness.code.NO_BRAND': 'Bu tenantda hali brend yo‘q.',
+  'settings.home.readiness.code.NO_LOCATION':
+    'Hech bir brendda filial yo‘q, shuning uchun buyurtma qabul qilib bo‘lmaydi.',
+  'settings.home.readiness.code.NO_LEGAL_ENTITY': 'Filialga faol yuridik shaxs biriktirilmagan.',
+  'settings.home.readiness.code.NO_MERCHANT_BINDING':
+    'Filial to‘lov usulini taklif qiladi, lekin unga hisob biriktirilmagan.',
+  'settings.home.readiness.code.NO_DELIVERY_ZONE':
+    'Filial yetkazib berishni taklif qiladi, lekin zona biriktirilmagan.',
+  'settings.home.readiness.code.NO_DELIVERY_TARIFF':
+    'Filialda yetkazib berish zonasi bor, lekin unga tarif aniqlanmagan.',
+  'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
+    'POS ulanishi sozlangan, lekin ishlamayapti.',
+  'settings.home.readiness.code.NO_PUBLISHED_MENU': 'Brendda nashr etilgan menyu yo‘q.',
+  'settings.home.readiness.code.NO_AVAILABLE_ITEM':
+    'Brendning nashr etilgan menyusida buyurtma uchun mavjud narsa yo‘q.',
+  'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
+    'Ishlatilayotgan rasm yoki media fayl hali tayyor emas.',
+  'settings.home.search.label': 'Sozlamani topish',
+  'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
+  'settings.home.search.empty': '«{query}» bo‘yicha hech narsa topilmadi.',
   'settings.home.description.brandProfile':
     'Brend qanday nomlanadi va mijoz uni koʻradigan har joyda qanday koʻrinadi.',
   'settings.home.description.locations':
@@ -2049,7 +2081,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Tushunarli',
   'marketing.promoCodes.form.name': 'Nomi (ushbu ro‘yxat uchun)',
   'marketing.promoCodes.form.code': 'Mijoz kiritadigan kod',
-  'marketing.promoCodes.form.code.hint': '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
+  'marketing.promoCodes.form.code.hint':
+    '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
   'marketing.promoCodes.form.shape': 'Chegirma turi',
   'marketing.promoCodes.form.percent': 'Buyurtmadan foiz, %',
   'marketing.promoCodes.form.amount': 'Buyurtmadan chegirma summasi',
@@ -2521,7 +2554,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.supportVisits': 'HorecaOS yordami tashriflari',
   'settings.home.description.dataPrivacy':
     'Saqlash muddatlari, rozilik, ma’lumot subyekti so‘rovlari va mijoz shaxsiy ma’lumotini kim ko‘rgani.',
-  'settings.home.description.supportVisits': 'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
+  'settings.home.description.supportVisits':
+    'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
   'settings.dataPrivacy.title': 'Ma’lumotlar va maxfiylik',
   'settings.dataPrivacy.lead':
     'Restoran shaxsiy ma’lumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning o‘z so‘zlarini kim ko‘rgan.',
@@ -2643,4 +2677,44 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Tugagan',
   'orders.callCentre.callLog.type.MISSED': 'O‘tkazib yuborilgan',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Uzatilgan',
+
+  // ---- shared/ui q-scope-bar (settings.md §1.1, wave P31) ----
+  'scopeBar.brand': 'Brend',
+  'scopeBar.location': 'Filial',
+  'scopeBar.allLocations': 'Barcha filiallar',
+  'scopeBar.level': 'Tahrirlash darajasi',
+  'scopeBar.level.BRAND': 'BREND',
+  'scopeBar.level.LOCATION': 'FILIAL',
+  'scopeBar.status.DRAFT': 'qoralama',
+  'scopeBar.status.ACTIVE': 'faol',
+  'scopeBar.status.SUSPENDED': 'to‘xtatilgan',
+  'scopeBar.status.ARCHIVED': 'arxiv',
+
+  // ---- shared/ui q-inherited-field (settings.md §1.2, wave P31) ----
+  'inheritedField.state.loading': 'Yuklanmoqda…',
+  'inheritedField.state.setHere': 'Shu darajada belgilangan',
+  'inheritedField.state.inherited': 'Meros qilib olingan',
+  'inheritedField.state.explicitUnset': 'Shu yerda bekor qilingan',
+  'inheritedField.state.notSettable': 'Bu yerda belgilanmaydi',
+  'inheritedField.source.platformDefault': 'HorecaOS qiymati',
+  'inheritedField.source.brand': 'Brenddan',
+  'inheritedField.source.tenant': 'Kompaniyadan',
+  'inheritedField.action.setValue': 'Qiymat belgilash',
+  'inheritedField.action.revertToInherit': 'Merosga qaytarish',
+  'inheritedField.action.edit': 'Tahrirlash',
+  'inheritedField.action.override': 'Shu yerda ustunlik berish',
+  'inheritedField.notSettable.brand': 'Brend darajasida belgilanadi',
+  'inheritedField.notSettable.tenant': 'Kompaniya darajasida belgilanadi',
+  'inheritedField.trace.title': 'Bu qiymat qayerdan kelgan',
+  'inheritedField.trace.close': 'Yopish',
+  'inheritedField.trace.outcome.VALUE': 'Qiymat shu yerda belgilangan',
+  'inheritedField.trace.outcome.NOT_SET': 'Belgilanmagan',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_CONTINUED':
+    'Shu yerda bekor qilingan, meros davom etadi',
+  'inheritedField.trace.outcome.EXPLICIT_NULL_TERMINATED':
+    'Shu yerda bekor qilingan, meros to‘xtatilgan',
+  'inheritedField.trace.scope.LOCATION': 'Filial',
+  'inheritedField.trace.scope.BRAND': 'Brend',
+  'inheritedField.trace.scope.TENANT': 'Kompaniya',
+  'inheritedField.trace.scope.PLATFORM': 'Platforma',
 };
