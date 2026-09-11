@@ -50,18 +50,33 @@
             <!--
               ADR 0100: a tenant sitting in PROVISIONING because its owner never
               opened an email looks exactly like one mid-onboarding for any other
-              reason, so the marker says which. A dash means the caller may not
-              read invitations, not that the owner is fine.
+              reason, so this column says which. Four answers, all of them things
+              the server actually said -- and a dash for a tenant it said nothing
+              about, which is every tenant when the caller may not read
+              invitations, an archived one, and one past the projection's cap.
+              Absence is never read as an owner who is fine.
             -->
-            <td class="q-body-sm owner" [attr.data-owner]="ownerWaitingFor(tenant.id)">
-              @if (ownerWaitingFor(tenant.id) === true) {
-                <a [routerLink]="['/tenants', tenant.id, 'onboarding']" class="waiting">{{
-                  i18n.t('tenants.owner.waiting')
-                }}</a>
-              } @else if (ownerWaitingFor(tenant.id) === false) {
-                <span class="muted">{{ i18n.t('tenants.owner.ready') }}</span>
-              } @else {
-                <span class="muted">—</span>
+            <td class="q-body-sm owner" [attr.data-owner]="ownerColumn(tenant.id)">
+              @switch (ownerColumn(tenant.id)) {
+                @case ('waiting') {
+                  <a [routerLink]="['/tenants', tenant.id, 'onboarding']" class="waiting">{{
+                    i18n.t('tenants.owner.waiting')
+                  }}</a>
+                }
+                @case ('none') {
+                  <a [routerLink]="['/tenants', tenant.id, 'onboarding']" class="waiting">{{
+                    i18n.t('tenants.owner.none')
+                  }}</a>
+                }
+                @case ('ready') {
+                  <span class="muted">{{ i18n.t('tenants.owner.ready') }}</span>
+                }
+                @case ('notNeeded') {
+                  <span class="muted">{{ i18n.t('tenants.owner.notNeeded') }}</span>
+                }
+                @default {
+                  <span class="muted">—</span>
+                }
               }
             </td>
             <td class="q-body-sm q-tnum health" [attr.data-problems]="problemsOf(tenant.id)">

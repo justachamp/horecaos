@@ -44,17 +44,22 @@ export class TenantDirectory {
   protected readonly health = signal<ReadonlyMap<string, TenantHealthView>>(new Map());
 
   /**
-   * The tenants whose owner has not set up an account (ADR 0100), by id.
+   * Where each tenant's owner stands (ADR 0100), by id.
    *
-   * Read from the same overview the invitations screen uses, with the same
-   * optional-column discipline as plan and health: a caller without
-   * `TENANT_ONBOARDING_MANAGE` gets an empty map and a dash, never an error
-   * across the page. Held as a set of ids rather than the rows themselves, so
-   * nothing an operator may not read -- an address above all -- sits in this
-   * component at all.
+   * Read from the address-free projection, not from the invitations screen's
+   * overview: that one resolves every outstanding owner's address out of the
+   * identity provider and records a reveal for them, which is the right price
+   * for a screen that shows an address and the wrong one for a column that
+   * shows a word. Nothing an operator may not read reaches this component --
+   * and, because the projection has none to give, nothing reaches the browser
+   * either.
+   *
+   * Optional in the way plan and health are: a caller without
+   * `TENANT_ONBOARDING_MANAGE`, or a read that fails, leaves the map empty and
+   * the column a dash, never an error across the page. A tenant the projection
+   * does not mention is a tenant this screen knows nothing about, and says so.
    */
-  protected readonly ownerWaiting = signal<ReadonlySet<string>>(new Set());
-  protected readonly ownerKnown = signal(false);
+  protected readonly ownerStates = signal<ReadonlyMap<string, string>>(new Map());
 
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
@@ -116,19 +121,34 @@ export class TenantDirectory {
     }
     if (this.session.has('TENANT_ONBOARDING_MANAGE')) {
       try {
-        const outstanding = await this.tenantsApi.ownerInvitations('OUTSTANDING');
-        this.ownerWaiting.set(new Set(outstanding.map((row) => row.tenantId)));
-        this.ownerKnown.set(true);
+        this.ownerStates.set(
+          new Map((await this.tenantsApi.ownerStates()).map((row) => [row.tenantId, row.state])),
+        );
       } catch {
-        this.ownerWaiting.set(new Set());
-        this.ownerKnown.set(false);
+        this.ownerStates.set(new Map());
       }
     }
   }
 
-  /** Whether this tenant's owner is still to set up an account; null when unknown. */
-  protected ownerWaitingFor(tenantId: string): boolean | null {
-    return this.ownerKnown() ? this.ownerWaiting().has(tenantId) : null;
+  /**
+   * What the owner column says about this tenant: `waiting` for an owner
+   * somebody still has to chase, `ready` once they set up an account,
+   * `notNeeded` when they already had one, `none` when no owner has been
+   * linked or invited at all, and null when the answer is not known -- which
+   * is not the same as any of them, and is the dash.
+   */
+  protected ownerColumn(tenantId: string): 'waiting' | 'ready' | 'notNeeded' | 'none' | null {
+    const state = this.ownerStates().get(tenantId);
+    if (state === undefined) {
+      return null;
+    }
+    if (state === 'NO_OWNER') {
+      return 'none';
+    }
+    if (state === 'ACCEPTED') {
+      return 'ready';
+    }
+    return state === 'NOT_NEEDED' ? 'notNeeded' : 'waiting';
   }
 
   protected planOf(tenantId: string): string {

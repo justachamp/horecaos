@@ -241,6 +241,20 @@ export type OwnerInvitationState =
 export type OwnerInvitationFilter = OwnerInvitationState | 'OUTSTANDING' | '';
 
 /**
+ * Where one tenant's owner stands, with no recipient in it
+ * (OwnerInvitationService.OwnerStateView, ADR 0100).
+ *
+ * `NO_OWNER` is the state the overview cannot express, because a tenant with
+ * nobody linked or invited is nobody's work and is left out of it entirely.
+ * A screen that marks tenants has to be able to say it, or absence reads as
+ * an owner who is fine.
+ */
+export interface OwnerStateView {
+  readonly tenantId: string;
+  readonly state: OwnerInvitationState | 'NO_OWNER';
+}
+
+/**
  * One thing that happened to an invitation
  * (OwnerInvitationService.OwnerInvitationEventView, ADR 0100).
  *
@@ -620,6 +634,21 @@ export class TenantsApi {
       this.api.get<readonly OwnerInvitationOverviewRow[]>(
         `/api/v1/control-plane/owner-invitations${query}`,
       ),
+    );
+  }
+
+  /**
+   * Where every unarchived tenant's owner stands, and nothing else (ADR 0100).
+   * `TENANT_ONBOARDING_MANAGE` at platform scope, like the overview.
+   *
+   * Not the overview with its recipients dropped: a separate projection that
+   * resolves none, so no owner's address is read from the identity provider,
+   * none crosses the wire to a screen that renders a marker, and no reveal is
+   * recorded against the operator who opened a tenant list.
+   */
+  async ownerStates(): Promise<readonly OwnerStateView[]> {
+    return firstValueFrom(
+      this.api.get<readonly OwnerStateView[]>('/api/v1/control-plane/owner-invitations/waiting'),
     );
   }
 

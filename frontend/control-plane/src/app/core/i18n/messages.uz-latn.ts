@@ -610,12 +610,12 @@ export const uzLatn: Messages = {
     'Kirish xizmati javob bermadi. Avtomatik qayta urinib ko‘riladi.',
   'onboarding.invitation.hint.EXPIRED': 'Havoladan 72 soat ichida foydalanilmadi. Qayta yuboring.',
 
-  // IA 2.9 Egalar taklifnomalari — barcha ijarachilar bo'yicha ulanishning so'nggi bosqichi (ADR 0100).
+  // IA 2.9 Egalar taklifnomalari — barcha mijozlar bo'yicha ulanishning so'nggi bosqichi (ADR 0100).
   'ownerInvitations.title': 'Egalar taklifnomalari',
   'ownerInvitations.lead':
-    "Egasi hali hisob yaratmagan barcha ijarachilar va ularga nima yuborilgani. Taklifnomalar paydo bo'lishidan oldin egasi biriktirilgan ijarachi taklif qilinmagan deb ko'rsatiladi.",
+    "Egasi hali hisob yaratmagan barcha mijozlar va ularga nima yuborilgani. Taklifnomalar paydo bo'lishidan oldin egasi biriktirilgan mijoz taklif qilinmagan deb ko'rsatiladi.",
   'ownerInvitations.loading': 'Taklifnomalar yuklanmoqda…',
-  'ownerInvitations.empty': "Bu filtrga mos ijarachi yo'q.",
+  'ownerInvitations.empty': "Bu filtrga mos mijoz yo'q.",
   'ownerInvitations.outstanding': 'Egasi hali kutilmoqda: {count}.',
   'ownerInvitations.resent': 'Qayta yuborildi.',
   'ownerInvitations.cancel': 'Bekor qilish',
@@ -628,7 +628,7 @@ export const uzLatn: Messages = {
   'ownerInvitations.filter.SENT': 'Yuborilgan',
   'ownerInvitations.filter.ACCEPTED': 'Qabul qilingan',
   'ownerInvitations.state.NONE': 'Taklif qilinmagan',
-  'ownerInvitations.column.tenant': 'Ijarachi',
+  'ownerInvitations.column.tenant': 'Mijoz',
   'ownerInvitations.column.recipient': 'Kimga yuborilgan',
   'ownerInvitations.column.state': 'Holat',
   'ownerInvitations.column.sentAt': 'Yuborilgan',
@@ -655,8 +655,10 @@ export const uzLatn: Messages = {
   'tenants.column.owner': 'Egasi',
   'tenants.owner.waiting': 'Yaratilmagan',
   'tenants.owner.ready': 'Yaratilgan',
+  'tenants.owner.notNeeded': 'Talab qilinmaydi',
+  'tenants.owner.none': 'Egasi yo‘q',
   'onboarding.hint.OWNER_EMAIL_UNREADABLE':
-    'Ega emailini bu ijarachi uchun ochib bo‘lmadi. Ega emaili bilan yangi jarayonni boshlang.',
+    'Ega emailini bu mijoz uchun ochib bo‘lmadi. Ega emaili bilan yangi jarayonni boshlang.',
   'onboarding.template.suggested':
     '«{type}» uchun taklif: {code} shabloni shu biznes turini ko‘rsatadi.',
   'onboarding.template.fallback':

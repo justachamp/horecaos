@@ -606,12 +606,12 @@ export const ru: Messages = {
   'onboarding.invitation.hint.EXPIRED':
     'Ссылкой не воспользовались за 72 часа. Отправьте приглашение снова.',
 
-  // IA 2.9 Приглашения владельцев — последний шаг подключения по всем арендаторам (ADR 0100).
+  // IA 2.9 Приглашения владельцев — последний шаг подключения по всем клиентам (ADR 0100).
   'ownerInvitations.title': 'Приглашения владельцев',
   'ownerInvitations.lead':
-    'Все арендаторы, владелец которых ещё не завёл учётную запись, и что им было отправлено. Арендатор, которому владельца назначили до появления приглашений, отмечен как неприглашённый.',
+    'Все клиенты, владелец которых ещё не завёл учётную запись, и что им было отправлено. Клиент, которому владельца назначили до появления приглашений, отмечен как неприглашённый.',
   'ownerInvitations.loading': 'Загрузка приглашений…',
-  'ownerInvitations.empty': 'Под этот фильтр не подходит ни один арендатор.',
+  'ownerInvitations.empty': 'Под этот фильтр не подходит ни один клиент.',
   'ownerInvitations.outstanding': 'Ещё ждут владельца: {count}.',
   'ownerInvitations.resent': 'Отправлено повторно.',
   'ownerInvitations.cancel': 'Отмена',
@@ -624,7 +624,7 @@ export const ru: Messages = {
   'ownerInvitations.filter.SENT': 'Отправлено',
   'ownerInvitations.filter.ACCEPTED': 'Принято',
   'ownerInvitations.state.NONE': 'Не приглашали',
-  'ownerInvitations.column.tenant': 'Арендатор',
+  'ownerInvitations.column.tenant': 'Клиент',
   'ownerInvitations.column.recipient': 'Кому отправлено',
   'ownerInvitations.column.state': 'Состояние',
   'ownerInvitations.column.sentAt': 'Отправлено',
@@ -651,8 +651,10 @@ export const ru: Messages = {
   'tenants.column.owner': 'Владелец',
   'tenants.owner.waiting': 'Не создан',
   'tenants.owner.ready': 'Создан',
+  'tenants.owner.notNeeded': 'Не требуется',
+  'tenants.owner.none': 'Владельца нет',
   'onboarding.hint.OWNER_EMAIL_UNREADABLE':
-    'Email владельца не удалось расшифровать для этого арендатора. Запустите новое подключение с email владельца.',
+    'Email владельца не удалось расшифровать для этого клиента. Запустите новое подключение с email владельца.',
   'onboarding.template.suggested':
     'Предложен для типа «{type}»: шаблон {code} указывает этот тип бизнеса.',
   'onboarding.template.fallback':

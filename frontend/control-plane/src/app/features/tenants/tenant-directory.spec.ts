@@ -7,12 +7,7 @@ import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { Page } from '../../core/api/page';
 import { TenantDirectory } from './tenant-directory';
-import {
-  OwnerInvitationOverviewRow,
-  TenantSummaryView,
-  TenantView,
-  TenantsApi,
-} from './tenants-api';
+import { OwnerStateView, TenantSummaryView, TenantView, TenantsApi } from './tenants-api';
 
 const CONFIG: AppConfig = {
   apiBaseUrl: 'https://api.test.horecaos.uz',
@@ -45,37 +40,20 @@ class FakeTenantsApi {
     .mockResolvedValue([
       { tenantId: 'tenant-a', deadLetters: 1, blockedReceipts: 2, posOrdersAwaiting: 0 },
     ]);
-  readonly ownerInvitations = vi
-    .fn<(state?: string) => Promise<readonly OwnerInvitationOverviewRow[]>>()
-    .mockResolvedValue([]);
+  readonly ownerInvitations = vi.fn().mockResolvedValue([]);
+  readonly ownerStates = vi.fn<() => Promise<readonly OwnerStateView[]>>().mockResolvedValue([]);
 }
-
-const WAITING: OwnerInvitationOverviewRow = {
-  tenantId: 'tenant-a',
-  tenantSlug: 'tenant-a',
-  tenantName: 'Tenant A',
-  tenantStatus: 'ACTIVE',
-  state: 'SENT',
-  recipient: 'dilnoza.karimova@example.uz',
-  emailMasked: 'd***a@example.uz',
-  locale: 'ru',
-  attempts: 1,
-  lastErrorCode: null,
-  queuedAt: '2026-09-11T04:00:00Z',
-  sentAt: '2026-09-11T04:01:00Z',
-  openedAt: null,
-  acceptedAt: null,
-  expiresAt: '2026-09-14T04:01:00Z',
-};
 
 describe('TenantDirectory', () => {
   let fixture: ComponentFixture<TenantDirectory>;
   let api: FakeTenantsApi;
   let router: Router;
+  let capabilities: ReadonlySet<string>;
 
   beforeEach(async () => {
     api = new FakeTenantsApi();
     localStorage.clear();
+    capabilities = new Set(['TENANT_READ', 'COMMERCIAL_PLAN_READ', 'TENANT_ONBOARDING_MANAGE']);
 
     await TestBed.configureTestingModule({
       imports: [TenantDirectory],
@@ -85,7 +63,10 @@ describe('TenantDirectory', () => {
         { provide: TenantsApi, useValue: api },
         {
           provide: SessionContextService,
-          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+          useValue: {
+            has: (capability: string) => capabilities.has(capability),
+            current: () => ({ subject: 'me' }),
+          },
         },
       ],
     }).compileComponents();
@@ -243,7 +224,7 @@ describe('TenantDirectory', () => {
    */
   it('marks a tenant whose owner has not set up an account, and links to its onboarding', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-    api.ownerInvitations.mockResolvedValue([WAITING]);
+    api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state: 'SENT' }]);
 
     fixture = TestBed.createComponent(TenantDirectory);
     fixture.detectChanges();
@@ -251,17 +232,54 @@ describe('TenantDirectory', () => {
     await new Promise((resolve) => setTimeout(resolve));
     fixture.detectChanges();
 
-    expect(api.ownerInvitations).toHaveBeenCalledWith('OUTSTANDING');
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
-    expect(owner.dataset['owner']).toBe('true');
+    expect(owner.dataset['owner']).toBe('waiting');
     const link = owner.querySelector('a') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/tenants/tenant-a/onboarding');
-    expect(owner.textContent).not.toContain('example.uz');
   });
 
-  it('says the owner is set up when the overview does not list the tenant', async () => {
+  /**
+   * The assertion is on the request, not on the rendered cell. The overview
+   * carries every outstanding owner's address and records an ADR 0029 reveal
+   * for all of them; a column that renders a word has no business asking for
+   * it, and a cell that happens to show no address is no evidence that it did
+   * not (ADR 0100 \u00a76).
+   */
+  it('reads the address-free projection, never the overview that reveals recipients', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-    api.ownerInvitations.mockResolvedValue([]);
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(api.ownerStates).toHaveBeenCalled();
+    expect(api.ownerInvitations).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Four different things, four different words. "Set up" used to be what the
+   * screen said about every tenant the list did not mention -- including one
+   * created a minute earlier that had no owner at all.
+   */
+  it.each([
+    ['SENT', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d'],
+    ['NONE', 'waiting', '\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d'],
+    ['ACCEPTED', 'ready', '\u0421\u043e\u0437\u0434\u0430\u043d'],
+    [
+      'NOT_NEEDED',
+      'notNeeded',
+      '\u041d\u0435 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f',
+    ],
+    [
+      'NO_OWNER',
+      'none',
+      '\u0412\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 \u043d\u0435\u0442',
+    ],
+  ])('says what the server said about an owner in state %s', async (state, marker, text) => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state }]);
 
     fixture = TestBed.createComponent(TenantDirectory);
     fixture.detectChanges();
@@ -270,8 +288,23 @@ describe('TenantDirectory', () => {
     fixture.detectChanges();
 
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
-    expect(owner.dataset['owner']).toBe('false');
-    expect(owner.querySelector('a')).toBeNull();
+    expect(owner.dataset['owner']).toBe(marker);
+    expect(owner.textContent?.trim()).toBe(text);
+  });
+
+  it('leaves a dash for a tenant the projection does not mention', async () => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerStates.mockResolvedValue([{ tenantId: 'some-other-tenant', state: 'SENT' }]);
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.dataset['owner']).toBeUndefined();
+    expect(owner.textContent?.trim()).toBe('\u2014');
   });
 
   /**
@@ -279,9 +312,9 @@ describe('TenantDirectory', () => {
    * failing read leaves a dash, never an error across a page that is mostly
    * about something else.
    */
-  it('leaves a dash rather than an error when the overview cannot be read', async () => {
+  it('leaves a dash rather than an error when the projection cannot be read', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-    api.ownerInvitations.mockRejectedValue(
+    api.ownerStates.mockRejectedValue(
       new ApiError({ status: 403, code: 'INSUFFICIENT_CAPABILITY', detail: 'no' }),
     );
 
@@ -294,5 +327,30 @@ describe('TenantDirectory', () => {
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
     expect(owner.textContent?.trim()).toBe('\u2014');
     expect(fixture.nativeElement.querySelector('.state.error')).toBeNull();
+  });
+
+  /**
+   * The capability guards were only ever taken true, so deleting one would have
+   * been invisible: the refused read renders the same dash the unasked one
+   * does. What is pinned here is that the read is never attempted -- every
+   * `TENANT_READ`-only operator's page load would otherwise fire a platform-scope
+   * request that can only ever be refused.
+   */
+  it('does not ask for what the operator may not read', async () => {
+    capabilities = new Set(['TENANT_READ']);
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(api.ownerStates).not.toHaveBeenCalled();
+    expect(api.tenantPlans).not.toHaveBeenCalled();
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.dataset['owner']).toBeUndefined();
+    expect(owner.textContent?.trim()).toBe('\u2014');
+    expect(fixture.nativeElement.querySelector('.plan')?.textContent).toContain('\u2014');
   });
 });

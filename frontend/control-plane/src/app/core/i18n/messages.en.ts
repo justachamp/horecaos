@@ -652,6 +652,8 @@ export const en = {
   'tenants.column.owner': 'Owner',
   'tenants.owner.waiting': 'Not set up',
   'tenants.owner.ready': 'Set up',
+  'tenants.owner.notNeeded': 'Not needed',
+  'tenants.owner.none': 'No owner yet',
   'onboarding.hint.OWNER_EMAIL_UNREADABLE':
     'The owner’s email could not be decrypted for this tenant. Start a new run with the owner’s email.',
   'onboarding.template.suggested':
