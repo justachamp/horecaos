@@ -508,6 +508,7 @@ export const en = {
   'onboarding.step.KEYCLOAK_ORGANIZATION_RECONCILE': 'Sign-in organization',
   'onboarding.step.TENANT_OWNER_LINK_OR_INVITE': 'Owner account',
   'onboarding.step.DEFAULT_CONFIGURATION_APPLY': 'Default settings',
+  'onboarding.step.SAMPLE_MENU_PUBLISH': 'Sample menu',
   'onboarding.step.BRANDS_AND_LOCATIONS_VALIDATE': 'Brands and locations',
   'onboarding.step.PAYMENT_CONFIGURATION_VALIDATE': 'Payments and legal entities',
   'onboarding.step.DELIVERY_CONFIGURATION_VALIDATE': 'Delivery zones and tariffs',
@@ -547,6 +548,10 @@ export const en = {
     'A test order could not be priced. Check the menu’s prices in the operations app.',
   'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
     'Delivery coverage could not be checked just now. This retries on its own.',
+  'onboarding.hint.NOT_REQUESTED': 'No sample menu was asked for when this run was started.',
+  'onboarding.hint.SAMPLE_MENU_REJECTED': 'The sample menu did not pass catalogue validation and was not published.',
+  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY': 'The sample menu is priced in UZS only, and this tenant trades in another currency, so nothing was created.',
+  'onboarding.hint.SAMPLE_PRICING_REFUSED': 'The sample menu could not be priced: the tenant already has a live price book at priority 0. Give one of them a higher priority, or end its window, then resume.',
   'onboarding.hint.TENANT_MISSING': 'The tenant record was not found.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE': 'A temporary failure. This retries on its own.',
   'onboarding.hint.open': 'Open',
@@ -566,6 +571,7 @@ export const en = {
   'onboarding.template.label':
     'New runs follow the {code} template, version {version}: {count} required steps.',
   'onboarding.start.ownerLocale': 'Invitation language',
+  'onboarding.start.sampleMenu': 'Create and publish a sample menu so we can check everything works; the tenant replaces it later',
   'onboarding.invitation.title': 'Owner invitation',
   'onboarding.invitation.state.QUEUED': 'Waiting to be sent',
   'onboarding.invitation.state.SENT': 'Sent',

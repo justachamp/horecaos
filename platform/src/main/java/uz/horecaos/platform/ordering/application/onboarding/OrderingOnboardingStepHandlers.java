@@ -2,16 +2,21 @@ package uz.horecaos.platform.ordering.application.onboarding;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.catalog.api.SampleMenuPort;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
+import uz.horecaos.platform.inventory.api.StockListingPort;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.SampleMenuPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -20,7 +25,7 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 
 /**
- * The one ADR 0008 step handler that cannot live beside the rest.
+ * The two ADR 0008 step handlers that cannot live beside the rest.
  *
  * <p>{@code tenancy.application.onboarding.OnboardingStepHandlers} holds every
  * other unblocked handler, each reading another module's schema directly to
@@ -42,10 +47,261 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
  * {@code @NamedInterface} precisely so a handler can live outside {@code
  * tenancy}; {@code OnboardingService} discovers it the same way it discovers
  * every other handler, through ordinary Spring bean collection.
+ *
+ * <p>{@code SAMPLE_MENU_PUBLISH} (ADR 0099) is here for a stronger version of
+ * the same reason. It has to write {@code catalog}, {@code pricing} and {@code
+ * inventory} — and writing another module's tables through raw SQL is a second
+ * implementation of that module's rules, not the boundary compromise reading
+ * them is. {@code ordering} is the only module that already depends on all
+ * three exported interfaces plus {@code tenancy.api}, so putting the handler
+ * here adds no module edge whatsoever.
  */
 public final class OrderingOnboardingStepHandlers {
 
+    /**
+     * {@code StorefrontChannelSeeder.STOREFRONT_CODE} (tenancy, not importable
+     * from here): every tenant gets this channel on creation, and it is the
+     * channel both handlers below care about.
+     */
+    private static final String STOREFRONT_CHANNEL = "STOREFRONT";
+
+    /**
+     * The currency {@code SampleMenuContent}'s amounts are authored in (ADR
+     * 0099). Whole som, at the platform's UZS exponent of zero — not ISO 4217's
+     * two, which both money modules deliberately refuse to use. Nothing converts
+     * them, so this is the only currency the sample menu can honestly be priced
+     * in; see {@code SampleMenuPublish.execute}'s refusal.
+     */
+    private static final String SAMPLE_CURRENCY = "UZS";
+
     private OrderingOnboardingStepHandlers() {}
+
+    /**
+     * Plants and publishes the sample menu a run may have asked for (ADR 0099).
+     *
+     * <p>The one optional step. A run that did not ask for a sample menu carries
+     * this step {@code SKIPPED} from the moment it was materialised, so this
+     * handler never sees it: {@code claimNextStep} takes only {@code PENDING}.
+     *
+     * <p>Orchestration only. Each of the three ports below is idempotent on its
+     * own and each runs in its own transaction, deliberately: a step that dies
+     * between the catalog and the prices has to be able to run again from the
+     * top and find what it already made, and one long transaction spanning three
+     * modules' writes would buy atomicity this step does not need at the cost of
+     * a lock held across a publication's validation pass.
+     *
+     * <p>Does nothing at all when the brand already has a published menu that is
+     * not the sample's. A tenant that authored a real menu between starting a
+     * run and this step running must not have a sample published over it — and
+     * the honest outcome for that is {@code COMPLETED}, because the thing this
+     * step exists to guarantee (a published, sellable menu) is true.
+     */
+    @Component
+    public static class SampleMenuPublish implements OnboardingStepHandler {
+
+        private final JdbcClient jdbc;
+        private final SampleMenuPort catalog;
+        private final SampleMenuPricingPort pricing;
+        private final StockListingPort stock;
+        private final SalesChannelLookup channels;
+
+        public SampleMenuPublish(
+                JdbcClient jdbc,
+                SampleMenuPort catalog,
+                SampleMenuPricingPort pricing,
+                StockListingPort stock,
+                SalesChannelLookup channels) {
+            this.jdbc = jdbc;
+            this.catalog = catalog;
+            this.pricing = pricing;
+            this.stock = stock;
+            this.channels = channels;
+        }
+
+        @Override
+        public OnboardingStep step() {
+            return OnboardingStep.SAMPLE_MENU_PUBLISH;
+        }
+
+        @Override
+        public StepResult execute(StepContext context) {
+            UUID tenantId = context.tenantId();
+
+            Optional<BrandRow> brand = firstBrand(tenantId);
+            if (brand.isEmpty()) {
+                return StepResult.failed("NO_BRAND", "The tenant has no brand to hang a sample menu on");
+            }
+            UUID brandId = brand.get().id();
+
+            List<UUID> locationIds = locationsOfBrand(tenantId, brandId);
+            if (locationIds.isEmpty()) {
+                return StepResult.failed(
+                        "NO_LOCATION",
+                        "Brand %s has no location to offer a sample menu at"
+                                .formatted(brand.get().code()));
+            }
+
+            // Checked here rather than left to the publication, which throws an
+            // IllegalArgumentException for an unregistered channel — and a thrown
+            // handler is mapped to RETRY/TRANSIENT_INFRASTRUCTURE, so a tenant
+            // whose storefront channel was never seeded would retry a permanent
+            // condition until a human noticed. Named the same way
+            // ACTIVATION_SMOKE_TEST names it, because it is the same gap.
+            //
+            // Existence is not enough: a channel exists after it is archived, and
+            // publish refuses an archived one by throwing — the very shape this
+            // check exists to avoid. sellable() is ACTIVATION_SMOKE_TEST's own
+            // predicate, and it is also stricter than publish (which tolerates
+            // INACTIVE): a storefront the tenant has switched off should fail
+            // here, once and honestly, rather than pass CATALOG_READINESS_VALIDATE
+            // on a menu published to a dead channel and fail at step 12.
+            Optional<SalesChannel> storefront = channels.byCode(tenantId, STOREFRONT_CHANNEL);
+            if (storefront.isEmpty() || !storefront.get().sellable()) {
+                return StepResult.failed(
+                        "NO_CHANNEL",
+                        "The tenant has no active %s channel to publish a sample menu to"
+                                .formatted(STOREFRONT_CHANNEL));
+            }
+
+            Optional<UUID> sampleCatalogId = catalog.sampleCatalogId(tenantId, brandId);
+            Optional<UUID> publishedCatalogId = catalog.publishedCatalogId(tenantId, brandId, STOREFRONT_CHANNEL);
+            if (publishedCatalogId.isPresent() && !publishedCatalogId.equals(sampleCatalogId)) {
+                // A real menu is already live on the storefront. Publishing a
+                // sample over it would retire the tenant's own work.
+                return StepResult.completed(
+                        Map.of("channel", STOREFRONT_CHANNEL, "created", false, "reason", "MENU_ALREADY_PUBLISHED"),
+                        null);
+            }
+
+            // The sample's prices are whole som, copied from
+            // tools/seed-data/horecaos-tenant.json, and nothing converts them.
+            // Stamping them onto another currency would publish a menu that is
+            // wrong by an exchange rate — 38 000 GEL for a plate of plov — as the
+            // platform's own proof that the tenant works, so a tenant that trades
+            // in anything else is refused rather than served a wrong menu. It also
+            // keeps the hard-coded Uzbek VAT profile SampleMenuPricing writes off
+            // tenants it does not describe. A per-market price table is the way to
+            // lift this, when KZ or GE actually onboards (ADR 0099).
+            String currency = currencyOf(tenantId);
+            if (!SAMPLE_CURRENCY.equals(currency)) {
+                return StepResult.failed(
+                        "SAMPLE_MENU_UNSUPPORTED_CURRENCY",
+                        "The sample menu's prices are authored in %s; this tenant trades in %s"
+                                .formatted(SAMPLE_CURRENCY, currency));
+            }
+
+            SampleMenuPort.SampleMenu menu = catalog.installSample(tenantId, brandId, locationIds);
+
+            SampleMenuPricingPort.SamplePricing priced;
+            try {
+                priced = pricing.priceSample(
+                        tenantId,
+                        brandId,
+                        currency,
+                        menu.variants().stream()
+                                .map(variant -> new SampleMenuPricingPort.SampleVariantPrice(
+                                        variant.variantId(), variant.amountMinor()))
+                                .toList());
+            } catch (SampleMenuPricingPort.SamplePricingRefusedException refused) {
+                // Permanent: pricing will refuse the same way on every attempt.
+                // Without this the thrown handler becomes RETRY, and the operator
+                // is told by TRANSIENT_INFRASTRUCTURE's own hint that it retries
+                // on its own — which it does, five times, and then stops.
+                return StepResult.failed("SAMPLE_PRICING_REFUSED", refused.getMessage());
+            }
+
+            // An item with no stock row reads as unavailable rather than
+            // available, so a menu that is published, offered and priced still
+            // cannot be sold until something lists it — which is exactly what
+            // ACTIVATION_SMOKE_TEST checks two steps later.
+            int listed = 0;
+            for (UUID locationId : locationIds) {
+                for (SampleMenuPort.SampleVariant variant : menu.variants()) {
+                    if (stock.ensureListed(tenantId, brandId, locationId, variant.variantId())) {
+                        listed++;
+                    }
+                }
+            }
+
+            SampleMenuPort.SamplePublication publication =
+                    catalog.publishSample(tenantId, brandId, menu.catalogId(), STOREFRONT_CHANNEL);
+            if (!publication.blockers().isEmpty()) {
+                return StepResult.failed(
+                        "SAMPLE_MENU_REJECTED",
+                        "The sample menu did not pass catalog validation: %s"
+                                .formatted(String.join(", ", publication.blockers())));
+            }
+
+            // Ids and counts only (ADR 0029): no item name, no price, nothing
+            // about a person. The catalog id is also the external reference, so
+            // a re-run reconciles against what it made rather than looking again.
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("catalogId", menu.catalogId().toString());
+            result.put("catalogCode", menu.catalogCode());
+            result.put("publicationId", publication.publicationId().toString());
+            if (priced.priceBookId() != null) {
+                // Absent rather than null when the tenant's own prices already
+                // covered the sample and no sample book was needed.
+                result.put("priceBookId", priced.priceBookId().toString());
+            }
+            result.put("categories", menu.categories());
+            result.put("products", menu.products());
+            result.put("variants", menu.variants().size());
+            result.put("locations", locationIds.size());
+            // Beside stockItemsListed and for the same reason: both ports create
+            // only what is missing, so a run record that says nothing about them
+            // cannot tell "there was nothing to do" from "something was
+            // overwritten". Zero on a retry that found every offering already
+            // there, including ones an operator had hidden.
+            result.put("offeringsCreated", menu.offeringsCreated());
+            result.put("stockItemsListed", listed);
+            result.put("pricesSet", priced.priced());
+            result.put("channel", STOREFRONT_CHANNEL);
+            result.put("created", menu.created());
+            return StepResult.completed(result, menu.catalogId().toString());
+        }
+
+        /**
+         * The brand the sample hangs on: lowest code, which is stable across
+         * runs. Ordering by {@code created_at} would depend on clock resolution
+         * for two brands created in the same millisecond by the same import.
+         */
+        private Optional<BrandRow> firstBrand(UUID tenantId) {
+            return jdbc.sql("""
+                    SELECT id, code FROM tenant.brands
+                     WHERE tenant_id = :tenantId AND status <> 'ARCHIVED'
+                     ORDER BY code
+                     LIMIT 1
+                    """)
+                    .param("tenantId", tenantId)
+                    .query((row, n) -> new BrandRow(row.getObject("id", UUID.class), row.getString("code")))
+                    .optional();
+        }
+
+        private List<UUID> locationsOfBrand(UUID tenantId, UUID brandId) {
+            return jdbc.sql("""
+                    SELECT id FROM tenant.locations
+                     WHERE tenant_id = :tenantId AND brand_id = :brandId
+                     ORDER BY code
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .query(UUID.class)
+                    .list();
+        }
+
+        /** The sample is priced in the tenant's own money, never in a currency this step chose. */
+        private String currencyOf(UUID tenantId) {
+            return Objects.requireNonNull(
+                    jdbc.sql("SELECT default_currency FROM tenant.tenants WHERE id = :tenantId")
+                            .param("tenantId", tenantId)
+                            .query(String.class)
+                            .single(),
+                    "A tenant row always carries a currency: the column is NOT NULL");
+        }
+
+        private record BrandRow(UUID id, String code) {}
+    }
 
     /**
      * A read-only dry run: does the location have a working serviceability
@@ -82,12 +338,6 @@ public final class OrderingOnboardingStepHandlers {
      */
     @Component
     public static class ActivationSmokeTest implements OnboardingStepHandler {
-
-        /**
-         * {@code StorefrontChannelSeeder.STOREFRONT_CODE} (tenancy, not
-         * importable from here): every tenant gets this channel on creation.
-         */
-        private static final String STOREFRONT_CHANNEL = "STOREFRONT";
 
         private final JdbcClient jdbc;
         private final SalesChannelLookup channels;

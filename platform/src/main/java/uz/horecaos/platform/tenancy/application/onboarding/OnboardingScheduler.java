@@ -106,11 +106,27 @@ public class OnboardingScheduler {
      * correctly waiting for approval ages forever and raises the one alert this
      * gauge exists to never raise.
      *
-     * <p>What does enter is a run with a step that is due *now* and has not
-     * moved: the scheduler is dead, every replica is failing the same step, or a
-     * required step has exhausted its attempts and needs a person to resume it.
-     * Each of those is the same fact — onboarding has stopped — and each is worth
-     * someone's attention within the working day.
+     * <p>What does enter is a run with a *required* step that is due *now* and
+     * has not moved: the scheduler is dead, every replica is failing the same
+     * step, or a required step has exhausted its attempts and needs a person to
+     * resume it. Each of those is the same fact — onboarding has stopped — and
+     * each is worth someone's attention within the working day.
+     *
+     * <p>{@code AND s.required} is what makes that sentence true of the SQL, and
+     * it is the same set {@code claimNextStep} and {@code refreshRunStatus}
+     * already agree halts a run — both gate on {@code required AND status =
+     * 'FAILED'}. Before ADR 0099 every step but {@code TENANT_ACTIVATE} was
+     * required, so the clause was invisible; {@code SAMPLE_MENU_PUBLISH} is the
+     * first step that can be {@code FAILED} on a run that is nonetheless
+     * {@code READY} and correct, and without the clause one such tenant pins
+     * this platform-wide maximum forever and masks every genuine stall behind it.
+     *
+     * <p>What that gives up, deliberately: a failed or permanently-pending
+     * *optional* step is invisible to this gauge and to the ADR 0058 stuck-run
+     * listing, so the run-detail view is the only place an operator learns that
+     * a sample menu failed. That is the right trade — the alert answers "has
+     * onboarding stopped", and a declined-or-broken offer has not stopped it —
+     * and it is written down in ADR 0099 rather than left as a side effect.
      *
      * <p>Zero when nothing is stuck, so an absent series means the application is
      * not reporting rather than that all is well.
@@ -123,6 +139,7 @@ public class OnboardingScheduler {
                       FROM tenant.onboarding_steps s
                       JOIN tenant.onboarding_runs r ON r.id = s.run_id
                      WHERE r.status NOT IN ('ACTIVE', 'CANCELLED')
+                       AND s.required
                        AND s.step_key <> 'TENANT_ACTIVATE'
                        AND s.status IN ('PENDING', 'FAILED')
                        AND s.available_at <= CAST(:now AS timestamptz)

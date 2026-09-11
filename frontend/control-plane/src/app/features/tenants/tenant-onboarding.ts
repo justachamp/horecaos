@@ -52,9 +52,13 @@ const HINTS: Readonly<Record<string, { readonly key: MessageKey; readonly link?:
   NO_LOCATION: { key: 'onboarding.hint.NO_LOCATION', link: 'brands' },
   NO_MERCHANT_BINDING: { key: 'onboarding.hint.NO_MERCHANT_BINDING' },
   NO_PUBLISHED_MENU: { key: 'onboarding.hint.NO_PUBLISHED_MENU' },
+  NOT_REQUESTED: { key: 'onboarding.hint.NOT_REQUESTED' },
   OWNER_NOT_SUPPLIED: { key: 'onboarding.hint.OWNER_NOT_SUPPLIED' },
   POS_BINDING_UNHEALTHY: { key: 'onboarding.hint.POS_BINDING_UNHEALTHY', link: 'installations' },
   QUOTE_REFUSED: { key: 'onboarding.hint.QUOTE_REFUSED' },
+  SAMPLE_MENU_REJECTED: { key: 'onboarding.hint.SAMPLE_MENU_REJECTED' },
+  SAMPLE_MENU_UNSUPPORTED_CURRENCY: { key: 'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY' },
+  SAMPLE_PRICING_REFUSED: { key: 'onboarding.hint.SAMPLE_PRICING_REFUSED' },
   SERVICEABILITY_UNAVAILABLE: { key: 'onboarding.hint.SERVICEABILITY_UNAVAILABLE' },
   TENANT_MISSING: { key: 'onboarding.hint.TENANT_MISSING' },
   TRANSIENT_INFRASTRUCTURE: { key: 'onboarding.hint.TRANSIENT_INFRASTRUCTURE' },
@@ -64,6 +68,7 @@ const STEP_NAMES: ReadonlySet<string> = new Set([
   'KEYCLOAK_ORGANIZATION_RECONCILE',
   'TENANT_OWNER_LINK_OR_INVITE',
   'DEFAULT_CONFIGURATION_APPLY',
+  'SAMPLE_MENU_PUBLISH',
   'BRANDS_AND_LOCATIONS_VALIDATE',
   'PAYMENT_CONFIGURATION_VALIDATE',
   'DELIVERY_CONFIGURATION_VALIDATE',
@@ -82,8 +87,11 @@ const ENDED = new Set(['CANCELLED', 'FAILED']);
  * IA 2.5 Onboarding -- the resumable run: steps, blockers, what to do about
  * each, a dry-run check, resume, cancel, and activate.
  *
- * The real step catalogue (`OnboardingStep`, 12 steps from
- * `KEYCLOAK_ORGANIZATION_RECONCILE` through `TENANT_ACTIVATE`) is shown as
+ * The real step catalogue (every `OnboardingStep`, from
+ * `KEYCLOAK_ORGANIZATION_RECONCILE` through `TENANT_ACTIVATE`, of which
+ * `SAMPLE_MENU_PUBLISH` is the only optional one -- a run that declined it
+ * carries that step `SKIPPED` rather than omitting it, which is normal and not
+ * a failure) is shown as
  * the server names it, not the fiscal-code-backfill/SMS-sender-alias guess
  * this row's own IA prose makes -- `FRONTEND_DOMAIN_VALIDATE` is the closest
  * thing to domain verification, `POS_BINDINGS_VALIDATE` to a provider
@@ -125,6 +133,24 @@ export class TenantOnboarding {
   protected readonly resending = signal(false);
   protected readonly resent = signal(false);
   protected readonly invitationLocales: readonly InvitationLocale[] = ['uz', 'ru', 'en'];
+
+  /**
+   * Whether to plant a sample menu (ADR 0099). On by default for a new tenant:
+   * the platform wants to see its own storefront answer before the tenant is
+   * ready to author anything, and the tenant replaces it later. The server
+   * treats an absent field as a no, so the default lives here rather than there
+   * -- a caller that predates the field must not start planting sample catalogs.
+   *
+   * Off by default for a restart, set in `load()` from whether a run already
+   * exists. This panel is not only the first-run panel: `canStartNew` also shows
+   * it over a `CANCELLED` or `FAILED` run, and a tenant on its second run has
+   * usually spent the time between the two authoring something. The server's own
+   * decline only sees a *published* menu, so a draft the owner is mid-way
+   * through is invisible to it -- on by default there would publish a sample
+   * over a tenant that is nearly ready, silently. The operator can still tick
+   * the box; what changes is that it is now a choice rather than a default.
+   */
+  protected readonly sampleMenu = signal(true);
   protected readonly actionError = signal<string | null>(null);
 
   protected readonly resumeReason = signal('');
@@ -169,6 +195,12 @@ export class TenantOnboarding {
       const run = await this.tenantsApi.currentOnboardingRun(this.tenantId);
       this.run.set(run);
       this.runId.set(run?.run.id ?? null);
+      // A restart is not a first run: see `sampleMenu`. Keyed on "has this
+      // tenant a run at all" rather than on the previous run's
+      // SAMPLE_MENU_PUBLISH status, because the harmful case is the one where
+      // that step was SKIPPED (the owner has been authoring instead), not the
+      // one where it completed.
+      this.sampleMenu.set(run === null);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));
     } finally {
@@ -344,6 +376,7 @@ export class TenantOnboarding {
         undefined,
         this.selectedTemplate()?.id,
         this.ownerLocale(),
+        this.sampleMenu(),
       );
       this.runId.set(runId);
       this.validation.set(null);

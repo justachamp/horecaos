@@ -504,6 +504,7 @@ export const uzLatn: Messages = {
   'onboarding.step.KEYCLOAK_ORGANIZATION_RECONCILE': 'Kirish tashkiloti',
   'onboarding.step.TENANT_OWNER_LINK_OR_INVITE': 'Egasining hisobi',
   'onboarding.step.DEFAULT_CONFIGURATION_APPLY': 'Standart sozlamalar',
+  'onboarding.step.SAMPLE_MENU_PUBLISH': 'Namuna menyu',
   'onboarding.step.BRANDS_AND_LOCATIONS_VALIDATE': 'Brendlar va joylar',
   'onboarding.step.PAYMENT_CONFIGURATION_VALIDATE': 'To‘lovlar va yuridik shaxslar',
   'onboarding.step.DELIVERY_CONFIGURATION_VALIDATE': 'Yetkazib berish hududlari va tariflari',
@@ -547,6 +548,10 @@ export const uzLatn: Messages = {
     'Sinov buyurtmasi narxini hisoblab bo‘lmadi. Menyu narxlarini operatsion ilovada tekshiring.',
   'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
     'Yetkazib berish qamrovini hozir tekshirib bo‘lmadi. Qayta urinish o‘zi bajariladi.',
+  'onboarding.hint.NOT_REQUESTED': 'Bu ishga tushirishda namuna menyu so‘ralmagan.',
+  'onboarding.hint.SAMPLE_MENU_REJECTED': 'Namuna menyu katalog tekshiruvidan o‘tmadi va e’lon qilinmadi.',
+  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY': 'Namuna menyu faqat UZS da tuzilgan, mijoz esa boshqa valyutada ishlaydi, shuning uchun hech narsa yaratilmadi.',
+  'onboarding.hint.SAMPLE_PRICING_REFUSED': 'Namuna menyuga narx qo‘yib bo‘lmadi: mijozda 0 ustuvorlikdagi amaldagi narxlar kitobi bor. Ulardan biriga yuqoriroq ustuvorlik bering yoki muddatini yoping, so‘ng davom ettiring.',
   'onboarding.hint.TENANT_MISSING': 'Mijoz yozuvi topilmadi.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE':
     'Vaqtinchalik nosozlik. Qayta urinish o‘zi bajariladi.',
@@ -568,6 +573,7 @@ export const uzLatn: Messages = {
   'onboarding.template.label':
     'Yangi jarayonlar {code} shabloni, {version}-versiya bo‘yicha boradi: {count} ta majburiy qadam.',
   'onboarding.start.ownerLocale': 'Taklifnoma tili',
+  'onboarding.start.sampleMenu': 'Hamma narsa ishlayotganini tekshirish uchun namuna menyu yarating va e’lon qiling; mijoz uni keyinroq almashtiradi',
   'onboarding.invitation.title': 'Egaga taklifnoma',
   'onboarding.invitation.state.QUEUED': 'Yuborilishini kutmoqda',
   'onboarding.invitation.state.SENT': 'Yuborildi',

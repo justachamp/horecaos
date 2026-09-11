@@ -15,6 +15,13 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStuckRunDirectory;
  * OnboardingScheduler.stalledAgeSeconds} gauges — a per-run listing rather
  * than a single oldest-age number, and with a caller-chosen threshold rather
  * than the gauge's implicit "however long".
+ *
+ * <p>Same rows means the same predicate, {@code AND s.required} included: a
+ * failed optional step (ADR 0099's {@code SAMPLE_MENU_PUBLISH} is the only one)
+ * does not halt a run, so a run carrying one is not stuck and must not be
+ * listed here either. The clause belongs in the {@code WHERE} rather than the
+ * {@code HAVING}, where it also narrows the {@code min(s.updated_at)} the
+ * threshold is measured against.
  */
 @Component
 public class JdbcOnboardingStuckRunDirectory implements OnboardingStuckRunDirectory {
@@ -35,6 +42,7 @@ public class JdbcOnboardingStuckRunDirectory implements OnboardingStuckRunDirect
                   FROM tenant.onboarding_steps s
                   JOIN tenant.onboarding_runs r ON r.id = s.run_id
                  WHERE r.status NOT IN ('ACTIVE', 'CANCELLED')
+                   AND s.required
                    AND s.step_key <> 'TENANT_ACTIVATE'
                    AND s.status IN ('PENDING', 'FAILED')
                    AND s.available_at <= CAST(:now AS timestamptz)

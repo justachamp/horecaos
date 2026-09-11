@@ -164,6 +164,7 @@ describe('TenantOnboarding', () => {
       undefined,
       'template-2',
       'ru',
+      true,
     );
   });
 
@@ -193,6 +194,7 @@ describe('TenantOnboarding', () => {
       undefined,
       'template-2',
       'ru',
+      true,
     );
   });
 
@@ -543,4 +545,159 @@ describe('TenantOnboarding', () => {
 
     expect(fixture.nativeElement.textContent).toContain('У вас нет права');
   });
+  it('asks for a sample menu by default, and says so in the operator\u2019s language', async () => {
+    await createWith(null);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    expect(start.textContent).toContain(ru['onboarding.start.sampleMenu']);
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      true,
+    );
+  });
+
+  it('does not ask for a sample menu when this is a restart rather than a first run', async () => {
+    // RUN is FAILED, so the start panel is showing over an ended run. A tenant
+    // on its second run has usually been authoring in between, and the server's
+    // own decline only sees a *published* menu -- a draft is invisible to it. So
+    // the box is off unless the operator deliberately ticks it.
+    await createWith(RUN);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      false,
+    );
+  });
+
+  it('starts without a sample menu when the operator clears the box', async () => {
+    await createWith(null);
+    api.startOnboarding.mockResolvedValue({ runId: 'run-2' });
+    api.currentOnboardingRun.mockResolvedValue(RUN);
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const checkbox = start.querySelector('input[name="sampleMenu"]') as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    await settle();
+
+    (start.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle();
+
+    // Sent as an explicit false rather than omitted: the server reads an absent
+    // field as a no either way, but a caller that means no should say so.
+    expect(api.startOnboarding).toHaveBeenLastCalledWith(
+      'tenant-1',
+      undefined,
+      undefined,
+      'template-1',
+      'ru',
+      false,
+    );
+  });
+
+  it('shows the sample menu step like any other, and explains a skipped one', async () => {
+    await createWith({
+      run: {
+        id: 'run-3',
+        status: 'IN_PROGRESS',
+        currentPhase: 'CONFIGURING',
+        startedBy: 'admin@test',
+        lastError: null,
+      },
+      steps: [
+        {
+          stepKey: 'SAMPLE_MENU_PUBLISH',
+          phase: 'CONFIGURING',
+          status: 'SKIPPED',
+          required: false,
+          attemptCount: 0,
+          errorCode: 'NOT_REQUESTED',
+          detail: null,
+          externalReference: null,
+        },
+      ],
+      outstandingRequired: [],
+    });
+
+    // Named, not left as a raw enum key, and the hint says what happened.
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.step.SAMPLE_MENU_PUBLISH']);
+    expect(fixture.nativeElement.textContent).toContain(ru['onboarding.hint.NOT_REQUESTED']);
+
+    // detail: null is what the server really writes for a declined row -- it
+    // writes the code and nothing else, precisely so a Russian operator is not
+    // shown the translated hint followed by an untranslated English copy of it.
+    // The raw caption falls back to the code, the way every unhinted code reads.
+    expect(fixture.nativeElement.textContent).toContain('NOT_REQUESTED');
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'No sample menu was asked for when this run was started',
+    );
+  });
+
+  // Every way the sample menu step can refuse, and the hint is the only place
+  // the console says what to do about it. A code wired into HINTS but never
+  // rendered is indistinguishable from one missing: key parity across the
+  // catalogues proves the string exists, not that an operator ever sees it.
+  const SAMPLE_REFUSALS = [
+    { errorCode: 'SAMPLE_MENU_REJECTED', detail: 'VARIANT_HAS_NO_ACTIVE_PRICE' },
+    { errorCode: 'SAMPLE_MENU_UNSUPPORTED_CURRENCY', detail: 'KZT' },
+    { errorCode: 'SAMPLE_PRICING_REFUSED', detail: 'PRICE_BOOK_PRIORITY_CONFLICT' },
+  ] as const;
+
+  for (const { errorCode, detail } of SAMPLE_REFUSALS) {
+    it(`explains a sample menu that failed ${errorCode}`, async () => {
+      await createWith({
+        run: {
+          id: 'run-4',
+          status: 'FAILED',
+          currentPhase: 'CONFIGURING',
+          startedBy: 'admin@test',
+          lastError: null,
+        },
+        steps: [
+          {
+            stepKey: 'SAMPLE_MENU_PUBLISH',
+            phase: 'CONFIGURING',
+            status: 'FAILED',
+            required: false,
+            attemptCount: 1,
+            errorCode,
+            detail,
+            externalReference: null,
+          },
+        ],
+        outstandingRequired: [],
+      });
+
+      expect(fixture.nativeElement.textContent).toContain(ru[`onboarding.hint.${errorCode}`]);
+      // The server's own detail is still shown, because it names the specifics.
+      expect(fixture.nativeElement.textContent).toContain(detail);
+    });
+  }
 });
