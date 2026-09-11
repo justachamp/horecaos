@@ -23,6 +23,7 @@ import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.PlatformMailer;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore.Row;
 
@@ -55,6 +56,7 @@ public class OwnerInvitationRelay {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JdbcOwnerInvitationStore store;
+    private final JdbcOwnerInvitationEventStore events;
     private final StaffAccounts accounts;
     private final PlatformMailer mailer;
     private final AuditRecorder audit;
@@ -63,12 +65,14 @@ public class OwnerInvitationRelay {
 
     public OwnerInvitationRelay(
             JdbcOwnerInvitationStore store,
+            JdbcOwnerInvitationEventStore events,
             StaffAccounts accounts,
             PlatformMailer mailer,
             AuditRecorder audit,
             Clock clock,
             @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin) {
         this.store = store;
+        this.events = events;
         this.accounts = accounts;
         this.mailer = mailer;
         this.audit = audit;
@@ -123,10 +127,12 @@ public class OwnerInvitationRelay {
         }
         if (account.isEmpty()) {
             store.markFailed(row.id(), row.attempts(), "OWNER_ACCOUNT_MISSING");
+            record(row, JdbcOwnerInvitationEventStore.SEND_FAILED, "OWNER_ACCOUNT_MISSING", now);
             return false;
         }
         if (account.get().hasPassword()) {
             store.markNotNeeded(row.id(), row.attempts());
+            record(row, JdbcOwnerInvitationEventStore.NOT_NEEDED, null, now);
             return false;
         }
 
@@ -142,6 +148,7 @@ public class OwnerInvitationRelay {
         switch (outcome) {
             case MailOutcome.Sent ignored -> {
                 if (store.markSent(row.id(), row.attempts(), OwnerInvitationService.hash(token), expiresAt, now)) {
+                    record(row, JdbcOwnerInvitationEventStore.SENT, null, now);
                     audit.record(AuditFact.of("tenant.owner_invitation.sent", AuditClass.BUSINESS)
                             .by(ActorRef.systemJob("owner-invitation-relay"))
                             .at(ResourceScope.tenant(row.tenantId()))
@@ -155,9 +162,14 @@ public class OwnerInvitationRelay {
                 }
                 return false;
             }
-            case MailOutcome.NotConfigured ignored ->
+            case MailOutcome.NotConfigured ignored -> {
                 store.markRetry(row.id(), row.attempts(), now.plus(UNCONFIGURED_WAIT), "MAIL_NOT_CONFIGURED", false);
-            case MailOutcome.Rejected rejected -> store.markFailed(row.id(), row.attempts(), rejected.code());
+                record(row, JdbcOwnerInvitationEventStore.SEND_DEFERRED, "MAIL_NOT_CONFIGURED", now);
+            }
+            case MailOutcome.Rejected rejected -> {
+                store.markFailed(row.id(), row.attempts(), rejected.code());
+                record(row, JdbcOwnerInvitationEventStore.SEND_FAILED, rejected.code(), now);
+            }
             case MailOutcome.Failed failed -> retry(row, now, failed.code());
         }
         return false;
@@ -166,9 +178,32 @@ public class OwnerInvitationRelay {
     private void retry(Row row, Instant now, String code) {
         if (row.attempts() >= MAX_ATTEMPTS) {
             store.markFailed(row.id(), row.attempts(), code);
+            record(row, JdbcOwnerInvitationEventStore.SEND_FAILED, code, now);
         } else {
             store.markRetry(row.id(), row.attempts(), now.plus(backoff(row.attempts())), code, true);
+            record(row, JdbcOwnerInvitationEventStore.SEND_DEFERRED, code, now);
         }
+    }
+
+    /**
+     * Appends what this attempt did to the invitation's history (ADR 0100).
+     *
+     * <p>Always after the state write, never before: a history saying an email
+     * was sent by a relay that had already lost its lease would be a lie the
+     * operator has no way to check.
+     */
+    private void record(Row row, String type, @org.jspecify.annotations.Nullable String outcomeCode, Instant now) {
+        events.append(new JdbcOwnerInvitationEventStore.Entry(
+                row.tenantId(),
+                row.id(),
+                type,
+                row.attempts(),
+                row.locale(),
+                outcomeCode,
+                ActorRef.Type.SYSTEM_JOB.name(),
+                "owner-invitation-relay",
+                null,
+                now));
     }
 
     /** 1, 2, 4 ... minutes, capped at an hour. */

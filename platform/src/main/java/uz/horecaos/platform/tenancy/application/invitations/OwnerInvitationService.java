@@ -6,8 +6,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -19,23 +23,34 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore.OverviewRow;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore.Row;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * A tenant owner's invitation (ADR 0097): queued by onboarding, resent by an
- * operator, opened and accepted by the owner through a one-time link.
+ * operator, opened and accepted by the owner through a one-time link. Every one
+ * of those acts is also appended to the invitation's history (ADR 0100), which
+ * a resend does not erase the way the invitation row itself is erased.
  *
  * <p>The link's token exists only in the email. This class sees it once, when
  * the owner presents it, and compares its SHA-256 with the one the relay kept;
  * nothing here stores, logs or returns a token.
+ *
+ * <p>The recipient's address is Keycloak's, read at the moment a screen asks
+ * for it and stored nowhere. An operator holding {@link
+ * Capability#TENANT_ONBOARDING_MANAGE} -- the capability that supplied the
+ * address at onboarding -- sees it in full and leaves an ADR 0029 reveal fact
+ * behind; everybody else sees it masked.
  */
 @Service
 public class OwnerInvitationService implements OwnerInvitations {
@@ -45,15 +60,44 @@ public class OwnerInvitationService implements OwnerInvitations {
 
     public static final Set<String> LOCALES = Set.of("uz", "ru", "en");
 
+    /** Everything that is neither accepted nor unnecessary: the work an operator still has. */
+    public static final String OUTSTANDING = "OUTSTANDING";
+
+    /** A tenant whose owner was linked and never invited. Not a stored status. */
+    public static final String NONE = "NONE";
+
+    /**
+     * At most this many tenants come back from the overview. Each row costs one
+     * identity-provider read to resolve its recipient, so the page is bounded
+     * by that and not by what a screen would like.
+     */
+    public static final int OVERVIEW_LIMIT = 200;
+
+    /** Why an operator is shown a staff address, recorded on every reveal (ADR 0029). */
+    static final String RECIPIENT_PURPOSE = "tenancy.onboarding.invitation.recipient";
+
+    /** Most urgent first: what an operator should look at before anything else. */
+    private static final List<String> URGENCY =
+            List.of("FAILED", "EXPIRED", NONE, "QUEUED", "SENT", "NOT_NEEDED", "ACCEPTED");
+
     private final JdbcOwnerInvitationStore store;
+    private final JdbcOwnerInvitationEventStore events;
     private final StaffAccounts accounts;
+    private final AuthorizationService authorization;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public OwnerInvitationService(
-            JdbcOwnerInvitationStore store, StaffAccounts accounts, AuditRecorder audit, Clock clock) {
+            JdbcOwnerInvitationStore store,
+            JdbcOwnerInvitationEventStore events,
+            StaffAccounts accounts,
+            AuthorizationService authorization,
+            AuditRecorder audit,
+            Clock clock) {
         this.store = store;
+        this.events = events;
         this.accounts = accounts;
+        this.authorization = authorization;
         this.audit = audit;
         this.clock = clock;
     }
@@ -73,6 +117,17 @@ public class OwnerInvitationService implements OwnerInvitations {
         if (!store.queueIfAbsent(id, tenantId, subjectId, language, queuedBy, now)) {
             return false;
         }
+        events.append(new JdbcOwnerInvitationEventStore.Entry(
+                tenantId,
+                id,
+                JdbcOwnerInvitationEventStore.QUEUED,
+                0,
+                language,
+                null,
+                ActorRef.Type.SYSTEM_JOB.name(),
+                queuedBy,
+                null,
+                now));
         audit.record(AuditFact.of("tenant.owner_invitation.queued", AuditClass.BUSINESS)
                 .by(ActorRef.systemJob("tenant-onboarding"))
                 .at(ResourceScope.tenant(tenantId))
@@ -97,11 +152,83 @@ public class OwnerInvitationService implements OwnerInvitations {
         return QUEUED;
     }
 
-    /** Where the tenant's owner invitation stands, for the control plane. */
-    @Transactional(readOnly = true)
-    public Optional<OwnerInvitationView> view(UUID tenantId) {
+    /**
+     * Where the tenant's owner invitation stands, for a named operator: the
+     * recipient in full when they hold {@link Capability#TENANT_ONBOARDING_MANAGE}
+     * here, and the invitation's history either way.
+     *
+     * <p>Not read-only: showing an operator a staff address is a reveal, and a
+     * reveal writes a fact (ADR 0029).
+     */
+    @Transactional
+    public Optional<OwnerInvitationView> view(UUID tenantId, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
-        return store.latestFor(tenantId).map(row -> OwnerInvitationView.of(row, maskedEmail(row.subjectId()), now));
+        Optional<Row> found = store.latestFor(tenantId);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        Row row = found.get();
+        ResourceScope scope = ResourceScope.tenant(tenantId);
+        Recipient recipient = recipientOf(row.subjectId(), mayReveal(actor, scope));
+        if (recipient.full() != null) {
+            recordReveal(scope, actor, 1, now, correlationId);
+        }
+        return Optional.of(render(row, recipient, now));
+    }
+
+    /**
+     * Every tenant whose owner has an invitation or is waiting for one (ADR
+     * 0100), most urgent first.
+     *
+     * <p>The caller has already been required to hold {@link
+     * Capability#TENANT_ONBOARDING_MANAGE} at platform scope to reach this at
+     * all, so the recipients come back in full -- and the one fact recorded
+     * here says how many were shown, never which.
+     *
+     * @param state one stored state, {@link #NONE}, {@link #OUTSTANDING}, or
+     *        null for all of them
+     */
+    @Transactional
+    public List<OwnerInvitationOverviewRow> overview(@Nullable String state, ActorRef actor, String correlationId) {
+        Instant now = clock.instant();
+        ResourceScope scope = ResourceScope.platform();
+        boolean reveal = mayReveal(actor, scope);
+        String wanted = state == null || state.isBlank() ? null : state.strip().toUpperCase(java.util.Locale.ROOT);
+
+        List<OwnerInvitationOverviewRow> rows = new ArrayList<>();
+        int revealed = 0;
+        for (OverviewRow row : store.overview(OVERVIEW_LIMIT)) {
+            String rowState = stateOf(row.status(), row.expiresAt(), now);
+            if (!matches(rowState, wanted)) {
+                continue;
+            }
+            Recipient recipient = row.subjectId() == null ? Recipient.UNKNOWN : recipientOf(row.subjectId(), reveal);
+            if (recipient.full() != null) {
+                revealed++;
+            }
+            rows.add(new OwnerInvitationOverviewRow(
+                    row.tenantId(),
+                    row.tenantSlug(),
+                    row.tenantName(),
+                    row.tenantStatus(),
+                    rowState,
+                    recipient.full(),
+                    recipient.masked(),
+                    row.locale(),
+                    row.attempts() == null ? 0 : row.attempts(),
+                    row.lastErrorCode(),
+                    text(row.queuedAt()),
+                    text(row.sentAt()),
+                    text(row.openedAt()),
+                    text(row.acceptedAt()),
+                    text(row.expiresAt())));
+        }
+        rows.sort(Comparator.comparingInt((OwnerInvitationOverviewRow row) -> urgencyOf(row.state()))
+                .thenComparing(OwnerInvitationOverviewRow::tenantName));
+        if (revealed > 0) {
+            recordReveal(scope, actor, revealed, now, correlationId);
+        }
+        return List.copyOf(rows);
     }
 
     /**
@@ -126,6 +253,17 @@ public class OwnerInvitationService implements OwnerInvitations {
         if (!store.requeue(row.id(), language, by, now)) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "The owner has already set up their account");
         }
+        events.append(new JdbcOwnerInvitationEventStore.Entry(
+                tenantId,
+                row.id(),
+                JdbcOwnerInvitationEventStore.RESENT,
+                0,
+                language,
+                row.status(),
+                ActorRef.Type.USER.name(),
+                by,
+                reason,
+                now));
         audit.record(AuditFact.of("tenant.owner_invitation.resent", AuditClass.SECURITY)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -164,6 +302,17 @@ public class OwnerInvitationService implements OwnerInvitations {
         UUID id = Ids.newId();
         String by = actor.subject() == null ? "unknown" : actor.subject();
         store.queueIfAbsent(id, tenantId, subjectId, language, by, now);
+        events.append(new JdbcOwnerInvitationEventStore.Entry(
+                tenantId,
+                id,
+                JdbcOwnerInvitationEventStore.QUEUED,
+                0,
+                language,
+                null,
+                ActorRef.Type.USER.name(),
+                by,
+                reason,
+                now));
         audit.record(AuditFact.of("tenant.owner_invitation.queued", AuditClass.SECURITY)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -184,11 +333,26 @@ public class OwnerInvitationService implements OwnerInvitations {
     public InvitationInspection inspect(String token) {
         Instant now = clock.instant();
         Row row = live(token, now);
-        store.markOpened(row.id(), now);
+        if (store.markOpened(row.id(), now)) {
+            // Only the first open. A mail scanner following the link is not the
+            // owner reading their invitation, and opened_at has always meant
+            // the first one.
+            events.append(new JdbcOwnerInvitationEventStore.Entry(
+                    row.tenantId(),
+                    row.id(),
+                    JdbcOwnerInvitationEventStore.OPENED,
+                    row.attempts(),
+                    row.locale(),
+                    null,
+                    "OWNER",
+                    row.subjectId(),
+                    null,
+                    now));
+        }
         return new InvitationInspection(
                 store.tenantName(row.tenantId()),
-                maskedEmail(row.subjectId()),
-                java.util.Objects.requireNonNull(row.expiresAt()).toString(),
+                maskFor(row.subjectId()),
+                Objects.requireNonNull(row.expiresAt()).toString(),
                 row.locale());
     }
 
@@ -220,6 +384,17 @@ public class OwnerInvitationService implements OwnerInvitations {
         if (!store.markAccepted(row.id(), now)) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This invitation changed while it was being accepted");
         }
+        events.append(new JdbcOwnerInvitationEventStore.Entry(
+                row.tenantId(),
+                row.id(),
+                JdbcOwnerInvitationEventStore.ACCEPTED,
+                row.attempts(),
+                row.locale(),
+                null,
+                "OWNER",
+                row.subjectId(),
+                null,
+                now));
         audit.record(AuditFact.of("tenant.owner_invitation.accepted", AuditClass.SECURITY)
                 .by(ActorRef.user(row.subjectId(), null))
                 .at(ResourceScope.tenant(row.tenantId()))
@@ -242,6 +417,65 @@ public class OwnerInvitationService implements OwnerInvitations {
         }
     }
 
+    /** The state a screen shows: the stored status, plus the two it does not store. */
+    static String stateOf(@Nullable String status, @Nullable Instant expiresAt, Instant now) {
+        if (status == null) {
+            return NONE;
+        }
+        return "SENT".equals(status) && expiresAt != null && !expiresAt.isAfter(now) ? "EXPIRED" : status;
+    }
+
+    private static boolean matches(String state, @Nullable String wanted) {
+        if (wanted == null) {
+            return true;
+        }
+        if (OUTSTANDING.equals(wanted)) {
+            return !"ACCEPTED".equals(state) && !"NOT_NEEDED".equals(state);
+        }
+        return wanted.equals(state);
+    }
+
+    private static int urgencyOf(String state) {
+        int rank = URGENCY.indexOf(state);
+        return rank < 0 ? URGENCY.size() : rank;
+    }
+
+    private OwnerInvitationView render(Row row, Recipient recipient, Instant now) {
+        List<OwnerInvitationEventView> timeline = events.timeline(row.tenantId(), row.id()).stream()
+                .map(event -> new OwnerInvitationEventView(
+                        event.type(),
+                        event.attempt(),
+                        event.locale(),
+                        event.outcomeCode(),
+                        event.actorType(),
+                        event.actorReference(),
+                        event.reason(),
+                        event.occurredAt().toString()))
+                .toList();
+        return OwnerInvitationView.of(row, recipient, timeline, now);
+    }
+
+    /**
+     * Whether this caller may be shown a recipient in full: the capability that
+     * chose the address at onboarding is the one that may read it back.
+     */
+    private boolean mayReveal(ActorRef actor, ResourceScope scope) {
+        return actor.type() == ActorRef.Type.USER
+                && authorization.has(actor.subject(), Capability.TENANT_ONBOARDING_MANAGE, scope);
+    }
+
+    private void recordReveal(ResourceScope scope, ActorRef actor, int count, Instant now, String correlationId) {
+        audit.record(AuditFact.of("tenant.owner_invitation.recipient_revealed", AuditClass.SECURITY)
+                .by(actor)
+                .at(scope)
+                .because(RECIPIENT_PURPOSE)
+                .changed(Map.of("revealedCount", count))
+                .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
+                .correlatedBy(correlationId)
+                .occurredAt(now)
+                .build());
+    }
+
     private Row live(String token, Instant now) {
         Row row = store.byTokenHashForUpdate(hash(token.strip()))
                 .orElseThrow(() -> new ApiException(
@@ -258,16 +492,23 @@ public class OwnerInvitationService implements OwnerInvitations {
         return row;
     }
 
-    private @Nullable String maskedEmail(String subjectId) {
+    /**
+     * The address Keycloak holds, masked and -- when the caller may see it --
+     * whole. The identity provider being unreachable costs the address and
+     * nothing else: the screen still says where the invitation stands.
+     */
+    private Recipient recipientOf(String subjectId, boolean reveal) {
         try {
             return accounts.find(subjectId)
-                    .map(account -> mask(account.email()))
-                    .orElse(null);
+                    .map(account -> new Recipient(reveal ? account.email() : null, mask(account.email())))
+                    .orElse(Recipient.UNKNOWN);
         } catch (RuntimeException unavailable) {
-            // The screen still says where the invitation stands; only the
-            // masked address is missing while the identity provider is down.
-            return null;
+            return Recipient.UNKNOWN;
         }
+    }
+
+    private @Nullable String maskFor(String subjectId) {
+        return recipientOf(subjectId, false).masked();
     }
 
     /** {@code owner@example.uz} as {@code o***r@example.uz}: enough to recognise, not enough to use. */
@@ -283,9 +524,34 @@ public class OwnerInvitationService implements OwnerInvitations {
         return shown + email.substring(at);
     }
 
-    /** The control plane's view of an invitation; {@code state} adds EXPIRED to the stored status. */
+    private static @Nullable String text(@Nullable Instant instant) {
+        return instant == null ? null : instant.toString();
+    }
+
+    /** An address in both the forms a screen may be given, and neither is stored. */
+    record Recipient(@Nullable String full, @Nullable String masked) {
+
+        static final Recipient UNKNOWN = new Recipient(null, null);
+
+        /** A record's generated {@code toString} would print the address. */
+        @Override
+        public String toString() {
+            return "Recipient[full=" + (full == null ? "none" : "<redacted>") + ", masked=" + masked + "]";
+        }
+    }
+
+    /**
+     * The control plane's view of an invitation; {@code state} adds EXPIRED to
+     * the stored status.
+     *
+     * <p>{@code recipient} is the address in full and is present only for a
+     * caller holding {@link Capability#TENANT_ONBOARDING_MANAGE} here (ADR
+     * 0100); {@code emailMasked} is what everybody else gets and is what ADR
+     * 0097 shipped.
+     */
     public record OwnerInvitationView(
             String state,
+            @Nullable String recipient,
             @Nullable String emailMasked,
             String locale,
             int attempts,
@@ -294,15 +560,15 @@ public class OwnerInvitationService implements OwnerInvitations {
             @Nullable String sentAt,
             @Nullable String openedAt,
             @Nullable String acceptedAt,
-            @Nullable String expiresAt) {
+            @Nullable String expiresAt,
+            List<OwnerInvitationEventView> timeline) {
 
-        static OwnerInvitationView of(Row row, @Nullable String emailMasked, Instant now) {
-            boolean expired = "SENT".equals(row.status())
-                    && row.expiresAt() != null
-                    && !row.expiresAt().isAfter(now);
+        static OwnerInvitationView of(
+                Row row, Recipient recipient, List<OwnerInvitationEventView> timeline, Instant now) {
             return new OwnerInvitationView(
-                    expired ? "EXPIRED" : row.status(),
-                    emailMasked,
+                    stateOf(row.status(), row.expiresAt(), now),
+                    recipient.full(),
+                    recipient.masked(),
                     row.locale(),
                     row.attempts(),
                     row.lastErrorCode(),
@@ -310,11 +576,52 @@ public class OwnerInvitationService implements OwnerInvitations {
                     text(row.sentAt()),
                     text(row.openedAt()),
                     text(row.acceptedAt()),
-                    text(row.expiresAt()));
+                    text(row.expiresAt()),
+                    timeline);
         }
 
-        private static @Nullable String text(@Nullable Instant instant) {
-            return instant == null ? null : instant.toString();
+        /** A record's generated {@code toString} would print the address. */
+        @Override
+        public String toString() {
+            return "OwnerInvitationView[state=" + state + ", recipient=" + (recipient == null ? "none" : "<redacted>")
+                    + ", emailMasked=" + emailMasked + ", attempts=" + attempts + "]";
+        }
+    }
+
+    /** One thing that happened to an invitation (ADR 0100). */
+    public record OwnerInvitationEventView(
+            String type,
+            int attempt,
+            @Nullable String locale,
+            @Nullable String outcomeCode,
+            String actorType,
+            @Nullable String actor,
+            @Nullable String reason,
+            String occurredAt) {}
+
+    /** One tenant on the cross-tenant overview (ADR 0100). */
+    public record OwnerInvitationOverviewRow(
+            UUID tenantId,
+            String tenantSlug,
+            String tenantName,
+            String tenantStatus,
+            String state,
+            @Nullable String recipient,
+            @Nullable String emailMasked,
+            @Nullable String locale,
+            int attempts,
+            @Nullable String lastErrorCode,
+            @Nullable String queuedAt,
+            @Nullable String sentAt,
+            @Nullable String openedAt,
+            @Nullable String acceptedAt,
+            @Nullable String expiresAt) {
+
+        /** A record's generated {@code toString} would print the address. */
+        @Override
+        public String toString() {
+            return "OwnerInvitationOverviewRow[tenantId=" + tenantId + ", state=" + state + ", recipient="
+                    + (recipient == null ? "none" : "<redacted>") + ", emailMasked=" + emailMasked + "]";
         }
     }
 

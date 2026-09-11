@@ -182,13 +182,18 @@ public class JdbcOwnerInvitationStore {
                 """).param("id", id).param("attempt", attempt).update();
     }
 
-    /** The first time the link was opened; later opens change nothing. */
-    public void markOpened(UUID id, Instant now) {
-        jdbc.sql("""
-                UPDATE tenant.owner_invitations
-                   SET opened_at = :now, version = version + 1
-                 WHERE id = :id AND status = 'SENT' AND opened_at IS NULL
-                """).param("id", id).param("now", utc(now)).update();
+    /**
+     * The first time the link was opened; later opens change nothing.
+     *
+     * @return true when this was the first open, so the history records one
+     *         open rather than one per mail scanner that followed the link
+     */
+    public boolean markOpened(UUID id, Instant now) {
+        return jdbc.sql("""
+                        UPDATE tenant.owner_invitations
+                           SET opened_at = :now, version = version + 1
+                         WHERE id = :id AND status = 'SENT' AND opened_at IS NULL
+                        """).param("id", id).param("now", utc(now)).update() > 0;
     }
 
     /** Spends the link: the hash goes, so the same token can never be used again. */
@@ -219,6 +224,70 @@ public class JdbcOwnerInvitationStore {
                          ORDER BY r.started_at DESC
                          LIMIT 1
                         """).param("tenantId", tenantId).query(String.class).optional();
+    }
+
+    /**
+     * Every tenant whose owner matters, with its latest invitation if it has
+     * one (ADR 0100).
+     *
+     * <p>The left join is the point. A tenant onboarded before invitations
+     * existed has a completed owner step and no invitation row at all, and a
+     * list that started from {@code owner_invitations} would leave out exactly
+     * the tenants nobody has told yet. A tenant with neither an invitation nor
+     * a linked owner has no owner to chase and is not listed; an archived
+     * tenant is nobody's work and is not either.
+     *
+     * @param limit a hard cap, because each row costs one identity-provider
+     *        read to resolve its recipient
+     */
+    public List<OverviewRow> overview(int limit) {
+        return jdbc.sql("""
+                        SELECT t.id AS tenant_id, t.slug, t.display_name, t.status AS tenant_status,
+                               i.id AS invitation_id, COALESCE(i.subject_id, o.external_reference) AS subject_id,
+                               i.status, i.locale, i.attempts, i.last_error_code,
+                               i.queued_at, i.sent_at, i.opened_at, i.accepted_at, i.expires_at
+                          FROM tenant.tenants t
+                          LEFT JOIN LATERAL (
+                              SELECT oi.id, oi.subject_id, oi.status, oi.locale, oi.attempts,
+                                     oi.last_error_code, oi.queued_at, oi.sent_at, oi.opened_at,
+                                     oi.accepted_at, oi.expires_at
+                                FROM tenant.owner_invitations oi
+                               WHERE oi.tenant_id = t.id
+                               ORDER BY oi.queued_at DESC, oi.id
+                               LIMIT 1) i ON true
+                          LEFT JOIN LATERAL (
+                              SELECT s.external_reference
+                                FROM tenant.onboarding_steps s
+                                JOIN tenant.onboarding_runs r ON r.id = s.run_id
+                               WHERE r.tenant_id = t.id
+                                 AND s.step_key = 'TENANT_OWNER_LINK_OR_INVITE'
+                                 AND s.status = 'COMPLETED'
+                                 AND s.external_reference IS NOT NULL
+                               ORDER BY r.started_at DESC
+                               LIMIT 1) o ON true
+                         WHERE t.status <> 'ARCHIVED'
+                           AND (i.id IS NOT NULL OR o.external_reference IS NOT NULL)
+                         ORDER BY t.display_name, t.id
+                         LIMIT :limit
+                        """)
+                .param("limit", limit)
+                .query((row, number) -> new OverviewRow(
+                        java.util.Objects.requireNonNull(row.getObject("tenant_id", UUID.class)),
+                        row.getString("slug"),
+                        row.getString("display_name"),
+                        row.getString("tenant_status"),
+                        row.getObject("invitation_id", UUID.class),
+                        row.getString("subject_id"),
+                        row.getString("status"),
+                        row.getString("locale"),
+                        row.getObject("attempts", Integer.class),
+                        row.getString("last_error_code"),
+                        instant(row, "queued_at"),
+                        instant(row, "sent_at"),
+                        instant(row, "opened_at"),
+                        instant(row, "accepted_at"),
+                        instant(row, "expires_at")))
+                .list();
     }
 
     /** The name an invitation is written in; the tenant's own display name. */
@@ -256,6 +325,28 @@ public class JdbcOwnerInvitationStore {
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
+
+    /**
+     * One tenant on the cross-tenant overview. Every invitation field is absent
+     * for a tenant whose owner was linked but never invited; {@code subjectId}
+     * is then the owner that onboarding linked.
+     */
+    public record OverviewRow(
+            UUID tenantId,
+            String tenantSlug,
+            String tenantName,
+            String tenantStatus,
+            @Nullable UUID invitationId,
+            @Nullable String subjectId,
+            @Nullable String status,
+            @Nullable String locale,
+            @Nullable Integer attempts,
+            @Nullable String lastErrorCode,
+            @Nullable Instant queuedAt,
+            @Nullable Instant sentAt,
+            @Nullable Instant openedAt,
+            @Nullable Instant acceptedAt,
+            @Nullable Instant expiresAt) {}
 
     /** One invitation. {@code tokenHash} is a SHA-256, never a token. */
     public record Row(
