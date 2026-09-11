@@ -80,3 +80,69 @@ describe('CreateCustomerDialog', () => {
     expect(dismissed).toBe(true);
   });
 });
+
+/**
+ * `create-customer-dialog` is one of `q-modal`'s two migrated call sites
+ * (ADR 0101, row `X.8`) — `order-reason-dialog` is the other, and its own spec
+ * carries the matching pair of assertions.
+ *
+ * The point of the migration is not that the markup moved. It is that this
+ * dialog now answers Escape and gives the caret back, which the hand-written
+ * copy it replaced never did, and that a failure inside it is now announced to
+ * a screen reader (`q-inline-alert`) instead of rendered as a bare paragraph.
+ */
+describe('CreateCustomerDialog: migrated to shared/ui', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    TestBed.inject(I18n).setLocale('en');
+  });
+
+  it('wears the shared modal chrome and keeps every field it had', () => {
+    const { fixture } = render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const panel = host.querySelector('[data-testid="q-modal"]')!;
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    expect(panel.getAttribute('role')).toBe('dialog');
+    // Named by the heading the shared chrome renders, not by a second copy of it.
+    const labelledBy = panel.getAttribute('aria-labelledby')!;
+    expect(host.querySelector(`#${labelledBy}`)?.textContent).toContain('Create a customer');
+
+    expect(panel.querySelector('[data-testid="create-customer-phone"]')).not.toBeNull();
+    expect(panel.querySelector('[data-testid="create-customer-confirm"]')).not.toBeNull();
+  });
+
+  it('closes on Escape, which the dialog it replaced did not', () => {
+    const { fixture } = render();
+    let dismissed = false;
+    fixture.componentInstance.dismiss.subscribe(() => (dismissed = true));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(dismissed).toBe(true);
+  });
+
+  it('refuses Escape while the create is in flight, so a half-sent form is not lost', () => {
+    const { fixture } = render();
+    fixture.componentRef.setInput('busy', true);
+    fixture.detectChanges();
+    let dismissed = false;
+    fixture.componentInstance.dismiss.subscribe(() => (dismissed = true));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(dismissed).toBe(false);
+  });
+
+  it('reports a failure through the shared alert, in the interrupting role', () => {
+    const { fixture } = render();
+    fixture.componentRef.setInput('errorMessage', 'That phone is already taken.');
+    fixture.detectChanges();
+
+    const alert = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="q-inline-alert"]',
+    )!;
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.textContent).toContain('That phone is already taken.');
+  });
+});

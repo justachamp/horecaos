@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signal } from '@angular/core';
 
 import { Shell } from './shell';
@@ -10,6 +10,7 @@ import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
+import { Toasts } from '../shared/ui/toast';
 
 class FakeAuth {
   readonly displayName = signal<string | null>(null);
@@ -206,5 +207,74 @@ describe('Shell', () => {
     );
 
     expect(labels).toEqual(['Chilanzar', 'Yunusabad — suspended', 'Sergeli — draft']);
+  });
+});
+
+/**
+ * The shell is `q-toast-host`'s only call site, and deliberately so (ADR 0101,
+ * row `X.17`): one host, mounted outside the routed outlet, so a confirmation
+ * survives both the dialog that raised it closing and the navigation a
+ * successful mutation usually triggers. `customers-page.spec.ts` and
+ * `order-queue.spec.ts` cover the two features that raise them.
+ */
+describe('Shell: the toast host', () => {
+  let fixture: ComponentFixture<Shell>;
+  let toasts: Toasts;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [Shell],
+      providers: [
+        provideRouter([]),
+        { provide: Auth, useValue: new FakeAuth() },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(Shell);
+    toasts = TestBed.inject(Toasts);
+    toasts.clear();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => toasts.clear());
+
+  it('mounts exactly one host, with both live regions present before anything is announced', () => {
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelectorAll('[data-testid="q-toast-host"]').length).toBe(1);
+    // Empty, but in the DOM: a live region created at the moment it gains
+    // content is often never announced at all.
+    expect(host.querySelector('[data-testid="q-toast-alerts"]')?.getAttribute('role')).toBe(
+      'alert',
+    );
+    expect(host.querySelector('[data-testid="q-toast-statuses"]')?.getAttribute('role')).toBe(
+      'status',
+    );
+    expect(host.querySelectorAll('[data-testid="q-toast"]').length).toBe(0);
+  });
+
+  it('renders a confirmation raised from anywhere in the application', () => {
+    toasts.show({ message: 'Customer created', tone: 'success', timeoutMs: 0 });
+    fixture.detectChanges();
+
+    const statuses = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="q-toast-statuses"]',
+    )!;
+    expect(statuses.textContent).toContain('Customer created');
+  });
+
+  it('puts a failure in the interrupting region rather than beside the success', () => {
+    toasts.show({ message: 'Order updated', tone: 'success', timeoutMs: 0 });
+    toasts.show({ message: 'That did not apply', tone: 'error', timeoutMs: 0 });
+    fixture.detectChanges();
+
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('[data-testid="q-toast-alerts"]')?.textContent).toContain(
+      'That did not apply',
+    );
+    expect(host.querySelector('[data-testid="q-toast-alerts"]')?.textContent).not.toContain(
+      'Order updated',
+    );
   });
 });

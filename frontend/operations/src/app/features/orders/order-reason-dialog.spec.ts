@@ -122,3 +122,55 @@ describe('OrderReasonDialog', () => {
     expect(buttons.every((b) => b.disabled)).toBe(true);
   });
 });
+
+/**
+ * `order-reason-dialog` is `q-modal`'s second migrated call site (ADR 0101,
+ * row `X.8`); `create-customer-dialog.spec.ts` carries the first.
+ *
+ * This one matters more than its sibling: it is the dialog an operator opens
+ * mid-service to reject or cancel an order, and it was the one where Escape
+ * silently did nothing while the caret was free to wander behind an
+ * `aria-modal="true"` panel.
+ */
+describe('OrderReasonDialog: migrated to shared/ui', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    TestBed.inject(I18n).setLocale('en');
+  });
+
+  it('wears the shared modal chrome and keeps every field it had', () => {
+    const { fixture } = render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const panel = host.querySelector('[data-testid="q-modal"]')!;
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    expect(panel.getAttribute('role')).toBe('dialog');
+    const labelledBy = panel.getAttribute('aria-labelledby')!;
+    expect(host.querySelector(`#${labelledBy}`)?.textContent).toContain('Reject order');
+
+    expect(panel.querySelector('[data-testid="order-reason-dialog-code"]')).not.toBeNull();
+    expect(panel.querySelector('[data-testid="order-reason-dialog-confirm"]')).not.toBeNull();
+  });
+
+  it('closes on Escape, which the dialog it replaced did not', () => {
+    const { fixture } = render();
+    let dismissed = false;
+    fixture.componentInstance.dismiss.subscribe(() => (dismissed = true));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(dismissed).toBe(true);
+  });
+
+  it('refuses Escape while the rejection is in flight', () => {
+    const { fixture } = render();
+    fixture.componentRef.setInput('busy', true);
+    fixture.detectChanges();
+    let dismissed = false;
+    fixture.componentInstance.dismiss.subscribe(() => (dismissed = true));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(dismissed).toBe(false);
+  });
+});
