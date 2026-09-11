@@ -148,6 +148,16 @@ export interface RecordConsentRequest {
   readonly evidenceReference?: string | null;
 }
 
+/**
+ * `CustomerEligibility.Answer` — whether this customer may be reached for a
+ * purpose and channel right now. `refusalReason` is `CONSENT_WITHHELD` or
+ * `NO_VERIFIED_ENDPOINT` when `eligible` is false, and null otherwise.
+ */
+export interface CustomerEligibility {
+  readonly eligible: boolean;
+  readonly refusalReason: 'CONSENT_WITHHELD' | 'NO_VERIFIED_ENDPOINT' | null;
+}
+
 export interface BlacklistStatus {
   readonly active: boolean;
   readonly expired: boolean;
@@ -362,6 +372,50 @@ export class CustomersApi {
     );
   }
 
+  /** Corrects a mistyped value in place — no `type`, which never changes (`CustomerController.UpdateContactRequest`). */
+  async updateContact(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+    value: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.put<{ value: string }, void>(
+        operationsPaths.customerContactPoint(scope, accountId, contactPointId),
+        command({ value }),
+      ),
+    );
+  }
+
+  /** Removes a contact point added by mistake. Tombstoned server-side, never physically deleted. */
+  async removeContact(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<null, void>(
+        'DELETE',
+        operationsPaths.customerContactPoint(scope, accountId, contactPointId),
+        command(null),
+      ),
+    );
+  }
+
+  /** Makes this the account's primary contact of its kind, demoting whichever one held that place. */
+  async setPrimaryContact(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<null, void>(
+        operationsPaths.customerContactPointSetPrimary(scope, accountId, contactPointId),
+        command(null),
+      ),
+    );
+  }
+
   // ------------------------------------------------------------ the addresses
 
   async revealAddresses(
@@ -450,6 +504,22 @@ export class CustomersApi {
         command(request),
       ),
     );
+  }
+
+  async eligibility(
+    scope: LocationScope,
+    accountId: string,
+    brandId: string,
+    purpose: string,
+    channel: string,
+  ): Promise<CustomerEligibility> {
+    return (
+      await firstValueFrom(
+        this.api.get<CustomerEligibility>(operationsPaths.customerEligibility(scope, accountId), {
+          params: { brandId, purpose, channel },
+        }),
+      )
+    ).value;
   }
 
   // ------------------------------------------------------------ the blacklist

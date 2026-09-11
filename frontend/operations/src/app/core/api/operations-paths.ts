@@ -378,9 +378,28 @@ export const operationsPaths = {
     return `${this.customer(scope, accountId)}/contact-points`;
   },
 
+  /** Correct (`PUT`) or remove (`DELETE`) one contact point. Mutation: key required. */
+  customerContactPoint(scope: LocationScope, accountId: string, contactPointId: string): string {
+    return `${this.customerContactPoints(scope, accountId)}/${encodeURIComponent(contactPointId)}`;
+  },
+
+  /** Make this contact point the account's primary of its kind (`POST`). Mutation: key required. */
+  customerContactPointSetPrimary(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+  ): string {
+    return `${this.customerContactPoint(scope, accountId, contactPointId)}/set-primary`;
+  },
+
   /** Record (`POST`) or read (`GET`) the full consent history. */
   customerConsentDecisions(scope: LocationScope, accountId: string): string {
     return `${this.customer(scope, accountId)}/consent-decisions`;
+  },
+
+  /** Whether this customer may be reached for a purpose and channel, right now (`GET`, query params `brandId`, `purpose`, `channel`). */
+  customerEligibility(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/eligibility`;
   },
 
   /** Whether this customer is blacklisted right now, with no reveal. */

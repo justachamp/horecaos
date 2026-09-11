@@ -50,9 +50,11 @@ export const messagesEn = {
   'support.banner.until': 'until {time}',
   'support.banner.none': 'No open support session here; screens will refuse until one is opened',
   'support.banner.leave': 'Leave',
-  'settings.supportVisits.lead': 'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
+  'settings.supportVisits.lead':
+    'Every time someone from HorecaOS support entered your account: how much access they had, why, and how it ended. A visit still in progress can be ended here; the access goes at once.',
   'settings.supportVisits.loading': 'Loading visits…',
-  'settings.supportVisits.denied': 'Only the account’s owner and administrators can see support visits.',
+  'settings.supportVisits.denied':
+    'Only the account’s owner and administrators can see support visits.',
   'settings.supportVisits.empty': 'Nobody from HorecaOS support has entered your account.',
   'settings.supportVisits.openUntil': 'In progress, until {time}',
   'settings.supportVisits.endedAt': 'Ended {time}',
@@ -339,9 +341,11 @@ export const messagesEn = {
   'invite.submitting': 'Setting up…',
   'invite.signingIn': 'Your account is ready. Signing you in…',
   'invite.invalid.title': 'This link cannot be used',
-  'invite.invalid.body': 'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
+  'invite.invalid.body':
+    'It may already have been used, or a newer invitation replaced it. If you already set your password, sign in.',
   'invite.expired.title': 'This link has expired',
-  'invite.expired.body': 'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
+  'invite.expired.body':
+    'Invitation links work for 72 hours. Ask the HorecaOS team to send a new one.',
   'invite.toSignIn': 'Go to sign in',
   'invite.policy.length': 'The password is too short: use at least 12 characters.',
   'invite.policy.notEmail': 'The password must not be your email address.',
@@ -1526,6 +1530,17 @@ export const messagesEn = {
   'customers.profile.noContacts': 'No contact details on file.',
   'customers.profile.addPhone': 'Add phone',
   'customers.profile.addPhone.placeholder': '+998901112233',
+  'customers.profile.addEmail': 'Add email',
+  'customers.profile.addEmail.placeholder': 'name@example.com',
+  'customers.profile.contact.type.PHONE': 'Phone',
+  'customers.profile.contact.type.EMAIL': 'Email',
+  'customers.profile.contact.verification.UNVERIFIED': 'Unverified',
+  'customers.profile.contact.verification.PENDING': 'Verification pending',
+  'customers.profile.contact.verification.VERIFIED': 'Verified',
+  'customers.profile.contact.verification.FAILED': 'Verification failed',
+  'customers.profile.contact.masked': 'Hidden — Reveal to see the value',
+  'customers.profile.contact.setPrimary': 'Make primary',
+  'customers.profile.contact.remove': 'Remove',
   'customers.profile.dateOfBirth': 'Date of birth',
   'customers.profile.dateOfBirth.none': 'Not on file',
   'customers.profile.dateOfBirth.add': 'Add a date of birth',
@@ -1547,6 +1562,13 @@ export const messagesEn = {
   'customers.address.archive': 'Archive',
   'customers.address.untitled': 'Untitled',
   'customers.address.empty': 'No saved addresses.',
+  'customers.address.coordinateSource': 'Coordinates',
+  'customers.address.coordinateSource.NOT_GEOCODED': 'Not geocoded yet',
+  'customers.address.coordinateSource.LANDMARK_ONLY': 'Landmark only — no map pin',
+  'customers.address.coordinateSource.GEOCODER': 'Geocoded',
+  'customers.address.coordinateSource.CUSTOMER_PIN': 'Customer-placed pin',
+  'customers.address.coordinateSource.OPERATOR_PIN': 'Operator-placed pin',
+  'customers.address.coordinateSource.LEGACY_UNSOURCED': 'Pin from before this was tracked',
 
   'customers.orders.reorder': 'Reorder',
   'customers.orders.number': 'Order',
@@ -1565,6 +1587,21 @@ export const messagesEn = {
   'customers.consent.empty': 'No consent decisions on file.',
   'customers.consent.record': 'Record a decision',
   'customers.consent.record.action': 'Record',
+  'customers.consent.purpose.MARKETING_PROMOTIONS': 'Marketing promotions',
+  'customers.consent.channel.SMS': 'SMS',
+  'customers.consent.channel.EMAIL': 'Email',
+  'customers.consent.channel.PUSH': 'Push notification',
+  'customers.consent.channel.TELEGRAM': 'Telegram',
+  'customers.consent.policyVersion': 'Policy version the customer saw',
+  'customers.consent.policyVersion.placeholder': 'e.g. privacy-policy-2026-01',
+  'customers.consent.eligibility': 'Marketing eligibility',
+  'customers.consent.eligibility.eligible': 'Contactable for this purpose and channel.',
+  'customers.consent.eligibility.notEligible': 'Not contactable',
+  'customers.consent.eligibility.unknown': 'Checking…',
+  'customers.consent.eligibility.refusal.CONSENT_WITHHELD':
+    'no consent on file for this purpose and channel',
+  'customers.consent.eligibility.refusal.NO_VERIFIED_ENDPOINT':
+    'no verified contact endpoint for this channel',
 
   'customers.cashback.lead':
     'Points balance and ledger (loyalty module, ADR 0046) — not money, and never withdrawable.',
@@ -2528,7 +2565,8 @@ export const messagesEn = {
   'settings.nav.supportVisits': 'HorecaOS support visits',
   'settings.home.description.dataPrivacy':
     'Retention, consent, data-subject requests, and who has looked at a customer’s personal data.',
-  'settings.home.description.supportVisits': 'Who from HorecaOS support entered your account, when and why',
+  'settings.home.description.supportVisits':
+    'Who from HorecaOS support entered your account, when and why',
   'settings.dataPrivacy.title': 'Data & privacy',
   'settings.dataPrivacy.lead':
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',

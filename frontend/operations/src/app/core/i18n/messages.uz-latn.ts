@@ -40,9 +40,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'support.banner.until': '{time} gacha',
   'support.banner.none': 'Ochiq yordam sessiyasi yo‘q; u ochilmaguncha ekranlar rad etadi',
   'support.banner.leave': 'Chiqish',
-  'settings.supportVisits.lead': 'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
+  'settings.supportVisits.lead':
+    'HorecaOS yordami xodimining hisobingizga har bir kirishi: qanday kirish, nima uchun va qanday tugagan. Davom etayotgan tashrifni shu yerda tugatish mumkin — kirish darhol yo‘qoladi.',
   'settings.supportVisits.loading': 'Tashriflar yuklanmoqda…',
-  'settings.supportVisits.denied': 'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
+  'settings.supportVisits.denied':
+    'Yordam tashriflarini faqat hisob egasi va administratorlari ko‘radi.',
   'settings.supportVisits.empty': 'HorecaOS yordamidan hech kim hisobingizga kirmagan.',
   'settings.supportVisits.openUntil': 'Davom etmoqda, {time} gacha',
   'settings.supportVisits.endedAt': '{time} da tugagan',
@@ -324,9 +326,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.submitting': 'Saqlanmoqda…',
   'invite.signingIn': 'Hisobingiz tayyor. Tizimga kirilmoqda…',
   'invite.invalid.title': 'Bu havoladan foydalanib bo‘lmaydi',
-  'invite.invalid.body': 'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
+  'invite.invalid.body':
+    'Ehtimol, u allaqachon ishlatilgan yoki yangi taklifnoma uni almashtirgan. Parolni allaqachon o‘rnatgan bo‘lsangiz, tizimga kiring.',
   'invite.expired.title': 'Havolaning muddati tugagan',
-  'invite.expired.body': 'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
+  'invite.expired.body':
+    'Taklifnoma havolasi 72 soat amal qiladi. HorecaOS jamoasidan yangisini yuborishni so‘rang.',
   'invite.toSignIn': 'Kirish sahifasiga o‘tish',
   'invite.policy.length': 'Parol juda qisqa: kamida 12 ta belgi bo‘lsin.',
   'invite.policy.notEmail': 'Parol email manzilingiz bilan bir xil bo‘lmasin.',
@@ -1509,6 +1513,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.profile.noContacts': 'Aloqa maʻlumotlari yoʻq.',
   'customers.profile.addPhone': 'Telefon qoʻshish',
   'customers.profile.addPhone.placeholder': '+998901112233',
+  'customers.profile.addEmail': 'Email qoʻshish',
+  'customers.profile.addEmail.placeholder': 'name@example.com',
+  'customers.profile.contact.type.PHONE': 'Telefon',
+  'customers.profile.contact.type.EMAIL': 'Email',
+  'customers.profile.contact.verification.UNVERIFIED': 'Tasdiqlanmagan',
+  'customers.profile.contact.verification.PENDING': 'Tasdiqlash kutilmoqda',
+  'customers.profile.contact.verification.VERIFIED': 'Tasdiqlangan',
+  'customers.profile.contact.verification.FAILED': 'Tasdiqlash muvaffaqiyatsiz',
+  'customers.profile.contact.masked': 'Yashirilgan — qiymatni koʻrish uchun «Koʻrsatish»ni bosing',
+  'customers.profile.contact.setPrimary': 'Asosiy qilish',
+  'customers.profile.contact.remove': 'Oʻchirish',
   'customers.profile.dateOfBirth': 'Tugʻilgan sana',
   'customers.profile.dateOfBirth.none': 'Kiritilmagan',
   'customers.profile.dateOfBirth.add': 'Tugʻilgan sanani kiritish',
@@ -1530,6 +1545,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.address.archive': 'Arxivlash',
   'customers.address.untitled': 'Nomsiz',
   'customers.address.empty': 'Saqlangan manzillar yoʻq.',
+  'customers.address.coordinateSource': 'Koordinatalar',
+  'customers.address.coordinateSource.NOT_GEOCODED': 'Hali aniqlanmagan',
+  'customers.address.coordinateSource.LANDMARK_ONLY': 'Faqat moʻljal — xaritada nuqta yoʻq',
+  'customers.address.coordinateSource.GEOCODER': 'Geokoder aniqlagan',
+  'customers.address.coordinateSource.CUSTOMER_PIN': 'Mijoz qoʻygan nuqta',
+  'customers.address.coordinateSource.OPERATOR_PIN': 'Operator qoʻygan nuqta',
+  'customers.address.coordinateSource.LEGACY_UNSOURCED': 'Manba qayd etilishidan oldingi nuqta',
 
   'customers.orders.reorder': 'Qayta buyurtma berish',
   'customers.orders.number': 'Buyurtma',
@@ -1548,6 +1570,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.consent.empty': 'Rozilik qarorlari yoʻq.',
   'customers.consent.record': 'Qaror qayd etish',
   'customers.consent.record.action': 'Qayd etish',
+  'customers.consent.purpose.MARKETING_PROMOTIONS': 'Marketing xabarnomalari',
+  'customers.consent.channel.SMS': 'SMS',
+  'customers.consent.channel.EMAIL': 'Email',
+  'customers.consent.channel.PUSH': 'Push-bildirishnoma',
+  'customers.consent.channel.TELEGRAM': 'Telegram',
+  'customers.consent.policyVersion': 'Mijoz koʻrgan siyosat versiyasi',
+  'customers.consent.policyVersion.placeholder': 'masalan, privacy-policy-2026-01',
+  'customers.consent.eligibility': 'Marketingga yaroqlilik',
+  'customers.consent.eligibility.eligible': 'Ushbu maqsad va kanal uchun aloqa qilish mumkin.',
+  'customers.consent.eligibility.notEligible': 'Aloqa qilib boʻlmaydi',
+  'customers.consent.eligibility.unknown': 'Tekshirilmoqda…',
+  'customers.consent.eligibility.refusal.CONSENT_WITHHELD':
+    'ushbu maqsad va kanal uchun rozilik yoʻq',
+  'customers.consent.eligibility.refusal.NO_VERIFIED_ENDPOINT':
+    'ushbu kanal uchun tasdiqlangan aloqa yoʻq',
 
   'customers.cashback.lead':
     'Ball balansi va tarixi (sodiqlik moduli, ADR 0046) — bu pul emas va hech qachon yechib olinmaydi.',
@@ -2049,7 +2086,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.reveal.dismiss': 'Tushunarli',
   'marketing.promoCodes.form.name': 'Nomi (ushbu ro‘yxat uchun)',
   'marketing.promoCodes.form.code': 'Mijoz kiritadigan kod',
-  'marketing.promoCodes.form.code.hint': '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
+  'marketing.promoCodes.form.code.hint':
+    '4-32 ta harf yoki raqam. Saqlangandan keyin bir marta ko‘rsatiladi.',
   'marketing.promoCodes.form.shape': 'Chegirma turi',
   'marketing.promoCodes.form.percent': 'Buyurtmadan foiz, %',
   'marketing.promoCodes.form.amount': 'Buyurtmadan chegirma summasi',
@@ -2521,7 +2559,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.supportVisits': 'HorecaOS yordami tashriflari',
   'settings.home.description.dataPrivacy':
     'Saqlash muddatlari, rozilik, ma’lumot subyekti so‘rovlari va mijoz shaxsiy ma’lumotini kim ko‘rgani.',
-  'settings.home.description.supportVisits': 'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
+  'settings.home.description.supportVisits':
+    'HorecaOS yordamidan kim, qachon va nima uchun hisobingizga kirgan',
   'settings.dataPrivacy.title': 'Ma’lumotlar va maxfiylik',
   'settings.dataPrivacy.lead':
     'Restoran shaxsiy ma’lumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning o‘z so‘zlarini kim ko‘rgan.',

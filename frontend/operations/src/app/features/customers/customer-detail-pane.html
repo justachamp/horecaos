@@ -145,18 +145,76 @@
 
       <section class="block">
         <h3 class="q-subhead">{{ 'customers.profile.contacts' | t }}</h3>
-        @if (revealedContacts(); as contacts) {
-          @for (contact of contacts; track contact.id) {
-            <p class="q-body q-mono">
-              {{ contact.value }}
+        @for (contact of p.value.contactSummaries; track contact.id) {
+          @if (editingContactId() === contact.id) {
+            <div class="form form--inline">
+              <input
+                class="q-body field"
+                type="text"
+                [value]="editContactValue()"
+                (input)="editContactValue.set($any($event.target).value)"
+              />
+              <button
+                type="button"
+                class="secondary"
+                (click)="cancelEditingContact()"
+                [disabled]="contactActionPending()"
+              >
+                {{ 'customers.cancel' | t }}
+              </button>
+              <button
+                type="button"
+                class="primary"
+                (click)="saveEditedContact()"
+                [disabled]="contactActionPending()"
+              >
+                {{ contactActionPending() ? ('customers.saving' | t) : ('customers.save' | t) }}
+              </button>
+            </div>
+          } @else {
+            <p class="q-body contact-row">
+              <span class="q-caption">{{ contactTypeLabel(contact.type) }}</span>
+              <span class="q-mono">{{
+                revealedValueFor(contact.id) ?? ('customers.profile.contact.masked' | t)
+              }}</span>
+              <span class="q-caption">{{
+                contactVerificationLabel(contact.verificationStatus)
+              }}</span>
               @if (contact.isPrimary) {
                 <span class="q-caption">{{ 'customers.profile.primary' | t }}</span>
               }
+              <button
+                type="button"
+                class="link"
+                (click)="startEditingContact(contact.id, revealedValueFor(contact.id) ?? '')"
+              >
+                {{ 'customers.edit' | t }}
+              </button>
+              @if (!contact.isPrimary) {
+                <button
+                  type="button"
+                  class="link"
+                  [disabled]="contactActionPending()"
+                  (click)="makeContactPrimary(contact.id)"
+                >
+                  {{ 'customers.profile.contact.setPrimary' | t }}
+                </button>
+              }
+              <button
+                type="button"
+                class="link"
+                [disabled]="contactActionPending()"
+                (click)="removeContact(contact.id)"
+              >
+                {{ 'customers.profile.contact.remove' | t }}
+              </button>
             </p>
-          } @empty {
-            <p class="q-body-sm">{{ 'customers.profile.noContacts' | t }}</p>
           }
-        } @else {
+        } @empty {
+          <p class="q-body-sm">{{ 'customers.profile.noContacts' | t }}</p>
+        }
+
+        @if (!revealedContacts()) {
           <button
             type="button"
             class="secondary reveal-link"
@@ -166,25 +224,40 @@
             {{ 'customers.reveal' | t }}
           </button>
         }
-        @if (revealedContacts()) {
-          <div class="form form--inline">
-            <input
-              class="q-body field"
-              type="text"
-              [value]="newContactValue()"
-              (input)="newContactValue.set($any($event.target).value)"
-              [placeholder]="'customers.profile.addPhone.placeholder' | t"
-            />
-            <button
-              type="button"
-              class="secondary"
-              (click)="addContact()"
-              [disabled]="addingContact()"
-            >
-              {{ 'customers.profile.addPhone' | t }}
-            </button>
-          </div>
-        }
+
+        <div class="form form--inline">
+          <select
+            class="q-body field"
+            [value]="newContactType()"
+            (change)="setNewContactType($any($event.target).value)"
+          >
+            <option value="PHONE">{{ contactTypeLabel('PHONE') }}</option>
+            <option value="EMAIL">{{ contactTypeLabel('EMAIL') }}</option>
+          </select>
+          <input
+            class="q-body field"
+            type="text"
+            [value]="newContactValue()"
+            (input)="newContactValue.set($any($event.target).value)"
+            [placeholder]="
+              newContactType() === 'EMAIL'
+                ? ('customers.profile.addEmail.placeholder' | t)
+                : ('customers.profile.addPhone.placeholder' | t)
+            "
+          />
+          <button
+            type="button"
+            class="secondary"
+            (click)="addContact()"
+            [disabled]="addingContact()"
+          >
+            {{
+              newContactType() === 'EMAIL'
+                ? ('customers.profile.addEmail' | t)
+                : ('customers.profile.addPhone' | t)
+            }}
+          </button>
+        </div>
       </section>
 
       <section class="block">
@@ -377,6 +450,13 @@
                   {{ 'customers.address.landmark' | t }}: {{ address.fields.landmark }}
                 </p>
               }
+              <p
+                class="q-caption"
+                [class.coordinate-missing]="!addressHasPin(address.coordinateSource)"
+              >
+                {{ 'customers.address.coordinateSource' | t }}:
+                {{ coordinateSourceLabel(address.coordinateSource) }}
+              </p>
               <div class="address-card__actions">
                 <button type="button" class="link" (click)="startEditingAddress(address)">
                   {{ 'customers.edit' | t }}
@@ -566,22 +646,48 @@
       </table>
 
       <section class="block">
+        <h3 class="q-subhead">{{ 'customers.consent.eligibility' | t }}</h3>
+        @if (eligibility(); as answer) {
+          @if (answer.eligible) {
+            <p class="q-body-sm eligible">{{ 'customers.consent.eligibility.eligible' | t }}</p>
+          } @else {
+            <p class="q-body-sm not-eligible">
+              {{ 'customers.consent.eligibility.notEligible' | t }}
+              @if (answer.refusalReason) {
+                — {{ eligibilityRefusalLabel(answer.refusalReason) }}
+              }
+            </p>
+          }
+        } @else {
+          <p class="q-body-sm">
+            {{
+              loadingEligibility()
+                ? ('customers.loading' | t)
+                : ('customers.consent.eligibility.unknown' | t)
+            }}
+          </p>
+        }
+      </section>
+
+      <section class="block">
         <h3 class="q-subhead">{{ 'customers.consent.record' | t }}</h3>
         <div class="form">
           <label class="q-caption">{{ 'customers.consent.purpose' | t }}</label>
-          <input
-            class="q-body field"
-            type="text"
-            [value]="consentPurpose()"
-            (input)="consentPurpose.set($any($event.target).value)"
-          />
+          <select class="q-body field" [value]="consentPurpose" disabled>
+            <option [value]="consentPurpose">
+              {{ 'customers.consent.purpose.MARKETING_PROMOTIONS' | t }}
+            </option>
+          </select>
           <label class="q-caption">{{ 'customers.consent.channel' | t }}</label>
-          <input
+          <select
             class="q-body field"
-            type="text"
             [value]="consentChannel()"
-            (input)="consentChannel.set($any($event.target).value)"
-          />
+            (change)="setConsentChannel($any($event.target).value)"
+          >
+            @for (channel of consentChannels; track channel) {
+              <option [value]="channel">{{ consentChannelLabel(channel) }}</option>
+            }
+          </select>
           <label class="q-caption">{{ 'customers.consent.decision' | t }}</label>
           <select
             class="q-body field"
@@ -591,12 +697,20 @@
             <option value="GRANTED">{{ 'customers.consent.decision.GRANTED' | t }}</option>
             <option value="WITHDRAWN">{{ 'customers.consent.decision.WITHDRAWN' | t }}</option>
           </select>
+          <label class="q-caption">{{ 'customers.consent.policyVersion' | t }}</label>
+          <input
+            class="q-body field"
+            type="text"
+            [value]="consentPolicyVersion()"
+            (input)="consentPolicyVersion.set($any($event.target).value)"
+            [placeholder]="'customers.consent.policyVersion.placeholder' | t"
+          />
           <div class="form__actions">
             <button
               type="button"
               class="primary"
               (click)="recordConsent()"
-              [disabled]="recordingConsent()"
+              [disabled]="recordingConsent() || !consentPolicyVersion().trim()"
             >
               {{
                 recordingConsent()
