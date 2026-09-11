@@ -24,8 +24,13 @@
 
 set -euo pipefail
 
-LOCK_DIR="${TMPDIR:-/tmp}/horecaos-maven.lock"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# One lock per working tree, not one for the machine. The hazard the lock
+# guards against is two Maven runs writing one `target/`; a git worktree has
+# its own `target/`, so agents in sibling `.worktrees/*` can build at once and
+# only two runs in the same tree queue. The key is the tree's own path, so the
+# lock name cannot collide across trees and never needs configuring.
+LOCK_DIR="${TMPDIR:-/tmp}/horecaos-maven-$(printf '%s' "$REPO_ROOT" | cksum | cut -d' ' -f1).lock"
 STALE_AFTER_SECONDS=1800
 
 acquire() {
