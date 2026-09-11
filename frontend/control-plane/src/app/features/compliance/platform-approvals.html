@@ -33,7 +33,13 @@
               {{ i18n.t(actionKey(row.request.actionCode)) }}
               <div class="q-caption muted">{{ row.request.thresholdDescription }}</div>
             </td>
-            <td class="q-body-sm"><a [routerLink]="['/tenants', row.tenantId]">{{ directory.nameOf(row.tenantId) }}</a></td>
+            <td class="q-body-sm">
+              @if (row.tenantId; as tenantId) {
+                <a [routerLink]="['/tenants', tenantId]">{{ directory.nameOf(tenantId) }}</a>
+              } @else {
+                <span class="q-caption muted">{{ tenantName(row) }}</span>
+              }
+            </td>
             <td class="q-body-sm">{{ row.request.requestedBy }} · {{ i18n.dateTime(asDate(row.request.requestedAt)) }}</td>
             <td class="q-body-sm q-tnum">{{ i18n.dateTime(asDate(row.request.expiresAt)) }}</td>
             <td class="q-body-sm">

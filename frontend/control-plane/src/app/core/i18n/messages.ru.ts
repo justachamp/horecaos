@@ -119,6 +119,7 @@ export const ru: Messages = {
   'platformApprovals.action.tenant_activate': 'Активация клиента',
   'platformApprovals.approve': 'Подтвердить',
   'platformApprovals.decline': 'Отклонить',
+  'platformApprovals.platformScoped': 'Собственное решение HorecaOS',
   'platformApprovals.notYours': 'Запрошено вами; решает другой',
   'platformApprovals.approved': 'Подтверждено для {tenant}. Запросивший может продолжать.',
   'platformApprovals.declined': 'Отклонено для {tenant}.',

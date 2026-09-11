@@ -65,6 +65,18 @@ export class PlatformApprovals {
     return `platformApprovals.action.${code.replace(/\./g, '_')}` as MessageKey;
   }
 
+  /**
+   * Whose account the decision concerns, as far as this queue can say. A
+   * PLATFORM-scope request names no tenant on purpose: it is HorecaOS's own
+   * decision, and the console that raised it holds the detail behind its own
+   * capability (ADR 0095, ADR 0029).
+   */
+  protected tenantName(row: PlatformPendingApproval): string {
+    return row.tenantId === null
+      ? this.i18n.t('platformApprovals.platformScoped')
+      : this.directory.nameOf(row.tenantId);
+  }
+
   protected open(row: PlatformPendingApproval, decision: 'APPROVE' | 'DECLINE'): void {
     const current = this.deciding();
     this.deciding.set(
@@ -84,11 +96,19 @@ export class PlatformApprovals {
     this.actionError.set(null);
     this.actionMessage.set(null);
     try {
-      await this.access.decide(row.tenantId, row.request.id, action.decision, reason);
+      // A PLATFORM-scope request carries no tenant, and the tenant decision
+      // route is keyed on one: sending it there answers 404. Which route a row
+      // takes is decided by the row, not by its action code, so a decision
+      // HorecaOS adds later needs nothing here.
+      if (row.tenantId === null) {
+        await this.api.decidePlatform(row.request.id, action.decision, reason);
+      } else {
+        await this.access.decide(row.tenantId, row.request.id, action.decision, reason);
+      }
       this.deciding.set(null);
       this.actionMessage.set(
         this.i18n.t(action.decision === 'APPROVE' ? 'platformApprovals.approved' : 'platformApprovals.declined', {
-          tenant: this.directory.nameOf(row.tenantId),
+          tenant: this.tenantName(row),
         }),
       );
       await this.load();

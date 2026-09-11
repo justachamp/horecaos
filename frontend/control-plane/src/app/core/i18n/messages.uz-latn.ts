@@ -119,6 +119,7 @@ export const uzLatn: Messages = {
   'platformApprovals.action.tenant_activate': 'Mijozni faollashtirish',
   'platformApprovals.approve': 'Tasdiqlash',
   'platformApprovals.decline': 'Rad etish',
+  'platformApprovals.platformScoped': 'HorecaOS’ning o‘z qarori',
   'platformApprovals.notYours': 'Siz so‘ragansiz; boshqa kishi hal qiladi',
   'platformApprovals.approved': '{tenant} uchun tasdiqlandi. So‘ragan kishi davom etishi mumkin.',
   'platformApprovals.declined': '{tenant} uchun rad etildi.',

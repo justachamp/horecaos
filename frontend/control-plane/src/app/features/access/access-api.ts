@@ -55,7 +55,8 @@ export interface PendingApprovalResponse {
   readonly actionCode: string;
   readonly parametersHash: string;
   readonly scopeType: string;
-  readonly scopeId: string;
+  /** Null at PLATFORM scope, which names no scope below the platform itself. */
+  readonly scopeId: string | null;
   readonly thresholdDescription: string;
   readonly policyVersion: number;
   readonly requiredApproverCapability: string;

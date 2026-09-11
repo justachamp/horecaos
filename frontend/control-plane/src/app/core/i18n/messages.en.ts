@@ -122,6 +122,7 @@ export const en = {
   'platformApprovals.action.tenant_activate': 'Activate the tenant',
   'platformApprovals.approve': 'Approve',
   'platformApprovals.decline': 'Decline',
+  'platformApprovals.platformScoped': 'HorecaOS’s own decision',
   'platformApprovals.notYours': 'Asked by you; someone else decides',
   'platformApprovals.approved': 'Approved for {tenant}. The person who asked can now go ahead.',
   'platformApprovals.declined': 'Declined for {tenant}.',
