@@ -253,10 +253,16 @@ nothing, and completes.
 ```json
 {"catalogId": "...", "catalogCode": "SAMPLE-MENU", "publicationId": "...",
  "priceBookId": "...", "categories": 4, "products": 10, "variants": 10,
- "locations": 2, "channel": "STOREFRONT", "created": true}
+ "locations": 2, "stockItemsListed": 20, "pricesSet": 10,
+ "channel": "STOREFRONT", "created": true}
 ```
 
 Ids and counts only. No item names, no prices, nothing about a person.
+`priceBookId` is absent rather than null when the tenant's own prices already
+covered every sample variant and no sample book was needed. The one other shape
+is the brand that already published a real menu, which records what it declined
+to do and nothing else: `{"channel": "STOREFRONT", "created": false, "reason":
+"MENU_ALREADY_PUBLISHED"}`.
 
 ### Failures
 
