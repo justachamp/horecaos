@@ -122,6 +122,8 @@ public class JdbcOwnerInvitationEventStore {
      *
      * @param attempt the send attempt it belongs to, counted from one; zero on
      *        an event that is not a send attempt
+     * @param outcomeCode what the event came to: a failure code on a send
+     *        attempt, the state it replaced on a resend; never a message
      * @param actorType {@code SYSTEM_JOB}, {@code USER} or {@code OWNER}
      * @param reason an operator's own words; absent on a machine event
      */

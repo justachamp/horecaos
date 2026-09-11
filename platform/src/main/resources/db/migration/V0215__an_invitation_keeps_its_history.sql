@@ -37,6 +37,9 @@ CREATE TABLE tenant.owner_invitation_events (
     -- event that is not a send attempt (a queue, a resend).
     attempt integer NOT NULL DEFAULT 0,
     locale varchar(8),
+    -- What this event came to: a mail or identity failure code on a send
+    -- attempt, and on a resend the state it replaced. Never a message, and
+    -- never anything a provider wrote -- a code the platform chose.
     outcome_code varchar(64),
     actor_type varchar(16) NOT NULL,
     actor_reference varchar(255),

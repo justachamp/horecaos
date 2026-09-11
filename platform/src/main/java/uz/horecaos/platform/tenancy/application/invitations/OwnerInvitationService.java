@@ -70,6 +70,13 @@ public class OwnerInvitationService implements OwnerInvitations {
      * At most this many tenants come back from the overview. Each row costs one
      * identity-provider read to resolve its recipient, so the page is bounded
      * by that and not by what a screen would like.
+     *
+     * <p>The cap is applied by the query and the state filter here, in that
+     * order, so the cap is what the screen can miss. The query sorts tenants
+     * whose owner is already set up last for exactly that reason: the list is
+     * complete for every filter except {@code ACCEPTED} and {@code NOT_NEEDED}
+     * until a platform has more than this many tenants still waiting on an
+     * owner, at which point onboarding has a bigger problem than a page size.
      */
     public static final int OVERVIEW_LIMIT = 200;
 

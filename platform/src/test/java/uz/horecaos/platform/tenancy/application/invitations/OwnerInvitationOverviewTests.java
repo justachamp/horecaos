@@ -64,6 +64,7 @@ class OwnerInvitationOverviewTests {
     private RecordingMailer mailer;
     private FakeAuthorization authorization;
     private List<AuditFact> facts;
+    private JdbcOwnerInvitationStore store;
     private OwnerInvitationService invitations;
     private OwnerInvitationRelay relay;
 
@@ -93,7 +94,7 @@ class OwnerInvitationOverviewTests {
         accounts = new FakeAccounts();
         authorization = new FakeAuthorization();
         facts = new ArrayList<>();
-        JdbcOwnerInvitationStore store = new JdbcOwnerInvitationStore(jdbc);
+        store = new JdbcOwnerInvitationStore(jdbc);
         JdbcOwnerInvitationEventStore events = new JdbcOwnerInvitationEventStore(jdbc);
         invitations = new OwnerInvitationService(store, events, accounts, authorization, facts::add, clock);
         mailer = new RecordingMailer();
@@ -215,6 +216,30 @@ class OwnerInvitationOverviewTests {
         assertThat(facts)
                 .singleElement()
                 .satisfies(fact -> assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", 1)));
+    }
+
+    /**
+     * The cap is applied by the query and the state filter by the service, in
+     * that order, so whatever the query leaves beyond the cap is what the
+     * screen will not have. Ordering alphabetically would make that an
+     * arbitrary letter; ordering settled-last makes it a tenant nobody has to
+     * chase. Exercised with a limit of one rather than two hundred tenants.
+     */
+    @Test
+    @DisplayName("when the cap bites it takes the tenants whose owner is already set up")
+    void theCapFallsOnTheTenantsNobodyHasToChase() {
+        relay.runOnce();
+        invitations.accept(tokenFor("anvar@example.uz"), "Anvar", "Anvarov", "a-long-enough-passphrase", "corr");
+
+        // 'Accepted & Co' sorts first by name, so an alphabetical cap of one
+        // would return it and lose both tenants that still need an owner.
+        assertThat(store.overview(1))
+                .extracting(JdbcOwnerInvitationStore.OverviewRow::tenantSlug)
+                .containsAnyOf("waiting-co", "never-told-co")
+                .doesNotContain("accepted-co");
+        assertThat(store.overview(2))
+                .extracting(JdbcOwnerInvitationStore.OverviewRow::tenantSlug)
+                .containsExactlyInAnyOrder("waiting-co", "never-told-co");
     }
 
     // ------------------------------------------------------------- fixtures

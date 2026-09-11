@@ -161,6 +161,12 @@ denormalising it into a table would quietly undo it.
 - The overview excludes archived tenants. An archived tenant whose owner never
   accepted is not work anybody will do, and leaving it in the list forever
   would train operators to ignore the list.
+- The cap of 200 is applied before the state filter, not after, so the screen
+  is a cap rather than a page. The query sorts tenants whose owner is already
+  set up last to make that harmless: every other filter is complete until a
+  platform has more than 200 tenants still waiting on an owner. Paging, not a
+  larger cap, is the answer if it ever is one — the cap exists because each row
+  costs a Keycloak call.
 - The timeline records only the *first* open. The link is opened by mail
   scanners and prefetchers as well as by owners; recording every GET would
   bury the owner's own open in noise, and `opened_at` has always meant the
@@ -178,7 +184,7 @@ denormalising it into a table would quietly undo it.
 | `event_type` | varchar(24) NOT NULL | `QUEUED`, `RESENT`, `SENT`, `SEND_DEFERRED`, `SEND_FAILED`, `OPENED`, `ACCEPTED`, `NOT_NEEDED` |
 | `attempt` | integer NOT NULL | the send attempt the event belongs to, counted from one; 0 on a queue or a resend |
 | `locale` | varchar(8) | the language of the email this event concerns |
-| `outcome_code` | varchar(64) | the mail or identity failure code, never a message |
+| `outcome_code` | varchar(64) | what the event came to: a mail or identity failure code on a send attempt, the state it replaced on a resend; never a message |
 | `actor_type` | varchar(16) NOT NULL | `SYSTEM_JOB`, `USER`, `OWNER` |
 | `actor_reference` | varchar(255) | subject id or job name; never a display name, never an address |
 | `reason` | varchar(1000) | the operator's own words for a resend; absent for machine events |
@@ -220,7 +226,11 @@ null and the states still render.
 schema — a queue, a deferred attempt, a send, an open, an accept and a resend
 in one timeline, and the resend's reason and actor on its row.
 `OwnerInvitationOverviewTests` covers the overview query, the `NONE` tenant,
-the filters, and that the full address appears only for the capability.
+the filters, the cap falling on settled tenants first, and that the full
+address appears only for the capability. `OwnerInvitationControllerEndpointTests`
+covers the endpoint itself: the reveal fact over HTTP, the state filter, a
+platform-support caller refused the overview and given the mask on the panel,
+and 401 for an anonymous one.
 Angular specs cover the new screen, the extended panel and the directory
 column.
 

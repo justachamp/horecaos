@@ -238,7 +238,10 @@ public class JdbcOwnerInvitationStore {
      * tenant is nobody's work and is not either.
      *
      * @param limit a hard cap, because each row costs one identity-provider
-     *        read to resolve its recipient
+     *        read to resolve its recipient. Tenants whose owner is already set
+     *        up sort last, so the cap is reached on those first and a caller
+     *        asking for the outstanding ones gets all of them until there are
+     *        more than {@code limit} outstanding
      */
     public List<OverviewRow> overview(int limit) {
         return jdbc.sql("""
@@ -267,7 +270,17 @@ public class JdbcOwnerInvitationStore {
                                LIMIT 1) o ON true
                          WHERE t.status <> 'ARCHIVED'
                            AND (i.id IS NOT NULL OR o.external_reference IS NOT NULL)
-                         ORDER BY t.display_name, t.id
+                         -- Settled last. The cap is applied by the database and the
+                         -- state filter by the caller, so whatever this ORDER BY puts
+                         -- beyond :limit is what the screen will not have. Sorting
+                         -- alphabetically would make that an arbitrary letter; sorting
+                         -- settled last makes it "we ran out of room for tenants whose
+                         -- owner is already set up", which is the truncation to want.
+                         -- COALESCE, not a bare IN: a tenant with no invitation row has
+                         -- a NULL status, NULL IN (...) is NULL, and NULL sorts last --
+                         -- which would drop the never-invited tenants first of all.
+                         ORDER BY (COALESCE(i.status, 'NONE') IN ('ACCEPTED', 'NOT_NEEDED')),
+                                  t.display_name, t.id
                          LIMIT :limit
                         """)
                 .param("limit", limit)
