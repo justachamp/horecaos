@@ -347,7 +347,7 @@
                 <tr [attr.data-entry]="entry.entryType">
                   <td class="q-body-sm">{{ i18n.dateTime(asDate(entry.createdAt)) }}</td>
                   <td class="q-body-sm">
-                    {{ entryLabel(entry.entryType) }}
+                    <span class="entryLabel">{{ entryLabel(entry.entryType) }}</span>
                     <span class="chip" [class.bonus]="entry.moneyKind === 'BONUS'">{{ i18n.t(entry.moneyKind === 'BONUS' ? 'wallet.kind.BONUS' : 'wallet.kind.PAID') }}</span>
                     <div class="q-caption muted">{{ entry.reason }}</div>
                   </td>

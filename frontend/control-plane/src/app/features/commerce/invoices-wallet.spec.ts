@@ -396,6 +396,48 @@ describe('InvoicesWallet', () => {
     expect(el('.bonusLedger').textContent).toContain('200 000');
   });
 
+  it('names the entry that takes paid money back, and shows a raw code rather than a blank cell', async () => {
+    await create();
+    api.walletLedger.mockResolvedValue({
+      items: [
+        {
+          entryId: 'w-9', moneyKind: 'PAID', entryType: 'DEPOSIT_REVERSAL', amount: UZS(-500_000),
+          statementId: null, grantId: null, expiresAt: null, externalReference: 'MT103-DEP',
+          reason: 'recorded against the wrong tenant', recordedBy: 'finance-1',
+          approvedBy: 'finance-2', createdAt: '2026-09-15T09:00:00Z',
+        },
+        {
+          entryId: 'w-10', moneyKind: 'PAID', entryType: 'SOMETHING_NEW', amount: UZS(-1_000),
+          statementId: null, grantId: null, expiresAt: null, externalReference: null,
+          reason: 'a type the server has and no catalogue names yet', recordedBy: 'system',
+          approvedBy: null, createdAt: '2026-09-15T09:00:00Z',
+        },
+      ],
+      nextCursor: null,
+    });
+    await fixture.componentInstance['load']();
+    await settle();
+
+    // DEPOSIT_REVERSAL shipped missing from all three catalogues, and key
+    // parity between them cannot see that: the row for the one entry that
+    // takes paid money back rendered a blank Type cell.
+    const reversal = el('[data-entry="DEPOSIT_REVERSAL"] .entryLabel');
+    expect(reversal.textContent?.trim()).toBe(ru['wallet.entry.DEPOSIT_REVERSAL']);
+    expect(reversal.textContent?.trim().length).toBeGreaterThan(0);
+
+    // And the next type the server grows shows itself rather than nothing.
+    expect(el('[data-entry="SOMETHING_NEW"] .entryLabel').textContent?.trim()).toBe('SOMETHING_NEW');
+  });
+
+  it('shows a payment method nobody labelled by its raw code', async () => {
+    await create();
+    api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'DIRECT_DEBIT' });
+    await fixture.componentInstance['load']();
+    await settle();
+
+    expect(el('.methodName').textContent?.trim()).toBe('DIRECT_DEBIT');
+  });
+
   it('says card charging is not connected, and offers nothing to someone who may only read', async () => {
     await create();
     api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'CARD', cardTokenReference: 'vault:pilot' });

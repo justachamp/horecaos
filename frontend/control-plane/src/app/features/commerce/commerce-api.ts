@@ -260,6 +260,7 @@ export interface WalletEntryView {
     | 'STATEMENT_REVERSAL'
     | 'ADJUSTMENT'
     | 'REFUND'
+    | 'DEPOSIT_REVERSAL'
     | (string & {});
   readonly amount: Money;
   readonly statementId: string | null;
