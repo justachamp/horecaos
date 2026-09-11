@@ -28,6 +28,7 @@
         <tr>
           <th>{{ 'couriers.column.reference' | t }}</th>
           <th>{{ 'couriers.column.type' | t }}</th>
+          <th>{{ 'couriers.column.vehicleClass' | t }}</th>
           <th>{{ 'couriers.column.load' | t }}</th>
           <th>{{ 'couriers.column.engagement' | t }}</th>
           <th></th>
@@ -38,6 +39,9 @@
           <tr data-testid="courier-row">
             <td class="q-mono">{{ courier.displayReference }}</td>
             <td>{{ courier.courierTypeName }}</td>
+            <td data-testid="courier-vehicle-class">
+              {{ vehicleClassLabel(courier.vehicleClass) }}
+            </td>
             <td class="q-tnum">
               {{ courier.activeAssignments }} / {{ courier.concurrencyCeiling }}
             </td>
@@ -50,6 +54,9 @@
               }
             </td>
             <td class="couriers__row-actions">
+              <button type="button" data-testid="courier-open" (click)="openDetail(courier)">
+                {{ 'couriers.action.open' | t }}
+              </button>
               @if (canVerifyRow(courier)) {
                 <button type="button" (click)="openVerify(courier)">
                   {{ 'couriers.action.verify' | t }}
@@ -64,17 +71,13 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="5">
+            <td colspan="6">
               <p class="q-body-sm" data-testid="couriers-empty">{{ 'couriers.empty' | t }}</p>
             </td>
           </tr>
         }
       </tbody>
     </table>
-
-    <div class="couriers__not-built">
-      <p class="q-caption">{{ 'couriers.notBuilt.fields' | t }}</p>
-    </div>
   }
 
   @if (showRegisterForm()) {
@@ -139,6 +142,35 @@
           />
         </label>
 
+        <h3 class="q-caption couriers__section">{{ 'couriers.compliance.heading' | t }}</h3>
+        <p class="q-caption couriers__hint">{{ 'couriers.compliance.optional' | t }}</p>
+
+        @for (field of complianceFields; track field) {
+          <label class="field">
+            <span class="q-caption">{{ complianceLabel(field) }}</span>
+            <input
+              type="text"
+              [attr.data-testid]="'register-' + field"
+              [value]="newCompliance()[field]"
+              (input)="setCompliance('new', field, $any($event.target).value)"
+            />
+          </label>
+        }
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.compliance.fuelType' | t }}</span>
+          <select
+            data-testid="register-fuel-type"
+            [value]="newFuelType()"
+            (change)="newFuelType.set($any($event.target).value)"
+          >
+            <option value="">{{ 'couriers.compliance.fuel.unset' | t }}</option>
+            @for (fuel of fuelTypes; track fuel) {
+              <option [value]="fuel">{{ fuelTypeLabel(fuel) }}</option>
+            }
+          </select>
+        </label>
+
         @if (registerError(); as error) {
           <p class="dialog__error q-body-sm">{{ error }}</p>
         }
@@ -153,6 +185,191 @@
         </div>
       </div>
     </div>
+  }
+
+  @if (detailLoading()) {
+    <div class="couriers__pane" data-testid="courier-detail-loading">
+      <p class="q-body-sm">{{ 'couriers.detail.loading' | t }}</p>
+    </div>
+  } @else if (detail(); as courier) {
+    <aside class="couriers__pane" data-testid="courier-detail">
+      <div class="couriers__pane-head">
+        <h2 class="q-subhead">
+          {{ 'couriers.detail.title' | t: { reference: courier.displayReference } }}
+        </h2>
+        <button type="button" data-testid="courier-detail-close" (click)="closeDetail()">
+          {{ 'couriers.detail.close' | t }}
+        </button>
+      </div>
+
+      @if (detailError(); as error) {
+        <div class="couriers__error-band" role="alert">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+
+      <dl class="couriers__facts">
+        <div>
+          <dt class="q-caption">{{ 'couriers.column.type' | t }}</dt>
+          <dd class="q-body-sm">{{ courier.courierTypeName }}</dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'couriers.column.vehicleClass' | t }}</dt>
+          <dd class="q-body-sm" data-testid="detail-vehicle-class">
+            {{ vehicleClassLabel(courier.vehicleClass) }}
+          </dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'couriers.compliance.fuelType' | t }}</dt>
+          <dd class="q-body-sm">
+            {{ courier.vehicleFuelType ? fuelTypeLabel(courier.vehicleFuelType) : '—' }}
+          </dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'couriers.column.engagement' | t }}</dt>
+          <dd class="q-body-sm">{{ engagementStatusLabel(courier.engagementStatus) }}</dd>
+        </div>
+      </dl>
+
+      <h3 class="q-caption couriers__section">{{ 'couriers.compliance.heading' | t }}</h3>
+      @if (missingFieldCount() > 0) {
+        <p class="q-caption couriers__hint" data-testid="courier-file-incomplete">
+          {{ 'couriers.compliance.incomplete' | t: { count: missingFieldCount() } }}
+        </p>
+      }
+
+      <ul class="couriers__file">
+        @for (field of complianceFields; track field) {
+          <li>
+            <span class="q-caption">{{ complianceLabel(field) }}</span>
+            @if (revealedValue(field); as value) {
+              <span class="q-body-sm q-mono" [attr.data-testid]="'revealed-' + field">{{
+                value
+              }}</span>
+            } @else if (onFile(field)) {
+              <span class="status-badge" [attr.data-testid]="'on-file-' + field">{{
+                'couriers.compliance.onFile' | t
+              }}</span>
+            } @else {
+              <span class="q-body-sm couriers__missing">{{
+                'couriers.compliance.missing' | t
+              }}</span>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (revealed()) {
+        <button type="button" data-testid="courier-hide" (click)="hideRevealed()">
+          {{ 'couriers.compliance.hide' | t }}
+        </button>
+      } @else {
+        <div class="couriers__reveal">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.compliance.purpose' | t }}</span>
+            <input
+              type="text"
+              data-testid="reveal-purpose"
+              [value]="revealPurpose()"
+              (input)="revealPurpose.set($any($event.target).value)"
+            />
+          </label>
+          <p class="q-caption couriers__hint">{{ 'couriers.compliance.purposeHint' | t }}</p>
+          <button
+            type="button"
+            data-testid="courier-reveal"
+            [disabled]="!canReveal()"
+            (click)="reveal()"
+          >
+            {{ 'couriers.compliance.reveal' | t }}
+          </button>
+        </div>
+      }
+
+      <h3 class="q-caption couriers__section">{{ 'couriers.groups.heading' | t }}</h3>
+      @if (courier.groups.length === 0) {
+        <p class="q-body-sm couriers__missing">{{ 'couriers.groups.none' | t }}</p>
+      } @else {
+        <ul class="couriers__chips">
+          @for (group of courier.groups; track group.groupId) {
+            <li class="status-badge">{{ group.displayName }}</li>
+          }
+        </ul>
+      }
+
+      <h3 class="q-caption couriers__section">{{ 'couriers.branches.heading' | t }}</h3>
+      @if (courier.branches.length === 0) {
+        <p class="q-body-sm couriers__missing" data-testid="courier-no-branches">
+          {{ 'couriers.branches.none' | t }}
+        </p>
+      } @else {
+        <ul class="couriers__chips">
+          @for (branch of courier.branches; track branch.locationId) {
+            <li class="status-badge">
+              {{ branch.locationName }}
+              @if (branch.primary) {
+                <span class="couriers__primary">{{ 'couriers.branches.primary' | t }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      @if (editing()) {
+        <h3 class="q-caption couriers__section">{{ 'couriers.compliance.editHeading' | t }}</h3>
+        <p class="q-caption couriers__hint">{{ 'couriers.compliance.editHint' | t }}</p>
+        @for (field of complianceFields; track field) {
+          <label class="field">
+            <span class="q-caption">{{ complianceLabel(field) }}</span>
+            <input
+              type="text"
+              [attr.data-testid]="'edit-' + field"
+              [value]="editCompliance()[field]"
+              (input)="setCompliance('edit', field, $any($event.target).value)"
+            />
+          </label>
+        }
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.compliance.fuelType' | t }}</span>
+          <select
+            data-testid="edit-fuel-type"
+            [value]="editFuelType()"
+            (change)="editFuelType.set($any($event.target).value)"
+          >
+            <option value="">{{ 'couriers.compliance.fuel.unset' | t }}</option>
+            @for (fuel of fuelTypes; track fuel) {
+              <option [value]="fuel">{{ fuelTypeLabel(fuel) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.compliance.reason' | t }}</span>
+          <input
+            type="text"
+            data-testid="edit-reason"
+            [value]="editReason()"
+            (input)="editReason.set($any($event.target).value)"
+          />
+        </label>
+        <div class="dialog__actions">
+          <button type="button" (click)="cancelEditing()">
+            {{ 'couriers.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            data-testid="courier-file-save"
+            [disabled]="!canSaveFile()"
+            (click)="saveFile()"
+          >
+            {{ 'couriers.compliance.save' | t }}
+          </button>
+        </div>
+      } @else {
+        <button type="button" data-testid="courier-file-edit" (click)="startEditing()">
+          {{ 'couriers.compliance.edit' | t }}
+        </button>
+      }
+    </aside>
   }
 
   @if (dialog(); as state) {

@@ -461,6 +461,49 @@ export const courierPaths = {
     return this.couriers(tenantId);
   },
 
+  /** One courier, with which compliance fields are on file — never their contents (IA 3.3). */
+  courier(tenantId: string, courierId: string): string {
+    return `${this.couriers(tenantId)}/${encodeURIComponent(courierId)}`;
+  },
+
+  /**
+   * The compliance file. `POST` records or corrects it (mutation: key required);
+   * `GET` with a `purpose` query parameter is the audited ADR 0029 reveal and is
+   * the only path that returns a passport, a ПИНФЛ or a home address.
+   */
+  courierComplianceFile(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/compliance-file`;
+  },
+
+  /** Courier groups (IA 3.3). Same path for `POST` (author one). */
+  courierGroups(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-groups`;
+  },
+
+  /** Put a courier in a group (`POST`) — idempotent. Mutation: key required. */
+  courierGroupMemberships(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/groups`;
+  },
+
+  /**
+   * Take a courier out of a group (`POST`). A sub-resource rather than a
+   * `DELETE` because the reason travels in the body: ADR 0029 keeps reasons out
+   * of URLs. Mutation: key required.
+   */
+  courierGroupRemoval(tenantId: string, courierId: string, groupId: string): string {
+    return `${this.courierGroupMemberships(tenantId, courierId)}/${encodeURIComponent(groupId)}/removal`;
+  },
+
+  /** Which branches a courier rides for (`POST` to bind). Mutation: key required. */
+  courierBranchBindings(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/branch-bindings`;
+  },
+
+  /** Unbind a courier from one branch (`POST`). Mutation: key required. */
+  courierBranchUnbinding(tenantId: string, courierId: string, locationId: string): string {
+    return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(locationId)}/removal`;
+  },
+
   /** Vehicle classes, for the registration form's picker. */
   courierTypes(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
