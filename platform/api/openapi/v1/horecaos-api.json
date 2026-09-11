@@ -25139,7 +25139,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/resume" : {
       "post" : {
-        "description" : "Completed steps are never reset; a retry reconciles external work.",
+        "description" : "Completed steps are never reset; a retry reconciles external work. Refused once the run has reached READY, ACTIVE or CANCELLED: nothing claims a step on a run the scheduler no longer drives, so reopening one there would report work that never happens.",
         "operationId" : "resume_3",
         "parameters" : [ {
           "in" : "path",

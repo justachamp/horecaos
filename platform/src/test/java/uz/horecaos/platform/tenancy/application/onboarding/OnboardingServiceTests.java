@@ -208,6 +208,10 @@ class OnboardingServiceTests {
         UUID runId = startRun();
 
         assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("SKIPPED=NOT_REQUESTED");
+        assertThat(lastError(runId, "SAMPLE_MENU_PUBLISH"))
+                .as("the code is what the console translates; an English sentence beside it is "
+                        + "a second, untranslated copy of the hint a Russian operator is already reading")
+                .isNull();
     }
 
     @Test
@@ -244,6 +248,149 @@ class OnboardingServiceTests {
         assertThat(attempts(runId, "SAMPLE_MENU_PUBLISH")).isZero();
     }
 
+    /**
+     * ADR 0099's rollback story, asserted rather than asserted-in-prose: the code
+     * is reverted, the handler is gone, and a run that had already asked for a
+     * sample menu still drains to {@code READY} with the step released
+     * {@code BLOCKED}. No new fixture is needed — {@code allHandlers} registers no
+     * {@code SAMPLE_MENU_PUBLISH} handler, which is exactly the rolled-back shape.
+     */
+    @Test
+    void aSampleMenuWithNoHandlerIsBlockedAndDoesNotStopTheRunReachingReady() {
+        UUID runId = startRunWithSampleMenu(true);
+
+        drain(runId);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("BLOCKED=CAPABILITY_ABSENT");
+        assertThat(runStatus(runId)).isEqualTo("READY");
+    }
+
+    /**
+     * The other half of a rollback, which the {@code BLOCKED} path never reaches:
+     * the reverted binary's {@link OnboardingStep} has no constant for the key at
+     * all. Until this was fixed the row mapper's {@code valueOf} threw before any
+     * handler was looked up, and because the step sorts before every validation
+     * the run froze there — one warning per replica per tick, forever, five steps
+     * short of activation.
+     */
+    @Test
+    void aStepKeyThisBinaryDoesNotKnowIsReleasedBlockedRatherThanThrowing() {
+        UUID runId = startRunWithSampleMenu(true);
+        jdbc.sql("""
+                UPDATE tenant.onboarding_steps SET step_key = 'A_STEP_FROM_A_LATER_BINARY'
+                 WHERE run_id = :runId AND step_key = 'SAMPLE_MENU_PUBLISH'
+                """).param("runId", runId).update();
+
+        drain(runId);
+
+        assertThat(stepStatus(runId, "A_STEP_FROM_A_LATER_BINARY")).isEqualTo("BLOCKED=CAPABILITY_ABSENT");
+        assertThat(runStatus(runId))
+                .as("an unknown key must not wedge the run short of the steps after it")
+                .isEqualTo("READY");
+    }
+
+    /**
+     * The alternative ADR 0099 rejected — making the step required when the run
+     * asked for it — would break exactly this: a sample menu a tenant accepted,
+     * and that then failed, must not block activation for a tenant that has since
+     * authored a real menu.
+     *
+     * <p>Asserting a *later* step completed is what pins {@code claimNextStep}'s
+     * {@code failed.required}; without it the run simply stalls at step 5 while
+     * still reporting {@code PROVISIONING}, which a status-only assertion cannot
+     * tell from a healthy run.
+     */
+    @Test
+    void aSampleMenuThatFailedDoesNotStopTheRunReachingReady() {
+        OnboardingService withRejectingSample = serviceWith(sampleMenuHandler(
+                context -> OnboardingStepHandler.StepResult.failed("SAMPLE_MENU_REJECTED", "publication rejected")));
+        UUID runId = startRunWithSampleMenu(withRejectingSample, true);
+
+        drain(withRejectingSample, runId);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("FAILED=SAMPLE_MENU_REJECTED");
+        assertThat(runStatus(runId)).isEqualTo("READY");
+        assertThat(withRejectingSample.outstandingRequiredSteps(runId)).isEmpty();
+        assertThat(stepStatus(runId, "ACTIVATION_SMOKE_TEST"))
+                .as("the run walks past the failed optional step rather than halting on it")
+                .startsWith("COMPLETED");
+    }
+
+    /**
+     * ADR 0008's stalled-run gauge answers "has onboarding stopped". A failed
+     * optional step has not stopped it — the run is {@code READY} and waiting for
+     * a person — so it must not pin the gauge, which is a platform-wide maximum
+     * and would mask every genuine stall behind one such tenant.
+     *
+     * <p>The sibling {@code aRunThatFailedItsRequiredStepIsStalled} makes the
+     * opposite assertion; the pair reads as one statement about {@code required}.
+     */
+    @Test
+    void aRunWhoseOptionalSampleMenuFailedIsNeverStalled() {
+        OnboardingService withRejectingSample = serviceWith(sampleMenuHandler(
+                context -> OnboardingStepHandler.StepResult.failed("SAMPLE_MENU_REJECTED", "publication rejected")));
+        UUID runId = startRunWithSampleMenu(withRejectingSample, true);
+        drain(withRejectingSample, runId);
+        assertThat(runStatus(runId)).isEqualTo("READY");
+
+        clock.advance(java.time.Duration.ofHours(2));
+
+        assertThat(stalledAgeSeconds())
+                .as("a declined-or-broken offer is not the workflow stopping")
+                .isZero();
+        assertThat(new JdbcOnboardingStuckRunDirectory(jdbc)
+                        .stuckRuns(clock.instant(), java.time.Duration.ofHours(1), 10))
+                .as("and the ADR 0058 listing reads the same rows, so it must agree")
+                .isEmpty();
+    }
+
+    /**
+     * The same end state reached the way production reaches it: the handler
+     * throws, every attempt is mapped to {@code RETRY/TRANSIENT_INFRASTRUCTURE},
+     * and the last one is released {@code FAILED} and due at once.
+     */
+    @Test
+    void aSampleMenuThatExhaustedItsAttemptsIsNeitherStalledNorBlocking() {
+        OnboardingService withThrowingSample = serviceWith(sampleMenuHandler(context -> {
+            throw new IllegalStateException("the catalog module is down");
+        }));
+        UUID runId = startRunWithSampleMenu(withThrowingSample, true);
+
+        drain(withThrowingSample, runId);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo("FAILED=TRANSIENT_INFRASTRUCTURE");
+        assertThat(attempts(runId, "SAMPLE_MENU_PUBLISH")).isEqualTo(OnboardingService.MAXIMUM_ATTEMPTS);
+        assertThat(runStatus(runId)).isEqualTo("READY");
+
+        clock.advance(java.time.Duration.ofHours(2));
+
+        assertThat(stalledAgeSeconds()).isZero();
+    }
+
+    /**
+     * {@link OnboardingService#resume} used to reopen a failed optional step on a
+     * {@code READY} run, report it reopened and write the audit fact — while
+     * {@code dueRuns} excludes a {@code READY} run and {@code refreshRunStatus}
+     * cannot pull one back, so nothing would ever claim it. The operator was told
+     * work had been rescheduled that could not happen, and the red row they were
+     * looking at turned yellow.
+     */
+    @Test
+    void resumeRefusesARunThatHasAlreadyFinished() {
+        OnboardingService withRejectingSample = serviceWith(sampleMenuHandler(
+                context -> OnboardingStepHandler.StepResult.failed("SAMPLE_MENU_REJECTED", "publication rejected")));
+        UUID runId = startRunWithSampleMenu(withRejectingSample, true);
+        drain(withRejectingSample, runId);
+        assertThat(runStatus(runId)).isEqualTo("READY");
+
+        assertThatThrownBy(() -> withRejectingSample.resume(runId, ADMIN, "have another go"))
+                .isInstanceOf(OnboardingService.ResumeNotPermittedException.class);
+
+        assertThat(stepStatus(runId, "SAMPLE_MENU_PUBLISH"))
+                .as("the failure the operator was looking at is still there to look at")
+                .isEqualTo("FAILED=SAMPLE_MENU_REJECTED");
+    }
+
     /** The choice is on the run's audit fact, so "who asked for this" is answerable. */
     @Test
     void theSampleMenuChoiceIsOnTheStartedAuditFact() {
@@ -265,6 +412,18 @@ class OnboardingServiceTests {
                 .param("runId", runId)
                 .query((rs, n) -> rs.getString("step_key") + "=" + rs.getString("status"))
                 .list();
+    }
+
+    private @Nullable String lastError(UUID runId, String stepKey) {
+        return jdbc.sql("""
+                SELECT last_error FROM tenant.onboarding_steps
+                 WHERE run_id = :runId AND step_key = :stepKey
+                """)
+                .param("runId", runId)
+                .param("stepKey", stepKey)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     private String stepStatus(UUID runId, String stepKey) {
@@ -883,7 +1042,11 @@ class OnboardingServiceTests {
     }
 
     private UUID startRunWithSampleMenu(boolean sampleMenu) {
-        return service.startRun(
+        return startRunWithSampleMenu(service, sampleMenu);
+    }
+
+    private UUID startRunWithSampleMenu(OnboardingService target, boolean sampleMenu) {
+        return target.startRun(
                 TENANT,
                 TEMPLATE,
                 1,
@@ -898,15 +1061,61 @@ class OnboardingServiceTests {
     }
 
     /**
+     * The service the fixture builds, plus one more handler.
+     *
+     * <p>Built through the same constructor rather than mutating {@link #service},
+     * because a run has to be started and drained by the instance that owns the
+     * handler set under test — {@code handlers} is read once, in the constructor.
+     */
+    private OnboardingService serviceWith(OnboardingStepHandler extra) {
+        List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(allHandlers(provisioner, store, jdbc));
+        handlers.add(extra);
+        return new OnboardingService(
+                jdbc,
+                transactions,
+                handlers,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        clock,
+                        new SimpleMeterRegistry()),
+                published,
+                JsonMapper.builder().build(),
+                clock,
+                controlPlane);
+    }
+
+    /** A stand-in for ADR 0099's step, doing whatever the test needs it to do. */
+    private static OnboardingStepHandler sampleMenuHandler(
+            java.util.function.Function<OnboardingStepHandler.StepContext, OnboardingStepHandler.StepResult> body) {
+        return new OnboardingStepHandler() {
+            @Override
+            public OnboardingStep step() {
+                return OnboardingStep.SAMPLE_MENU_PUBLISH;
+            }
+
+            @Override
+            public StepResult execute(StepContext context) {
+                return body.apply(context);
+            }
+        };
+    }
+
+    /**
      * Runs until nothing is due, advancing the clock so retry backoff elapses.
      * A real scheduler waits for it; a test with a frozen clock would otherwise
      * stop at the first retry and look like a failure that never happened.
      */
     private void drain(UUID runId) {
+        drain(service, runId);
+    }
+
+    private void drain(OnboardingService target, UUID runId) {
         for (int guard = 0; guard < 60; guard++) {
-            if (!service.runNextStep(runId)) {
+            if (!target.runNextStep(runId)) {
                 clock.advance(java.time.Duration.ofMinutes(10));
-                if (!service.runNextStep(runId)) {
+                if (!target.runNextStep(runId)) {
                     return;
                 }
             }

@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The onboarding step catalogue (ADR 0008).
  *
- * <p>All twelve now have handlers except {@code TENANT_ACTIVATE}, which is
+ * <p>Every step now has a handler except {@code TENANT_ACTIVATE}, which is
  * never blocked in the first place — it waits on a platform administrator, not
  * a missing capability. The seven that used to stay materialised {@code
  * BLOCKED} — because a template that silently skips a check is

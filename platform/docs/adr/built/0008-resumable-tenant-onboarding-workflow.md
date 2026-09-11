@@ -139,6 +139,12 @@
   counts only required rows) can be held up by. Everything else here is
   unchanged; the steps that were 4–12 are now 5–13, and runs materialised
   before that keep the `sequence_number` they were created with.
+  Two of this record's own mechanics had to learn the same distinction, because
+  before ADR 0099 every step but `TENANT_ACTIVATE` was required and the question
+  never arose: the stalled-run gauge and the ADR 0058 stuck-run listing now
+  count only `required` rows, and `resume` refuses a run that has already
+  reached `READY`, `ACTIVE` or `CANCELLED` rather than reopening a step nothing
+  would claim. ADR 0099 argues both.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)

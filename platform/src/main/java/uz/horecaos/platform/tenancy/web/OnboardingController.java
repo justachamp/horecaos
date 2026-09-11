@@ -154,11 +154,19 @@ public class OnboardingController {
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
     @Operation(
             summary = "Reopen failed steps",
-            description = "Completed steps are never reset; a retry reconciles external work.")
+            description = "Completed steps are never reset; a retry reconciles external work. "
+                    + "Refused once the run has reached READY, ACTIVE or CANCELLED: nothing claims "
+                    + "a step on a run the scheduler no longer drives, so reopening one there would "
+                    + "report work that never happens.")
     ResponseEntity<Map<String, Object>> resume(
             @PathVariable UUID tenantId, @PathVariable UUID runId, @Valid @RequestBody ReasonRequest request) {
 
-        int reopened = onboarding.resume(runId, actor(), request.reason());
+        int reopened;
+        try {
+            reopened = onboarding.resume(runId, actor(), request.reason());
+        } catch (OnboardingService.ResumeNotPermittedException refused) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage());
+        }
         return ResponseEntity.ok(Map.of("reopenedSteps", reopened));
     }
 
