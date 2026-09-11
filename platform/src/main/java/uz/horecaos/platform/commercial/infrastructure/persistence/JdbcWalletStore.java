@@ -370,13 +370,12 @@ public class JdbcWalletStore {
     /** One statement's outstanding draw on one money kind, and on one grant when that kind is bonus. */
     public record StatementDraw(String moneyKind, @Nullable UUID grantId, long drawnMinor, String currency) {}
 
-    /** The tenant's total live PAID balance. */
+    /** The tenant's total live PAID balance; zero for a tenant with no entries. */
     public long paidBalance(UUID tenantId) {
-        Long total = jdbc.sql("""
-                        SELECT SUM(amount_minor) FROM commercial.wallet_entries
+        return jdbc.sql("""
+                        SELECT COALESCE(SUM(amount_minor), 0) FROM commercial.wallet_entries
                          WHERE tenant_id = :tenantId AND money_kind = 'PAID'
                         """).param("tenantId", tenantId).query(Long.class).single();
-        return total == null ? 0 : total;
     }
 
     private static WalletEntry entry(ResultSet row, int number) throws SQLException {
