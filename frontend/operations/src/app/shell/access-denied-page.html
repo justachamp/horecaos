@@ -1,0 +1,9 @@
+<div class="page">
+  @if (sectionLabel; as key) {
+    <h1 class="q-title">{{ key | t }}</h1>
+  }
+
+  <q-denied-state [capability]="capability">
+    <a class="q-body-sm" routerLink="/today">{{ 'shell.accessDenied.backHome' | t }}</a>
+  </q-denied-state>
+</div>
