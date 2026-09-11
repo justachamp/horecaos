@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -68,6 +69,8 @@ class OwnerInvitationOverviewTests {
     private FakeAuthorization authorization;
     private List<AuditFact> facts;
     private JdbcOwnerInvitationStore store;
+    private JdbcOwnerInvitationEventStore events;
+    private TransactionTemplate transactions;
     private OwnerInvitationService invitations;
     private OwnerInvitationRelay relay;
 
@@ -98,18 +101,13 @@ class OwnerInvitationOverviewTests {
         authorization = new FakeAuthorization();
         facts = new ArrayList<>();
         store = new JdbcOwnerInvitationStore(jdbc);
-        JdbcOwnerInvitationEventStore events = new JdbcOwnerInvitationEventStore(jdbc);
-        invitations = new OwnerInvitationService(store, events, accounts, authorization, facts::add, clock);
+        events = new JdbcOwnerInvitationEventStore(jdbc);
+        transactions = new TransactionTemplate(new JdbcTransactionManager(db.dataSource()));
+        invitations =
+                new OwnerInvitationService(store, events, accounts, authorization, facts::add, transactions, clock);
         mailer = new RecordingMailer();
         relay = new OwnerInvitationRelay(
-                store,
-                events,
-                accounts,
-                mailer,
-                facts::add,
-                new TransactionTemplate(new JdbcTransactionManager(db.dataSource())),
-                clock,
-                "https://ops.test/");
+                store, events, accounts, mailer, facts::add, transactions, clock, "https://ops.test/");
 
         accepted = tenant("accepted-co", "Accepted & Co", "ACTIVE");
         waiting = tenant("waiting-co", "Waiting Kafe", "PROVISIONING");
@@ -291,8 +289,18 @@ class OwnerInvitationOverviewTests {
                         "FAILED", "EXPIRED", OwnerInvitationService.NONE, "QUEUED", "SENT", "NOT_NEEDED", "ACCEPTED");
     }
 
+    /**
+     * The alphabetical order inside one state is the query's, and this is the
+     * test of the query. It is not a test of the service's tiebreak and must
+     * not be read as one: every row here shares an urgency rank, the query
+     * already hands them over by {@code display_name}, and {@link List#sort} is
+     * stable -- so deleting {@code .thenComparing(tenantName)} in the service
+     * leaves both assertions below green. {@link
+     * #theTiebreakSortsWhatTheQueryHandedBackOutOfOrder} is the one that
+     * observes the comparator.
+     */
     @Test
-    @DisplayName("tenants in one state are listed alphabetically")
+    @DisplayName("tenants in one state are listed alphabetically, which is the query's ordering")
     void tenantsInOneStateAreAlphabetical() {
         // Inserted last-first, so a list that did not sort would hand them back
         // in this order.
@@ -306,6 +314,154 @@ class OwnerInvitationOverviewTests {
                 .extracting(JdbcOwnerInvitationStore.OverviewRow::tenantName)
                 .as("the query's half of the same guarantee: alphabetical inside each settled/unsettled half")
                 .containsSubsequence("Accepted & Co", "Alisher Kafe", "Waiting Kafe", "Zulfiya Osh");
+    }
+
+    /**
+     * The service sorts by urgency and then by name, and the second half of
+     * that is invisible through the real store: every urgency rank lies wholly
+     * inside one of the query's two settled/unsettled groups, so within a rank
+     * the query's own {@code t.display_name} always already holds. The only way
+     * to see the tiebreak work is to hand the service the order the query never
+     * produces -- which is also the order a future change to that ORDER BY
+     * would start producing, with nothing else in this file noticing.
+     */
+    @Test
+    @DisplayName("two tenants in one state come back alphabetically however the query ordered them")
+    void theTiebreakSortsWhatTheQueryHandedBackOutOfOrder() {
+        UUID zulfiya = UUID.randomUUID();
+        UUID alisher = UUID.randomUUID();
+        JdbcOwnerInvitationStore backwards = new JdbcOwnerInvitationStore(jdbc) {
+            @Override
+            public List<JdbcOwnerInvitationStore.OverviewRow> overview(int limit) {
+                return List.of(
+                        queued(zulfiya, "zulfiya-co", "Zulfiya Osh"), queued(alisher, "alisher-co", "Alisher Kafe"));
+            }
+        };
+        OwnerInvitationService sorting =
+                new OwnerInvitationService(backwards, events, accounts, authorization, facts::add, transactions, clock);
+
+        assertThat(sorting.overview(null, READER, "corr"))
+                .extracting(OwnerInvitationOverviewRow::tenantName)
+                .as("one urgency rank, handed over backwards: the service's own tiebreak is all that orders it")
+                .containsExactly("Alisher Kafe", "Zulfiya Osh");
+    }
+
+    /**
+     * Both caps are the service's to pass, and neither call site was pinned:
+     * {@code store.ownerStates(OVERVIEW_LIMIT)} is a plausible copy/paste
+     * between two constants ten lines apart, and it would quietly shrink the
+     * directory's column to the first 200 tenants -- which ADR 0100 says must
+     * read as "not known" -- with every other assertion in this file green.
+     */
+    @Test
+    @DisplayName("each read asks the store for the cap its own documentation names")
+    void theDocumentedCapsAreTheOnesAskedFor() {
+        List<Integer> overviewLimits = new ArrayList<>();
+        List<Integer> stateLimits = new ArrayList<>();
+        JdbcOwnerInvitationStore recording = new JdbcOwnerInvitationStore(jdbc) {
+            @Override
+            public List<JdbcOwnerInvitationStore.OverviewRow> overview(int limit) {
+                overviewLimits.add(limit);
+                return super.overview(limit);
+            }
+
+            @Override
+            public List<JdbcOwnerInvitationStore.OwnerStateRow> ownerStates(int limit) {
+                stateLimits.add(limit);
+                return super.ownerStates(limit);
+            }
+        };
+        OwnerInvitationService counted =
+                new OwnerInvitationService(recording, events, accounts, authorization, facts::add, transactions, clock);
+
+        counted.overview(null, READER, "corr");
+        counted.ownerStates();
+
+        assertThat(overviewLimits).containsExactly(OwnerInvitationService.OVERVIEW_LIMIT);
+        assertThat(stateLimits)
+                .as("the address-free projection's cap, not the overview's")
+                .containsExactly(OwnerInvitationService.OWNER_STATE_LIMIT);
+        assertThat(OwnerInvitationService.OVERVIEW_LIMIT)
+                .as("ADR 0100 documents 200 rows for the overview")
+                .isEqualTo(200);
+        assertThat(OwnerInvitationService.OWNER_STATE_LIMIT)
+                .as("ADR 0100 documents 1000 rows for the address-free projection")
+                .isEqualTo(1000);
+    }
+
+    /**
+     * The overview used to be {@code @Transactional}, which bound a Hikari
+     * connection at method entry and held it across every recipient the loop
+     * resolved -- up to 200 tenants, two blocking Keycloak calls each, each one
+     * able to wait out a ten-second read timeout without failing the request.
+     * Three of those on one screen would have held three of ten pool
+     * connections for minutes. So: the rows and the addresses are read with
+     * nothing bound, and only the reveal fact is written in a transaction.
+     */
+    @Test
+    @DisplayName("recipients are resolved with no transaction bound, and the reveal fact is written inside one")
+    void theIdentityProviderIsNeverCalledInsideATransaction() {
+        authorization.grant("operator", Capability.TENANT_ONBOARDING_MANAGE, ResourceScope.platform());
+        facts.clear();
+        List<Boolean> whileResolving = new ArrayList<>();
+        List<Boolean> whileRecording = new ArrayList<>();
+        StaffAccounts watched = new StaffAccounts() {
+            @Override
+            public Optional<StaffAccount> find(String subjectId) {
+                whileResolving.add(TransactionSynchronizationManager.isActualTransactionActive());
+                return accounts.find(subjectId);
+            }
+
+            @Override
+            public void completeSetup(String subjectId, String firstName, String lastName, String password) {
+                throw new UnsupportedOperationException("nothing under test sets a password");
+            }
+        };
+        OwnerInvitationService watchedService = new OwnerInvitationService(
+                store,
+                events,
+                watched,
+                authorization,
+                fact -> {
+                    whileRecording.add(TransactionSynchronizationManager.isActualTransactionActive());
+                    facts.add(fact);
+                },
+                transactions,
+                clock);
+
+        var rows = watchedService.overview(null, ONBOARDER, "corr");
+
+        assertThat(rows).hasSize(3);
+        assertThat(whileResolving)
+                .as("a Keycloak round trip inside a transaction pins a pool connection for as long as it takes")
+                .hasSize(3)
+                .containsOnly(false);
+        assertThat(whileRecording)
+                .as("the fact is still a transaction's worth of work, just its own")
+                .containsExactly(true);
+        assertThat(facts)
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", 3)));
+    }
+
+    /** One overview row for a tenant with no invitation and no owner to resolve. */
+    private static JdbcOwnerInvitationStore.OverviewRow queued(UUID tenantId, String slug, String name) {
+        return new JdbcOwnerInvitationStore.OverviewRow(
+                tenantId,
+                slug,
+                name,
+                "PROVISIONING",
+                UUID.randomUUID(),
+                null,
+                "QUEUED",
+                "ru",
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     /**
@@ -375,6 +531,16 @@ class OwnerInvitationOverviewTests {
                 .as("no reveal, so the count of the reveals that matter keeps its meaning")
                 .isEmpty();
         assertThat(states.toString()).doesNotContain("example.uz");
+
+        // The query's own half of the cap ADR 0100 documents: a bound, and an
+        // alphabetical one, so a tenant beyond it is simply absent. Five
+        // unarchived tenants stand here -- Accepted & Co, Never Told Osh,
+        // Nothing Yet, Settled Choyxona, Waiting Kafe -- and a dropped LIMIT or
+        // a dropped ORDER BY is invisible to every assertion above.
+        assertThat(store.ownerStates(2))
+                .extracting(JdbcOwnerInvitationStore.OwnerStateRow::tenantId)
+                .as("the cap is the query's, and it falls alphabetically by display name")
+                .containsExactly(accepted, neverTold);
     }
 
     // ------------------------------------------------------------- fixtures

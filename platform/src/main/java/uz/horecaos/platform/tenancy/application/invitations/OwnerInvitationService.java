@@ -18,6 +18,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -111,6 +112,32 @@ public class OwnerInvitationService implements OwnerInvitations {
     private final StaffAccounts accounts;
     private final AuthorizationService authorization;
     private final AuditRecorder audit;
+
+    /**
+     * The short transactions of the four methods that talk to Keycloak,
+     * demarcated here rather than with {@code @Transactional} on the method.
+     *
+     * <p>Every one of {@link #view}, {@link #overview}, {@link #inspect} and
+     * {@link #accept} resolves something from the identity provider over HTTP --
+     * the overview up to {@link #OVERVIEW_LIMIT} recipients, two round trips
+     * each -- and each writes only at the ends of that call. Annotating the
+     * method binds a Hikari connection at entry and holds it for the whole round
+     * trip, and in {@code accept} it held a {@code FOR UPDATE} row lock with it;
+     * ten seconds is the read timeout on one Keycloak call and nothing about a
+     * slow identity provider fails the request. That is the coupling {@link
+     * OwnerInvitationRelay} was built to avoid on the same dependency ("the send
+     * is never inside a transaction"), and these carry more of it than the relay
+     * does. So the round trips happen with nothing bound, and each write is its
+     * own committed unit of work through this.
+     *
+     * <p>A template and not a self-invoked annotated method, for the reason
+     * {@code OwnerInvitationRelay}, {@code PaymentAttemptService}, {@code
+     * OnboardingService} and {@code TenantControlPlaneService} each carry one of
+     * these: a method calling its own annotated method skips the proxy and would
+     * silently write outside any transaction at all.
+     */
+    private final TransactionTemplate transactions;
+
     private final Clock clock;
 
     public OwnerInvitationService(
@@ -119,12 +146,14 @@ public class OwnerInvitationService implements OwnerInvitations {
             StaffAccounts accounts,
             AuthorizationService authorization,
             AuditRecorder audit,
+            TransactionTemplate transactions,
             Clock clock) {
         this.store = store;
         this.events = events;
         this.accounts = accounts;
         this.authorization = authorization;
         this.audit = audit;
+        this.transactions = transactions;
         this.clock = clock;
     }
 
@@ -184,9 +213,14 @@ public class OwnerInvitationService implements OwnerInvitations {
      * here, and the invitation's history either way.
      *
      * <p>Not read-only: showing an operator a staff address is a reveal, and a
-     * reveal writes a fact (ADR 0029).
+     * reveal writes a fact (ADR 0029). Not one transaction either, and
+     * deliberately not -- see {@link #transactions}. The row, the timeline and the
+     * address are read with nothing bound; only the fact is written in a
+     * transaction, and it is the last thing that happens. The shape matters
+     * less here than in {@link #overview} -- one identity-provider read rather
+     * than two hundred -- but leaving this one annotated is an invitation to
+     * copy the loop back into a transaction.
      */
-    @Transactional
     public Optional<OwnerInvitationView> view(UUID tenantId, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
         Optional<Row> found = store.latestFor(tenantId);
@@ -196,10 +230,11 @@ public class OwnerInvitationService implements OwnerInvitations {
         Row row = found.get();
         ResourceScope scope = ResourceScope.tenant(tenantId);
         Recipient recipient = recipientOf(row.subjectId(), mayReveal(actor, scope));
+        OwnerInvitationView rendered = render(row, recipient, now);
         if (recipient.full() != null) {
-            recordReveal(scope, actor, 1, now, correlationId);
+            transactions.executeWithoutResult(ignored -> recordReveal(scope, actor, 1, now, correlationId));
         }
-        return Optional.of(render(row, recipient, now));
+        return Optional.of(rendered);
     }
 
     /**
@@ -211,10 +246,17 @@ public class OwnerInvitationService implements OwnerInvitations {
      * all, so the recipients come back in full -- and the one fact recorded
      * here says how many were shown, never which.
      *
+     * <p>Three steps, and the order is the point (see {@link #transactions}). The
+     * rows are one statement, which Spring JDBC auto-commits on a connection it
+     * hands straight back. The loop that follows makes up to {@link
+     * #OVERVIEW_LIMIT} pairs of Keycloak calls with no transaction bound, so a
+     * slow identity provider costs this request its own latency and not a
+     * connection out of the pool for the whole of it. The fact is written last,
+     * in a transaction of its own.
+     *
      * @param state one stored state, {@link #NONE}, {@link #OUTSTANDING}, or
      *        null for all of them
      */
-    @Transactional
     public List<OwnerInvitationOverviewRow> overview(@Nullable String state, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
         ResourceScope scope = ResourceScope.platform();
@@ -252,7 +294,8 @@ public class OwnerInvitationService implements OwnerInvitations {
         rows.sort(Comparator.comparingInt((OwnerInvitationOverviewRow row) -> urgencyOf(row.state()))
                 .thenComparing(OwnerInvitationOverviewRow::tenantName));
         if (revealed > 0) {
-            recordReveal(scope, actor, revealed, now, correlationId);
+            int shown = revealed;
+            transactions.executeWithoutResult(ignored -> recordReveal(scope, actor, shown, now, correlationId));
         }
         return List.copyOf(rows);
     }
@@ -391,27 +434,34 @@ public class OwnerInvitationService implements OwnerInvitations {
     /**
      * What the owner sees before setting their password: whose invitation it
      * is and which address it went to, masked. Marks it opened.
+     *
+     * <p>The open is its own unit of work and the address is read after it, with
+     * nothing bound: {@code markOpened} carries its own guard ({@code status =
+     * 'SENT' AND opened_at IS NULL}), so the first open wins on the statement
+     * rather than on a surrounding transaction, and the row and the line it
+     * explains still stand or fall together (ADR 0100).
      */
-    @Transactional
     public InvitationInspection inspect(String token) {
         Instant now = clock.instant();
-        Row row = live(token, now);
-        if (store.markOpened(row.id(), now)) {
-            // Only the first open. A mail scanner following the link is not the
-            // owner reading their invitation, and opened_at has always meant
-            // the first one.
-            events.append(new JdbcOwnerInvitationEventStore.Entry(
-                    row.tenantId(),
-                    row.id(),
-                    JdbcOwnerInvitationEventStore.OPENED,
-                    row.attempts(),
-                    row.locale(),
-                    null,
-                    "OWNER",
-                    row.subjectId(),
-                    null,
-                    now));
-        }
+        Row row = live(hash(token.strip()), now);
+        transactions.executeWithoutResult(ignored -> {
+            if (store.markOpened(row.id(), now)) {
+                // Only the first open. A mail scanner following the link is not
+                // the owner reading their invitation, and opened_at has always
+                // meant the first one.
+                events.append(new JdbcOwnerInvitationEventStore.Entry(
+                        row.tenantId(),
+                        row.id(),
+                        JdbcOwnerInvitationEventStore.OPENED,
+                        row.attempts(),
+                        row.locale(),
+                        null,
+                        "OWNER",
+                        row.subjectId(),
+                        null,
+                        now));
+            }
+        });
         return new InvitationInspection(
                 store.tenantName(row.tenantId()),
                 maskFor(row.subjectId()),
@@ -423,50 +473,80 @@ public class OwnerInvitationService implements OwnerInvitations {
      * Sets the owner's name and password, marks their address verified, and
      * spends the link.
      *
+     * <p>Spend, then set the password, then record it -- three steps, and none
+     * of them holds anything while Keycloak is being asked. This used to be one
+     * transaction that opened with {@code SELECT ... FOR UPDATE} and then made
+     * two blocking identity-provider calls inside it, so a Keycloak that had
+     * stopped answering held a pool connection <em>and</em> a row lock for the
+     * ten seconds of each read timeout, per accepting owner.
+     *
+     * <p>The spend comes first and is guarded on {@code status = 'SENT'}, so two
+     * requests holding the same one-time link cannot both reach {@code
+     * completeSetup}: the loser is told the invitation changed, and the lost
+     * {@code FOR UPDATE} is not missed, because a resend crossing an accept is
+     * refused by whichever of {@code requeue} and {@code markAccepted} arrives
+     * second.
+     *
+     * <p>A password the policy refuses is the reason the spend is undone rather
+     * than kept: nothing happened, and an owner who typed a short password must
+     * not be left holding a dead link and a support ticket. The history is
+     * written after {@code completeSetup} returns for the same reason -- it is
+     * append-only, so an ACCEPTED line written before the password was set could
+     * never be taken back when the policy refused it. What that costs is a
+     * process killed between the two: an ACCEPTED row whose timeline does not
+     * say so. That is a missing line rather than a false one, and the owner's
+     * password is set either way.
+     *
      * @return the name the owner signs in with -- their address, which they
      *         just proved they receive mail at
      */
-    @Transactional
     public InvitationAccepted accept(
             String token, String firstName, String lastName, String password, String correlationId) {
         Instant now = clock.instant();
-        Row row = live(token, now);
+        String tokenHash = hash(token.strip());
+        Row row = live(tokenHash, now);
         StaffAccount account = accounts.find(row.subjectId())
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "This invitation's account no longer exists; ask for a new invitation",
                         Map.of("reason", "ACCOUNT_MISSING")));
+        if (!Boolean.TRUE.equals(transactions.execute(ignored -> store.markAccepted(row.id(), now)))) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This invitation changed while it was being accepted");
+        }
         try {
             accounts.completeSetup(row.subjectId(), firstName.strip(), lastName.strip(), password);
         } catch (PasswordRejectedException refused) {
+            // Nothing was set, so nothing was accepted: give the link back,
+            // guarded on the spend this call made, and say what was wrong with
+            // the password. The owner types another one and the link still works.
+            transactions.executeWithoutResult(ignored -> store.restoreLink(row.id(), tokenHash, now));
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "The password does not meet the policy",
                     Map.of("field", "password", "policy", refused.policy()));
         }
-        if (!store.markAccepted(row.id(), now)) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This invitation changed while it was being accepted");
-        }
-        events.append(new JdbcOwnerInvitationEventStore.Entry(
-                row.tenantId(),
-                row.id(),
-                JdbcOwnerInvitationEventStore.ACCEPTED,
-                row.attempts(),
-                row.locale(),
-                null,
-                "OWNER",
-                row.subjectId(),
-                null,
-                now));
-        audit.record(AuditFact.of("tenant.owner_invitation.accepted", AuditClass.SECURITY)
-                .by(ActorRef.user(row.subjectId(), null))
-                .at(ResourceScope.tenant(row.tenantId()))
-                .target("tenant.owner_invitation", row.id())
-                .because("The owner set up their account from the invitation (ADR 0097)")
-                .changed(Map.of("status", "ACCEPTED", "emailVerified", true))
-                .correlatedBy(correlationId)
-                .occurredAt(now)
-                .build());
+        transactions.executeWithoutResult(ignored -> {
+            events.append(new JdbcOwnerInvitationEventStore.Entry(
+                    row.tenantId(),
+                    row.id(),
+                    JdbcOwnerInvitationEventStore.ACCEPTED,
+                    row.attempts(),
+                    row.locale(),
+                    null,
+                    "OWNER",
+                    row.subjectId(),
+                    null,
+                    now));
+            audit.record(AuditFact.of("tenant.owner_invitation.accepted", AuditClass.SECURITY)
+                    .by(ActorRef.user(row.subjectId(), null))
+                    .at(ResourceScope.tenant(row.tenantId()))
+                    .target("tenant.owner_invitation", row.id())
+                    .because("The owner set up their account from the invitation (ADR 0097)")
+                    .changed(Map.of("status", "ACCEPTED", "emailVerified", true))
+                    .correlatedBy(correlationId)
+                    .occurredAt(now)
+                    .build());
+        });
         return new InvitationAccepted(account.email());
     }
 
@@ -539,8 +619,17 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .build());
     }
 
-    private Row live(String token, Instant now) {
-        Row row = store.byTokenHashForUpdate(hash(token.strip()))
+    /**
+     * The invitation a presented token names, if the link is still live.
+     *
+     * <p>Read without a lock and without a transaction. The lock this used to
+     * take was held across two Keycloak calls, and it bought nothing the guarded
+     * writes do not: every write that follows names the state it expects, so a
+     * caller that read a row somebody else has since moved on is refused at the
+     * write rather than made to wait at the read.
+     */
+    private Row live(String tokenHash, Instant now) {
+        Row row = store.byTokenHash(tokenHash)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "This invitation link is not valid. If you already set your password, sign in.",

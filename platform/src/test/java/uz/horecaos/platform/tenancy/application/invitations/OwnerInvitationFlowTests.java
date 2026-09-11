@@ -25,6 +25,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -41,6 +43,7 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore;
 import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * ADR 0097 end to end against the migrated schema: queued by onboarding,
@@ -106,7 +109,8 @@ class OwnerInvitationFlowTests {
         // is a genuine one and not a fixture's promise.
         transactions = new TransactionTemplate(new JdbcTransactionManager(db.dataSource()));
         authorization = new FakeAuthorization();
-        invitations = new OwnerInvitationService(store, events, accounts, authorization, facts::add, clock);
+        invitations =
+                new OwnerInvitationService(store, events, accounts, authorization, facts::add, transactions, clock);
         relay = relayWith(events);
 
         tenantId = UUID.randomUUID();
@@ -334,6 +338,42 @@ class OwnerInvitationFlowTests {
     }
 
     /**
+     * The same race on the other guarded write, and not a copy of the one
+     * above. {@code markRetry}'s SET clause moves the attempt counter as well
+     * as the error code, and its return was the one nothing observed: replacing
+     * it with {@code return true}, or dropping {@code AND attempts = :attempt}
+     * from its WHERE clause, left the whole suite green while a SEND_DEFERRED
+     * line for a replaced attempt went into a table the application role can
+     * only ever INSERT into.
+     */
+    @Test
+    @DisplayName("a retry a resend overtook changes nothing, and is not written into the history")
+    void anOvertakenRetryIsNotRecorded() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        mailer.next = mail -> {
+            // As above: the row is back in the queue at attempt zero before this
+            // attempt's outcome lands, so the deferral belongs to nothing.
+            invitations.resend(tenantId, null, ONBOARDER, "the owner asked again", "corr");
+            return new MailOutcome.Failed("SMTP_UNAVAILABLE");
+        };
+
+        assertThat(relay.runOnce()).isZero();
+
+        var view = view();
+        assertThat(view.state()).isEqualTo("QUEUED");
+        assertThat(view.lastErrorCode())
+                .as("the resend cleared it, and an overtaken attempt does not write its code back over the clear")
+                .isNull();
+        assertThat(view.attempts())
+                .as("the counter belongs to the resend, not to the attempt it replaced")
+                .isZero();
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("no SEND_DEFERRED for an attempt a resend had already replaced")
+                .containsExactly("QUEUED", "RESENT");
+    }
+
+    /**
      * The one branch of the relay's switch that does not retry. A typed-wrong
      * address is exactly what ADR 0100 was written to make visible, and
      * retrying it for two hours would hide it behind QUEUED.
@@ -442,22 +482,7 @@ class OwnerInvitationFlowTests {
     @Test
     @DisplayName("a tenant onboarded before invitations existed can have its first one sent")
     void aTenantOnboardedEarlierGetsItsFirstInvitation() {
-        UUID runId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO tenant.onboarding_runs (id, tenant_id, template_id, template_version, status,
-                    current_phase, started_by)
-                VALUES (:id, :tenantId, '94cc9f54-7451-4db1-ac13-4073f6833b15', 1, 'FAILED', 'VALIDATING', 'operator')
-                """).param("id", runId).param("tenantId", tenantId).update();
-        jdbc.sql("""
-                INSERT INTO tenant.onboarding_steps (id, tenant_id, run_id, step_key, phase, sequence_number,
-                    status, required, external_reference)
-                VALUES (:id, :tenantId, :runId, 'TENANT_OWNER_LINK_OR_INVITE', 'PROVISIONING', 2,
-                    'COMPLETED', true, 'owner-subject')
-                """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", tenantId)
-                .param("runId", runId)
-                .update();
+        ownerLinkedByOnboarding("owner-subject", "FAILED", "VALIDATING");
         assertThat(invitations.view(tenantId, READER, "corr")).isEmpty();
 
         invitations.resend(tenantId, "uz", ActorRef.user("operator", null), "onboarded before invitations", "corr");
@@ -476,22 +501,7 @@ class OwnerInvitationFlowTests {
                         ApiException.class,
                         refused -> assertThat(refused.properties()).containsEntry("reason", "NO_OWNER"));
 
-        UUID runId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO tenant.onboarding_runs (id, tenant_id, template_id, template_version, status,
-                    current_phase, started_by)
-                VALUES (:id, :tenantId, '94cc9f54-7451-4db1-ac13-4073f6833b15', 1, 'ACTIVE', 'ACTIVATING', 'operator')
-                """).param("id", runId).param("tenantId", tenantId).update();
-        jdbc.sql("""
-                INSERT INTO tenant.onboarding_steps (id, tenant_id, run_id, step_key, phase, sequence_number,
-                    status, required, external_reference)
-                VALUES (:id, :tenantId, :runId, 'TENANT_OWNER_LINK_OR_INVITE', 'PROVISIONING', 2,
-                    'COMPLETED', true, 'set-up-owner')
-                """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", tenantId)
-                .param("runId", runId)
-                .update();
+        ownerLinkedByOnboarding("set-up-owner", "ACTIVE", "ACTIVATING");
         accounts.put("set-up-owner", "owner@example.uz", true);
 
         assertThatThrownBy(() -> invitations.resend(tenantId, null, ActorRef.user("operator", null), "why", "corr"))
@@ -499,6 +509,46 @@ class OwnerInvitationFlowTests {
                         ApiException.class,
                         refused -> assertThat(refused.properties()).containsEntry("reason", "ALREADY_SET_UP"));
         assertThat(invitations.view(tenantId, READER, "corr")).isEmpty();
+    }
+
+    /**
+     * Two operators sending a tenant's first invitation at once. The loser's
+     * {@code INSERT ... ON CONFLICT DO NOTHING} matches nothing, so the
+     * identifier it minted names no row and the history entry that follows would
+     * violate V0215's foreign key -- a 500 out of a race, where the caller
+     * should be told in so many words what happened. Nothing else in the suite
+     * reaches a false {@code queueIfAbsent}: deleting the guard left every test
+     * green.
+     */
+    @Test
+    @DisplayName("a first invitation another operator queued first is a conflict, not a foreign key violation")
+    void aFirstInvitationLostToAnotherOperatorIsAConflict() {
+        ownerLinkedByOnboarding("owner-subject", "FAILED", "VALIDATING");
+        // Only the insert reports a loss. latestFor and ownerFromOnboarding still
+        // read the real database, so the call arrives at the branch under test by
+        // the same path the losing request would take.
+        JdbcOwnerInvitationStore lost = new JdbcOwnerInvitationStore(jdbc) {
+            @Override
+            public boolean queueIfAbsent(
+                    UUID id, UUID tenant, String subjectId, String locale, String queuedBy, Instant now) {
+                return false;
+            }
+        };
+        OwnerInvitationService loser =
+                new OwnerInvitationService(lost, events, accounts, authorization, facts::add, transactions, clock);
+
+        assertThatThrownBy(() -> loser.resend(tenantId, "uz", ONBOARDER, "onboarded before invitations", "corr"))
+                .isInstanceOfSatisfying(ApiException.class, refused -> {
+                    assertThat(refused.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+                    assertThat(refused.properties()).containsEntry("reason", "ALREADY_QUEUED");
+                });
+
+        assertThat(facts)
+                .as("the loser queued nothing, so it claims nothing in the audit trail")
+                .isEmpty();
+        assertThat(invitations.view(tenantId, READER, "corr"))
+                .as("and left no invitation of its own behind")
+                .isEmpty();
     }
 
     /**
@@ -659,6 +709,86 @@ class OwnerInvitationFlowTests {
         });
     }
 
+    /**
+     * The accept spends the link before it asks Keycloak to set the password, so
+     * that two requests holding one link cannot both get that far. A refusal
+     * therefore has to give the link back, or every owner who types a password
+     * the realm's policy dislikes is left with a dead link and a support ticket.
+     */
+    @Test
+    @DisplayName("a password the policy refuses gives the link back, and the owner sets another one with it")
+    void aRefusedPasswordLeavesTheLinkUsable() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        accounts.refuse = true;
+
+        assertThatThrownBy(() -> invitations.accept(token, "Dilnoza", "Karimova", "password", "corr"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.properties())
+                                .containsEntry("policy", "invalidPasswordNotUsernameMessage"));
+
+        var refused = view();
+        assertThat(refused.state())
+                .as("the spend is undone: nothing was set, so nothing was accepted")
+                .isEqualTo("SENT");
+        assertThat(refused.acceptedAt()).isNull();
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("and the append-only history makes no claim it could never take back")
+                .containsExactly("QUEUED", "SENT");
+
+        accounts.refuse = false;
+        assertThat(invitations
+                        .accept(token, "Dilnoza", "Karimova", "a-long-enough-passphrase", "corr")
+                        .signInName())
+                .as("the same link, spent and given back, still opens the account")
+                .isEqualTo("dilnoza.karimova@example.uz");
+        assertThat(view().state()).isEqualTo("ACCEPTED");
+        assertThat(timeline())
+                .extracting(OwnerInvitationService.OwnerInvitationEventView::type)
+                .as("one acceptance, the one that happened -- the refused attempt left no line of its own")
+                .containsExactly("QUEUED", "SENT", "ACCEPTED");
+    }
+
+    /**
+     * Every call through {@link StaffAccounts} is Keycloak over HTTP with a ten
+     * second read timeout, and none of them may be made while a pool connection
+     * is bound -- the accept used to hold one, plus a {@code FOR UPDATE} row
+     * lock, across two of them.
+     *
+     * <p>Two halves, because neither is enough on its own. The recorded flags
+     * catch a future transaction wrapped around the wrong thing. The annotations
+     * catch the shape being put back, which the recorded flags cannot see here:
+     * this fixture builds the service by hand, so no Spring proxy applies
+     * {@code @Transactional} and re-adding it would leave every flag false.
+     */
+    @Test
+    @DisplayName("no identity-provider call is made with a transaction bound, and no such method is annotated")
+    void theIdentityProviderIsNeverCalledInsideATransaction() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "ru", UUID.randomUUID());
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+
+        accounts.bound.clear();
+        invitations.inspect(token);
+        invitations.accept(token, "Dilnoza", "Karimova", "a-long-enough-passphrase", "corr");
+        invitations.view(tenantId, READER, "corr");
+
+        assertThat(accounts.bound)
+                .as("a Keycloak round trip inside a transaction pins a pool connection for as long as it takes")
+                .isNotEmpty()
+                .containsOnly(false);
+        for (String method : List.of("accept", "inspect", "view", "overview")) {
+            assertThat(java.util.Arrays.stream(OwnerInvitationService.class.getDeclaredMethods())
+                            .filter(declared -> declared.getName().equals(method))
+                            .noneMatch(declared -> declared.isAnnotationPresent(Transactional.class)))
+                    .as("%s reaches the identity provider, so it cannot be @Transactional", method)
+                    .isTrue();
+        }
+    }
+
     @Test
     @DisplayName("an unreachable identity provider costs the address and not the state")
     void theStateSurvivesAnUnreachableIdentityProvider() {
@@ -675,6 +805,37 @@ class OwnerInvitationFlowTests {
     }
 
     // ------------------------------------------------------------- fixtures
+
+    /**
+     * A tenant onboarded before invitations existed: an onboarding run whose
+     * owner step completed and linked a subject, and no invitation anywhere.
+     * Without it {@code inviteFirst} stops at NO_OWNER and never reaches
+     * anything further down.
+     */
+    private void ownerLinkedByOnboarding(String subjectId, String runStatus, String phase) {
+        UUID runId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO tenant.onboarding_runs (id, tenant_id, template_id, template_version, status,
+                            current_phase, started_by)
+                        VALUES (:id, :tenantId, '94cc9f54-7451-4db1-ac13-4073f6833b15', 1, :status, :phase, 'operator')
+                        """)
+                .param("id", runId)
+                .param("tenantId", tenantId)
+                .param("status", runStatus)
+                .param("phase", phase)
+                .update();
+        jdbc.sql("""
+                        INSERT INTO tenant.onboarding_steps (id, tenant_id, run_id, step_key, phase, sequence_number,
+                            status, required, external_reference)
+                        VALUES (:id, :tenantId, :runId, 'TENANT_OWNER_LINK_OR_INVITE', 'PROVISIONING', 2,
+                            'COMPLETED', true, :subjectId)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .param("subjectId", subjectId)
+                .update();
+    }
 
     private OwnerInvitationRelay relayWith(JdbcOwnerInvitationEventStore eventStore) {
         return new OwnerInvitationRelay(
@@ -725,6 +886,15 @@ class OwnerInvitationFlowTests {
     private static final class FakeAccounts implements StaffAccounts {
         private final Map<String, StaffAccount> accounts = new HashMap<>();
         private final Map<String, String> setUp = new HashMap<>();
+
+        /**
+         * Whether a database transaction was bound on each call. Keycloak is
+         * two blocking HTTP round trips behind this interface, and a connection
+         * held across one of them is a connection the rest of the platform does
+         * not have.
+         */
+        private final List<Boolean> bound = new ArrayList<>();
+
         private boolean refuse;
         private boolean unreachable;
 
@@ -734,6 +904,7 @@ class OwnerInvitationFlowTests {
 
         @Override
         public Optional<StaffAccount> find(String subjectId) {
+            bound.add(TransactionSynchronizationManager.isActualTransactionActive());
             if (unreachable) {
                 throw new IllegalStateException("the identity provider is not answering");
             }
@@ -742,6 +913,7 @@ class OwnerInvitationFlowTests {
 
         @Override
         public void completeSetup(String subjectId, String firstName, String lastName, String password) {
+            bound.add(TransactionSynchronizationManager.isActualTransactionActive());
             if (refuse) {
                 throw new PasswordRejectedException("invalidPasswordNotUsernameMessage");
             }

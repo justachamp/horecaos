@@ -92,12 +92,21 @@ public class JdbcOwnerInvitationStore {
                 .optional();
     }
 
-    /** The invitation a link names, locked so an accept and a resend cannot cross. */
-    public Optional<Row> byTokenHashForUpdate(String tokenHash) {
+    /**
+     * The invitation a link names.
+     *
+     * <p>No {@code FOR UPDATE}. It used to take one so an accept and a resend
+     * could not cross, which meant the lock was held for the whole of the two
+     * Keycloak calls the accept then made. The guards do that work instead:
+     * {@link #markAccepted} insists the row is still {@code SENT} and {@link
+     * #requeue} that it is not yet {@code ACCEPTED}, so whichever of the two
+     * arrives second is refused rather than made to wait behind a round trip to
+     * another server.
+     */
+    public Optional<Row> byTokenHash(String tokenHash) {
         return jdbc.sql("SELECT " + COLUMNS + """
                           FROM tenant.owner_invitations
                          WHERE token_hash = :hash
-                         FOR UPDATE
                         """)
                 .param("hash", tokenHash)
                 .query(JdbcOwnerInvitationStore::map)
@@ -205,7 +214,16 @@ public class JdbcOwnerInvitationStore {
                         """).param("id", id).param("now", utc(now)).update() > 0;
     }
 
-    /** Spends the link: the hash goes, so the same token can never be used again. */
+    /**
+     * Spends the link: the hash goes, so the same token can never be used again.
+     *
+     * <p>Called before the password is set, not after, so that two requests
+     * holding one link cannot both reach the identity provider. The {@code
+     * status = 'SENT'} guard is what decides between them, and what refuses an
+     * accept that an operator's resend got to first.
+     *
+     * @return true when this call spent it
+     */
     public boolean markAccepted(UUID id, Instant now) {
         return jdbc.sql("""
                         UPDATE tenant.owner_invitations
@@ -213,6 +231,35 @@ public class JdbcOwnerInvitationStore {
                                opened_at = COALESCE(opened_at, :now), version = version + 1
                          WHERE id = :id AND status = 'SENT'
                         """).param("id", id).param("now", utc(now)).update() > 0;
+    }
+
+    /**
+     * Gives a spent link back, because the password it was spent for was refused
+     * by the identity provider's policy and nothing happened.
+     *
+     * <p>Guarded on this caller's own spend -- the instant it wrote into {@code
+     * accepted_at}, with the hash still cleared -- so a restore can only ever
+     * undo the acceptance it belongs to, and never one that succeeded a moment
+     * later. {@code expires_at} and {@code sent_at} were untouched by the spend,
+     * which is why the row can go back to SENT at all; {@code opened_at} stays,
+     * because the owner really did open it.
+     *
+     * @return true when the link was given back; false when something else has
+     *         moved the row on, which leaves it moved on
+     */
+    public boolean restoreLink(UUID id, String tokenHash, Instant acceptedAt) {
+        return jdbc.sql("""
+                        UPDATE tenant.owner_invitations
+                           SET status = 'SENT', token_hash = :hash, accepted_at = NULL,
+                               version = version + 1
+                         WHERE id = :id AND status = 'ACCEPTED' AND token_hash IS NULL
+                           AND accepted_at = :acceptedAt AND expires_at IS NOT NULL AND sent_at IS NOT NULL
+                        """)
+                        .param("id", id)
+                        .param("hash", tokenHash)
+                        .param("acceptedAt", utc(acceptedAt))
+                        .update()
+                > 0;
     }
 
     /**
