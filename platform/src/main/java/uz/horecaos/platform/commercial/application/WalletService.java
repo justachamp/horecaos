@@ -325,7 +325,7 @@ public class WalletService {
                 requestId,
                 now));
 
-        audit.record(AuditFact.of("commercial.wallet.adjustment.applied", AuditClass.BUSINESS)
+        audit.record(AuditFact.of("commercial.wallet.adjusted", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
@@ -504,7 +504,7 @@ public class WalletService {
         Instant now = clock.instant();
         wallet.setPaymentMethod(tenantId, method, cardTokenReference, subject(actor), now);
 
-        audit.record(AuditFact.of("commercial.wallet.payment_method.changed", AuditClass.BUSINESS)
+        audit.record(AuditFact.of("commercial.wallet.payment_method_changed", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.tenant_billing", tenantId)

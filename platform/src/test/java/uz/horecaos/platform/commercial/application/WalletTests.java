@@ -118,6 +118,7 @@ class WalletTests {
         // and would take the three wallet policies V0211 seeds with it — and
         // whether a correction needs a second person at all is what those decide.
         jdbc.sql("TRUNCATE TABLE audit.approval_requests CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("""
                 TRUNCATE TABLE commercial.wallet_entries, commercial.tenant_billing,
                     commercial.statement_lines, commercial.statements, commercial.subscriptions,
@@ -202,6 +203,9 @@ class WalletTests {
                 .as("a different transfer of the same size is a different transfer")
                 .isEqualTo(2_000_000);
         assertThat(wallet.balances(PILOT).paidMinor()).isEqualTo(ledgerSum(WalletEntry.PAID));
+        assertThat(auditedActions())
+                .as("two transfers were recorded and audited, and the refused one left nothing behind")
+                .containsExactly("commercial.wallet.transfer_recorded", "commercial.wallet.transfer_recorded");
     }
 
     // ------------------------------------------------------------ settlement
@@ -654,6 +658,15 @@ class WalletTests {
                 .param("id", PILOT)
                 .query(Long.class)
                 .single();
+    }
+
+    /** Every wallet fact written for this tenant, oldest first. */
+    private List<String> auditedActions() {
+        return jdbc.sql("""
+                        SELECT action_code FROM audit.audit_events
+                         WHERE action_code LIKE 'commercial.wallet.%'
+                         ORDER BY occurred_at, action_code
+                        """).query(String.class).list();
     }
 
     private String requestStatus(UUID requestId) {
