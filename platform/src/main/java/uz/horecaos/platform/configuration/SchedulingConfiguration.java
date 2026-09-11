@@ -194,9 +194,12 @@ public class SchedulingConfiguration {
      * holds nothing across it. Anything adding a {@code
      * @Scheduled} method here should expect the same off-by-one wave 73/77 hit,
      * and trust {@code SchedulerPoolSizeTests}, which counts them, over the
-     * number written here.
+     * number written here. ADR 0098 added the last one so far: {@code
+     * PasswordResetRelay.sweepOnce}, the sibling of ADR 0097's invitation
+     * relay — without it a staff member who forgot their password could ask
+     * for a reset and no email would ever leave.
      */
-    static final int DEFAULT_POOL_SIZE = 56;
+    static final int DEFAULT_POOL_SIZE = 57;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

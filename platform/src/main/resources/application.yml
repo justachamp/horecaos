@@ -295,8 +295,15 @@ horecaos:
       username: ${HORECAOS_MAIL_SMTP_USERNAME:}
       password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
   # Where the staff apps are served, for links the platform writes into email.
+  # A password reset (ADR 0098) comes back to whichever console asked for it,
+  # so both origins are needed, not only operations'.
   frontends:
     operations-origin: ${HORECAOS_OPERATIONS_ORIGIN:http://localhost:4200}
+    # Both consoles take Angular's default 4200 when served alone, so the two
+    # defaults here cannot both be 4200 or a control-plane link would open
+    # operations. Serve the control plane with `ng serve --port 4300`, or set
+    # the variable; every deployment sets both.
+    control-plane-origin: ${HORECAOS_CONTROL_PLANE_ORIGIN:http://localhost:4300}
   partner:
     # ADR 0040. A reference, never a value, per ADR 0028.
     #
