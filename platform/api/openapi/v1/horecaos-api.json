@@ -11245,6 +11245,19 @@
           "scopeType" : {
             "type" : "string"
           },
+          "subject" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "subjectTenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subjectTenantName" : {
+            "type" : "string"
+          },
           "thresholdDescription" : {
             "type" : "string"
           }
@@ -18631,7 +18644,7 @@
     },
     "/api/v1/control-plane/approval-requests" : {
       "get" : {
-        "description" : "A change of a tenant's country, a tenant's activation and the wallet changes HorecaOS proposes against a tenant's account, oldest first. A row carrying a tenant is decided through that tenant's own decision route; a PLATFORM-scope row carries no tenant and is decided through the platform route beside this one. The maker's reason is not returned, for the same reason as the tenant queue.",
+        "description" : "A change of a tenant's country, a tenant's activation and the wallet changes HorecaOS proposes against a tenant's account — a correction, a bonus grant, a refund of paid money or the reversal of a deposit recorded in error — oldest first. A row carrying a tenant is decided through that tenant's own decision route; a PLATFORM-scope row carries no tenant and is decided through the platform route beside this one. Such a row still names whose account it moves and what it proposes, in subjectTenantId, subjectTenantName and subject, taken from the same command the parameters hash covers. The maker's reason is not returned, for the same reason as the tenant queue.",
         "operationId" : "platformPending",
         "parameters" : [ {
           "in" : "query",

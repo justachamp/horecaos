@@ -6359,6 +6359,19 @@
           "scopeType" : {
             "type" : "string"
           },
+          "subject" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "subjectTenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subjectTenantName" : {
+            "type" : "string"
+          },
           "thresholdDescription" : {
             "type" : "string"
           }

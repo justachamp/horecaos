@@ -1607,6 +1607,9 @@ export interface PendingApprovalResponse {
   requiredApproverCapability?: string;
   scopeId?: string;
   scopeType?: string;
+  subject?: { [key: string]: string };
+  subjectTenantId?: string;
+  subjectTenantName?: string;
   thresholdDescription?: string;
 }
 
