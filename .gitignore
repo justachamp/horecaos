@@ -13,3 +13,5 @@ target/
 !.env.example
 .worktrees/
 platform/local-secrets.properties
+__pycache__/
+*.pyc
