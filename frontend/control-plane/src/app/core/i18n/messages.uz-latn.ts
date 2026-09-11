@@ -1374,6 +1374,13 @@ export const uzLatn: Messages = {
   'platformApprovals.action.commercial_wallet_deposit-reversal': 'Depozitni qaytarish',
   'platformApprovals.subject.moves': '{tenant} · {amount}',
   'platformApprovals.subject.unknownTenant': 'Bu so‘rovda mijoz ko‘rsatilmagan',
+  'platformApprovals.subject.field.moneyKind': 'Pul',
+  'platformApprovals.subject.field.entryType': 'Qanday yoziladi',
+  'platformApprovals.subject.field.grantId': 'Bonus berilishi',
+  'platformApprovals.subject.field.expiresAt': 'Muddati tugaydi',
+  'platformApprovals.subject.field.payoutReference': 'To‘lov havolasi',
+  'platformApprovals.subject.field.depositEntryId': 'Qaytarilayotgan depozit',
+  'platformApprovals.subject.field.subscriptionId': 'Obuna',
   'dunning.lead': 'To‘lovni kechiktirayotgan yoki to‘xtatilgan barcha mijozlar, qancha vaqtdan beri va har bir bosqich nimani cheklaydi. Mijoz o‘z-o‘zidan hech qayerga o‘tmaydi: ikki hafta kechikishdan so‘ng hodisa odamdan qaror qabul qilishni so‘raydi.',
   'dunning.stage.planApplies': 'Tarif va modullardagi hamma narsa ishlaydi.',
   'dunning.stage.planLapses': 'Tarif va modullar amal qilmaydi; funksiyalar standartga qaytadi.',
@@ -1568,6 +1575,7 @@ export const uzLatn: Messages = {
   'tenantIssueQueue.pos.noChange': 'Bu eksportni allaqachon kimdir yopgan; ro‘yxat yangilandi.',
 
   'money.uzsSuffix': 'so‘m',
+  'money.unscaled': '{amount} {currency} (saqlangan minor birliklarda)',
 
   'error.VALIDATION_FAILED': 'Kiritilgan ma’lumotlarning bir qismi noto‘g‘ri.',
   'error.INVALID_REQUEST': 'Platforma bu so‘rovni bajara olmadi.',

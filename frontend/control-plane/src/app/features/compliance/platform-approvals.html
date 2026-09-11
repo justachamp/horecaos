@@ -34,6 +34,11 @@
               @if (subjectLine(row); as subject) {
                 <div class="q-body-sm subject">{{ subject }}</div>
               }
+              @for (field of subjectDetail(row); track field.key) {
+                <div class="q-caption subjectDetail" [attr.data-subject-field]="field.key">
+                  {{ field.label }}: {{ field.value }}
+                </div>
+              }
               <div class="q-caption muted">{{ row.request.thresholdDescription }}</div>
             </td>
             <td class="q-body-sm">

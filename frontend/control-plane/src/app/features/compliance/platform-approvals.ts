@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 
 import { asDate } from '../../core/api/dates';
+import { Money } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -9,6 +10,13 @@ import { MessageKey, en } from '../../core/i18n/messages.en';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { AccessApi } from '../access/access-api';
 import { PlatformPendingApproval, ResidencyApi } from './residency-api';
+
+/** One component of a signed subject, as the approvals queue renders it. */
+interface SubjectField {
+  readonly key: string;
+  readonly label: string;
+  readonly value: string;
+}
 
 /**
  * IA 6.5 Approvals -- platform decisions waiting for a second signature, in
@@ -93,6 +101,12 @@ export class PlatformApprovals {
    * Whose money moves and how much, for a row that names no tenant of its own.
    *
    * Empty for a row whose tenant column already answers the question.
+   *
+   * The amount is rendered through `moneyOrRaw`, not `money`: the currency is
+   * whatever the tenant holds, `money` throws on one this console has no scale
+   * for, and a throw here truncates the whole queue at the offending row —
+   * which, since the queue is served oldest first, hides everything newer than
+   * one tenant billed in KZT.
    */
   protected subjectLine(row: PlatformPendingApproval): string {
     if (row.tenantId !== null) {
@@ -104,19 +118,92 @@ export class PlatformApprovals {
       (row.request.subjectTenantId === null
         ? this.i18n.t('platformApprovals.subject.unknownTenant')
         : this.directory.nameOf(row.request.subjectTenantId));
-    const minor = subject['amountMinor'];
-    const currency = subject['currency'];
-    if (minor === undefined || currency === undefined) {
-      return tenant;
-    }
-    const amount = Number(minor);
-    if (!Number.isFinite(amount)) {
+    const amount = this.signedAmount(subject);
+    if (amount === null) {
       return tenant;
     }
     return this.i18n.t('platformApprovals.subject.moves', {
       tenant,
-      amount: this.i18n.money({ amountMinor: amount, currency }),
+      amount: this.i18n.moneyOrRaw(amount),
     });
+  }
+
+  /**
+   * Every remaining component of the subject the signature covers, laid out
+   * beneath the amount.
+   *
+   * <p>The subject is not two keys. `ApprovalParameters.sign()` puts each
+   * covered, non-withheld component of the command into it in one pass, and
+   * the console used to render `amountMinor` and `currency` and drop the rest
+   * on the floor — so a correction of real, refundable paid money and one of
+   * promotional credit that lapses with a named grant read identically at the
+   * same amount under the same action label, and a bonus grant's own expiry,
+   * which is half of what is being given away, reached no screen at all. A
+   * component the signature covers and the console does not show is the exact
+   * failure V0212 and ADR 0095 were written to close.
+   *
+   * <p>So this renders whatever is there rather than a list somebody has to
+   * remember to extend: a key with no label shows its raw key, the way {@link
+   * actionLabel} shows a raw action code. Never dropped, never blank.
+   *
+   * <p>`tenantId` is left out because the tenant column already links it, and
+   * the amount and its currency are left out only when the amount line above
+   * actually rendered them.
+   */
+  protected subjectDetail(row: PlatformPendingApproval): readonly SubjectField[] {
+    if (row.tenantId !== null) {
+      return [];
+    }
+    const subject = row.request.subject;
+    const alreadyOnTheRow =
+      this.signedAmount(subject) === null
+        ? new Set(['tenantId'])
+        : new Set(['tenantId', 'amountMinor', 'currency']);
+    return Object.entries(subject)
+      .filter(([key]) => !alreadyOnTheRow.has(key))
+      .map(([key, value]) => ({
+        key,
+        label: this.labelled(`platformApprovals.subject.field.${key}`, key),
+        value: this.subjectValue(key, value),
+      }));
+  }
+
+  /** The signed amount and its currency, or null when the subject carries no readable one. */
+  private signedAmount(subject: Readonly<Record<string, string>>): Money | null {
+    const minor = subject['amountMinor'];
+    const currency = subject['currency'];
+    if (minor === undefined || currency === undefined) {
+      return null;
+    }
+    const amountMinor = Number(minor);
+    return Number.isFinite(amountMinor) ? { amountMinor, currency } : null;
+  }
+
+  /**
+   * One subject value as a person reads it, through the catalogue the rest of
+   * the console already uses for that value, and verbatim when there is none.
+   *
+   * An identifier stays an identifier: a truncated-but-present grant id is
+   * honest about what the signature covers, and an omitted one is not.
+   */
+  private subjectValue(key: string, value: string): string {
+    switch (key) {
+      case 'moneyKind':
+        return this.labelled(`wallet.kind.${value}`, value);
+      case 'entryType':
+        return this.labelled(`wallet.entry.${value}`, value);
+      case 'expiresAt': {
+        const lapsesOn = asDate(value);
+        return Number.isNaN(lapsesOn.getTime()) ? value : this.i18n.day(lapsesOn);
+      }
+      default:
+        return value;
+    }
+  }
+
+  /** A catalogued label, or the raw string when no catalogue has one — never the empty string. */
+  private labelled(key: string, raw: string): string {
+    return key in en ? this.i18n.t(key as MessageKey) : raw;
   }
 
   /** The tenant a platform row concerns, for the link back to its wallet. */

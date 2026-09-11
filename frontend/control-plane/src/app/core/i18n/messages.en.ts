@@ -1383,6 +1383,13 @@ export const en = {
   'platformApprovals.action.commercial_wallet_deposit-reversal': 'Deposit taken back',
   'platformApprovals.subject.moves': '{tenant} · {amount}',
   'platformApprovals.subject.unknownTenant': 'Tenant not named on this request',
+  'platformApprovals.subject.field.moneyKind': 'Money',
+  'platformApprovals.subject.field.entryType': 'Records as',
+  'platformApprovals.subject.field.grantId': 'Bonus grant',
+  'platformApprovals.subject.field.expiresAt': 'Lapses on',
+  'platformApprovals.subject.field.payoutReference': 'Payout reference',
+  'platformApprovals.subject.field.depositEntryId': 'Deposit taken back',
+  'platformApprovals.subject.field.subscriptionId': 'Subscription',
   'dunning.lead': 'Every tenant that is late paying or suspended, how long it has been there, and what each stage restricts. Nothing moves a tenant by itself: after two weeks late an incident asks a person to decide.',
   'dunning.stage.planApplies': 'Everything in the plan and its modules works.',
   'dunning.stage.planLapses': 'The plan and its modules no longer apply; features fall back to defaults.',
@@ -1577,6 +1584,7 @@ export const en = {
   'tenantIssueQueue.pos.noChange': 'Someone settled this export already; the list is refreshed.',
 
   'money.uzsSuffix': "so'm",
+  'money.unscaled': '{amount} {currency} (in stored minor units)',
 
   'error.VALIDATION_FAILED': 'Some of what was entered is not valid.',
   'error.INVALID_REQUEST': 'The platform could not act on that request.',

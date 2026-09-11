@@ -1374,6 +1374,13 @@ export const ru: Messages = {
   'platformApprovals.action.commercial_wallet_deposit-reversal': 'Возврат депозита',
   'platformApprovals.subject.moves': '{tenant} · {amount}',
   'platformApprovals.subject.unknownTenant': 'Клиент в этом запросе не указан',
+  'platformApprovals.subject.field.moneyKind': 'Деньги',
+  'platformApprovals.subject.field.entryType': 'Запишется как',
+  'platformApprovals.subject.field.grantId': 'Бонусное начисление',
+  'platformApprovals.subject.field.expiresAt': 'Сгорает',
+  'platformApprovals.subject.field.payoutReference': 'Ссылка на выплату',
+  'platformApprovals.subject.field.depositEntryId': 'Возвращаемый депозит',
+  'platformApprovals.subject.field.subscriptionId': 'Подписка',
   'dunning.lead': 'Все клиенты, которые опаздывают с оплатой или приостановлены, сколько времени они в этом состоянии и что ограничивает каждый этап. Сам по себе клиент никуда не переходит: через две недели просрочки инцидент просит человека принять решение.',
   'dunning.stage.planApplies': 'Всё из тарифа и модулей работает.',
   'dunning.stage.planLapses': 'Тариф и модули не действуют; функции возвращаются к умолчаниям.',
@@ -1568,6 +1575,7 @@ export const ru: Messages = {
   'tenantIssueQueue.pos.noChange': 'Эту выгрузку уже кто-то закрыл; список обновлён.',
 
   'money.uzsSuffix': 'сўм',
+  'money.unscaled': '{amount} {currency} (в хранимых минорных единицах)',
 
   'error.VALIDATION_FAILED': 'Часть введённых данных некорректна.',
   'error.INVALID_REQUEST': 'Платформа не смогла выполнить этот запрос.',
