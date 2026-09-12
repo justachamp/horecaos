@@ -24,8 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
+import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
+import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
+import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierShiftService;
@@ -87,6 +92,30 @@ class PlannedShiftServiceTests {
     private UUID courierId;
     private UUID engagementId;
 
+    /**
+     * Never asked in this suite — {@link CourierShiftService} needs an {@link
+     * AdjustmentRuleEvaluator}, which in turn needs a {@link
+     * CourierAdjustmentService}, which needs an {@link ApprovalService} — but
+     * {@link ApprovalService} is not a functional interface, so a full stub is
+     * simpler than a mock nothing here would ever verify.
+     */
+    private static final ApprovalService NEVER_REQUIRED = new ApprovalService() {
+        @Override
+        public ApprovalOutcome requireApproval(ApprovalRequestCommand command) {
+            return new ApprovalOutcome.NotRequired();
+        }
+
+        @Override
+        public void decide(UUID requestId, Decision decision, ActorRef approver, String reason) {
+            throw new UnsupportedOperationException("Not exercised by this suite");
+        }
+
+        @Override
+        public int expireOverdue() {
+            return 0;
+        }
+    };
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(
@@ -127,22 +156,28 @@ class PlannedShiftServiceTests {
 
         CourierPolicyResolver policyResolver = new CourierPolicyResolver(new AdvisoryPolicies());
         RecordingAudit audit = new RecordingAudit();
+        var ledgerStore = new uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore(jdbc);
+        var ledger = new uz.horecaos.platform.courier.application.CourierLedgerService(
+                ledgerStore,
+                courierStore,
+                policyResolver,
+                (tenantId, locationId, businessDate) -> Optional.empty(),
+                clock);
+        CourierAdjustmentService adjustments =
+                new CourierAdjustmentService(courierStore, ledger, NEVER_REQUIRED, audit, policyResolver, clock);
+        AdjustmentRuleEvaluator adjustmentRules = new AdjustmentRuleEvaluator(courierStore, ledgerStore, adjustments);
         engagements = new CourierEngagementService(
                 courierStore, protection, audit, policyResolver, (tenantId, assetIds) -> false, clock);
         shifts = new CourierShiftService(
                 shiftStore,
                 courierStore,
-                new uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore(jdbc),
+                ledgerStore,
                 new uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore(jdbc),
-                new uz.horecaos.platform.courier.application.CourierLedgerService(
-                        new uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore(jdbc),
-                        courierStore,
-                        policyResolver,
-                        (tenantId, locationId, businessDate) -> Optional.empty(),
-                        clock),
+                ledger,
                 policyResolver,
                 protection,
                 audit,
+                adjustmentRules,
                 clock);
         plannedShifts = new PlannedShiftService(rosterStore, courierStore, shiftStore, audit, clock);
 
@@ -443,8 +478,8 @@ class PlannedShiftServiceTests {
 
     private void seedCourier() {
         courierTypeId = UUID.randomUUID();
-        courierStore.insertType(
-                new CourierTypeRow(courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        courierStore.insertType(new CourierTypeRow(
+                courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
 
         CourierEngagementService.Registration registration =
                 engagements.register(new CourierEngagementService.NewCourier(

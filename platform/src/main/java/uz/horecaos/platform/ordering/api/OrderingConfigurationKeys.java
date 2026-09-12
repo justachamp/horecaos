@@ -270,6 +270,8 @@ public final class OrderingConfigurationKeys {
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
                     + "them. 0 means no gate. Not yet enforced.")
+            .build();
+
     /**
      * Days an abandoned cart is kept before {@code CartRetentionSweeper}
      * deletes it (ADR 0092). Ninety, matching that class's own {@code
