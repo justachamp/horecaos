@@ -293,6 +293,17 @@ export const routes: Routes = [
               ),
           },
           {
+            // 4.4d (wave P46): the two tenant-wide catalog switches. Lives
+            // under Settings rather than the `catalog` shell — see
+            // `catalog-settings-page.ts`'s own doc for why it always reads
+            // and writes TENANT scope, ignoring this shell's scope bar.
+            path: 'catalog',
+            loadComponent: () =>
+              import('./features/settings/catalog-settings/catalog-settings-page').then(
+                (m) => m.CatalogSettingsPage,
+              ),
+          },
+          {
             path: 'payment-methods',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),

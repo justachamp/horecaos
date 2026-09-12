@@ -1,5 +1,6 @@
 package uz.horecaos.platform.tenancy.domain.configuration;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -267,6 +268,148 @@ public final class ConfigurationKeys {
                     + "account in the operations app, and lets them end one.")
             .build();
 
+    /**
+     * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5:
+     * order policy's eleven registry entries. Declared identically in {@code
+     * ordering.api.OrderingConfigurationKeys}, which is where every one of
+     * them is actually consumed once a reader exists — see that class's own
+     * doc for why none of them is consumed yet, and {@code
+     * OrderingConfigurationKeyTests} for the drift check.
+     */
+    public static final ConfigurationKey<Integer> ORDERING_BUSINESS_DAY_START_HOUR = ConfigurationKey.of(
+                    "ordering.business_day_start_hour", Integer.class)
+            .defaultValue(6)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("The local hour (0-23) a trading day is considered to start.")
+            .build();
+
+    public static final ConfigurationKey<Integer> ORDERING_AVERAGE_ORDER_MINUTES = ConfigurationKey.of(
+                    "ordering.average_order_minutes", Integer.class)
+            .defaultValue(30)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes an order is expected to take from acceptance to ready.")
+            .build();
+
+    public static final ConfigurationKey<Integer> ORDERING_MAXIMUM_ORDER_MINUTES = ConfigurationKey.of(
+                    "ordering.maximum_order_minutes", Integer.class)
+            .defaultValue(60)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes beyond which an order is unambiguously overdue.")
+            .build();
+
+    public static final ConfigurationKey<Integer> ORDERING_LATE_ORDER_THRESHOLD_MINUTES = ConfigurationKey.of(
+                    "ordering.late_order_threshold_minutes", Integer.class)
+            .defaultValue(45)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
+            .build();
+
+    public static final ConfigurationKey<Long> ORDERING_MINIMUM_ORDER_AMOUNT_MINOR = ConfigurationKey.of(
+                    "ordering.minimum_order_amount_minor", Long.class)
+            .defaultValue(0L)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("The smallest order total accepted for pickup and dine-in, in minor units. "
+                    + "Delivery's own minimum comes from the service zone, not this key.")
+            .build();
+
+    public static final ConfigurationKey<BigDecimal> ORDERING_VAT_RATE_PERCENT = ConfigurationKey.of(
+                    "ordering.vat_rate_percent", BigDecimal.class)
+            .defaultValue(new BigDecimal("12"))
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("The VAT rate applied at checkout, as a percentage.")
+            .build();
+
+    public static final ConfigurationKey<Integer> ORDERING_ROUTING_POLL_INTERVAL_MINUTES = ConfigurationKey.of(
+                    "ordering.routing_poll_interval_minutes", Integer.class)
+            .defaultValue(2)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes between polls of the routing port while a delivery order awaits assignment.")
+            .build();
+
+    public static final ConfigurationKey<String> ORDERING_PREORDER_BRANCH_RESOLUTION = ConfigurationKey.of(
+                    "ordering.preorder_branch_resolution", String.class)
+            .defaultValue("BY_DISTANCE")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("How a pre-order outside working hours picks its fulfilling branch: "
+                    + "BY_DISTANCE or BY_OPENING_TIME.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_PROMO_CODE_ALLOWED = ConfigurationKey.of(
+                    "ordering.operator_promo_code_allowed", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator hand-entering an order may apply a promo code.")
+            .build();
+
+    public static final ConfigurationKey<String> ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS = ConfigurationKey.of(
+                    "ordering.auto_accept_eligible_channels", String.class)
+            .defaultValue("ALL")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for "
+                    + "auto-accept. Not yet enforced.")
+            .build();
+
+    public static final ConfigurationKey<Integer> ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS = ConfigurationKey.of(
+                    "ordering.auto_accept_min_prior_orders", Integer.class)
+            .defaultValue(0)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Prior successful orders a customer needs before auto-accept applies to "
+                    + "them. 0 means no gate. Not yet enforced.")
+            .build();
+
+    /**
+     * Wave P46 (gap map row {@code 4.4d}): catalog base settings' first
+     * switch. Declared identically in {@code
+     * inventory.api.InventoryConfigurationKeys}, because {@code
+     * InventoryService} reads it to explain, rather than silently repeat,
+     * why {@code QUANTITY} tracking is refused — see that declaration's own
+     * doc.
+     */
+    public static final ConfigurationKey<Boolean> CATALOG_USE_STOCK_LOGIC = ConfigurationKey.of(
+                    "catalog.use_stock_logic", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("inventory")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Turns counted-stock tracking on for the whole tenant. Not yet enforced: "
+                    + "QUANTITY tracking mode is still refused either way.")
+            .build();
+
+    /**
+     * Wave P46 (gap map row {@code 4.4d}): catalog base settings' second
+     * switch, "QR and kiosk sell at hall prices." {@code
+     * tenancy.api.SalesChannel#pricingChannelId()} already gives every
+     * channel a one-hop price-plane override, authored by hand per channel
+     * through {@code SalesChannelService} — this key does not change that
+     * resolution; nothing outside this registry reads it yet, so unlike
+     * {@link #CATALOG_USE_STOCK_LOGIC} it is declared only here. It exists so
+     * the switch can be authored and shown through the operations surface
+     * ahead of whichever later change makes a QR or kiosk channel with no
+     * price plane of its own default to the tenant's hall channel instead of
+     * requiring every one to be pointed there manually.
+     */
+    public static final ConfigurationKey<Boolean> CATALOG_QR_KIOSK_PRICE_PLANE = ConfigurationKey.of(
+                    "catalog.qr_kiosk_price_plane", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("QR and kiosk channels take the tenant's hall (dine-in) price plane "
+                    + "automatically. Not yet enforced: a channel with no price plane of its own "
+                    + "still needs one set by hand through Sales channels.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             QUOTE_TTL_SECONDS,
@@ -278,7 +421,20 @@ public final class ConfigurationKeys {
             AUDIT_BUSINESS_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
-            FEATURE_SUPPORT_VISITS));
+            FEATURE_SUPPORT_VISITS,
+            ORDERING_BUSINESS_DAY_START_HOUR,
+            ORDERING_AVERAGE_ORDER_MINUTES,
+            ORDERING_MAXIMUM_ORDER_MINUTES,
+            ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
+            ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
+            ORDERING_VAT_RATE_PERCENT,
+            ORDERING_ROUTING_POLL_INTERVAL_MINUTES,
+            ORDERING_PREORDER_BRANCH_RESOLUTION,
+            ORDERING_OPERATOR_PROMO_CODE_ALLOWED,
+            ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
+            ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
+            CATALOG_USE_STOCK_LOGIC,
+            CATALOG_QR_KIOSK_PRICE_PLANE));
 
     private ConfigurationKeys() {}
 

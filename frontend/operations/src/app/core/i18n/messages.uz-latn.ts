@@ -410,6 +410,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.notifications': 'Bildirishnomalar',
   'settings.nav.integrations': 'Integratsiyalar',
   'settings.nav.referenceData': 'Maʼlumotnoma maʼlumotlari',
+  'settings.nav.catalogBaseSettings': 'Katalogning bazaviy sozlamalari',
 
   'settings.home.title': 'Sozlamalar',
   'settings.home.lead':
@@ -451,6 +452,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Restoranga qanday kanallar orqali kirish mumkin va har biriga nima ruxsat etilgan.',
   'settings.home.description.channelSetup': 'Har bir kanal ortidagi doʻkonni sozlash.',
   'settings.home.description.orderPolicy': 'Har bir buyurtma solishtiriladigan qoidalar toʻplami.',
+  'settings.home.description.catalogBaseSettings':
+    'Butun kompaniya uchun qoldiq logikasi va QR/kiosk narxlash almashtirgichlari.',
   'settings.home.description.paymentMethods': 'Tenantning oʻz toʻlov usullari roʻyxati.',
   'settings.home.description.fiscalization': 'Restoran soliq uchun kimning nomidan savdo qiladi.',
   'settings.home.description.notifications':
@@ -646,6 +649,46 @@ export const messagesUzLatn: MessageCatalogue = {
     'Avtomatik dispetcherlik, provayder kaskadi va toʻlanmagan buyurtma muddati yetkazib berish dispetcherlik qoidalarida — yagona provayderdan mustaqil qoidalar dvigatelida, bu yerda emas.',
   'settings.orderPolicy.card4.title': 'Shartlar',
   'settings.orderPolicy.card5.title': 'Operator tomonidan buyurtma kiritish',
+  'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
+  'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
+  'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.field.minimumOrderAmount': 'Buyurtmaning eng kam summasi',
+  'settings.orderPolicy.minimumOrderAmount.hint':
+    'Faqat oʻzi olib ketish va zalda — yetkazib berishning oʻz minimal summasi xizmat zonasida belgilanadi.',
+  'settings.orderPolicy.field.vatRatePercent': 'QQS stavkasi (%)',
+  'settings.orderPolicy.field.routingPollIntervalMinutes':
+    'Marshrutlashni soʻrash intervali (daqiqa)',
+  'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Avtomatik qabul uchun kanallar',
+  'settings.orderPolicy.autoAcceptEligibleChannels.hint':
+    '"ALL" yoki sotuv kanali kodlarining vergul bilan ajratilgan roʻyxati. Hali qoʻllanilmaydi.',
+  'settings.orderPolicy.field.autoAcceptMinPriorOrders':
+    'Oldingi muvaffaqiyatli buyurtmalar minimumi',
+  'settings.orderPolicy.field.preorderBranchResolution': 'Oldindan buyurtma uchun filial tanlash',
+  'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Eng yaqin filial',
+  'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Eng tez ochiladigan',
+  'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator promokod kiritishi mumkin',
+  'settings.orderPolicy.revertReason': 'Meros qiymatga qaytarildi',
+
+  // 4.4d Katalogning bazaviy sozlamalari
+  'settings.catalog.title': 'Katalogning bazaviy sozlamalari',
+  'settings.catalog.lead':
+    'Butun kompaniya uchun ikkita almashtirgich — katalogdagi qolgan ish ularga bogʻliq.',
+  'settings.catalog.tenantWideNote':
+    'Butun kompaniya uchun umumiy — har bir filial uchun emas, bir marta belgilanadi.',
+  'settings.catalog.yes': 'Ha',
+  'settings.catalog.no': 'Yoʻq',
+  'settings.catalog.revertReason': 'Platforma standart qiymatiga qaytarildi',
+  'settings.catalog.useStockLogic.title': 'Qoldiq logikasidan foydalanish',
+  'settings.catalog.useStockLogic.body':
+    'Butun kompaniya uchun sonlar boʻyicha qoldiqlarni hisoblashni yoqadi — "mavjud/sotilgan" ikki holatli tizim oʻrniga.',
+  'settings.catalog.useStockLogic.field': 'Qoldiq logikasidan foydalanish',
+  'settings.catalog.useStockLogic.notYetEnforced':
+    'Hali qoʻllanilmaydi: bu almashtirgich holatidan qatʼi nazar, miqdoriy hisob har bir mahsulot uchun rad etiladi.',
+  'settings.catalog.qrKioskPricePlane.title': 'QR va kiosk zal narxlarida sotadi',
+  'settings.catalog.qrKioskPricePlane.body':
+    'QR va kiosk kanallarini qoʻlda tuzilgan alohida narx rejasi oʻrniga avtomatik ravishda zal narx rejasiga yoʻnaltiradi.',
+  'settings.catalog.qrKioskPricePlane.field': 'QR va kiosk zal narxlarida sotadi',
 
   // 10.7 Fiskalizatsiya
   'settings.fiscalization.title': 'Fiskalizatsiya',

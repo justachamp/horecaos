@@ -405,6 +405,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.notifications': 'Уведомления',
   'settings.nav.integrations': 'Интеграции',
   'settings.nav.referenceData': 'Справочные данные',
+  'settings.nav.catalogBaseSettings': 'Базовые настройки каталога',
 
   'settings.home.title': 'Настройки',
   'settings.home.lead':
@@ -445,6 +446,8 @@ export const messagesRu: MessageCatalogue = {
     'Какие каналы продаж существуют и что каждому из них разрешено.',
   'settings.home.description.channelSetup': 'Настройка витрины за каждым каналом.',
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
+  'settings.home.description.catalogBaseSettings':
+    'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
   'settings.home.description.paymentMethods': 'Собственный список способов оплаты тенанта.',
   'settings.home.description.fiscalization': 'От чьего имени торгует ресторан для налоговой.',
   'settings.home.description.notifications':
@@ -637,6 +640,44 @@ export const messagesRu: MessageCatalogue = {
     'Автодиспетчеризация, каскад провайдеров и тайм-аут неоплаченного заказа находятся в правилах диспетчеризации доставки — едином провайдер-независимом движке правил, а не здесь.',
   'settings.orderPolicy.card4.title': 'Условия',
   'settings.orderPolicy.card5.title': 'Оформление заказа оператором',
+  'settings.orderPolicy.field.businessDayStartHour': 'Начало торгового дня (час)',
+  'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
+  'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
+  'settings.orderPolicy.field.minimumOrderAmount': 'Минимальная сумма заказа',
+  'settings.orderPolicy.minimumOrderAmount.hint':
+    'Только самовывоз и зал — у доставки свой минимум, задаётся в зоне обслуживания.',
+  'settings.orderPolicy.field.vatRatePercent': 'Ставка НДС (%)',
+  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Интервал опроса маршрутизации (минуты)',
+  'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Каналы, доступные для автоприёма',
+  'settings.orderPolicy.autoAcceptEligibleChannels.hint':
+    '«ALL» либо список кодов каналов продаж через запятую. Пока не применяется.',
+  'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Минимум предыдущих успешных заказов',
+  'settings.orderPolicy.field.preorderBranchResolution': 'Подбор филиала для предзаказа',
+  'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Ближайший филиал',
+  'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Скорее всех откроется',
+  'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Оператор может вводить промокод',
+  'settings.orderPolicy.revertReason': 'Возврат к унаследованному значению',
+
+  // 4.4d Базовые настройки каталога
+  'settings.catalog.title': 'Базовые настройки каталога',
+  'settings.catalog.lead':
+    'Два переключателя на всю компанию, от которых зависит остальная работа с каталогом.',
+  'settings.catalog.tenantWideNote':
+    'Общие для компании — задаются один раз, а не для каждого филиала.',
+  'settings.catalog.yes': 'Да',
+  'settings.catalog.no': 'Нет',
+  'settings.catalog.revertReason': 'Возврат к значению платформы по умолчанию',
+  'settings.catalog.useStockLogic.title': 'Использовать логику остатков',
+  'settings.catalog.useStockLogic.body':
+    'Включает учёт количества остатков для всей компании вместо бинарного состояния «в наличии / продано».',
+  'settings.catalog.useStockLogic.field': 'Использовать логику остатков',
+  'settings.catalog.useStockLogic.notYetEnforced':
+    'Пока не применяется: учёт количества отклоняется для любой позиции независимо от этого переключателя.',
+  'settings.catalog.qrKioskPricePlane.title': 'QR и киоск продают по ценам зала',
+  'settings.catalog.qrKioskPricePlane.body':
+    'Автоматически направляет каналы QR и киоск на ценовой план зала вместо отдельного плана, составленного вручную.',
+  'settings.catalog.qrKioskPricePlane.field': 'QR и киоск продают по ценам зала',
 
   // 10.7 Фискализация
   'settings.fiscalization.title': 'Фискализация',

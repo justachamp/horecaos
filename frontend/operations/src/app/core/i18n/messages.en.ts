@@ -431,6 +431,7 @@ export const messagesEn = {
   'settings.nav.notifications': 'Notifications',
   'settings.nav.integrations': 'Integrations',
   'settings.nav.referenceData': 'Reference data',
+  'settings.nav.catalogBaseSettings': 'Catalog base settings',
 
   'settings.home.title': 'Settings',
   'settings.home.lead':
@@ -472,6 +473,8 @@ export const messagesEn = {
     'Which routes into the restaurant exist, and what each one is allowed to do.',
   'settings.home.description.channelSetup': 'Configure the storefront behind each channel.',
   'settings.home.description.orderPolicy': 'The rulebook every order is measured against.',
+  'settings.home.description.catalogBaseSettings':
+    'Company-wide stock logic and QR/kiosk pricing switches.',
   'settings.home.description.paymentMethods': "The tenant's own list of ways a customer can pay.",
   'settings.home.description.fiscalization': 'Whom the restaurant trades as, for tax.',
   'settings.home.description.notifications':
@@ -667,6 +670,43 @@ export const messagesEn = {
     'Auto-dispatch, provider cascade and unpaid-order timeout live in Delivery dispatch rules, a single provider-agnostic rule engine — not here.',
   'settings.orderPolicy.card4.title': 'Conditions',
   'settings.orderPolicy.card5.title': 'Operator order entry',
+  'settings.orderPolicy.field.businessDayStartHour': 'Business day starts at (hour)',
+  'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
+  'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
+  'settings.orderPolicy.field.minimumOrderAmount': 'Minimum order sum',
+  'settings.orderPolicy.minimumOrderAmount.hint':
+    'Pickup and dine-in only — delivery keeps its own minimum, set on the service zone.',
+  'settings.orderPolicy.field.vatRatePercent': 'VAT rate (%)',
+  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Routing poll interval (minutes)',
+  'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Auto-accept eligible channels',
+  'settings.orderPolicy.autoAcceptEligibleChannels.hint':
+    '"ALL", or a comma-separated list of sales channel codes. Not yet enforced.',
+  'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Minimum prior successful orders',
+  'settings.orderPolicy.field.preorderBranchResolution': 'Pre-order branch selection',
+  'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Nearest branch',
+  'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Soonest to open',
+  'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator may apply a promo code',
+  'settings.orderPolicy.revertReason': 'Reverted to the inherited value',
+
+  // 4.4d Catalog base settings
+  'settings.catalog.title': 'Catalog base settings',
+  'settings.catalog.lead': 'Two tenant-wide switches behind the per-item catalog plumbing.',
+  'settings.catalog.tenantWideNote':
+    'Company-wide — set once for every brand and branch, not per location.',
+  'settings.catalog.yes': 'Yes',
+  'settings.catalog.no': 'No',
+  'settings.catalog.revertReason': 'Reverted to the platform default',
+  'settings.catalog.useStockLogic.title': 'Use stock logic',
+  'settings.catalog.useStockLogic.body':
+    'Turns counted-stock tracking on for the whole company instead of the binary available/sold-out state.',
+  'settings.catalog.useStockLogic.field': 'Use stock logic',
+  'settings.catalog.useStockLogic.notYetEnforced':
+    'Not yet enforced: quantity tracking is refused for every item regardless of this switch.',
+  'settings.catalog.qrKioskPricePlane.title': 'QR and kiosk take hall prices',
+  'settings.catalog.qrKioskPricePlane.body':
+    'Points the QR and kiosk channels at the hall price plane automatically instead of requiring one authored by hand.',
+  'settings.catalog.qrKioskPricePlane.field': 'QR and kiosk take hall prices',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',

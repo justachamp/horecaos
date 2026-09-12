@@ -92,6 +92,26 @@ class ConfigurationKeysTests {
     }
 
     /**
+     * Wave P46 (gap map rows {@code 4.4d}, {@code 10.3b}): "a registry drift
+     * test naming every new key and its default", for the one key of the
+     * thirteen this wave adds that has no per-module mirror to drift-test
+     * against — {@code catalog.qr_kiosk_price_plane}. The eleven order-policy
+     * keys are covered by {@code OrderingConfigurationKeyTests}, and {@code
+     * catalog.use_stock_logic} by {@code InventoryConfigurationKeyTests}.
+     */
+    @Test
+    void theQrKioskPricePlaneSwitchIsOffByDefaultTenantVisibleAndTenantOnly() {
+        assertThat(ConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.code()).isEqualTo("catalog.qr_kiosk_price_plane");
+        assertThat(ConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.defaultValue())
+                .as("off by default: enforcement does not exist yet either way")
+                .isEqualTo(false);
+        assertThat(ConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.tenantVisible())
+                .isTrue();
+        assertThat(ConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.settableScopes())
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
+    }
+
+    /**
      * ADR 0027's owner directive of 2026-09-08: both audit classes default to
      * ten years, configurable, and platform-only — a retention floor is not a
      * per-tenant choice.

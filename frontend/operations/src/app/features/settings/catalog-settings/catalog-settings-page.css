@@ -4,6 +4,11 @@
   max-width: 720px;
 }
 
+.tenant-wide-note {
+  color: var(--q-ink-muted);
+  margin: 12px 0 0;
+}
+
 .card {
   margin-top: 24px;
   max-width: 560px;
@@ -16,30 +21,10 @@
   margin: 0 0 8px;
 }
 
-.version-banner {
-  color: var(--q-ink-muted);
-  margin: 0 0 12px;
-}
-
 .fields {
-  margin: 0;
+  margin: 12px 0 0;
   display: grid;
   gap: 12px;
-}
-
-.field-list {
-  margin-top: 12px;
-  display: grid;
-  gap: 16px;
-}
-
-.field-row:first-child {
-  margin-top: 0;
-}
-
-.hint {
-  color: var(--q-ink-muted);
-  margin: 4px 0 0;
 }
 
 .field dt {
@@ -51,8 +36,15 @@
   margin: 0;
 }
 
+.not-yet-enforced {
+  margin-top: 12px;
+  padding: 8px 12px;
+  color: var(--q-ink-muted);
+  background: var(--q-surface-2);
+  border-radius: var(--q-radius);
+}
+
 .primary {
-  margin-top: 16px;
   height: 36px;
   padding: 0 16px;
   border: none;
@@ -78,6 +70,10 @@
   cursor: pointer;
 }
 
+.form {
+  margin-top: 12px;
+}
+
 .form label {
   display: block;
   color: var(--q-ink-muted);
@@ -88,7 +84,7 @@
   margin-top: 0;
 }
 
-.field {
+.field.q-body {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -105,7 +101,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 0;
   color: var(--q-ink);
 }
 
