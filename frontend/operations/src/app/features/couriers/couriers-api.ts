@@ -235,6 +235,8 @@ export interface NewRateCardRequest {
 export interface ShiftView {
   readonly shiftId: string;
   readonly courierId: string;
+  /** The non-personal handle (ADR 0029) — "K-014" — never the decrypted name. Null only if the courier row is gone. */
+  readonly courierDisplayReference?: string | null;
   /** `OPEN` | `CLOSE_REQUESTED` | `RECONCILING` | `AWAITING_APPROVAL` | `CLOSED` | `AUTO_CLOSED` | `SETTLED`. */
   readonly status: string;
   readonly dutyState: string;
@@ -243,6 +245,42 @@ export interface ShiftView {
   readonly paidSeconds?: number | null;
   readonly breakSeconds: number;
   readonly approvalRequestId?: string | null;
+}
+
+/**
+ * Mirrors `OperationsCourierController.PlannedShiftResponse` — the roster a
+ * manager plans, as distinct from {@link ShiftView} (ADR 0042, IA 3.5).
+ */
+export interface PlannedShiftView {
+  readonly entryId: string;
+  readonly courierId: string;
+  readonly courierDisplayReference?: string | null;
+  /** `DRAFT` | `PUBLISHED` | `ACCEPTED` | `DECLINED` | `CONSUMED` | `MISSED` | `CANCELLED`. */
+  readonly status: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  readonly publishedAt?: string | null;
+  readonly respondedAt?: string | null;
+  /** Present only from {@link CouriersApi.rosterComparison}. */
+  readonly comparison?: RosterComparisonView | null;
+}
+
+/** Mirrors `OperationsCourierController.RosterComparisonView`. */
+export interface RosterComparisonView {
+  /** `COVERED` | `PENDING` | `UNCOVERED`. */
+  readonly coverage: string;
+  readonly matchedShiftId?: string | null;
+  readonly matchedDutyState?: string | null;
+}
+
+/** The fields a manager fills in to plan a courier's shift. */
+export interface DraftRosterEntryRequest {
+  readonly brandId: string;
+  readonly locationId: string;
+  readonly courierId: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  readonly reason: string;
 }
 
 /** Mirrors `OperationsCourierController.CourierPolicyResponse` (IA 3.9). */
@@ -497,13 +535,80 @@ export class CouriersApi {
     brandId: string,
     locationId: string,
     limit = 200,
+    from?: string,
+    to?: string,
   ): Promise<readonly ShiftView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly ShiftView[]>(courierPaths.courierShifts(tenantId), {
-        params: { brandId, locationId, limit },
+        params: { brandId, locationId, limit, from, to },
       }),
     );
     return result.value ?? [];
+  }
+
+  // ------------------------------------------------------------------ IA 3.5 roster
+
+  async rosterEntries(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    from?: string,
+    to?: string,
+    limit = 200,
+  ): Promise<readonly PlannedShiftView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PlannedShiftView[]>(courierPaths.courierRosterEntries(tenantId), {
+        params: { brandId, locationId, from, to, limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  /** Every planned entry in the period, each carrying whichever actual shift matched it. */
+  async rosterComparison(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    from: string,
+    to: string,
+    limit = 200,
+  ): Promise<readonly PlannedShiftView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PlannedShiftView[]>(courierPaths.courierRosterComparison(tenantId), {
+        params: { brandId, locationId, from, to, limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  async draftRosterEntry(
+    tenantId: string,
+    request: DraftRosterEntryRequest,
+  ): Promise<PlannedShiftView> {
+    return firstValueFrom(
+      this.api.post<DraftRosterEntryRequest, PlannedShiftView>(
+        courierPaths.courierRosterEntries(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  async publishRosterEntry(tenantId: string, entryId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierRosterEntryPublish(tenantId, entryId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  async cancelRosterEntry(tenantId: string, entryId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierRosterEntryCancel(tenantId, entryId),
+        command({ reason }),
+      ),
+    );
   }
 
   async closeShift(

@@ -795,6 +795,16 @@ export const routes: Routes = [
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
           {
+            // IA 3.6c — bulk geozone upload, one level under Zones rather than
+            // its own top-level tab (delivery-shell.ts's own doc names this
+            // as sharing the 3.6 shell).
+            path: 'zones/import',
+            loadComponent: () =>
+              import('./features/delivery/geozone-batch-import-page').then(
+                (m) => m.GeozoneBatchImportPage,
+              ),
+          },
+          {
             // IA §3.6b. Tenant-scoped, not brand-scoped: a region's bounding
             // box constrains the geocoder for every brand (ADR 0104).
             path: 'regions',

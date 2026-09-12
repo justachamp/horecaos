@@ -72,6 +72,11 @@ export const deliveryZonePaths = {
   zoneLocation(scope: BrandScope, zoneId: string, locationId: string): string {
     return `${this.zoneLocations(scope, zoneId)}/${encodeURIComponent(locationId)}`;
   },
+
+  /** Bulk-import legacy zone geometry as DRAFT versions (row `3.6c`). Mutation: key required. */
+  zoneImportBatch(scope: BrandScope): string {
+    return `${this.base(scope)}/import-batch`;
+  },
 } as const;
 
 /**

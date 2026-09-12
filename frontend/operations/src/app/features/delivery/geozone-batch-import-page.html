@@ -1,0 +1,125 @@
+<div class="zone-import">
+  @if (loading()) {
+    <div class="zone-import__skeleton" [attr.aria-label]="'delivery.zoneImport.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="zone-import__denied" data-testid="zone-import-denied">
+      <p class="q-body-sm">{{ 'delivery.zoneImport.denied' | t }}</p>
+    </div>
+  } @else {
+    <h1 class="q-subhead">{{ 'delivery.zoneImport.title' | t }}</h1>
+    <p class="q-body-sm zone-import__intro">{{ 'delivery.zoneImport.intro' | t }}</p>
+
+    <div class="zone-import__picker">
+      <label class="zone-import__file-label">
+        <input
+          type="file"
+          accept="application/json,.json,.geojson"
+          class="zone-import__file-input"
+          (change)="onFileSelected($event)"
+          data-testid="zone-import-file"
+        />
+        {{ 'delivery.zoneImport.choose' | t }}
+      </label>
+      @if (fileName(); as name) {
+        <span class="q-body-sm zone-import__file-name" data-testid="zone-import-file-name">{{
+          name
+        }}</span>
+        <button type="button" class="zone-import__clear" (click)="clear()">
+          {{ 'delivery.zoneImport.clear' | t }}
+        </button>
+      }
+    </div>
+
+    @if (parseError(); as error) {
+      <div class="zone-import__error-band" role="alert" data-testid="zone-import-parse-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="zone-import__error-band" role="alert" data-testid="zone-import-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (rows().length > 0) {
+      <table class="zone-import__table" data-testid="zone-import-preview">
+        <thead>
+          <tr>
+            <th>{{ 'delivery.zoneImport.column.externalRef' | t }}</th>
+            <th>{{ 'delivery.zoneImport.column.code' | t }}</th>
+            <th>{{ 'delivery.zoneImport.column.role' | t }}</th>
+            @if (report()) {
+              <th>{{ 'delivery.zoneImport.column.outcome' | t }}</th>
+              <th>{{ 'delivery.zoneImport.column.warnings' | t }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.externalRef) {
+            <tr data-testid="zone-import-row">
+              <td>{{ row.externalRef }}</td>
+              <td class="q-mono">{{ row.code }}</td>
+              <td>{{ row.role }}</td>
+              @if (report()) {
+                @let outcome = rowOutcomeFor(row);
+                <td data-testid="zone-import-outcome">
+                  @if (outcome?.accepted) {
+                    <span class="status-badge status-badge--accepted">{{
+                      'delivery.zoneImport.accepted' | t
+                    }}</span>
+                  } @else {
+                    <span class="status-badge status-badge--rejected">{{
+                      outcome?.error ?? ('delivery.zoneImport.rejected' | t)
+                    }}</span>
+                  }
+                </td>
+                <td data-testid="zone-import-warnings">
+                  @for (warning of outcome?.warnings ?? []; track warning) {
+                    <div class="zone-import__warning">{{ warning }}</div>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="zone-import__actions">
+        <button
+          type="button"
+          class="zone-import__action"
+          [disabled]="busy()"
+          (click)="dryRun()"
+          data-testid="zone-import-dry-run"
+        >
+          {{ 'delivery.zoneImport.dryRun' | t }}
+        </button>
+        <button
+          type="button"
+          class="zone-import__action zone-import__action--commit"
+          [disabled]="busy()"
+          (click)="commit()"
+          data-testid="zone-import-commit"
+        >
+          {{ 'delivery.zoneImport.commit' | t }}
+        </button>
+      </div>
+
+      @if (report(); as result) {
+        <p class="q-body-sm zone-import__summary" data-testid="zone-import-summary">
+          @if (result.dryRun) {
+            {{
+              'delivery.zoneImport.dryRunSummary'
+                | t: { accepted: result.accepted, total: result.totalRows }
+            }}
+          } @else {
+            {{
+              'delivery.zoneImport.commitSummary'
+                | t: { accepted: result.accepted, total: result.totalRows }
+            }}
+          }
+        </p>
+      }
+    }
+  }
+</div>

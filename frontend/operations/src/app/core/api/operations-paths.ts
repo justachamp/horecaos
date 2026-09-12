@@ -585,9 +585,37 @@ export const courierPaths = {
     return `${this.rateCard(tenantId, cardId)}/activation`;
   },
 
-  /** The branch's shifts, newest first (IA 3.5). Query params: `brandId`, `locationId`, `limit`. */
+  /**
+   * The branch's shifts, newest first (IA 3.5). Query params: `brandId`,
+   * `locationId`, `limit`, and optionally `from`/`to` to window the read to a
+   * period.
+   */
   courierShifts(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-shifts`;
+  },
+
+  /**
+   * The branch's planned shifts (IA 3.5's roster). `GET` with `brandId`,
+   * `locationId`, optional `from`/`to`/`limit`; `POST` drafts one (mutation:
+   * key required).
+   */
+  courierRosterEntries(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-roster-entries`;
+  },
+
+  /** Planned-versus-actual, for one period (IA 3.5). `GET` with `brandId`, `locationId`, `from`, `to`. */
+  courierRosterComparison(tenantId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/comparison`;
+  },
+
+  /** Publish a planned shift (`POST`). Mutation: key required. */
+  courierRosterEntryPublish(tenantId: string, entryId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/publish`;
+  },
+
+  /** Cancel a planned shift still DRAFT or PUBLISHED (`POST`). Mutation: key required. */
+  courierRosterEntryCancel(tenantId: string, entryId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/cancel`;
   },
 
   /** The courier compensation policy in force (IA 3.9). Query params: optional `brandId`, `locationId`. */

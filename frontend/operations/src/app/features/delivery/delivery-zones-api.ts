@@ -101,6 +101,56 @@ export interface VersionView {
 }
 
 /**
+ * One row of legacy geometry to import (operations gap map row `3.6c`, ADR
+ * 0037). Mirrors `OperationsServiceZoneController.BatchImportZoneRow`.
+ *
+ * `externalRef` is never interpreted by the server — it comes back on the
+ * matching {@link RowOutcomeResponse} so an operator can line a report row
+ * up against the source spreadsheet without hunting for it by geometry.
+ */
+export interface BatchImportZoneRow {
+  readonly externalRef: string;
+  readonly role: 'DELIVERY' | 'CATCHMENT';
+  readonly code: string;
+  readonly displayNameRu: string;
+  readonly displayNameUz: string;
+  readonly displayNameEn: string;
+  readonly regionId?: string | null;
+  readonly priority: number;
+  readonly currency: string;
+  readonly deliveryTariffId?: string | null;
+  readonly freeDeliveryFromMinor?: number | null;
+  readonly minBasketMinor?: number | null;
+  /** GeoJSON, exactly as the source system exported it — `[longitude, latitude]` pairs. */
+  readonly geoJson: string;
+}
+
+export interface BatchImportRequest {
+  readonly dryRun: boolean;
+  readonly rows: readonly BatchImportZoneRow[];
+}
+
+/** Mirrors `OperationsServiceZoneController.RowOutcomeResponse`. */
+export interface RowOutcomeResponse {
+  readonly externalRef: string;
+  readonly accepted: boolean;
+  readonly zoneId?: string | null;
+  readonly version?: number | null;
+  readonly areaSquareMeters?: number | null;
+  readonly warnings: readonly string[];
+  readonly error?: string | null;
+}
+
+/** Mirrors `OperationsServiceZoneController.BatchImportResponse`. */
+export interface BatchImportResponse {
+  readonly totalRows: number;
+  readonly accepted: number;
+  readonly rejected: number;
+  readonly dryRun: boolean;
+  readonly rows: readonly RowOutcomeResponse[];
+}
+
+/**
  * Delivery zones (operations §3.6) — `OperationsServiceZoneController`
  * (ADR 0037, ADR 0104, `operations` OpenAPI surface).
  */
@@ -198,6 +248,22 @@ export class DeliveryZonesApi {
         'DELETE',
         deliveryZonePaths.zoneLocation(scope, zoneId, locationId),
         command({}),
+      ),
+    );
+  }
+
+  /**
+   * Every accepted row lands as a new zone's DRAFT version, never activated —
+   * ADR 0037 gates activation behind rendering the shape on a map beside its
+   * source (`X.4`, not built), because a coordinate-order mistake still
+   * produces a geometrically valid polygon. `dryRun` runs every check a real
+   * import would and rolls the whole batch back, so nothing here persists.
+   */
+  async importBatch(scope: BrandScope, request: BatchImportRequest): Promise<BatchImportResponse> {
+    return firstValueFrom(
+      this.api.post<BatchImportRequest, BatchImportResponse>(
+        deliveryZonePaths.zoneImportBatch(scope),
+        command(request),
       ),
     );
   }
