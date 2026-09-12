@@ -173,8 +173,11 @@ describe('StaffPage', () => {
     fixture.detectChanges();
 
     expect(api.revoke).toHaveBeenCalledTimes(2);
-    expect(api.revoke).toHaveBeenCalledWith('t1', 'g1', 'Left the company');
-    expect(api.revoke).toHaveBeenCalledWith('t1', 'g2', 'Left the company');
+    expect(api.revoke).toHaveBeenCalledWith('t1', 'g1', 'Left the company', expect.any(String));
+    expect(api.revoke).toHaveBeenCalledWith('t1', 'g2', 'Left the company', expect.any(String));
+    // Staff 9.3c: a bulk suspension's N revokes must correlate as one action.
+    const [firstCall, secondCall] = (api.revoke as ReturnType<typeof vi.fn>).mock.calls;
+    expect(firstCall[3]).toBe(secondCall[3]);
     expect(api.listGrants).toHaveBeenCalledTimes(2); // initial load + reload after suspend
   });
 

@@ -77,6 +77,28 @@ public interface StaffAccounts {
      */
     void logoutEverywhere(String subjectId);
 
+    /**
+     * The name the identity provider holds for this account — "First Last"
+     * when both are set — for Staff 9.3b's actor-display resolution: an
+     * incident review otherwise shows a column of UUIDs, because roughly
+     * every {@code ActorRef.user(subject, null)} call site passes no display
+     * name of its own and {@code audit.audit_events.actor_display} is
+     * therefore null on nearly every row.
+     *
+     * <p>Interim per the staff-identity ADR: {@link #completeSetup} already
+     * writes {@code firstName}/{@code lastName} to Keycloak, and until a
+     * durable HorecaOS-owned staff directory exists, reading them back here is
+     * the source of truth. Empty by default so no other implementation of
+     * this interface — a test double, a future non-Keycloak provider — has to
+     * answer a question it may not be able to.
+     *
+     * @return empty when the account has no name on file, not only when it
+     *         does not exist
+     */
+    default Optional<String> displayName(String subjectId) {
+        return Optional.empty();
+    }
+
     /** An account as far as an invitation cares. */
     record StaffAccount(String subjectId, String email, boolean emailVerified, boolean hasPassword) {
 

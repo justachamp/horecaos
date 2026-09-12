@@ -1,11 +1,14 @@
 package uz.horecaos.platform.audit.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -23,6 +26,7 @@ import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionManag
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ApiException;
 
 /** ADR 0027 querying and partition upkeep. */
 class AuditQueryAndPartitionTests {
@@ -32,6 +36,9 @@ class AuditQueryAndPartitionTests {
     private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121303");
 
     private static TestDatabase.Handle db;
+
+    /** {@link uz.horecaos.platform.iam.api.accounts.StaffDisplayNames} stand-in: only the names a test puts here resolve. */
+    private final Map<String, String> knownDisplayNames = new HashMap<>();
 
     private JdbcClient jdbc;
     private AuditQueryService queries;
@@ -62,7 +69,8 @@ class AuditQueryAndPartitionTests {
 
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
         JsonMapper objectMapper = JsonMapper.builder().build();
-        queries = new AuditQueryService(jdbc, objectMapper);
+        knownDisplayNames.clear();
+        queries = new AuditQueryService(jdbc, objectMapper, knownDisplayNames::get);
         recorder = new JdbcAuditRecorder(jdbc, objectMapper);
         partitions = new AuditPartitionManager(jdbc, clock);
 
@@ -92,6 +100,73 @@ class AuditQueryAndPartitionTests {
                 .isEmpty();
     }
 
+    /** Staff 9.3b: the read-time fix, since ~99 write-side call sites still pass no display name. */
+    @Test
+    void resolvesActorDisplayAtReadTimeForARowWrittenWithANullDisplay() {
+        record("tenant.suspended", TENANT, "operator-1");
+        knownDisplayNames.put("operator-1", "Operator One");
+
+        var results = queries.search(new AuditQueryService.AuditQuery(
+                TENANT, null, null, null, null, null, null, null, null, null, null, null));
+
+        assertThat(results.getFirst().actorDisplay())
+                .as("actor_display was written null; the resolver fills it in on the way out")
+                .isEqualTo("Operator One");
+    }
+
+    @Test
+    void detailAlsoResolvesTheActorDisplayName() {
+        UUID eventId = UUID.randomUUID();
+        recorder.record(AuditFact.of("order.cancel", AuditClass.BUSINESS)
+                .id(eventId)
+                .by(ActorRef.user("operator-3", null))
+                .at(ResourceScope.tenant(TENANT))
+                .because("test")
+                .correlatedBy("detail-name-test")
+                .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
+                .build());
+        knownDisplayNames.put("operator-3", "Operator Three");
+
+        assertThat(queries.findDetail(TENANT, eventId).orElseThrow().actorDisplay())
+                .isEqualTo("Operator Three");
+    }
+
+    /**
+     * The premise a caller must never be able to break: resolution only ever
+     * touches a subject whose row the caller's own tenant-scoped query already
+     * decided to return. Another tenant's row is refused before the resolver
+     * is ever consulted, so its actor's name is never surfaced either.
+     */
+    @Test
+    void neverResolvesANameForAPrincipalTheCallerCouldNotOtherwiseSee() {
+        record("tenant.suspended", OTHER_TENANT, "operator-2");
+        knownDisplayNames.put("operator-2", "Operator Two");
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, null)))
+                .as("the row belongs to another tenant, so its actor's name is never surfaced either")
+                .isEmpty();
+    }
+
+    /** A row that already carries a real display name is left exactly as it was written. */
+    @Test
+    void aRowAlreadyCarryingADisplayNameIsNotOverwritten() {
+        recorder.record(AuditFact.of("tenant.suspended", AuditClass.BUSINESS)
+                .by(ActorRef.user("operator-1", "Written At Record Time"))
+                .at(ResourceScope.tenant(TENANT))
+                .because("test")
+                .correlatedBy("pre-named")
+                .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
+                .build());
+        knownDisplayNames.put("operator-1", "Should Never Win");
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                                TENANT, null, null, null, null, null, null, null, null, null, null, null))
+                        .getFirst()
+                        .actorDisplay())
+                .isEqualTo("Written At Record Time");
+    }
+
     @Test
     void filtersByActorAndAction() {
         record("tenant.suspended", TENANT, "operator-1");
@@ -112,6 +187,61 @@ class AuditQueryAndPartitionTests {
         assertThat(queries.search(new AuditQueryService.AuditQuery(
                         TENANT, null, null, null, null, null, null, null, null, null, null, 10_000)))
                 .hasSizeLessThanOrEqualTo(AuditQueryService.MAXIMUM_PAGE);
+    }
+
+    /**
+     * {@code Page.last(events)} used to run unconditionally in {@code
+     * AuditController}, so past 200 events an operator had no way to see the
+     * rest of the log (Staff 9.3). {@code id} is a random UUID, not a v7 one,
+     * so the cursor has to carry {@code (recorded_at, id)} together — a
+     * single-column cursor could skip or repeat rows once two events land in
+     * the same instant.
+     */
+    @Test
+    void cursorPagingReturnsTheRestOfTheLogPastTheFirstPage() {
+        for (int index = 0; index < 5; index++) {
+            record("brand.created", TENANT, "operator-1");
+        }
+
+        var firstPage = queries.search(new AuditQueryService.AuditQuery(
+                TENANT, null, null, null, null, null, null, null, null, null, null, 2));
+        assertThat(firstPage).hasSize(2);
+
+        String cursor = AuditQueryService.cursorFor(firstPage.getLast());
+        var secondPage = queries.search(new AuditQueryService.AuditQuery(
+                TENANT, null, null, null, null, null, null, null, null, null, null, 2, cursor));
+
+        assertThat(secondPage)
+                .as("the second page must not repeat anything the first page already returned")
+                .hasSize(2)
+                .noneMatch(
+                        event -> firstPage.stream().anyMatch(seen -> seen.id().equals(event.id())));
+
+        var thirdPage = queries.search(new AuditQueryService.AuditQuery(
+                TENANT,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2,
+                AuditQueryService.cursorFor(secondPage.getLast())));
+        assertThat(thirdPage)
+                .as("five rows, two pages of two already taken: exactly one remains")
+                .hasSize(1);
+    }
+
+    @Test
+    void aMalformedCursorIsRejectedAsAClientError() {
+        assertThatThrownBy(() -> queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, null, "not-a-cursor")))
+                .as("a cursor this endpoint never minted is a client error, not a 500")
+                .isInstanceOf(ApiException.class);
     }
 
     @Test

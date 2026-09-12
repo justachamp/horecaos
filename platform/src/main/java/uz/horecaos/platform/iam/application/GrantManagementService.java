@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -113,6 +114,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 clock.instant()));
         return grantId;
     }
@@ -212,6 +214,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 clock.instant()));
         return grantId;
     }
@@ -283,6 +286,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 now));
         return grantId;
     }
@@ -375,6 +379,7 @@ public class GrantManagementService {
                     revokerSubject,
                     reason,
                     Map.of("scope", grant.scopeType()),
+                    correlationIdFor(grantId),
                     clock.instant()));
         }
         return updated == 1;
@@ -556,6 +561,24 @@ public class GrantManagementService {
     private void evictAndPublish(GrantChanged event) {
         cacheOwner.evictGrants(event.principalSubject(), event.scope().tenantId());
         events.publishEvent(event);
+    }
+
+    /**
+     * Staff 9.3c: a bulk action is N grant changes that must audit as one
+     * group, not N. {@code CorrelationIdFilter} already puts the request's own
+     * {@code X-Correlation-Id} (client-supplied, or generated when absent)
+     * into MDC before any controller runs, so reusing it here is what lets
+     * {@code staff-page.ts}'s {@code suspend}/{@code restore} fan-out — one
+     * minted id sent on every call in a {@code Promise.allSettled} batch —
+     * turn into one shared {@code correlation_id} across every resulting
+     * {@code GrantChanged}, instead of {@code grantId} grouping each row
+     * alone. Falls back to {@code grantId} only when nothing put a
+     * correlation id on this thread — a system-initiated grant with no
+     * request behind it at all.
+     */
+    private static String correlationIdFor(UUID grantId) {
+        String fromRequest = MDC.get("correlationId");
+        return fromRequest == null || fromRequest.isBlank() ? grantId.toString() : fromRequest;
     }
 
     private static OffsetDateTime at(Instant instant) {

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.audit.domain;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,38 @@ public final class ChangeDocuments {
 
         Map<String, Object> document = new LinkedHashMap<>();
         document.put(field, change);
+        return document;
+    }
+
+    /**
+     * Merges two flat snapshots — "before this write" and "after it" — into
+     * the per-field {@code {before, after}} shape {@link #change} already
+     * produces for one field, over the union of both maps' keys.
+     *
+     * <p>Staff 9.3a: almost every {@code .changed(...)} call site in this
+     * codebase writes a single flat after-only map, or — {@code
+     * TenantControlPlaneService}'s {@code brand.revised} and {@code
+     * location.revised} facts, until this wave — a hand-rolled root-level
+     * {@code {before, after}} pair that is two whole-object snapshots rather
+     * than a diff a reader can act on. Either shape means «who changed the
+     * minimum order sum from 30 000 to 50 000» cannot be answered from the
+     * screen. This is the write-side primitive for fixing that a call site at
+     * a time: pass what an aggregate looked like before a write and what it
+     * looks like after, keyed identically, and get back the per-field diff
+     * the activity log's viewer already parses.
+     *
+     * <p>A key present in only one map still gets an entry — a field that
+     * existed and was cleared, or one that did not exist and was set, is a
+     * change either way, not an omission.
+     */
+    public static Map<String, Object> diff(Map<String, Object> before, Map<String, Object> after) {
+        Set<String> fields = new LinkedHashSet<>(before.keySet());
+        fields.addAll(after.keySet());
+
+        Map<String, Object> document = new LinkedHashMap<>();
+        for (String field : fields) {
+            document.putAll(change(field, before.get(field), after.get(field)));
+        }
         return document;
     }
 

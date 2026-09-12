@@ -1,14 +1,23 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
+import { activityLogActionLabelKey, humanizeActionCode } from './activity-log-action-labels';
 import { ActivityLogApi, AuditEventDetail, AuditEventView } from './activity-log-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 type ClassFilter = 'ALL' | 'BUSINESS' | 'SECURITY';
+type OutcomeFilter = 'ALL' | 'SUCCEEDED' | 'REJECTED' | 'FAILED';
+type ScopeTypeFilter = 'ALL' | 'PLATFORM' | 'TENANT' | 'BRAND' | 'LOCATION';
+
+/** A person seen in the loaded window, for the actor filter's picker — {@link ActivityLogPage.knownPeople}. */
+interface KnownPerson {
+  readonly subject: string;
+  readonly display: string;
+}
 
 function isoDaysAgo(days: number): string {
   const date = new Date();
@@ -22,18 +31,20 @@ function isoDaysAgo(days: number): string {
  * diff; a named human actor even for background paths; a bulk action
  * producing N records, not one").
  *
- * Reads `AuditController`'s new operations-surface routes (wave 39): the
- * list is `search` (§11.12's outcome/scope/correlation filters, also new
- * this wave), the drawer's diff is `detail` (§11.13's single-event read,
- * itself an individually audited call per its own doc).
+ * Reads `AuditController`'s operations-surface routes: the list is `search`
+ * (§11.12's outcome/scope/correlation filters), the drawer's diff is
+ * `detail` (§11.13's single-event read, itself an individually audited call
+ * per its own doc).
  *
- * **Scoped down for this wave.** «Что» renders the raw `action_code`
- * (`order.cancel`, `iam.grants.revoke`, …) rather than the plain-language
- * sentence the spec calls for — a full code-to-sentence dictionary spans
- * every module's own action codes and is not one screen's translation table
- * to invent. «Кто» shows `actorDisplay ?? actorSubject`: §11.1's staff
- * profile gap means `actor_display` is null on most rows today, so most
- * actors render as a Keycloak subject id rather than a name, honestly.
+ * «Кто» shows `actorDisplay ?? actorSubject`. Before this wave `actorDisplay`
+ * was null on nearly every row; `AuditQueryService` now resolves it at read
+ * time (Staff 9.3b), so most rows carry a name here without this component
+ * doing anything differently — the fix lives entirely on the read path.
+ * «Что» renders a plain-language label from {@link activityLogActionLabelKey}
+ * where one is named, and a humanized rendering of the raw code otherwise —
+ * still not a complete code-to-sentence dictionary (every module's own
+ * action codes is not one screen's translation table to invent), but no
+ * longer a bare dotted code either.
  */
 @Component({
   selector: 'q-activity-log-page',
@@ -54,11 +65,41 @@ export class ActivityLogPage {
   protected readonly classFilter = signal<ClassFilter>('ALL');
   protected readonly actorFilter = signal('');
   protected readonly correlationFilter = signal('');
+  protected readonly outcomeFilter = signal<OutcomeFilter>('ALL');
+  protected readonly scopeTypeFilter = signal<ScopeTypeFilter>('ALL');
+  protected readonly scopeIdFilter = signal('');
+  protected readonly targetIdFilter = signal('');
   protected readonly rangeDays = signal(7);
+
+  /** `AuditQueryService.MAXIMUM_PAGE` — one page's worth per fetch. */
+  private static readonly PAGE_SIZE = 200;
+
+  protected readonly nextCursor = signal<string | null>(null);
+  protected readonly loadingMore = signal(false);
 
   protected readonly openEventId = signal<string | null>(null);
   protected readonly openDetail = signal<AuditEventDetail | null>(null);
   protected readonly detailLoading = signal(false);
+  /** `true` once the open event's correlation id is confirmed to have a sibling — Staff 9.3c's chip. */
+  protected readonly openEventIsPartOfBulk = signal(false);
+
+  /**
+   * Every distinct human actor seen in the loaded window, for the actor
+   * filter's picker (a `<datalist>`, so a subject id can still be typed or
+   * pasted directly). Not a full staff roster — a deep link from a person's
+   * own card would seed one without a fetch this screen does not otherwise
+   * need — but it turns the filter from "paste a UUID" into "start typing a
+   * name" for anyone who has already appeared on screen.
+   */
+  protected readonly knownPeople = computed<readonly KnownPerson[]>(() => {
+    const seen = new Map<string, string>();
+    for (const event of this.events()) {
+      if (event.actorType === 'USER' && event.actorSubject) {
+        seen.set(event.actorSubject, event.actorDisplay ?? event.actorSubject);
+      }
+    }
+    return Array.from(seen, ([subject, display]) => ({ subject, display }));
+  });
 
   constructor() {
     void this.load();
@@ -86,12 +127,45 @@ export class ActivityLogPage {
     this.correlationFilter.set(value);
   }
 
+  protected onScopeIdInput(value: string): void {
+    this.scopeIdFilter.set(value);
+  }
+
+  protected onTargetIdInput(value: string): void {
+    this.targetIdFilter.set(value);
+  }
+
+  protected setOutcomeFilter(value: string): void {
+    this.outcomeFilter.set(value as OutcomeFilter);
+    void this.load();
+  }
+
+  protected setScopeTypeFilter(value: string): void {
+    this.scopeTypeFilter.set(value as ScopeTypeFilter);
+    void this.load();
+  }
+
   protected applyTextFilters(): void {
     void this.load();
   }
 
+  private currentFilters() {
+    return {
+      auditClass: this.classFilter() === 'ALL' ? undefined : this.classFilter(),
+      actorSubject: this.actorFilter().trim() || undefined,
+      correlationId: this.correlationFilter().trim() || undefined,
+      outcome: this.outcomeFilter() === 'ALL' ? undefined : this.outcomeFilter(),
+      scopeType: this.scopeTypeFilter() === 'ALL' ? undefined : this.scopeTypeFilter(),
+      scopeId: this.scopeIdFilter().trim() || undefined,
+      targetId: this.targetIdFilter().trim() || undefined,
+      from: isoDaysAgo(this.rangeDays()),
+      limit: ActivityLogPage.PAGE_SIZE,
+    };
+  }
+
   private async load(): Promise<void> {
     this.state.set('loading');
+    this.nextCursor.set(null);
     await this.tenant.ensureLoaded();
     const tenantId = this.tenant.tenantId();
     if (!tenantId) {
@@ -99,14 +173,9 @@ export class ActivityLogPage {
       return;
     }
     try {
-      const page = await this.api.search(tenantId, {
-        auditClass: this.classFilter() === 'ALL' ? undefined : this.classFilter(),
-        actorSubject: this.actorFilter().trim() || undefined,
-        correlationId: this.correlationFilter().trim() || undefined,
-        from: isoDaysAgo(this.rangeDays()),
-        limit: 200,
-      });
+      const page = await this.api.search(tenantId, this.currentFilters());
       this.events.set(page.items);
+      this.nextCursor.set(page.nextCursor);
       this.state.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -115,6 +184,29 @@ export class ActivityLogPage {
         this.loadErrorText.set(this.describe(error));
         this.state.set('error');
       }
+    }
+  }
+
+  /**
+   * Staff 9.3: `AuditController` no longer answers `Page.last` unconditionally,
+   * so an operator past {@link PAGE_SIZE} events can keep going instead of
+   * being stuck at the first page.
+   */
+  protected async loadMore(): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const cursor = this.nextCursor();
+    if (!tenantId || !cursor || this.loadingMore()) {
+      return;
+    }
+    this.loadingMore.set(true);
+    try {
+      const page = await this.api.search(tenantId, { ...this.currentFilters(), cursor });
+      this.events.set([...this.events(), ...page.items]);
+      this.nextCursor.set(page.nextCursor);
+    } catch (error) {
+      this.loadErrorText.set(this.describe(error));
+    } finally {
+      this.loadingMore.set(false);
     }
   }
 
@@ -130,9 +222,20 @@ export class ActivityLogPage {
     }
     this.openEventId.set(event.id);
     this.openDetail.set(null);
+    this.openEventIsPartOfBulk.set(false);
     this.detailLoading.set(true);
     try {
-      this.openDetail.set(await this.api.detail(tenantId, event.id));
+      const detail = await this.api.detail(tenantId, event.id);
+      this.openDetail.set(detail);
+      // Staff 9.3c's «Часть массового действия» chip: a second, bounded
+      // lookup for whether this event's own correlation id has a sibling.
+      // limit: 2 is enough to answer "is this alone or not" without pulling
+      // a whole batch just to render a chip.
+      const siblings = await this.api.search(tenantId, {
+        correlationId: detail.correlationId,
+        limit: 2,
+      });
+      this.openEventIsPartOfBulk.set(siblings.items.length > 1);
     } catch {
       // The row itself is already on screen; a failed detail fetch just leaves the drawer empty.
     } finally {
@@ -140,17 +243,36 @@ export class ActivityLogPage {
     }
   }
 
+  /** The chip's click-through: filter the whole log down to this event's batch. */
+  protected viewBulkBatch(): void {
+    const detail = this.openDetail();
+    if (!detail) {
+      return;
+    }
+    this.correlationFilter.set(detail.correlationId);
+    this.closeDrawer();
+    void this.load();
+  }
+
   protected closeDrawer(): void {
     this.openEventId.set(null);
     this.openDetail.set(null);
+    this.openEventIsPartOfBulk.set(false);
   }
 
   protected actorLabel(event: AuditEventView): string {
     return event.actorDisplay ?? event.actorSubject ?? '—';
   }
 
+  protected actionLabel(event: AuditEventView): string {
+    const key = activityLogActionLabelKey(event.actionCode);
+    return key ? this.i18n.t(key) : humanizeActionCode(event.actionCode);
+  }
+
   protected scopeLabel(event: AuditEventView): string {
-    return event.scopeType === 'PLATFORM' ? this.i18n.t('staff.activity.scope.platform') : (event.scopeId ?? '—');
+    return event.scopeType === 'PLATFORM'
+      ? this.i18n.t('staff.activity.scope.platform')
+      : (event.scopeId ?? '—');
   }
 
   protected changeEntries(detail: AuditEventDetail): readonly (readonly [string, unknown])[] {

@@ -149,6 +149,22 @@
   margin-top: 12px;
 }
 
+.bulk-chip {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--q-warning);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-warning);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.load-more {
+  margin-top: 12px;
+}
+
 .muted {
   color: var(--q-ink-muted);
 }

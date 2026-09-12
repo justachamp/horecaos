@@ -21,6 +21,14 @@ import uz.horecaos.platform.iam.api.GrantChanged;
  * written inside the same transaction as the grant, so a rolled-back grant
  * leaves no evidence and a committed one always has some. This is the same
  * pattern the tenancy outbox listener uses.
+ *
+ * <p><strong>Correlated by {@link GrantChanged#correlationId}, not {@link
+ * GrantChanged#grantId}</strong> (Staff 9.3c). Grouping by the grant's own id
+ * used to mean a twelve-grant bulk suspension wrote twelve audit rows under
+ * twelve different correlation ids, so pasting one into the activity log's
+ * filter — the «Часть массового действия» chip — returned exactly one row
+ * instead of the batch. {@code GrantChanged}'s own doc explains where its
+ * {@code correlationId} comes from.
  */
 @Component
 public class GrantAuditListener {
@@ -40,7 +48,7 @@ public class GrantAuditListener {
                 .because(event.reason())
                 .changed(event.details())
                 .usingCapability(Capability.IAM_GRANT_MANAGE.code())
-                .correlatedBy(event.grantId().toString())
+                .correlatedBy(event.correlationId())
                 .occurredAt(event.occurredAt())
                 .build());
     }
