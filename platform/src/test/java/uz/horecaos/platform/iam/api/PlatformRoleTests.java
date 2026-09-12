@@ -292,6 +292,16 @@ class PlatformRoleTests {
     }
 
     @Test
+    void fiscalTerminalManageIsLimitedToTenantOwnerAndAdmin() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.FISCAL_TERMINAL_MANAGE))
+                        .toList())
+                .as("registering fiscal equipment is IT-admin territory, the same pair as an integration installation")
+                .containsExactlyInAnyOrder(PlatformRole.TENANT_OWNER, PlatformRole.TENANT_ADMIN);
+    }
+
+    @Test
     void aTenantAdminHasNoCommercialOrExecutionAuthority() {
         assertThat(PlatformRole.TENANT_ADMIN.capabilities())
                 .as("subscription and refund execution stay with the owner and finance")

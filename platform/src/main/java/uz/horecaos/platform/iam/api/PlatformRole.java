@@ -270,6 +270,10 @@ public enum PlatformRole {
                     MEDIA_READ,
                     MEDIA_UPLOAD,
                     INTEGRATION_INSTALLATION_MANAGE,
+                    // ADR 0038 lines 503-513: registering the branch's own fiscal
+                    // equipment, held the same way as the integration pair above it.
+                    FISCAL_TERMINAL_READ,
+                    FISCAL_TERMINAL_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
@@ -418,6 +422,10 @@ public enum PlatformRole {
                     MEDIA_READ,
                     MEDIA_UPLOAD,
                     INTEGRATION_INSTALLATION_MANAGE,
+                    // ADR 0038 lines 503-513: registering the branch's own fiscal
+                    // equipment, held the same way as the integration pair above it.
+                    FISCAL_TERMINAL_READ,
+                    FISCAL_TERMINAL_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
