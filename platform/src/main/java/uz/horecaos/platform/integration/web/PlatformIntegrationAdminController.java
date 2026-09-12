@@ -57,8 +57,10 @@ public class PlatformIntegrationAdminController {
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM)
     @Operation(
             summary = "The provider registry: every adapter this build declares",
-            description = "Static and code-owned, not tenant-scoped. Honestly thin: three adapters "
-                    + "exist (Click, Payme, Telegram) against the much larger catalogue the parity "
+            description = "Static and code-owned, not tenant-scoped. Honestly thin: eight adapters "
+                    + "exist (Click and Payme for payment, Telegram for notification, the hosted-PBX "
+                    + "and Asterisk-AMI telephony pair, and the Google Tag Manager / Analytics 4 / "
+                    + "Search Console analytics trio) against the much larger catalogue the parity "
                     + "inventory names.")
     List<ConnectFieldCatalog.ProviderConnectDeclaration> providers() {
         return ConnectFieldCatalog.all();
