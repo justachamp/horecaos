@@ -503,6 +503,17 @@
         "required" : [ "displayName" ],
         "type" : "object"
       },
+      "ArchiveTagRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "AssetResponse" : {
         "properties" : {
           "assetId" : {
@@ -555,6 +566,23 @@
           }
         },
         "required" : [ "courierId", "expectedVersion", "reasonCode" ],
+        "type" : "object"
+      },
+      "AssignmentResponse" : {
+        "properties" : {
+          "assignedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "AttemptResponse" : {
@@ -1353,6 +1381,18 @@
         },
         "type" : "object"
       },
+      "BoundaryChangeResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BranchOrderCountsResponse" : {
         "properties" : {
           "counts" : {
@@ -1570,6 +1610,39 @@
         "required" : [ "reasonCode", "supervisorName" ],
         "type" : "object"
       },
+      "CalendarResponse" : {
+        "properties" : {
+          "boundaryVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "businessDayStart" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "holidays" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HolidayResponse"
+            },
+            "type" : "array"
+          },
+          "recutCompletedThrough" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          },
+          "weekendDays" : {
+            "items" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "CallHourResponse" : {
         "properties" : {
           "answeredCount" : {
@@ -1769,7 +1842,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -1904,6 +1977,21 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "ChangeBoundaryRequest" : {
+        "properties" : {
+          "businessDayStart" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "businessDayStart", "reason" ],
         "type" : "object"
       },
       "CircleRequest" : {
@@ -3040,6 +3128,27 @@
           }
         },
         "required" : [ "brandId", "phone" ],
+        "type" : "object"
+      },
+      "CreateTagRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[a-z0-9][a-z0-9_-]{0,31}$",
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 80,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "reason" ],
         "type" : "object"
       },
       "CreateTariffRequest" : {
@@ -4304,6 +4413,38 @@
         "required" : [ "outcome" ],
         "type" : "object"
       },
+      "HolidayAddedResponse" : {
+        "properties" : {
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HolidayResponse" : {
+        "properties" : {
+          "date" : {
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "month" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "HourDemandResponse" : {
         "properties" : {
           "averageOrders" : {
@@ -4391,6 +4532,38 @@
         "required" : [ "lines", "periodEnd", "periodStart", "providerCode", "providerInvoiceRef", "reason" ],
         "type" : "object"
       },
+      "InboxFailureSummary" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "consumerName" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "IngestResponse" : {
         "properties" : {
           "collectionGate" : {
@@ -4420,7 +4593,7 @@
       "InstallRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
             "type" : "string"
           },
           "displayName" : {
@@ -4477,7 +4650,14 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "nonSensitiveConfig" : {
+            "type" : "string"
+          },
           "providerType" : {
+            "type" : "string"
+          },
+          "secretLastUsedAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "secretReference" : {
@@ -4549,6 +4729,45 @@
           }
         },
         "required" : [ "token" ],
+        "type" : "object"
+      },
+      "IssuePartnerClientRequest" : {
+        "properties" : {
+          "displayLabel" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayLabel", "reason" ],
+        "type" : "object"
+      },
+      "IssuedClientResponse" : {
+        "properties" : {
+          "clientId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretValue" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "ItemResponse" : {
@@ -6673,6 +6892,73 @@
         },
         "type" : "object"
       },
+      "OrderOutcomeReasonControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerReasonRequest" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          },
+          "internalName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerVersionResponse" : {
+        "properties" : {
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderPaymentResponse" : {
         "properties" : {
           "attempts" : {
@@ -6899,6 +7185,20 @@
         },
         "type" : "object"
       },
+      "PageInboxFailureSummary" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InboxFailureSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageInstallationView" : {
         "properties" : {
           "items" : {
@@ -6979,6 +7279,40 @@
           },
           "nextCursor" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerClientResponse" : {
+        "properties" : {
+          "clientId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastAuthenticatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretConfigured" : {
+            "type" : "boolean"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -7677,7 +8011,7 @@
       "ProviderConnectDeclaration" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
             "type" : "string"
           },
           "fields" : {
@@ -8001,6 +8335,56 @@
             "minLength" : 0,
             "pattern" : "^998\\d{9}$",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReasonResponse" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "internalName" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8784,6 +9168,28 @@
         },
         "type" : "object"
       },
+      "RemoveTenantCalendarHolidayRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ReplayRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RescheduleRequest" : {
         "properties" : {
           "expectedVersion" : {
@@ -9243,6 +9649,17 @@
         },
         "type" : "object"
       },
+      "RevokePartnerClientRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RevokeRequest" : {
         "properties" : {
           "reason" : {
@@ -9350,6 +9767,17 @@
         "required" : [ "reason", "value" ],
         "type" : "object"
       },
+      "RotatePartnerClientRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RotateSecretRequest" : {
         "properties" : {
           "newSecretReference" : {
@@ -9398,6 +9826,26 @@
           }
         },
         "required" : [ "reason", "value" ],
+        "type" : "object"
+      },
+      "RotatedClientResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretValue" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "RotationRequest" : {
@@ -9588,7 +10036,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -9606,7 +10054,7 @@
       "SecretIngressRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
+            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "PROVIDER_MARKETPLACE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
             "type" : "string"
           },
           "providerType" : {
@@ -9856,6 +10304,24 @@
         },
         "type" : "object"
       },
+      "SetLocationTagsRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "tagIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "reason", "tagIds" ],
+        "type" : "object"
+      },
       "SetPreferenceRequest" : {
         "properties" : {
           "brandId" : {
@@ -9892,6 +10358,26 @@
           }
         },
         "required" : [ "state" ],
+        "type" : "object"
+      },
+      "SetWeekendRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "weekendDays" : {
+            "items" : {
+              "format" : "int32",
+              "maximum" : 7,
+              "minimum" : 1,
+              "type" : "integer"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "reason", "weekendDays" ],
         "type" : "object"
       },
       "SettingsRequest" : {
@@ -10036,6 +10522,37 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SlaBucketControllerBucket" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "fromMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "toMinutesExclusive" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SlaBuckets" : {
+        "properties" : {
+          "buckets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SlaBucketControllerBucket"
+            },
+            "type" : "array"
           },
           "version" : {
             "format" : "int32",
@@ -10720,6 +11237,33 @@
         "required" : [ "reason", "status" ],
         "type" : "object"
       },
+      "TagCreatedResponse" : {
+        "properties" : {
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TagResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TariffDetailResponse" : {
         "properties" : {
           "activeVersion" : {
@@ -10816,6 +11360,71 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TenantCalendarHolidayRequest" : {
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "month" : {
+            "format" : "int32",
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "reason" ],
+        "type" : "object"
+      },
+      "TenantCategoryCount" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "inboxDeadLettered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inboxWaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outboxDeadLettered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outboxWaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requiresReconciliation" : {
+            "type" : "boolean"
+          },
+          "retryableByTimer" : {
+            "type" : "boolean"
+          },
+          "securityRelevant" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -12235,9 +12844,156 @@
         "tags" : [ "Audit" ]
       }
     },
-    "/api/v1/operations/tenants/{tenantId}/brands" : {
+    "/api/v1/operations/tenants/{tenantId}/branch-tags" : {
       "get" : {
         "operationId" : "list_15",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "activeOnly",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TagResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's own branch tag registry",
+        "tags" : [ "Branch tags" ]
+      },
+      "post" : {
+        "operationId" : "create_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TagCreatedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a branch tag",
+        "tags" : [ "Branch tags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/branch-tags/assignments" : {
+      "get" : {
+        "description" : "The filter-and-group read: which branches carry a given tag, without one request per branch.",
+        "operationId" : "assignments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AssignmentResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every branch's tags, tenant-wide",
+        "tags" : [ "Branch tags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/branch-tags/{tagId}/archive" : {
+      "post" : {
+        "description" : "Archived, never deleted: a branch already carrying this tag must keep resolving it, and the code is freed for reuse.",
+        "operationId" : "archive_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tagId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ArchiveTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a branch tag",
+        "tags" : [ "Branch tags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands" : {
+      "get" : {
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12268,7 +13024,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
       "get" : {
-        "operationId" : "get_3",
+        "operationId" : "get_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12305,7 +13061,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_17",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12607,7 +13363,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
-        "operationId" : "list_12",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12645,7 +13401,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default.",
-        "operationId" : "create_4",
+        "operationId" : "create_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12893,7 +13649,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals" : {
       "get" : {
         "description" : "Sorted the way settings.md asks: failing health first, never checked next, healthy last — an operator opens this screen to find what is broken.",
-        "operationId" : "list_11",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12977,7 +13733,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}" : {
       "get" : {
-        "operationId" : "get_5",
+        "operationId" : "get_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -13321,6 +14077,100 @@
         },
         "summary" : "The location's own profile, for the Settings 10.2 detail screen",
         "tags" : [ "Location service operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags" : {
+      "get" : {
+        "operationId" : "tagsOfLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "format" : "uuid",
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One branch's own tags",
+        "tags" : [ "Branch tags" ]
+      },
+      "put" : {
+        "description" : "Sets the whole tag set for this branch at once, rather than an assign/unassign pair — the screen's own checkbox grid already knows the full set it wants.",
+        "operationId" : "setTagsOfLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetLocationTagsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace one branch's tags",
+        "tags" : [ "Branch tags" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity" : {
@@ -14551,7 +15401,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_10",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14950,7 +15800,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_16",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15105,7 +15955,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
-        "operationId" : "list_9",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15143,7 +15993,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15702,7 +16552,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}" : {
       "get" : {
-        "operationId" : "get_4",
+        "operationId" : "get_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17555,7 +18405,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17649,6 +18499,138 @@
         },
         "summary" : "Per-adapter connect field declarations (ADR 0065)",
         "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox" : {
+      "get" : {
+        "description" : "The payload is never returned (ADR 0029). One row per consumer that failed the event, the same shape the platform-wide surface uses, forced to this tenant.",
+        "operationId" : "inboxFailures",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "DEAD_LETTER",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInboxFailureSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This tenant's own failed inbound messages, across every consumer",
+        "tags" : [ "Integration failures (tenant)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox/{consumerName}/{eventId}/replay" : {
+      "post" : {
+        "description" : "Returns a dead-lettered inbox message to pending. A message belonging to another tenant is refused exactly like one that does not exist — ADR 0031's not-found-not-forbidden posture, so an event id is not an enumeration oracle.",
+        "operationId" : "replay",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "consumerName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "eventId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReplayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replay this tenant's own stuck inbound message",
+        "tags" : [ "Integration failures (tenant)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/taxonomy" : {
+      "get" : {
+        "description" : "Waiting means still being retried; dead-lettered means waiting on a person. Every count is WHERE tenant_id = this path's tenantId — never an optional filter.",
+        "operationId" : "taxonomy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantCategoryCount"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This tenant's failure categories, their rules, and how many messages are in each",
+        "tags" : [ "Integration failures (tenant)" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/integrations/secrets" : {
@@ -17924,6 +18906,218 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients" : {
+      "get" : {
+        "description" : "Never the secret value — only the ADR 0028 reference, so an operator can see that a credential is configured and when it was last rotated or used.",
+        "operationId" : "list_10",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PartnerClientResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List this installation's partner API clients",
+        "tags" : [ "Partner API clients" ]
+      },
+      "post" : {
+        "description" : "Creates a Keycloak client_credentials confidential client and returns its secret exactly once — the platform never stores or returns it again. Refused when the installation is not MARKETPLACE, or already has a live (PENDING or ACTIVE) client.",
+        "operationId" : "issue_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IssuePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedClientResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a new partner API client",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}" : {
+      "delete" : {
+        "description" : "Disables the Keycloak client so no new token can ever be minted for it, then retires the row. There is no DELETED status (ADR 0040): the record that a credential once existed survives, only its authority does not.",
+        "operationId" : "revoke_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "clientId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revoke a partner API client",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}/secret-rotations" : {
+      "post" : {
+        "description" : "Mints a fresh Keycloak secret and returns it exactly once. The client id and the installation stay put; only what the reference resolves to changes.",
+        "operationId" : "rotate_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "clientId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotatePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotatedClientResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate a partner API client's secret",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
       "post" : {
         "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
@@ -18102,7 +19296,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18252,7 +19446,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status. Mirrors LegalEntityController#update exactly.",
-        "operationId" : "update_1",
+        "operationId" : "update_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18352,7 +19546,7 @@
     "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/archive" : {
       "post" : {
         "description" : "Permitted from DRAFT or SUSPENDED. The row survives. Mirrors LegalEntityController#archive exactly.",
-        "operationId" : "archive_2",
+        "operationId" : "archive_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18646,7 +19840,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18714,7 +19908,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}" : {
       "get" : {
-        "operationId" : "get_2",
+        "operationId" : "get_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18796,7 +19990,7 @@
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive" : {
       "post" : {
         "description" : "Ends its life on the platform; the row survives so every payment it ever settled still resolves an account reference. Permitted from DRAFT or SUSPENDED -- an ACTIVE binding is suspended first, so retiring one is never the first anyone hears that it stopped resolving.",
-        "operationId" : "archive_1",
+        "operationId" : "archive_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18936,6 +20130,203 @@
         },
         "summary" : "Suspend a merchant binding",
         "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons" : {
+      "get" : {
+        "operationId" : "list_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "activeOnly",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The reasons of one kind",
+        "tags" : [ "Order outcome reasons" ]
+      },
+      "post" : {
+        "operationId" : "create_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerIdResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a reason",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories" : {
+      "get" : {
+        "operationId" : "categories",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform categories a reason of this kind may carry",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}" : {
+      "delete" : {
+        "description" : "Archived, never deleted; see the delegate's own Javadoc for why the row must survive.",
+        "operationId" : "archive",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reasonId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a reason",
+        "tags" : [ "Order outcome reasons" ]
+      },
+      "put" : {
+        "description" : "Outcomes already recorded keep the snapshot they were recorded with; see the delegate's own Javadoc for why that duplication is deliberate.",
+        "operationId" : "update_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reasonId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerVersionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rewrite a reason and bump its version",
+        "tags" : [ "Order outcome reasons" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements" : {
@@ -19681,7 +21072,7 @@
     "/api/v1/operations/tenants/{tenantId}/regions/{regionId}/archive" : {
       "post" : {
         "description" : "Archived, never deleted: zone versions name this row and a months-old fee resolution's evidence must not become a dangling id. The versions that already name it keep being checked against its box.",
-        "operationId" : "archive",
+        "operationId" : "archive_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21324,7 +22715,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_14",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25485,6 +26876,184 @@
         "tags" : [ "Quotes" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/business-calendar" : {
+      "get" : {
+        "description" : "The resolved business-day boundary and timezone, whether a recut is outstanding after a previous boundary change, the declared weekend, and this tenant's own holidays.",
+        "operationId" : "get_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CalendarResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's business calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/boundary" : {
+      "put" : {
+        "description" : "Warns in its own response rather than performing silently: moving the boundary changes which business date every future fact is filed under and leaves a recut outstanding until DayCloseService has caught the historical range up. Gated by the ADR 0027 approval model (ADR 0050 action reporting.business-day-boundary.change).",
+        "operationId" : "changeBoundary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChangeBoundaryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoundaryChangeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move the business-day boundary",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/holidays" : {
+      "post" : {
+        "description" : "A month and day for one that recurs every year, or a date for a one-off or movable closure. Additional to the platform's own per-country public holidays, never a replacement for them.",
+        "operationId" : "addHoliday",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantCalendarHolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HolidayAddedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a closure to this tenant's own calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/holidays/{holidayId}" : {
+      "delete" : {
+        "operationId" : "removeHoliday",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "holidayId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RemoveTenantCalendarHolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a closure from this tenant's own calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/weekend" : {
+      "put" : {
+        "description" : "ISO-8601 weekday numbers (1=Monday..7=Sunday). An empty list means the tenant trades every day, which is also today's assumed default.",
+        "operationId" : "setWeekend",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetWeekendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Declare the tenant's weekend",
+        "tags" : [ "Business calendar" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/commercial/entitlements" : {
       "get" : {
         "description" : "The locked-by-plan half of IA 9.1's locked-vs-denied distinction: a module absent here is not a permission gap, it is a plan that does not include it.",
@@ -26938,7 +28507,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_13",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27980,6 +29549,35 @@
         "tags" : [ "Reporting" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/sla-bucket-set" : {
+      "get" : {
+        "description" : "Half-open intervals in minutes, exhaustive and fixed per version. Read-only: ADR 0043 fixes the buckets platform-wide so a chart drawn under one version keeps its meaning; this tenant can read the definition, not edit it.",
+        "operationId" : "slaBucketSet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SlaBuckets"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The elapsed-time buckets orders are reported in, and their version",
+        "tags" : [ "Reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/sla-buckets" : {
       "get" : {
         "description" : "sla_bucket_set.v1: six half-open intervals that are exhaustive and do not overlap, so the shares sum to the whole. Not a tenant setting — an editable bucket rewrites every chart already drawn.",
@@ -28179,6 +29777,9 @@
     "description" : "A brand's promo codes: shape, value, limits, and lifecycle",
     "name" : "Promo codes"
   }, {
+    "description" : "Why orders are cancelled and how they are completed, per tenant",
+    "name" : "Order outcome reasons"
+  }, {
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
   }, {
@@ -28202,6 +29803,9 @@
   }, {
     "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
     "name" : "Staff sign-in"
+  }, {
+    "description" : "A tenant's weekend, its own holidays, and its business-day boundary",
+    "name" : "Business calendar"
   }, {
     "description" : "Server-Sent Events for the live operations surfaces",
     "name" : "Operational streams"
@@ -28281,6 +29885,9 @@
     "description" : "Seating, rounds, the running bill, and settlement",
     "name" : "Dine-in sessions"
   }, {
+    "description" : "A merchant's own error taxonomy and inbox replay",
+    "name" : "Integration failures (tenant)"
+  }, {
     "description" : "Referral codes and redemptions actually happening at a brand",
     "name" : "Referrals"
   }, {
@@ -28289,6 +29896,9 @@
   }, {
     "description" : "A tenant's own read of ADR 0038 legal entities and their location assignments",
     "name" : "Legal entities"
+  }, {
+    "description" : "ADR 0040 inbound OAuth 2.0 credentials for a MARKETPLACE installation",
+    "name" : "Partner API clients"
   }, {
     "description" : "Balances, manual adjustments, and liability",
     "name" : "Loyalty operations"
@@ -28337,6 +29947,9 @@
   }, {
     "description" : "Sections, tables, QR tokens, and branch settings",
     "name" : "Dine-in floor plan"
+  }, {
+    "description" : "A chain's own tags for its branches (24/7, has parking, airport)",
+    "name" : "Branch tags"
   }, {
     "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
     "name" : "Referral program"
