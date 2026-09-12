@@ -292,9 +292,146 @@
       } @else {
         <ul class="couriers__chips">
           @for (group of courier.groups; track group.groupId) {
-            <li class="status-badge">{{ group.displayName }}</li>
+            <li class="couriers__chip">
+              <span class="status-badge">{{ group.displayName }}</span>
+              <button
+                type="button"
+                [attr.data-testid]="'leave-group-' + group.groupId"
+                (click)="startLeaveGroup(group.groupId)"
+              >
+                {{ 'couriers.groups.leave' | t }}
+              </button>
+            </li>
           }
         </ul>
+      }
+
+      @if (leavingGroupId(); as groupId) {
+        <div class="couriers__inline-form">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.leaveReason' | t }}</span>
+            <input
+              type="text"
+              data-testid="leave-group-reason"
+              [value]="leaveGroupReason()"
+              (input)="leaveGroupReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (leaveError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="cancelLeaveGroup()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="leave-group-confirm"
+              [disabled]="!canConfirmLeaveGroup()"
+              (click)="confirmLeaveGroup()"
+            >
+              {{ 'couriers.groups.leaveConfirm' | t }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (showJoinGroupForm()) {
+        <div class="couriers__inline-form">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.join.pick' | t }}</span>
+            <select
+              data-testid="join-group-select"
+              [value]="joinGroupId()"
+              (change)="joinGroupId.set($any($event.target).value)"
+            >
+              @for (group of availableGroupsToJoin(); track group.groupId) {
+                <option [value]="group.groupId">{{ group.displayName }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.join.reason' | t }}</span>
+            <input
+              type="text"
+              data-testid="join-group-reason"
+              [value]="joinGroupReason()"
+              (input)="joinGroupReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (joinError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeJoinGroupForm()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="join-group-submit"
+              [disabled]="!canJoinGroup()"
+              (click)="submitJoinGroup()"
+            >
+              {{ 'couriers.groups.join.submit' | t }}
+            </button>
+          </div>
+        </div>
+      } @else if (availableGroupsToJoin().length > 0) {
+        <button type="button" data-testid="courier-join-group" (click)="openJoinGroupForm()">
+          {{ 'couriers.groups.join.action' | t }}
+        </button>
+      }
+
+      @if (showGroupForm()) {
+        <div class="couriers__inline-form">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.create.code' | t }}</span>
+            <input
+              type="text"
+              data-testid="new-group-code"
+              [value]="newGroupCode()"
+              (input)="newGroupCode.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.create.displayName' | t }}</span>
+            <input
+              type="text"
+              data-testid="new-group-display-name"
+              [value]="newGroupDisplayName()"
+              (input)="newGroupDisplayName.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.groups.create.reason' | t }}</span>
+            <input
+              type="text"
+              data-testid="new-group-reason"
+              [value]="newGroupReason()"
+              (input)="newGroupReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (groupFormError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeGroupForm()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="new-group-submit"
+              [disabled]="!canCreateGroup()"
+              (click)="submitGroupForm()"
+            >
+              {{ 'couriers.groups.create.submit' | t }}
+            </button>
+          </div>
+        </div>
+      } @else {
+        <button type="button" data-testid="courier-new-group" (click)="openGroupForm()">
+          {{ 'couriers.groups.create.action' | t }}
+        </button>
       }
 
       <h3 class="q-caption couriers__section">{{ 'couriers.branches.heading' | t }}</h3>
@@ -305,14 +442,108 @@
       } @else {
         <ul class="couriers__chips">
           @for (branch of courier.branches; track branch.locationId) {
-            <li class="status-badge">
-              {{ branch.locationName }}
-              @if (branch.primary) {
-                <span class="couriers__primary">{{ 'couriers.branches.primary' | t }}</span>
-              }
+            <li class="couriers__chip">
+              <span class="status-badge">
+                {{ branch.locationName }}
+                @if (branch.primary) {
+                  <span class="couriers__primary">{{ 'couriers.branches.primary' | t }}</span>
+                }
+              </span>
+              <button
+                type="button"
+                [attr.data-testid]="'unbind-branch-' + branch.locationId"
+                (click)="startUnbindBranch(branch.locationId)"
+              >
+                {{ 'couriers.branches.unbind' | t }}
+              </button>
             </li>
           }
         </ul>
+      }
+
+      @if (unbindingLocationId()) {
+        <div class="couriers__inline-form">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.branches.unbindReason' | t }}</span>
+            <input
+              type="text"
+              data-testid="unbind-branch-reason"
+              [value]="unbindReason()"
+              (input)="unbindReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (unbindError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="cancelUnbindBranch()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="unbind-branch-confirm"
+              [disabled]="!canConfirmUnbindBranch()"
+              (click)="confirmUnbindBranch()"
+            >
+              {{ 'couriers.branches.unbindConfirm' | t }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (showBindBranchForm()) {
+        <div class="couriers__inline-form">
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.branches.bind.pick' | t }}</span>
+            <select
+              data-testid="bind-branch-select"
+              [value]="bindLocationId()"
+              (change)="bindLocationId.set($any($event.target).value)"
+            >
+              @for (option of availableLocationsToBind(); track option.id) {
+                <option [value]="option.id">{{ option.displayName }}</option>
+              }
+            </select>
+          </label>
+          <label class="field field--checkbox">
+            <input
+              type="checkbox"
+              data-testid="bind-branch-primary"
+              [checked]="bindPrimary()"
+              (change)="bindPrimary.set($any($event.target).checked)"
+            />
+            <span class="q-caption">{{ 'couriers.branches.bind.primary' | t }}</span>
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.branches.bind.reason' | t }}</span>
+            <input
+              type="text"
+              data-testid="bind-branch-reason"
+              [value]="bindReason()"
+              (input)="bindReason.set($any($event.target).value)"
+            />
+          </label>
+          @if (bindError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeBindBranchForm()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="bind-branch-submit"
+              [disabled]="!canBindBranch()"
+              (click)="submitBindBranch()"
+            >
+              {{ 'couriers.branches.bind.submit' | t }}
+            </button>
+          </div>
+        </div>
+      } @else if (availableLocationsToBind().length > 0) {
+        <button type="button" data-testid="courier-bind-branch" (click)="openBindBranchForm()">
+          {{ 'couriers.branches.bind.action' | t }}
+        </button>
       }
 
       @if (editing()) {

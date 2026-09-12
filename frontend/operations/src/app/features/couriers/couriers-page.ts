@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { ApiError } from '../../core/api/problem-details';
-import { CurrentLocation } from '../../core/auth/current-location';
+import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -9,6 +9,7 @@ import {
   ComplianceFieldName,
   CourierComplianceFileRequest,
   CourierDetailResponse,
+  CourierGroupResponse,
   CouriersApi,
   CourierTypeResponse,
   RosterEntryResponse,
@@ -66,6 +67,14 @@ const FUEL_TYPES: readonly VehicleFuelType[] = [
  * list read; the backend does not put it there and this component never asks
  * for it except through that reveal.
  *
+ * **Courier groups and branch bindings** (same wave). Author a group, put a
+ * courier in one or take them out, bind a courier to a branch or release one —
+ * each a `CouriersApi` call this component now makes, not only reads. A branch
+ * to bind against comes from {@link CurrentLocation}'s own brand-scoped
+ * options, the same list every other branch picker in this console already
+ * uses; a group to join comes from the tenant's own list, fetched alongside
+ * the roster.
+ *
  * Registration still takes one `fullName` field rather than a first/last split,
  * because `fulfillment.couriers.protected_full_name` is one envelope-encrypted
  * string.
@@ -95,6 +104,7 @@ export class CouriersPage implements OnInit {
 
   protected readonly roster = signal<readonly RosterEntryResponse[]>([]);
   protected readonly types = signal<readonly CourierTypeResponse[]>([]);
+  protected readonly groups = signal<readonly CourierGroupResponse[]>([]);
 
   protected readonly showRegisterForm = signal(false);
   protected readonly registerSubmitting = signal(false);
@@ -154,6 +164,42 @@ export class CouriersPage implements OnInit {
   protected readonly suspendReasonCode = signal('');
   protected readonly suspendReason = signal('');
 
+  // ------------------------------------------------------------------ groups
+
+  protected readonly showGroupForm = signal(false);
+  protected readonly groupFormSubmitting = signal(false);
+  protected readonly groupFormError = signal<string | null>(null);
+  protected readonly newGroupCode = signal('');
+  protected readonly newGroupDisplayName = signal('');
+  protected readonly newGroupReason = signal('');
+
+  protected readonly showJoinGroupForm = signal(false);
+  protected readonly joinGroupId = signal('');
+  protected readonly joinGroupReason = signal('');
+  protected readonly joinSubmitting = signal(false);
+  protected readonly joinError = signal<string | null>(null);
+
+  /** The group chip whose «leave» a reason is currently being typed for. */
+  protected readonly leavingGroupId = signal<string | null>(null);
+  protected readonly leaveGroupReason = signal('');
+  protected readonly leaveSubmitting = signal(false);
+  protected readonly leaveError = signal<string | null>(null);
+
+  // -------------------------------------------------------- branch bindings
+
+  protected readonly showBindBranchForm = signal(false);
+  protected readonly bindLocationId = signal('');
+  protected readonly bindPrimary = signal(false);
+  protected readonly bindReason = signal('');
+  protected readonly bindSubmitting = signal(false);
+  protected readonly bindError = signal<string | null>(null);
+
+  /** The branch chip whose «unbind» a reason is currently being typed for. */
+  protected readonly unbindingLocationId = signal<string | null>(null);
+  protected readonly unbindReason = signal('');
+  protected readonly unbindSubmitting = signal(false);
+  protected readonly unbindError = signal<string | null>(null);
+
   async ngOnInit(): Promise<void> {
     await this.load();
   }
@@ -168,12 +214,14 @@ export class CouriersPage implements OnInit {
       return;
     }
     try {
-      const [roster, types] = await Promise.all([
+      const [roster, types, groups] = await Promise.all([
         this.api.roster(scope.tenantId),
         this.api.types(scope.tenantId),
+        this.api.groups(scope.tenantId),
       ]);
       this.roster.set(roster);
       this.types.set(types);
+      this.groups.set(groups);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -350,6 +398,7 @@ export class CouriersPage implements OnInit {
     // however slowly the request answers.
     this.closeRevealState();
     this.editing.set(false);
+    this.closeGroupAndBranchForms();
     this.detail.set(null);
     this.detailError.set(null);
     this.detailLoading.set(true);
@@ -366,6 +415,24 @@ export class CouriersPage implements OnInit {
     this.detail.set(null);
     this.editing.set(false);
     this.closeRevealState();
+    this.closeGroupAndBranchForms();
+  }
+
+  private closeGroupAndBranchForms(): void {
+    this.showJoinGroupForm.set(false);
+    this.leavingGroupId.set(null);
+    this.showBindBranchForm.set(false);
+    this.unbindingLocationId.set(null);
+  }
+
+  /** Re-reads the open courier so a group or branch write shows up immediately. */
+  private async refreshDetail(): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    if (!scope || !courier) {
+      return;
+    }
+    this.detail.set(await this.api.courier(scope.tenantId, courier.courierId));
   }
 
   protected onFile(field: ComplianceFieldName): boolean {
@@ -481,6 +548,244 @@ export class CouriersPage implements OnInit {
       this.detailError.set(this.describe(error));
     } finally {
       this.editSubmitting.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------------ groups
+
+  /** Author a group. Tenant-wide, so it lives beside the roster rather than a courier. */
+  protected openGroupForm(): void {
+    this.newGroupCode.set('');
+    this.newGroupDisplayName.set('');
+    this.newGroupReason.set('');
+    this.groupFormError.set(null);
+    this.showGroupForm.set(true);
+  }
+
+  protected closeGroupForm(): void {
+    this.showGroupForm.set(false);
+  }
+
+  protected canCreateGroup(): boolean {
+    return (
+      !this.groupFormSubmitting() &&
+      this.newGroupCode().trim().length > 0 &&
+      this.newGroupDisplayName().trim().length > 0 &&
+      this.newGroupReason().trim().length > 0
+    );
+  }
+
+  protected async submitGroupForm(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || !this.canCreateGroup()) {
+      return;
+    }
+    this.groupFormSubmitting.set(true);
+    this.groupFormError.set(null);
+    try {
+      await this.api.createGroup(
+        scope.tenantId,
+        this.newGroupCode().trim(),
+        this.newGroupDisplayName().trim(),
+        this.newGroupReason().trim(),
+      );
+      this.showGroupForm.set(false);
+      this.groups.set(await this.api.groups(scope.tenantId));
+    } catch (error) {
+      this.groupFormError.set(this.describe(error));
+    } finally {
+      this.groupFormSubmitting.set(false);
+    }
+  }
+
+  /** Every active group the open courier is not already in. */
+  protected availableGroupsToJoin(): readonly CourierGroupResponse[] {
+    const courier = this.detail();
+    const joined = new Set((courier?.groups ?? []).map((group) => group.groupId));
+    return this.groups().filter((group) => group.status === 'ACTIVE' && !joined.has(group.groupId));
+  }
+
+  protected openJoinGroupForm(): void {
+    this.joinGroupId.set(this.availableGroupsToJoin()[0]?.groupId ?? '');
+    this.joinGroupReason.set('');
+    this.joinError.set(null);
+    this.showJoinGroupForm.set(true);
+  }
+
+  protected closeJoinGroupForm(): void {
+    this.showJoinGroupForm.set(false);
+  }
+
+  protected canJoinGroup(): boolean {
+    return (
+      !this.joinSubmitting() &&
+      this.joinGroupId() !== '' &&
+      this.joinGroupReason().trim().length > 0
+    );
+  }
+
+  protected async submitJoinGroup(): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    if (!scope || !courier || !this.canJoinGroup()) {
+      return;
+    }
+    this.joinSubmitting.set(true);
+    this.joinError.set(null);
+    try {
+      await this.api.joinGroup(
+        scope.tenantId,
+        courier.courierId,
+        this.joinGroupId(),
+        this.joinGroupReason().trim(),
+      );
+      this.showJoinGroupForm.set(false);
+      await this.refreshDetail();
+    } catch (error) {
+      this.joinError.set(this.describe(error));
+    } finally {
+      this.joinSubmitting.set(false);
+    }
+  }
+
+  protected startLeaveGroup(groupId: string): void {
+    this.leavingGroupId.set(groupId);
+    this.leaveGroupReason.set('');
+    this.leaveError.set(null);
+  }
+
+  protected cancelLeaveGroup(): void {
+    this.leavingGroupId.set(null);
+  }
+
+  protected canConfirmLeaveGroup(): boolean {
+    return !this.leaveSubmitting() && this.leaveGroupReason().trim().length > 0;
+  }
+
+  protected async confirmLeaveGroup(): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    const groupId = this.leavingGroupId();
+    if (!scope || !courier || !groupId || !this.canConfirmLeaveGroup()) {
+      return;
+    }
+    this.leaveSubmitting.set(true);
+    this.leaveError.set(null);
+    try {
+      await this.api.leaveGroup(
+        scope.tenantId,
+        courier.courierId,
+        groupId,
+        this.leaveGroupReason().trim(),
+      );
+      this.leavingGroupId.set(null);
+      await this.refreshDetail();
+    } catch (error) {
+      this.leaveError.set(this.describe(error));
+    } finally {
+      this.leaveSubmitting.set(false);
+    }
+  }
+
+  // -------------------------------------------------------- branch bindings
+
+  /**
+   * Which branches the open courier could still be bound to — the operator's
+   * own current-brand options, the same list every other branch picker in
+   * this console already reads off {@link CurrentLocation}, minus the ones
+   * already on file.
+   */
+  protected availableLocationsToBind(): readonly LocationOption[] {
+    const courier = this.detail();
+    const bound = new Set((courier?.branches ?? []).map((branch) => branch.locationId));
+    return this.location.options().filter((option) => !bound.has(option.id));
+  }
+
+  protected openBindBranchForm(): void {
+    this.bindLocationId.set(this.availableLocationsToBind()[0]?.id ?? '');
+    this.bindPrimary.set(false);
+    this.bindReason.set('');
+    this.bindError.set(null);
+    this.showBindBranchForm.set(true);
+  }
+
+  protected closeBindBranchForm(): void {
+    this.showBindBranchForm.set(false);
+  }
+
+  protected canBindBranch(): boolean {
+    return (
+      !this.bindSubmitting() && this.bindLocationId() !== '' && this.bindReason().trim().length > 0
+    );
+  }
+
+  protected async submitBindBranch(): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    if (!scope || !courier || !this.canBindBranch()) {
+      return;
+    }
+    this.bindSubmitting.set(true);
+    this.bindError.set(null);
+    try {
+      await this.api.bindBranch(
+        scope.tenantId,
+        courier.courierId,
+        scope.brandId,
+        this.bindLocationId(),
+        this.bindPrimary(),
+        this.bindReason().trim(),
+      );
+      this.showBindBranchForm.set(false);
+      await this.refreshDetail();
+    } catch (error) {
+      this.bindError.set(this.describe(error));
+    } finally {
+      this.bindSubmitting.set(false);
+    }
+  }
+
+  protected startUnbindBranch(locationId: string): void {
+    this.unbindingLocationId.set(locationId);
+    this.unbindReason.set('');
+    this.unbindError.set(null);
+  }
+
+  protected cancelUnbindBranch(): void {
+    this.unbindingLocationId.set(null);
+  }
+
+  protected canConfirmUnbindBranch(): boolean {
+    return !this.unbindSubmitting() && this.unbindReason().trim().length > 0;
+  }
+
+  protected async confirmUnbindBranch(): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    const locationId = this.unbindingLocationId();
+    // brandId comes off the binding itself, not the operator's current scope:
+    // a branch bound earlier may belong to a brand the operator has since
+    // switched away from, and courierBranchUnbinding needs the binding's own.
+    const branch = courier?.branches.find((candidate) => candidate.locationId === locationId);
+    if (!scope || !courier || !branch || !this.canConfirmUnbindBranch()) {
+      return;
+    }
+    this.unbindSubmitting.set(true);
+    this.unbindError.set(null);
+    try {
+      await this.api.unbindBranch(
+        scope.tenantId,
+        courier.courierId,
+        branch.brandId,
+        branch.locationId,
+        this.unbindReason().trim(),
+      );
+      this.unbindingLocationId.set(null);
+      await this.refreshDetail();
+    } catch (error) {
+      this.unbindError.set(this.describe(error));
+    } finally {
+      this.unbindSubmitting.set(false);
     }
   }
 

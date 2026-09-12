@@ -3,12 +3,18 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
-import { CurrentLocation } from '../../core/auth/current-location';
+import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { CourierDetailResponse, CouriersApi, RosterEntryResponse } from './couriers-api';
 import { CouriersPage } from './couriers-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+/** The operator's own brand: `l1` where `DETAIL` is already bound, plus `l2` free to bind. */
+const BRANCH_OPTIONS: readonly LocationOption[] = [
+  { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
+  { id: 'l2', displayName: 'Sergeli', status: 'ACTIVE' },
+];
 
 const COURIER: RosterEntryResponse = {
   courierId: 'courier-1',
@@ -47,7 +53,10 @@ async function flushMicrotasks(): Promise<void> {
 describe('CouriersPage', () => {
   let fixture: ComponentFixture<CouriersPage>;
 
-  async function render(api: Partial<CouriersApi>): Promise<HTMLElement> {
+  async function render(
+    api: Partial<CouriersApi>,
+    options: readonly LocationOption[] = [],
+  ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [CouriersPage],
       providers: [
@@ -57,9 +66,13 @@ describe('CouriersPage', () => {
             scope: signal<LocationScope | null>(SCOPE),
             denied: signal(false),
             ensureLoaded: () => Promise.resolve(),
+            options: () => options,
           },
         },
-        { provide: CouriersApi, useValue: api },
+        // `groups()` is read on every load, exactly like `roster()`/`types()`;
+        // defaulted here so the tests below it that are not about groups do
+        // not each have to stub a call they do not care about.
+        { provide: CouriersApi, useValue: { groups: vi.fn().mockResolvedValue([]), ...api } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -178,19 +191,17 @@ describe('CouriersPage', () => {
     const register = vi.fn().mockResolvedValue({ courierId: 'c2', engagementId: 'e2' });
     const host = await render({
       roster: vi.fn().mockResolvedValue([]),
-      types: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            courierTypeId: 'type-1',
-            code: 'SCOOTER',
-            displayName: 'Scooter',
-            vehicleClass: 'SCOOTER',
-            minDistanceMeters: 0,
-            maxConcurrentAssignments: 2,
-            offerTtlSeconds: 60,
-          },
-        ]),
+      types: vi.fn().mockResolvedValue([
+        {
+          courierTypeId: 'type-1',
+          code: 'SCOOTER',
+          displayName: 'Scooter',
+          vehicleClass: 'SCOOTER',
+          minDistanceMeters: 0,
+          maxConcurrentAssignments: 2,
+          offerTtlSeconds: 60,
+        },
+      ]),
       register,
     });
 
@@ -412,5 +423,170 @@ describe('CouriersPage', () => {
     // a passport the console never held.
     expect(recordComplianceFile.mock.calls[0][2].passport).toBeUndefined();
     expect(courier).toHaveBeenCalledTimes(2);
+  });
+
+  // ------------------------------------------------------------------ groups
+
+  it('creates a courier group and refreshes the tenant list', async () => {
+    const createGroup = vi.fn().mockResolvedValue({ groupId: 'g2' });
+    const groups = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          groupId: 'g2',
+          code: 'NIGHT',
+          displayName: 'Ночная смена',
+          status: 'ACTIVE',
+          memberCount: 0,
+        },
+      ]);
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier: vi.fn().mockResolvedValue(DETAIL),
+      groups,
+      createGroup,
+    });
+
+    await click(host, 'courier-open');
+    await click(host, 'courier-new-group');
+    type(host, 'new-group-code', 'NIGHT');
+    type(host, 'new-group-display-name', 'Ночная смена');
+    type(host, 'new-group-reason', 'planning the rota');
+    await click(host, 'new-group-submit');
+
+    expect(createGroup).toHaveBeenCalledWith('t1', 'NIGHT', 'Ночная смена', 'planning the rota');
+    // Re-read, not just closed: the next «join a group» pick must offer it.
+    expect(groups).toHaveBeenCalledTimes(2);
+  });
+
+  it('joins a courier to an existing group not already on their file', async () => {
+    const joinGroup = vi.fn().mockResolvedValue(undefined);
+    const courier = vi.fn().mockResolvedValue(DETAIL);
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier,
+      groups: vi.fn().mockResolvedValue([
+        {
+          groupId: 'g1',
+          code: 'NIGHT',
+          displayName: 'Ночная смена',
+          status: 'ACTIVE',
+          memberCount: 1,
+        },
+        {
+          groupId: 'g2',
+          code: 'DAY',
+          displayName: 'Дневная смена',
+          status: 'ACTIVE',
+          memberCount: 4,
+        },
+      ]),
+      joinGroup,
+    });
+
+    await click(host, 'courier-open');
+    await click(host, 'courier-join-group');
+
+    // g1 is already on DETAIL's file, so only g2 is offered to join.
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="join-group-select"]')!;
+    expect([...select.options].map((option) => option.value)).toEqual(['g2']);
+
+    type(host, 'join-group-reason', 'he asked for days');
+    await click(host, 'join-group-submit');
+
+    expect(joinGroup).toHaveBeenCalledWith('t1', 'courier-1', 'g2', 'he asked for days');
+    expect(courier).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes a courier out of a group with a reason', async () => {
+    const leaveGroup = vi.fn().mockResolvedValue(undefined);
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier: vi.fn().mockResolvedValue(DETAIL),
+      leaveGroup,
+    });
+
+    await click(host, 'courier-open');
+    await click(host, 'leave-group-g1');
+
+    // No reason, no leave: the same rule every other write on this page keeps.
+    expect(
+      host.querySelector<HTMLButtonElement>('[data-testid="leave-group-confirm"]')!.disabled,
+    ).toBe(true);
+
+    type(host, 'leave-group-reason', 'he moved to days');
+    await click(host, 'leave-group-confirm');
+
+    expect(leaveGroup).toHaveBeenCalledWith('t1', 'courier-1', 'g1', 'he moved to days');
+  });
+
+  // ----------------------------------------------------------- branch bindings
+
+  it('binds a courier to a branch the operator can see and has not bound yet', async () => {
+    const bindBranch = vi.fn().mockResolvedValue(undefined);
+    const courier = vi.fn().mockResolvedValue(DETAIL);
+    const host = await render(
+      {
+        roster: vi.fn().mockResolvedValue([COURIER]),
+        types: vi.fn().mockResolvedValue([]),
+        courier,
+        bindBranch,
+      },
+      BRANCH_OPTIONS,
+    );
+
+    await click(host, 'courier-open');
+    await click(host, 'courier-bind-branch');
+
+    // l1 is already on DETAIL's file, so only l2 is offered to bind.
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="bind-branch-select"]')!;
+    expect([...select.options].map((option) => option.value)).toEqual(['l2']);
+
+    host.querySelector<HTMLInputElement>('[data-testid="bind-branch-primary"]')!.click();
+    type(host, 'bind-branch-reason', 'he covers Sergeli too');
+    await click(host, 'bind-branch-submit');
+
+    expect(bindBranch).toHaveBeenCalledWith(
+      't1',
+      'courier-1',
+      'b1',
+      'l2',
+      true,
+      'he covers Sergeli too',
+    );
+    expect(courier).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases a courier from a branch, carrying the binding’s own brandId', async () => {
+    const unbindBranch = vi.fn().mockResolvedValue(undefined);
+    const host = await render(
+      {
+        roster: vi.fn().mockResolvedValue([COURIER]),
+        types: vi.fn().mockResolvedValue([]),
+        courier: vi.fn().mockResolvedValue(DETAIL),
+        unbindBranch,
+      },
+      BRANCH_OPTIONS,
+    );
+
+    await click(host, 'courier-open');
+    await click(host, 'unbind-branch-l1');
+
+    type(host, 'unbind-branch-reason', 'he never rides there');
+    await click(host, 'unbind-branch-confirm');
+
+    // DETAIL's own binding names brandId "b1" — asserted explicitly because
+    // this is exactly the value the P19 fix made a real path segment.
+    expect(unbindBranch).toHaveBeenCalledWith(
+      't1',
+      'courier-1',
+      'b1',
+      'l1',
+      'he never rides there',
+    );
   });
 });

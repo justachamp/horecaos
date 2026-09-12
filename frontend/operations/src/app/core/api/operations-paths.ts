@@ -444,9 +444,10 @@ export const operationsPaths = {
 
 /**
  * The in-house courier roster (ADR 0042, `OperationsCourierController`) —
- * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` carries
- * no `brand_id`/`location_id` column at all (§3.3's branch-bindings ownership
- * is not built — see the wave's final report). Kept apart from {@link
+ * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` itself
+ * carries no `brand_id`/`location_id` column. Courier groups and branch
+ * bindings are first-class relations (IA 3.3, V0221) reached through their
+ * own paths below rather than through this one. Kept apart from {@link
  * operationsPaths} for the same reason {@link mediaPaths} is: every call here
  * takes a bare `tenantId`.
  */
@@ -499,9 +500,20 @@ export const courierPaths = {
     return `${this.courier(tenantId, courierId)}/branch-bindings`;
   },
 
-  /** Unbind a courier from one branch (`POST`). Mutation: key required. */
-  courierBranchUnbinding(tenantId: string, courierId: string, locationId: string): string {
-    return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(locationId)}/removal`;
+  /**
+   * Unbind a courier from one branch (`POST`). Mutation: key required.
+   * `brandId` carries the LOCATION-scoped capability check only — the server
+   * looks up the binding by courier and location, which is already unique —
+   * but it must be a real path segment: the interceptor reads it off the URL
+   * template, not the request body.
+   */
+  courierBranchUnbinding(
+    tenantId: string,
+    courierId: string,
+    brandId: string,
+    locationId: string,
+  ): string {
+    return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(brandId)}/${encodeURIComponent(locationId)}/removal`;
   },
 
   /** Vehicle classes, for the registration form's picker. */

@@ -430,12 +430,13 @@ export class CouriersApi {
   async unbindBranch(
     tenantId: string,
     courierId: string,
+    brandId: string,
     locationId: string,
     reason: string,
   ): Promise<void> {
     await firstValueFrom(
       this.api.post<{ reason: string }, void>(
-        courierPaths.courierBranchUnbinding(tenantId, courierId, locationId),
+        courierPaths.courierBranchUnbinding(tenantId, courierId, brandId, locationId),
         command({ reason }),
       ),
     );

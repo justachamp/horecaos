@@ -150,6 +150,29 @@
   gap: 6px;
 }
 
+.couriers__chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.couriers__chip button {
+  padding: 1px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.couriers__inline-form {
+  margin: 8px 0 16px;
+}
+
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
 .couriers__missing {
   color: var(--q-ink-muted);
 }
