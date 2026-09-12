@@ -362,7 +362,13 @@ class LiveBoardCountsTests {
      * tenant. What this test still catches, and what an id-collision variant
      * could not catch any harder given that guarantee, is the {@code WHERE}
      * clause being dropped or corrupted wholesale rather than merely missing
-     * its {@code tenant_id} conjunct.
+     * its {@code tenant_id} conjunct — the {@code tenant_id} predicate in
+     * these three queries is defence in depth the foreign keys already make
+     * redundant, and the assertion messages below say what a failure would
+     * mean rather than claiming a coverage no fixture can construct. The web
+     * layer ({@code OperationsBrandOrderCountsEndpointTests}) does not repeat
+     * this fixture on purpose: it proves who may ask, and delegates what the
+     * answer contains to this class.
      */
     @Test
     @DisplayName("neither the brand read nor the location read ever reaches another tenant's orders")
@@ -376,14 +382,14 @@ class LiveBoardCountsTests {
         var location = board.forLocation(TENANT, BRAND, CHILONZOR, OrderCountsPeriod.BUSINESS_DAY);
 
         assertThat(brand.totals().totalNonTerminal())
-                .as("counts() must filter on tenant_id, not merely on brand_id")
+                .as("counts() let another tenant's order through: its WHERE clause is dropped or corrupted")
                 .isEqualTo(1);
         assertThat(brand.locations())
-                .as("countsByLocation() must filter on tenant_id too")
+                .as("countsByLocation() let another tenant's order through: its WHERE clause is dropped or corrupted")
                 .extracting(JdbcOrderStore.LocationCountsRow::locationId)
                 .containsExactly(CHILONZOR);
         assertThat(slices(brand.mix(), MixSliceRow.CHANNEL))
-                .as("activeMix() must filter on tenant_id too")
+                .as("activeMix() let another tenant's order through: its WHERE clause is dropped or corrupted")
                 .containsExactly(new MixSliceRow(MixSliceRow.CHANNEL, "TELEGRAM", 1));
         assertThat(location.counts().totalNonTerminal()).isEqualTo(1);
     }

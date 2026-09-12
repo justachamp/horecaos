@@ -48,7 +48,10 @@ import uz.horecaos.platform.support.TestDatabase;
  * <p>Data behaviour — what the period predicate does to which counter, and what
  * the mixes contain — belongs to {@code LiveBoardCountsTests}, which owns a
  * migrated-schema fixture for it. This suite proves the wire: who may ask, and
- * that the answer carries the period it was cut to.
+ * that the answer carries the period it was cut to. Tenant isolation of the
+ * counts themselves is asserted there too, once, against a genuinely second
+ * tenant ({@code theLiveBoardIsScopedToItsOwnTenant}); repeating that fixture
+ * here would prove the same predicate a second time through a slower layer.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
