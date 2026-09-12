@@ -67,6 +67,9 @@
                   {{ 'couriers.action.suspend' | t }}
                 </button>
               }
+              <button type="button" data-testid="courier-adjust" (click)="openAdjustment(courier)">
+                {{ 'couriers.action.adjust' | t }}
+              </button>
             </td>
           </tr>
         } @empty {
@@ -645,7 +648,7 @@
               {{ 'couriers.verify.submit' | t }}
             </button>
           </div>
-        } @else {
+        } @else if (state.kind === 'suspend') {
           <h2 class="q-subhead">
             {{ 'couriers.suspend.title' | t: { reference: state.courier.displayReference } }}
           </h2>
@@ -674,6 +677,71 @@
             </button>
             <button type="button" [disabled]="!canSuspend()" (click)="submitSuspend()">
               {{ 'couriers.suspend.submit' | t }}
+            </button>
+          </div>
+        } @else {
+          <h2 class="q-subhead">
+            {{ 'couriers.adjust.title' | t: { reference: state.courier.displayReference } }}
+          </h2>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.adjust.reasonCode' | t }}</span>
+            <select
+              [value]="adjustmentReasonCode()"
+              (change)="adjustmentReasonCode.set($any($event.target).value)"
+              data-testid="adjust-reason-select"
+            >
+              @for (reason of adjustmentReasons(); track reason.code) {
+                <option [value]="reason.code">
+                  {{ reason.displayName }} ({{ reasonKindLabel(reason.kind) }})
+                </option>
+              }
+            </select>
+          </label>
+          @if (selectedAdjustmentReason(); as selected) {
+            <p class="q-caption" data-testid="adjust-selected-kind">
+              {{ reasonKindLabel(selected.kind) }}
+            </p>
+          }
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.adjust.amount' | t }}</span>
+            <input
+              type="number"
+              min="0"
+              [value]="adjustmentAmount()"
+              (input)="adjustmentAmount.set($any($event.target).valueAsNumber)"
+              data-testid="adjust-amount"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.adjust.currency' | t }}</span>
+            <input
+              type="text"
+              [value]="adjustmentCurrency()"
+              (input)="adjustmentCurrency.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'couriers.adjust.reason' | t }}</span>
+            <input
+              type="text"
+              [value]="adjustmentReasonText()"
+              (input)="adjustmentReasonText.set($any($event.target).value)"
+            />
+          </label>
+          @if (dialogError(); as error) {
+            <p class="dialog__error q-body-sm">{{ error }}</p>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeDialog()">
+              {{ 'couriers.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              [disabled]="!canRecordAdjustment()"
+              (click)="submitAdjustment()"
+              data-testid="adjust-submit"
+            >
+              {{ 'couriers.adjust.submit' | t }}
             </button>
           </div>
         }

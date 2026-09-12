@@ -555,9 +555,37 @@ export const courierPaths = {
     return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(brandId)}/${encodeURIComponent(locationId)}/removal`;
   },
 
-  /** Vehicle classes, for the registration form's picker. */
+  /** Vehicle classes, for the registration form's picker and the IA 3.4 management screen. Query param: `includeArchived`. */
   courierTypes(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
+  },
+
+  /** One vehicle class (ADR 0108). `PUT` corrects it; same path plus `/archival` for `POST` archives it. */
+  courierType(tenantId: string, typeId: string): string {
+    return `${this.courierTypes(tenantId)}/${encodeURIComponent(typeId)}`;
+  },
+
+  courierTypeArchival(tenantId: string, typeId: string): string {
+    return `${this.courierType(tenantId, typeId)}/archival`;
+  },
+
+  /** The bonus/penalty registry (ADR 0108). Same path for `POST` (define one). */
+  adjustmentReasons(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/adjustment-reasons`;
+  },
+
+  adjustmentReasonArchival(tenantId: string, reasonId: string): string {
+    return `${this.adjustmentReasons(tenantId)}/${encodeURIComponent(reasonId)}/archival`;
+  },
+
+  /** Record a bonus or a penalty against one courier. Mutation: key required. */
+  courierAdjustments(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/adjustments`;
+  },
+
+  /** A courier's ledger (ADR 0042). Query param: `limit`. */
+  courierLedger(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/ledger`;
   },
 
   /** Attest that the registration evidence was sighted. Mutation: key required. */

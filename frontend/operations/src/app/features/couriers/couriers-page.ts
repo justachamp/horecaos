@@ -6,6 +6,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import {
+  AdjustmentReasonResponse,
   ComplianceFieldName,
   CourierComplianceFileRequest,
   CourierDetailResponse,
@@ -15,9 +16,10 @@ import {
   RosterEntryResponse,
   VehicleFuelType,
 } from './couriers-api';
+import { newIdempotencyKey } from '../../core/api/idempotency';
 
 type DialogKind = {
-  readonly kind: 'verify' | 'suspend';
+  readonly kind: 'verify' | 'suspend' | 'adjustment';
   readonly courier: RosterEntryResponse;
 } | null;
 
@@ -105,6 +107,7 @@ export class CouriersPage implements OnInit {
   protected readonly roster = signal<readonly RosterEntryResponse[]>([]);
   protected readonly types = signal<readonly CourierTypeResponse[]>([]);
   protected readonly groups = signal<readonly CourierGroupResponse[]>([]);
+  protected readonly adjustmentReasons = signal<readonly AdjustmentReasonResponse[]>([]);
 
   protected readonly showRegisterForm = signal(false);
   protected readonly registerSubmitting = signal(false);
@@ -164,6 +167,12 @@ export class CouriersPage implements OnInit {
   protected readonly suspendReasonCode = signal('');
   protected readonly suspendReason = signal('');
 
+  // -------------------------------------------------------------- adjustments
+  protected readonly adjustmentReasonCode = signal('');
+  protected readonly adjustmentAmount = signal(0);
+  protected readonly adjustmentCurrency = signal('UZS');
+  protected readonly adjustmentReasonText = signal('');
+
   // ------------------------------------------------------------------ groups
 
   protected readonly showGroupForm = signal(false);
@@ -214,14 +223,16 @@ export class CouriersPage implements OnInit {
       return;
     }
     try {
-      const [roster, types, groups] = await Promise.all([
+      const [roster, types, groups, adjustmentReasons] = await Promise.all([
         this.api.roster(scope.tenantId),
         this.api.types(scope.tenantId),
         this.api.groups(scope.tenantId),
+        this.api.adjustmentReasons(scope.tenantId),
       ]);
       this.roster.set(roster);
       this.types.set(types);
       this.groups.set(groups);
+      this.adjustmentReasons.set(adjustmentReasons.filter((reason) => reason.status === 'ACTIVE'));
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -379,6 +390,75 @@ export class CouriersPage implements OnInit {
       });
       this.dialog.set(null);
       await this.load();
+    } catch (error) {
+      this.dialogError.set(this.describe(error));
+    } finally {
+      this.dialogSubmitting.set(false);
+    }
+  }
+
+  // -------------------------------------------------------------- adjustment
+
+  /**
+   * A manual bonus or penalty (ADR 0108). There is no origin field to set —
+   * every adjustment recorded here is `MANUAL`, and the server stamps that
+   * unconditionally; see `CouriersApi.recordAdjustment`'s own doc.
+   */
+  protected openAdjustment(courier: RosterEntryResponse): void {
+    this.adjustmentReasonCode.set(this.adjustmentReasons()[0]?.code ?? '');
+    this.adjustmentAmount.set(0);
+    this.adjustmentCurrency.set('UZS');
+    this.adjustmentReasonText.set('');
+    this.dialogError.set(null);
+    this.dialog.set({ kind: 'adjustment', courier });
+  }
+
+  protected selectedAdjustmentReason(): AdjustmentReasonResponse | null {
+    return (
+      this.adjustmentReasons().find((reason) => reason.code === this.adjustmentReasonCode()) ?? null
+    );
+  }
+
+  protected reasonKindLabel(kind: string): string {
+    return kind === 'PENALTY'
+      ? this.i18n.t('delivery.rates.reasons.kind.PENALTY')
+      : this.i18n.t('delivery.rates.reasons.kind.BONUS');
+  }
+
+  protected canRecordAdjustment(): boolean {
+    return (
+      !this.dialogSubmitting() &&
+      this.adjustmentReasonCode() !== '' &&
+      this.adjustmentAmount() > 0 &&
+      this.adjustmentCurrency().trim().length === 3 &&
+      this.adjustmentReasonText().trim().length > 0
+    );
+  }
+
+  protected async submitAdjustment(): Promise<void> {
+    const state = this.dialog();
+    const scope = this.location.scope();
+    const reason = this.selectedAdjustmentReason();
+    if (!scope || !state || state.kind !== 'adjustment' || !reason || !this.canRecordAdjustment()) {
+      return;
+    }
+    this.dialogSubmitting.set(true);
+    this.dialogError.set(null);
+    try {
+      const signedAmount =
+        reason.kind === 'PENALTY'
+          ? -Math.abs(this.adjustmentAmount())
+          : Math.abs(this.adjustmentAmount());
+      await this.api.recordAdjustment(scope.tenantId, state.courier.courierId, {
+        locationId: scope.locationId,
+        amountMinor: signedAmount,
+        currency: this.adjustmentCurrency().trim().toUpperCase(),
+        reasonCode: reason.code,
+        origin: 'MANUAL',
+        idempotencyKey: newIdempotencyKey(),
+        reason: this.adjustmentReasonText().trim(),
+      });
+      this.dialog.set(null);
     } catch (error) {
       this.dialogError.set(this.describe(error));
     } finally {
