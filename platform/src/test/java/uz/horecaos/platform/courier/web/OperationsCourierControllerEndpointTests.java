@@ -82,6 +82,7 @@ class OperationsCourierControllerEndpointTests {
     private static final String BRAND_MANAGER = "018f9c20-4000-7000-8000-0000000000f3";
     private static final String OTHER_TENANT_ADMIN = "018f9c20-4000-7000-8000-0000000000f4";
     private static final String REVEALER = "018f9c20-4000-7000-8000-0000000000f5";
+    private static final String ADJUSTER = "018f9c20-4000-7000-8000-0000000000f6";
 
     // ADR 0042: courier.pii.reveal is granted per person, not through any
     // PlatformRole bundle (see COURIER_PII_REVEAL's own doc) — so REVEALER's
@@ -89,6 +90,14 @@ class OperationsCourierControllerEndpointTests {
     // than from RoleRegistrySynchronizer, which only ever touches the
     // platform-defined roles named in PlatformRole.
     private static final UUID REVEALER_ROLE = UUID.fromString("018f9c20-5000-7000-8000-0000000000a1");
+
+    // ADR 0108: courier.adjustment.create is held by LOCATION_MANAGER (location
+    // scope) and COURIER_DISPATCHER (brand scope) in PlatformRole.java, neither
+    // of which this file's grant() helper (TENANT scope only) can hand out
+    // directly. A hand-authored TENANT-scoped custom role is the same pattern
+    // REVEALER already uses for courier.pii.reveal, and TENANT is broader than
+    // either bundle's own scope, so it satisfies the same check.
+    private static final UUID ADJUSTER_ROLE = UUID.fromString("018f9c20-5000-7000-8000-0000000000a2");
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -134,6 +143,11 @@ class OperationsCourierControllerEndpointTests {
     void reset() {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+        jdbc.sql("TRUNCATE TABLE fulfillment.courier_ledger_entries CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE fulfillment.courier_settlement_periods CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE fulfillment.courier_adjustment_reasons CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE fulfillment.courier_branch_bindings CASCADE").update();
         jdbc.sql("TRUNCATE TABLE fulfillment.courier_group_members CASCADE").update();
         jdbc.sql("TRUNCATE TABLE fulfillment.courier_groups CASCADE").update();
@@ -167,6 +181,21 @@ class OperationsCourierControllerEndpointTests {
                 .param("capability", Capability.COURIER_PII_REVEAL.code())
                 .update();
         grantCustomRole(REVEALER, REVEALER_ROLE, TENANT);
+
+        jdbc.sql("""
+                INSERT INTO iam.roles (id, tenant_id, code, name, scope_type, status, is_platform_defined)
+                VALUES (:id, :tenantId, 'courier-adjuster', 'Courier adjuster', 'TENANT', 'ACTIVE', false)
+                """).param("id", ADJUSTER_ROLE).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO iam.role_capabilities (role_id, capability_code) VALUES (:roleId, :capability)
+                """)
+                .param("roleId", ADJUSTER_ROLE)
+                .param("capability", Capability.COURIER_ADJUSTMENT_CREATE.code())
+                .update();
+        grantCustomRole(ADJUSTER, ADJUSTER_ROLE, TENANT);
+
+        seedActiveEngagement(COURIER, TENANT);
+        seedAdjustmentReason(TENANT, "GOODWILL_BONUS", "BONUS", "DELIVERED_VOLUME");
     }
 
     // ------------------------------------------------------------- compliance file
@@ -230,6 +259,84 @@ class OperationsCourierControllerEndpointTests {
         assertThat(refused.getResponse().getContentAsString())
                 .contains("INSUFFICIENT_CAPABILITY")
                 .contains(Capability.COURIER_PII_REVEAL.code());
+    }
+
+    // ------------------------------------------------------ adjustments (ADR 0108)
+
+    /**
+     * The critical regression the wave's brief named: before this wave, {@code
+     * AdjustmentRequest} carried its own {@code origin} field, and a client
+     * sending {@code "origin":"RULE"} skipped the {@code MANUAL} branch of
+     * {@code CourierAdjustmentService.request}'s four-eyes check. {@code
+     * AdjustmentRequest} no longer declares the field at all — Spring Boot's
+     * default Jackson configuration ignores an unrecognised property rather
+     * than failing the request, so this proves the stronger claim: even a
+     * caller who still remembers the old field name cannot make it reach the
+     * ledger. The written entry's {@code origin} column, read back directly
+     * from the database rather than from any response DTO, is the only
+     * evidence that matters here.
+     */
+    @Test
+    void aRequestSuppliedOriginIsIgnoredAndTheLedgerEntryIsAlwaysManual() throws Exception {
+        // Without an explicit courier.compensation policy, resolving one falls
+        // through to Optional.empty() (CourierPolicyResolver's documented
+        // fallback to ADR 0042's provisional defaults) — but Spring's
+        // @Cacheable on JdbcPolicyResolver.resolve unwraps that empty Optional
+        // to a bare null before CourierPolicyResolver ever sees it, and the
+        // tenant.policy_current cache is configured to refuse null values, so
+        // every brand-new tenant's first policy-gated call 500s (surfaces here
+        // as 400) until an admin authors *some* policy. That is a real,
+        // pre-existing defect outside this wave's scope (JdbcPolicyResolver /
+        // CacheRegistry, not the courier module) — flagged in the wave report
+        // rather than fixed here. Seeding one sidesteps it for this test.
+        seedCourierCompensationPolicy(TENANT);
+
+        MvcResult written = mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                        .with(tokenFor(ADJUSTER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "adjust-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"locationId":"%s","amountMinor":5000,"currency":"UZS",
+                                 "reasonCode":"GOODWILL_BONUS","origin":"RULE",
+                                 "idempotencyKey":"adjust-goodwill-1","reason":"a one-off goodwill bonus"}
+                                """.formatted(LOCATION)))
+                .andReturn();
+
+        assertThat(written.getResponse().getStatus()).isEqualTo(200);
+        assertThat(written.getResponse().getContentAsString())
+                .as("a bonus needs no approval, so this is written immediately")
+                .contains("\"written\":true");
+
+        String storedOrigin = jdbc.sql("""
+                SELECT origin FROM fulfillment.courier_ledger_entries
+                 WHERE tenant_id = :tenantId AND courier_id = :courierId AND reason_code = 'GOODWILL_BONUS'
+                """)
+                .param("tenantId", TENANT)
+                .param("courierId", COURIER)
+                .query(String.class)
+                .single();
+        assertThat(storedOrigin)
+                .as("origin=RULE in the request body never reaches the ledger")
+                .isEqualTo("MANUAL");
+    }
+
+    @Test
+    void aCallerWithoutAdjustmentCreateCannotRecordABonus() throws Exception {
+        MvcResult refused = mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "adjust-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"locationId":"%s","amountMinor":5000,"currency":"UZS",
+                                 "reasonCode":"GOODWILL_BONUS",
+                                 "idempotencyKey":"adjust-goodwill-2","reason":"a one-off goodwill bonus"}
+                                """.formatted(LOCATION)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.COURIER_ADJUSTMENT_CREATE.code());
     }
 
     // --------------------------------------------------------------------- groups
@@ -585,6 +692,84 @@ class OperationsCourierControllerEndpointTests {
                 .param("typeId", courierTypeId)
                 .param("subject", "keycloak-" + reference)
                 .param("reference", reference)
+                .update();
+    }
+
+    /** A minimal ACTIVE engagement — every column {@code ck_engagement_active_is_verified} requires, and nothing more. */
+    private void seedActiveEngagement(UUID courierId, UUID tenantId) {
+        Instant now = Instant.now();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_engagements (
+                    id, tenant_id, courier_id, engagement_type, status, engaged_from,
+                    protected_registration_ref, registration_valid_until,
+                    registration_verified_at, registration_verified_by, verification_method,
+                    reverification_due_on, warning_state, version, created_at, updated_at)
+                VALUES (:id, :tenantId, :courierId, 'SELF_EMPLOYED', 'ACTIVE', :engagedFrom,
+                    'ciphertext-not-exercised-here', :validUntil,
+                    :verifiedAt, 'test-fixture', 'MANUAL_ATTESTATION',
+                    :reverificationDue, 'VALID', 1, :now, :now)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .param("engagedFrom", now.atOffset(ZoneOffset.UTC).toLocalDate().minusMonths(1))
+                .param("validUntil", now.atOffset(ZoneOffset.UTC).toLocalDate().plusYears(1))
+                .param("verifiedAt", now.atOffset(ZoneOffset.UTC))
+                .param(
+                        "reverificationDue",
+                        now.atOffset(ZoneOffset.UTC).toLocalDate().plusMonths(6))
+                .param("now", now.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * A TENANT-scope {@code courier.compensation} policy, ACTIVE and current.
+     *
+     * <p>Without this, {@code JdbcPolicyResolver.resolve} answers {@code
+     * Optional.empty()} for a tenant that has never had one authored — exactly
+     * ADR 0042's documented fallback case — but Spring's {@code @Cacheable}
+     * unwraps that empty {@code Optional} to a bare {@code null} before {@code
+     * CourierPolicyResolver}'s own {@code .orElseGet(...)} ever runs, and the
+     * {@code tenant.policy_current} cache refuses null values. See the one
+     * test that calls this for what that looks like from the outside.
+     */
+    private void seedCourierCompensationPolicy(UUID tenantId) {
+        UUID policyId = UUID.randomUUID();
+        String document = """
+                {"reverificationDays":180,"warningDays":30,"settlementPeriodDays":14,
+                 "cashCeilingMinor":5000000,"penaltyApprovalThresholdMinor":200000,
+                 "shiftEnforcement":"ADVISORY","graceSeconds":300,"confirmationPointRetentionDays":30}
+                """.replaceAll("\\s+", " ").trim();
+        jdbc.sql("""
+                INSERT INTO tenant.policies (
+                    id, key_code, scope_type, tenant_id, version, status, document, document_hash,
+                    valid_from, created_by)
+                VALUES (:id, 'courier.compensation', 'TENANT', :tenantId, 1, 'ACTIVE', :document::jsonb,
+                    repeat('a', 64), now(), 'test-fixture')
+                """)
+                .param("id", policyId)
+                .param("tenantId", tenantId)
+                .param("document", document)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.policy_current (
+                    key_code, scope_type, tenant_id, policy_id, policy_version, activated_by)
+                VALUES ('courier.compensation', 'TENANT', :tenantId, :policyId, 1, 'test-fixture')
+                """).param("tenantId", tenantId).param("policyId", policyId).update();
+    }
+
+    /** A manual-only reason (every {@code rule_*} column left null). */
+    private void seedAdjustmentReason(UUID tenantId, String code, String kind, String outcomeBasis) {
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_adjustment_reasons (
+                    id, tenant_id, code, kind, outcome_basis, display_name, status, rule_version, created_at)
+                VALUES (:id, :tenantId, :code, :kind, :basis, :code, 'ACTIVE', 1, now())
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("kind", kind)
+                .param("basis", outcomeBasis)
                 .update();
     }
 

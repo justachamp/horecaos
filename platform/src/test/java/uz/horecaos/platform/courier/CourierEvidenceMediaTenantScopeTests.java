@@ -143,8 +143,8 @@ class CourierEvidenceMediaTenantScopeTests {
         assetOfB = seedPrivateScan(TENANT_B);
 
         UUID typeOfB = UUID.randomUUID();
-        courierStore.insertType(
-                new CourierTypeRow(typeOfB, TENANT_B, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        courierStore.insertType(new CourierTypeRow(
+                typeOfB, TENANT_B, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
         engagementOfB = engagements
                 .register(new CourierEngagementService.NewCourier(
                         TENANT_B,
