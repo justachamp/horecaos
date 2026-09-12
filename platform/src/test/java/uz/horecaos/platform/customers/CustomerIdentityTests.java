@@ -26,6 +26,7 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
+import uz.horecaos.platform.customers.application.CustomerEligibility;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.application.CustomerListQueryService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
@@ -71,6 +72,7 @@ class CustomerIdentityTests {
     private CustomerIdentityService identity;
     private CustomerProfileService profiles;
     private ConsentService consent;
+    private CustomerEligibility eligibility;
     private CustomerBlacklistService blacklist;
     private CustomerListQueryService lists;
 
@@ -124,6 +126,7 @@ class CustomerIdentityTests {
         profiles = new CustomerProfileService(
                 store, protection, objectMapper, clock, new JdbcAuditRecorder(jdbc, objectMapper));
         consent = new ConsentService(store, clock);
+        eligibility = new CustomerEligibility(consent, profiles);
         // A minimal CustomerOrderActivityPort: no order ever "arrives" in this
         // suite, so the ordered-today counter's own default (zero) is exactly
         // right and this suite has no reason to stand up the ordering module.
@@ -488,6 +491,191 @@ class CustomerIdentityTests {
         assertThat(catchThrowable(() ->
                         profiles.revealContactPoints(TENANT, account.account().accountId(), "probe", STAFF_ACTOR)))
                 .isInstanceOf(FieldProtection.ProtectionIntegrityException.class);
+    }
+
+    @Test
+    @DisplayName("correcting a mistyped contact point rewrites the row instead of shadowing it")
+    void updatingAContactPointCorrectsItInPlace() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-contact");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        profiles.updateContactPoint(TENANT, accountId, contactId, "+998901112233");
+
+        assertThat(profiles.contactPointSummaries(TENANT, accountId)).hasSize(1);
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .singleElement()
+                .satisfies(contact -> {
+                    assertThat(contact.id()).isEqualTo(contactId);
+                    assertThat(contact.value()).isEqualTo("+998901112233");
+                });
+        // A support agent can now find the account by the corrected number.
+        assertThat(profiles.findAccountsByContact(TENANT, ContactType.PHONE, "+998901112233"))
+                .containsExactly(accountId);
+        assertThat(profiles.findAccountsByContact(TENANT, ContactType.PHONE, "+998901112200"))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("correcting a value resets verification, since nothing proved the new one")
+    void updatingAContactPointResetsVerification() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-resets-verification");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        markVerified(accountId, contactId, "PHONE");
+        assertThat(summaryOf(accountId, contactId).verificationStatus()).isEqualTo("VERIFIED");
+
+        profiles.updateContactPoint(TENANT, accountId, contactId, "+998901112233");
+
+        assertThat(summaryOf(accountId, contactId).verificationStatus()).isEqualTo("UNVERIFIED");
+    }
+
+    @Test
+    @DisplayName("re-submitting the same number, merely spelled differently, is a no-op and leaves verification alone")
+    void updatingAContactPointToTheSameValueLeavesVerificationAlone() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-noop");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        markVerified(accountId, contactId, "PHONE");
+        assertThat(summaryOf(accountId, contactId).verificationStatus()).isEqualTo("VERIFIED");
+
+        // Same number, spelled with spaces instead of the E.164 form already on
+        // file — PhoneNumber.normalize collapses both to the same digits, so an
+        // operator re-submitting it (an edit dialog pre-filled and saved without
+        // a real change, say) must not be treated as a correction.
+        profiles.updateContactPoint(TENANT, accountId, contactId, "+998 90 111 22 00");
+
+        assertThat(summaryOf(accountId, contactId).verificationStatus())
+                .as("nothing about the contact actually changed, so whatever proved it before still applies — "
+                        + "resetting it here would silently revoke SMS eligibility for a customer whose phone "
+                        + "number on file never moved")
+                .isEqualTo("VERIFIED");
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .singleElement()
+                .extracting(CustomerProfileService.RevealedContact::value)
+                .isEqualTo("+998901112200");
+    }
+
+    @Test
+    @DisplayName("updating another account's contact point, or one that does not exist, is refused")
+    void updatingAContactPointRequiresOwnership() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-not-mine");
+        var other = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-owner");
+        UUID contactId =
+                profiles.addContactPoint(TENANT, other.account().accountId(), ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(() ->
+                        profiles.updateContactPoint(TENANT, account.account().accountId(), contactId, "+998901112233")))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(catchThrowable(() ->
+                        profiles.updateContactPoint(TENANT, account.account().accountId(), UUID.randomUUID(), "x")))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("a removed contact point tombstones in place and disappears from every ordinary read")
+    void removingAContactPointTombstonesInsteadOfDeleting() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-remove-contact");
+        UUID accountId = account.account().accountId();
+        UUID wrong = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        UUID right = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", false);
+
+        profiles.removeContactPoint(TENANT, accountId, wrong);
+
+        assertThat(profiles.contactPointSummaries(TENANT, accountId))
+                .extracting(CustomerProfileService.ContactPointSummary::id)
+                .containsExactly(right);
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .extracting(CustomerProfileService.RevealedContact::id)
+                .containsExactly(right);
+        // The row itself is still there — an UPDATE, never a DELETE, because
+        // notifications.recipient_endpoints may still hold a plain foreign key
+        // to it (JdbcCustomerStore#removeContactPoint's own doc).
+        assertThat(jdbc.sql("SELECT count(*) FROM customer.contact_points WHERE id = :id")
+                        .param("id", wrong)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+        // A second removal is a no-op, not an error about an id that no longer resolves.
+        assertThat(catchThrowable(() -> profiles.removeContactPoint(TENANT, accountId, wrong)))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("removing the account's last verified endpoint changes the eligibility answer")
+    void removingTheLastVerifiedEndpointChangesEligibility() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-remove-verified");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        markVerified(accountId, contactId, "PHONE");
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+
+        assertThat(eligibility
+                        .answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS")
+                        .eligible())
+                .isTrue();
+
+        profiles.removeContactPoint(TENANT, accountId, contactId);
+
+        CustomerEligibility.Answer after =
+                eligibility.answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS");
+        assertThat(after.eligible()).isFalse();
+        assertThat(after.refusalReason()).isEqualTo(CustomerEligibility.Refusal.NO_VERIFIED_ENDPOINT);
+    }
+
+    @Test
+    @DisplayName("setting a contact point primary demotes whichever one held that place")
+    void settingPrimaryDemotesTheOldOne() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-set-primary");
+        UUID accountId = account.account().accountId();
+        UUID first = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        UUID second = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", false);
+
+        profiles.setPrimaryContactPoint(TENANT, accountId, second);
+
+        assertThat(summaryOf(accountId, second).isPrimary()).isTrue();
+        assertThat(summaryOf(accountId, first).isPrimary()).isFalse();
+    }
+
+    @Test
+    @DisplayName("setting an unowned or removed contact point primary is refused, without touching the real primary")
+    void settingPrimaryRequiresOwnershipAndLeavesTheRealPrimaryAlone() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-set-primary-refused");
+        UUID accountId = account.account().accountId();
+        UUID primary = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(() -> profiles.setPrimaryContactPoint(TENANT, accountId, UUID.randomUUID())))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(summaryOf(accountId, primary).isPrimary()).isTrue();
+    }
+
+    private CustomerProfileService.ContactPointSummary summaryOf(UUID accountId, UUID contactId) {
+        return profiles.contactPointSummaries(TENANT, accountId).stream()
+                .filter(s -> s.id().equals(contactId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    /** Bypasses OTP: sets a contact point VERIFIED the way {@code CustomerVerificationService} would, by hash. */
+    private void markVerified(UUID accountId, UUID contactId, String type) {
+        String hash = store.contactPoints(TENANT, accountId).stream()
+                .filter(row -> row.id().equals(contactId))
+                .findFirst()
+                .orElseThrow()
+                .normalizedHash();
+        assertThat(store.markContactVerified(TENANT, accountId, type, null, hash, NOW))
+                .as("the fixture must actually promote the row it set up, or the test proves nothing")
+                .isEqualTo(1);
     }
 
     @Test
@@ -1083,6 +1271,103 @@ class CustomerIdentityTests {
     }
 
     @Test
+    @DisplayName("eligibility refuses CONSENT_WITHHELD before ever looking at a contact point")
+    void eligibilityRefusesOnMissingConsentDistinctly() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-eligibility-no-consent");
+        UUID accountId = account.account().accountId();
+        // A verified phone on file, and still refused: consent was never granted.
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        markVerified(accountId, contactId, "PHONE");
+
+        CustomerEligibility.Answer answer =
+                eligibility.answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS");
+
+        assertThat(answer.eligible()).isFalse();
+        assertThat(answer.refusalReason()).isEqualTo(CustomerEligibility.Refusal.CONSENT_WITHHELD);
+    }
+
+    @Test
+    @DisplayName("eligibility refuses NO_VERIFIED_ENDPOINT once consent is granted but no phone is verified")
+    void eligibilityRefusesOnNoVerifiedEndpointDistinctly() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-eligibility-no-endpoint");
+        UUID accountId = account.account().accountId();
+        // Consent granted, and still refused: the phone on file was never verified.
+        profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+
+        CustomerEligibility.Answer answer =
+                eligibility.answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS");
+
+        assertThat(answer.eligible()).isFalse();
+        assertThat(answer.refusalReason()).isEqualTo(CustomerEligibility.Refusal.NO_VERIFIED_ENDPOINT);
+    }
+
+    @Test
+    @DisplayName("eligibility is granted once consent is on file and the endpoint it addresses is verified")
+    void eligibilityGrantsOnceBothHold() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-eligibility-granted");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.EMAIL, "someone@example.uz", true);
+        markVerified(accountId, contactId, "EMAIL");
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "EMAIL",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+
+        CustomerEligibility.Answer answer =
+                eligibility.answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "EMAIL");
+
+        assertThat(answer.eligible()).isTrue();
+        assertThat(answer.refusalReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("eligibility is brand-scoped, exactly as the consent decision behind it is")
+    void eligibilityIsScopedPerBrand() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-eligibility-brand-scope");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        markVerified(accountId, contactId, "PHONE");
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+
+        assertThat(eligibility
+                        .answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS")
+                        .eligible())
+                .isTrue();
+        assertThat(eligibility
+                        .answer(TENANT, accountId, BRAND_B, "MARKETING_PROMOTIONS", "SMS")
+                        .eligible())
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("adding a contact to another tenant's account is refused")
     void contactsCannotCrossTenants() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-17");
@@ -1090,6 +1375,90 @@ class CustomerIdentityTests {
         assertThat(catchThrowable(() -> profiles.addContactPoint(
                         OTHER_TENANT, account.account().accountId(), ContactType.PHONE, "+998901112233", true)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("correcting another tenant's contact point is refused, not merely misdirected")
+    void updatingAContactPointCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-update");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(
+                        () -> profiles.updateContactPoint(OTHER_TENANT, accountId, contactId, "+998901112233")))
+                .as("the tenant_id predicate in JdbcCustomerStore.updateContactPoint is the only guard here — "
+                        + "CustomerProfileService does no independent ownership check")
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        // Refused, and the value is exactly what it was before the attempt.
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .singleElement()
+                .extracting(CustomerProfileService.RevealedContact::value)
+                .isEqualTo("+998901112200");
+    }
+
+    @Test
+    @DisplayName("removing another tenant's contact point is refused, not merely misdirected")
+    void removingAContactPointCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-remove");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(() -> profiles.removeContactPoint(OTHER_TENANT, accountId, contactId)))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(profiles.contactPointSummaries(TENANT, accountId))
+                .as("a tenant B caller must not be able to tombstone tenant A's contact point")
+                .extracting(CustomerProfileService.ContactPointSummary::id)
+                .containsExactly(contactId);
+    }
+
+    @Test
+    @DisplayName("setting another tenant's contact point primary is refused, not merely misdirected")
+    void settingPrimaryCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-primary");
+        UUID accountId = account.account().accountId();
+        UUID primary = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        UUID other = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", false);
+
+        assertThat(catchThrowable(() -> profiles.setPrimaryContactPoint(OTHER_TENANT, accountId, other)))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(summaryOf(accountId, primary).isPrimary())
+                .as("a tenant B caller must not be able to reprime tenant A's contact points")
+                .isTrue();
+        assertThat(summaryOf(accountId, other).isPrimary()).isFalse();
+    }
+
+    @Test
+    @DisplayName("eligibility never answers for a customer read under the wrong tenant")
+    void eligibilityCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-eligibility");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        markVerified(accountId, contactId, "PHONE");
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+        assertThat(eligibility
+                        .answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS")
+                        .eligible())
+                .as("the fixture must actually be eligible under its own tenant, or this test proves nothing")
+                .isTrue();
+
+        CustomerEligibility.Answer fromOtherTenant =
+                eligibility.answer(OTHER_TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS");
+
+        assertThat(fromOtherTenant.eligible())
+                .as("consent.hasConsent and contactPointSummaries are both tenant_id-scoped queries; an "
+                        + "eligible tenant-A customer must not read as eligible under tenant B")
+                .isFalse();
+        assertThat(fromOtherTenant.refusalReason()).isEqualTo(CustomerEligibility.Refusal.CONSENT_WITHHELD);
     }
 
     @Test

@@ -38,6 +38,17 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 public class CustomerProfileService {
 
     private static final String CONTACT_TABLE = "customer.contact_points";
+
+    /**
+     * The encrypted placeholder {@link #removeContactPoint} writes over a
+     * removed contact's value. Plaintext content of ciphertext that never
+     * leaves this store's ADR 0029 boundary, so a distinct literal from
+     * {@code CustomerErasureService}'s own {@code TOMBSTONE} costs nothing
+     * and says, to anyone who ever does decrypt one under an ADR 0027
+     * purpose, which of the two flows produced it.
+     */
+    private static final String REMOVED_CONTACT_PLACEHOLDER = "REMOVED-BY-OPERATOR";
+
     private static final String ADDRESS_TABLE = "customer.addresses";
     private static final String ACCOUNT_TABLE = "customer.customer_accounts";
 
@@ -153,6 +164,108 @@ public class CustomerProfileService {
                 .map(row -> new ContactPointSummary(
                         row.id(), ContactType.valueOf(row.type()), row.verificationStatus(), row.isPrimary()))
                 .toList();
+    }
+
+    /**
+     * Corrects a contact point's value in place — the fix for a mistyped
+     * number a support call caught, which used to be reachable only by
+     * shadowing it with a second, correct row and leaving the wrong one
+     * standing.
+     *
+     * <p>The type is read from the existing row rather than taken from the
+     * caller: an operator fixing a value is not asking to recategorise it from
+     * a phone to an email, and this keeps that impossible rather than merely
+     * discouraged. The value is re-normalised and rehashed under that type,
+     * and verification resets — {@link JdbcCustomerStore#updateContactPoint}'s
+     * own doc says why.
+     *
+     * <p>Except when it does not change anything: re-submitting a value that
+     * normalises to the same {@code normalized_hash} already on the row — the
+     * same digits, or the same number spelled with different punctuation — is
+     * a no-op, and the method returns without touching the row at all.
+     * {@code JdbcCustomerStore#updateContactPoint}'s reset only makes sense
+     * because the value changed; applying it when it did not would revoke a
+     * verified endpoint's eligibility (see {@code CustomerEligibility}) for a
+     * value nobody actually edited.
+     *
+     * @throws ContactPointNotFoundException when this id is not this
+     *                                        account's own contact point
+     */
+    @Transactional
+    public void updateContactPoint(UUID tenantId, UUID accountId, UUID contactPointId, String rawValue) {
+        JdbcCustomerStore.ContactPointRow existing = requireContactPoint(tenantId, accountId, contactPointId);
+        ContactType type = ContactType.valueOf(existing.type());
+        String normalized = normalize(type, rawValue);
+        String newHash = protection.lookupHash(tenantId, type.lookupDomain(), normalized);
+        if (newHash.equals(existing.normalizedHash())) {
+            return;
+        }
+        ProtectedValue encrypted = protection.protect(
+                tenantId,
+                DataClass.PERSONAL,
+                new RecordRef(CONTACT_TABLE, "encrypted_value", contactPointId),
+                normalized);
+
+        int written = store.updateContactPoint(
+                tenantId, accountId, contactPointId, newHash, encrypted.serialize(), clock.instant());
+        if (written == 0) {
+            throw new ContactPointNotFoundException();
+        }
+    }
+
+    /**
+     * Removes a contact point an operator added by mistake.
+     *
+     * <p>An {@code UPDATE} that tombstones the value in place, never a {@code
+     * DELETE} — {@link JdbcCustomerStore#removeContactPoint}'s own doc says
+     * why. It drops out of {@link #contactPointSummaries} and {@link
+     * #revealContactPoints} — {@code RecipientContactDirectory#resolveValue}
+     * already documents returning empty for a contact "removed between the
+     * intent and the send" as an ordinary outcome, so notifications needs no
+     * change to keep meaning that.
+     *
+     * @throws ContactPointNotFoundException when this id is not this
+     *                                        account's own contact point, or
+     *                                        was already removed
+     */
+    @Transactional
+    public void removeContactPoint(UUID tenantId, UUID accountId, UUID contactPointId) {
+        requireContactPoint(tenantId, accountId, contactPointId);
+        String tombstone = protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL,
+                        new RecordRef(CONTACT_TABLE, "encrypted_value", contactPointId),
+                        REMOVED_CONTACT_PLACEHOLDER)
+                .serialize();
+        int written = store.removeContactPoint(tenantId, accountId, contactPointId, tombstone, clock.instant());
+        if (written == 0) {
+            throw new ContactPointNotFoundException();
+        }
+    }
+
+    /**
+     * Makes one contact point this account's primary of its kind.
+     *
+     * <p>Existence and ownership are confirmed here, before {@link
+     * JdbcCustomerStore#setPrimaryContactPoint} ever runs — that method's own
+     * doc explains why it must not be called for an id that turns out not to
+     * exist.
+     *
+     * @throws ContactPointNotFoundException when this id is not this
+     *                                        account's own contact point
+     */
+    @Transactional
+    public void setPrimaryContactPoint(UUID tenantId, UUID accountId, UUID contactPointId) {
+        JdbcCustomerStore.ContactPointRow target = requireContactPoint(tenantId, accountId, contactPointId);
+        store.setPrimaryContactPoint(tenantId, accountId, contactPointId, target.type(), clock.instant());
+    }
+
+    private JdbcCustomerStore.ContactPointRow requireContactPoint(UUID tenantId, UUID accountId, UUID contactPointId) {
+        return store.contactPoints(tenantId, accountId).stream()
+                .filter(row -> row.id().equals(contactPointId))
+                .findFirst()
+                .orElseThrow(ContactPointNotFoundException::new);
     }
 
     /**
@@ -558,6 +671,13 @@ public class CustomerProfileService {
     public static class AddressNotFoundException extends RuntimeException {
         public AddressNotFoundException() {
             super("No such address");
+        }
+    }
+
+    /** No such contact point of this account's — the same answer as "not yours", or already removed. */
+    public static class ContactPointNotFoundException extends RuntimeException {
+        public ContactPointNotFoundException() {
+            super("No such contact point");
         }
     }
 

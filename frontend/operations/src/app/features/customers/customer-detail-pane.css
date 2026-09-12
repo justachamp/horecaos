@@ -217,6 +217,25 @@ textarea.field {
   margin-top: 6px;
 }
 
+.coordinate-missing {
+  color: var(--q-warning-text);
+}
+
+.contact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eligible {
+  color: var(--q-success-text);
+}
+
+.not-eligible {
+  color: var(--q-error-text);
+}
+
 .address-form {
   padding: 12px;
   border: 1px solid var(--q-hairline);

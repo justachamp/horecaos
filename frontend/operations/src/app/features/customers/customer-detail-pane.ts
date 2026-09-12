@@ -8,13 +8,17 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { formatDate, formatDateTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { customerStatusLabel } from './customer-status';
 import {
   BlacklistStatus,
   ConsentDecision,
+  ContactType,
   CustomerAddressFields,
+  CustomerCoordinateSource,
+  CustomerEligibility,
   CustomerOrderSummary,
   CustomerProfile,
   CustomersApi,
@@ -28,6 +32,54 @@ import {
 type Tab = 'profile' | 'addresses' | 'orders' | 'consent' | 'cashback' | 'blacklist';
 
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
+
+/**
+ * The one marketing purpose the console records consent under (5.2b).
+ *
+ * <p>Three spellings of "marketing" were live at once before this: this
+ * screen posted a lowercase `'marketing'`, the SendPulse import records
+ * `'MARKETING'`, and `campaigns-page.ts` already defaults every new
+ * campaign's own `consentPurpose` to `'MARKETING_PROMOTIONS'`. A consent
+ * type registry is a separate, tenant-wide decision (ADR 0015/0044, not yet
+ * built — `data-privacy-page.ts`'s own doc says so), so the fix here is not
+ * to build one; it is to stop guessing and match the string campaigns
+ * actually check.
+ */
+const CONSENT_PURPOSE = 'MARKETING_PROMOTIONS';
+
+/** `MarketingEligibility#consentChannel`'s own vocabulary — the strings a consent decision is actually matched against. */
+const CONSENT_CHANNELS = ['SMS', 'EMAIL', 'PUSH', 'TELEGRAM'] as const;
+type ConsentChannel = (typeof CONSENT_CHANNELS)[number];
+
+const CONSENT_CHANNEL_LABEL_KEYS: Readonly<Record<ConsentChannel, MessageKey>> = {
+  SMS: 'customers.consent.channel.SMS',
+  EMAIL: 'customers.consent.channel.EMAIL',
+  PUSH: 'customers.consent.channel.PUSH',
+  TELEGRAM: 'customers.consent.channel.TELEGRAM',
+};
+
+const CONTACT_TYPE_LABEL_KEYS: Readonly<Record<ContactType, MessageKey>> = {
+  PHONE: 'customers.profile.contact.type.PHONE',
+  EMAIL: 'customers.profile.contact.type.EMAIL',
+};
+
+/** `ck_contact_verification` (V0017) — the four values a contact point's `verification_status` may carry. */
+const CONTACT_VERIFICATION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  UNVERIFIED: 'customers.profile.contact.verification.UNVERIFIED',
+  PENDING: 'customers.profile.contact.verification.PENDING',
+  VERIFIED: 'customers.profile.contact.verification.VERIFIED',
+  FAILED: 'customers.profile.contact.verification.FAILED',
+};
+
+/** `ck_address_coordinate_source` — `CustomerProfileService.CoordinateSource`'s six values. */
+const COORDINATE_SOURCE_LABEL_KEYS: Readonly<Record<CustomerCoordinateSource, MessageKey>> = {
+  NOT_GEOCODED: 'customers.address.coordinateSource.NOT_GEOCODED',
+  LANDMARK_ONLY: 'customers.address.coordinateSource.LANDMARK_ONLY',
+  GEOCODER: 'customers.address.coordinateSource.GEOCODER',
+  CUSTOMER_PIN: 'customers.address.coordinateSource.CUSTOMER_PIN',
+  OPERATOR_PIN: 'customers.address.coordinateSource.OPERATOR_PIN',
+  LEGACY_UNSOURCED: 'customers.address.coordinateSource.LEGACY_UNSOURCED',
+};
 
 /**
  * Fixed, English, machine-facing purpose strings for every ADR 0029 reveal on
@@ -243,6 +295,7 @@ export class CustomerDetailPane {
     this.ordersState = firstPage();
     this.ordersHasMore.set(false);
     this.consentHistory.set(null);
+    this.eligibility.set(null);
     this.balances.set(null);
     this.expandedBalanceId.set(null);
     this.loyaltyEntries.set(null);
@@ -313,8 +366,13 @@ export class CustomerDetailPane {
     }
   }
 
+  protected readonly newContactType = signal<ContactType>('PHONE');
   protected readonly newContactValue = signal('');
   protected readonly addingContact = signal(false);
+
+  protected setNewContactType(type: string): void {
+    this.newContactType.set(type === 'EMAIL' ? 'EMAIL' : 'PHONE');
+  }
 
   protected async addContact(): Promise<void> {
     const scope = this.scope();
@@ -327,7 +385,7 @@ export class CustomerDetailPane {
       await this.api.addContact(
         scope,
         this.accountId(),
-        'PHONE',
+        this.newContactType(),
         value,
         this.revealedContacts()?.length === 0,
       );
@@ -338,6 +396,100 @@ export class CustomerDetailPane {
     } finally {
       this.addingContact.set(false);
     }
+  }
+
+  protected readonly editingContactId = signal<string | null>(null);
+  protected readonly editContactValue = signal('');
+  protected readonly contactActionPending = signal(false);
+
+  protected startEditingContact(contactId: string, currentValue: string): void {
+    this.editingContactId.set(contactId);
+    this.editContactValue.set(currentValue);
+  }
+
+  protected cancelEditingContact(): void {
+    this.editingContactId.set(null);
+  }
+
+  protected async saveEditedContact(): Promise<void> {
+    const scope = this.scope();
+    const contactId = this.editingContactId();
+    const value = this.editContactValue().trim();
+    if (!scope || !contactId || !value || this.contactActionPending()) {
+      return;
+    }
+    this.contactActionPending.set(true);
+    try {
+      await this.api.updateContact(scope, this.accountId(), contactId, value);
+      this.editingContactId.set(null);
+      await this.refreshContacts();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.contactActionPending.set(false);
+    }
+  }
+
+  protected async removeContact(contactId: string): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.contactActionPending()) {
+      return;
+    }
+    this.contactActionPending.set(true);
+    try {
+      await this.api.removeContact(scope, this.accountId(), contactId);
+      await this.refreshContacts();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.contactActionPending.set(false);
+    }
+  }
+
+  protected async makeContactPrimary(contactId: string): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.contactActionPending()) {
+      return;
+    }
+    this.contactActionPending.set(true);
+    try {
+      await this.api.setPrimaryContact(scope, this.accountId(), contactId);
+      await this.refreshContacts();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.contactActionPending.set(false);
+    }
+  }
+
+  /** Re-reads whichever of the profile summary or the full reveal this pane currently shows. */
+  private async refreshContacts(): Promise<void> {
+    const scope = this.scope();
+    if (!scope) {
+      return;
+    }
+    this.profile.set(await this.api.profile(scope, this.accountId()));
+    if (this.revealedContacts()) {
+      await this.revealContacts();
+    }
+  }
+
+  /** The decrypted value for one contact point, once {@link revealContacts} has run; null before that, or for a value this account no longer holds. */
+  protected revealedValueFor(contactId: string): string | null {
+    return this.revealedContacts()?.find((contact) => contact.id === contactId)?.value ?? null;
+  }
+
+  protected contactTypeLabel(type: ContactType): string {
+    return this.i18n.t(CONTACT_TYPE_LABEL_KEYS[type]);
+  }
+
+  /** Known values only (`ck_contact_verification`, V0017); an unrecognised one renders as the raw wire value. */
+  protected contactVerificationLabel(status: string): string {
+    return status in CONTACT_VERIFICATION_LABEL_KEYS
+      ? this.i18n.t(
+          CONTACT_VERIFICATION_LABEL_KEYS[status as keyof typeof CONTACT_VERIFICATION_LABEL_KEYS],
+        )
+      : status;
   }
 
   /** `undefined` = never revealed this load; `null` = revealed and genuinely absent. */
@@ -520,6 +672,19 @@ export class CustomerDetailPane {
     }
   }
 
+  /**
+   * `NOT_GEOCODED` and `LANDMARK_ONLY` carry no pin — the whole reason this
+   * row exists (5.2c): a phone order captured from one of these cannot be
+   * zone-resolved or tariffed by location, only by the free-text landmark.
+   */
+  protected coordinateSourceLabel(source: CustomerCoordinateSource): string {
+    return this.i18n.t(COORDINATE_SOURCE_LABEL_KEYS[source]);
+  }
+
+  protected addressHasPin(source: CustomerCoordinateSource): boolean {
+    return source !== 'NOT_GEOCODED' && source !== 'LANDMARK_ONLY';
+  }
+
   // ------------------------------------------------------------------- orders
 
   protected readonly orders = signal<readonly CustomerOrderSummary[]>([]);
@@ -589,9 +754,16 @@ export class CustomerDetailPane {
   protected readonly consentHistory = signal<readonly ConsentDecision[] | null>(null);
   protected readonly loadingConsent = signal(false);
   protected readonly recordingConsent = signal(false);
-  protected readonly consentPurpose = signal('marketing');
-  protected readonly consentChannel = signal('');
+  /** Fixed rather than free text (5.2b) — see {@link CONSENT_PURPOSE}'s own doc. */
+  protected readonly consentPurpose = CONSENT_PURPOSE;
+  protected readonly consentChannels = CONSENT_CHANNELS;
+  protected readonly consentChannel = signal<ConsentChannel>('SMS');
   protected readonly consentDecision = signal<'GRANTED' | 'WITHDRAWN'>('GRANTED');
+  /** No default: a fabricated version was the bug (5.2b), and there is no registry yet to pick a real one from. */
+  protected readonly consentPolicyVersion = signal('');
+
+  protected readonly eligibility = signal<CustomerEligibility | null>(null);
+  protected readonly loadingEligibility = signal(false);
 
   private async loadConsent(): Promise<void> {
     const scope = this.scope();
@@ -606,21 +778,55 @@ export class CustomerDetailPane {
     } finally {
       this.loadingConsent.set(false);
     }
+    await this.loadEligibility();
+  }
+
+  protected setConsentChannel(channel: string): void {
+    this.consentChannel.set(
+      (CONSENT_CHANNELS as readonly string[]).includes(channel)
+        ? (channel as ConsentChannel)
+        : 'SMS',
+    );
+    void this.loadEligibility();
+  }
+
+  private async loadEligibility(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.loadingEligibility()) {
+      return;
+    }
+    this.loadingEligibility.set(true);
+    try {
+      this.eligibility.set(
+        await this.api.eligibility(
+          scope,
+          this.accountId(),
+          scope.brandId,
+          this.consentPurpose,
+          this.consentChannel(),
+        ),
+      );
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.loadingEligibility.set(false);
+    }
   }
 
   protected async recordConsent(): Promise<void> {
     const scope = this.scope();
-    const purpose = this.consentPurpose().trim();
-    if (!scope || !purpose || this.recordingConsent()) {
+    const policyVersion = this.consentPolicyVersion().trim();
+    if (!scope || !policyVersion || this.recordingConsent()) {
       return;
     }
     this.recordingConsent.set(true);
     try {
       await this.api.recordConsent(scope, this.accountId(), {
-        purpose,
-        channel: this.consentChannel().trim() || null,
+        brandId: scope.brandId,
+        purpose: this.consentPurpose,
+        channel: this.consentChannel(),
         decision: this.consentDecision(),
-        policyVersion: 'operator-recorded-v1',
+        policyVersion,
         source: 'SUPPORT_AGENT',
       });
       await this.loadConsent();
@@ -633,6 +839,18 @@ export class CustomerDetailPane {
 
   protected formatConsentDecidedAt(decidedAt: string): string {
     return formatDateTime(new Date(decidedAt), PLACEHOLDER_TIME_ZONE);
+  }
+
+  protected consentChannelLabel(channel: ConsentChannel): string {
+    return this.i18n.t(CONSENT_CHANNEL_LABEL_KEYS[channel]);
+  }
+
+  protected eligibilityRefusalLabel(reason: 'CONSENT_WITHHELD' | 'NO_VERIFIED_ENDPOINT'): string {
+    return this.i18n.t(
+      reason === 'CONSENT_WITHHELD'
+        ? 'customers.consent.eligibility.refusal.CONSENT_WITHHELD'
+        : 'customers.consent.eligibility.refusal.NO_VERIFIED_ENDPOINT',
+    );
   }
 
   // ----------------------------------------------------------------- cashback
