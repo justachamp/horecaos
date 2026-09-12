@@ -378,6 +378,53 @@ class CustomerErasureTests {
                         .isEqualTo(survivor));
     }
 
+    // -------------------------------------------------- tenant-wide worklist (ADR 0109)
+
+    @Test
+    @DisplayName("the tenant-wide worklist lists every account's requests, not just one account's own history")
+    void worklistListsEveryAccountsRequests() {
+        UUID first = newAccount(TENANT, "First");
+        ErasureRequestRow firstRequest = erasure.request(TENANT, first, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        UUID second = newAccount(TENANT, "Second");
+        ErasureRequestRow secondRequest = erasure.request(TENANT, second, RequestedVia.STOREFRONT, SELF_SERVICE_ACTOR);
+
+        List<ErasureRequestRow> worklist = erasure.worklist(TENANT, null, 200);
+
+        assertThat(worklist)
+                .extracting(ErasureRequestRow::id)
+                .containsExactlyInAnyOrder(secondRequest.id(), firstRequest.id());
+    }
+
+    @Test
+    @DisplayName("the worklist filters by status")
+    void worklistFiltersByStatus() {
+        UUID pendingAccount = newAccount(TENANT, "Still pending");
+        ErasureRequestRow pending = erasure.request(TENANT, pendingAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        UUID completedAccount = newAccountWithContactAndAddress(TENANT, "Completed");
+        ErasureRequestRow completed = erasure.request(TENANT, completedAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        erasure.execute(TENANT, completedAccount, completed.id(), STAFF_ACTOR);
+
+        assertThat(erasure.worklist(TENANT, "PENDING", 200))
+                .extracting(ErasureRequestRow::id)
+                .containsExactly(pending.id());
+        assertThat(erasure.worklist(TENANT, "COMPLETED", 200))
+                .extracting(ErasureRequestRow::id)
+                .containsExactly(completed.id());
+    }
+
+    @Test
+    @DisplayName("the worklist never crosses a tenant boundary")
+    void worklistNeverCrossesATenantBoundary() {
+        UUID mine = newAccount(TENANT, "Mine");
+        ErasureRequestRow myRequest = erasure.request(TENANT, mine, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        UUID theirs = newAccount(OTHER_TENANT, "Theirs");
+        erasure.request(OTHER_TENANT, theirs, RequestedVia.OPERATIONS, STAFF_ACTOR);
+
+        assertThat(erasure.worklist(TENANT, null, 200))
+                .extracting(ErasureRequestRow::id)
+                .containsExactly(myRequest.id());
+    }
+
     // ------------------------------------------------------------------- fixture
 
     private void insertTenantRow(UUID id, String slug) {

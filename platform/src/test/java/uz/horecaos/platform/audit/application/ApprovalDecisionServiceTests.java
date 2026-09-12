@@ -426,6 +426,64 @@ class ApprovalDecisionServiceTests {
                 .doesNotContain("Customer says the kebab never arrived");
     }
 
+    // --- decided history (ADR 0109, Staff 9.4) -----------------------------
+
+    /**
+     * The gap map's own words: "a manager also cannot see what she approved
+     * last week". A decided request leaves the pending queue and must show up
+     * here instead — not vanish.
+     */
+    @Test
+    void decidedHistoryShowsWhatThisTenantAlreadyDecided() {
+        UUID approved = raise();
+        approve(approved);
+
+        List<ApprovalDecisionService.DecidedApprovalHistoryEntry> history = decisions.decided(TENANT, null, 50);
+
+        assertThat(history)
+                .extracting(ApprovalDecisionService.DecidedApprovalHistoryEntry::id)
+                .containsExactly(approved);
+        assertThat(history.getFirst().status()).isEqualTo("APPROVED");
+        assertThat(history.getFirst().decidedBy()).isEqualTo(CHECKER);
+    }
+
+    @Test
+    void decidedHistoryNeverIncludesAStillPendingRequest() {
+        raise();
+
+        assertThat(decisions.decided(TENANT, null, 50))
+                .as("a request nobody has decided yet belongs to the pending worklist, not history")
+                .isEmpty();
+    }
+
+    @Test
+    void decidedHistoryNeverCrossesATenantBoundary() {
+        UUID mine = raise();
+        approve(mine);
+        UUID theirs = raiseIn(OTHER_TENANT);
+        authorization.grant(CHECKER, Capability.REFUND_APPROVE, ResourceScope.tenant(OTHER_TENANT));
+        decisions.decide(
+                OTHER_TENANT,
+                theirs,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "Approved for the other tenant");
+
+        assertThat(decisions.decided(TENANT, null, 50))
+                .extracting(ApprovalDecisionService.DecidedApprovalHistoryEntry::id)
+                .containsExactly(mine)
+                .doesNotContain(theirs);
+    }
+
+    @Test
+    void decidedHistoryDoesNotCarryTheMakersFreeTextReason() {
+        UUID requestId = raise();
+        approve(requestId);
+
+        assertThat(decisions.decided(TENANT, null, 50).getFirst().toString())
+                .doesNotContain("Customer says the kebab never arrived");
+    }
+
     @Test
     void aLapsedRequestLeavesTheQueueBeforeTheSweeperReachesIt() {
         raise();

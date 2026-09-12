@@ -27,7 +27,13 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
 import uz.horecaos.platform.iam.api.TenantRoleCatalog;
+import uz.horecaos.platform.iam.application.AccessCheckService;
+import uz.horecaos.platform.iam.application.AccessCheckService.AccessCheckAnswer;
+import uz.horecaos.platform.iam.application.AccessCheckService.Verdict;
 import uz.horecaos.platform.iam.application.GrantManagementService;
+import uz.horecaos.platform.iam.application.GrantManagementService.GrantView;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /** Grant management and the session context the frontend shapes itself from (ADR 0025). */
@@ -38,16 +44,19 @@ public class GrantController {
 
     private final GrantManagementService grants;
     private final AuthorizationService authorization;
+    private final AccessCheckService accessCheck;
     private final CurrentActor currentActor;
     private final TenantOrganizationDirectory tenantOrganizations;
 
     public GrantController(
             GrantManagementService grants,
             AuthorizationService authorization,
+            AccessCheckService accessCheck,
             CurrentActor currentActor,
             TenantOrganizationDirectory tenantOrganizations) {
         this.grants = grants;
         this.authorization = authorization;
+        this.accessCheck = accessCheck;
         this.currentActor = currentActor;
         this.tenantOrganizations = tenantOrganizations;
     }
@@ -160,6 +169,108 @@ public class GrantController {
             CapabilityView view,
             @Nullable Capability requestedCapability,
             @Nullable Boolean granted) {}
+
+    /**
+     * "Can she do this, and why" for a tenant's own manager (Staff 9.5, ADR
+     * 0109) — the tenant-facing sibling of {@link #debugAccess}, which stays
+     * {@code PLATFORM_ADMIN}-only because it can reveal any principal's grants
+     * across every tenant. This route is under {@code /api/v1/tenants/**}
+     * (ADR 0057's {@code operations} surface group), not {@code
+     * /control-plane/**} — staff-and-access.md §6's own suggested path names
+     * the latter, but that would put this behind the platform-staff app's
+     * OpenAPI client and unreachable from Operations, which is the whole
+     * point of this endpoint existing. {@code brandId}/{@code locationId}
+     * mirror {@link #debugAccess}'s own params exactly rather than that
+     * section's shorthand {@code scopeId}, which cannot alone construct a
+     * {@code LOCATION} scope without its brand ancestor.
+     *
+     * <p>{@link AccessCheckService#check} enforces its own scope containment
+     * on top of this method's {@code IAM_GRANT_MANAGE} declaration — see that
+     * method's own doc for why the annotation alone is not enough.
+     */
+    @GetMapping("/tenants/{tenantId}/access-check")
+    @RequiresCapability(Capability.IAM_GRANT_MANAGE)
+    @Operation(
+            summary = "Can this principal do this, on this resource, and why — for this tenant's own staff",
+            description = "Three answers: ALLOWED, INSUFFICIENT_CAPABILITY (with every other scope "
+                    + "the subject holds this capability at, so a negative answer can point at the "
+                    + "grant that almost worked), and ENTITLEMENT_REQUIRED when entitlementKey is "
+                    + "given and the capability answer was otherwise ALLOWED but the tenant's plan "
+                    + "does not include that feature.")
+    AccessCheckResponse accessCheck(
+            @PathVariable UUID tenantId,
+            @RequestParam String subject,
+            @RequestParam Capability capability,
+            @RequestParam ScopeType scopeType,
+            @RequestParam(required = false) @Nullable UUID brandId,
+            @RequestParam(required = false) @Nullable UUID locationId,
+            @RequestParam(required = false) @Nullable String entitlementKey) {
+
+        ResourceScope target = askableScopeOf(tenantId, scopeType, brandId, locationId);
+        AccessCheckAnswer answer =
+                accessCheck.check(currentActor.get().subject(), subject, capability, target, entitlementKey);
+        return AccessCheckResponse.of(answer);
+    }
+
+    /**
+     * @param heldElsewhere every active grant {@code subject} holds carrying
+     *                      {@code capability}, whatever scope it is at
+     * @param entitlement   present only for {@code ENTITLEMENT_REQUIRED}
+     */
+    public record AccessCheckResponse(
+            Verdict verdict,
+            Capability capability,
+            ScopeType scopeType,
+            @Nullable UUID scopeId,
+            List<GrantView> heldElsewhere,
+            @Nullable EntitlementAnswer entitlement) {
+
+        static AccessCheckResponse of(AccessCheckAnswer answer) {
+            var entitlement = answer.entitlement();
+            return new AccessCheckResponse(
+                    answer.verdict(),
+                    answer.capability(),
+                    answer.scope().type(),
+                    answer.scope().scopeId(),
+                    answer.heldElsewhere(),
+                    entitlement == null
+                            ? null
+                            : new EntitlementAnswer(entitlement.description(), entitlement.upgradePath()));
+        }
+    }
+
+    public record EntitlementAnswer(String description, String upgradePath) {}
+
+    /**
+     * TENANT, BRAND, or LOCATION only — the levels staff-and-access.md §6's
+     * "Где" picker offers. PLATFORM is refused: there is no per-tenant
+     * question to ask about a platform-wide decision, and {@code
+     * OperationsConfigurationController.scopeOf} refuses it for the identical
+     * reason.
+     */
+    private static ResourceScope askableScopeOf(
+            UUID tenantId, ScopeType scopeType, @Nullable UUID brandId, @Nullable UUID locationId) {
+        try {
+            return switch (scopeType) {
+                case PLATFORM ->
+                    throw new IllegalArgumentException("scopeType PLATFORM is not askable from this endpoint");
+                case TENANT -> ResourceScope.tenant(tenantId);
+                case BRAND -> ResourceScope.brand(tenantId, requireScopeId(brandId, "brandId"));
+                case LOCATION ->
+                    ResourceScope.location(
+                            tenantId, requireScopeId(brandId, "brandId"), requireScopeId(locationId, "locationId"));
+            };
+        } catch (IllegalArgumentException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        }
+    }
+
+    private static UUID requireScopeId(@Nullable UUID value, String name) {
+        if (value == null) {
+            throw new IllegalArgumentException(name + " is required for this scopeType");
+        }
+        return value;
+    }
 
     @GetMapping("/control-plane/tenants/{tenantId}/grants")
     @RequiresCapability(Capability.IAM_GRANT_MANAGE)

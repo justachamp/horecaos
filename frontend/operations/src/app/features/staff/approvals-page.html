@@ -3,69 +3,152 @@
   <p class="q-body-sm subtitle">{{ 'staff.approvals.subtitle' | t }}</p>
   <p class="q-caption read-note">{{ 'staff.approvals.reasonNote' | t }}</p>
 
-  @switch (state()) {
-    @case ('loading') {
-      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
-    }
-    @case ('denied') {
-      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
-    }
-    @case ('error') {
-      <div class="error-band" role="alert">
-        <span class="q-body-sm">{{ loadErrorText() }}</span>
-        <button type="button" class="secondary" (click)="retry()">
-          {{ 'reports.error.retry' | t }}
-        </button>
-      </div>
-    }
-    @case ('ready') {
-      <table class="table">
-        <thead>
-          <tr>
-            <th class="q-caption">{{ 'staff.approvals.column.action' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.scope' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.threshold' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.requestedBy' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.requestedAt' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.expiresAt' | t }}</th>
-            <th class="q-caption">{{ 'staff.approvals.column.decide' | t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (request of pending(); track request.id) {
+  <div class="tabs" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="tab() === 'pending'"
+      [attr.aria-selected]="tab() === 'pending'"
+      (click)="selectTab('pending')"
+    >
+      {{ 'staff.approvals.tab.pending' | t }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="tab() === 'decided'"
+      [attr.aria-selected]="tab() === 'decided'"
+      data-testid="approvals-tab-decided"
+      (click)="selectTab('decided')"
+    >
+      {{ 'staff.approvals.tab.decided' | t }}
+    </button>
+  </div>
+
+  @if (tab() === 'pending') {
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ loadErrorText() }}</span>
+          <button type="button" class="secondary" (click)="retry()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('ready') {
+        <table class="table">
+          <thead>
             <tr>
-              <td class="q-body-sm">{{ actionLabel(request) }}</td>
-              <td class="q-body-sm">{{ scopeLabel(request) }}</td>
-              <td class="q-body-sm">{{ request.thresholdDescription }}</td>
-              <td class="q-body-sm q-mono">{{ request.requestedBy }}</td>
-              <td class="q-body-sm q-mono">{{ request.requestedAt }}</td>
-              <td class="q-body-sm q-mono">{{ request.expiresAt }}</td>
-              <td class="q-body-sm">
-                @if (request.mayDecide) {
-                  <div class="decide-buttons">
-                    <button type="button" class="approve" (click)="openApprove(request)">
-                      {{ 'staff.approvals.action.approve' | t }}
-                    </button>
-                    <button type="button" class="decline" (click)="openDecline(request)">
-                      {{ 'staff.approvals.action.decline' | t }}
-                    </button>
-                  </div>
-                } @else {
-                  <span class="q-caption cannot-decide">{{
-                    'staff.approvals.cannotDecide' | t
-                  }}</span>
-                }
-              </td>
+              <th class="q-caption">{{ 'staff.approvals.column.action' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.scope' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.threshold' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.requestedBy' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.requestedAt' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.expiresAt' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.decide' | t }}</th>
             </tr>
-          } @empty {
-            <tr>
-              <td class="q-body-sm empty" colspan="7">{{ 'staff.approvals.empty' | t }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (request of pending(); track request.id) {
+              <tr>
+                <td class="q-body-sm">{{ actionLabel(request) }}</td>
+                <td class="q-body-sm">{{ scopeLabel(request) }}</td>
+                <td class="q-body-sm">{{ request.thresholdDescription }}</td>
+                <td class="q-body-sm q-mono">{{ request.requestedBy }}</td>
+                <td class="q-body-sm q-mono">{{ request.requestedAt }}</td>
+                <td class="q-body-sm q-mono">{{ request.expiresAt }}</td>
+                <td class="q-body-sm">
+                  @if (request.mayDecide) {
+                    <div class="decide-buttons">
+                      <button type="button" class="approve" (click)="openApprove(request)">
+                        {{ 'staff.approvals.action.approve' | t }}
+                      </button>
+                      <button type="button" class="decline" (click)="openDecline(request)">
+                        {{ 'staff.approvals.action.decline' | t }}
+                      </button>
+                    </div>
+                  } @else {
+                    <span class="q-caption cannot-decide">{{
+                      'staff.approvals.cannotDecide' | t
+                    }}</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="7">{{ 'staff.approvals.empty' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
     }
   }
+
+  @if (tab() === 'decided') {
+    @switch (decidedState()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ decidedErrorText() }}</span>
+          <button type="button" class="secondary" (click)="retryDecided()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('ready') {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'staff.approvals.column.action' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.scope' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.threshold' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.status' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.decidedBy' | t }}</th>
+              <th class="q-caption">{{ 'staff.approvals.column.decidedAt' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of decided(); track entry.id) {
+              <tr>
+                <td class="q-body-sm">{{ decidedActionLabel(entry) }}</td>
+                <td class="q-body-sm">{{ scopeLabel(entry) }}</td>
+                <td class="q-body-sm">{{ entry.thresholdDescription }}</td>
+                <td class="q-body-sm">
+                  <span [class]="'status-pill status-pill--' + entry.status.toLowerCase()">{{
+                    decidedStatusLabelKey(entry.status) | t
+                  }}</span>
+                </td>
+                <td class="q-body-sm q-mono">{{ entry.decidedBy }}</td>
+                <td class="q-body-sm q-mono">{{ entry.decidedAt }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="6">
+                  {{ 'staff.approvals.decided.empty' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  }
+
+  <p class="q-caption access-check-link">
+    {{ 'staff.approvals.accessCheckLead' | t }}
+    <a routerLink="/staff/access-check">{{ 'staff.approvals.accessCheckLink' | t }}</a>
+  </p>
 
   @if (confirmTarget(); as target) {
     <div class="dialog-backdrop" (click)="cancelConfirm()">

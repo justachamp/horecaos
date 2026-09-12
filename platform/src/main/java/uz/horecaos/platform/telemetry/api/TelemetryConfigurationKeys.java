@@ -56,11 +56,21 @@ public final class TelemetryConfigurationKeys {
      * has to clear — settlement period plus dispute window — is a tenant-level
      * calendar in ADR 0042. The startup check refuses a production profile whose
      * configured values breach that floor, at any scope one is stored at.
+     *
+     * <p>{@code tenantVisible()} since ADR 0109 (Settings 10.11): before then
+     * this key was settable at TENANT scope but readable only through {@code
+     * ConfigurationController}'s {@code PLATFORM_ADMIN} surface, so a tenant
+     * could not see or set its own courier-location retention at all — the
+     * "only surface is PLATFORM-scoped" gap the data-privacy screen named.
+     * {@code OperationsConfigurationController} is generic over every {@code
+     * tenantVisible()} key, so this one line is what makes the existing
+     * tenant read/write cover it.
      */
     public static final ConfigurationKey<Integer> TRACK_RETENTION_DAYS = ConfigurationKey.of(
                     TRACK_RETENTION_DAYS_CODE, Integer.class)
             .defaultValue(TrackRetentionFloor.CONFIGURED_TRACK_RETENTION_DAYS)
             .ownedBy("telemetry")
+            .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
             .describedAs("Days a courier's track is kept at coordinate precision before its "
                     + "daily partition is dropped. Must be at least the ADR 0042 settlement "

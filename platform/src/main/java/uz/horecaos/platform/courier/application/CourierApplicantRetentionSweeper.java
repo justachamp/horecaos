@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.ApplicantRef;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -37,6 +39,15 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
  * value an unverified application holds -- is overwritten with a tombstone,
  * the courier archived and their engagement ended. Each erasure is audited;
  * the log carries a count.
+ *
+ * <p><strong>Tenant self-service since ADR 0109 (Settings 10.11).</strong> One
+ * pass sweeps every tenant's applicants, so it cannot honour a different
+ * window per tenant directly; it sweeps on the longer of the platform default
+ * and the largest value any tenant configured through {@link
+ * CourierConfigurationKeys#APPLICANT_RETENTION_MONTHS}, the same rule {@code
+ * CartRetentionSweeper.effectiveRetentionDays} and {@code
+ * TrackRetentionSweeper.effectiveRetentionDays} already use — a stored value
+ * can only lengthen the window, never shorten another tenant's.
  */
 @Component
 public class CourierApplicantRetentionSweeper {
@@ -44,18 +55,21 @@ public class CourierApplicantRetentionSweeper {
     private static final Logger log = LoggerFactory.getLogger(CourierApplicantRetentionSweeper.class);
 
     private final Eraser eraser;
+    private final JdbcClient jdbc;
     private final Clock clock;
-    private final int retentionMonths;
+    private final int configuredRetentionMonths;
     private final int batchSize;
 
     public CourierApplicantRetentionSweeper(
             Eraser eraser,
+            JdbcClient jdbc,
             Clock clock,
             @Value("${horecaos.courier.applicant-retention.months:12}") int retentionMonths,
             @Value("${horecaos.courier.applicant-retention.batch-size:100}") int batchSize) {
         this.eraser = eraser;
+        this.jdbc = jdbc;
         this.clock = clock;
-        this.retentionMonths = retentionMonths;
+        this.configuredRetentionMonths = retentionMonths;
         this.batchSize = batchSize;
     }
 
@@ -73,12 +87,33 @@ public class CourierApplicantRetentionSweeper {
     /** @return how many applicants this pass erased, for a deterministic test */
     public int runOnce() {
         Instant now = clock.instant();
+        int retentionMonths = effectiveRetentionMonths();
         Instant cutoff = now.atZone(ZoneOffset.UTC).minusMonths(retentionMonths).toInstant();
         int erased = eraser.eraseBatch(cutoff, batchSize, now);
         if (erased > 0) {
             log.info("Courier applicant retention sweep: {} unverified applicants erased", erased);
         }
         return erased;
+    }
+
+    /**
+     * The platform default, or the longest value any tenant configured,
+     * whichever is greater — see this class's own doc for why a single sweep
+     * cannot simply resolve one tenant's value.
+     */
+    int effectiveRetentionMonths() {
+        Long longest = jdbc.sql("""
+                        SELECT max(integer_value) FROM tenant.configuration_values
+                         WHERE key_code = :keyCode AND is_explicit_null = false
+                        """)
+                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .query(Long.class)
+                .optional()
+                .orElse(null);
+
+        return longest == null
+                ? configuredRetentionMonths
+                : Math.max(configuredRetentionMonths, Math.toIntExact(longest));
     }
 
     /**

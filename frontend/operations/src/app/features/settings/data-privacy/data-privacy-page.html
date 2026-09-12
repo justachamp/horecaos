@@ -3,37 +3,62 @@
 
 <section class="card">
   <h2 class="q-subhead">{{ 'settings.dataPrivacy.retention.title' | t }}</h2>
+  <p class="q-caption retention-lead">{{ 'settings.dataPrivacy.retention.lead' | t }}</p>
   <table class="table">
     <thead>
       <tr>
         <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.category' | t }}</th>
-        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.status' | t }}</th>
-        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.note' | t }}</th>
+        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.value' | t }}</th>
+        <th class="q-caption">{{ 'settings.dataPrivacy.retention.column.enforcedBy' | t }}</th>
+        <th class="q-caption"></th>
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td class="q-body-sm">
-          {{ 'settings.dataPrivacy.retention.abandonedCarts.category' | t }}
-        </td>
-        <td class="q-body-sm">
-          <span class="status-pill status-pill--not-built">{{
-            'settings.dataPrivacy.retention.status.notEnforced' | t
-          }}</span>
-        </td>
-        <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.abandonedCarts.note' | t }}</td>
-      </tr>
-      <tr>
-        <td class="q-body-sm">
-          {{ 'settings.dataPrivacy.retention.courierLocation.category' | t }}
-        </td>
-        <td class="q-body-sm">
-          <span class="status-pill status-pill--enforced">{{
-            'settings.dataPrivacy.retention.status.enforced' | t
-          }}</span>
-        </td>
-        <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.courierLocation.note' | t }}</td>
-      </tr>
+      @for (row of retentionRows; track row.code) {
+        <tr>
+          <td class="q-body-sm">{{ row.categoryKey | t }}</td>
+          <td class="q-body-sm">
+            @if (row.resolution(); as resolution) {
+              <div class="retention-edit">
+                <input
+                  type="number"
+                  min="1"
+                  class="retention-input"
+                  [value]="row.editValue()"
+                  (input)="setRetentionEditValue(row, $any($event.target).value)"
+                  [attr.data-testid]="'retention-input-' + row.code"
+                />
+                <span class="q-caption">{{ row.unitKey | t }}</span>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="row.saving()"
+                  (click)="saveRetention(row)"
+                  [attr.data-testid]="'retention-save-' + row.code"
+                >
+                  {{ 'settings.dataPrivacy.retention.action.save' | t }}
+                </button>
+              </div>
+              <p class="q-caption retention-source">
+                @if (resolution.cameFromDefault) {
+                  {{ 'settings.dataPrivacy.retention.source.platformDefault' | t }}
+                } @else {
+                  {{ 'settings.dataPrivacy.retention.source.tenant' | t }}
+                }
+              </p>
+              @if (row.error(); as message) {
+                <p class="q-caption dialog__error">{{ message }}</p>
+              }
+            } @else if (row.error()) {
+              <p class="q-caption dialog__error">{{ row.error() }}</p>
+            } @else {
+              <span class="q-caption">{{ 'customers.loading' | t }}</span>
+            }
+          </td>
+          <td class="q-body-sm">{{ row.enforcedByKey | t }}</td>
+          <td></td>
+        </tr>
+      }
       <tr>
         <td class="q-body-sm">
           {{ 'settings.dataPrivacy.retention.candidateRecords.category' | t }}
@@ -44,6 +69,7 @@
           }}</span>
         </td>
         <td class="q-body-sm">{{ 'settings.dataPrivacy.retention.candidateRecords.note' | t }}</td>
+        <td></td>
       </tr>
     </tbody>
   </table>
@@ -52,17 +78,126 @@
 <section class="card">
   <h2 class="q-subhead">{{ 'settings.dataPrivacy.consent.title' | t }}</h2>
   <p class="q-body-sm">{{ 'settings.dataPrivacy.consent.lead' | t }}</p>
-  <dl class="fields">
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.dataPrivacy.consent.states.label' | t }}</dt>
-      <dd class="q-body-sm">{{ 'settings.dataPrivacy.consent.states.value' | t }}</dd>
-    </div>
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.dataPrivacy.consent.sources.label' | t }}</dt>
-      <dd class="q-body-sm">{{ 'settings.dataPrivacy.consent.sources.value' | t }}</dd>
-    </div>
-  </dl>
-  <p class="q-caption gap-note">{{ 'settings.dataPrivacy.consent.gap' | t }}</p>
+
+  @switch (consentState()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ consentErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retryConsentTypes()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.dataPrivacy.consent.column.code' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.consent.column.label' | t }}</th>
+            <th class="q-caption">
+              {{ 'settings.dataPrivacy.consent.column.channelSpecific' | t }}
+            </th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.consent.column.policyVersion' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (type of consentTypes(); track type.id) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ type.code }}</td>
+              <td class="q-body-sm">{{ consentLabel(type) }}</td>
+              <td class="q-body-sm">
+                {{
+                  (type.channelSpecific
+                    ? 'settings.dataPrivacy.consent.channelSpecific.yes'
+                    : 'settings.dataPrivacy.consent.channelSpecific.no'
+                  ) | t
+                }}
+              </td>
+              <td class="q-body-sm">{{ type.policyVersion }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>
+
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.erasure.title' | t }}</h2>
+  <p class="q-body-sm">{{ 'settings.dataPrivacy.erasure.lead' | t }}</p>
+
+  <label class="filter">
+    <span class="q-caption">{{ 'settings.dataPrivacy.erasure.filter.label' | t }}</span>
+    <select
+      class="select"
+      [value]="erasureStatusFilter()"
+      (change)="setErasureStatusFilter($any($event.target).value)"
+    >
+      <option value="ALL">{{ 'settings.dataPrivacy.erasure.filter.all' | t }}</option>
+      <option value="PENDING">{{ 'settings.dataPrivacy.erasure.status.pending' | t }}</option>
+      <option value="COMPLETED">{{ 'settings.dataPrivacy.erasure.status.completed' | t }}</option>
+      <option value="CANCELLED">{{ 'settings.dataPrivacy.erasure.status.cancelled' | t }}</option>
+    </select>
+  </label>
+
+  @switch (erasureState()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ erasureErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retryErasureWorklist()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.status' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.customer' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.requestedVia' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.requestedAt' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.resolvedAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (request of erasureRequests(); track request.id) {
+            <tr>
+              <td class="q-body-sm">
+                <span [class]="'status-pill status-pill--' + request.status.toLowerCase()">{{
+                  erasureStatusLabelKey(request.status) | t
+                }}</span>
+              </td>
+              <td class="q-body-sm q-mono">{{ request.customerAccountId }}</td>
+              <td class="q-body-sm">{{ request.requestedVia }}</td>
+              <td class="q-body-sm q-mono">{{ request.requestedAt }}</td>
+              <td class="q-body-sm q-mono">
+                {{ request.completedAt ?? request.cancelledAt ?? '—' }}
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'settings.dataPrivacy.erasure.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
 </section>
 
 <section class="card">
@@ -72,7 +207,7 @@
       'notBuilt.body'
         | t
           : {
-              spec: 'ADR 0029 (PII protection) — "no data-subject export, correction, anonymisation, retention, legal-hold or proof operation exists anywhere"',
+              spec: 'ADR 0029 (PII protection) — export, correction, retention-expiry enforcement, legal hold and proof remain the larger privacy-operations surface this wave does not reach',
             }
     }}
   </p>

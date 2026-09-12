@@ -57,7 +57,7 @@ class CartRetentionSweeperTests {
         jdbc = JdbcClient.create(db.dataSource());
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         clock = new MovableClock(Instant.now());
-        sweeper = new CartRetentionSweeper(new JdbcCartStore(jdbc), clock, 90, 500);
+        sweeper = new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500);
         seedTenancy();
     }
 
@@ -93,6 +93,39 @@ class CartRetentionSweeperTests {
         assertThat(sweeper.runOnce()).isEqualTo(1);
         assertThat(exists(recent)).isFalse();
         assertThat(exists(converted)).as("an order's cart is its history").isTrue();
+    }
+
+    @Test
+    @DisplayName("a tenant's own configured retention lengthens the window, never shortens it")
+    void aTenantsLongerRetentionGovernsItsOwnCarts() {
+        // No stored row: the platform default from @Value governs.
+        assertThat(sweeper.effectiveRetentionDays()).isEqualTo(90);
+
+        storeRetention(180);
+        assertThat(sweeper.effectiveRetentionDays())
+                .as("the tenant asked for a longer window than the platform default")
+                .isEqualTo(180);
+
+        // A value below the platform default never shortens it: this sweep runs
+        // once across every tenant's carts, so a smaller stored value would
+        // delete another tenant's cart on the platform's own, longer promise.
+        jdbc.sql("UPDATE tenant.configuration_values SET integer_value = 30 WHERE key_code = :keyCode")
+                .param("keyCode", uz.horecaos.platform.ordering.api.OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE)
+                .update();
+        assertThat(sweeper.effectiveRetentionDays()).isEqualTo(90);
+    }
+
+    private void storeRetention(int days) {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values (id, key_code, scope_type, tenant_id,
+                    value_type, integer_value, set_by)
+                VALUES (:id, :keyCode, 'TENANT', :tenantId, 'INTEGER', :days, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("keyCode", uz.horecaos.platform.ordering.api.OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE)
+                .param("tenantId", tenantId)
+                .param("days", (long) days)
+                .update();
     }
 
     // ------------------------------------------------------------- fixtures

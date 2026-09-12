@@ -81,6 +81,69 @@
   color: var(--q-ink-subtle);
 }
 
+.status-pill--pending {
+  border-color: var(--q-warning);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.status-pill--completed {
+  border-color: var(--q-success);
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.status-pill--cancelled {
+  color: var(--q-ink-subtle);
+}
+
+.retention-lead {
+  color: var(--q-ink-subtle);
+  margin: 0 0 4px;
+}
+
+.retention-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.retention-input {
+  width: 90px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+}
+
+.retention-source {
+  margin: 4px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+.dialog__error {
+  color: var(--q-error-text);
+  margin: 4px 0 0;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+}
+
 .empty {
   color: var(--q-ink-subtle);
   text-align: center;

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
 import java.math.BigDecimal;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
@@ -23,6 +24,12 @@ import uz.horecaos.platform.tenancy.api.ConfigurationKey;
  * changes nothing until a reader exists, is what lets settings.md's five
  * cards stop rendering "not built" one field at a time instead of all at
  * once.
+ * <p>And, since ADR 0109 (Settings 10.11): how long an abandoned cart —
+ * one that expired without becoming an order — is kept before {@code
+ * CartRetentionSweeper} deletes it outright. A different question from the
+ * one above: {@link #CART_EXPIRY_MINUTES} decides when a cart stops being
+ * usable at checkout, this decides how long its record survives afterwards
+ * for the data-privacy self-service screen's own "retention periods" gap.
  *
  * <p><strong>Declared twice.</strong> The registry ADR 0030's startup
  * validator consults lives in {@code tenancy.domain.configuration}, which is
@@ -35,6 +42,9 @@ public final class OrderingConfigurationKeys {
 
     /** The code both declarations share. */
     public static final String CART_EXPIRY_MINUTES_CODE = "ordering.cart_expiry_minutes";
+
+    /** The code both declarations share. */
+    public static final String CART_RETENTION_DAYS_CODE = "ordering.cart_retention_days";
 
     /**
      * Minutes an untouched cart stays active before expiring.
@@ -260,6 +270,25 @@ public final class OrderingConfigurationKeys {
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
                     + "them. 0 means no gate. Not yet enforced.")
+    /**
+     * Days an abandoned cart is kept before {@code CartRetentionSweeper}
+     * deletes it (ADR 0092). Ninety, matching that class's own {@code
+     * @Value} default exactly — the same "a wired key's default is the live
+     * value" discipline {@link #CART_EXPIRY_MINUTES} follows. Settable at the
+     * platform and per tenant, and only ever lengthened: {@code
+     * CartRetentionSweeper} sweeps on the longer of the platform default and
+     * the largest tenant-configured value, the same rule {@code
+     * TrackRetentionSweeper.effectiveRetentionDays} already uses, because a
+     * shorter stored value must never delete another tenant's cart early.
+     */
+    public static final ConfigurationKey<Integer> CART_RETENTION_DAYS = ConfigurationKey.of(
+                    CART_RETENTION_DAYS_CODE, Integer.class)
+            .defaultValue(90)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days an abandoned cart (one that expired without becoming an order) "
+                    + "is kept before it is deleted outright.")
             .build();
 
     private OrderingConfigurationKeys() {}

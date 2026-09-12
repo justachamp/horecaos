@@ -45,6 +45,7 @@ import { LocationScope } from './operations-paths';
  */
 const OPERATIONS = '/api/v1/operations';
 const CONTROL_PLANE = '/api/v1/control-plane';
+const TENANT = '/api/v1/tenants';
 
 export const settingsPaths = {
   // ---------------------------------------------------------- 10.1 Brand profile
@@ -538,6 +539,22 @@ export const settingsPaths = {
   /** `OnboardingController.validate` — the dry run the readiness panel reshapes. */
   onboardingValidate(tenantId: string, runId: string): string {
     return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/onboarding-runs/${enc(runId)}/validate`;
+  },
+
+  // ---------------------------------------------------------- 10.11 Data & privacy (ADR 0109)
+
+  /**
+   * `CustomerController.tenantErasureRequests` — the tenant-wide DSAR
+   * worklist. Reuses `CustomerErasureService`'s existing per-account
+   * lifecycle (`V0178`); this is the only new read the worklist needed.
+   */
+  erasureRequests(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/erasure-requests`;
+  },
+
+  /** `ConsentTypeController.list` — the tenant's own consent-purpose registry. */
+  consentTypes(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/consent-types`;
   },
 } as const;
 
