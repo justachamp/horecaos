@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -11,10 +12,12 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -337,9 +341,14 @@ public class OperationsCourierController {
 
     @GetMapping("/courier-types")
     @RequiresCapability(Capability.COURIER_READ)
-    @Operation(summary = "Vehicle classes, for the registration form's picker")
-    public ResponseEntity<List<CourierTypeResponse>> types(@PathVariable UUID tenantId) {
-        return ResponseEntity.ok(courierStore.listTypes(tenantId).stream()
+    @Operation(
+            summary = "Vehicle classes, for the registration form's picker and the IA 3.4 management screen",
+            description = "includeArchived=false (default) is the registration picker's list; "
+                    + "the management screen passes true so an archived class a past rate card "
+                    + "or courier still names does not vanish from the table.")
+    public ResponseEntity<List<CourierTypeResponse>> types(
+            @PathVariable UUID tenantId, @RequestParam(defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(courierStore.listTypes(tenantId, includeArchived).stream()
                 .map(CourierTypeResponse::of)
                 .toList());
     }
@@ -348,8 +357,10 @@ public class OperationsCourierController {
     @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
     @Operation(
             summary = "Define a vehicle class (IA 3.4)",
-            description = "The two dispatch numbers — minimum distance and the offer TTL — and "
-                    + "not a courier's pay, which is a rate card and a separate act.")
+            description = "The dispatch numbers — minimum/maximum distance, the offer TTL — and "
+                    + "not a courier's pay, which is a rate card and a separate act. "
+                    + "startingMinuteOffset and workMode are ADR 0108: captured and rendered, not "
+                    + "yet read by the accrual calculator or the dispatch gate.")
     public ResponseEntity<CourierTypeResponse> createType(
             @PathVariable UUID tenantId, @Valid @RequestBody CreateCourierTypeRequest body) {
 
@@ -364,10 +375,72 @@ public class OperationsCourierController {
                 body.maxDistanceMeters(),
                 body.maxConcurrentAssignments(),
                 body.offerTtlSeconds(),
-                "ACTIVE"));
+                body.startingMinuteOffset(),
+                body.workModeOrDefault(),
+                "ACTIVE",
+                1));
 
         return ResponseEntity.ok(
                 CourierTypeResponse.of(courierStore.findType(tenantId, typeId).orElseThrow()));
+    }
+
+    @PutMapping("/courier-types/{typeId}")
+    @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a vehicle class (ADR 0108)",
+            description = "Types were create-only at every layer: no update and no archive, even "
+                    + "though status already has ARCHIVED, so a mistyped code or a wrong offer "
+                    + "TTL was permanent. expectedVersion is required and is the version this "
+                    + "controller last reported for this row; a stale one is refused with "
+                    + "STALE_VERSION.")
+    public ResponseEntity<CourierTypeResponse> updateType(
+            @PathVariable UUID tenantId, @PathVariable UUID typeId, @Valid @RequestBody UpdateCourierTypeRequest body) {
+
+        CourierTypeRow current = courierStore
+                .findType(tenantId, typeId)
+                .filter(row -> "ACTIVE".equals(row.status()))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier type: " + typeId));
+
+        boolean updated = courierStore.updateType(
+                tenantId,
+                typeId,
+                new JdbcCourierStore.CourierTypeUpdate(
+                        body.code(),
+                        body.displayName(),
+                        body.vehicleClass(),
+                        body.minDistanceMeters(),
+                        body.maxDistanceMeters(),
+                        body.maxConcurrentAssignments(),
+                        body.offerTtlSeconds(),
+                        body.startingMinuteOffset(),
+                        body.workMode()),
+                body.expectedVersion(),
+                Instant.now());
+        if (!updated) {
+            throw ApiException.staleVersion(body.expectedVersion(), current.version());
+        }
+
+        return ResponseEntity.ok(
+                CourierTypeResponse.of(courierStore.findType(tenantId, typeId).orElseThrow()));
+    }
+
+    @PostMapping("/courier-types/{typeId}/archival")
+    @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a vehicle class",
+            description = "Archived, never deleted: a past rate card or courier still names it. "
+                    + "The registration picker stops offering it; the management screen keeps "
+                    + "showing it when includeArchived=true.")
+    public ResponseEntity<Void> archiveType(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID typeId,
+            @Valid @RequestBody ArchiveCourierTypeRequest body) {
+
+        if (!courierStore.archiveType(tenantId, typeId, Instant.now())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "No active courier type %s to archive".formatted(typeId));
+        }
+        return ResponseEntity.accepted().build();
     }
 
     // ------------------------------------------------------------ rate cards
@@ -727,7 +800,14 @@ public class OperationsCourierController {
     @Operation(
             summary = "Record a bonus or a penalty",
             description = "A manual penalty is never written on this call alone: it returns the "
-                    + "approval request and writes nothing until a second person decides.")
+                    + "approval request and writes nothing until a second person decides. "
+                    + "origin stays on the request for wire compatibility but this endpoint never "
+                    + "reads it: every adjustment reaching HorecaOS over HTTP is MANUAL, "
+                    + "unconditionally, whatever the field says. Before this wave the origin the "
+                    + "caller sent controlled the stamped value, and a caller sending RULE bypassed "
+                    + "the four-eyes branch a MANUAL penalty above threshold requires (ADR 0108) — "
+                    + "RULE now exists only as a value AdjustmentRuleEvaluator's own Java call "
+                    + "constructs, never as something an HTTP request can cause.")
     public ResponseEntity<AdjustmentResponse> adjust(
             @PathVariable UUID tenantId, @PathVariable UUID courierId, @Valid @RequestBody AdjustmentRequest body) {
 
@@ -738,7 +818,7 @@ public class OperationsCourierController {
                 body.amountMinor(),
                 body.currency(),
                 body.reasonCode(),
-                AdjustmentOrigin.valueOf(body.origin()),
+                AdjustmentOrigin.MANUAL,
                 body.idempotencyKey(),
                 actor(),
                 body.reason(),
@@ -747,6 +827,61 @@ public class OperationsCourierController {
         JdbcCourierLedgerStore.LedgerEntryRow entry = outcome.entry();
         return ResponseEntity.ok(new AdjustmentResponse(
                 entry == null ? null : entry.id(), outcome.approvalRequestId(), outcome.written()));
+    }
+
+    // ------------------------------------------------------ adjustment reasons
+
+    @GetMapping("/adjustment-reasons")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(
+            summary = "The bonus/penalty registry (IA 3.4, ADR 0108)",
+            description = "Every reason this tenant has authored, manual-only and rule-wired "
+                    + "alike — hasRule says which. Read under courier.read: a dispatcher choosing "
+                    + "a reason on the manual-entry form needs this list and does not need "
+                    + "courier.adjustment.reason.manage to see it.")
+    public ResponseEntity<List<AdjustmentReasonResponse>> adjustmentReasons(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(courierStore.listAdjustmentReasons(tenantId).stream()
+                .map(AdjustmentReasonResponse::of)
+                .toList());
+    }
+
+    @PostMapping("/adjustment-reasons")
+    @RequiresCapability(value = Capability.COURIER_ADJUSTMENT_REASON_MANAGE, mutating = true)
+    @Operation(
+            summary = "Define a bonus/penalty reason, manual-only or rule-wired (ADR 0108)",
+            description = "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, "
+                    + "never a behaviour. Omit every rule* field for a manual-only reason; supply "
+                    + "all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must "
+                    + "match kind, and ORDER_UNDELIVERED/ORDER_DAMAGED have no evaluator reader and "
+                    + "may only be authored manual-only.")
+    public ResponseEntity<AdjustmentReasonResponse> createAdjustmentReason(
+            @PathVariable UUID tenantId, @Valid @RequestBody CreateAdjustmentReasonRequest body) {
+
+        UUID reasonId = UUID.randomUUID();
+        courierStore.insertAdjustmentReason(
+                reasonId, tenantId, body.code(), body.kind(), body.outcomeBasis(), body.displayName(), body.toRule());
+
+        return ResponseEntity.ok(AdjustmentReasonResponse.of(
+                courierStore.findAdjustmentReason(tenantId, body.code()).orElseThrow()));
+    }
+
+    @PostMapping("/adjustment-reasons/{reasonId}/archival")
+    @RequiresCapability(value = Capability.COURIER_ADJUSTMENT_REASON_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a bonus/penalty reason",
+            description = "Archived, never deleted: a ledger entry still names its code. A "
+                    + "rule-wired reason stops evaluating the moment it archives, because "
+                    + "ruleReasonsAt reads status = 'ACTIVE'.")
+    public ResponseEntity<Void> archiveAdjustmentReason(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID reasonId,
+            @Valid @RequestBody ArchiveCourierTypeRequest body) {
+
+        if (!courierStore.archiveAdjustmentReason(tenantId, reasonId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "No active adjustment reason %s to archive".formatted(reasonId));
+        }
+        return ResponseEntity.accepted().build();
     }
 
     @GetMapping("/couriers/{courierId}/ledger")
@@ -1228,6 +1363,16 @@ public class OperationsCourierController {
             @Size(max = 48) String reasonCode,
             @NotBlank String reason) {}
 
+    /**
+     * A manual bonus or penalty.
+     *
+     * <p>{@code origin} stays on the wire — the OpenAPI contract test refuses
+     * to make a published required field optional or remove it, and this one
+     * has been required since before this wave — but {@link #adjust} never
+     * reads it. Whatever value a caller sends, including {@code "RULE"}, is
+     * accepted and discarded; see that method's own doc for the gap this
+     * closes.
+     */
     record AdjustmentRequest(
             UUID locationId,
             long amountMinor,
@@ -1236,6 +1381,90 @@ public class OperationsCourierController {
             @NotBlank String origin,
             @NotBlank String idempotencyKey,
             @NotBlank String reason) {}
+
+    /**
+     * One row of the bonus/penalty registry (ADR 0108). {@code hasRule} is a
+     * courier-typed convenience over "every rule* field is non-null"; the
+     * six are omitted individually here for the same reason the response
+     * carries {@code hasRule} rather than making a caller check nullness six
+     * times to answer one boolean question.
+     */
+    record AdjustmentReasonResponse(
+            UUID reasonId,
+            String code,
+            String kind,
+            String outcomeBasis,
+            String displayName,
+            String status,
+            boolean hasRule,
+            @Nullable Long ruleAmountMinor,
+            @Nullable String ruleCurrency,
+            @Nullable String ruleComparator,
+            @Nullable Long ruleThreshold,
+            @Nullable String ruleWindow,
+            @Nullable String ruleTrigger,
+            int ruleVersion) {
+
+        static AdjustmentReasonResponse of(JdbcCourierStore.AdjustmentReasonRow row) {
+            return new AdjustmentReasonResponse(
+                    row.id(),
+                    row.code(),
+                    row.kind(),
+                    row.outcomeBasis(),
+                    row.displayName(),
+                    row.status(),
+                    row.hasRule(),
+                    row.ruleAmountMinor(),
+                    row.ruleCurrency(),
+                    row.ruleComparator(),
+                    row.ruleThreshold(),
+                    row.ruleWindow(),
+                    row.ruleTrigger(),
+                    row.ruleVersion());
+        }
+    }
+
+    /**
+     * Defines a reason. Every {@code rule*} field is optional and they arrive
+     * together or not at all: supplying some but not others is refused before
+     * this ever reaches the database's own {@code
+     * ck_adjustment_reason_rule_pair}, so the caller sees ADR 0031's
+     * vocabulary rather than a constraint-violation message.
+     */
+    record CreateAdjustmentReasonRequest(
+            @NotBlank @Size(max = 48) String code,
+            @NotBlank String kind,
+            @NotBlank String outcomeBasis,
+            @NotBlank @Size(max = 160) String displayName,
+            @Nullable Long ruleAmountMinor,
+            @Nullable @Size(min = 3, max = 3) String ruleCurrency,
+            @Nullable String ruleComparator,
+            @Nullable Long ruleThreshold,
+            @Nullable String ruleWindow,
+            @Nullable String ruleTrigger) {
+
+        JdbcCourierStore.@Nullable RuleConfig toRule() {
+            List<Object> present = Arrays.asList(
+                    ruleAmountMinor, ruleCurrency, ruleComparator, ruleThreshold, ruleWindow, ruleTrigger);
+            long presentCount = present.stream().filter(Objects::nonNull).count();
+            if (presentCount == 0) {
+                return null;
+            }
+            if (presentCount < present.size()) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "A rule needs all of ruleAmountMinor, ruleCurrency, ruleComparator, "
+                                + "ruleThreshold, ruleWindow and ruleTrigger, or none of them");
+            }
+            return new JdbcCourierStore.RuleConfig(
+                    Objects.requireNonNull(ruleAmountMinor),
+                    Objects.requireNonNull(ruleCurrency),
+                    Objects.requireNonNull(ruleComparator),
+                    Objects.requireNonNull(ruleThreshold),
+                    Objects.requireNonNull(ruleWindow),
+                    Objects.requireNonNull(ruleTrigger));
+        }
+    }
 
     record CloseperiodRequest(@NotBlank String reason) {}
 
@@ -1307,7 +1536,11 @@ public class OperationsCourierController {
             int minDistanceMeters,
             @Nullable Integer maxDistanceMeters,
             int maxConcurrentAssignments,
-            int offerTtlSeconds) {
+            int offerTtlSeconds,
+            int startingMinuteOffset,
+            String workMode,
+            String status,
+            int version) {
 
         static CourierTypeResponse of(CourierTypeRow row) {
             return new CourierTypeResponse(
@@ -1318,10 +1551,22 @@ public class OperationsCourierController {
                     row.minDistanceMeters(),
                     row.maxDistanceMeters(),
                     row.maxConcurrentAssignments(),
-                    row.offerTtlSeconds());
+                    row.offerTtlSeconds(),
+                    row.startingMinuteOffset(),
+                    row.workMode(),
+                    row.status(),
+                    row.version());
         }
     }
 
+    /**
+     * @param workMode null (or blank) defaults to {@code SHIFT} — kept
+     *                 optional, unlike {@link UpdateCourierTypeRequest}'s own
+     *                 field, because the OpenAPI contract test refuses to add
+     *                 a new required field to an existing endpoint: an older
+     *                 client that has never heard of ADR 0108 still has to be
+     *                 able to create a type
+     */
     record CreateCourierTypeRequest(
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 120) String displayName,
@@ -1329,7 +1574,34 @@ public class OperationsCourierController {
             @PositiveOrZero int minDistanceMeters,
             @Nullable Integer maxDistanceMeters,
             @Positive int maxConcurrentAssignments,
-            @Positive int offerTtlSeconds) {}
+            @Positive int offerTtlSeconds,
+            @PositiveOrZero @Max(1440) int startingMinuteOffset,
+            @Nullable String workMode) {
+
+        String workModeOrDefault() {
+            return workMode == null || workMode.isBlank() ? "SHIFT" : workMode;
+        }
+    }
+
+    /**
+     * Corrects a vehicle class (ADR 0108). {@code code} is included: a
+     * mistyped one used to be permanent, which is exactly the gap this record
+     * exists to close.
+     */
+    record UpdateCourierTypeRequest(
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String displayName,
+            @NotBlank String vehicleClass,
+            @PositiveOrZero int minDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
+            @Positive int maxConcurrentAssignments,
+            @Positive int offerTtlSeconds,
+            @PositiveOrZero @Max(1440) int startingMinuteOffset,
+            @NotBlank String workMode,
+            int expectedVersion,
+            @NotBlank String reason) {}
+
+    record ArchiveCourierTypeRequest(@NotBlank String reason) {}
 
     record RateCardSummaryResponse(
             UUID cardId,

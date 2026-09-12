@@ -486,6 +486,31 @@ public class JdbcCourierLedgerStore {
                 .optional();
     }
 
+    /**
+     * The four counts {@code AdjustmentRuleEvaluator} needs to evaluate a
+     * {@code SHIFT}-window reason at shift close (ADR 0108) — never the full
+     * earning rows, which would carry ADR 0029 protected coordinates this
+     * evaluator has no reason to touch.
+     */
+    public ShiftDeliveryMetrics shiftDeliveryMetrics(UUID tenantId, UUID shiftId) {
+        return jdbc.sql("""
+                SELECT count(*) AS delivered,
+                       count(*) FILTER (WHERE on_time_outcome = 'ON_TIME') AS on_time,
+                       count(*) FILTER (WHERE on_time_outcome = 'LATE') AS late,
+                       count(*) FILTER (WHERE geo_unverified) AS geo_unverified
+                  FROM fulfillment.courier_assignment_earnings
+                 WHERE tenant_id = :tenantId AND shift_id = :shiftId
+                """)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
+                .query((ResultSet rs, int rowNumber) -> new ShiftDeliveryMetrics(
+                        rs.getInt("delivered"), rs.getInt("on_time"), rs.getInt("late"), rs.getInt("geo_unverified")))
+                .single();
+    }
+
+    /** @param deliveredCount earnings recorded against this shift, whatever their outcome */
+    public record ShiftDeliveryMetrics(int deliveredCount, int onTimeCount, int lateCount, int geoUnverifiedCount) {}
+
     public List<EarningRow> earningsOf(UUID tenantId, UUID periodId) {
         return jdbc.sql(SELECT_EARNING + """
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId

@@ -58,10 +58,12 @@ public class JdbcCourierStore {
                 INSERT INTO fulfillment.courier_types (
                     id, tenant_id, code, display_name, vehicle_class,
                     min_distance_meters, max_distance_meters,
-                    max_concurrent_assignments, offer_ttl_seconds, status,
+                    max_concurrent_assignments, offer_ttl_seconds,
+                    starting_minute_offset, work_mode, status,
                     version, created_at, updated_at)
                 VALUES (:id, :tenantId, :code, :displayName, :vehicleClass,
-                    :minDistance, :maxDistance, :maxConcurrent, :offerTtl, 'ACTIVE',
+                    :minDistance, :maxDistance, :maxConcurrent, :offerTtl,
+                    :startingMinuteOffset, :workMode, 'ACTIVE',
                     1, :now, :now)
                 """).params(typeParams(type)).update();
     }
@@ -77,18 +79,14 @@ public class JdbcCourierStore {
         params.put("maxDistance", type.maxDistanceMeters());
         params.put("maxConcurrent", type.maxConcurrentAssignments());
         params.put("offerTtl", type.offerTtlSeconds());
+        params.put("startingMinuteOffset", type.startingMinuteOffset());
+        params.put("workMode", type.workMode());
         params.put("now", utc(Instant.now()));
         return params;
     }
 
     public Optional<CourierTypeRow> findType(UUID tenantId, UUID typeId) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, code, display_name, vehicle_class,
-                       min_distance_meters, max_distance_meters,
-                       max_concurrent_assignments, offer_ttl_seconds, status
-                  FROM fulfillment.courier_types
-                 WHERE tenant_id = :tenantId AND id = :id
-                """)
+        return jdbc.sql(SELECT_COURIER_TYPE + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
                 .param("id", typeId)
                 .query(JdbcCourierStore::mapType)
@@ -97,17 +95,71 @@ public class JdbcCourierStore {
 
     /** Every active vehicle class, for the registration form's picker (§9). */
     public List<CourierTypeRow> listTypes(UUID tenantId) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, code, display_name, vehicle_class,
-                       min_distance_meters, max_distance_meters,
-                       max_concurrent_assignments, offer_ttl_seconds, status
-                  FROM fulfillment.courier_types
-                 WHERE tenant_id = :tenantId AND status = 'ACTIVE'
-                 ORDER BY display_name
-                """)
+        return listTypes(tenantId, false);
+    }
+
+    /**
+     * Every vehicle class, optionally including archived ones.
+     *
+     * @param includeArchived the registration picker (§9) never wants an
+     *                        archived class offered; the management screen
+     *                        (IA 3.4) needs to keep showing one that a past
+     *                        rate card or courier still names
+     */
+    public List<CourierTypeRow> listTypes(UUID tenantId, boolean includeArchived) {
+        String where = includeArchived ? "" : " AND status = 'ACTIVE'";
+        return jdbc.sql(SELECT_COURIER_TYPE + " WHERE tenant_id = :tenantId" + where + " ORDER BY display_name")
                 .param("tenantId", tenantId)
                 .query(JdbcCourierStore::mapType)
                 .list();
+    }
+
+    /**
+     * Corrects a vehicle class under its expected version. A mistyped code or
+     * a wrong offer TTL was permanent before this wave — see ADR 0108.
+     *
+     * @return false when the row is missing, archived, or has moved on since
+     *         {@code expectedVersion} was read
+     */
+    public boolean updateType(UUID tenantId, UUID typeId, CourierTypeUpdate update, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.courier_types
+                   SET code = :code, display_name = :displayName, vehicle_class = :vehicleClass,
+                       min_distance_meters = :minDistance, max_distance_meters = :maxDistance,
+                       max_concurrent_assignments = :maxConcurrent, offer_ttl_seconds = :offerTtl,
+                       starting_minute_offset = :startingMinuteOffset, work_mode = :workMode,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'ACTIVE' AND version = :expectedVersion
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", typeId)
+                        .param("code", update.code())
+                        .param("displayName", update.displayName())
+                        .param("vehicleClass", update.vehicleClass())
+                        .param("minDistance", update.minDistanceMeters())
+                        .param("maxDistance", update.maxDistanceMeters())
+                        .param("maxConcurrent", update.maxConcurrentAssignments())
+                        .param("offerTtl", update.offerTtlSeconds())
+                        .param("startingMinuteOffset", update.startingMinuteOffset())
+                        .param("workMode", update.workMode())
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Archives a vehicle class. Never deleted: a past rate card or courier still names it. */
+    public boolean archiveType(UUID tenantId, UUID typeId, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.courier_types
+                   SET status = 'ARCHIVED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :typeId AND status = 'ACTIVE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("typeId", typeId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ----------------------------------------------------------------- couriers
@@ -784,40 +836,84 @@ public class JdbcCourierStore {
 
     // ----------------------------------------------------- adjustment reasons
 
+    /**
+     * @param rule null for a manual-only reason; non-null wires it to
+     *             {@code AdjustmentRuleEvaluator} (ADR 0108)
+     */
     public void insertAdjustmentReason(
-            UUID id, UUID tenantId, String code, String kind, String outcomeBasis, String displayName) {
+            UUID id,
+            UUID tenantId,
+            String code,
+            String kind,
+            String outcomeBasis,
+            String displayName,
+            @Nullable RuleConfig rule) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", id);
+        params.put("tenantId", tenantId);
+        params.put("code", code);
+        params.put("kind", kind);
+        params.put("basis", outcomeBasis);
+        params.put("displayName", displayName);
+        params.put("ruleAmount", rule == null ? null : rule.amountMinor());
+        params.put("ruleCurrency", rule == null ? null : rule.currency());
+        params.put("ruleComparator", rule == null ? null : rule.comparator());
+        params.put("ruleThreshold", rule == null ? null : rule.threshold());
+        params.put("ruleWindow", rule == null ? null : rule.window());
+        params.put("ruleTrigger", rule == null ? null : rule.trigger());
 
         jdbc.sql("""
                 INSERT INTO fulfillment.courier_adjustment_reasons (
-                    id, tenant_id, code, kind, outcome_basis, display_name, status, created_at)
-                VALUES (:id, :tenantId, :code, :kind, :basis, :displayName, 'ACTIVE', now())
-                """)
-                .param("id", id)
-                .param("tenantId", tenantId)
-                .param("code", code)
-                .param("kind", kind)
-                .param("basis", outcomeBasis)
-                .param("displayName", displayName)
-                .update();
+                    id, tenant_id, code, kind, outcome_basis, display_name, status,
+                    rule_amount_minor, rule_currency, rule_comparator, rule_threshold,
+                    rule_window, rule_trigger, rule_version, created_at)
+                VALUES (:id, :tenantId, :code, :kind, :basis, :displayName, 'ACTIVE',
+                    :ruleAmount, :ruleCurrency, :ruleComparator, :ruleThreshold,
+                    :ruleWindow, :ruleTrigger, 1, now())
+                """).params(params).update();
     }
 
     public Optional<AdjustmentReasonRow> findAdjustmentReason(UUID tenantId, String code) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, code, kind, outcome_basis, display_name, status
-                  FROM fulfillment.courier_adjustment_reasons
-                 WHERE tenant_id = :tenantId AND code = :code
-                """)
+        return jdbc.sql(SELECT_ADJUSTMENT_REASON + " WHERE tenant_id = :tenantId AND code = :code")
                 .param("tenantId", tenantId)
                 .param("code", code)
-                .query((ResultSet rs, int rowNumber) -> new AdjustmentReasonRow(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("kind"),
-                        rs.getString("outcome_basis"),
-                        rs.getString("display_name"),
-                        rs.getString("status")))
+                .query(JdbcCourierStore::mapAdjustmentReason)
                 .optional();
+    }
+
+    /** Every adjustment reason this tenant has authored — the registry (IA 3.4, ADR 0108). */
+    public List<AdjustmentReasonRow> listAdjustmentReasons(UUID tenantId) {
+        return jdbc.sql(SELECT_ADJUSTMENT_REASON + " WHERE tenant_id = :tenantId ORDER BY display_name")
+                .param("tenantId", tenantId)
+                .query(JdbcCourierStore::mapAdjustmentReason)
+                .list();
+    }
+
+    /** Every ACTIVE reason wired to a rule, for {@code AdjustmentRuleEvaluator} to walk at a trigger. */
+    public List<AdjustmentReasonRow> ruleReasonsAt(UUID tenantId, String window, String trigger) {
+        return jdbc.sql(SELECT_ADJUSTMENT_REASON
+                        + " WHERE tenant_id = :tenantId AND status = 'ACTIVE'"
+                        + "   AND rule_amount_minor IS NOT NULL AND rule_window = :window AND rule_trigger = :trigger"
+                        + " ORDER BY code")
+                .param("tenantId", tenantId)
+                .param("window", window)
+                .param("trigger", trigger)
+                .query(JdbcCourierStore::mapAdjustmentReason)
+                .list();
+    }
+
+    /** Archives a reason. Never deleted: a ledger entry still names its code. */
+    public boolean archiveAdjustmentReason(UUID tenantId, UUID reasonId) {
+        return jdbc.sql("""
+                UPDATE fulfillment.courier_adjustment_reasons
+                   SET status = 'ARCHIVED'
+                 WHERE tenant_id = :tenantId AND id = :reasonId AND status = 'ACTIVE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("reasonId", reasonId)
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------------------------- rows
@@ -825,7 +921,14 @@ public class JdbcCourierStore {
     /**
      * A vehicle class and its dispatch numbers.
      *
-     * @param maxDistanceMeters null when the class has no upper distance bound
+     * @param maxDistanceMeters    null when the class has no upper distance bound
+     * @param startingMinuteOffset ADR 0108. Minutes after shift open before this
+     *                             type begins earning PER_SHIFT_FIXED. Captured
+     *                             and rendered; not yet read by the accrual
+     *                             calculator or the dispatch gate
+     * @param workMode             ADR 0108. {@code SHIFT} or {@code ON_DEMAND}.
+     *                             Captured and rendered; not yet read by the
+     *                             dispatch gate — see ADR 0108's open inputs
      */
     public record CourierTypeRow(
             UUID id,
@@ -837,7 +940,22 @@ public class JdbcCourierStore {
             @Nullable Integer maxDistanceMeters,
             int maxConcurrentAssignments,
             int offerTtlSeconds,
-            String status) {}
+            int startingMinuteOffset,
+            String workMode,
+            String status,
+            int version) {}
+
+    /** The fields {@link #updateType} may correct. Code included: ADR 0108 exists because a mistyped one was permanent. */
+    public record CourierTypeUpdate(
+            String code,
+            String displayName,
+            String vehicleClass,
+            int minDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
+            int maxConcurrentAssignments,
+            int offerTtlSeconds,
+            int startingMinuteOffset,
+            String workMode) {}
 
     public record CourierRow(
             UUID id,
@@ -897,8 +1015,49 @@ public class JdbcCourierStore {
             @Nullable String suspensionReasonCode,
             int version) {}
 
+    /**
+     * A row of the bonus/penalty registry (ADR 0042, ADR 0108).
+     *
+     * @param ruleAmountMinor null for a manual-only reason. See {@link RuleConfig}
+     *                        for what the six rule_* columns mean together
+     */
     public record AdjustmentReasonRow(
-            UUID id, UUID tenantId, String code, String kind, String outcomeBasis, String displayName, String status) {}
+            UUID id,
+            UUID tenantId,
+            String code,
+            String kind,
+            String outcomeBasis,
+            String displayName,
+            String status,
+            @Nullable Long ruleAmountMinor,
+            @Nullable String ruleCurrency,
+            @Nullable String ruleComparator,
+            @Nullable Long ruleThreshold,
+            @Nullable String ruleWindow,
+            @Nullable String ruleTrigger,
+            int ruleVersion) {
+
+        public boolean hasRule() {
+            return ruleAmountMinor != null;
+        }
+    }
+
+    /**
+     * The rule half of a reason (ADR 0108) — all six or none, enforced by
+     * {@code ck_adjustment_reason_rule_pair}.
+     *
+     * @param amountMinor posted by {@code AdjustmentRuleEvaluator} when
+     *                    {@code comparator} holds against {@code threshold};
+     *                    sign must match the reason's {@code kind}
+     * @param comparator  {@code GTE} or {@code LTE}
+     * @param threshold   a plain count for {@code LATE_DELIVERY}/{@code DELIVERED_VOLUME},
+     *                    basis points (0-10000) for the two {@code *_RATE} bases,
+     *                    minor currency units for {@code CASH_VARIANCE}
+     * @param window      {@code SHIFT} or {@code SETTLEMENT_PERIOD}
+     * @param trigger     {@code SHIFT_CLOSE} or {@code SETTLEMENT_PERIOD_CLOSE}
+     */
+    public record RuleConfig(
+            long amountMinor, String currency, String comparator, long threshold, String window, String trigger) {}
 
     /**
      * The compliance file as a screen may read it: which fields exist, and the
@@ -961,6 +1120,39 @@ public class JdbcCourierStore {
               FROM fulfillment.courier_engagements
             """;
 
+    private static final String SELECT_ADJUSTMENT_REASON = """
+            SELECT id, tenant_id, code, kind, outcome_basis, display_name, status,
+                   rule_amount_minor, rule_currency, rule_comparator, rule_threshold,
+                   rule_window, rule_trigger, rule_version
+              FROM fulfillment.courier_adjustment_reasons
+            """;
+
+    private static AdjustmentReasonRow mapAdjustmentReason(ResultSet rs, int rowNumber) throws SQLException {
+        return new AdjustmentReasonRow(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("code"),
+                rs.getString("kind"),
+                rs.getString("outcome_basis"),
+                rs.getString("display_name"),
+                rs.getString("status"),
+                (Long) rs.getObject("rule_amount_minor"),
+                rs.getString("rule_currency"),
+                rs.getString("rule_comparator"),
+                (Long) rs.getObject("rule_threshold"),
+                rs.getString("rule_window"),
+                rs.getString("rule_trigger"),
+                rs.getInt("rule_version"));
+    }
+
+    private static final String SELECT_COURIER_TYPE = """
+            SELECT id, tenant_id, code, display_name, vehicle_class,
+                   min_distance_meters, max_distance_meters,
+                   max_concurrent_assignments, offer_ttl_seconds,
+                   starting_minute_offset, work_mode, status, version
+              FROM fulfillment.courier_types
+            """;
+
     private static CourierTypeRow mapType(ResultSet rs, int rowNumber) throws SQLException {
         return new CourierTypeRow(
                 rs.getObject("id", UUID.class),
@@ -972,7 +1164,10 @@ public class JdbcCourierStore {
                 rs.getObject("max_distance_meters", Integer.class),
                 rs.getInt("max_concurrent_assignments"),
                 rs.getInt("offer_ttl_seconds"),
-                rs.getString("status"));
+                rs.getInt("starting_minute_offset"),
+                rs.getString("work_mode"),
+                rs.getString("status"),
+                rs.getInt("version"));
     }
 
     private static CourierRosterRow mapRoster(ResultSet rs, int rowNumber) throws SQLException {

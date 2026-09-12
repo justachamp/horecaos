@@ -69,10 +69,18 @@ describe('CouriersPage', () => {
             options: () => options,
           },
         },
-        // `groups()` is read on every load, exactly like `roster()`/`types()`;
-        // defaulted here so the tests below it that are not about groups do
-        // not each have to stub a call they do not care about.
-        { provide: CouriersApi, useValue: { groups: vi.fn().mockResolvedValue([]), ...api } },
+        // `groups()`/`adjustmentReasons()` are read on every load, exactly
+        // like `roster()`/`types()`; defaulted here so the tests below that
+        // are not about groups or adjustments do not each have to stub a
+        // call they do not care about.
+        {
+          provide: CouriersApi,
+          useValue: {
+            groups: vi.fn().mockResolvedValue([]),
+            adjustmentReasons: vi.fn().mockResolvedValue([]),
+            ...api,
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -291,6 +299,93 @@ describe('CouriersPage', () => {
       reasonCode: 'NO_SHOW',
       reason: 'did not come in for a week',
     });
+  });
+
+  // -------------------------------------------------------------- adjustment
+
+  it('records a manual bonus with no origin field, sent as a positive amount', async () => {
+    const recordAdjustment = vi
+      .fn()
+      .mockResolvedValue({ written: true, entryId: 'e1', approvalRequestId: null });
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      adjustmentReasons: vi.fn().mockResolvedValue([
+        {
+          reasonId: 'r1',
+          code: 'GOODWILL_BONUS',
+          kind: 'BONUS',
+          outcomeBasis: 'DELIVERED_VOLUME',
+          displayName: 'Goodwill bonus',
+          status: 'ACTIVE',
+          hasRule: false,
+          ruleVersion: 1,
+        },
+      ]),
+      recordAdjustment,
+    });
+
+    (host.querySelector('[data-testid="courier-adjust"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    typeByLabel(host, 'Amount (minor units)', '50000');
+    typeByLabel(host, 'Note (why)', 'a one-off goodwill bonus');
+
+    (host.querySelector('[data-testid="adjust-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // `origin` stays on the wire (the platform's OpenAPI contract test
+    // refuses to drop a published required field) but the server never reads
+    // it — this console always sends the one truthful value, 'MANUAL', and
+    // nothing in this form can make it send anything else.
+    expect(recordAdjustment).toHaveBeenCalledWith(
+      't1',
+      'courier-1',
+      expect.objectContaining({
+        reasonCode: 'GOODWILL_BONUS',
+        amountMinor: 50000,
+        reason: 'a one-off goodwill bonus',
+        origin: 'MANUAL',
+      }),
+    );
+  });
+
+  it('sends a penalty reason as a negative amount', async () => {
+    const recordAdjustment = vi
+      .fn()
+      .mockResolvedValue({ written: false, entryId: null, approvalRequestId: 'a1' });
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      adjustmentReasons: vi.fn().mockResolvedValue([
+        {
+          reasonId: 'r2',
+          code: 'ORDER_UNDELIVERED',
+          kind: 'PENALTY',
+          outcomeBasis: 'ORDER_UNDELIVERED',
+          displayName: 'Order not delivered',
+          status: 'ACTIVE',
+          hasRule: false,
+          ruleVersion: 1,
+        },
+      ]),
+      recordAdjustment,
+    });
+
+    (host.querySelector('[data-testid="courier-adjust"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    typeByLabel(host, 'Amount (minor units)', '75000');
+    typeByLabel(host, 'Note (why)', 'never arrived');
+
+    (host.querySelector('[data-testid="adjust-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(recordAdjustment).toHaveBeenCalledWith(
+      't1',
+      'courier-1',
+      expect.objectContaining({ reasonCode: 'ORDER_UNDELIVERED', amountMinor: -75000 }),
+    );
   });
 
   // ------------------------------------------------------------ detail pane

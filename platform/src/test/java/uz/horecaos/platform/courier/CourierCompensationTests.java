@@ -36,6 +36,7 @@ import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
 import uz.horecaos.platform.courier.application.ConfirmationPointRetentionJob;
 import uz.horecaos.platform.courier.application.CourierAccrualService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
@@ -134,6 +135,7 @@ class CourierCompensationTests {
     private CourierSettlementService settlement;
     private CourierCashService cash;
     private CourierAdjustmentService adjustments;
+    private AdjustmentRuleEvaluator adjustmentRules;
     private CourierDispatchGate gate;
     private CourierRateCardService rateCards;
     private DeliveryCostQueryService deliveryCosts;
@@ -236,8 +238,19 @@ class CourierCompensationTests {
         // evidence is proved in CourierEvidenceMediaTenantScopeTests.
         engagements = new CourierEngagementService(
                 courierStore, protection, audit, policyResolver, (tenantId, assetIds) -> false, clock);
+        adjustments = new CourierAdjustmentService(courierStore, ledger, approvals, audit, policyResolver, clock);
+        adjustmentRules = new AdjustmentRuleEvaluator(courierStore, ledgerStore, adjustments);
         shifts = new CourierShiftService(
-                shiftStore, courierStore, ledgerStore, rateCardStore, ledger, policyResolver, protection, audit, clock);
+                shiftStore,
+                courierStore,
+                ledgerStore,
+                rateCardStore,
+                ledger,
+                policyResolver,
+                protection,
+                audit,
+                adjustmentRules,
+                clock);
         accruals = new CourierAccrualService(
                 ledgerStore,
                 rateCardStore,
@@ -251,7 +264,6 @@ class CourierCompensationTests {
         settlement = new CourierSettlementService(
                 ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock);
         cash = new CourierCashService(shiftStore, ledger, audit, clock);
-        adjustments = new CourierAdjustmentService(courierStore, ledger, approvals, audit, policyResolver, clock);
         gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         deliveryCosts = new DeliveryCostQueryService(costStore);
@@ -487,8 +499,8 @@ class CourierCompensationTests {
     @DisplayName("a newly authored courier type is readable by id and in the tenant's list")
     void aNewCourierTypeIsReadableAndListed() {
         UUID carTypeId = UUID.randomUUID();
-        courierStore.insertType(
-                new JdbcCourierStore.CourierTypeRow(carTypeId, TENANT, "CAR", "Car", "CAR", 0, null, 6, 90, "ACTIVE"));
+        courierStore.insertType(new JdbcCourierStore.CourierTypeRow(
+                carTypeId, TENANT, "CAR", "Car", "CAR", 0, null, 6, 90, 0, "SHIFT", "ACTIVE", 1));
 
         var found = courierStore.findType(TENANT, carTypeId).orElseThrow();
         assertThat(found.displayName()).isEqualTo("Car");
@@ -498,6 +510,23 @@ class CourierCompensationTests {
                 .as("the fixture's Scooter type and the freshly authored Car both belong to this tenant")
                 .extracting(JdbcCourierStore.CourierTypeRow::code)
                 .contains("SCOOTER", "CAR");
+    }
+
+    @Test
+    @DisplayName("maxDistanceMeters is accepted at type creation and enforced by CourierDispatchGate")
+    void maxDistanceMetersIsEnforcedByTheDispatchGate() {
+        // The fixture's own SCOOTER type carries maxDistanceMeters = 15_000
+        // (seedCourierType), so this proves the create-path value the gap map
+        // named — "accepted, enforced, never sent" — is read back by the same
+        // gate that already enforces it, not only stored inertly.
+        policies.enforcement = ShiftEnforcement.OFF; // isolate the distance-band refusal alone
+
+        CourierDispatchGate.Eligibility withinBand = gate.evaluate(TENANT, BRAND, branch, courierId, 4_000);
+        assertThat(withinBand.refusals()).doesNotContain("OUTSIDE_DISTANCE_BAND");
+
+        CourierDispatchGate.Eligibility beyondBand = gate.evaluate(TENANT, BRAND, branch, courierId, 20_000);
+        assertThat(beyondBand.eligible()).isFalse();
+        assertThat(beyondBand.refusals()).contains("OUTSIDE_DISTANCE_BAND");
     }
 
     @Test
@@ -514,9 +543,106 @@ class CourierCompensationTests {
         assertThat(summary.courierTypeId())
                 .as("seedRateCard() applies brand-wide, to every courier type")
                 .isNull();
+        assertThat(summary.effectiveFrom())
+                .as("activation stamps an effective-from instant, which the console can now render")
+                .isNotNull();
 
         RateCard detail = rateCardStore.findCard(TENANT, summary.id()).orElseThrow();
         assertThat(detail.components()).isNotEmpty();
+        assertThat(detail.of(RateComponentType.PER_KM_BAND))
+                .as("GET rate-cards/{cardId} carries the PER_KM_BAND ladder, not only flat components")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("a courier type can be corrected under its expected version, and archived, but never deleted")
+    void aCourierTypeCanBeCorrectedAndArchived() {
+        UUID carTypeId = UUID.randomUUID();
+        courierStore.insertType(new JdbcCourierStore.CourierTypeRow(
+                carTypeId, TENANT, "CAR", "Car", "CAR", 0, null, 6, 90, 0, "SHIFT", "ACTIVE", 1));
+
+        boolean updated = courierStore.updateType(
+                TENANT,
+                carTypeId,
+                new JdbcCourierStore.CourierTypeUpdate(
+                        "CAR", "Car (corrected)", "CAR", 100, 20_000, 4, 120, 15, "SHIFT"),
+                1,
+                Instant.now());
+        assertThat(updated).isTrue();
+
+        var corrected = courierStore.findType(TENANT, carTypeId).orElseThrow();
+        assertThat(corrected.displayName()).isEqualTo("Car (corrected)");
+        assertThat(corrected.maxConcurrentAssignments()).isEqualTo(4);
+        assertThat(corrected.startingMinuteOffset()).isEqualTo(15);
+        assertThat(corrected.version()).isEqualTo(2);
+
+        boolean staleWrite = courierStore.updateType(
+                TENANT,
+                carTypeId,
+                new JdbcCourierStore.CourierTypeUpdate("CAR", "Stale write", "CAR", 0, null, 1, 60, 0, "SHIFT"),
+                1, // the version this row had before the update above, now stale
+                Instant.now());
+        assertThat(staleWrite)
+                .as("a write under a version somebody else already moved past is refused")
+                .isFalse();
+        assertThat(courierStore.findType(TENANT, carTypeId).orElseThrow().displayName())
+                .as("the stale write changed nothing")
+                .isEqualTo("Car (corrected)");
+
+        assertThat(courierStore.archiveType(TENANT, carTypeId, Instant.now())).isTrue();
+        assertThat(courierStore.listTypes(TENANT))
+                .as("archived types leave the registration picker's list")
+                .extracting(JdbcCourierStore.CourierTypeRow::code)
+                .doesNotContain("CAR");
+        assertThat(courierStore.listTypes(TENANT, true))
+                .as("but the management screen still shows an archived type a past rate card may name")
+                .extracting(JdbcCourierStore.CourierTypeRow::code)
+                .contains("CAR");
+        assertThat(courierStore.archiveType(TENANT, carTypeId, Instant.now()))
+                .as("archiving an already-archived type is refused, not silently repeated")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a second rate-card version under a narrower scope supersedes the brand-wide one, by code")
+    void aSecondRateCardVersionUnderANarrowerScopeSupersedesTheFirst() {
+        // A day later than seedRateCard()'s own activation: activating a
+        // superseding version at the exact instant the superseded one was
+        // itself activated would open a zero-width effective window
+        // (ck_rate_card_window requires effective_to > effective_from), and
+        // that is right — two activations of the same code do not happen at
+        // the same instant outside a test that forgot to move the clock.
+        clock.set(NOON.plus(Duration.ofDays(1)));
+        UUID v2 = rateCards.author(new CourierRateCardService.NewRateCard(
+                TENANT,
+                BRAND,
+                branch, // narrower than seedRateCard()'s brand-wide (null) scope
+                null,
+                "STANDARD", // seedRateCard()'s own code — a code whose v1 is ACTIVE
+                2,
+                UZS,
+                List.of(new RateComponent(
+                        UUID.randomUUID(), RateComponentType.PER_ORDER, 0, 3_500, null, null, null))));
+
+        rateCards.activate(TENANT, v2, manager(), "re-pricing STANDARD for this branch");
+
+        List<JdbcCourierRateCardStore.CardSummaryRow> cards = rateCardStore.list(TENANT, BRAND);
+        var supersededV1 = cards.stream()
+                .filter(row -> row.id().equals(rateCardId))
+                .findFirst()
+                .orElseThrow();
+        var activeV2 =
+                cards.stream().filter(row -> row.id().equals(v2)).findFirst().orElseThrow();
+
+        assertThat(supersededV1.status())
+                .as("one ACTIVE row per code, per ADR 0042's own rule — v1 stands down when v2 activates")
+                .isEqualTo("SUPERSEDED");
+        assertThat(supersededV1.cardVersion()).isEqualTo(1);
+        assertThat(activeV2.status()).isEqualTo("ACTIVE");
+        assertThat(activeV2.cardVersion()).isEqualTo(2);
+        assertThat(activeV2.locationId())
+                .as("the re-priced card is scoped narrower than the brand-wide card it replaced")
+                .isEqualTo(branch);
     }
 
     // ------------------------------------------------------- shifts (§3.5)
@@ -946,12 +1072,169 @@ class CourierCompensationTests {
     }
 
     @Test
+    @DisplayName("closing a shift evaluates a wired SHIFT-window rule and posts its bonus, stamped RULE")
+    void shiftCloseEvaluatesAWiredRuleAndPostsItsBonus() {
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "TWO_IN_A_SHIFT",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "Two or more deliveries in one shift",
+                new JdbcCourierStore.RuleConfig(50_000, UZS, "GTE", 2, "SHIFT", "SHIFT_CLOSE"));
+
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .as("the rule fired the moment the shift's own delivery count became final")
+                .filteredOn(entry -> "TWO_IN_A_SHIFT".equals(entry.reasonCode()))
+                .hasSize(1)
+                .allSatisfy(entry -> {
+                    assertThat(entry.amountMinor()).isEqualTo(50_000);
+                    assertThat(entry.origin())
+                            .as("AdjustmentOrigin.RULE — stamped by AdjustmentRuleEvaluator, never by a request")
+                            .isEqualTo(AdjustmentOrigin.RULE);
+                    assertThat(entry.approvalRequestId())
+                            .as("a bonus never needs four-eyes approval, whatever its origin")
+                            .isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("closing a shift evaluates its wired rules only once, however many closes are retried")
+    void shiftCloseRuleEvaluationIsIdempotent() {
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "ONE_DELIVERY",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "At least one delivery",
+                new JdbcCourierStore.RuleConfig(10_000, UZS, "GTE", 1, "SHIFT", "SHIFT_CLOSE"));
+
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        // A second close of the same shift is refused by the shift itself
+        // (RESOURCE_CONFLICT), but the point this test proves is narrower and
+        // holds even if that guard were ever weakened: the evaluator's own
+        // idempotency key ties one rule to one window, so re-evaluating the
+        // same closed shift could never post the bonus twice.
+        List<CourierAdjustmentService.Outcome> repeated = adjustmentRules.evaluateShiftClose(
+                TENANT, shiftStore.findShift(TENANT, shift.id()).orElseThrow());
+
+        assertThat(repeated).hasSize(1);
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .filteredOn(entry -> "ONE_DELIVERY".equals(entry.reasonCode()))
+                .as("re-evaluating posts the same entry back, not a second one")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a rule-derived penalty above the configured threshold still needs four-eyes approval")
+    void aRuleDerivedPenaltyAboveThresholdStillNeedsApproval() {
+        // CourierCompensationPolicy.DEFAULTS.penaltyApprovalThresholdMinor() is
+        // 200_000; this rule's amount is chosen above it on purpose.
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "OVER_THRESHOLD_PENALTY",
+                "PENALTY",
+                "DELIVERED_VOLUME",
+                "A contrived penalty above the approval threshold",
+                new JdbcCourierStore.RuleConfig(-300_000, UZS, "GTE", 1, "SHIFT", "SHIFT_CLOSE"));
+        approvals.answer = new ApprovalOutcome.Pending(UUID.randomUUID());
+
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        assertThat(entriesOfType(LedgerEntryType.PENALTY))
+                .as("origin=RULE does not exempt a large penalty from ADR 0042's four-eyes rule")
+                .filteredOn(entry -> "OVER_THRESHOLD_PENALTY".equals(entry.reasonCode()))
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("every adjustment reason names a delivery outcome, and free text cannot be one")
     void everyAdjustmentReasonNamesADeliveryOutcome() {
         Throwable behaviouralReason = catchThrowable(() -> courierStore.insertAdjustmentReason(
-                UUID.randomUUID(), TENANT, "RUDE_TO_CUSTOMER", "PENALTY", "ATTITUDE", "Rude to the customer"));
+                UUID.randomUUID(), TENANT, "RUDE_TO_CUSTOMER", "PENALTY", "ATTITUDE", "Rude to the customer", null));
 
         assertThat(behaviouralReason).hasMessageContaining("ck_adjustment_reason_basis");
+    }
+
+    @Test
+    @DisplayName("the registry round-trips a rule-wired reason, and lists it alongside manual-only ones")
+    void theRegistryRoundTripsARuleWiredReason() {
+        UUID reasonId = UUID.randomUUID();
+        courierStore.insertAdjustmentReason(
+                reasonId,
+                TENANT,
+                "LATE_STREAK",
+                "PENALTY",
+                "LATE_DELIVERY",
+                "Three or more late deliveries in a shift",
+                new JdbcCourierStore.RuleConfig(-20_000, UZS, "GTE", 3, "SHIFT", "SHIFT_CLOSE"));
+
+        var found = courierStore.findAdjustmentReason(TENANT, "LATE_STREAK").orElseThrow();
+        assertThat(found.hasRule()).isTrue();
+        assertThat(found.ruleAmountMinor()).isEqualTo(-20_000);
+        assertThat(found.ruleComparator()).isEqualTo("GTE");
+        assertThat(found.ruleThreshold()).isEqualTo(3);
+        assertThat(found.ruleWindow()).isEqualTo("SHIFT");
+        assertThat(found.ruleTrigger()).isEqualTo("SHIFT_CLOSE");
+
+        assertThat(courierStore.listAdjustmentReasons(TENANT))
+                .as("seedAdjustmentReasons()'s two manual-only reasons and this rule-wired one all list")
+                .hasSize(3)
+                .filteredOn(row -> "LATE_STREAK".equals(row.code()))
+                .extracting(JdbcCourierStore.AdjustmentReasonRow::hasRule)
+                .containsExactly(true);
+        assertThat(courierStore.listAdjustmentReasons(TENANT))
+                .filteredOn(row -> "ORDER_UNDELIVERED".equals(row.code()))
+                .as("seedAdjustmentReasons()'s manual-only reason carries no rule")
+                .extracting(JdbcCourierStore.AdjustmentReasonRow::hasRule)
+                .containsExactly(false);
+
+        assertThat(courierStore.archiveAdjustmentReason(TENANT, reasonId)).isTrue();
+        assertThat(courierStore
+                        .findAdjustmentReason(TENANT, "LATE_STREAK")
+                        .orElseThrow()
+                        .status())
+                .isEqualTo("ARCHIVED");
+        assertThat(courierStore.ruleReasonsAt(TENANT, "SHIFT", "SHIFT_CLOSE"))
+                .as("an archived reason stops evaluating — ruleReasonsAt reads status = ACTIVE")
+                .isEmpty();
+        assertThat(courierStore.archiveAdjustmentReason(TENANT, reasonId))
+                .as("archiving an already-archived reason is refused, not silently repeated")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a rule's six fields are all-or-nothing, enforced by the database and not only by the Java type")
+    void aRulesFieldsAreAllOrNothingAtTheDatabase() {
+        // -10_000, not a positive figure: ORDER_UNDELIVERED is a PENALTY reason,
+        // and a positive amount here would also trip ck_adjustment_reason_rule_sign,
+        // leaving it ambiguous which constraint this test is actually proving.
+        Throwable partial =
+                catchThrowable(() -> jdbc.sql("""
+                        UPDATE fulfillment.courier_adjustment_reasons
+                           SET rule_amount_minor = -10000
+                         WHERE tenant_id = :tenantId AND code = 'ORDER_UNDELIVERED'
+                        """).param("tenantId", TENANT).update());
+
+        assertThat(partial).hasMessageContaining("ck_adjustment_reason_rule_pair");
     }
 
     // ------------------------------------------------------------- settlement
@@ -1381,8 +1664,8 @@ class CourierCompensationTests {
 
     private void seedCourier() {
         courierTypeId = UUID.randomUUID();
-        courierStore.insertType(
-                new CourierTypeRow(courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        courierStore.insertType(new CourierTypeRow(
+                courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
 
         CourierEngagementService.Registration registration =
                 engagements.register(new CourierEngagementService.NewCourier(
@@ -1435,14 +1718,16 @@ class CourierCompensationTests {
                 "ORDER_UNDELIVERED",
                 "PENALTY",
                 "ORDER_UNDELIVERED",
-                "The order was not delivered");
+                "The order was not delivered",
+                null);
         courierStore.insertAdjustmentReason(
                 UUID.randomUUID(),
                 TENANT,
                 "ON_TIME_STREAK",
                 "BONUS",
                 "ON_TIME_RATE",
-                "Ten consecutive on-time deliveries");
+                "Ten consecutive on-time deliveries",
+                null);
     }
 
     private static RateComponent band(int from, @Nullable Integer to, long perKmMinor) {
