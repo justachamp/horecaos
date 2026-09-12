@@ -94,15 +94,42 @@ public class JdbcCourierShiftStore {
      * home, and whose hours are sitting in {@code AWAITING_APPROVAL}.
      */
     public List<ShiftRow> atLocation(UUID tenantId, UUID brandId, UUID locationId, int limit) {
-        return jdbc.sql(SELECT_SHIFT + """
-                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+        return atLocation(tenantId, brandId, locationId, null, null, limit);
+    }
+
+    /**
+     * The same read, windowed to a period. Both bounds are inclusive-overlap on
+     * {@code opened_at}/{@code closed_at} — a shift still open, or one that
+     * closed after {@code from}, is part of "shifts covering this period" even
+     * when it opened earlier. Without a window the page had no way to ask for
+     * anything but "the most recent N", which is IA 3.5's own gap: a manager
+     * checking last Tuesday could not.
+     */
+    public List<ShiftRow> atLocation(
+            UUID tenantId, UUID brandId, UUID locationId, @Nullable Instant from, @Nullable Instant to, int limit) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("brandId", brandId);
+        params.put("locationId", locationId);
+        params.put("limit", limit);
+
+        StringBuilder filter =
+                new StringBuilder(" WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId");
+        if (from != null) {
+            filter.append(" AND (closed_at IS NULL OR closed_at >= :from)");
+            params.put("from", JdbcCourierStore.utc(from));
+        }
+        if (to != null) {
+            filter.append(" AND opened_at <= :to");
+            params.put("to", JdbcCourierStore.utc(to));
+        }
+
+        return jdbc.sql(SELECT_SHIFT + filter + """
                  ORDER BY opened_at DESC
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId)
-                .param("brandId", brandId)
-                .param("locationId", locationId)
-                .param("limit", limit)
+                .params(params)
                 .query(JdbcCourierShiftStore::mapShift)
                 .list();
     }

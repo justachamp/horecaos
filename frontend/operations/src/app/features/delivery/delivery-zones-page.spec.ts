@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../core/api/catalog-paths';
@@ -126,6 +127,7 @@ describe('DeliveryZonesPage', () => {
         { provide: DeliveryZonesApi, useValue: api },
         { provide: DeliveryTariffsApi, useValue: tariffs },
         { provide: RegionsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        provideRouter([]),
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale(locale);
@@ -411,6 +413,7 @@ describe('DeliveryZonesPage', () => {
         { provide: DeliveryZonesApi, useValue: { list: vi.fn() } },
         { provide: DeliveryTariffsApi, useValue: { list: vi.fn() } },
         { provide: RegionsApi, useValue: { list: vi.fn() } },
+        provideRouter([]),
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -420,5 +423,11 @@ describe('DeliveryZonesPage', () => {
     fixture.detectChanges();
 
     expect(host().querySelector('[data-testid="zones-denied"]')).not.toBeNull();
+  });
+
+  it('links to the bulk geozone import page', async () => {
+    await render({ list: vi.fn().mockResolvedValue([]) });
+    const link = host().querySelector('[data-testid="zones-import-link"]');
+    expect(link?.getAttribute('href')).toBe('/delivery/zones/import');
   });
 });

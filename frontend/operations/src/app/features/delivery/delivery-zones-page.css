@@ -13,6 +13,22 @@
   margin-bottom: 12px;
 }
 
+.zones__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zones__import-link {
+  font-size: 13px;
+  color: var(--q-primary);
+  text-decoration: none;
+}
+
+.zones__import-link:hover {
+  text-decoration: underline;
+}
+
 .zones__create {
   padding: 6px 14px;
   border: 1px solid var(--q-primary);

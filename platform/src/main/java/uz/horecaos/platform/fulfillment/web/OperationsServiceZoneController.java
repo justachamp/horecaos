@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -20,6 +22,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
+import uz.horecaos.platform.fulfillment.application.ZoneBatchImportService;
+import uz.horecaos.platform.fulfillment.application.ZoneBatchImportService.BatchImportReport;
+import uz.horecaos.platform.fulfillment.application.ZoneBatchImportService.ImportRow;
+import uz.horecaos.platform.fulfillment.application.ZoneBatchImportService.RowOutcome;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
@@ -61,10 +67,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperationsServiceZoneController {
 
     private final ServiceZoneService zones;
+    private final ZoneBatchImportService batchImport;
     private final CurrentActor currentActor;
 
-    public OperationsServiceZoneController(ServiceZoneService zones, CurrentActor currentActor) {
+    public OperationsServiceZoneController(
+            ServiceZoneService zones, ZoneBatchImportService batchImport, CurrentActor currentActor) {
         this.zones = zones;
+        this.batchImport = batchImport;
         this.currentActor = currentActor;
     }
 
@@ -264,6 +273,43 @@ public class OperationsServiceZoneController {
         }
     }
 
+    @PostMapping("/import-batch")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Bulk-import legacy zone geometry (operations gap map row 3.6c, ADR 0037)",
+            description = "Every accepted row lands as a new zone's DRAFT version, exactly like "
+                    + "drafting one by hand — never activated by this endpoint. dryRun runs every "
+                    + "check a real import would (geometry validity, the area ceiling, the "
+                    + "region's bounding box) and then rolls the whole batch back, so an operator "
+                    + "sees the outcome before committing it. A coordinate-order mistake still "
+                    + "produces a valid polygon that ships nowhere near where it should — that is "
+                    + "exactly why ADR 0037 gates activation behind rendering the shape on a map "
+                    + "beside its source (X.4), which this endpoint does not attempt.")
+    public ResponseEntity<BatchImportResponse> importBatch(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BatchImportRequest body) {
+
+        List<ImportRow> rows = body.rows().stream()
+                .map(row -> new ImportRow(
+                        row.externalRef(),
+                        row.role(),
+                        row.code(),
+                        row.displayNameRu(),
+                        row.displayNameUz(),
+                        row.displayNameEn(),
+                        row.regionId(),
+                        row.priority(),
+                        row.currency(),
+                        row.deliveryTariffId(),
+                        row.freeDeliveryFromMinor(),
+                        row.minBasketMinor(),
+                        row.geoJson(),
+                        actorId()))
+                .toList();
+
+        BatchImportReport report = batchImport.importBatch(tenantId, brandId, rows, body.dryRun());
+        return ResponseEntity.ok(BatchImportResponse.of(report));
+    }
+
     private ZoneRole resolveRole(UUID tenantId, UUID brandId, UUID zoneId) {
         return zones.roleOf(tenantId, brandId, zoneId)
                 .orElseThrow(
@@ -344,6 +390,65 @@ public class OperationsServiceZoneController {
                     row.createdAt(),
                     row.activatedAt(),
                     row.retiredAt());
+        }
+    }
+
+    /** A batch of legacy zone geometry to land as DRAFT versions (row {@code 3.6c}). */
+    public record BatchImportRequest(
+            boolean dryRun, @NotEmpty @Valid List<BatchImportZoneRow> rows) {}
+
+    /**
+     * One legacy zone, as the source system named it. {@code externalRef} is
+     * never interpreted — it is echoed back on the matching {@link
+     * RowOutcomeResponse} so an operator can line a report row up against the
+     * source spreadsheet without hunting for it by geometry.
+     */
+    public record BatchImportZoneRow(
+            @NotBlank @Size(max = 120) String externalRef,
+            @NotNull ZoneRole role,
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 200) String displayNameRu,
+            @NotBlank @Size(max = 200) String displayNameUz,
+            @NotBlank @Size(max = 200) String displayNameEn,
+            @Nullable UUID regionId,
+            int priority,
+            @NotBlank @Size(min = 3, max = 3) String currency,
+            @Nullable UUID deliveryTariffId,
+            @PositiveOrZero Long freeDeliveryFromMinor,
+            @PositiveOrZero Long minBasketMinor,
+            @NotBlank String geoJson) {}
+
+    public record BatchImportResponse(
+            int totalRows, int accepted, int rejected, boolean dryRun, List<RowOutcomeResponse> rows) {
+
+        static BatchImportResponse of(BatchImportReport report) {
+            return new BatchImportResponse(
+                    report.totalRows(),
+                    report.accepted(),
+                    report.rejected(),
+                    report.dryRun(),
+                    report.rows().stream().map(RowOutcomeResponse::of).toList());
+        }
+    }
+
+    public record RowOutcomeResponse(
+            String externalRef,
+            boolean accepted,
+            @Nullable UUID zoneId,
+            @Nullable Integer version,
+            @Nullable Double areaSquareMeters,
+            List<String> warnings,
+            @Nullable String error) {
+
+        static RowOutcomeResponse of(RowOutcome outcome) {
+            return new RowOutcomeResponse(
+                    outcome.externalRef(),
+                    outcome.accepted(),
+                    outcome.zoneId(),
+                    outcome.version(),
+                    outcome.areaSquareMeters(),
+                    outcome.warnings(),
+                    outcome.error());
         }
     }
 }

@@ -1,0 +1,41 @@
+.plan-shift__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.plan-shift__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.plan-shift__error {
+  color: var(--q-error-text);
+}
+
+.plan-shift__dismiss,
+.plan-shift__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.plan-shift__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.plan-shift__confirm:disabled,
+.plan-shift__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

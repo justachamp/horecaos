@@ -77,3 +77,68 @@
   height: 120px;
   background: var(--q-surface-1);
 }
+
+.shifts__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.shifts__period {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.shifts__period-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shifts__period-input {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.shifts__apply {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.roster {
+  margin-top: 32px;
+}
+
+.roster__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roster__hint {
+  color: var(--q-ink-subtle);
+  margin: 4px 0 12px;
+}
+
+.roster__plan {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+  font-size: 12px;
+}

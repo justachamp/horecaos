@@ -6,6 +6,44 @@
       <p class="q-body-sm">{{ 'delivery.shifts.denied' | t }}</p>
     </div>
   } @else {
+    <div class="shifts__toolbar">
+      <h1 class="q-subhead">{{ 'delivery.shifts.title' | t }}</h1>
+      <div
+        class="shifts__period"
+        role="group"
+        [attr.aria-label]="'delivery.shifts.period.label' | t"
+      >
+        <label class="shifts__period-field">
+          <span class="q-caption">{{ 'delivery.shifts.period.from' | t }}</span>
+          <input
+            type="date"
+            class="shifts__period-input"
+            [value]="fromDate()"
+            (change)="setFromDate($any($event.target).value)"
+            data-testid="shifts-from"
+          />
+        </label>
+        <label class="shifts__period-field">
+          <span class="q-caption">{{ 'delivery.shifts.period.to' | t }}</span>
+          <input
+            type="date"
+            class="shifts__period-input"
+            [value]="toDate()"
+            (change)="setToDate($any($event.target).value)"
+            data-testid="shifts-to"
+          />
+        </label>
+        <button
+          type="button"
+          class="shifts__apply"
+          (click)="applyPeriod()"
+          data-testid="shifts-apply-period"
+        >
+          {{ 'delivery.shifts.period.apply' | t }}
+        </button>
+      </div>
+    </div>
+
     @if (loadError(); as error) {
       <div class="shifts__error-band" role="alert">
         <span class="q-body-sm">{{ error }}</span>
@@ -22,8 +60,10 @@
         <tr>
           <th>{{ 'delivery.shifts.column.courier' | t }}</th>
           <th>{{ 'delivery.shifts.column.status' | t }}</th>
+          <th>{{ 'delivery.shifts.column.dutyState' | t }}</th>
           <th>{{ 'delivery.shifts.column.openedAt' | t }}</th>
           <th>{{ 'delivery.shifts.column.closedAt' | t }}</th>
+          <th class="shifts__num-col">{{ 'delivery.shifts.column.break' | t }}</th>
           <th class="shifts__num-col">{{ 'delivery.shifts.column.paid' | t }}</th>
           <th></th>
         </tr>
@@ -31,12 +71,21 @@
       <tbody>
         @for (shift of shifts(); track shift.shiftId) {
           <tr data-testid="shift-row">
-            <td class="q-tnum">{{ shift.courierId }}</td>
+            <td data-testid="shift-courier">{{ courierLabel(shift) }}</td>
             <td>
               <span class="status-badge">{{ statusLabel(shift.status) }}</span>
             </td>
+            <td data-testid="shift-duty-state">
+              <q-status-pill
+                [label]="dutyStateLabel(shift.dutyState)"
+                [tone]="dutyStateTone(shift.dutyState)"
+              />
+            </td>
             <td class="q-tnum">{{ openedAtLabel(shift) }}</td>
             <td class="q-tnum">{{ closedAtLabel(shift) }}</td>
+            <td class="shifts__num-col q-tnum" data-testid="shift-break">
+              {{ breakLabel(shift) }}
+            </td>
             <td class="shifts__num-col q-tnum">{{ paidLabel(shift) }}</td>
             <td class="shifts__actions">
               @if (shift.status === 'OPEN') {
@@ -65,12 +114,105 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="6" class="shifts__empty" data-testid="shifts-empty">
+            <td colspan="8" class="shifts__empty" data-testid="shifts-empty">
               {{ 'delivery.shifts.empty' | t }}
             </td>
           </tr>
         }
       </tbody>
     </table>
+
+    <section class="roster" data-testid="roster-section">
+      <div class="roster__toolbar">
+        <h2 class="q-subhead">{{ 'delivery.shifts.roster.title' | t }}</h2>
+        <button
+          type="button"
+          class="roster__plan"
+          (click)="openPlanDialog()"
+          data-testid="roster-plan"
+        >
+          {{ 'delivery.shifts.roster.plan' | t }}
+        </button>
+      </div>
+      <p class="q-caption roster__hint">{{ 'delivery.shifts.roster.hint' | t }}</p>
+
+      @if (rosterError(); as error) {
+        <div class="shifts__error-band" role="alert" data-testid="roster-error">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+
+      @if (rosterLoading()) {
+        <div class="shifts__skeleton" [attr.aria-label]="'delivery.shifts.loading' | t"></div>
+      } @else {
+        <table class="shifts__table">
+          <thead>
+            <tr>
+              <th>{{ 'delivery.shifts.column.courier' | t }}</th>
+              <th>{{ 'delivery.shifts.roster.column.window' | t }}</th>
+              <th>{{ 'delivery.shifts.roster.column.status' | t }}</th>
+              <th>{{ 'delivery.shifts.roster.column.coverage' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of rosterEntries(); track entry.entryId) {
+              <tr data-testid="roster-row">
+                <td data-testid="roster-courier">{{ courierLabel(entry) }}</td>
+                <td class="q-tnum">{{ plannedWindowLabel(entry) }}</td>
+                <td>
+                  <span class="status-badge">{{ entryStatusLabel(entry.status) }}</span>
+                </td>
+                <td data-testid="roster-coverage">
+                  <q-status-pill
+                    [label]="coverageLabel(entry.comparison?.coverage)"
+                    [tone]="coverageTone(entry.comparison?.coverage)"
+                  />
+                </td>
+                <td class="shifts__actions">
+                  @if (canPublish(entry)) {
+                    <button
+                      type="button"
+                      class="shifts__action shifts__action--approve"
+                      [disabled]="isEntryBusy(entry)"
+                      (click)="publishEntry(entry)"
+                      data-testid="roster-publish"
+                    >
+                      {{ 'delivery.shifts.roster.publish' | t }}
+                    </button>
+                  }
+                  @if (canCancelEntry(entry)) {
+                    <button
+                      type="button"
+                      class="shifts__action"
+                      [disabled]="isEntryBusy(entry)"
+                      (click)="cancelEntry(entry)"
+                      data-testid="roster-cancel"
+                    >
+                      {{ 'delivery.shifts.roster.cancel' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="shifts__empty" data-testid="roster-empty">
+                  {{ 'delivery.shifts.roster.empty' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    @if (planDialogOpen()) {
+      <q-plan-shift-dialog
+        [couriers]="couriers()"
+        [busy]="planBusy()"
+        (confirm)="submitPlan($event)"
+        (dismiss)="closePlanDialog()"
+      />
+    }
   }
 </div>
