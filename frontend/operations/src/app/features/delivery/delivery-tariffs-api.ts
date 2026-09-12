@@ -128,7 +128,7 @@ export interface DiscountRequest {
 }
 
 /**
- * A whole rate table as the console now authors it (ADR 0101).
+ * A whole rate table as the console now authors it (ADR 0104).
  *
  * The previous revision drafted one band, no time rules and no discounts, and
  * said so honestly. What it could not say is that the backend had accepted all
@@ -174,7 +174,7 @@ export interface VersionView {
 
 /**
  * Delivery tariffs (operations §3.7) — `OperationsDeliveryTariffController`
- * (ADR 0037, ADR 0101, `operations` OpenAPI surface).
+ * (ADR 0037, ADR 0104, `operations` OpenAPI surface).
  */
 @Injectable({ providedIn: 'root' })
 export class DeliveryTariffsApi {

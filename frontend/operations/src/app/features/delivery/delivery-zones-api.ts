@@ -102,7 +102,7 @@ export interface VersionView {
 
 /**
  * Delivery zones (operations §3.6) — `OperationsServiceZoneController`
- * (ADR 0037, ADR 0101, `operations` OpenAPI surface).
+ * (ADR 0037, ADR 0104, `operations` OpenAPI surface).
  */
 @Injectable({ providedIn: 'root' })
 export class DeliveryZonesApi {

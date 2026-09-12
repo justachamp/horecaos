@@ -102,7 +102,7 @@ const DISCOUNT_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
 /**
  * Delivery tariffs — operations §3.7.
  *
- * **What changed in this wave (ADR 0101).**
+ * **What changed in this wave (ADR 0104).**
  *
  * 1. **The form authors the whole rate table.** It used to draft exactly one
  *    flat band across the whole reach, with no time rules, no discounts, no

@@ -23,7 +23,7 @@ import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Authoring the geography a geocoder is allowed to answer inside (ADR 0037,
- * ADR 0101).
+ * ADR 0104).
  *
  * <p>A region is a code, a tri-lingual name, a centre and a SW/NE bounding
  * box, and the box is the whole point of the row: V0025's own comment says an
@@ -33,7 +33,7 @@ import uz.horecaos.platform.web.api.ApiException;
  * the check that catches a transposed latitude, where "the geometry is valid,
  * it is simply somewhere else".
  *
- * <p>Before ADR 0101 the table's only writer in this repository was test SQL.
+ * <p>Before ADR 0104 the table's only writer in this repository was test SQL.
  * That made the guard inert in production: with no region there is nothing to
  * check against, so every zone activated anywhere passed the box check by
  * default.

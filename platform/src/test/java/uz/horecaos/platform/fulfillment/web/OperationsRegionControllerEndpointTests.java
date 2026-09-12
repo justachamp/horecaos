@@ -39,11 +39,11 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
- * The first surface {@code fulfillment.regions} has ever had (ADR 0101).
+ * The first surface {@code fulfillment.regions} has ever had (ADR 0104).
  *
  * <p>Three things this proves that the service-level suite cannot: the capability
  * is enforced at {@code TENANT} scope and therefore refuses a brand-scoped grant
- * — the reduction in reach ADR 0101 records as a negative consequence, asserted
+ * — the reduction in reach ADR 0104 records as a negative consequence, asserted
  * here so it is a decision and not an accident; a tenant's grant does not reach
  * another tenant's regions through this path; and every write leaves its ADR 0027
  * fact attributed to the caller's own subject.
@@ -215,7 +215,7 @@ class OperationsRegionControllerEndpointTests {
 
     @Test
     void aBrandScopedGrantCannotAuthorATenantWideRegion() throws Exception {
-        // ADR 0101's stated negative consequence, asserted rather than assumed:
+        // ADR 0104's stated negative consequence, asserted rather than assumed:
         // the row has no brand_id and its box gates every brand's zone
         // activations, so a brand manager who may draw a zone may not redraw the
         // geography that zone is checked against.

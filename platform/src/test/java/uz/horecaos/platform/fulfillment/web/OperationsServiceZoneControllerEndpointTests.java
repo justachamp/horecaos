@@ -257,7 +257,7 @@ class OperationsServiceZoneControllerEndpointTests {
 
     @Test
     void aZoneCanBeListedByVersion_deactivatedAndUnbound() throws Exception {
-        // ADR 0101: before these three the console could only ever add. A wrong
+        // ADR 0104: before these three the console could only ever add. A wrong
         // radius was live for ever and a branch bound to the wrong zone stayed
         // bound, because "activate" was the only lifecycle verb with a surface.
         UUID zoneId = registerZone(OWNER);

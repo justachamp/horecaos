@@ -54,7 +54,7 @@ import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
- * What ADR 0101 adds to ADR 0037: a region anyone can author, a tariff binding
+ * What ADR 0104 adds to ADR 0037: a region anyone can author, a tariff binding
  * the console actually sends, and a zone version that can be taken back.
  *
  * <p>Four of these assert the absence of something after a mutation — the zone
@@ -158,7 +158,7 @@ class ZoneLifecycleAndRegionTests {
     @Test
     @DisplayName("a draft carrying a tariff activates with it bound, and the zone's tariff is what prices")
     void aZoneDraftCarriesItsTariffAllTheWayToTheFee() {
-        // The defect ADR 0101 names: the console's own client type declared
+        // The defect ADR 0104 names: the console's own client type declared
         // deliveryTariffId and submitDraft never set it, so every console zone
         // reached this state with a null here and the zone-beats-branch chain
         // could not be exercised from the product at all.

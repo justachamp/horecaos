@@ -358,7 +358,7 @@ public class JdbcServiceZoneStore {
     }
 
     /**
-     * Every version of one zone, newest first (ADR 0101).
+     * Every version of one zone, newest first (ADR 0104).
      *
      * <p>ADR 0037's versioning was built for the auditor — a payout dispute six
      * weeks later asking whether that address was inside that polygon — and
@@ -367,7 +367,7 @@ public class JdbcServiceZoneStore {
      * reach, and a wrong radius is permanent.
      *
      * <p>Unpaginated: a zone accumulates one version per edit and the realistic
-     * count is single digits. ADR 0101 accepts that trade-off by name.
+     * count is single digits. ADR 0104 accepts that trade-off by name.
      */
     public List<ZoneVersionRow> listVersions(UUID tenantId, UUID zoneId) {
         return jdbc.sql("""
@@ -552,7 +552,7 @@ public class JdbcServiceZoneStore {
     }
 
     /**
-     * Retires the live version and puts nothing in its place (ADR 0101).
+     * Retires the live version and puts nothing in its place (ADR 0104).
      *
      * <p>The zone then covers nothing, which is ADR 0037's stated safe
      * direction: "a half-configured zone is visibly inert rather than quietly
@@ -577,7 +577,7 @@ public class JdbcServiceZoneStore {
     }
 
     /**
-     * Closes a binding's validity window rather than deleting the row (ADR 0101).
+     * Closes a binding's validity window rather than deleting the row (ADR 0104).
      *
      * <p>A {@code delivery_fee_resolutions} row six weeks old names the binding
      * that applied, so deleting it turns evidence into a dangling reference —

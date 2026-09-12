@@ -63,7 +63,7 @@ export interface RegionRegisteredView {
 
 /**
  * Regions (operations §3.6b) — `OperationsRegionController` (ADR 0037,
- * ADR 0101).
+ * ADR 0104).
  *
  * Tenant-scoped, not brand-scoped: the row has no `brand_id` and every brand
  * under the tenant geocodes against it. That is also why the capability is

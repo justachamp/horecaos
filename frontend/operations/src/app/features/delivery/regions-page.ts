@@ -16,7 +16,7 @@ const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
 };
 
 /**
- * Regions and their geocoder bounding boxes — operations §3.6b (ADR 0101).
+ * Regions and their geocoder bounding boxes — operations §3.6b (ADR 0104).
  *
  * **A row that existed at no layer.** `fulfillment.regions` has been in the
  * schema since V0025 and had no store, no service, no controller and no

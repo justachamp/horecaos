@@ -1,6 +1,6 @@
 /**
  * Where delivery zones, regions and tariffs live on the platform (ADR 0037,
- * ADR 0101).
+ * ADR 0104).
  *
  * **The mismatch this file used to document is now closed.** Every builder
  * below points at `/api/v1/operations` — the surface group ADR 0057 defines

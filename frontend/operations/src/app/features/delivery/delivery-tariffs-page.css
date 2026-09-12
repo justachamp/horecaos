@@ -206,7 +206,7 @@
   color: var(--q-ink-muted);
 }
 
-/* ---------------------------------------------------------------- ADR 0101 */
+/* ---------------------------------------------------------------- ADR 0104 */
 
 .dialog--wide {
   width: 720px;
@@ -285,7 +285,7 @@
 }
 
 /* ROAD mode with no routing answer prices from an inflated straight line and
-   stamps RADIUS_FALLBACK on the resolution. ADR 0101: render it, do not hide
+   stamps RADIUS_FALLBACK on the resolution. ADR 0104: render it, do not hide
    it — an operator who thinks routing is working prices differently from one
    who knows the number is approximate. */
 .tariff-detail__fallback,

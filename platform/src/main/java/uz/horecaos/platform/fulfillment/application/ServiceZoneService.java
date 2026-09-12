@@ -266,7 +266,7 @@ public class ServiceZoneService {
 
     /**
      * Retires the live version of a zone and activates nothing in its place
-     * (ADR 0101).
+     * (ADR 0104).
      *
      * <p>The zone then covers nothing. That is the point, and it is ADR 0037's
      * own safe direction — a zone that covers nothing is visibly inert, and an
@@ -308,7 +308,7 @@ public class ServiceZoneService {
     }
 
     /**
-     * Stops a zone applying to a branch (ADR 0101).
+     * Stops a zone applying to a branch (ADR 0104).
      *
      * <p>Closes the binding's window rather than deleting the row: a fee
      * resolution six weeks old names the binding that applied. An unbind of a

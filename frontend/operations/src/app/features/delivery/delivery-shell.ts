@@ -7,7 +7,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * The Delivery section's frame: a sub-nav strip over a routed child.
  *
  * IA §3's P-tier screens — 3.1 Dispatch board, 3.6 Delivery zones, 3.6b
- * Regions (added by ADR 0101, the first surface `fulfillment.regions` has ever
+ * Regions (added by ADR 0104, the first surface `fulfillment.regions` has ever
  * had), 3.7 Delivery tariffs, 3.8 Dispatch rules — plus wave 38's tier-2 additions —
  * 3.2 Live map, 3.4 Courier types & rates, 3.5 Shifts & attendance, 3.9
  * Courier policy — share this shell. 3.3 Couriers stays its own top-level

@@ -54,7 +54,7 @@ interface TariffOption {
 /**
  * Delivery zones — operations §3.6, and §3.6d with it.
  *
- * **What changed in this wave (ADR 0101).**
+ * **What changed in this wave (ADR 0104).**
  *
  * 1. **The draft carries its tariff.** `submitDraft` used to build a body with
  *    no `deliveryTariffId` although the client type and the endpoint both had
@@ -177,7 +177,7 @@ export class DeliveryZonesPage implements OnInit {
    * actually bound to a zone, not for all of them — a brand with hundreds of
    * rate tables and three zones makes three calls. A brand that binds hundreds
    * of *distinct* tariffs to zones would want the fact on the list read
-   * instead; ADR 0101 names that trade-off.
+   * instead; ADR 0104 names that trade-off.
    */
   private async loadTariffOptions(): Promise<void> {
     const scope = this.brand.scope();

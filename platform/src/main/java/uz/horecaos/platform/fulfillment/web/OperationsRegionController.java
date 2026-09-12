@@ -30,7 +30,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
  * Regions — the geography a geocoder is allowed to answer inside (ADR 0037,
- * ADR 0101).
+ * ADR 0104).
  *
  * <p>The first surface {@code fulfillment.regions} has ever had. The table has
  * existed since V0025 and its only writer in this repository was test SQL, so
@@ -43,7 +43,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * {@code brand_id} and every brand under the tenant geocodes against it, so a
  * brand-scoped write would be a lie the URL tells about ownership and would
  * let a grant over one brand redraw the geography gating another brand's zone
- * activations. ADR 0101 records the cost of that choice out loud: {@code
+ * activations. ADR 0104 records the cost of that choice out loud: {@code
  * BRAND_MANAGER}, who may draw and bind zones, cannot author a region.
  *
  * <p><strong>The capability is {@code DELIVERY_ZONE_MANAGE}</strong>, not one
