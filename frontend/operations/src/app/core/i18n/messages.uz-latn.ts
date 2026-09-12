@@ -179,6 +179,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.action.advance.completedPickup': 'Berildi',
   'orders.action.advance.generic': '→ {status}',
   'orders.action.overflow': 'Yana',
+  'orders.action.open': 'Ochish',
+  'orders.action.copyNumber': 'Raqamni nusxalash',
   'orders.action.outcome.APPROVE': 'qabul qilindi',
   'orders.action.outcome.REJECT': 'rad etildi',
   'orders.action.lostRace': 'Allaqachon {action} — qarorni boshqa operator qabul qildi.',

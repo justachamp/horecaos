@@ -450,13 +450,43 @@ function configureWithActions(
 }
 
 describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)', () => {
-  it('renders no action cell content for a status whose actions[] is empty — never a disabled control', async () => {
+  it('renders no inline or mutating overflow control for a status whose actions[] is empty', async () => {
     configureWithActions([order({ status: 'COMPLETED', actions: [] })], {});
     const harness = await RouterTestingHarness.create('/orders?tab=completed');
     await flushMicrotasks();
 
     const cell = harness.routeNativeElement!.querySelector('[data-testid="order-row-actions"]');
-    expect(cell?.querySelector('button')).toBeNull();
+    expect(cell?.querySelectorAll('.row-actions__inline')).toHaveLength(0);
+    // No server-driven action renders — only the two static read-only items
+    // below are in the menu, and neither is a code from actions[].
+    for (const code of ['APPROVE', 'REJECT', 'ADVANCE', 'CANCEL', 'AMEND']) {
+      expect(cell?.querySelector(`[data-testid="order-row-action-${code}"]`)).toBeNull();
+    }
+  });
+
+  it('1.1e: a terminal order still offers a read-only overflow menu, never none', async () => {
+    configureWithActions([order({ status: 'COMPLETED', actions: [] })], {});
+    const harness = await RouterTestingHarness.create('/orders?tab=completed');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    const trigger = host.querySelector(
+      '[data-testid="order-row-overflow-trigger"]',
+    ) as HTMLButtonElement | null;
+    // §2.9: "terminal | none [inline] | overflow (read-only items only)" — the
+    // trigger itself must not disappear just because actions[] came back empty.
+    expect(trigger).not.toBeNull();
+
+    trigger!.click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-row-overflow-menu"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-row-action-OPEN"]')?.textContent?.trim()).toBe(
+      'Open',
+    );
+    expect(
+      host.querySelector('[data-testid="order-row-action-COPY_NUMBER"]')?.textContent?.trim(),
+    ).toBe('Copy order number');
   });
 
   it('renders the first two actions inline and the rest in the overflow menu', async () => {

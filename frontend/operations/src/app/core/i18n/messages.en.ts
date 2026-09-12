@@ -189,6 +189,8 @@ export const messagesEn = {
   'orders.action.advance.completedPickup': 'Handed over',
   'orders.action.advance.generic': '→ {status}',
   'orders.action.overflow': 'More actions',
+  'orders.action.open': 'Open',
+  'orders.action.copyNumber': 'Copy order number',
   'orders.action.outcome.APPROVE': 'accepted',
   'orders.action.outcome.REJECT': 'rejected',
   'orders.action.lostRace': 'Already {action} — another operator settled this.',

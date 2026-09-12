@@ -177,6 +177,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.action.advance.completedPickup': 'Выдан',
   'orders.action.advance.generic': '→ {status}',
   'orders.action.overflow': 'Ещё',
+  'orders.action.open': 'Открыть',
+  'orders.action.copyNumber': 'Копировать номер',
   'orders.action.outcome.APPROVE': 'принят',
   'orders.action.outcome.REJECT': 'отклонён',
   'orders.action.lostRace': 'Уже {action} — решение принял другой оператор.',
