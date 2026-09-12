@@ -21969,7 +21969,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/audit-events" : {
       "get" : {
-        "description" : "Reading audit is itself audited. The change document is not returned in a list; retrieving it is a separate, individually audited read.",
+        "description" : "Reading audit is itself audited. The change document is not returned in a list; retrieving it is a separate, individually audited read. Cursor-paginated per ADR 0031: pass the previous page's nextCursor back as cursor.",
         "operationId" : "search_1",
         "parameters" : [ {
           "in" : "path",
@@ -22060,6 +22060,15 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -29193,7 +29202,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/audit-events" : {
       "get" : {
-        "description" : "The same read as the control-plane route, reachable from the operations frontend. Reading audit is itself audited.",
+        "description" : "The same read as the control-plane route, reachable from the operations frontend. Reading audit is itself audited. Cursor-paginated per ADR 0031: pass the previous page's nextCursor back as cursor.",
         "operationId" : "operationsSearch",
         "parameters" : [ {
           "in" : "path",
@@ -29284,6 +29293,15 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "type" : "string"
           }
         } ],
         "responses" : {

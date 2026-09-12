@@ -6,7 +6,10 @@ import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
@@ -141,6 +144,36 @@ class KeycloakStaffAccounts implements StaffAccounts {
     @Override
     public void setPassword(String subjectId, String password) {
         resetPassword(subjectId, password);
+    }
+
+    /**
+     * Reads back exactly what {@link #completeSetup} wrote — {@code
+     * firstName}/{@code lastName} — and nothing {@link #find} already
+     * exposes. A missing account or a name nobody ever set are the same
+     * "nothing to show" answer to the caller (Staff 9.3b): the audit screen
+     * falls back to the raw subject id either way.
+     */
+    @Override
+    public Optional<String> displayName(String subjectId) {
+        Map<String, Object> user;
+        try {
+            user = client.get()
+                    .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                    .retrieve()
+                    .body(SINGLE);
+        } catch (HttpClientErrorException.NotFound missing) {
+            return Optional.empty();
+        }
+        if (user == null) {
+            return Optional.empty();
+        }
+        String full = Stream.of(user.get("firstName"), user.get("lastName"))
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .map(String::strip)
+                .filter(part -> !part.isEmpty())
+                .collect(Collectors.joining(" "));
+        return full.isEmpty() ? Optional.empty() : Optional.of(full);
     }
 
     /**
