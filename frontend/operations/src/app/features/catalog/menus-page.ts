@@ -6,7 +6,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { CatalogApi } from './catalog-api';
+import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import { VariantAvailabilityRow } from './catalog-domain';
 import { InventoryApi } from './inventory-api';
 import { PricingApi } from './pricing-api';
@@ -78,9 +78,7 @@ export class MenusPage implements OnInit {
     }
 
     try {
-      const rows = await firstValueFrom(
-        this.catalogApi.variantsAtLocation(scope, scope.locationId),
-      );
+      const rows = await fetchAllVariantsAtLocation(this.catalogApi, scope, scope.locationId);
       this.rows.set(rows);
 
       if (rows.length > 0) {

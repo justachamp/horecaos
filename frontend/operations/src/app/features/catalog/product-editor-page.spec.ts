@@ -82,7 +82,7 @@ function configure(
         provide: CatalogApi,
         useValue: {
           validate: () => of(CLEAN_REPORT),
-          variantsAtLocation: () => of([]),
+          variantsAtLocation: () => of({ items: [], nextCursor: null }),
           ...catalogApi,
         },
       },
