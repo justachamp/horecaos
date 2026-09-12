@@ -127,38 +127,32 @@
               } @else if (matrixError(); as message) {
                 <p class="q-body-sm error" role="alert">{{ message }}</p>
               } @else {
-                <div class="matrix">
+                <div class="matrix" [class.matrix--saving]="matrixSaving()">
                   <div class="matrix__group">
                     <h3 class="q-caption matrix__label">
                       {{ 'settings.salesChannels.matrix.paymentMethods' | t }}
                     </h3>
-                    @for (method of paymentMethods; track method) {
-                      <label class="matrix__cell q-body-sm">
-                        <input
-                          type="checkbox"
-                          [checked]="isPaymentMethodEnabled(method)"
-                          [disabled]="matrixSaving()"
-                          (change)="togglePaymentMethod(channel, method)"
-                        />
-                        {{ method }}
-                      </label>
-                    }
+                    <q-matrix-grid
+                      data-testid="payment-matrix"
+                      [rowHeaders]="paymentMatrixRows()"
+                      [columnHeaders]="paymentMatrixColumns()"
+                      [cells]="paymentMatrixCells()"
+                      [disabled]="matrixSaving()"
+                      (toggle)="onPaymentMatrixToggle($event)"
+                    />
                   </div>
                   <div class="matrix__group">
                     <h3 class="q-caption matrix__label">
                       {{ 'settings.salesChannels.matrix.fulfillmentModes' | t }}
                     </h3>
-                    @for (mode of fulfillmentModes; track mode) {
-                      <label class="matrix__cell q-body-sm">
-                        <input
-                          type="checkbox"
-                          [checked]="isFulfillmentModeEnabled(mode)"
-                          [disabled]="matrixSaving()"
-                          (change)="toggleFulfillmentMode(channel, mode)"
-                        />
-                        {{ mode }}
-                      </label>
-                    }
+                    <q-matrix-grid
+                      data-testid="fulfillment-matrix"
+                      [rowHeaders]="fulfillmentMatrixRows()"
+                      [columnHeaders]="fulfillmentMatrixColumns()"
+                      [cells]="fulfillmentMatrixCells()"
+                      [disabled]="matrixSaving()"
+                      (toggle)="onFulfillmentMatrixToggle($event)"
+                    />
                   </div>
                 </div>
               }

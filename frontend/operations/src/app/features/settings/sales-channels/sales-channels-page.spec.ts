@@ -88,9 +88,10 @@ describe('SalesChannelsPage', () => {
     fixture.detectChanges();
 
     expect(api.matrices).toHaveBeenCalledWith(SCOPE, 'chan-1');
-    const checkboxes = fixture.nativeElement.querySelectorAll('input[type="checkbox"]');
-    expect(checkboxes.length).toBe(6); // 3 payment methods + 3 fulfilment modes
-    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true); // CASH
+    const cells = fixture.nativeElement.querySelectorAll('[data-testid="mg-cell"]');
+    expect(cells.length).toBe(6); // 3 payment methods + 3 fulfilment modes, one row each
+    const cash = fixture.nativeElement.querySelector('[data-row="chan-1"][data-col="CASH"]');
+    expect(cash?.getAttribute('data-state')).toBe('ON');
   });
 
   it('toggles a payment method with the channel’s current version', async () => {
@@ -100,16 +101,41 @@ describe('SalesChannelsPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    const clickCheckbox = fixture.nativeElement.querySelectorAll(
-      'input[type="checkbox"]',
-    )[1] as HTMLInputElement;
-    clickCheckbox.dispatchEvent(new Event('change'));
+    const clickCell = fixture.nativeElement.querySelector(
+      '[data-row="chan-1"][data-col="CLICK"]',
+    ) as HTMLElement;
+    clickCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
 
     expect(api.replacePaymentMethods).toHaveBeenCalledWith(
       SCOPE,
       'chan-1',
       { CASH: true, CLICK: true, PAYME: false },
+      3,
+    );
+  });
+
+  it('bulk-toggles every payment method off in one call through the row-toggle button', async () => {
+    const row = fixture.nativeElement.querySelector('.row') as HTMLElement;
+    row.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="payment-matrix"] [data-testid="mg-row-toggle-chan-1"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // CASH is already ON, so a row toggle turns every eligible cell ON — the
+    // three-method row is only heterogeneous (CASH on, CLICK/PAYME off), so
+    // "any off" means the bulk gesture's target is ON for all three.
+    expect(api.replacePaymentMethods).toHaveBeenCalledWith(
+      SCOPE,
+      'chan-1',
+      { CASH: true, CLICK: true, PAYME: true },
       3,
     );
   });
