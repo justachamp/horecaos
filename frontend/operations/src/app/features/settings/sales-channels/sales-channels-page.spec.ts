@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { ChannelMatrices, ChannelView, SalesChannelsApi } from './sales-channels-api';
@@ -88,9 +89,10 @@ describe('SalesChannelsPage', () => {
     fixture.detectChanges();
 
     expect(api.matrices).toHaveBeenCalledWith(SCOPE, 'chan-1');
-    const checkboxes = fixture.nativeElement.querySelectorAll('input[type="checkbox"]');
-    expect(checkboxes.length).toBe(6); // 3 payment methods + 3 fulfilment modes
-    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true); // CASH
+    const cells = fixture.nativeElement.querySelectorAll('[data-testid="mg-cell"]');
+    expect(cells.length).toBe(6); // 3 payment methods + 3 fulfilment modes, one row each
+    const cash = fixture.nativeElement.querySelector('[data-row="chan-1"][data-col="CASH"]');
+    expect(cash?.getAttribute('data-state')).toBe('ON');
   });
 
   it('toggles a payment method with the channel’s current version', async () => {
@@ -100,16 +102,41 @@ describe('SalesChannelsPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    const clickCheckbox = fixture.nativeElement.querySelectorAll(
-      'input[type="checkbox"]',
-    )[1] as HTMLInputElement;
-    clickCheckbox.dispatchEvent(new Event('change'));
+    const clickCell = fixture.nativeElement.querySelector(
+      '[data-row="chan-1"][data-col="CLICK"]',
+    ) as HTMLElement;
+    clickCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
 
     expect(api.replacePaymentMethods).toHaveBeenCalledWith(
       SCOPE,
       'chan-1',
       { CASH: true, CLICK: true, PAYME: false },
+      3,
+    );
+  });
+
+  it('bulk-toggles every payment method off in one call through the row-toggle button', async () => {
+    const row = fixture.nativeElement.querySelector('.row') as HTMLElement;
+    row.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="payment-matrix"] [data-testid="mg-row-toggle-chan-1"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // CASH is already ON, so a row toggle turns every eligible cell ON — the
+    // three-method row is only heterogeneous (CASH on, CLICK/PAYME off), so
+    // "any off" means the bulk gesture's target is ON for all three.
+    expect(api.replacePaymentMethods).toHaveBeenCalledWith(
+      SCOPE,
+      'chan-1',
+      { CASH: true, CLICK: true, PAYME: true },
       3,
     );
   });
@@ -151,5 +178,56 @@ describe('SalesChannelsPage', () => {
 
     expect(api.archive).toHaveBeenCalledWith(SCOPE, 'chan-1', 3);
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Delete');
+  });
+
+  // ------------------------------------------------------------------------ denied
+
+  it('renders the denied state, not the registry, when the location grant is missing', async () => {
+    TestBed.resetTestingModule();
+    const noScopeLocation = new FakeCurrentLocation();
+    noScopeLocation.scope.set(null);
+    noScopeLocation.denied.set(true);
+    const list = vi.fn().mockResolvedValue([STOREFRONT]);
+    await TestBed.configureTestingModule({
+      imports: [SalesChannelsPage],
+      providers: [
+        { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: CurrentLocation, useValue: noScopeLocation },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(SalesChannelsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sales-channels-denied"]')).toBeTruthy();
+    expect(host.querySelector('.row')).toBeFalsy();
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('renders the denied state on a 403 from the channel list, not the empty table', async () => {
+    TestBed.resetTestingModule();
+    const list = vi
+      .fn()
+      .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+    await TestBed.configureTestingModule({
+      imports: [SalesChannelsPage],
+      providers: [
+        { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(SalesChannelsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(list).toHaveBeenCalledWith(SCOPE);
+    expect(host.querySelector('[data-testid="sales-channels-denied"]')).toBeTruthy();
+    expect(host.querySelector('.row')).toBeFalsy();
   });
 });

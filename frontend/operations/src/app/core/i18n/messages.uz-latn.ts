@@ -3139,4 +3139,30 @@ export const messagesUzLatn: MessageCatalogue = {
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'Bugungi kunga qaytish',
+
+  // shared/ui — q-data-table (X.18)
+  'shared.dataTable.views.toggle': 'Ko‘rinishlar',
+  'shared.dataTable.views.remove': 'Ko‘rinishni o‘chirish',
+  'shared.dataTable.views.namePlaceholder': 'Ko‘rinish nomi',
+  'shared.dataTable.views.save': 'Saqlash',
+  'shared.dataTable.columns.toggle': 'Ustunlar',
+  'shared.dataTable.bulk.selected': 'Tanlangan: {count}',
+  'shared.dataTable.bulk.clear': 'Tanlovni bekor qilish',
+  'shared.dataTable.selectAll': 'Sahifadagi barcha qatorlarni tanlash',
+  'shared.dataTable.selectRow': 'Qatorni tanlash',
+  'shared.dataTable.rowMenu.toggle': 'Qator amallari',
+  'shared.dataTable.loadMore': 'Yana ko‘rsatish',
+  'shared.dataTable.loading': 'Yuklanmoqda…',
+
+  // shared/ui — q-data-grid (X.6)
+  'shared.dataGrid.unsavedCount': 'Saqlanmagan: {count}',
+  'shared.dataGrid.save': 'Saqlash',
+  'shared.dataGrid.saving': 'Saqlanmoqda…',
+  'shared.dataGrid.discard': 'Bekor qilish',
+  'shared.dataGrid.saveError': 'Saqlab bo‘lmadi. O‘zgarishlar yo‘qolmadi — qayta urinib ko‘ring.',
+
+  // shared/ui — q-matrix-grid (X.7)
+  'shared.matrixGrid.toggleRow': 'Butun qatorni almashtirish',
+  'shared.matrixGrid.toggleColumn': 'Butun ustunni almashtirish',
+  'shared.matrixGrid.unavailable': 'Bu kanalda mavjud emas',
 };

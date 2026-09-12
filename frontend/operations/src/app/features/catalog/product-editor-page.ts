@@ -19,7 +19,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
-import { CatalogApi } from './catalog-api';
+import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import {
   FiscalClassification,
   ModifierGroupSummary,
@@ -294,9 +294,7 @@ export class ProductEditorPage implements OnInit {
       return;
     }
     try {
-      const rows = await firstValueFrom(
-        this.api.variantsAtLocation(scope, locationScope.locationId),
-      );
+      const rows = await fetchAllVariantsAtLocation(this.api, scope, locationScope.locationId);
       const variantIds = new Set(product.variants.map((v) => v.variantId));
       this.availabilityRows.set(rows.filter((row) => variantIds.has(row.variantId)));
     } catch {

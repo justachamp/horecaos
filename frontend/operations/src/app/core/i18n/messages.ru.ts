@@ -3117,4 +3117,30 @@ export const messagesRu: MessageCatalogue = {
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'На главную',
+
+  // shared/ui — q-data-table (X.18)
+  'shared.dataTable.views.toggle': 'Виды',
+  'shared.dataTable.views.remove': 'Удалить вид',
+  'shared.dataTable.views.namePlaceholder': 'Название вида',
+  'shared.dataTable.views.save': 'Сохранить',
+  'shared.dataTable.columns.toggle': 'Столбцы',
+  'shared.dataTable.bulk.selected': 'Выбрано: {count}',
+  'shared.dataTable.bulk.clear': 'Снять выделение',
+  'shared.dataTable.selectAll': 'Выбрать все строки на странице',
+  'shared.dataTable.selectRow': 'Выбрать строку',
+  'shared.dataTable.rowMenu.toggle': 'Действия со строкой',
+  'shared.dataTable.loadMore': 'Показать ещё',
+  'shared.dataTable.loading': 'Загрузка…',
+
+  // shared/ui — q-data-grid (X.6)
+  'shared.dataGrid.unsavedCount': 'Не сохранено: {count}',
+  'shared.dataGrid.save': 'Сохранить',
+  'shared.dataGrid.saving': 'Сохранение…',
+  'shared.dataGrid.discard': 'Отменить',
+  'shared.dataGrid.saveError': 'Не удалось сохранить. Изменения не потеряны — попробуйте ещё раз.',
+
+  // shared/ui — q-matrix-grid (X.7)
+  'shared.matrixGrid.toggleRow': 'Переключить всю строку',
+  'shared.matrixGrid.toggleColumn': 'Переключить весь столбец',
+  'shared.matrixGrid.unavailable': 'Недоступно для этого канала',
 };

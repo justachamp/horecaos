@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -8,12 +15,24 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { QCellDef, DataTable } from '../../shared/ui/data-table/data-table';
+import { DataTableColumn } from '../../shared/ui/data-table/data-table-types';
 import { CatalogApi } from './catalog-api';
 import { CatalogSummary, ProductSummary } from './catalog-domain';
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
 import { describeApiError } from '../orders/order-errors';
 
 type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
+
+/**
+ * `q-data-table`'s `[(filters)]` model, so Save View / Apply View
+ * (`X.18`) has a real effect on this screen — both the status tab and the
+ * free-text search are what this page's own filter bar controls.
+ */
+interface ProductFilters {
+  readonly tab: StatusTab;
+  readonly search: string;
+}
 
 /**
  * catalog.md §4.1 — the brand product library.
@@ -35,7 +54,7 @@ type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
  */
 @Component({
   selector: 'q-products-page',
-  imports: [TPipe, CreateProductDialog],
+  imports: [TPipe, CreateProductDialog, DataTable, QCellDef],
   templateUrl: './products-page.html',
   styleUrl: './products-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,7 +63,27 @@ export class ProductsPage implements OnInit {
   private readonly api = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly router = inject(Router);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
+
+  protected readonly columns = computed<readonly DataTableColumn[]>(() => {
+    this.i18n.locale();
+    return [
+      { key: 'name', header: this.i18n.t('catalog.products.column.name') },
+      { key: 'code', header: this.i18n.t('catalog.products.column.code') },
+      { key: 'variants', header: this.i18n.t('catalog.products.column.variants'), numeric: true },
+      { key: 'categories', header: this.i18n.t('catalog.products.column.categories') },
+      { key: 'mxik', header: this.i18n.t('catalog.products.column.mxik') },
+      { key: 'status', header: this.i18n.t('catalog.products.column.status') },
+    ];
+  });
+
+  protected readonly rowIdFn = (product: ProductSummary): string => product.productId;
+
+  /** `q-data-table`'s `scopeKey` — so a shared terminal's persisted filters and saved views never leak from one brand into another. */
+  protected readonly scopeKey = computed<string | null>(() => {
+    const scope = this.brand.scope();
+    return scope ? `${scope.tenantId}:${scope.brandId}` : null;
+  });
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly loadingMore = signal(false);
@@ -57,8 +96,10 @@ export class ProductsPage implements OnInit {
   protected readonly page = signal<CursorState>(firstPage(50));
   protected readonly hasMore = signal(false);
 
-  protected readonly activeTab = signal<StatusTab>('ALL');
-  protected readonly search = signal('');
+  /** Two-way bound to `q-data-table`'s `[(filters)]` — persisted per-tab filters and saved views both round-trip through this signal. */
+  protected readonly filters = signal<ProductFilters | null>({ tab: 'ALL', search: '' });
+  protected readonly activeTab = computed<StatusTab>(() => this.filters()?.tab ?? 'ALL');
+  protected readonly search = computed<string>(() => this.filters()?.search ?? '');
 
   protected readonly createDialogOpen = signal(false);
   protected readonly creating = signal(false);
@@ -152,11 +193,11 @@ export class ProductsPage implements OnInit {
   }
 
   protected selectTab(tab: StatusTab): void {
-    this.activeTab.set(tab);
+    this.filters.update((current) => ({ tab, search: current?.search ?? '' }));
   }
 
   protected onSearchInput(value: string): void {
-    this.search.set(value);
+    this.filters.update((current) => ({ tab: current?.tab ?? 'ALL', search: value }));
   }
 
   protected visibleProducts(): readonly ProductSummary[] {
@@ -204,6 +245,10 @@ export class ProductsPage implements OnInit {
 
   protected openProduct(productId: string): void {
     void this.router.navigate(['/catalog/products', productId]);
+  }
+
+  protected onRowClick(product: ProductSummary): void {
+    this.openProduct(product.productId);
   }
 
   protected severityCaption(product: ProductSummary): string | null {
