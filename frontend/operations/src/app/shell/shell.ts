@@ -3,11 +3,12 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
+import { SessionCapabilities } from '../core/auth/session-capabilities';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
-import { NAVIGATION } from './navigation';
+import { NAVIGATION, NavGroup } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 
@@ -56,11 +57,30 @@ export class Shell {
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
   private readonly currentLocation = inject(CurrentLocation);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly auth = inject(Auth);
   protected readonly status = inject(ServiceStatus);
   private readonly toasts = inject(Toasts);
 
-  protected readonly navigation = NAVIGATION;
+  /**
+   * The rail, filtered to sections this operator has any business in
+   * (operations IA §9.1c) — a courtesy, never enforcement: the API refuses
+   * the calls behind a hidden section either way (ADR 0025). A group left
+   * with no items after filtering is dropped too, so an empty "People"
+   * heading never prints above nothing.
+   *
+   * Hiding rather than disabling — the same "omit, do not disable" rule
+   * `not-built-page.ts` already follows for an unbuilt screen — because a
+   * greyed-out rail item teaches an operator that grey means "try again
+   * later", and a wrong refusal reads as a bug, not as her own job.
+   */
+  protected readonly navigation = computed<readonly NavGroup[]>(() =>
+    NAVIGATION.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => this.capabilities.has(item.capability)),
+    })).filter((group) => group.items.length > 0),
+  );
+
   protected readonly locales = LOCALES;
   protected readonly locale = this.i18n.locale;
 
@@ -80,6 +100,11 @@ export class Shell {
     // to call again from every screen that also depends on `CurrentLocation`:
     // `ensureLoaded()` memoizes and replays the same promise.
     void this.currentLocation.ensureLoaded();
+    // Same reasoning, for the rail filter above: fetched once here rather
+    // than waiting for a routed screen, so the fourteen-entry flash the
+    // unfiltered rail would otherwise show is as short as the session
+    // context read allows.
+    void this.capabilities.ensureLoaded();
   }
 
   /**

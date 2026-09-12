@@ -41,6 +41,43 @@ export function errorReference(error: ApiError): string {
 }
 
 /**
+ * Which of ADR 0025's two refusal codes a failed call carries, and the name
+ * the server attached to it — `INSUFFICIENT_CAPABILITY` and
+ * `ENTITLEMENT_REQUIRED` both fall through {@link describeApiError} to the
+ * same flat one-line sentence today, and operations IA §9.1d's whole
+ * complaint is that a screen cannot then tell its operator whether she is
+ * looking at a wall or an upsell. A caller that wants to distinguish them —
+ * to render `q-denied-state` or `q-locked-state` instead of the flat
+ * sentence — reaches for this first.
+ */
+export interface AccessRefusal {
+  /** `'denied'` for a missing capability (a wall); `'locked'` for a missing entitlement (an upsell). */
+  readonly kind: 'denied' | 'locked';
+  /**
+   * The capability constant (`kind: 'denied'`, from `ApiException.insufficientCapability`'s
+   * `requiredCapability` property) or the entitlement key (`kind: 'locked'`,
+   * from `ApiException.entitlementRequired`'s `entitlementKey` — see
+   * `campaign-detail-pane.ts`'s own read of the same field). `null` when the
+   * server refused without naming one, which `q-denied-state`/`q-locked-state`
+   * both render as an unnamed refusal rather than a missing value.
+   */
+  readonly name: string | null;
+}
+
+/** `null` for every code that is neither of ADR 0025's two refusals — see {@link AccessRefusal}. */
+export function accessRefusal(error: ApiError): AccessRefusal | null {
+  if (error.code === ApiErrorCode.INSUFFICIENT_CAPABILITY) {
+    const capability = error.problem?.['requiredCapability'];
+    return { kind: 'denied', name: typeof capability === 'string' ? capability : null };
+  }
+  if (error.code === ApiErrorCode.ENTITLEMENT_REQUIRED) {
+    const entitlementKey = error.problem?.['entitlementKey'];
+    return { kind: 'locked', name: typeof entitlementKey === 'string' ? entitlementKey : null };
+  }
+  return null;
+}
+
+/**
  * A `409 RESOURCE_CONFLICT` from an illegal transition (§4.1: "renders the
  * from/to pair in words"). `ApiException`'s extra properties carry `from` and
  * `to` on `IllegalTransitionException`; both are present or neither is, so

@@ -2046,6 +2046,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.roles.cannotDo': 'Nima qila olmaydi',
   'staff.roles.holders': 'Kim egallagan',
   'staff.roles.holders.none': 'Hali hech kim',
+  'staff.roles.search.label': 'Lavozimlarni qidirish',
+  'staff.roles.search.placeholder':
+    'Nima qila olishi boʻyicha qidiring — «buyurtmalarni bekor qilish», «qaytarishlar»…',
+  'staff.roles.search.empty': '«{query}» boʻyicha hech narsa topilmadi',
 
   'staff.shell.people': 'Xodimlar',
   'staff.shell.roles': 'Lavozimlar',
@@ -3025,4 +3029,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'inheritedField.trace.scope.BRAND': 'Brend',
   'inheritedField.trace.scope.TENANT': 'Kompaniya',
   'inheritedField.trace.scope.PLATFORM': 'Platforma',
+
+  // --- shell/access-denied-page (operations IA §9.1c) ---------------------
+  'shell.accessDenied.backHome': 'Bugungi kunga qaytish',
 };

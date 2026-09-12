@@ -2065,6 +2065,9 @@ export const messagesEn = {
   'staff.roles.cannotDo': "What it can't do",
   'staff.roles.holders': 'Who holds it',
   'staff.roles.holders.none': 'Nobody yet',
+  'staff.roles.search.label': 'Search jobs',
+  'staff.roles.search.placeholder': 'Search by what a job can do — “cancel orders”, “refunds”…',
+  'staff.roles.search.empty': 'No job matches “{query}”',
 
   'staff.shell.people': 'People',
   'staff.shell.roles': 'Jobs',
@@ -3037,6 +3040,11 @@ export const messagesEn = {
   'inheritedField.trace.scope.BRAND': 'Brand',
   'inheritedField.trace.scope.TENANT': 'Company',
   'inheritedField.trace.scope.PLATFORM': 'Platform',
+  // screen. `ui.*` rather than a per-component namespace because `q-denied-
+  // state` and `q-locked-state` share both sentences.
+
+  // --- shell/access-denied-page (operations IA §9.1c) ---------------------
+  'shell.accessDenied.backHome': 'Back to Today',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

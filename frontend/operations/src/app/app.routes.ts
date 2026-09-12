@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
+import { capabilityGuard } from './core/auth/capability.guard';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -17,9 +18,13 @@ import { NAV_ITEMS } from './shell/navigation';
  * reason (see their own comments below), even though the section around them
  * is "built".
  *
- * Everything except `/login` is behind {@link authGuard}. The guard proves
- * somebody is signed in; it never decides what they may do. Authorization is the
- * server's (ADR 0025).
+ * Everything except `/login` and `/invite` is behind {@link authGuard}, which
+ * proves only that somebody is signed in, and — for every route beneath the
+ * shell, `/access-denied` itself included — {@link capabilityGuard}
+ * (operations IA §9.1c), which refuses a direct URL into a rail section the
+ * signed-in operator holds no capability for. Neither guard is what
+ * authorizes anything: the server does that (ADR 0025), on every request,
+ * whether or not either guard ran.
  */
 export const routes: Routes = [
   {
@@ -53,8 +58,18 @@ export const routes: Routes = [
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     canActivate: [authGuard],
+    canActivateChild: [capabilityGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'today' },
+      {
+        // operations IA §9.1c: where `capabilityGuard` sends a direct URL
+        // into a section its own capability check refused. Declared before
+        // `today` for no routing reason (its own literal segment cannot
+        // collide with anything) — kept beside the redirect above because
+        // both are landing points the operator did not ask for by name.
+        path: 'access-denied',
+        loadComponent: () => import('./shell/access-denied-page').then((m) => m.AccessDeniedPage),
+      },
       {
         path: 'today',
         loadComponent: () => import('./features/today/today-page').then((m) => m.TodayPage),

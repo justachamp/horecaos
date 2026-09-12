@@ -8,14 +8,37 @@ import { Shell } from './shell';
 import { ServiceStatus } from './service-status';
 import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
+import { CurrentTenant } from '../core/auth/current-tenant';
+import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
 import { Toasts } from '../shared/ui/toast';
+import { NAV_ITEMS } from './navigation';
 
 class FakeAuth {
   readonly displayName = signal<string | null>(null);
   readonly subject = signal<string | null>('operator-1');
   readonly logout = vi.fn().mockReturnValue(of(null));
+}
+
+/**
+ * Every capability `navigation.ts` names, granted at one `TENANT` scope —
+ * a fully-privileged operator, so every other spec in this file keeps
+ * seeing the unfiltered fourteen-entry rail it asserted before the rail
+ * became capability-gated (operations IA §9.1c). `capabilityGate`'s own
+ * spec covers a partially-privileged operator.
+ */
+class FakeCurrentTenant {
+  readonly tenantId = signal<string | null>('t1');
+  readonly scopes = signal<readonly ScopeGrant[]>([
+    {
+      scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+      roleCode: 'tenant-owner',
+      capabilities: [...new Set(NAV_ITEMS.map((item) => item.capability))],
+    },
+  ]);
+  readonly denied = signal(false);
+  readonly ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
 /**
@@ -53,15 +76,18 @@ describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
   let status: ServiceStatus;
   let currentLocation: FakeCurrentLocation;
+  let currentTenant: FakeCurrentTenant;
 
   beforeEach(async () => {
     currentLocation = new FakeCurrentLocation();
+    currentTenant = new FakeCurrentTenant();
     await TestBed.configureTestingModule({
       imports: [Shell],
       providers: [
         provideRouter([]),
         { provide: Auth, useValue: new FakeAuth() },
         { provide: CurrentLocation, useValue: currentLocation },
+        { provide: CurrentTenant, useValue: currentTenant },
       ],
     }).compileComponents();
 
@@ -85,6 +111,33 @@ describe('Shell', () => {
     // tier-2 build this wave, so it now gets a rail entry the same way
     // Finance's own tier-2 rows did not stop Finance from getting one.
     expect(items.length).toBe(14);
+  });
+
+  it('hides a section whose capability the session context lacks, and drops its group heading if it empties', () => {
+    // A cook-only grant: `ORDER_READ`/`KITCHEN_TICKET_READ`/`CATALOG_READ`
+    // (a subset of `location-staff`'s own bundle) — none of `COURIER_READ`,
+    // `CUSTOMER_READ` or `IAM_GRANT_MANAGE`, so every item in the People
+    // group is missing its capability.
+    currentTenant.scopes.set([
+      {
+        scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+        roleCode: 'location-staff',
+        capabilities: ['ORDER_READ', 'KITCHEN_TICKET_READ', 'CATALOG_READ'],
+      },
+    ]);
+    fixture.detectChanges();
+
+    const items = [...fixture.nativeElement.querySelectorAll('.rail__item')].map((node: Element) =>
+      node.textContent?.trim(),
+    );
+    expect(items).not.toContain('Staff and access');
+    expect(items).toContain('Kitchen');
+
+    // The whole group emptied out — its heading must not print above nothing.
+    const groups = [...fixture.nativeElement.querySelectorAll('.rail__group-label')].map(
+      (node: Element) => node.textContent?.trim(),
+    );
+    expect(groups).not.toContain('People');
   });
 
   it('hides the late indicator when nothing is late', () => {

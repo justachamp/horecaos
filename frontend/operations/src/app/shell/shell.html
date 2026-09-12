@@ -16,7 +16,7 @@
     </div>
 
     <div class="rail__groups">
-      @for (group of navigation; track group.label) {
+      @for (group of navigation(); track group.label) {
         <div class="rail__group">
           <h2 class="rail__group-label q-caption">{{ group.label | t }}</h2>
           @for (item of group.items; track item.path) {
