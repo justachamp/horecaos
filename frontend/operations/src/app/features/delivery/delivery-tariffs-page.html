@@ -376,10 +376,10 @@
         <div class="field-row">
           <label class="field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.minFee' | t }}</span>
-            <input
-              type="number"
-              [value]="draftMinFeeMinor()"
-              (input)="draftMinFeeMinor.set(+$any($event.target).value)"
+            <q-money-input
+              [valueMinor]="draftMinFeeMinor()"
+              (valueMinorChange)="draftMinFeeMinor.set($event)"
+              data-testid="tariff-min-fee"
             />
           </label>
           <label class="field">

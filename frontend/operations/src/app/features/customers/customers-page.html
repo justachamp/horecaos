@@ -35,12 +35,16 @@
     }
 
     <div class="filters">
-      <input
-        type="search"
+      <q-combobox
         class="search"
-        [value]="searchQuery()"
-        (input)="onSearchInput($any($event.target).value)"
+        [query]="searchQuery()"
+        (queryChange)="onSearchInput($event)"
+        [options]="searchOptions()"
+        [allowCreate]="true"
+        [createLabel]="searchCreateLabel()"
         [placeholder]="'customers.search.placeholder' | t"
+        (optionSelected)="onSearchOptionSelected($event)"
+        (create)="onSearchCreateRequested($event)"
         data-testid="customers-search"
       />
       <select
@@ -133,6 +137,7 @@
   <q-create-customer-dialog
     [busy]="creating()"
     [errorMessage]="createError()"
+    [initialPhone]="createDialogInitialPhone()"
     (confirm)="onCreateSubmit($event)"
     (dismiss)="onCreateDismiss()"
   />

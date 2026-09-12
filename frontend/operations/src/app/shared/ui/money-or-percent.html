@@ -1,0 +1,36 @@
+<div class="q-money-or-percent" data-testid="q-money-or-percent">
+  <div class="q-money-or-percent__kind" role="group">
+    <button
+      type="button"
+      class="q-money-or-percent__kind-button"
+      [class.q-money-or-percent__kind-button--active]="kind() === 'AMOUNT'"
+      [attr.aria-pressed]="kind() === 'AMOUNT'"
+      (click)="selectKind('AMOUNT')"
+      data-testid="q-money-or-percent-amount-toggle"
+    >
+      {{ 'ui.moneyOrPercent.amount' | t }}
+    </button>
+    <button
+      type="button"
+      class="q-money-or-percent__kind-button"
+      [class.q-money-or-percent__kind-button--active]="kind() === 'PERCENT'"
+      [attr.aria-pressed]="kind() === 'PERCENT'"
+      (click)="selectKind('PERCENT')"
+      data-testid="q-money-or-percent-percent-toggle"
+    >
+      {{ 'ui.moneyOrPercent.percent' | t }}
+    </button>
+  </div>
+
+  @if (kind() === 'AMOUNT') {
+    <q-money-input
+      [valueMinor]="amountMinor()"
+      (valueMinorChange)="amountMinorChange.emit($event)"
+    />
+  } @else {
+    <q-percent-input
+      [basisPoints]="basisPoints()"
+      (basisPointsChange)="basisPointsChange.emit($event)"
+    />
+  }
+</div>

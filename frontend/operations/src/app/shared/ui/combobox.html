@@ -1,0 +1,92 @@
+<div class="q-combobox" data-testid="q-combobox" (focusout)="onBlur($event)">
+  @if (multiple() && selected().length > 0) {
+    <ul class="q-combobox__chips" data-testid="q-combobox-chips">
+      @for (chip of selected(); track chip.id) {
+        <li class="q-combobox__chip" data-testid="q-combobox-chip">
+          <span class="q-body-sm">{{ chip.label }}</span>
+          <button
+            type="button"
+            [attr.aria-label]="'ui.combobox.removeChip' | t: { label: chip.label }"
+            (click)="removeChip(chip)"
+            data-testid="q-combobox-chip-remove"
+          >
+            ✕
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <input
+    type="text"
+    class="q-combobox__input"
+    role="combobox"
+    aria-autocomplete="list"
+    [attr.aria-expanded]="open()"
+    aria-controls="q-combobox-listbox"
+    [attr.aria-activedescendant]="
+      activeIndex() >= 0
+        ? activeIndex() < options().length
+          ? 'q-combobox-option-' + options()[activeIndex()].id
+          : 'q-combobox-create-row'
+        : null
+    "
+    [attr.aria-label]="ariaLabel()"
+    [placeholder]="placeholder()"
+    [value]="query()"
+    (input)="onInput($any($event.target).value)"
+    (focus)="onFocus()"
+    (keydown)="onKeydown($event)"
+    data-testid="q-combobox-input"
+  />
+
+  @if (open()) {
+    <ul
+      class="q-combobox__listbox"
+      id="q-combobox-listbox"
+      role="listbox"
+      data-testid="q-combobox-listbox"
+    >
+      @if (loading()) {
+        <li class="q-combobox__status q-caption" data-testid="q-combobox-loading">
+          {{ 'ui.combobox.loading' | t }}
+        </li>
+      } @else if (options().length === 0 && !showCreateRow()) {
+        <li class="q-combobox__status q-caption" data-testid="q-combobox-no-results">
+          {{ 'ui.combobox.noResults' | t }}
+        </li>
+      }
+      @for (option of options(); track option.id; let i = $index) {
+        <li
+          [id]="'q-combobox-option-' + option.id"
+          role="option"
+          [attr.aria-selected]="i === activeIndex()"
+          class="q-combobox__option"
+          [class.q-combobox__option--active]="i === activeIndex()"
+          (mousedown)="$event.preventDefault()"
+          (click)="choose(option)"
+          data-testid="q-combobox-option"
+        >
+          <span class="q-body-sm">{{ option.label }}</span>
+          @if (option.sublabel) {
+            <span class="q-caption q-combobox__sublabel">{{ option.sublabel }}</span>
+          }
+        </li>
+      }
+      @if (showCreateRow()) {
+        <li
+          id="q-combobox-create-row"
+          role="option"
+          [attr.aria-selected]="activeIndex() === options().length"
+          class="q-combobox__option q-combobox__option--create"
+          [class.q-combobox__option--active]="activeIndex() === options().length"
+          (mousedown)="$event.preventDefault()"
+          (click)="activateCreateRow()"
+          data-testid="q-combobox-create-row"
+        >
+          {{ createLabel() ?? ('ui.combobox.createOption' | t: { query: query().trim() }) }}
+        </li>
+      }
+    </ul>
+  }
+</div>

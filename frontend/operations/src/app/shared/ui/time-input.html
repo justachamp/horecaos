@@ -1,0 +1,13 @@
+<input
+  type="text"
+  inputmode="numeric"
+  class="q-time-input q-tnum"
+  placeholder="HH:mm"
+  [value]="draft()"
+  [disabled]="disabled()"
+  [attr.aria-label]="ariaLabel() ?? ('ui.timeInput.label' | t)"
+  (input)="onTyped($any($event.target).value)"
+  (blur)="onBlur()"
+  (keydown)="onKeydown($event)"
+  data-testid="q-time-input"
+/>

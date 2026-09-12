@@ -37,7 +37,9 @@
       <div class="promo-codes__reveal" data-testid="promo-codes-reveal">
         <span class="q-caption">{{ 'marketing.promoCodes.reveal.label' | t }}</span>
         <span class="q-body promo-codes__reveal-code">{{ created.plaintextCode }}</span>
-        <span class="q-caption promo-codes__reveal-hint">{{ 'marketing.promoCodes.reveal.hint' | t }}</span>
+        <span class="q-caption promo-codes__reveal-hint">{{
+          'marketing.promoCodes.reveal.hint' | t
+        }}</span>
         <button type="button" (click)="dismissJustCreated()">
           {{ 'marketing.promoCodes.reveal.dismiss' | t }}
         </button>
@@ -116,13 +118,23 @@
 
         <label class="field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.name' | t }}</span>
-          <input type="text" [value]="formName()" (input)="formName.set($any($event.target).value)" />
+          <input
+            type="text"
+            [value]="formName()"
+            (input)="formName.set($any($event.target).value)"
+          />
         </label>
 
         <label class="field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.code' | t }}</span>
-          <input type="text" [value]="formCode()" (input)="formCode.set($any($event.target).value)" />
-          <span class="q-caption promo-codes__field-hint">{{ 'marketing.promoCodes.form.code.hint' | t }}</span>
+          <input
+            type="text"
+            [value]="formCode()"
+            (input)="formCode.set($any($event.target).value)"
+          />
+          <span class="q-caption promo-codes__field-hint">{{
+            'marketing.promoCodes.form.code.hint' | t
+          }}</span>
         </label>
 
         <label class="field">
@@ -134,27 +146,22 @@
           </select>
         </label>
 
-        @if (formShape() === 'PERCENTAGE_OFF_ORDER') {
+        @if (formShape() !== 'FREE_DELIVERY') {
           <label class="field">
-            <span class="q-caption">{{ 'marketing.promoCodes.form.percent' | t }}</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              max="100"
-              [value]="formPercent()"
-              (input)="formPercent.set(+$any($event.target).value)"
-            />
-          </label>
-        }
-        @if (formShape() === 'FIXED_AMOUNT_OFF_ORDER') {
-          <label class="field">
-            <span class="q-caption">{{ 'marketing.promoCodes.form.amount' | t }}</span>
-            <input
-              type="number"
-              min="1"
-              [value]="formAmountMinor()"
-              (input)="formAmountMinor.set(+$any($event.target).value)"
+            <span class="q-caption">{{
+              (moneyOrPercentKind() === 'PERCENT'
+                ? 'marketing.promoCodes.form.percent'
+                : 'marketing.promoCodes.form.amount'
+              ) | t
+            }}</span>
+            <q-money-or-percent
+              [kind]="moneyOrPercentKind()"
+              (kindChange)="onMoneyOrPercentKindChange($event)"
+              [amountMinor]="formAmountMinor()"
+              (amountMinorChange)="formAmountMinor.set($event)"
+              [basisPoints]="formBasisPoints()"
+              (basisPointsChange)="formBasisPoints.set($event)"
+              data-testid="promo-codes-value"
             />
           </label>
         }

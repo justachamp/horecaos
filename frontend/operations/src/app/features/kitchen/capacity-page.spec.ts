@@ -116,9 +116,7 @@ describe('CapacityPage', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     (host.querySelector('[data-testid="capacity-form-portions"]') as HTMLInputElement).value = '30';
-    host
-      .querySelector('[data-testid="capacity-form-portions"]')
-      ?.dispatchEvent(new Event('input'));
+    host.querySelector('[data-testid="capacity-form-portions"]')?.dispatchEvent(new Event('input'));
 
     (host.querySelector('[data-testid="capacity-form-submit"]') as HTMLButtonElement).click();
     await flushMicrotasks();
@@ -130,6 +128,28 @@ describe('CapacityPage', () => {
     expect(body.portionsPerHour).toBe(30);
     expect(body.windowStart).toMatch(/^\d\d:\d\d:00$/);
     expect(host.querySelector('[data-testid="capacity-form-error"]')).toBeNull();
+  });
+
+  it('picks a weekday and a time window through the shared primitives, then submits them', async () => {
+    const create = vi.fn().mockReturnValue(of(window_({ capacityWindowId: 'window-new' })));
+    await render({ list: () => Promise.resolve([]), create });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="q-day-of-week-toggle-day-3"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const fromField = host.querySelectorAll('[data-testid="q-time-input"]')[0] as HTMLInputElement;
+    fromField.value = '08:00';
+    fromField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="capacity-form-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const [, body] = create.mock.calls[0];
+    expect(body.weekday).toBe(3);
+    expect(body.windowStart).toBe('08:00:00');
   });
 
   it('surfaces a refused overlapping window without crashing', async () => {

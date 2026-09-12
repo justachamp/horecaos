@@ -1,0 +1,45 @@
+.q-number-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-number-stepper__button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.q-number-stepper__button:hover:not(:disabled) {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.q-number-stepper__button:disabled {
+  color: var(--q-ink-subtle);
+  cursor: not-allowed;
+}
+
+.q-number-stepper__value {
+  width: 64px;
+  height: 32px;
+  text-align: center;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.q-number-stepper__value:disabled {
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.q-number-stepper__hint {
+  color: var(--q-ink-subtle);
+}

@@ -1,0 +1,41 @@
+<div class="q-number-stepper" data-testid="q-number-stepper">
+  <button
+    type="button"
+    class="q-number-stepper__button"
+    [disabled]="!canDecrement()"
+    [attr.aria-label]="ariaLabel() ? ariaLabel() + ' −' : '−'"
+    (click)="decrement()"
+    data-testid="q-number-stepper-decrement"
+  >
+    −
+  </button>
+  <input
+    type="text"
+    inputmode="numeric"
+    class="q-number-stepper__value q-tnum"
+    [value]="value()"
+    [disabled]="disabled()"
+    [attr.aria-label]="ariaLabel()"
+    [attr.aria-valuemin]="min()"
+    [attr.aria-valuemax]="max()"
+    [attr.aria-valuenow]="value()"
+    role="spinbutton"
+    (change)="onTyped($any($event.target).value)"
+    data-testid="q-number-stepper-input"
+  />
+  <button
+    type="button"
+    class="q-number-stepper__button"
+    [disabled]="!canIncrement()"
+    [attr.aria-label]="ariaLabel() ? ariaLabel() + ' +' : '+'"
+    (click)="increment()"
+    data-testid="q-number-stepper-increment"
+  >
+    +
+  </button>
+  @if (boundsHint()) {
+    <span class="q-caption q-number-stepper__hint" data-testid="q-number-stepper-hint">{{
+      boundsHint()
+    }}</span>
+  }
+</div>

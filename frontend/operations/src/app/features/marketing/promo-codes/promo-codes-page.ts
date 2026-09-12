@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
@@ -6,8 +13,14 @@ import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { MoneyOrPercent, MoneyOrPercentKind } from '../../../shared/ui/money-or-percent';
 import { describeApiError } from '../../orders/order-errors';
-import { DiscountShape, DraftPromoCodeRequest, PromoCodeView, PromoCodesApi } from './promo-codes-api';
+import {
+  DiscountShape,
+  DraftPromoCodeRequest,
+  PromoCodeView,
+  PromoCodesApi,
+} from './promo-codes-api';
 
 /**
  * Marketing §6.2 Promo codes (ADR 0072) — a brand's own promo codes: shape,
@@ -36,7 +49,7 @@ import { DiscountShape, DraftPromoCodeRequest, PromoCodeView, PromoCodesApi } fr
  */
 @Component({
   selector: 'q-promo-codes-page',
-  imports: [TPipe],
+  imports: [TPipe, MoneyOrPercent],
   templateUrl: './promo-codes-page.html',
   styleUrl: './promo-codes-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -72,7 +85,8 @@ export class PromoCodesPage implements OnInit {
   protected readonly formName = signal('');
   protected readonly formCode = signal('');
   protected readonly formShape = signal<DiscountShape>('PERCENTAGE_OFF_ORDER');
-  protected readonly formPercent = signal(10);
+  /** `q-percent-input`'s own model — basis points, never the display percent (ADR 0101, row `X.10`). */
+  protected readonly formBasisPoints = signal(1_000);
   protected readonly formAmountMinor = signal(10_000);
   protected readonly formHasCap = signal(false);
   protected readonly formMaximumDiscountMinor = signal(50_000);
@@ -80,6 +94,22 @@ export class PromoCodesPage implements OnInit {
   protected readonly formHasTotalLimit = signal(false);
   protected readonly formTotalLimit = signal(100);
   protected readonly formPerCustomerLimit = signal(1);
+
+  /**
+   * `q-money-or-percent`'s `kind` — derived from {@link formShape} rather than
+   * held independently, so the shape `<select>` above and the widget's own
+   * AMOUNT/PERCENT toggle can never disagree about which one is live.
+   * `FREE_DELIVERY` never renders the widget at all (see the template), so
+   * its arbitrary `'PERCENT'` fallback here is never shown.
+   */
+  protected readonly moneyOrPercentKind = computed<MoneyOrPercentKind>(() =>
+    this.formShape() === 'FIXED_AMOUNT_OFF_ORDER' ? 'AMOUNT' : 'PERCENT',
+  );
+
+  /** The widget's own toggle moves {@link formShape} itself — see {@link moneyOrPercentKind}'s doc. */
+  protected onMoneyOrPercentKindChange(kind: MoneyOrPercentKind): void {
+    this.formShape.set(kind === 'AMOUNT' ? 'FIXED_AMOUNT_OFF_ORDER' : 'PERCENTAGE_OFF_ORDER');
+  }
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -164,7 +194,7 @@ export class PromoCodesPage implements OnInit {
     this.formName.set('');
     this.formCode.set('');
     this.formShape.set('PERCENTAGE_OFF_ORDER');
-    this.formPercent.set(10);
+    this.formBasisPoints.set(1_000);
     this.formAmountMinor.set(10_000);
     this.formHasCap.set(false);
     this.formMaximumDiscountMinor.set(50_000);
@@ -192,7 +222,7 @@ export class PromoCodesPage implements OnInit {
       return false;
     }
     if (this.formShape() === 'PERCENTAGE_OFF_ORDER') {
-      const basisPoints = Math.round(this.formPercent() * 100);
+      const basisPoints = this.formBasisPoints();
       return basisPoints > 0 && basisPoints <= 10_000;
     }
     if (this.formShape() === 'FIXED_AMOUNT_OFF_ORDER') {
@@ -233,7 +263,7 @@ export class PromoCodesPage implements OnInit {
 
   private valueForShape(): number {
     if (this.formShape() === 'PERCENTAGE_OFF_ORDER') {
-      return Math.round(this.formPercent() * 100);
+      return this.formBasisPoints();
     }
     if (this.formShape() === 'FIXED_AMOUNT_OFF_ORDER') {
       return this.formAmountMinor();
