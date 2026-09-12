@@ -1137,6 +1137,21 @@ public class WalletService {
      * decides whether it is safe to ask the provider about it again. A
      * {@link DuplicateKeyException} out of the insert below is left to
      * propagate rather than caught here — see {@link #beginOrReuseCardAttempt}.
+     *
+     * <p><strong>Never reused under a card it was not minted with.</strong> A
+     * PENDING attempt's id is the idempotency key the provider is handed, and
+     * that key was minted under whatever card was on file when the row was
+     * inserted — {@code card_token_reference}, pinned on the row by {@link
+     * JdbcCardChargeAttemptStore#begin}. {@code setPaymentMethod} never
+     * touches this table, so a card swapped while the attempt sits PENDING
+     * left the id on file pointing at a card it was never asked about; asking
+     * the provider about it, or charging it again, under the tenant's
+     * <em>current</em> token would hand the same key to two different cards,
+     * which {@link CardCharger#charge} documents as fatal either way. When the
+     * tenant's current token no longer matches the one on the row, the row is
+     * settled {@code SUPERSEDED} out of band — never asked about again, never
+     * retried — and a genuinely new attempt is minted under the card now on
+     * file, exactly as if none had existed.
      */
     private Optional<CardAttempt> beginCardAttempt(UUID tenantId, UUID statementId) {
         Instant now = clock.instant();
@@ -1151,11 +1166,15 @@ public class WalletService {
         }
         Optional<JdbcCardChargeAttemptStore.PendingAttempt> pending = attempts.findPending(tenantId, statementId);
         if (pending.isPresent()) {
-            return Optional.of(
-                    reusedAttempt(pending.get(), statementId, statement.number(), billing.cardTokenReference()));
+            JdbcCardChargeAttemptStore.PendingAttempt existing = pending.get();
+            if (Objects.equals(existing.cardTokenReference(), billing.cardTokenReference())) {
+                return Optional.of(reusedAttempt(existing, statementId, statement.number()));
+            }
+            return supersedeAndMintFresh(tenantId, statementId, statement, billing, currency, existing, now);
         }
         UUID attemptId = Ids.newId();
-        attempts.begin(attemptId, tenantId, statementId, statement.dueMinor(), currency, now);
+        attempts.begin(
+                attemptId, tenantId, statementId, statement.dueMinor(), currency, billing.cardTokenReference(), now);
         return Optional.of(new CardAttempt(
                 attemptId,
                 statementId,
@@ -1171,30 +1190,96 @@ public class WalletService {
      * statement while this one's own insert was racing it and lost — in a
      * transaction of its own, since the one that lost is already aborted and
      * cannot be read through (see {@link #beginOrReuseCardAttempt}).
+     *
+     * <p>Subject to the same card-swap check as {@link #beginCardAttempt}: the
+     * winner's row is only ever reused if its own pinned token still matches
+     * the tenant's current one, and is superseded and replaced otherwise.
      */
     private Optional<CardAttempt> reuseCardAttemptAfterRace(
             UUID tenantId, UUID statementId, DuplicateKeyException raced) {
-        TenantBilling billing = wallet.lockBilling(tenantId, clock.instant());
-        StatementPayment statement = openStatement(tenantId, wallet.currencyOf(tenantId), statementId);
+        Instant now = clock.instant();
+        TenantBilling billing = wallet.lockBilling(tenantId, now);
+        String currency = wallet.currencyOf(tenantId);
+        StatementPayment statement = openStatement(tenantId, currency, statementId);
         JdbcCardChargeAttemptStore.PendingAttempt winner =
                 attempts.findPending(tenantId, statementId).orElseThrow(() -> raced);
-        String statementNumber = statement == null ? winner.id().toString() : statement.number();
-        return Optional.of(reusedAttempt(winner, statementId, statementNumber, billing.cardTokenReference()));
+        if (Objects.equals(winner.cardTokenReference(), billing.cardTokenReference())) {
+            String statementNumber = statement == null ? winner.id().toString() : statement.number();
+            return Optional.of(reusedAttempt(winner, statementId, statementNumber));
+        }
+        return supersedeAndMintFresh(tenantId, statementId, statement, billing, currency, winner, now);
     }
 
     private static CardAttempt reusedAttempt(
-            JdbcCardChargeAttemptStore.PendingAttempt pending,
-            UUID statementId,
-            String statementNumber,
-            @Nullable String cardTokenReference) {
+            JdbcCardChargeAttemptStore.PendingAttempt pending, UUID statementId, String statementNumber) {
         return new CardAttempt(
                 pending.id(),
                 statementId,
                 statementNumber,
                 pending.amountMinor(),
                 pending.currency(),
-                cardTokenReference,
+                pending.cardTokenReference(),
                 true);
+    }
+
+    /**
+     * Settles a PENDING attempt {@code SUPERSEDED} because the card token it
+     * was minted under is no longer the one on file, and — when the statement
+     * still owes something — mints a genuinely new attempt and a genuinely
+     * new key against the card now on file.
+     *
+     * <p>Never charges the new card under the old key: two different cards
+     * behind one idempotency key is exactly what {@link CardCharger#charge}
+     * documents as fatal either way, a provider erroring on the changed
+     * parameter or replaying the old card's result for a charge the new card
+     * was never asked to make. Idempotent through {@link
+     * JdbcCardChargeAttemptStore#settle}'s own {@code WHERE outcome =
+     * 'PENDING'}: a concurrent report that already resolved this exact
+     * attempt is left alone rather than superseded out from under it.
+     *
+     * <p>{@code statement} may be null or already fully paid — the caller
+     * re-reads it fresh under the same lock — in which case the old attempt
+     * is still superseded (it must never be left pointing at a stale card)
+     * but nothing is minted in its place, exactly as {@link #beginCardAttempt}
+     * mints nothing for a statement with nothing left due.
+     */
+    private Optional<CardAttempt> supersedeAndMintFresh(
+            UUID tenantId,
+            UUID statementId,
+            @Nullable StatementPayment statement,
+            TenantBilling billing,
+            String currency,
+            JdbcCardChargeAttemptStore.PendingAttempt superseded,
+            Instant now) {
+        UUID freshId = statement != null && statement.dueMinor() > 0 ? Ids.newId() : null;
+        if (attempts.settle(superseded.id(), "SUPERSEDED", null, now)) {
+            audit.record(AuditFact.of("commercial.wallet.card_attempt_superseded", AuditClass.BUSINESS)
+                    .by(ActorRef.systemJob("wallet-settlement"))
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("commercial.statement", statementId)
+                    .because("the tenant's card token changed while this attempt was pending")
+                    .changed(
+                            freshId == null
+                                    ? Map.of(
+                                            "supersededAttemptId",
+                                            superseded.id().toString())
+                                    : Map.of(
+                                            "supersededAttemptId",
+                                            superseded.id().toString(),
+                                            "newAttemptId",
+                                            freshId.toString()))
+                    .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                    .correlatedBy(statementId.toString())
+                    .occurredAt(now)
+                    .build());
+        }
+        if (freshId == null || statement == null) {
+            return Optional.empty();
+        }
+        long amountMinor = statement.dueMinor();
+        attempts.begin(freshId, tenantId, statementId, amountMinor, currency, billing.cardTokenReference(), now);
+        return Optional.of(new CardAttempt(
+                freshId, statementId, statement.number(), amountMinor, currency, billing.cardTokenReference(), false));
     }
 
     /**

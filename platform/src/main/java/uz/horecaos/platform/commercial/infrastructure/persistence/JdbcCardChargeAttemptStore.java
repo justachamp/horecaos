@@ -35,18 +35,36 @@ public class JdbcCardChargeAttemptStore {
         this.jdbc = jdbc;
     }
 
-    /** Records that this attempt is about to be made, at this amount. */
-    public void begin(UUID attemptId, UUID tenantId, UUID statementId, long amountMinor, String currency, Instant now) {
+    /**
+     * Records that this attempt is about to be made, at this amount and
+     * under this card token -- pinned here so a later reuse retries under
+     * the same token the id was minted with, never one read fresh off
+     * {@code commercial.tenant_billing} at reuse time.
+     *
+     * @param cardTokenReference null exactly when the tenant has no token on
+     *                           file yet; the adapter is handed that as it
+     *                           stands (ADR 0095)
+     */
+    public void begin(
+            UUID attemptId,
+            UUID tenantId,
+            UUID statementId,
+            long amountMinor,
+            String currency,
+            @Nullable String cardTokenReference,
+            Instant now) {
         jdbc.sql("""
                         INSERT INTO commercial.card_charge_attempts (
-                            id, tenant_id, statement_id, amount_minor, currency, outcome, attempted_at)
-                        VALUES (:id, :tenantId, :statementId, :amount, :currency, 'PENDING', :now)
+                            id, tenant_id, statement_id, amount_minor, currency, card_token_reference,
+                            outcome, attempted_at)
+                        VALUES (:id, :tenantId, :statementId, :amount, :currency, :cardTokenReference, 'PENDING', :now)
                         """)
                 .param("id", attemptId)
                 .param("tenantId", tenantId)
                 .param("statementId", statementId)
                 .param("amount", amountMinor)
                 .param("currency", currency)
+                .param("cardTokenReference", cardTokenReference)
                 .param("now", utc(now))
                 .update();
     }
@@ -64,14 +82,17 @@ public class JdbcCardChargeAttemptStore {
      */
     public Optional<PendingAttempt> findPending(UUID tenantId, UUID statementId) {
         return jdbc.sql("""
-                        SELECT id, amount_minor, currency
+                        SELECT id, amount_minor, currency, card_token_reference
                           FROM commercial.card_charge_attempts
                          WHERE tenant_id = :tenantId AND statement_id = :statementId AND outcome = 'PENDING'
                         """)
                 .param("tenantId", tenantId)
                 .param("statementId", statementId)
                 .query((row, number) -> new PendingAttempt(
-                        row.getObject("id", UUID.class), row.getLong("amount_minor"), row.getString("currency")))
+                        row.getObject("id", UUID.class),
+                        row.getLong("amount_minor"),
+                        row.getString("currency"),
+                        row.getString("card_token_reference")))
                 .optional();
     }
 
@@ -103,7 +124,11 @@ public class JdbcCardChargeAttemptStore {
     }
 
     /** An unresolved attempt already on file, as {@link #begin} left it. */
-    public record PendingAttempt(UUID id, long amountMinor, String currency) {}
+    public record PendingAttempt(
+            UUID id,
+            long amountMinor,
+            String currency,
+            @Nullable String cardTokenReference) {}
 
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);

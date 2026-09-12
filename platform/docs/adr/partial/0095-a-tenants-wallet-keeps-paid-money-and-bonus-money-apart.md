@@ -1,7 +1,7 @@
 # ADR 0095: A tenant's wallet keeps paid money and bonus money apart
 
 - Decision status: Proposed
-- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, and a `PENDING` card charge attempt retried under its own key and never credited twice; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-one cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured" to a charge and "not succeeded" to a status check, so a CARD tenant's remainder stays due exactly as an INVOICE one does
+- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts — each pinned to the card token it was minted under — and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, a `PENDING` card charge attempt retried under its own key and card token and never credited twice, and a card swapped while an attempt sits PENDING settling that attempt `SUPERSEDED` and minting a fresh one under the new card rather than ever retrying the old key under it; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-four cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured" to a charge and "not succeeded" to a status check, so a CARD tenant's remainder stays due exactly as an INVOICE one does
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: the platform owner decided on 2026-09-11 that tenants pay by invoice and bank transfer, from a prepaid wallet or by card; that bonus money HorecaOS grants is kept apart from money a tenant paid, is spent first and lapses on a date set per grant; that paid money never lapses and is refunded when a tenant leaves; that every manual change needs a proposer and a different approver; and that the activation deposit is credited to the first statement. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
@@ -247,7 +247,20 @@ As built on 2026-09-11.
   statement can never be collected by card however good the card becomes, or
   replays an earlier success for a different amount and the wallet credits
   money nobody took. Inert while `NotConfiguredCardCharger` is the only
-  adapter, and the contract a real one will be built against.
+  adapter, and the contract a real one will be built against. **The row also
+  pins the card token it was minted under**, in `card_token_reference`, copied
+  from `commercial.tenant_billing` at insert time — the same defect shape as
+  the statement id, one level down: a reused attempt used to read the
+  tenant's card fresh off `tenant_billing` rather than off the row itself, so
+  a card swapped while the attempt sat `PENDING` retried the old key under
+  the new card. Two different cards behind one idempotency key is exactly
+  what `CardCharger.charge` documents as fatal either way, a provider
+  erroring on the changed parameter or replaying the old card's result for a
+  charge the new card was never asked to make — `setPaymentMethod` does not
+  touch this table, so nothing else would have caught it. A reused attempt
+  now asks and charges under its own stored token, never one read fresh; see
+  `ux_card_charge_attempt_one_pending` below for what happens when that stored
+  token no longer matches.
 - **`ux_card_charge_attempt_one_pending`** (V0222): a partial unique index on
   `(tenant_id, statement_id) WHERE outcome = 'PENDING'` — a statement has at
   most one unresolved attempt at a time. V0214 gave every attempt its own key
@@ -274,7 +287,22 @@ As built on 2026-09-11.
   key. **This makes the contract explicit: a provider adapter must honour the
   idempotency key — treat a repeated key as the same attempt, never a new
   charge — for a retried `PENDING` attempt to be safe**, exactly as it must
-  already for the amount-change case V0214 exists for.
+  already for the amount-change case V0214 exists for. **A card swap while
+  the attempt sits `PENDING` is answered by superseding it, never by
+  retrying it.** `beginCardAttempt` and `reuseCardAttemptAfterRace` compare
+  the reused row's own `card_token_reference` against the tenant's current
+  one, both read under the same billing lock; a match retries as above, and a
+  mismatch settles the row `SUPERSEDED` — a fourth outcome the amount and
+  currency's own CHECK constraint allows beside `SUCCEEDED`, `FAILED` and
+  `NOT_CONFIGURED` — audits `commercial.wallet.card_attempt_superseded` with
+  the two attempt ids and the statement, never the token, and mints a
+  genuinely new attempt and a genuinely new key under the card now on file.
+  The superseded row is never asked about and never charged again: a `SUPERSEDED`
+  outcome is exactly as final to `JdbcCardChargeAttemptStore.settle`'s
+  `WHERE outcome = 'PENDING'` as `SUCCEEDED` or `FAILED` is. The race path
+  applies the identical check to the winner's row it reads back, so a card
+  swapped while two settlement passes race each other is superseded exactly
+  as one swapped between two ordinary passes would be.
   `WalletService.recordCardOutcome` is idempotent in the attempt as well as
   in the money: `JdbcCardChargeAttemptStore.settle` resolves a row once
   (`WHERE outcome = 'PENDING'`), and a second, truthful report of the same
@@ -404,6 +432,20 @@ As built on 2026-09-11.
   `commercial.wallet.card_charge_surplus_refused` rather than folded into
   paid balance, because at this table a surplus is what a card charged twice
   looks like.
+- **The attempt is pinned to the card it was minted under, and a swap
+  supersedes it rather than retrying it under the new card.** `setPaymentMethod`
+  does not touch `commercial.card_charge_attempts`, so a card changed while an
+  attempt sat `PENDING` used to leave the old id on file pointing at a card it
+  was never asked about, and a reused attempt read the tenant's *current* card
+  off `tenant_billing` rather than the one the id was minted with — the same
+  key handed to two different cards, which `CardCharger.charge` documents as
+  fatal either way. `card_token_reference` (V0214) fixes the source: pinned at
+  insert time, read back on every reuse, never re-derived from billing.
+  `beginCardAttempt` and `reuseCardAttemptAfterRace` compare it against the
+  tenant's current token before reusing; a mismatch settles the row
+  `SUPERSEDED`, audits `commercial.wallet.card_attempt_superseded` (ids only),
+  and mints a fresh attempt and a fresh key under the card now on file — never
+  charging it under the old one.
 - The expiry sweep catches per candidate, not only per pass. The candidate
   query orders by expiry, so one grant that keeps throwing would sit at the
   head of every later batch and hold every later expiry behind it, in every
@@ -516,6 +558,12 @@ them. Rolling back leaves the ledger in place and unread.
 - [x] A statement has at most one unresolved card charge attempt (V0222); a
       `PENDING` attempt is retried under its own key rather than re-attempted
       under a new one, and a reused attempt's outcome is never credited twice
+- [x] An attempt pins the card token it was minted under (V0214); a reused
+      attempt is asked about and charged under its own stored token, never
+      one read fresh off `tenant_billing`, and a card swapped while an
+      attempt sits `PENDING` supersedes it and mints a fresh attempt under
+      the new card rather than ever retrying the old key under it — in the
+      race path exactly as in the ordinary one
 
 ## Exit criteria
 

@@ -1840,6 +1840,152 @@ class WalletTests {
     }
 
     @Test
+    void aCardSwapWhileAnAttemptIsPendingSupersedesItAndChargesTheNewCardUnderAFreshKey() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:old-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        // The provider never answers, leaving a PENDING attempt on file --
+        // minted under vault:old-card, the card that was on file the moment
+        // the row was inserted.
+        walletChargingWith(new ThrowingCharger()).settleCardRemainders(PILOT);
+        assertThat(attemptOutcomes()).containsExactly("PENDING:unsettled");
+        String oldAttemptId = pendingAttemptId();
+
+        // The card is swapped while that attempt still sits unresolved.
+        // setPaymentMethod never touches commercial.card_charge_attempts, so
+        // without this fix the retry below would ask the provider about the
+        // old attempt, or charge it again, under the tenant's new card --
+        // the same idempotency key handed to two different cards, which
+        // CardCharger.charge documents as fatal either way.
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:new-card", MAKER, "the card expired", "c"));
+
+        RecordingCharger charger = new RecordingCharger(new CardCharger.Outcome.Succeeded("CLICK-NEW-CARD"));
+        walletChargingWith(charger).settleCardRemainders(PILOT);
+
+        assertThat(charger.statusChecks)
+                .as("the old attempt is retired, never asked about again under a card it was never asked "
+                        + "about in the first place")
+                .isEmpty();
+        assertThat(charger.charges)
+                .as("a fresh key, charged once, under the card actually on file -- never the new card "
+                        + "under the old key")
+                .singleElement()
+                .satisfies(charge -> {
+                    assertThat(charge.idempotencyKey())
+                            .as("a genuinely new attempt, not the one minted under the card that left")
+                            .isNotEqualTo(oldAttemptId);
+                    assertThat(charge.cardTokenReference()).isEqualTo("vault:new-card");
+                });
+        assertThat(attemptOutcomes())
+                .as("the stale attempt is settled out of band, never silently reused, and the fresh one "
+                        + "settles on its own key")
+                .containsExactlyInAnyOrder("SUPERSEDED:settled", "SUCCEEDED:settled");
+        assertThat(cardChargeAttemptRowCount()).isEqualTo(2L);
+        assertThat(auditedActions())
+                .contains("commercial.wallet.card_attempt_superseded", "commercial.wallet.card_charged");
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+        assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
+    }
+
+    @Test
+    void aReusedAttemptIsChargedWithItsOwnStoredTokenNeverOneReadFreshOffBillingAtChargeTime() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() -> wallet.setPaymentMethod(
+                PILOT, PaymentMethod.CARD, "vault:original-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        // Nothing about the card changes before beginOrReuseCardAttempt runs
+        // and decides this attempt -- minted moments ago under
+        // vault:original-card -- is safe to reuse: no swap has happened yet.
+        walletChargingWith(new ThrowingCharger()).settleCardRemainders(PILOT);
+        assertThat(attemptOutcomes()).containsExactly("PENDING:unsettled");
+        String pendingId = pendingAttemptId();
+
+        // Only once the retry is already under way -- inside status(), asking
+        // about the very attempt beginOrReuseCardAttempt just decided to
+        // reuse -- does the tenant's card change underneath it, by mutating
+        // tenant_billing directly rather than through setPaymentMethod (which
+        // is the path aCardSwapWhileAnAttemptIsPendingSupersedesItAndCharges
+        // TheNewCardUnderAFreshKey already covers). The charge that follows
+        // must still go out under the token the id was minted with.
+        MidFlightSwapCharger charger = new MidFlightSwapCharger(
+                new CardCharger.Outcome.Succeeded("CLICK-STORED-TOKEN"), "vault:mutated-mid-flight");
+        walletChargingWith(charger).settleCardRemainders(PILOT);
+
+        assertThat(charger.charges)
+                .as("the id was minted under vault:original-card, and CardCharger's own contract makes "
+                        + "reusing it under a different token fatal either way -- a provider erroring on "
+                        + "the changed parameter, or replaying an earlier result for a charge this token "
+                        + "was never asked to make")
+                .singleElement()
+                .satisfies(charge -> {
+                    assertThat(charge.idempotencyKey()).isEqualTo(pendingId);
+                    assertThat(charge.cardTokenReference()).isEqualTo("vault:original-card");
+                });
+        assertThat(cardChargeAttemptRowCount())
+                .as("one row throughout: this attempt was never found mismatched at the moment it was "
+                        + "picked up for reuse, so nothing here ever supersedes it")
+                .isEqualTo(1L);
+        assertThat(attemptOutcomes()).containsExactly("SUCCEEDED:settled");
+        assertThat(auditedActions()).doesNotContain("commercial.wallet.card_attempt_superseded");
+    }
+
+    @Test
+    void theRacePathSupersedesAWinningAttemptWhoseTokenNoLongerMatches() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() -> wallet.setPaymentMethod(
+                PILOT, PaymentMethod.CARD, "vault:current-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        // A concurrent settlement pass wins beginCardAttempt's own insert and
+        // commits its PENDING attempt first, exactly what reuseCardAttempt
+        // AfterRace exists to read back -- but minted under a card that is no
+        // longer the one on file by the time this pass's own lockBilling
+        // reads it, precisely as a swap racing a settlement pass would leave
+        // things.
+        UUID winnerId = Ids.newId();
+        RacingCardChargeAttemptStore racingStore = new RacingCardChargeAttemptStore(winnerId, "vault:raced-away-card");
+        RecordingCharger charger = new RecordingCharger(new CardCharger.Outcome.Succeeded("CLICK-RACE-SWAP"));
+        WalletService racing = new WalletService(
+                new JdbcWalletStore(jdbc),
+                new JdbcSubscriptionStore(jdbc),
+                racingStore,
+                approvals,
+                charger,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                meters,
+                transactions,
+                clock);
+
+        racing.settleCardRemainders(PILOT);
+
+        assertThat(charger.statusChecks)
+                .as("the winning row is never asked about under a card it was never asked about in the "
+                        + "first place")
+                .isEmpty();
+        assertThat(charger.charges)
+                .as("a genuinely fresh key, charged once, under the card actually on file")
+                .singleElement()
+                .satisfies(charge -> {
+                    assertThat(charge.idempotencyKey()).isNotEqualTo(winnerId.toString());
+                    assertThat(charge.cardTokenReference()).isEqualTo("vault:current-card");
+                });
+        assertThat(cardChargeAttemptRowCount()).isEqualTo(2L);
+        assertThat(attemptOutcomes())
+                .as("the raced-in winner is superseded rather than reused under a card it was never "
+                        + "minted with, and the fresh attempt settles on its own key")
+                .containsExactlyInAnyOrder("SUPERSEDED:settled", "SUCCEEDED:settled");
+        assertThat(auditedActions()).contains("commercial.wallet.card_attempt_superseded");
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+    }
+
+    @Test
     void theCardIsNeverAskedFromInsideSomebodyElsesTransaction() {
         startOnPlan(START, MONTHLY);
         inTxDo(() ->
@@ -2022,6 +2168,109 @@ class WalletTests {
                 String idempotencyKey) {
             attemptWasCommitted = pendingAttemptIsVisibleToAnotherSession(idempotencyKey);
             throw new IllegalStateException("the provider did not answer");
+        }
+    }
+
+    /**
+     * A charger that, on {@code status()} -- asked only about an attempt
+     * {@code beginOrReuseCardAttempt} already decided, under its own
+     * transaction, is safe to reuse -- mutates the tenant's card token
+     * directly on {@code tenant_billing}, bypassing {@code setPaymentMethod}
+     * entirely, before answering {@code NotSucceeded}. Proves that the
+     * {@code charge()} call which follows, in the same retry, is sent under
+     * the token pinned on the reused attempt rather than one read fresh off
+     * billing at that later moment.
+     */
+    private final class MidFlightSwapCharger implements CardCharger {
+
+        private final Outcome chargeAnswer;
+        private final String mutatedToken;
+        private final List<Charge> charges = new ArrayList<>();
+
+        MidFlightSwapCharger(Outcome chargeAnswer, String mutatedToken) {
+            this.chargeAnswer = chargeAnswer;
+            this.mutatedToken = mutatedToken;
+        }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            jdbc.sql("UPDATE commercial.tenant_billing SET card_token_reference = :token WHERE tenant_id = :id")
+                    .param("token", mutatedToken)
+                    .param("id", PILOT)
+                    .update();
+            return new StatusOutcome.NotSucceeded();
+        }
+
+        @Override
+        public Outcome charge(
+                UUID tenantId,
+                @Nullable String cardTokenReference,
+                long amountMinor,
+                String currency,
+                String idempotencyKey) {
+            charges.add(new Charge(cardTokenReference, idempotencyKey));
+            return chargeAnswer;
+        }
+
+        private record Charge(@Nullable String cardTokenReference, String idempotencyKey) {}
+    }
+
+    /**
+     * A {@code JdbcCardChargeAttemptStore} whose first {@link #begin} plants a
+     * competing PENDING row for the same statement on a connection of its
+     * own -- committed before the real insert runs, and so still on file even
+     * after that insert's own transaction rolls back on the unique violation.
+     * Exactly what a genuinely concurrent settlement pass landing between
+     * {@code beginCardAttempt}'s own {@code findPending} and its insert would
+     * leave behind, forced deterministically rather than raced with threads.
+     */
+    private final class RacingCardChargeAttemptStore extends JdbcCardChargeAttemptStore {
+
+        private final UUID winnerId;
+        private final String winnerCardTokenReference;
+        private boolean planted;
+
+        RacingCardChargeAttemptStore(UUID winnerId, String winnerCardTokenReference) {
+            super(jdbc);
+            this.winnerId = winnerId;
+            this.winnerCardTokenReference = winnerCardTokenReference;
+        }
+
+        @Override
+        public void begin(
+                UUID attemptId,
+                UUID tenantId,
+                UUID statementId,
+                long amountMinor,
+                String currency,
+                @Nullable String cardTokenReference,
+                Instant now) {
+            if (!planted) {
+                planted = true;
+                plantWinner(tenantId, statementId, amountMinor, currency, now);
+            }
+            super.begin(attemptId, tenantId, statementId, amountMinor, currency, cardTokenReference, now);
+        }
+
+        private void plantWinner(UUID tenantId, UUID statementId, long amountMinor, String currency, Instant now) {
+            try (java.sql.Connection separate = db.dataSource().getConnection();
+                    java.sql.PreparedStatement insert = separate.prepareStatement("""
+                            INSERT INTO commercial.card_charge_attempts (
+                                id, tenant_id, statement_id, amount_minor, currency, card_token_reference,
+                                outcome, attempted_at)
+                            VALUES (CAST(? AS uuid), CAST(? AS uuid), CAST(? AS uuid), ?, ?, ?, 'PENDING', ?)
+                            """)) {
+                insert.setString(1, winnerId.toString());
+                insert.setString(2, tenantId.toString());
+                insert.setString(3, statementId.toString());
+                insert.setLong(4, amountMinor);
+                insert.setString(5, currency);
+                insert.setString(6, winnerCardTokenReference);
+                insert.setObject(7, OffsetDateTime.ofInstant(now, ZoneOffset.UTC));
+                insert.executeUpdate();
+            } catch (java.sql.SQLException unreachable) {
+                throw new IllegalStateException("could not plant the racing attempt", unreachable);
+            }
         }
     }
 
