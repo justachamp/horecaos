@@ -648,19 +648,20 @@ wave that owns them:
    behind `P03` for that reason alone.
 8. `frontend/operations/src/app/core/api/*-paths.ts` are shared barrels. Add entries, never
    reformat the file, and keep each wave's additions in its own contiguous block.
-9. `platform/src/main/resources/db/migration` is **strictly ordinal** and `V0210` is the
-   current head, so two parallel waves would both write `V0211`. Numbers are allocated
+9. `platform/src/main/resources/db/migration` is **strictly ordinal** and `V0222` is the
+   current head, so two parallel waves would both write `V0223`. Numbers are allocated
    below; a wave uses its own block or none.
 
-**Migration numbers are allocated, not chosen.** Head is `V0210`. Each wave that adds
-schema owns the block below and may use fewer numbers than it reserves, never more; a wave
-not listed here adds no migration and must raise it rather than take a number.
+**Migration numbers are allocated, not chosen.** Head is `V0222`: `V0211`–`V0222` were
+taken while this map was being written — the wallet (ADR 0095: `V0211`, `V0212`, `V0214`,
+`V0222`), the password reset (ADR 0098: `V0213`), the invitation history (ADR 0100:
+`V0215`) and P19 (`V0220`, `V0221`) — so P11, P14 and P16 moved to the end of the table
+and `V0216`–`V0219` stay unused rather than reallocated. Each wave that adds schema owns
+the block below and may use fewer numbers than it reserves, never more; a wave not listed
+here adds no migration and must raise it rather than take a number.
 
 | Wave | Reserved | What it creates |
 |---|---|---|
-| **P11** | `V0211`–`V0213` | courier ETA persisted into the domain and joined onto the kitchen ticket |
-| **P14** | `V0214`–`V0216` | `customer_accounts.origin` and `created_by_actor_id` |
-| **P16** | `V0217`–`V0219` | a structured stop source on the availability read model |
 | **P19** | `V0220`–`V0222` | courier compliance columns under the ADR 0029 envelope; `courier_groups`; `courier_branch_bindings` |
 | **P22** | `V0223`–`V0225` | a channel dimension on `catalog.media_relations`; the widened media allowlist |
 | **P47** | `V0226`–`V0228` | the per-item sale-schedule binding V0020 withdrew; `catalog.product_recommendations` |
@@ -685,6 +686,9 @@ not listed here adds no migration and must raise it rather than take a number.
 | **T08** | `V0283`–`V0285` | a correlation column on the audit fact |
 | **W02** | `V0286`–`V0288` | `reporting.forecast_run` and `fact_forecast`; a holiday flag per sample date |
 | **W03** | `V0289`–`V0291` | the consent-type registry; tenant retention periods |
+| **P11** | `V0292`–`V0294` | courier ETA persisted into the domain and joined onto the kitchen ticket |
+| **P14** | `V0295`–`V0297` | `customer_accounts.origin` and `created_by_actor_id` |
+| **P16** | `V0298`–`V0300` | a structured stop source on the availability read model |
 
 **Sizing.** `1d` means one agent-day at eight size-points. **Every wave ends the same way.**
 `mvn spotless:apply` before the gate, never after — a formatting-only gate failure costs a
