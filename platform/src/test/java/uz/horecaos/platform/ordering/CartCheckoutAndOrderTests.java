@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,6 +41,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
@@ -3085,7 +3087,12 @@ class CartCheckoutAndOrderTests {
 
         var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(OrderActionsPolicy.availableFor(order.status(), order.fulfillmentMode()))
+        // Every relevant capability granted, so the assertion below is purely
+        // about the state-machine guard this test names, not about a role
+        // that happens to lack CANCEL for an unrelated reason (OrderActionsPolicyTests
+        // covers the per-role gate).
+        assertThat(OrderActionsPolicy.availableFor(
+                        order.status(), order.fulfillmentMode(), EnumSet.allOf(Capability.class)))
                 .as("the read model must not offer what the mutating endpoint just refused")
                 .noneMatch(action -> action.code() == OrderActionCode.CANCEL);
     }
