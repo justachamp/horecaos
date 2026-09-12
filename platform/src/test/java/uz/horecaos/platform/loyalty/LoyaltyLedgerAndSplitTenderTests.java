@@ -12,12 +12,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +57,7 @@ import uz.horecaos.platform.payments.settlement.OrderSettlementService;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService.PlannedTender;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService.SettlementPlan;
 import uz.horecaos.platform.payments.settlement.SettlementStatus;
+import uz.horecaos.platform.payments.settlement.TenderStatus;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -1020,6 +1023,95 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .as("a courier who sees only the order total collects 94 000, the customer has "
                         + "paid twice, and the tenant refunds")
                 .isEqualTo(82_000L);
+    }
+
+    /**
+     * W05: the operations read exposes exactly these rows as the IA's
+     * {@code payment[]} array, so this is also the test that the read model has
+     * a real settlement's own sequence, status and refunded amount to report --
+     * not only the two-tender shape every other test here uses, but three, so
+     * that "reverse of sequence" and "the two most recent legs, not just the
+     * one" are properties actually exercised rather than accidentally true of a
+     * settlement with only one money tender.
+     */
+    @Test
+    @DisplayName("a refund unwinds tenders in the reverse of their settlement sequence")
+    void aRefundUnwindsTendersInTheReverseOfTheirSettlementSequence() {
+        UUID order = completedOrder("N-1", 130_000L, 10_000L);
+        seedBalance(10_000L);
+
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                order,
+                customerId,
+                "UZS",
+                130_000L,
+                // Two money tenders beside the one balance tender, so the
+                // settlement has three legs and "reverse of sequence" is a
+                // property of all three rather than just money-before-points.
+                List.of(
+                        new PlannedTender(pointsMethod, 10_000L),
+                        new PlannedTender(clickMethod, 50_000L),
+                        new PlannedTender(cashMethod, 70_000L)),
+                "n-order",
+                "test")));
+
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+        List<JdbcSettlementStore.TenderRow> planned = settlementStore.tendersOf(TENANT, settlementId);
+
+        assertThat(planned)
+                .as("the read model's own ordering: the balance tender sequenced first, the two "
+                        + "money tenders after it in the order they were given")
+                .extracting(JdbcSettlementStore.TenderRow::sequence)
+                .containsExactly(1, 2, 3);
+        assertThat(planned.get(0).settlesFromBalance()).isTrue();
+        UUID pointsTenderId = planned.get(0).id();
+        UUID clickTenderId = planned.get(1).id();
+        UUID cashTenderId = planned.get(2).id();
+
+        for (JdbcSettlementStore.TenderRow tender : planned) {
+            UUID tenderId = tender.id();
+            transactions.executeWithoutResult(
+                    status -> settlements.recordTenderSettled(TENANT, order, tenderId, "test"));
+        }
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().status())
+                .isEqualTo(SettlementStatus.SETTLED);
+
+        // 90 000 back: more than the last-sequenced tender (cash, 70 000) alone,
+        // so it must reach into the money tender behind it too -- but the
+        // balance tender, sequenced first, must not be touched while any money
+        // remains. That is the whole of "reverse of sequence": highest sequence
+        // drained first, lowest (the balance leg) last.
+        long asMoney =
+                transactions.execute(status -> settlements.refund(TENANT, order, 90_000L, "ORDER_REFUNDED", "test"));
+        assertThat(asMoney).isEqualTo(90_000L);
+
+        Map<UUID, JdbcSettlementStore.TenderRow> afterRefund = settlementStore.tendersOf(TENANT, settlementId).stream()
+                .collect(Collectors.toMap(JdbcSettlementStore.TenderRow::id, row -> row));
+        JdbcSettlementStore.TenderRow cashAfter = Objects.requireNonNull(afterRefund.get(cashTenderId));
+        JdbcSettlementStore.TenderRow clickAfter = Objects.requireNonNull(afterRefund.get(clickTenderId));
+        JdbcSettlementStore.TenderRow pointsAfter = Objects.requireNonNull(afterRefund.get(pointsTenderId));
+
+        assertThat(cashAfter.refundedMinor())
+                .as("sequence 3, drained first and in full")
+                .isEqualTo(70_000L);
+        assertThat(cashAfter.status()).isEqualTo(TenderStatus.REVERSED);
+
+        assertThat(clickAfter.refundedMinor())
+                .as("sequence 2 absorbs only what sequence 3 could not")
+                .isEqualTo(20_000L);
+        assertThat(clickAfter.status())
+                .as("20 000 of 50 000 refunded is not the whole tender")
+                .isEqualTo(TenderStatus.SETTLED);
+
+        assertThat(pointsAfter.refundedMinor())
+                .as("sequence 1, the balance tender, is untouched while money remains -- "
+                        + "returning points first would leave the customer with points and the "
+                        + "tenant with their cash")
+                .isZero();
+        assertThat(pointsAfter.status()).isEqualTo(TenderStatus.SETTLED);
     }
 
     @Test

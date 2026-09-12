@@ -3474,6 +3474,7 @@ export interface OrderPaymentResponse {
   orderId?: string;
   orderStatus?: string;
   orderTotal?: ApiMoney;
+  payment?: Array<TenderResponse>;
   publicOrderNumber?: string;
   returned?: ApiMoney;
 }
@@ -6018,6 +6019,17 @@ export interface TenantView {
   legalName?: string;
   slug?: string;
   status?: "PROVISIONING" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+}
+
+export interface TenderResponse {
+  amount?: ApiMoney;
+  methodCode?: string;
+  methodDisplayName?: string;
+  refunded?: ApiMoney;
+  sequence?: number;
+  settlesFromBalance?: boolean;
+  status?: string;
+  tenderId?: string;
 }
 
 export interface TermDiscountRequest {

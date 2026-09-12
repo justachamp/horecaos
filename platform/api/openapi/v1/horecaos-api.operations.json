@@ -6697,6 +6697,12 @@
           "orderTotal" : {
             "$ref" : "#/components/schemas/ApiMoney"
           },
+          "payment" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenderResponse"
+            },
+            "type" : "array"
+          },
           "publicOrderNumber" : {
             "type" : "string"
           },
@@ -10810,6 +10816,37 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TenderResponse" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "methodCode" : {
+            "type" : "string"
+          },
+          "methodDisplayName" : {
+            "type" : "string"
+          },
+          "refunded" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "settlesFromBalance" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenderId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -18997,7 +19034,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment" : {
       "get" : {
-        "description" : "The order is read through OrderDirectory rather than the ordering module's own detail endpoint, so this stays a payments-side read: the public order number and total are enough to confirm this is the right order, without reaching into lines, notes or the encrypted fields that belong to a different capability. A null intent is not an error -- it is an order that was never checked out for payment, or one whose intent has gone terminal (cancelled, expired, failed) and is no longer the order's live obligation.",
+        "description" : "The order is read through OrderDirectory rather than the ordering module's own detail endpoint, so this stays a payments-side read: the public order number and total are enough to confirm this is the right order, without reaching into lines, notes or the encrypted fields that belong to a different capability. A null intent is not an error -- it is an order that was never checked out for payment, or one whose intent has gone terminal (cancelled, expired, failed) and is no longer the order's live obligation. `payment` is the IA's payment[] array -- every tender of the order's settlement (ADR 0046), in the sequence it settles, empty for an order with no settlement at all.",
         "operationId" : "forOrder_2",
         "parameters" : [ {
           "in" : "path",
@@ -19028,7 +19065,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "One order's payment: its live intent, every attempt, and what has settled",
+        "summary" : "One order's payment: its live intent, its settlement tenders, every attempt, and what has settled",
         "tags" : [ "Order payments" ]
       }
     },
@@ -28133,6 +28170,9 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
+    "description" : "One order's payment intent, its settlement tenders and attempts, and re-presenting its checkout surface",
+    "name" : "Order payments"
+  }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
   }, {
@@ -28159,9 +28199,6 @@
   }, {
     "description" : "Engagements, shift approval, settlement, and delivery cost",
     "name" : "Courier operations"
-  }, {
-    "description" : "One order's payment intent and attempts, and re-presenting its checkout surface",
-    "name" : "Order payments"
   }, {
     "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
     "name" : "Staff sign-in"

@@ -7,6 +7,7 @@ import {
   PaymentIntentStatus,
   RemedyType,
   SettlementBasis,
+  TenderStatus,
   VerificationState,
 } from './payments/payments-api';
 
@@ -65,6 +66,16 @@ export const PAYMENT_ATTEMPT_STATUS_KEYS: Readonly<Record<PaymentAttemptStatus, 
   REVERSED: 'finance.paymentAttemptStatus.REVERSED',
   FAILED: 'finance.paymentAttemptStatus.FAILED',
   UNCERTAIN: 'finance.paymentAttemptStatus.UNCERTAIN',
+};
+
+/** W05: one settlement tender's own status (ADR 0046), distinct from `PaymentIntentStatus`. */
+export const TENDER_STATUS_KEYS: Readonly<Record<TenderStatus, MessageKey>> = {
+  PLANNED: 'finance.tenderStatus.PLANNED',
+  RESERVED: 'finance.tenderStatus.RESERVED',
+  SETTLED: 'finance.tenderStatus.SETTLED',
+  RELEASED: 'finance.tenderStatus.RELEASED',
+  REVERSED: 'finance.tenderStatus.REVERSED',
+  FAILED: 'finance.tenderStatus.FAILED',
 };
 
 export const ENTITLEMENT_SCOPE_KEYS: Readonly<Record<EntitlementScope, MessageKey>> = {
