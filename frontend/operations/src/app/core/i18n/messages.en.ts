@@ -2183,6 +2183,7 @@ export const messagesEn = {
   'reports.overview.tile.late': 'Late',
   'reports.overview.tile.late.subtitle': 'median {minutes}',
   'reports.overview.tile.deltaSuffix': 'vs. same period a week back',
+  'reports.overview.trend.title': 'Dynamics',
   'reports.overview.timing.title': 'Timing',
   'reports.overview.timing.preparation': 'Preparation',
   'reports.overview.timing.medianCaption': 'median, confirmation to ready',
@@ -2740,6 +2741,10 @@ export const messagesEn = {
     'Only 1 occurrence of this weekday has been recorded so far — not enough to average. The count below is that single week, not an average.',
   'reports.forecast.thin.two':
     'Only 2 occurrences of this weekday have been recorded so far — not enough to average. The counts below are those two weeks, not an average.',
+  'reports.forecast.weekOverview.title': 'Demand by hour, whole week',
+  'reports.forecast.weekOverview.show': 'Show whole week',
+  'reports.forecast.weekOverview.loading': 'Loading the week…',
+  'reports.forecast.weekOverview.error': 'Could not load the week overview.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',
@@ -3056,6 +3061,18 @@ export const messagesEn = {
   'ui.alert.dismiss': 'Dismiss this message',
   'ui.toast.dismiss': 'Dismiss',
   'ui.splitPane.handle': 'Resize the detail pane',
+
+  // The chart family (wave T09, IA X.19) — line/bar/stacked-bar/donut/
+  // histogram/heatmap all share this handful of strings via `q-chart-frame`.
+  'ui.charts.table.show': 'Show as table',
+  'ui.charts.table.hide': 'Hide table',
+  'ui.charts.tooltip.noData': 'Not enough history',
+  'ui.charts.sparkline.trend': '{label} trend: from {first} to {last}',
+  'ui.charts.sequential.low': 'Fewer',
+  'ui.charts.sequential.high': 'More',
+  'ui.charts.table.count': 'Count',
+  'ui.charts.table.share': 'Share',
+  'ui.charts.table.value': 'Value',
 
   // Announced after a mutation settles, by the toast host in the shell. No
   // order number and no customer data: a toast is transient text on a shared
