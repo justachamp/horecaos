@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * {@link OrderAcceptancePolicyController} at every scope its own {@code
@@ -128,6 +130,35 @@ class OrderAcceptancePolicyControllerTests {
         controller(new FakeResolver(), author).author(TENANT_ID, request(BRAND_ID, LOCATION_ID));
 
         assertThat(author.lastScope).isEqualTo(ResourceScope.location(TENANT_ID, BRAND_ID, LOCATION_ID));
+    }
+
+    /**
+     * Before wave P46, a {@code locationId} with no {@code brandId} reached
+     * {@link ResourceScope#location}'s own {@code Objects.requireNonNull} on
+     * the missing brand and surfaced as a raw NPE — a 500 for a malformed
+     * request. {@code scopeOf} now refuses it as {@code VALIDATION_FAILED}
+     * before either the resolver or the author ever sees it.
+     */
+    @Test
+    void readingAtLocationScopeWithoutABrandIsRefusedRatherThanReachingTheNpe() {
+        FakeResolver resolver = new FakeResolver();
+        OrderAcceptancePolicyController controller = controller(resolver, new FakeAuthor());
+
+        assertThatThrownBy(() -> controller.effective(TENANT_ID, null, LOCATION_ID))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("locationId requires brandId");
+        assertThat(resolver.lastScope).isNull();
+    }
+
+    @Test
+    void authoringAtLocationScopeWithoutABrandIsRefusedRatherThanReachingTheNpe() {
+        FakeAuthor author = new FakeAuthor();
+        OrderAcceptancePolicyController controller = controller(new FakeResolver(), author);
+
+        assertThatThrownBy(() -> controller.author(TENANT_ID, request(null, LOCATION_ID)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("locationId requires brandId");
+        assertThat(author.lastScope).isNull();
     }
 
     private static OrderAcceptancePolicyController.AuthorRequest request(
