@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -10,6 +17,12 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { QCellDef, DataTable } from '../../shared/ui/data-table/data-table';
+import {
+  BulkAction,
+  BulkActionEvent,
+  DataTableColumn,
+} from '../../shared/ui/data-table/data-table-types';
 import { describeApiError } from '../orders/order-errors';
 
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
@@ -58,7 +71,7 @@ interface VariantAvailabilityResponse {
  */
 @Component({
   selector: 'q-stop-list-page',
-  imports: [TPipe],
+  imports: [TPipe, DataTable, QCellDef],
   templateUrl: './stop-list-page.html',
   styleUrl: './stop-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -66,7 +79,27 @@ interface VariantAvailabilityResponse {
 export class StopListPage implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
+
+  protected readonly columns = computed<readonly DataTableColumn[]>(() => {
+    this.i18n.locale(); // re-translate on a locale switch — a plain field would not.
+    return [
+      { key: 'product', header: this.i18n.t('kitchen.stopList.column.product') },
+      { key: 'category', header: this.i18n.t('kitchen.stopList.column.category') },
+      { key: 'status', header: this.i18n.t('kitchen.stopList.column.status') },
+      { key: 'toggle', header: '', hideable: false },
+    ];
+  });
+
+  protected readonly bulkActions = computed<readonly BulkAction[]>(() => {
+    this.i18n.locale();
+    return [
+      { id: 'stop', label: this.i18n.t('kitchen.stopList.action.stop') },
+      { id: 'unstop', label: this.i18n.t('kitchen.stopList.action.unstop') },
+    ];
+  });
+
+  protected readonly rowIdFn = (row: VariantAvailabilityResponse): string => row.variantId;
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly loadingMore = signal(false);
@@ -78,7 +111,8 @@ export class StopListPage implements OnInit {
   protected readonly hasMore = signal(false);
 
   protected readonly activeTab = signal<StopTab>('ALL');
-  protected readonly selected = signal<ReadonlySet<string>>(new Set());
+  /** Two-way bound to `q-data-table`'s own selection model — read here to gate the reason field, written here to clear the selection once a bulk action lands. */
+  protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
   protected readonly busyVariantIds = signal<ReadonlySet<string>>(new Set());
   protected readonly bulkReason = signal('');
   protected readonly notice = signal<string | null>(null);
@@ -132,7 +166,15 @@ export class StopListPage implements OnInit {
     this.activeTab.set(tab);
   }
 
-  protected tabCount(tab: StopTab): number {
+  /**
+   * `null` while more pages remain unloaded — a count over `items()` alone
+   * undercounts until the operator has paged to the end, and a wrong number
+   * is worse than none (the trap this wave's own gap-map entry names).
+   */
+  protected tabCount(tab: StopTab): number | null {
+    if (this.hasMore()) {
+      return null;
+    }
     const items = this.items();
     if (tab === 'AVAILABLE') {
       return items.filter((item) => item.available).length;
@@ -154,26 +196,6 @@ export class StopListPage implements OnInit {
       }
       return true;
     });
-  }
-
-  protected isSelected(variantId: string): boolean {
-    return this.selected().has(variantId);
-  }
-
-  protected toggleSelected(variantId: string): void {
-    this.selected.update((current) => {
-      const next = new Set(current);
-      if (next.has(variantId)) {
-        next.delete(variantId);
-      } else {
-        next.add(variantId);
-      }
-      return next;
-    });
-  }
-
-  protected clearSelection(): void {
-    this.selected.set(new Set());
   }
 
   protected isBusy(variantId: string): boolean {
@@ -215,11 +237,17 @@ export class StopListPage implements OnInit {
    * own audited call. `toStop` decides the target state for every selected
    * row alike, which is what "bulk" means on this screen: one shared reason,
    * applied to a set an operator picked, never a mixed-outcome guess.
+   *
+   * `q-data-table`'s bulk-action bar has no field of its own for a reason,
+   * so the reason stays this page's own toolbar control, gated on
+   * `selectedIds()` being non-empty; the action id it emits (`'stop'` /
+   * `'unstop'`) is all this handler needs from the event itself.
    */
-  protected async applyBulk(toStop: boolean): Promise<void> {
+  protected async onBulkAction(event: BulkActionEvent): Promise<void> {
+    const toStop = event.actionId === 'stop';
     const scope = this.location.scope();
     const reasonCode = this.bulkReason().trim();
-    const ids = [...this.selected()];
+    const ids = event.rowIds;
     if (!scope || !reasonCode || ids.length === 0) {
       return;
     }
@@ -250,7 +278,7 @@ export class StopListPage implements OnInit {
         this.setBusy(variantId, false);
       }
     }
-    this.clearSelection();
+    this.selectedIds.set(new Set());
     this.notice.set(
       failed > 0
         ? this.i18n.t('kitchen.stopList.bulk.partial', { failed })

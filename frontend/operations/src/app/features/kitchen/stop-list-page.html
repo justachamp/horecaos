@@ -8,7 +8,7 @@
         (click)="selectTab('ALL')"
       >
         {{ 'kitchen.stopList.tab.all' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('ALL') }}</span>
+        <span class="tab__count q-tnum">{{ tabCount('ALL') ?? '…' }}</span>
       </button>
       <button
         type="button"
@@ -17,7 +17,7 @@
         (click)="selectTab('AVAILABLE')"
       >
         {{ 'kitchen.stopList.tab.available' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('AVAILABLE') }}</span>
+        <span class="tab__count q-tnum">{{ tabCount('AVAILABLE') ?? '…' }}</span>
       </button>
       <button
         type="button"
@@ -26,14 +26,14 @@
         (click)="selectTab('ON_STOP')"
       >
         {{ 'kitchen.stopList.tab.onStop' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('ON_STOP') }}</span>
+        <span class="tab__count q-tnum">{{ tabCount('ON_STOP') ?? '…' }}</span>
       </button>
     </div>
 
-    @if (selected().size > 0) {
+    @if (selectedIds().size > 0) {
       <div class="stop-list__bulk">
         <span class="q-caption">{{
-          'kitchen.stopList.bulk.selected' | t: { count: selected().size }
+          'kitchen.stopList.bulk.selected' | t: { count: selectedIds().size }
         }}</span>
         <input
           type="text"
@@ -41,16 +41,8 @@
           [value]="bulkReason()"
           (input)="onBulkReasonInput($any($event.target).value)"
           [placeholder]="'kitchen.stopList.bulk.reasonPlaceholder' | t"
+          data-testid="stop-list-bulk-reason"
         />
-        <button type="button" [disabled]="!bulkReason().trim()" (click)="applyBulk(true)">
-          {{ 'kitchen.stopList.bulk.stopAction' | t }}
-        </button>
-        <button type="button" [disabled]="!bulkReason().trim()" (click)="applyBulk(false)">
-          {{ 'kitchen.stopList.bulk.unstopAction' | t }}
-        </button>
-        <button type="button" class="stop-list__bulk-clear" (click)="clearSelection()">
-          {{ 'kitchen.stopList.bulk.clear' | t }}
-        </button>
       </div>
     }
   </div>
@@ -80,68 +72,50 @@
         <p class="q-body-sm">{{ 'kitchen.stopList.denied' | t }}</p>
       </div>
     } @else {
-      <table class="stop-list__table">
-        <thead>
-          <tr>
-            <th class="stop-list__select-col" aria-hidden="true"></th>
-            <th>{{ 'kitchen.stopList.column.product' | t }}</th>
-            <th>{{ 'kitchen.stopList.column.category' | t }}</th>
-            <th>{{ 'kitchen.stopList.column.status' | t }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of visibleItems(); track item.variantId) {
-            <tr class="stop-row" data-testid="stop-list-row">
-              <td class="stop-list__select-col">
-                <input
-                  type="checkbox"
-                  [checked]="isSelected(item.variantId)"
-                  (change)="toggleSelected(item.variantId)"
-                />
-              </td>
-              <td>{{ item.productName }}</td>
-              <td>{{ item.category || '—' }}</td>
-              <td>
-                @if (item.available) {
-                  <span class="status-badge status-badge--available">{{
-                    'kitchen.stopList.status.available' | t
-                  }}</span>
-                } @else {
-                  <span class="status-badge status-badge--onStop">{{
-                    'kitchen.stopList.status.onStop' | t
-                  }}</span>
-                }
-              </td>
-              <td class="stop-list__action-col">
-                <button type="button" [disabled]="isBusy(item.variantId)" (click)="toggleOne(item)">
-                  {{
-                    (item.available
-                      ? 'kitchen.stopList.action.stop'
-                      : 'kitchen.stopList.action.unstop'
-                    ) | t
-                  }}
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5">
-                <p class="q-body-sm" data-testid="stop-list-empty">
-                  {{ 'kitchen.stopList.empty' | t }}
-                </p>
-              </td>
-            </tr>
+      <q-data-table
+        viewId="kitchen.stopList"
+        [columns]="columns()"
+        [rows]="visibleItems()"
+        [rowId]="rowIdFn"
+        [(selectedIds)]="selectedIds"
+        [bulkActions]="bulkActions()"
+        [bulkActionsDisabled]="!bulkReason().trim()"
+        [hasMore]="hasMore()"
+        [loading]="loadingMore()"
+        (bulkAction)="onBulkAction($event)"
+        (loadMore)="loadMore()"
+      >
+        <ng-template qCell="product" let-item>{{ item.productName }}</ng-template>
+        <ng-template qCell="category" let-item>{{ item.category || '—' }}</ng-template>
+        <ng-template qCell="status" let-item>
+          @if (item.available) {
+            <span class="status-badge status-badge--available">{{
+              'kitchen.stopList.status.available' | t
+            }}</span>
+          } @else {
+            <span class="status-badge status-badge--onStop">{{
+              'kitchen.stopList.status.onStop' | t
+            }}</span>
           }
-        </tbody>
-      </table>
-      @if (hasMore()) {
-        <div class="stop-list__load-more">
-          <button type="button" (click)="loadMore()" [disabled]="loadingMore()">
-            {{ 'kitchen.stopList.loadMore' | t }}
+        </ng-template>
+        <ng-template qCell="toggle" let-item>
+          <button
+            type="button"
+            class="stop-list__toggle-action"
+            [disabled]="isBusy(item.variantId)"
+            (click)="toggleOne(item)"
+            data-testid="stop-list-toggle"
+          >
+            {{
+              (item.available ? 'kitchen.stopList.action.stop' : 'kitchen.stopList.action.unstop')
+                | t
+            }}
           </button>
-        </div>
-      }
+        </ng-template>
+        <span emptyState class="q-body-sm" data-testid="stop-list-empty">{{
+          'kitchen.stopList.empty' | t
+        }}</span>
+      </q-data-table>
     }
   </div>
 </div>
