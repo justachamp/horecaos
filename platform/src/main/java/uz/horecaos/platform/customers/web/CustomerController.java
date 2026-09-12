@@ -645,6 +645,33 @@ public class CustomerController {
 
     // ------------------------------------------------------------------- erasure
 
+    /**
+     * Settings 10.11's tenant-wide DSAR worklist — every account with an
+     * erasure request, across the whole tenant, rather than the one account a
+     * caller already has open. Sits outside {@code /{accountId}/} on purpose:
+     * this is the list a manager reads before knowing which account is
+     * involved. Acting on a row (execute, cancel) still goes through the
+     * per-account endpoints below, using the {@code customerAccountId} this
+     * response carries.
+     */
+    @GetMapping("/erasure-requests")
+    @RequiresCapability(Capability.CUSTOMER_ERASURE_RAISE)
+    @Operation(
+            summary = "Every data-subject erasure request across the tenant, newest first",
+            description = "Filter with status=PENDING|COMPLETED|CANCELLED, or omit it for every "
+                    + "status. The tenant-scoped backend behind this (raise, history, execute, "
+                    + "cancel) has existed since V0178; only the control-plane console could read "
+                    + "any of it before this endpoint.")
+    public ResponseEntity<List<TenantErasureRequestResponse>> tenantErasureRequests(
+            @PathVariable UUID tenantId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer limit) {
+        int effectiveLimit = limit == null ? 200 : Math.min(limit, 500);
+        return ResponseEntity.ok(erasure.worklist(tenantId, status, effectiveLimit).stream()
+                .map(TenantErasureRequestResponse::of)
+                .toList());
+    }
+
     @PostMapping("/{accountId}/erasure-requests")
     @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
     @Operation(
@@ -878,6 +905,39 @@ public class CustomerController {
         static ErasureRequestResponse of(ErasureRequestRow row) {
             return new ErasureRequestResponse(
                     row.id(),
+                    row.status(),
+                    row.requestedVia(),
+                    row.requestedByActorType(),
+                    row.requestedByActorId(),
+                    row.requestedAt(),
+                    row.completedAt(),
+                    row.completedByActorId(),
+                    row.cancelledAt(),
+                    row.cancelledByActorId());
+        }
+    }
+
+    /**
+     * One erasure request as the tenant-wide worklist reads it — {@link
+     * ErasureRequestResponse} plus the {@code customerAccountId} a screen with
+     * no account already open needs to act on the row.
+     */
+    public record TenantErasureRequestResponse(
+            UUID id,
+            UUID customerAccountId,
+            String status,
+            String requestedVia,
+            String requestedByActorType,
+            String requestedByActorId,
+            Instant requestedAt,
+            @Nullable Instant completedAt,
+            @Nullable String completedByActorId,
+            @Nullable Instant cancelledAt,
+            @Nullable String cancelledByActorId) {
+        static TenantErasureRequestResponse of(ErasureRequestRow row) {
+            return new TenantErasureRequestResponse(
+                    row.id(),
+                    row.customerAccountId(),
                     row.status(),
                     row.requestedVia(),
                     row.requestedByActorType(),

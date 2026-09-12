@@ -1395,6 +1395,28 @@ public class JdbcCustomerStore {
     }
 
     /**
+     * Every request across the whole tenant, newest first — Settings 10.11's
+     * tenant-wide DSAR worklist, as distinct from {@link #erasureRequestHistory},
+     * which is scoped to one account.
+     *
+     * @param status one of {@code PENDING}, {@code COMPLETED}, {@code CANCELLED},
+     *               or null for every status
+     */
+    public List<ErasureRequestRow> erasureRequestsForTenant(UUID tenantId, @Nullable String status, int limit) {
+        StringBuilder sql = new StringBuilder(SELECT_ERASURE_REQUEST + " WHERE tenant_id = :tenantId");
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status = :status");
+        }
+        sql.append(" ORDER BY requested_at DESC LIMIT :limit");
+
+        var statement = jdbc.sql(sql.toString()).param("tenantId", tenantId).param("limit", limit);
+        if (status != null && !status.isBlank()) {
+            statement = statement.param("status", status);
+        }
+        return statement.query(JdbcCustomerStore::erasureRequestRow).list();
+    }
+
+    /**
      * Moves one request from {@code PENDING} to {@code COMPLETED}.
      *
      * <p>Conditional on {@code status = 'PENDING'} in the {@code WHERE}, mirroring

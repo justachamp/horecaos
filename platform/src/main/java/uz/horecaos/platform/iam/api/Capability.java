@@ -655,6 +655,25 @@ public enum Capability {
     CUSTOMER_ERASURE_EXECUTE("customer.erasure.execute", "customer", "erasure.execute"),
 
     /**
+     * ADR 0109: the tenant-wide DSAR erasure worklist (Settings 10.11) — seeing
+     * every account with a request outstanding across the whole tenant, not
+     * just the one customer a support agent already has open.
+     *
+     * <p>{@link #CUSTOMER_MANAGE} still gates the per-customer raise and
+     * withdraw actions (Customer detail's own erasure card, P40); this
+     * capability is deliberately named to match what P40's own gap-map entry
+     * already calls for there — folding raise and withdraw onto this same
+     * capability, once that wave lands, rather than reinventing a third name.
+     * Until then it gates exactly one thing: {@code
+     * CustomerController.tenantErasureRequests}, the worklist read. Held by
+     * {@link PlatformRole#TENANT_OWNER} and {@link PlatformRole#TENANT_ADMIN},
+     * matching {@link #CUSTOMER_ERASURE_EXECUTE}'s own bundle — a support agent
+     * files a request against the one customer on the phone and has no reason
+     * to browse every other customer's outstanding request in the same list.
+     */
+    CUSTOMER_ERASURE_RAISE("customer.erasure.raise", "customer", "erasure.raise"),
+
+    /**
      * ADR 0059 stage 3: importing a SendPulse contact export — creating or
      * matching customer accounts in bulk, binding their Telegram chats, and
      * recording consent provenance for every row in one call.
