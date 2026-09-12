@@ -153,6 +153,79 @@ class ProviderInstallationControllerTests {
         assertThat(status(installation)).isEqualTo("ACTIVE");
     }
 
+    /**
+     * ADR 0106: an analytics installation's one declared non-secret field
+     * lands under its own key in {@code non_sensitive_config} — not appended
+     * as a bare string, and not lost, which a test that only checked "the
+     * field is somewhere in there" would not catch if the key were wrong.
+     */
+    @Test
+    void installStoresAnAnalyticsInstallationsNonSecretFieldUnderItsDeclaredKey() {
+        environment("ga4-test", "ANALYTICS", "GOOGLE_ANALYTICS_4");
+
+        controller.install(
+                TENANT,
+                new ProviderInstallationController.InstallRequest(
+                        uz.horecaos.platform.integration.api.provider.ProviderCategory.ANALYTICS,
+                        "GOOGLE_ANALYTICS_4",
+                        "ga4-test",
+                        "Storefront GA4",
+                        null,
+                        "G-ABC1234"));
+
+        String config =
+                jdbc.sql("""
+                SELECT non_sensitive_config::text FROM integration.installations
+                 WHERE tenant_id = :tenantId AND provider_type = 'GOOGLE_ANALYTICS_4'
+                """).param("tenantId", TENANT).query(String.class).single();
+        assertThat(config).isEqualTo("{\"ga4MeasurementId\": \"G-ABC1234\"}");
+    }
+
+    /**
+     * ADR 0106: a blank non-secret field keeps its position rather than
+     * shifting the next field into its slot — the correction
+     * {@code connect-provider-panel.ts}'s own submit() now makes on the
+     * frontend, proven here on the backend half of the same join.
+     */
+    @Test
+    void installKeepsABlankNonSecretFieldsPositionRatherThanShiftingTheNextOneLeft() {
+        environment("click-test", "PAYMENT", "CLICK");
+
+        controller.install(
+                TENANT,
+                new ProviderInstallationController.InstallRequest(
+                        uz.horecaos.platform.integration.api.provider.ProviderCategory.PAYMENT,
+                        "CLICK",
+                        "click-test",
+                        "Click prod",
+                        null,
+                        // merchantId blank, serviceId filled — the position the
+                        // frontend's own trimmed join now preserves as "/service-9".
+                        "/service-9"));
+
+        String config =
+                jdbc.sql("""
+                SELECT non_sensitive_config::text FROM integration.installations
+                 WHERE tenant_id = :tenantId AND provider_type = 'CLICK'
+                """).param("tenantId", TENANT).query(String.class).single();
+        assertThat(config)
+                .as("serviceId landed under its own key, not merchantId's")
+                .isEqualTo("{\"serviceId\": \"service-9\"}");
+    }
+
+    private void environment(String code, String category, String providerType) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments
+                    (code, provider_category, provider_type, base_url, is_production, egress_allowlist)
+                VALUES (:code, :category, :providerType, 'https://example.test', false, '')
+                ON CONFLICT (code) DO NOTHING
+                """)
+                .param("code", code)
+                .param("category", category)
+                .param("providerType", providerType)
+                .update();
+    }
+
     @Test
     void theCloposClerkApprovalSettingDefaultsToTrueAndCanBeToggled() {
         UUID clopos = cloposInstallation("clopos-settings-one");

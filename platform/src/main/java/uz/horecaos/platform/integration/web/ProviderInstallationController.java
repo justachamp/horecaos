@@ -142,7 +142,8 @@ public class ProviderInstallationController {
         return Page.last(jdbc.sql("""
                 SELECT i.id, i.provider_category, i.provider_type, i.environment_code,
                        i.display_name, i.status, i.secret_reference, i.last_connection_status,
-                       i.adapter_version, i.last_secret_rotated_at
+                       i.adapter_version, i.last_secret_rotated_at, i.secret_last_used_at,
+                       i.non_sensitive_config
                   FROM integration.installations i
                  WHERE i.tenant_id = :tenantId
                  ORDER BY i.created_at DESC
@@ -158,7 +159,9 @@ public class ProviderInstallationController {
                         rs.getString("secret_reference"),
                         rs.getString("last_connection_status"),
                         rs.getString("adapter_version"),
-                        rs.getObject("last_secret_rotated_at", OffsetDateTime.class)))
+                        rs.getObject("last_secret_rotated_at", OffsetDateTime.class),
+                        rs.getObject("secret_last_used_at", OffsetDateTime.class),
+                        rs.getString("non_sensitive_config")))
                 .list());
     }
 
@@ -190,9 +193,10 @@ public class ProviderInstallationController {
         jdbc.sql("""
                 INSERT INTO integration.installations
                     (id, tenant_id, provider_category, provider_type, environment_code,
-                     display_name, status, secret_reference, external_account_reference)
+                     display_name, status, secret_reference, external_account_reference,
+                     non_sensitive_config)
                 VALUES (:id, :tenantId, :category, :type, :environment,
-                        :name, 'DRAFT', :secret, :account)
+                        :name, 'DRAFT', :secret, :account, cast(:config AS jsonb))
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
@@ -202,6 +206,7 @@ public class ProviderInstallationController {
                 .param("name", request.displayName())
                 .param("secret", request.secretReference())
                 .param("account", request.externalAccountReference())
+                .param("config", nonSensitiveConfigOf(request.providerType(), request.externalAccountReference()))
                 .update();
 
         record(
@@ -505,6 +510,75 @@ public class ProviderInstallationController {
         return "tenant-" + tenantId;
     }
 
+    /**
+     * Turns the connect form's single positionally-joined {@code
+     * externalAccountReference} string back into a {@code non_sensitive_config}
+     * jsonb document keyed by {@link ConnectFieldCatalog}'s own declared
+     * non-secret field names, in the order it declares them — the same order
+     * {@code connect-provider-panel.ts}'s {@code submit()} joins them in.
+     *
+     * <p>ADR 0106: a blank field keeps its position (an empty string in the
+     * split, silently dropped from the emitted document) rather than shifting
+     * every later field left. That correction matters starting with this
+     * wave: {@code CLICK} normally has both of its two non-secret fields
+     * filled, so the bug was latent there, but an analytics installation
+     * commonly has exactly one of its declared fields set, and the old
+     * behaviour would have written it under the wrong key.
+     */
+    private static String nonSensitiveConfigOf(String providerType, @Nullable String joinedReference) {
+        List<ConnectFieldCatalog.ConnectField> nonSecretFields = ConnectFieldCatalog.forProviderType(providerType)
+                .map(declaration -> declaration.fields().stream()
+                        .filter(field -> !field.secret())
+                        .toList())
+                .orElse(List.of());
+        if (nonSecretFields.isEmpty()) {
+            return "{}";
+        }
+        String[] parts =
+                joinedReference == null || joinedReference.isEmpty() ? new String[0] : joinedReference.split("/", -1);
+
+        StringBuilder json = new StringBuilder("{");
+        boolean wroteOne = false;
+        for (int i = 0; i < nonSecretFields.size(); i++) {
+            String value = i < parts.length ? parts[i] : "";
+            if (value.isBlank()) {
+                continue;
+            }
+            if (wroteOne) {
+                json.append(',');
+            }
+            json.append('"')
+                    .append(escapeJsonString(nonSecretFields.get(i).key()))
+                    .append("\":\"")
+                    .append(escapeJsonString(value))
+                    .append('"');
+            wroteOne = true;
+        }
+        return json.append('}').toString();
+    }
+
+    private static String escapeJsonString(String value) {
+        StringBuilder escaped = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        escaped.append(c);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
+    }
+
     private static SecretCategory secretCategoryFor(ProviderCategory category) {
         return switch (category) {
             case POS -> SecretCategory.PROVIDER_POS;
@@ -512,7 +586,7 @@ public class ProviderInstallationController {
             case DELIVERY -> SecretCategory.PROVIDER_DELIVERY;
             case NOTIFICATION -> SecretCategory.PROVIDER_NOTIFICATION;
             case VOICE -> SecretCategory.PROVIDER_VOICE;
-            case MARKETPLACE, GEOCODING, OTHER ->
+            case MARKETPLACE, GEOCODING, OTHER, ANALYTICS ->
                 throw new ApiException(
                         ErrorCode.UNPROCESSABLE_STATE,
                         "The secret door has no category for " + category + " installations yet");
@@ -828,8 +902,11 @@ public class ProviderInstallationController {
             @NotBlank @Size(max = 64) String providerType,
             @NotBlank @Size(max = 64) String environmentCode,
             @NotBlank @Size(max = 255) String displayName,
-            @Size(max = 512) String secretReference,
-            @Size(max = 255) String externalAccountReference) {}
+            // ADR 0106: ANALYTICS declares no secret field at all
+            // (ConnectFieldCatalog), so this is legitimately absent for it —
+            // not only a value the write-only door has not run yet for.
+            @Nullable @Size(max = 512) String secretReference,
+            @Nullable @Size(max = 255) String externalAccountReference) {}
 
     public record BindRequest(
             UUID brandId,
@@ -898,5 +975,19 @@ public class ProviderInstallationController {
             String secretReference,
             String lastConnectionStatus,
             String adapterVersion,
-            @Nullable OffsetDateTime lastSecretRotatedAt) {}
+            @Nullable OffsetDateTime lastSecretRotatedAt,
+            /**
+             * ADR 0106, gap-map row X.14: when the secret reference last resolved
+             * successfully during a capability-reconciliation preflight — evidence
+             * the secret still resolves, not evidence of a live provider call.
+             */
+            @Nullable OffsetDateTime secretLastUsedAt,
+            /**
+             * Raw jsonb text, e.g. {@code {"gtmContainerId":"GTM-ABC1234"}} for an
+             * ADR 0106 analytics installation, or Clopos's
+             * {@code {"clopos.requireClerkApproval":true}}. Never a secret — every
+             * field this column carries was declared {@code secret: false} in
+             * {@link ConnectFieldCatalog}.
+             */
+            String nonSensitiveConfig) {}
 }

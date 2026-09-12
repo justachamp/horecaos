@@ -136,6 +136,13 @@ public class SecurityConfiguration {
                                 // published state the menu is, and neither writes.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/serviceability",
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee",
+                                // ADR 0106: a GTM container id, a GA4 measurement id, and
+                                // a Search Console verification token — public identifiers
+                                // a browser's view-source already reveals once the
+                                // storefront injects them, so there is nothing here a token
+                                // would protect. See StorefrontAnalyticsConfigController's
+                                // own doc comment.
+                                "/api/v1/storefront/tenants/*/brands/*/analytics",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the

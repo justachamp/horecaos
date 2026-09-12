@@ -33,7 +33,39 @@ public final class ConnectFieldCatalog {
                     ProviderCategory.PAYMENT,
                     List.of(new ConnectField("cashboxId", false), new ConnectField("key", true))),
             new ProviderConnectDeclaration(
-                    "TELEGRAM_BOT_API", ProviderCategory.NOTIFICATION, List.of(new ConnectField("botToken", true))));
+                    "TELEGRAM_BOT_API", ProviderCategory.NOTIFICATION, List.of(new ConnectField("botToken", true))),
+
+            // ADR 0064's two VOICE adapters (VoiceProviderCapabilityCatalog), given a
+            // connect declaration for the first time this wave (ADR 0106) so telephony
+            // renders as an ordinary card in the same hub rather than needing a
+            // hand-written form.
+            new ProviderConnectDeclaration(
+                    "HOSTED_PBX", ProviderCategory.VOICE, List.of(new ConnectField("webhookSecretToken", true))),
+            new ProviderConnectDeclaration(
+                    "ASTERISK_AMI",
+                    ProviderCategory.VOICE,
+                    List.of(
+                            new ConnectField("host", false),
+                            new ConnectField("port", false),
+                            new ConnectField("username", false),
+                            new ConnectField("password", true))),
+
+            // ADR 0106: three public identifiers, never a secret. Hiding a GTM
+            // container id or a GA4 measurement id behind the write-only door would
+            // teach an operator that the mask means nothing — a browser's view-source
+            // already reveals every one of these once the storefront injects them.
+            new ProviderConnectDeclaration(
+                    "GOOGLE_TAG_MANAGER",
+                    ProviderCategory.ANALYTICS,
+                    List.of(new ConnectField("gtmContainerId", false))),
+            new ProviderConnectDeclaration(
+                    "GOOGLE_ANALYTICS_4",
+                    ProviderCategory.ANALYTICS,
+                    List.of(new ConnectField("ga4MeasurementId", false))),
+            new ProviderConnectDeclaration(
+                    "GOOGLE_SEARCH_CONSOLE",
+                    ProviderCategory.ANALYTICS,
+                    List.of(new ConnectField("searchConsoleVerificationToken", false))));
 
     private ConnectFieldCatalog() {}
 
