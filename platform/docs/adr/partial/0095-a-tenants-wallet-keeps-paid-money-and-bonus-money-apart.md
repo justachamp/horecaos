@@ -1,13 +1,13 @@
 # ADR 0095: A tenant's wallet keeps paid money and bonus money apart
 
 - Decision status: Proposed
-- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts — each pinned to the card token it was minted under — and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, a `PENDING` card charge attempt retried under its own key and card token and never credited twice, and a card swapped while an attempt sits PENDING settling that attempt `SUPERSEDED` and minting a fresh one under the new card rather than ever retrying the old key under it; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-four cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured" to a charge and "not succeeded" to a status check, so a CARD tenant's remainder stays due exactly as an INVOICE one does
+- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts — each pinned to the card token it was minted under — and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, a `PENDING` card charge attempt retried under its own key and card token and never credited twice, and a card swapped while an attempt sits PENDING settling that attempt `SUPERSEDED` and minting a fresh one under the new card rather than ever retrying the old key under it; a superseded attempt's own charge, if it later reports success, is never dropped either — its row moves `SUPERSEDED` → `SUCCEEDED` (never re-minted, never re-asked), the money is routed through the same clamp-before-append and surplus-refused path an ordinary success takes, and an unambiguous `commercial.wallet.card_charge_after_supersede` fact names both attempts and the provider's reference for finance to reconcile by hand, while the symmetric late failure of a superseded attempt writes nothing, exactly as a duplicate report of any other resolved outcome does; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-six cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured" to a charge and "not succeeded" to a status check, so a CARD tenant's remainder stays due exactly as an INVOICE one does
 - Date proposed: 2026-09-11
 - Date decided: —
 - Deciders: the platform owner decided on 2026-09-11 that tenants pay by invoice and bank transfer, from a prepaid wallet or by card; that bonus money HorecaOS grants is kept apart from money a tenant paid, is spent first and lapses on a date set per grant; that paid money never lapses and is refunded when a tenant leaves; that every manual change needs a proposer and a different approver; and that the activation deposit is credited to the first statement. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0021, ADR 0027, ADR 0028, ADR 0088, ADR 0093
 - Supersedes / Superseded by: —
-- Open inputs: how a subscription and prepaid money are taxed (finance) — amounts stay before tax until then; HorecaOS's own Click or Payme merchant account with card-token (recurring) access, for card charging (finance, operations); the bank details an invoice shows (finance)
+- Open inputs: how a subscription and prepaid money are taxed (finance) — amounts stay before tax until then; HorecaOS's own Click or Payme merchant account with card-token (recurring) access, for card charging (finance, operations); the bank details an invoice shows (finance); whether `settleCardRemainders` should take a per-tenant advisory lock (`pg_advisory_xact_lock` keyed on tenant id) around the whole settlement pass, closing the supersede/late-success race at its source instead of only reconciling it after the fact once a late success is on the books as `commercial.wallet.card_charge_after_supersede` — deferred for now because it would serialise every settlement pass for a tenant (including the six HTTP endpoints that trigger one) behind whichever pass is mid-provider-call, and the read-back-and-record fix already closes the one failure that mattered, money silently dropped from the books, without paying that cost (engineering, operations)
 
 ## Context
 
@@ -297,23 +297,55 @@ As built on 2026-09-11.
   `NOT_CONFIGURED` — audits `commercial.wallet.card_attempt_superseded` with
   the two attempt ids and the statement, never the token, and mints a
   genuinely new attempt and a genuinely new key under the card now on file.
-  The superseded row is never asked about and never charged again: a `SUPERSEDED`
-  outcome is exactly as final to `JdbcCardChargeAttemptStore.settle`'s
-  `WHERE outcome = 'PENDING'` as `SUCCEEDED` or `FAILED` is. The race path
-  applies the identical check to the winner's row it reads back, so a card
-  swapped while two settlement passes race each other is superseded exactly
-  as one swapped between two ordinary passes would be.
+  That audit fact says plainly that the superseded attempt's own `charge()`
+  call may still be outstanding against the old card and is not proof no
+  charge happened on it — see below for what happens when it later turns
+  out one did. The superseded row is never asked about and never retried
+  under either card: a `SUPERSEDED` outcome is exactly as final to
+  `JdbcCardChargeAttemptStore.settle`'s `WHERE outcome = 'PENDING'` as
+  `SUCCEEDED` or `FAILED` is. The race path applies the identical check to
+  the winner's row it reads back, so a card swapped while two settlement
+  passes race each other is superseded exactly as one swapped between two
+  ordinary passes would be.
   `WalletService.recordCardOutcome` is idempotent in the attempt as well as
   in the money: `JdbcCardChargeAttemptStore.settle` resolves a row once
   (`WHERE outcome = 'PENDING'`), and a second, truthful report of the same
   attempt — two racing passes each told the same answer — writes nothing a
-  second time. A success is also never credited past what the clamp allows:
-  the amount applied to the ledger is computed before anything is written,
-  not after, and money a statement no longer owed is refused rather than
+  second time. **Except when the row it finds already resolved is
+  `SUPERSEDED` rather than `SUCCEEDED`.** A superseded attempt's own
+  `charge()` call can still be genuinely outstanding on the provider's side
+  at the moment it is superseded — `settleOneCardRemainder`'s own contract
+  calls the provider with no lock held, precisely so a slow answer never
+  blocks anything else — and when that call finally does answer
+  `Succeeded`, it is a real, previously unrecorded charge against a card the
+  tenant no longer has on file, not a duplicate report of the fresh
+  attempt's own success: `recordCardOutcome` reads the row back
+  (`JdbcCardChargeAttemptStore.find`, tenant-scoped, unfiltered by outcome)
+  to tell the two apart, and on `SUPERSEDED` moves the row `SUCCEEDED`
+  itself (`JdbcCardChargeAttemptStore.settleSupersededSuccess`, guarded by
+  `WHERE outcome = 'SUPERSEDED'` the same way `settle` is guarded by
+  `WHERE outcome = 'PENDING'`) rather than discarding it as a benign
+  duplicate. The money is routed through the identical clamp-before-append
+  and surplus-refused path an ordinary success takes — the statement it was
+  charged for is very likely already paid in full by the attempt that
+  superseded it, so most or all of it is expected to land as a refused
+  surplus rather than a ledger entry, which is correct: it still must not
+  vanish unaudited. An unambiguous `commercial.wallet.card_charge_after_supersede`
+  fact names both attempt ids, the statement and the provider's own
+  reference — never a token — so finance can find the old card's charge and
+  refund it by hand. The symmetric late failure of a superseded attempt —
+  its outstanding `charge()` call finally answers declined — writes
+  nothing, exactly like the ordinary duplicate-report case: there is no
+  money to reconcile either way, on the old card or the new one. A success
+  is also never credited past what the clamp allows in either path: the
+  amount applied to the ledger is computed before anything is written, not
+  after, and money a statement no longer owed is refused rather than
   quietly added to paid balance — the shape a card charged twice would take
   at this table, so it is audited instead
   (`commercial.wallet.card_charge_surplus_refused`) for finance to reconcile
-  against the provider by hand.
+  against the provider by hand. A per-tenant advisory lock spanning the
+  whole settlement pass would close this race at its source instead of only
+  reconciling it after the fact — deferred for now; see Open inputs.
 - Approval policies for `commercial.wallet.adjustment`,
   `commercial.wallet.bonus-grant`, `commercial.wallet.refund` and
   `commercial.wallet.deposit-reversal`, seeded at `PLATFORM` scope and
@@ -443,9 +475,18 @@ As built on 2026-09-11.
   insert time, read back on every reuse, never re-derived from billing.
   `beginCardAttempt` and `reuseCardAttemptAfterRace` compare it against the
   tenant's current token before reusing; a mismatch settles the row
-  `SUPERSEDED`, audits `commercial.wallet.card_attempt_superseded` (ids only),
+  `SUPERSEDED`, audits `commercial.wallet.card_attempt_superseded` (ids only)
+  with a note that the old attempt's own charge may still be outstanding,
   and mints a fresh attempt and a fresh key under the card now on file — never
-  charging it under the old one.
+  charging it under the old one. Superseding a `PENDING` row is not the same
+  as knowing its own `charge()` call never landed: that call was made with no
+  lock held and can still be in flight, and if it later reports success it is
+  a real charge against a card the tenant no longer has on file. `recordCardOutcome`
+  reads such a row back and moves it `SUPERSEDED` → `SUCCEEDED`, records the
+  money through the same clamped, surplus-refused path an ordinary success
+  takes, and audits `commercial.wallet.card_charge_after_supersede` naming
+  both attempts and the provider's reference — so it is never simply dropped
+  as if the supersede had been proof no charge happened.
 - The expiry sweep catches per candidate, not only per pass. The candidate
   query orders by expiry, so one grant that keeps throwing would sit at the
   head of every later batch and hold every later expiry behind it, in every
@@ -564,6 +605,15 @@ them. Rolling back leaves the ledger in place and unread.
       attempt sits `PENDING` supersedes it and mints a fresh attempt under
       the new card rather than ever retrying the old key under it — in the
       race path exactly as in the ordinary one
+- [x] A superseded attempt's own charge, if it lands late as a success, is
+      never dropped from the books: the row is moved `SUPERSEDED` →
+      `SUCCEEDED`, the money is recorded through the same clamp-before-append
+      and surplus-refused path an ordinary success takes, and
+      `commercial.wallet.card_charge_after_supersede` names both attempts and
+      the provider's reference for finance to reconcile by hand; the
+      symmetric late failure of a superseded attempt writes nothing. A
+      per-tenant advisory lock around the whole settlement pass, which would
+      close the race at its source instead, is deferred (see Open inputs)
 
 ## Exit criteria
 
