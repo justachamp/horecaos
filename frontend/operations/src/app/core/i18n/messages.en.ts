@@ -3057,6 +3057,45 @@ export const messagesEn = {
   'ui.toast.dismiss': 'Dismiss',
   'ui.splitPane.handle': 'Resize the detail pane',
 
+  // `q-condition-builder` / `q-rule-list` / `q-rule-simulator` (row `X.25`).
+  // Three components, not four sentences, so each gets its own sub-namespace
+  // rather than crowding the shared handful above.
+  'ui.conditionBuilder.addCondition': 'Add condition',
+  'ui.conditionBuilder.addGroup': 'Add group',
+  'ui.conditionBuilder.removeCondition': 'Remove condition',
+  'ui.conditionBuilder.removeGroup': 'Remove group',
+  'ui.conditionBuilder.matchAll': 'Match ALL of these',
+  'ui.conditionBuilder.matchAny': 'Match ANY of these',
+  'ui.conditionBuilder.groupJoinerOr': 'OR',
+  'ui.conditionBuilder.textValuesPlaceholder': 'Values, comma-separated',
+  'ui.conditionBuilder.minorUnitsHint': 'minor units',
+  'ui.conditionBuilder.operator.AT_LEAST': 'at least',
+  'ui.conditionBuilder.operator.AT_MOST': 'at most',
+  'ui.conditionBuilder.operator.BETWEEN': 'between',
+  'ui.conditionBuilder.operator.EQUALS': 'is',
+  'ui.conditionBuilder.operator.IN': 'is one of',
+  'ui.conditionBuilder.operator.NOT_IN': 'is not one of',
+  'ui.dayOfWeek.MON': 'Mon',
+  'ui.dayOfWeek.TUE': 'Tue',
+  'ui.dayOfWeek.WED': 'Wed',
+  'ui.dayOfWeek.THU': 'Thu',
+  'ui.dayOfWeek.FRI': 'Fri',
+  'ui.dayOfWeek.SAT': 'Sat',
+  'ui.dayOfWeek.SUN': 'Sun',
+  'ui.ruleList.empty': 'No rules yet.',
+  'ui.ruleList.dragHandle': 'Drag to reorder, or use the move buttons',
+  'ui.ruleList.moveUp': 'Move up in priority',
+  'ui.ruleList.moveDown': 'Move down in priority',
+  'ui.ruleList.priority': 'Priority',
+  'ui.ruleList.enabled': 'Enabled',
+  'ui.ruleList.disabled': 'Disabled',
+  'ui.ruleSimulator.candidate': 'Candidate',
+  'ui.ruleSimulator.matched': 'Matched',
+  'ui.ruleSimulator.notMatched': 'Not matched',
+  'ui.ruleSimulator.disabledRule': 'Disabled — never evaluated',
+  'ui.ruleSimulator.outcome': 'What happens',
+  'ui.ruleSimulator.noRules': 'No rules to simulate.',
+
   // Announced after a mutation settles, by the toast host in the shell. No
   // order number and no customer data: a toast is transient text on a shared
   // terminal (ADR 0029).
