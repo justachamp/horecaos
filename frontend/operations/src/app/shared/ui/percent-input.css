@@ -1,0 +1,25 @@
+.q-percent-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-percent-input__field {
+  width: 80px;
+  height: 32px;
+  padding: 0 8px;
+  text-align: right;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.q-percent-input__field:disabled {
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.q-percent-input__suffix {
+  color: var(--q-ink-muted);
+}

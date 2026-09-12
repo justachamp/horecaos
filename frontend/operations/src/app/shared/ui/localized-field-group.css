@@ -1,0 +1,42 @@
+.q-localized-field-group {
+  display: inline-flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-localized-field-group__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.q-localized-field-group__tab--active {
+  border-bottom-color: var(--q-primary);
+  color: var(--q-ink);
+}
+
+.q-localized-field-group__default {
+  color: var(--q-warning);
+  font-size: inherit;
+}
+
+.q-localized-field-group__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.q-localized-field-group__dot--complete {
+  background: var(--q-success);
+}
+
+.q-localized-field-group__dot--incomplete {
+  background: var(--q-error);
+}

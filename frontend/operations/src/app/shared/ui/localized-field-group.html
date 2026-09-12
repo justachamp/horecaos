@@ -1,0 +1,39 @@
+<div class="q-localized-field-group" role="tablist" data-testid="q-localized-field-group">
+  @for (locale of locales(); track locale) {
+    <button
+      type="button"
+      role="tab"
+      class="q-localized-field-group__tab"
+      [class.q-localized-field-group__tab--active]="activeLocale() === locale"
+      [attr.aria-selected]="activeLocale() === locale"
+      (click)="activeLocaleChange.emit(locale)"
+      [attr.data-testid]="'q-localized-field-group-tab-' + locale"
+    >
+      <span class="q-body-sm">{{ labelFor(locale) }}</span>
+
+      @if (defaultLocale() === locale) {
+        <span
+          class="q-localized-field-group__default"
+          [attr.aria-label]="'ui.localizedFieldGroup.default' | t"
+          data-testid="q-localized-field-group-default-marker"
+        >
+          ★
+        </span>
+      }
+
+      @if (completeness()[locale] === true) {
+        <span
+          class="q-localized-field-group__dot q-localized-field-group__dot--complete"
+          [attr.aria-label]="'ui.localizedFieldGroup.complete' | t"
+          data-testid="q-localized-field-group-complete"
+        ></span>
+      } @else if (completeness()[locale] === false) {
+        <span
+          class="q-localized-field-group__dot q-localized-field-group__dot--incomplete"
+          [attr.aria-label]="'ui.localizedFieldGroup.incomplete' | t"
+          data-testid="q-localized-field-group-incomplete"
+        ></span>
+      }
+    </button>
+  }
+</div>

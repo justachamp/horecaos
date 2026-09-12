@@ -1,0 +1,13 @@
+<div class="q-money-input" data-testid="q-money-input">
+  <input
+    type="text"
+    inputmode="numeric"
+    class="q-money-input__field q-tnum"
+    [value]="displayText()"
+    [disabled]="disabled()"
+    [attr.aria-label]="ariaLabel()"
+    (input)="onInput($any($event.target).value)"
+    data-testid="q-money-input-field"
+  />
+  <span class="q-body-sm q-money-input__suffix">{{ 'ui.moneyInput.currencySuffix' | t }}</span>
+</div>

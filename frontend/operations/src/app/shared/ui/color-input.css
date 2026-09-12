@@ -1,0 +1,31 @@
+.q-color-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-color-input__swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: none;
+  cursor: pointer;
+}
+
+.q-color-input__text {
+  width: 100px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  text-transform: lowercase;
+}
+
+.q-color-input__text--invalid {
+  border-color: var(--q-error);
+  color: var(--q-error-text);
+}

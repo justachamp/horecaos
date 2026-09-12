@@ -1,0 +1,15 @@
+.q-time-input {
+  width: 72px;
+  height: 32px;
+  padding: 0 8px;
+  text-align: center;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.q-time-input:disabled {
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}

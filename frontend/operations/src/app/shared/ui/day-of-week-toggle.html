@@ -1,0 +1,15 @@
+<div class="q-day-of-week-toggle" role="group" data-testid="q-day-of-week-toggle">
+  @for (day of days; track day) {
+    <button
+      type="button"
+      class="q-day-of-week-toggle__day"
+      [class.q-day-of-week-toggle__day--selected]="isSelected(day)"
+      [attr.aria-pressed]="isSelected(day)"
+      [attr.aria-label]="fullLabel(day)"
+      (click)="toggle(day)"
+      [attr.data-testid]="'q-day-of-week-toggle-day-' + day"
+    >
+      {{ shortLabel(day) }}
+    </button>
+  }
+</div>

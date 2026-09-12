@@ -1,0 +1,24 @@
+.q-day-of-week-toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.q-day-of-week-toggle__day {
+  width: 36px;
+  height: 32px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.q-day-of-week-toggle__day:hover {
+  border-color: var(--q-primary);
+}
+
+.q-day-of-week-toggle__day--selected {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}

@@ -1,0 +1,88 @@
+.q-schedule-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.q-schedule-grid__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-schedule-grid__day-label {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.q-schedule-grid__windows {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.q-schedule-grid__window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-schedule-grid__remove {
+  border: none;
+  background: transparent;
+  color: var(--q-ink-subtle);
+  cursor: pointer;
+}
+
+.q-schedule-grid__remove:hover {
+  color: var(--q-error);
+}
+
+.q-schedule-grid__add {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.q-schedule-grid__empty {
+  color: var(--q-ink-subtle);
+}
+
+.q-schedule-grid__closed-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-schedule-grid__add-exception {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.q-schedule-grid__add-exception input[type='date'] {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.q-schedule-grid__add-exception button {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}

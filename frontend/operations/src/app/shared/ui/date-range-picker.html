@@ -1,0 +1,47 @@
+<div class="q-date-range-picker" data-testid="q-date-range-picker">
+  <div class="q-date-range-picker__presets" role="group">
+    <button type="button" (click)="setToday()" data-testid="q-date-range-picker-preset-today">
+      {{ 'ui.dateRangePicker.preset.today' | t }}
+    </button>
+    <button
+      type="button"
+      (click)="setYesterday()"
+      data-testid="q-date-range-picker-preset-yesterday"
+    >
+      {{ 'ui.dateRangePicker.preset.yesterday' | t }}
+    </button>
+    <button
+      type="button"
+      (click)="setLast7Days()"
+      data-testid="q-date-range-picker-preset-last7Days"
+    >
+      {{ 'ui.dateRangePicker.preset.last7Days' | t }}
+    </button>
+    <button
+      type="button"
+      (click)="setThisMonth()"
+      data-testid="q-date-range-picker-preset-thisMonth"
+    >
+      {{ 'ui.dateRangePicker.preset.thisMonth' | t }}
+    </button>
+  </div>
+
+  <label class="q-date-range-picker__field">
+    <span class="q-caption">{{ 'ui.dateRangePicker.from' | t }}</span>
+    <input
+      type="date"
+      [value]="start()"
+      (input)="onStartInput($any($event.target).value)"
+      data-testid="q-date-range-picker-start"
+    />
+  </label>
+  <label class="q-date-range-picker__field">
+    <span class="q-caption">{{ 'ui.dateRangePicker.to' | t }}</span>
+    <input
+      type="date"
+      [value]="end()"
+      (input)="onEndInput($any($event.target).value)"
+      data-testid="q-date-range-picker-end"
+    />
+  </label>
+</div>
