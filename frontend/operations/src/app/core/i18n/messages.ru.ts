@@ -1243,6 +1243,24 @@ export const messagesRu: MessageCatalogue = {
   'today.operators.title': 'Операторы',
   'today.operators.notBuilt':
     'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
+
+  // ---- IA 0.1e / X/X.3 Информационная панель (wallboard-shell.ts) — волна T23 ----
+  'wallboard.title': 'Живая доска',
+  'wallboard.denied': 'Нет доступа к живой доске',
+  'wallboard.counters.inProgress': 'В процессе',
+  'wallboard.counters.cancelled': 'Отменено',
+  'wallboard.mix.source.title': 'По источнику',
+  'wallboard.mix.type.title': 'По типу',
+  'wallboard.mix.empty': 'Нет заказов в процессе',
+  'wallboard.branches.title': 'Загрузка по филиалам',
+  'wallboard.branches.empty': 'Нет данных по филиалам',
+  'wallboard.branches.unavailable': 'Не удалось загрузить список филиалов',
+  'wallboard.operators.notBuilt':
+    'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
+  'wallboard.fullscreen.enter': 'Развернуть на весь экран',
+  'wallboard.freshness.loading': 'Подключение…',
+  'wallboard.freshness.seconds': 'Обновлено {seconds} с назад',
+  'wallboard.freshness.minutes': 'Обновлено {minutes} мин назад',
   // Кухня (2.1 Кухонные заказы, 2.5 Стоп-лист) — волна 30
   'kitchen.nav.label': 'Разделы кухни',
   'kitchen.nav.queue': 'Очередь',

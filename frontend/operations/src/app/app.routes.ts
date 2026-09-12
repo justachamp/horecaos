@@ -847,6 +847,18 @@ export const routes: Routes = [
       { path: '**', redirectTo: 'today' },
     ],
   },
+  // IA `0.1e` / `X/X.3` — the wallboard: a sibling of the shell's own route
+  // above, not a child of it, so it renders no rail and no top bar
+  // (`wallboard-shell.ts`'s own doc explains why). `authGuard` alone —
+  // `capabilityGuard` is declared as `canActivateChild` on the shell route
+  // and only ever runs for routes beneath it; a supervisor's wallboard has no
+  // rail entry to predict a refusal for, and the server still authorizes
+  // every `LiveBoard` call the same way it always has (ADR 0025).
+  {
+    path: 'wallboard',
+    loadComponent: () => import('./wallboard-shell/wallboard-shell').then((m) => m.WallboardShell),
+    canActivate: [authGuard],
+  },
 ];
 
 /**

@@ -1272,6 +1272,24 @@ export const messagesEn = {
   'today.operators.title': 'Operators',
   'today.operators.notBuilt':
     'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
+
+  // ---- IA 0.1e / X/X.3 Wallboard (wallboard-shell.ts) — wave T23 ----
+  'wallboard.title': 'Live board',
+  'wallboard.denied': 'No access to the live board',
+  'wallboard.counters.inProgress': 'In progress',
+  'wallboard.counters.cancelled': 'Cancelled',
+  'wallboard.mix.source.title': 'By source',
+  'wallboard.mix.type.title': 'By type',
+  'wallboard.mix.empty': 'No orders in progress',
+  'wallboard.branches.title': 'Branch load',
+  'wallboard.branches.empty': 'No branch data',
+  'wallboard.branches.unavailable': 'Could not load the branch list',
+  'wallboard.operators.notBuilt':
+    'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
+  'wallboard.fullscreen.enter': 'Enter fullscreen',
+  'wallboard.freshness.loading': 'Connecting…',
+  'wallboard.freshness.seconds': 'Updated {seconds}s ago',
+  'wallboard.freshness.minutes': 'Updated {minutes} min ago',
   // Kitchen (2.1 Kitchen queue, 2.5 Stop list) — wave 30
   'kitchen.nav.label': 'Kitchen sections',
   'kitchen.nav.queue': 'Queue',
