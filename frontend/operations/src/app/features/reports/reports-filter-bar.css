@@ -27,7 +27,7 @@
   border: 1px solid var(--q-ink);
   background: var(--q-canvas);
   color: var(--q-ink);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   cursor: pointer;
 }
 
@@ -53,7 +53,7 @@
   border-right: 1px solid var(--q-warning);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   cursor: pointer;
 }
 

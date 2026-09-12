@@ -37,7 +37,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .categories__list {
@@ -56,7 +56,7 @@
   background: none;
   text-align: left;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-radius: var(--q-radius);
 }
 

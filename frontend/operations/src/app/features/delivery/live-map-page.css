@@ -20,7 +20,7 @@
   color: var(--q-primary);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .live-map__error-band {
@@ -37,7 +37,7 @@
 .live-map__table th {
   text-align: left;
   padding: 8px 16px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
   position: sticky;
@@ -46,7 +46,7 @@
 
 .live-map__table td {
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-top: 1px solid var(--q-hairline);
 }
 

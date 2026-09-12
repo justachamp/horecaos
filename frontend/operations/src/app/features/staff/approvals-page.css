@@ -75,7 +75,7 @@
   padding: 0 12px;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
 }
@@ -147,7 +147,7 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   font-family: var(--q-font-sans);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   resize: vertical;
 }
 

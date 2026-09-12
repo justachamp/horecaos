@@ -20,7 +20,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-badge--active {
@@ -45,7 +45,7 @@
   color: var(--q-ink-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .tab--on {
@@ -195,7 +195,7 @@ textarea.field {
   cursor: pointer;
   text-decoration: underline;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .address-card,
@@ -323,7 +323,7 @@ textarea.field {
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__confirm {

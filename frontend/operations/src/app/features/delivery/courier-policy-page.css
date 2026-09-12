@@ -8,7 +8,7 @@
   margin-bottom: 12px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   color: var(--q-ink-muted);
 }
 
@@ -31,12 +31,12 @@
 
 .policy__row dt {
   color: var(--q-ink-muted);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .policy__row dd {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   font-weight: 600;
 }
 
