@@ -829,7 +829,12 @@ export const routes: Routes = [
             path: 'dispatch-rules',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/couriers.md §3.8 (Dispatch rules) — no backend exists' },
+            data: {
+              spec:
+                'operations-spec/couriers.md §3.8 (Dispatch rules) — the sourcing policy is ' +
+                'already resolved via ADR 0030 (DeliverySourcingPolicies.SOURCING); only a ' +
+                'write endpoint and this screen are missing, over q-condition-builder/q-rule-list',
+            },
           },
         ],
       },
