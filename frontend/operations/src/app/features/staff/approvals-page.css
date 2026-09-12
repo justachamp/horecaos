@@ -13,6 +13,50 @@
   margin: 4px 0 16px;
 }
 
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+  margin-bottom: 16px;
+}
+
+.tab {
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+}
+
+.access-check-link {
+  margin-top: 24px;
+  color: var(--q-ink-subtle);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  font-size: 12px;
+}
+
+.status-pill--approved {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.status-pill--declined {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

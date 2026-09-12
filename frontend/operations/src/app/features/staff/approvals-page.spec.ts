@@ -6,8 +6,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
-import { ApprovalsApi, PendingApproval } from './approvals-api';
+import { ApprovalsApi, DecidedApprovalHistoryEntry, PendingApproval } from './approvals-api';
 import { ApprovalsPage } from './approvals-page';
+
+function decidedEntry(
+  overrides: Partial<DecidedApprovalHistoryEntry> = {},
+): DecidedApprovalHistoryEntry {
+  return {
+    id: 'req-decided-1',
+    actionCode: 'payments.remedy.record',
+    parametersHash: 'a'.repeat(64),
+    scopeType: 'TENANT',
+    scopeId: null,
+    thresholdDescription: 'above 1,000,000 UZS',
+    policyVersion: 1,
+    requiredApproverCapability: 'refund.approve',
+    status: 'APPROVED',
+    requestedBy: 'operator-1',
+    requestedAt: '2026-09-01T10:00:00Z',
+    decidedBy: 'manager-1',
+    decidedAt: '2026-09-01T11:00:00Z',
+    ...overrides,
+  };
+}
 
 function approval(overrides: Partial<PendingApproval> = {}): PendingApproval {
   return {
@@ -41,10 +62,14 @@ async function flushMicrotasks(): Promise<void> {
 async function setUp(
   pendingResult: readonly PendingApproval[] | (() => Promise<readonly PendingApproval[]>),
   currentTenant: FakeCurrentTenant = new FakeCurrentTenant(),
+  decidedResult:
+    | readonly DecidedApprovalHistoryEntry[]
+    | (() => Promise<readonly DecidedApprovalHistoryEntry[]>) = [],
 ) {
   const api = {
     pending: vi.fn(typeof pendingResult === 'function' ? pendingResult : async () => pendingResult),
     decide: vi.fn(),
+    decided: vi.fn(typeof decidedResult === 'function' ? decidedResult : async () => decidedResult),
   };
   await TestBed.configureTestingModule({
     imports: [ApprovalsPage],
@@ -145,5 +170,48 @@ describe('ApprovalsPage', () => {
       throw new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null);
     }, currentTenant);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No location in scope');
+  });
+
+  it('does not load decided history until the tab is opened', async () => {
+    const { api } = await setUp([approval()]);
+    expect(api.decided).not.toHaveBeenCalled();
+  });
+
+  it('shows what this tenant already decided, on the decided tab (ADR 0109)', async () => {
+    const { fixture, api } = await setUp([], new FakeCurrentTenant(), [decidedEntry()]);
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="approvals-tab-decided"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.decided).toHaveBeenCalledWith('t1');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Refund or remedy above threshold');
+    expect(text).toContain('manager-1');
+    expect(text).toContain('Approved');
+  });
+
+  it('shows an empty state when nothing has been decided yet', async () => {
+    const { fixture } = await setUp([], new FakeCurrentTenant(), []);
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="approvals-tab-decided"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'This tenant has not decided any request yet.',
+    );
+  });
+
+  it('links to the access check screen (ADR 0109)', async () => {
+    const { fixture } = await setUp([]);
+    const link = fixture.nativeElement.querySelector('a[href="/staff/access-check"]');
+    expect(link).not.toBeNull();
   });
 });

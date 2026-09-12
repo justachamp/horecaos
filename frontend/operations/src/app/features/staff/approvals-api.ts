@@ -42,6 +42,27 @@ export interface DecidedApproval {
 }
 
 /**
+ * Mirrors `ApprovalRequestController.DecidedApprovalResponse` — Staff 9.4's
+ * decided-history read (ADR 0109): "a manager also cannot see what she
+ * approved last week", the gap map's own words for this row.
+ */
+export interface DecidedApprovalHistoryEntry {
+  readonly id: string;
+  readonly actionCode: string;
+  readonly parametersHash: string;
+  readonly scopeType: 'PLATFORM' | 'TENANT' | 'BRAND' | 'LOCATION';
+  readonly scopeId: string | null;
+  readonly thresholdDescription: string;
+  readonly policyVersion: number;
+  readonly requiredApproverCapability: string;
+  readonly status: 'APPROVED' | 'DECLINED';
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+}
+
+/**
  * Staff 9.4 Approvals — the maker-checker worklist over `audit.approval_requests`
  * (ADR 0027), reused as-is rather than reinvented: every producer across the
  * platform (refunds and future-order discounts above threshold, manual
@@ -64,6 +85,20 @@ export class ApprovalsApi {
       this.api.get<Page<PendingApproval>>(staffPaths.approvalRequests(tenantId), {
         params: { actionCode, limit: 200 },
       }),
+    );
+    return page.value.items;
+  }
+
+  /** What this tenant has already decided, newest decision first (ADR 0109). */
+  async decided(
+    tenantId: string,
+    actionCode?: string,
+  ): Promise<readonly DecidedApprovalHistoryEntry[]> {
+    const page = await firstValueFrom(
+      this.api.get<Page<DecidedApprovalHistoryEntry>>(
+        staffPaths.approvalRequestsDecided(tenantId),
+        { params: { actionCode, limit: 200 } },
+      ),
     );
     return page.value.items;
   }
