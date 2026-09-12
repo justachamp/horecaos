@@ -1272,6 +1272,19 @@ public enum Capability {
     COURIER_ADJUSTMENT_CREATE("courier.adjustment.create", "courier", "adjustment.create"),
     COURIER_ADJUSTMENT_APPROVE("courier.adjustment.approve", "courier", "adjustment.approve"),
 
+    /**
+     * ADR 0108: authoring the bonus/penalty registry — {@code
+     * courier_adjustment_reasons} and its rule columns — as opposed to {@link
+     * #COURIER_ADJUSTMENT_CREATE}, which posts one instance against one
+     * courier. Named apart from that one for the same reason {@link
+     * #COURIER_TYPE_MANAGE} sits apart from {@link #COURIER_RATECARD_MANAGE}:
+     * defining what a reason means and how it evaluates is a policy decision
+     * at a different tempo from a dispatcher recording a one-off penalty, and
+     * {@code AdjustmentRuleEvaluator}'s condition set is exactly as
+     * consequential to get wrong as a rate card's band ladder.
+     */
+    COURIER_ADJUSTMENT_REASON_MANAGE("courier.adjustment.reason.manage", "courier", "adjustment.reason.manage"),
+
     /** ADR 0042: a branch cashier confirming what cash was actually received. */
     COURIER_CASH_CONFIRM("courier.cash.confirm", "courier", "cash.confirm"),
 

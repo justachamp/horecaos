@@ -167,6 +167,11 @@ public enum PlatformRole {
                     COURIER_RATECARD_MANAGE,
                     COURIER_RATECARD_READ,
                     COURIER_TYPE_MANAGE,
+                    // ADR 0108: the bonus/penalty registry a rule evaluates against — the
+                    // same policy tempo as the rate card immediately above, held apart
+                    // from COURIER_ADJUSTMENT_CREATE, which LOCATION_MANAGER and
+                    // COURIER_DISPATCHER hold to post one instance against one courier.
+                    COURIER_ADJUSTMENT_REASON_MANAGE,
                     COURIER_PAYOUT_AUTHORISE,
                     // Finance 8.3/8.4/8.5's worklists — see TENANT_FINANCE's own comment
                     // on the same three.
