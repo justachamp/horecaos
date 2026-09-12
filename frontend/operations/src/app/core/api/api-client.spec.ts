@@ -99,6 +99,16 @@ describe('ApiClient', () => {
       http.expectOne(url('/api/v1/orders')).flush([]);
       await expect(promise).resolves.toMatchObject({ version: null });
     });
+
+    it('returns a text response as a plain string, never JSON-parsed', async () => {
+      const promise = firstValue(client.text('/api/v1/tenants/t/commercial/statements/s/export'));
+
+      const request = http.expectOne(url('/api/v1/tenants/t/commercial/statements/s/export'));
+      expect(request.request.responseType).toBe('text');
+      request.flush('number,period\r\n"S-1","2026-08"\r\n');
+
+      await expect(promise).resolves.toBe('number,period\r\n"S-1","2026-08"\r\n');
+    });
   });
 
   describe('cursor pagination', () => {

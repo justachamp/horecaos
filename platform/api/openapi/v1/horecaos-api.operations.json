@@ -9937,6 +9937,34 @@
         "required" : [ "password", "username" ],
         "type" : "object"
       },
+      "StatementLineView" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "quantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referenceCode" : {
+            "type" : "string"
+          },
+          "unitPrice" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
       "StatementResponse" : {
         "properties" : {
           "amountPayableMinor" : {
@@ -9951,6 +9979,57 @@
             "type" : "string"
           },
           "statementHash" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StatementView" : {
+        "properties" : {
+          "issueReason" : {
+            "type" : "string"
+          },
+          "issuedAt" : {
+            "type" : "string"
+          },
+          "issuedBy" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StatementLineView"
+            },
+            "type" : "array"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "periodEnd" : {
+            "type" : "string"
+          },
+          "periodKey" : {
+            "type" : "string"
+          },
+          "periodStart" : {
+            "type" : "string"
+          },
+          "statementId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "voidReason" : {
+            "type" : "string"
+          },
+          "voidedAt" : {
+            "type" : "string"
+          },
+          "voidedBy" : {
             "type" : "string"
           }
         },
@@ -24826,6 +24905,111 @@
           }
         },
         "summary" : "Every module this tenant is entitled to, and why",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements" : {
+      "get" : {
+        "description" : "Newest month first, void ones included. Mirrors CommercialStatementController.list (ADR 0088).",
+        "operationId" : "statements",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StatementView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every statement this tenant has been issued",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}" : {
+      "get" : {
+        "operationId" : "oneStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StatementView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement with its lines",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}/export" : {
+      "get" : {
+        "description" : "For the accounting system an invoice is made in. Amounts are integer minor units of the statement's currency.",
+        "operationId" : "statementExport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement as CSV",
         "tags" : [ "Commercial" ]
       }
     },

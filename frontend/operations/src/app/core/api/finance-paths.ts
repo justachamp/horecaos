@@ -155,4 +155,26 @@ export const financePaths = {
   commercialUsage(tenantId: string): string {
     return `/api/v1/tenants/${enc(tenantId)}/commercial/usage`;
   },
+
+  /**
+   * `CommercialOperationsController.statements` — Finance 8/X.4, wave T19.
+   *
+   * The read was always tenant-scoped (`CommercialStatementController` at
+   * `/api/v1/control-plane`, `COMMERCIAL_USAGE_READ`, ADR 0088); this app
+   * simply had no client for it. Rather than call `/api/v1/control-plane/**`
+   * — a different `OpenApiSurface` this console cannot reach (ADR 0057) — the
+   * same `StatementService` read is mirrored here, at the tenant path this
+   * file already lives under.
+   */
+  commercialStatements(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/statements`;
+  },
+
+  commercialStatement(tenantId: string, statementId: string): string {
+    return `${financePaths.commercialStatements(tenantId)}/${enc(statementId)}`;
+  },
+
+  commercialStatementExport(tenantId: string, statementId: string): string {
+    return `${financePaths.commercialStatement(tenantId, statementId)}/export`;
+  },
 } as const;

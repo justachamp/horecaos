@@ -63,6 +63,13 @@ export class ApiClient {
       );
   }
 
+  /** A plain-text document such as a CSV export — never JSON-parsed. */
+  text(path: string, options: GetOptions = {}): Observable<string> {
+    return this.http
+      .get(this.url(path), { params: toHttpParams(options.params), responseType: 'text' })
+      .pipe(catchError(toApiError));
+  }
+
   /** A cursor page. Pass the state through {@link pageParams}, never a raw offset. */
   page<T>(path: string, state: CursorState, filters: QueryParams = {}): Observable<Page<T>> {
     return this.http

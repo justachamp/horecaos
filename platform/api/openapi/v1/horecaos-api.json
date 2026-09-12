@@ -47403,6 +47403,111 @@
         "tags" : [ "Commercial" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/commercial/statements" : {
+      "get" : {
+        "description" : "Newest month first, void ones included. Mirrors CommercialStatementController.list (ADR 0088).",
+        "operationId" : "statements",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StatementView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every statement this tenant has been issued",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}" : {
+      "get" : {
+        "operationId" : "oneStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StatementView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement with its lines",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}/export" : {
+      "get" : {
+        "description" : "For the accounting system an invoice is made in. Amounts are integer minor units of the statement's currency.",
+        "operationId" : "statementExport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement as CSV",
+        "tags" : [ "Commercial" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/commercial/subscription" : {
       "get" : {
         "operationId" : "subscription",
