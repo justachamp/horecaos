@@ -16,6 +16,7 @@ import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
@@ -64,7 +65,8 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 mock(OrderCallProvenanceService.class),
                 mock(OperatorOrderingService.class),
                 mock(OperatorCustomerLookupService.class),
-                mock(OrderBulkActionService.class));
+                mock(OrderBulkActionService.class),
+                mock(LiveBoardQueryService.class));
     }
 
     @Test
