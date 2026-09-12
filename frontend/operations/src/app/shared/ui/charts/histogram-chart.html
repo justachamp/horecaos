@@ -1,0 +1,80 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-histogram-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height" role="presentation">
+    <g [attr.transform]="'translate(' + plotLeft + ',' + plotTop + ')'">
+      @for (tick of yTicks(); track tick.value) {
+        <line
+          class="q-chart__gridline"
+          x1="0"
+          [attr.x2]="plotWidth"
+          [attr.y1]="tick.y"
+          [attr.y2]="tick.y"
+        />
+        <text
+          class="q-chart__axis-label q-caption"
+          x="-8"
+          [attr.y]="tick.y"
+          text-anchor="end"
+          dominant-baseline="middle"
+        >
+          {{ tick.label }}
+        </text>
+      }
+
+      @for (bar of bars(); track bar.key) {
+        <rect
+          class="q-chart__bar"
+          [attr.x]="bar.x"
+          [attr.y]="bar.y"
+          [attr.width]="bar.width"
+          [attr.height]="bar.height"
+          [style.fill]="bar.color"
+          (mouseenter)="showHover(bar)"
+          (mouseleave)="clearHover()"
+        />
+        <text
+          class="q-chart__axis-label q-caption"
+          [attr.x]="bar.x + bar.width / 2"
+          [attr.y]="plotHeight + 16"
+          text-anchor="middle"
+        >
+          {{ bar.label }}
+        </text>
+      }
+    </g>
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-histogram-chart-tooltip"
+      [style.left.%]="((plotLeft + tip.cx) / width) * 100"
+      [style.top.%]="((plotTop + tip.cy) / height) * 100"
+    >
+      {{ tip.label }}: {{ tip.value }}
+    </div>
+  }
+
+  <table chart-table data-testid="q-histogram-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        <th scope="col">{{ 'ui.charts.table.count' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (bar of bars(); track bar.key) {
+        <tr>
+          <th scope="row">{{ bar.label }}</th>
+          <td>{{ bar.value }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

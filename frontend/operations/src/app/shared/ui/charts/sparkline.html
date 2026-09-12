@@ -1,0 +1,10 @@
+@if (hasTrend()) {
+  <svg
+    class="q-sparkline"
+    [attr.viewBox]="'0 0 ' + width + ' ' + height"
+    aria-hidden="true"
+    data-testid="q-sparkline"
+  >
+    <path [attr.d]="path()" fill="none" />
+  </svg>
+}

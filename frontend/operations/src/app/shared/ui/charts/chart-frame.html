@@ -1,0 +1,24 @@
+<figure class="q-chart-frame" [attr.aria-label]="ariaLabel()" data-testid="q-chart-frame">
+  <div class="q-chart-frame__graphic" aria-hidden="true" data-testid="q-chart-frame-graphic">
+    <ng-content select="[chart-graphic]" />
+    <ng-content select="[chart-tooltip]" />
+  </div>
+
+  <div class="q-chart-frame__legend" data-testid="q-chart-frame-legend">
+    <ng-content select="[chart-legend]" />
+  </div>
+
+  <button
+    type="button"
+    class="q-chart-frame__table-toggle q-caption"
+    (click)="toggleTable()"
+    [attr.aria-expanded]="tableVisible()"
+    data-testid="q-chart-frame-table-toggle"
+  >
+    {{ (tableVisible() ? 'ui.charts.table.hide' : 'ui.charts.table.show') | t }}
+  </button>
+
+  <div [hidden]="!tableVisible()" data-testid="q-chart-frame-table">
+    <ng-content select="[chart-table]" />
+  </div>
+</figure>

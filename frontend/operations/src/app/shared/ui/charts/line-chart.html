@@ -1,0 +1,127 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-line-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height" role="presentation">
+    <g [attr.transform]="'translate(' + plotLeft + ',' + plotTop + ')'">
+      @for (tick of yTicks(); track tick.value) {
+        <line
+          class="q-chart__gridline"
+          x1="0"
+          [attr.x2]="plotWidth"
+          [attr.y1]="tick.y"
+          [attr.y2]="tick.y"
+        />
+        <text
+          class="q-chart__axis-label q-caption"
+          x="-8"
+          [attr.y]="tick.y"
+          text-anchor="end"
+          dominant-baseline="middle"
+        >
+          {{ tick.label }}
+        </text>
+      }
+
+      @for (s of plotted(); track s.key) {
+        <path class="q-chart__line" [attr.d]="s.path" [style.stroke]="s.color" fill="none" />
+      }
+
+      @if (hover(); as tip) {
+        <line
+          class="q-chart__crosshair"
+          [attr.x1]="tip.cx"
+          [attr.x2]="tip.cx"
+          y1="0"
+          [attr.y2]="plotHeight"
+        />
+        @for (s of plotted(); track s.key) {
+          @if (s.points[tip.index].cy !== null) {
+            <circle
+              class="q-chart__point"
+              [attr.cx]="tip.cx"
+              [attr.cy]="s.points[tip.index].cy!"
+              r="3"
+              [style.fill]="s.color"
+            />
+          }
+        }
+      }
+
+      @for (point of hitPoints(); track point.index) {
+        <rect
+          class="q-chart__hit"
+          [attr.x]="point.cx - hitWidth()"
+          y="0"
+          [attr.width]="hitWidth() * 2"
+          [attr.height]="plotHeight"
+          (mouseenter)="showHoverAt(point.index)"
+          (mouseleave)="clearHover()"
+        />
+      }
+    </g>
+
+    @for (tick of xTicks(); track tick.index) {
+      <text
+        class="q-chart__axis-label q-caption"
+        [attr.x]="plotLeft + tick.cx"
+        [attr.y]="height - 8"
+        text-anchor="middle"
+      >
+        {{ tick.label }}
+      </text>
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-line-chart-tooltip"
+      [style.left.%]="((plotLeft + tip.cx) / width) * 100"
+    >
+      <div class="q-chart__tooltip-title q-caption">{{ tip.label }}</div>
+      @for (row of tip.rows; track row.label) {
+        <div class="q-chart__tooltip-row q-caption">
+          <span class="q-chart__swatch" [style.background]="row.color"></span>
+          {{ row.label }}: {{ row.value }}
+        </div>
+      }
+    </div>
+  }
+
+  @if (showLegend()) {
+    <ul chart-legend class="q-chart__legend-list" data-testid="q-line-chart-legend">
+      @for (s of plotted(); track s.key) {
+        <li class="q-chart__legend-item q-caption">
+          <span class="q-chart__swatch" [style.background]="s.color"></span>
+          {{ s.label }}
+        </li>
+      }
+    </ul>
+  }
+
+  <table chart-table data-testid="q-line-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        @for (s of plotted(); track s.key) {
+          <th scope="col">{{ s.label }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (label of xLabelsList(); track label + '|' + $index; let i = $index) {
+        <tr>
+          <th scope="row">{{ label }}</th>
+          @for (s of plotted(); track s.key) {
+            <td>{{ s.points[i].rawY === null ? '—' : valueFormatter()(s.points[i].rawY!) }}</td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

@@ -1,0 +1,39 @@
+.q-chart-frame {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.q-chart-frame__graphic {
+  position: relative;
+  width: 100%;
+}
+
+.q-chart-frame__graphic svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.q-chart-frame__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.q-chart-frame__table-toggle {
+  align-self: flex-start;
+  border: 1px solid var(--q-hairline);
+  background: transparent;
+  color: var(--q-ink-muted);
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: var(--q-radius);
+}
+
+.q-chart-frame__table-toggle:hover {
+  border-color: var(--q-ink-subtle);
+  color: var(--q-ink);
+}

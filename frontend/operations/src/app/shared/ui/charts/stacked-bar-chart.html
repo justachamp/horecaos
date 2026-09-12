@@ -1,0 +1,79 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-stacked-bar-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height" role="presentation">
+    @for (segment of plotted(); track segment.key) {
+      <rect
+        class="q-chart__segment"
+        [attr.x]="segment.x"
+        [attr.y]="barY"
+        [attr.width]="segment.width"
+        [attr.height]="barHeight"
+        [style.fill]="segment.color"
+        (mouseenter)="showHover(segment)"
+        (mouseleave)="clearHover()"
+      />
+    }
+
+    <text class="q-chart__axis-label q-caption" x="0" [attr.y]="barY + barHeight + 16">0%</text>
+    <text
+      class="q-chart__axis-label q-caption"
+      [attr.x]="width / 2"
+      [attr.y]="barY + barHeight + 16"
+      text-anchor="middle"
+    >
+      50%
+    </text>
+    <text
+      class="q-chart__axis-label q-caption"
+      [attr.x]="width"
+      [attr.y]="barY + barHeight + 16"
+      text-anchor="end"
+    >
+      100%
+    </text>
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-stacked-bar-chart-tooltip"
+      [style.left.%]="((tip.x + tip.width / 2) / width) * 100"
+    >
+      {{ tip.label }}: {{ tip.value }} ({{ tip.sharePercent }}%)
+    </div>
+  }
+
+  <ul chart-legend class="q-chart__legend-list" data-testid="q-stacked-bar-chart-legend">
+    @for (segment of plotted(); track segment.key) {
+      <li class="q-chart__legend-item q-caption">
+        <span class="q-chart__swatch" [style.background]="segment.color"></span>
+        {{ segment.label }} · {{ segment.sharePercent }}%
+      </li>
+    }
+  </ul>
+
+  <table chart-table data-testid="q-stacked-bar-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        <th scope="col">{{ 'ui.charts.table.count' | t }}</th>
+        <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (segment of plotted(); track segment.key) {
+        <tr>
+          <th scope="row">{{ segment.label }}</th>
+          <td>{{ segment.value }}</td>
+          <td>{{ segment.sharePercent }}%</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

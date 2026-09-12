@@ -2568,6 +2568,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.tile.late': 'Kechikishlar',
   'reports.overview.tile.late.subtitle': 'mediana {minutes}',
   'reports.overview.tile.deltaSuffix': 'bir hafta oldingi shu davrga nisbatan',
+  'reports.overview.trend.title': 'Dinamika',
   'reports.overview.timing.title': 'Bajarilish vaqti',
   'reports.overview.timing.preparation': 'Tayyorlash',
   'reports.overview.timing.medianCaption': 'mediana, tasdiqdan tayyorgacha',
@@ -3132,6 +3133,10 @@ export const messagesUzLatn: MessageCatalogue = {
     'Shu hafta kunining hozircha faqat 1 holati qayd etilgan — o‘rtacha chiqarish uchun yetarli emas. Quyidagi son o‘sha bitta hafta uchun, o‘rtacha emas.',
   'reports.forecast.thin.two':
     'Shu hafta kunining hozircha faqat 2 holati qayd etilgan — o‘rtacha chiqarish uchun yetarli emas. Quyidagi sonlar o‘sha ikki hafta uchun, o‘rtacha emas.',
+  'reports.forecast.weekOverview.title': 'Soatlar boʻyicha talab, butun hafta',
+  'reports.forecast.weekOverview.show': 'Butun haftani koʻrsatish',
+  'reports.forecast.weekOverview.loading': 'Hafta yuklanmoqda…',
+  'reports.forecast.weekOverview.error': 'Hafta koʻrinishini yuklab boʻlmadi.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',
@@ -3571,6 +3576,18 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Oʻchirilgan — tekshirilmaydi',
   'ui.ruleSimulator.outcome': 'Nima sodir boʻladi',
   'ui.ruleSimulator.noRules': 'Tekshirish uchun qoidalar yoʻq.',
+  // Diagrammalar oilasi (T09 toʻlqini, IA X.19) — chiziqli/ustunli/qatlamli
+  // ustunli/donut/gistogramma/issiqlik xaritasi `q-chart-frame` orqali shu
+  // bir nechta satrni baham koʻradi.
+  'ui.charts.table.show': 'Jadval koʻrinishida koʻrsatish',
+  'ui.charts.table.hide': 'Jadvalni yashirish',
+  'ui.charts.tooltip.noData': 'Tarix yetarli emas',
+  'ui.charts.sparkline.trend': '{label}: {first} dan {last} gacha dinamika',
+  'ui.charts.sequential.low': 'Kamroq',
+  'ui.charts.sequential.high': 'Koʻproq',
+  'ui.charts.table.count': 'Soni',
+  'ui.charts.table.share': 'Ulushi',
+  'ui.charts.table.value': 'Qiymat',
 
   'orders.action.applied': 'Buyurtma yangilandi',
   'customers.create.done': 'Mijoz yaratildi',

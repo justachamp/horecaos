@@ -76,15 +76,11 @@
         @if (sourceMix().length === 0) {
           <p class="q-body-sm today__empty">{{ 'today.mix.empty' | t }}</p>
         } @else {
-          @for (slice of sourceMix(); track slice.key) {
-            <div class="mix-row">
-              <span class="mix-row__label q-body-sm">{{ slice.key }}</span>
-              <span class="mix-row__bar"
-                ><span [style.width.%]="mixShare(slice, sourceMix())"></span
-              ></span>
-              <span class="mix-row__count q-tnum q-caption">{{ slice.count }}</span>
-            </div>
-          }
+          <q-bar-chart
+            [items]="sourceMixItems()"
+            [ariaLabel]="'today.mix.source.title' | t"
+            scale="total"
+          />
         }
       </div>
 
@@ -93,15 +89,11 @@
         @if (typeMix().length === 0) {
           <p class="q-body-sm today__empty">{{ 'today.mix.empty' | t }}</p>
         } @else {
-          @for (slice of typeMix(); track slice.key) {
-            <div class="mix-row">
-              <span class="mix-row__label q-body-sm">{{ typeMixLabel(slice.key) }}</span>
-              <span class="mix-row__bar"
-                ><span [style.width.%]="mixShare(slice, typeMix())"></span
-              ></span>
-              <span class="mix-row__count q-tnum q-caption">{{ slice.count }}</span>
-            </div>
-          }
+          <q-bar-chart
+            [items]="typeMixItems()"
+            [ariaLabel]="'today.mix.type.title' | t"
+            scale="total"
+          />
         }
       </div>
     </section>

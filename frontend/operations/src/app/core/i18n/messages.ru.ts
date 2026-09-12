@@ -2551,6 +2551,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.tile.late': 'Опоздания',
   'reports.overview.tile.late.subtitle': 'медиана {minutes}',
   'reports.overview.tile.deltaSuffix': 'к тому же периоду неделю назад',
+  'reports.overview.trend.title': 'Динамика',
   'reports.overview.timing.title': 'Время выполнения',
   'reports.overview.timing.preparation': 'Приготовление',
   'reports.overview.timing.medianCaption': 'медиана, от подтверждения до готовности',
@@ -3111,6 +3112,10 @@ export const messagesRu: MessageCatalogue = {
     'Пока зафиксирован только 1 случай этого дня недели — недостаточно для среднего. Ниже — значение за эту единственную неделю, а не среднее.',
   'reports.forecast.thin.two':
     'Пока зафиксировано только 2 случая этого дня недели — недостаточно для среднего. Ниже — значения за эти две недели, а не среднее.',
+  'reports.forecast.weekOverview.title': 'Спрос по часам, вся неделя',
+  'reports.forecast.weekOverview.show': 'Показать всю неделю',
+  'reports.forecast.weekOverview.loading': 'Загрузка недели…',
+  'reports.forecast.weekOverview.error': 'Не удалось загрузить обзор недели.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',
@@ -3546,6 +3551,18 @@ export const messagesRu: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Отключено — не проверяется',
   'ui.ruleSimulator.outcome': 'Что произойдёт',
   'ui.ruleSimulator.noRules': 'Нет правил для проверки.',
+  // Семейство графиков (волна T09, IA X.19) — эти несколько строк общие
+  // для линии/столбцов/составных столбцов/донат/гистограммы/теплокарты
+  // через `q-chart-frame`.
+  'ui.charts.table.show': 'Показать как таблицу',
+  'ui.charts.table.hide': 'Скрыть таблицу',
+  'ui.charts.tooltip.noData': 'Недостаточно истории',
+  'ui.charts.sparkline.trend': '{label}: динамика с {first} до {last}',
+  'ui.charts.sequential.low': 'Меньше',
+  'ui.charts.sequential.high': 'Больше',
+  'ui.charts.table.count': 'Количество',
+  'ui.charts.table.share': 'Доля',
+  'ui.charts.table.value': 'Значение',
 
   'orders.action.applied': 'Заказ обновлён',
   'customers.create.done': 'Клиент создан',

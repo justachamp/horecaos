@@ -13,6 +13,8 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { BarChart } from '../../shared/ui/charts/bar-chart';
+import { ChartCategory } from '../../shared/ui/charts/chart-model';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { BranchLoad, LiveBoard, LiveBoardSnapshot, MixSlice } from './live-board';
 
@@ -73,7 +75,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-today-page',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, RouterLink, BarChart],
   templateUrl: './today-page.html',
   styleUrl: './today-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -214,10 +216,13 @@ export class TodayPage implements OnInit {
     return this.branchesAvailable() && this.branchesShown() < this.branchesTotal();
   }
 
-  /** The bar width for one mix slice, as a share of its own band — never of the other band's total. */
-  protected mixShare(slice: MixSlice, band: readonly MixSlice[]): number {
-    const total = band.reduce((sum, entry) => sum + entry.count, 0);
-    return total === 0 ? 0 : Math.round((slice.count / total) * 100);
+  /** Channel codes are tenant data — the bar's own label is the raw code, same as the retired mix-row. */
+  protected sourceMixItems(): readonly ChartCategory[] {
+    return this.sourceMix().map((slice) => mixItem(slice, slice.key));
+  }
+
+  protected typeMixItems(): readonly ChartCategory[] {
+    return this.typeMix().map((slice) => mixItem(slice, this.typeMixLabel(slice.key)));
   }
 
   /**
@@ -253,4 +258,8 @@ export class TodayPage implements OnInit {
   protected errorReference(error: ApiError): string {
     return errorReference(error);
   }
+}
+
+function mixItem(slice: MixSlice, label: string): ChartCategory {
+  return { key: slice.key, label, value: slice.count };
 }

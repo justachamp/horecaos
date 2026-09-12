@@ -1,0 +1,27 @@
+<div class="q-kpi-tile" [class.q-kpi-tile--provisional]="provisional()" data-testid="q-kpi-tile">
+  <div class="q-kpi-tile__label q-caption">{{ label() }}</div>
+  <div class="q-kpi-tile__value-row">
+    <div class="q-kpi-tile__value q-data-lg q-tnum">{{ value() }}</div>
+    @if (sparklinePoints(); as points) {
+      <q-sparkline [points]="points" />
+    }
+  </div>
+  @if (deltaText(); as delta) {
+    <div
+      class="q-kpi-tile__delta q-caption"
+      [class.q-kpi-tile__delta--up]="deltaUp()"
+      data-testid="q-kpi-tile-delta"
+    >
+      {{ delta }}
+      @if (deltaSuffix(); as suffix) {
+        {{ suffix }}
+      }
+    </div>
+  }
+  @if (subtitle(); as sub) {
+    <div class="q-kpi-tile__subtitle q-caption">{{ sub }}</div>
+  }
+  @if (provisional() && provisionalNote(); as note) {
+    <div class="q-kpi-tile__provisional-note q-caption">{{ note }}</div>
+  }
+</div>

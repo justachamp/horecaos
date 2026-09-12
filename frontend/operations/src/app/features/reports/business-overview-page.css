@@ -53,7 +53,7 @@
   cursor: pointer;
 }
 
-/* Band A: KPI tiles */
+/* Band A: KPI tiles (q-kpi-tile owns its own look — see shared/ui/charts/kpi-tile.css) */
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -61,44 +61,22 @@
   margin-bottom: 28px;
 }
 
-.tile {
+/* Band A½: the trend charts the tiles' own sparklines are drawn from */
+.band--trend {
+  margin-bottom: 28px;
+}
+
+.trend-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.trend-charts q-line-chart {
   padding: 14px 16px;
   background: var(--q-canvas);
   border: 1px solid var(--q-hairline);
-}
-
-.tile--provisional {
-  border-left: 3px solid var(--q-warning);
-}
-
-.tile__label {
-  color: var(--q-ink-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.32px;
-}
-
-.tile__value {
-  margin-top: 6px;
-  color: var(--q-ink);
-}
-
-.tile__delta {
-  margin-top: 4px;
-  color: var(--q-error-text);
-}
-
-.tile__delta--up {
-  color: var(--q-success-text, #0e6027);
-}
-
-.tile__subtitle {
-  margin-top: 6px;
-  color: var(--q-ink-muted);
-}
-
-.tile__provisional-note {
-  margin-top: 6px;
-  color: var(--q-warning-text);
+  display: block;
 }
 
 /* Band B: timing */
@@ -176,63 +154,6 @@
   padding: 4px 8px;
   cursor: pointer;
   color: var(--q-ink-muted);
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: 120px 1fr 44px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-}
-
-.bar-row__label {
-  color: var(--q-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bar-row__track {
-  height: 10px;
-  background: var(--q-surface-1);
-}
-
-.bar-row__fill {
-  height: 100%;
-  background: var(--q-primary);
-}
-
-.bar-row__value {
-  text-align: right;
-  color: var(--q-ink-muted);
-}
-
-.stacked-bar {
-  display: flex;
-  height: 14px;
-  overflow: hidden;
-  background: var(--q-surface-1);
-}
-
-.stacked-bar__segment--DELIVERY {
-  background: var(--q-primary);
-}
-
-.stacked-bar__segment--PICKUP {
-  background: var(--q-success);
-}
-
-.stacked-bar__segment--DINE_IN {
-  background: var(--q-warning);
-}
-
-.stacked-bar__legend {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-  color: var(--q-ink-muted);
-  flex-wrap: wrap;
 }
 
 /* Band D: funnel + branches */

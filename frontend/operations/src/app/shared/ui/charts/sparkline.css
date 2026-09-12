@@ -1,0 +1,11 @@
+.q-sparkline {
+  display: block;
+  width: 72px;
+  height: 24px;
+  overflow: visible;
+}
+
+.q-sparkline path {
+  stroke: var(--q-primary);
+  stroke-width: 1.5;
+}
