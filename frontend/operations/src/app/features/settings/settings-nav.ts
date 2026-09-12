@@ -6,6 +6,12 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * Only P-tier screens (10.1–10.4, 10.6–10.10) plus the moved 10.8 appear;
  * 10.5's own row exists because the spec's nav table lists it even though the
  * screen itself renders `q-not-built-page` today (see settings.routes.ts).
+ *
+ * `catalogBaseSettings` is the one exception: IA row `4.4d`, not a
+ * settings.md screen, but wave P46 built it under this surface (two
+ * tenant-wide `ConfigurationKey` switches, same `q-inherited-field` pattern)
+ * and it needs a door somewhere a manager would actually look — the
+ * catalog's own `4.4` Menus screen does not exist as a settings-shaped page.
  */
 export interface SettingsNavItem {
   readonly path: string;
@@ -60,6 +66,12 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         path: 'order-policy',
         label: 'settings.nav.orderPolicy',
         description: 'settings.home.description.orderPolicy',
+        builtRoute: true,
+      },
+      {
+        path: 'catalog',
+        label: 'settings.nav.catalogBaseSettings',
+        description: 'settings.home.description.catalogBaseSettings',
         builtRoute: true,
       },
     ],
