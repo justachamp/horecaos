@@ -51,7 +51,7 @@ class S3AuditArchiveStoreTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for these tests");
 
-        minio = new GenericContainer<>(DockerImageName.parse("minio/minio:RELEASE.2025-07-23T15-54-02Z"))
+        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
                 .withCommand("server", "/data")
                 .withEnv("MINIO_ROOT_USER", "horecaos")
                 .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")

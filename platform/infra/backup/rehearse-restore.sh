@@ -15,7 +15,7 @@ set -euo pipefail
 PROJECT="${COMPOSE_PROJECT_NAME:-horecaos-platform}"
 NETWORK="${PROJECT}_default"
 PG_IMAGE="postgres:18"
-MC_IMAGE="minio/mc:RELEASE.2025-07-21T05-28-08Z"
+MC_IMAGE="quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z"
 WORK_VOLUME="horecaos-backup-rehearsal"
 
 SOURCE_URL="postgresql://horecaos:horecaos@platform-db:5432/horecaos"

@@ -527,7 +527,7 @@ services:
   minio:
     # ADR 0010/0034: S3-compatible, never S3-specific. This is the phase-one
     # implementation of the same interface AWS S3 will provide in phase two.
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     <<: *hardening
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9090"]

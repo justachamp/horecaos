@@ -189,7 +189,7 @@ services:
     # exists. Everything above it — the backup script, the encryption, the
     # restore procedure — is the same either way, so switching destination is
     # configuration rather than a rewrite.
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: ["server", "/data", "--console-address", ":9090"]
     environment:
       MINIO_ROOT_USER: horecaos
@@ -209,7 +209,7 @@ services:
     # ADR 0034: stands in for the off-site destination. A second instance rather
     # than a second bucket, because the risk being modelled is losing the primary
     # host entirely — a bucket on the same server proves nothing about that.
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: ["server", "/data", "--console-address", ":9091"]
     environment:
       MINIO_ROOT_USER: horecaos
@@ -226,7 +226,7 @@ services:
       retries: 20
 
   minio-seed:
-    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    image: quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z
     depends_on:
       minio:
         condition: service_healthy
