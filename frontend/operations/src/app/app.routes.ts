@@ -389,6 +389,17 @@ export const routes: Routes = [
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
           },
           {
+            // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool
+            // used a handful of times a year, deliberately not a
+            // `staff-shell.html` tab — reached only from the link at the
+            // bottom of Approvals and, later, from a denied state. Declared
+            // before the empty-path Люди child for the same reason `roles`,
+            // `activity` and `approvals` are.
+            path: 'access-check',
+            loadComponent: () =>
+              import('./features/staff/access-check-page').then((m) => m.AccessCheckPage),
+          },
+          {
             path: '',
             loadComponent: () => import('./features/staff/staff-page').then((m) => m.StaffPage),
             children: [

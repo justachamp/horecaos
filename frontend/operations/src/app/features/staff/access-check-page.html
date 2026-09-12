@@ -1,0 +1,166 @@
+<div class="access-check">
+  <h1 class="q-title">{{ 'staff.accessCheck.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'staff.accessCheck.lead' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <form class="question" (submit)="$event.preventDefault(); submit()">
+        <label class="field">
+          <span class="q-caption">{{ 'staff.accessCheck.field.who' | t }}</span>
+          <select
+            class="select"
+            data-testid="access-check-subject"
+            [value]="selectedSubject()"
+            (change)="setSubject($any($event.target).value)"
+          >
+            <option value="" disabled>{{ 'staff.accessCheck.pick' | t }}</option>
+            @for (subject of subjects(); track subject) {
+              <option [value]="subject">{{ subject }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'staff.accessCheck.field.what' | t }}</span>
+          <select
+            class="select"
+            data-testid="access-check-capability"
+            [value]="selectedCapability()"
+            (change)="setCapability($any($event.target).value)"
+          >
+            <option value="" disabled>{{ 'staff.accessCheck.pick' | t }}</option>
+            @for (capability of capabilities(); track capability) {
+              <option [value]="capability">{{ capability }}</option>
+            }
+          </select>
+        </label>
+
+        <div class="field">
+          <span class="q-caption">{{ 'staff.accessCheck.field.where' | t }}</span>
+          <div class="where">
+            <select
+              class="select"
+              data-testid="access-check-scope-type"
+              [value]="selectedScopeType()"
+              (change)="setScopeType($any($event.target).value)"
+            >
+              <option value="TENANT">{{ scopeLevelLabel('TENANT') }}</option>
+              <option value="BRAND">{{ scopeLevelLabel('BRAND') }}</option>
+              <option value="LOCATION">{{ scopeLevelLabel('LOCATION') }}</option>
+            </select>
+
+            @if (selectedScopeType() === 'BRAND' || selectedScopeType() === 'LOCATION') {
+              <select
+                class="select"
+                data-testid="access-check-brand"
+                [value]="selectedBrandId()"
+                (change)="setBrand($any($event.target).value)"
+              >
+                <option value="" disabled>{{ 'staff.accessCheck.pick' | t }}</option>
+                @for (brand of directory().brands; track brand.id) {
+                  <option [value]="brand.id">{{ brand.displayName }}</option>
+                }
+              </select>
+            }
+
+            @if (selectedScopeType() === 'LOCATION') {
+              <select
+                class="select"
+                data-testid="access-check-location"
+                [value]="selectedLocationId()"
+                (change)="setLocation($any($event.target).value)"
+              >
+                <option value="" disabled>{{ 'staff.accessCheck.pick' | t }}</option>
+                @for (location of locationsInSelectedBrand(); track location.id) {
+                  <option [value]="location.id">{{ location.displayName }}</option>
+                }
+              </select>
+            }
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="primary"
+          data-testid="access-check-submit"
+          [disabled]="!canSubmit() || checkState() === 'checking'"
+        >
+          {{ 'staff.accessCheck.action.check' | t }}
+        </button>
+      </form>
+
+      @switch (checkState()) {
+        @case ('checking') {
+          <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+        }
+        @case ('error') {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ checkErrorText() }}</span>
+          </div>
+        }
+        @case ('answered') {
+          @if (answer(); as result) {
+            <div
+              class="answer"
+              [class.answer--allowed]="result.verdict === 'ALLOWED'"
+              [class.answer--denied]="result.verdict === 'INSUFFICIENT_CAPABILITY'"
+              [class.answer--entitlement]="result.verdict === 'ENTITLEMENT_REQUIRED'"
+              data-testid="access-check-answer"
+            >
+              @switch (result.verdict) {
+                @case ('ALLOWED') {
+                  <p class="q-emphasis">{{ 'staff.accessCheck.answer.allowed' | t }}</p>
+                }
+                @case ('INSUFFICIENT_CAPABILITY') {
+                  <p class="q-emphasis">{{ 'staff.accessCheck.answer.denied' | t }}</p>
+                }
+                @case ('ENTITLEMENT_REQUIRED') {
+                  <p class="q-emphasis">{{ 'staff.accessCheck.answer.entitlementRequired' | t }}</p>
+                  @if (result.entitlement; as entitlement) {
+                    <p class="q-body-sm">{{ entitlement.description }}</p>
+                  }
+                }
+              }
+
+              @if (result.heldElsewhere.length > 0) {
+                <div class="held-elsewhere">
+                  <p class="q-caption">{{ 'staff.accessCheck.heldElsewhere.label' | t }}</p>
+                  <ul>
+                    @for (grant of result.heldElsewhere; track grant.id) {
+                      <li class="q-body-sm">
+                        {{ grant.roleCode }} · {{ scopeLevelLabel(grant.scopeType) }}
+                        @if (grant.scopeType === 'BRAND') {
+                          ({{ brandName(grant.scopeId ?? '') }})
+                        }
+                        @if (grant.scopeType === 'LOCATION') {
+                          ({{ locationName(grant.scopeId ?? '') }})
+                        }
+                        · {{ 'staff.accessCheck.heldElsewhere.since' | t }} {{ grant.validFrom }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              } @else if (result.verdict === 'INSUFFICIENT_CAPABILITY') {
+                <p class="q-caption">{{ 'staff.accessCheck.heldElsewhere.none' | t }}</p>
+              }
+            </div>
+          }
+        }
+      }
+    }
+  }
+</div>
