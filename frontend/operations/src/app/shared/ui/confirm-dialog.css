@@ -1,0 +1,53 @@
+/* The scrim and panel chrome are `overlay.css`; this is the confirmation's own
+ * width, its sentence, and its two buttons. */
+
+.q-confirm__backdrop {
+  align-items: center;
+  justify-content: center;
+}
+
+.q-confirm {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+}
+
+.q-confirm__body {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.q-confirm__cancel,
+.q-confirm__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+/* Cancel is first in the DOM so the focus trap lands on it; Confirm still
+ * reads last, where every other dialog in this console puts it. */
+.q-confirm__cancel {
+  order: 1;
+}
+
+.q-confirm__confirm {
+  order: 2;
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.q-confirm__confirm--destructive {
+  border-color: var(--q-error);
+  background: var(--q-error);
+  color: var(--q-inverse-ink);
+}
+
+.q-confirm__cancel:disabled,
+.q-confirm__confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

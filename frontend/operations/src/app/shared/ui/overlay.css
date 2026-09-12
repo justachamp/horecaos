@@ -1,0 +1,46 @@
+/* The chrome every overlay in this library shares: a scrim, a panel, and a
+ * button row. Loaded through a second entry in each component's `styleUrls`
+ * rather than copied into three files, and never into `styles.css` — a global
+ * rule named `.q-overlay__backdrop` would be reachable from any template in the
+ * application, which is how a "shared" class becomes a class nobody dares
+ * change.
+ *
+ * No font-size anywhere below. The type scale is closed and lives in the
+ * generated `tokens.css`; a size set here would be the one place it is not.
+ */
+
+.q-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  z-index: 50;
+  /* The same scrim the fifteen hand-written dialogs already agree on:
+   * `--q-ink` at half opacity. Written as a literal because `color-mix` over a
+   * token is not yet safe on the console's oldest supported browser and the
+   * value is what the hand-written copies use. */
+  background: rgba(22, 22, 22, 0.5);
+}
+
+.q-overlay__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  /* The panel itself is the focus trap's fallback target, so it must be
+   * focusable — and focusing a container should not draw a ring the operator
+   * cannot explain. The ring stays on the controls inside it. */
+  outline: none;
+}
+
+.q-overlay__title {
+  margin: 0;
+}
+
+.q-overlay__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}

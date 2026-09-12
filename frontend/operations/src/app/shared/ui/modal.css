@@ -1,0 +1,17 @@
+/* Only what makes a modal a modal: the scrim centres it, and it is 360px wide.
+ * Everything else is `overlay.css`, loaded alongside this file. */
+
+.q-modal__backdrop {
+  align-items: center;
+  justify-content: center;
+}
+
+.q-modal {
+  /* 360px is the width the fifteen hand-written dialogs already share, and the
+   * narrowest that holds a Tashkent phone number and its label on one line. */
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  padding: 20px;
+}

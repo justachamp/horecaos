@@ -16,6 +16,7 @@ import { OrderQueue } from './order-queue';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderSummaryResponse } from './order-summary';
+import { Toasts } from '../../shared/ui/toast';
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -149,7 +150,7 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
 
-    const badge = harness.routeNativeElement!.querySelector('.status-badge');
+    const badge = harness.routeNativeElement!.querySelector('[data-testid="q-status-pill-status"]');
     expect(badge?.textContent?.trim()).toBe('Preparing');
   });
 
@@ -172,9 +173,9 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=all');
     await flushMicrotasks();
 
-    const badges = [...harness.routeNativeElement!.querySelectorAll('.status-badge')].map((b) =>
-      b.textContent?.trim(),
-    );
+    const badges = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="q-status-pill-status"]'),
+    ].map((b) => b.textContent?.trim());
     expect(badges).toHaveLength(12);
     expect(badges).not.toContain('');
   });
@@ -186,7 +187,7 @@ describe('OrderQueue: status vocabulary', () => {
     const harness = await RouterTestingHarness.create('/orders?tab=all');
     await flushMicrotasks();
 
-    const badge = harness.routeNativeElement!.querySelector('.status-badge');
+    const badge = harness.routeNativeElement!.querySelector('[data-testid="q-status-pill-status"]');
     expect(badge?.textContent?.trim()).toBe('ON_HOLD_FOR_STOCK');
   });
 });
@@ -694,5 +695,51 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
       'OTHER',
       'клиент оскорблял оператора',
     );
+  });
+});
+
+/**
+ * The order board is the second caller of the `Toasts` service (ADR 0101, row
+ * `X.17`); `customers-page.spec.ts` is the first, and `shell.spec.ts` proves
+ * the single host that renders what both of them raise.
+ *
+ * Before this, an action applied from a row changed the row and said nothing:
+ * the operator's only confirmation was noticing a status word change in a
+ * table of twelve.
+ */
+describe('OrderQueue: migrated to shared/ui', () => {
+  it('announces an applied action, with no order number and no customer data in the sentence', async () => {
+    const approve = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CONFIRMED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions(
+      [order({ status: 'AWAITING_APPROVAL', actions: [{ action: 'APPROVE' }] })],
+      { approve },
+    );
+    const toasts = TestBed.inject(Toasts);
+    toasts.clear();
+
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-APPROVE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    const announced = toasts.visible();
+    expect(announced.map((toast) => toast.message)).toEqual(['Order updated']);
+    expect(announced[0].tone).toBe('success');
+    // ADR 0029: a toast is transient text on a terminal in a dining room.
+    expect(announced[0].message).not.toContain('order-1');
+    toasts.clear();
   });
 });

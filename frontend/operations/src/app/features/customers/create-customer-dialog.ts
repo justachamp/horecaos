@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import { TPipe } from '../../core/i18n/t.pipe';
+import { InlineAlert } from '../../shared/ui/inline-alert';
+import { Modal } from '../../shared/ui/modal';
 
 export interface CreateCustomerSubmission {
   readonly phone: string;
@@ -19,7 +29,7 @@ export interface CreateCustomerSubmission {
  */
 @Component({
   selector: 'q-create-customer-dialog',
-  imports: [TPipe],
+  imports: [TPipe, Modal, InlineAlert],
   templateUrl: './create-customer-dialog.html',
   styleUrl: './create-customer-dialog.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

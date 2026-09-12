@@ -101,9 +101,7 @@
   background: var(--q-surface-1);
 }
 
-.inbox-list__denied {
-  padding: 24px;
-}
+/* The denied branch is `q-denied-state` (ADR 0101); it brings its own padding. */
 
 /* ---- table ---------------------------------------------------------------- */
 
@@ -172,28 +170,9 @@
   color: var(--q-ink-subtle);
 }
 
-.inbox-list__attention-caption {
-  margin-left: 6px;
-  color: var(--q-error-text);
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  font-size: 12px;
-  color: var(--q-ink-muted);
-  white-space: nowrap;
-}
-
-.status-badge--attention {
-  border-color: var(--q-error-text);
-  color: var(--q-error-text);
-  background: var(--q-error-tint);
-}
+/* The state badge and its «needs reply» caption are `q-status-pill` now
+ * (ADR 0101) — one object with an overlay, not a badge plus a caption. */
 
 .inbox-list__empty-row td {
-  padding: 24px 12px;
-  text-align: center;
+  padding: 0;
 }

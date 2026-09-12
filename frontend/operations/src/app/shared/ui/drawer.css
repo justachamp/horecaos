@@ -1,0 +1,37 @@
+/* Only what makes a drawer a drawer: it fills the block axis and is anchored to
+ * an inline edge. The scrim and panel chrome are `overlay.css`. */
+
+.q-drawer__backdrop {
+  justify-content: flex-end;
+}
+
+.q-drawer__backdrop--start {
+  justify-content: flex-start;
+}
+
+.q-drawer {
+  /* Wider than a modal because a drawer exists for content a modal cannot hold,
+   * and capped as a percentage so a narrow console still sees the page behind
+   * it — an operator must never lose sight of the queue (shell.ts). */
+  width: 420px;
+  max-width: min(90vw, 560px);
+  height: 100%;
+  padding: 20px;
+  border-radius: 0;
+  /* Hairline elevation, never a shadow — the console has no drop shadows. */
+  border-block: none;
+}
+
+.q-drawer__backdrop:not(.q-drawer__backdrop--start) .q-drawer {
+  border-inline-end: none;
+}
+
+.q-drawer__backdrop--start .q-drawer {
+  border-inline-start: none;
+}
+
+.q-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

@@ -3,17 +3,22 @@ import {
   Component,
   DestroyRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DeniedState } from '../../shared/ui/denied-state';
+import { EmptyState } from '../../shared/ui/empty-state';
+import { StatusPill } from '../../shared/ui/status-pill';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { InboxApi } from './inbox-api';
 import { ConversationSummaryResponse } from './inbox-conversation';
@@ -28,6 +33,9 @@ const FETCH_LIMIT = 200;
 /** See `order-queue.ts`'s identical constant for why this is a fixed zone, not the browser's. */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 
+/** The capability `ConversationInboxController`'s endpoints declare — see `Capability.CONVERSATION_INBOX_MANAGE`. */
+const LIST_CAPABILITY = 'CONVERSATION_INBOX_MANAGE';
+
 /**
  * The inbox's list — a sibling of `OrderQueue`, built the same way: a live
  * poll, a dense table, and a docked detail beside it rather than a modal
@@ -39,7 +47,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-inbox-list',
-  imports: [TPipe],
+  imports: [TPipe, StatusPill, DeniedState, EmptyState],
   templateUrl: './inbox-list.html',
   styleUrl: './inbox-list.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -58,6 +66,20 @@ export class InboxList implements OnInit {
   protected readonly refreshing = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly denied = signal(false);
+  /**
+   * `null` when `denied` is true only because the operator has no location in
+   * scope (`CurrentLocation.denied()`) — no request was ever made, so no
+   * capability was ever checked. Set to {@link LIST_CAPABILITY} only once a
+   * real `CONVERSATION_INBOX_MANAGE` 403 comes back from {@link refresh}'s
+   * own request. See `customers-page.ts`'s identical signal for the bug this
+   * closes: a hardcoded capability name is wrong, and actively misleading,
+   * for the scope-denial case.
+   */
+  protected readonly deniedCapability = signal<string | null>(null);
+  /** Distinct copy for "no location assigned" versus a genuine capability denial. */
+  protected readonly deniedAskKey = computed<MessageKey>(() =>
+    this.deniedCapability() === null ? 'ui.denied.ask.noLocation' : 'ui.denied.ask',
+  );
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -99,6 +121,9 @@ export class InboxList implements OnInit {
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());
+      // No request was made, so no capability was ever checked — see
+      // `deniedCapability`'s own doc for why this must stay `null` here.
+      this.deniedCapability.set(null);
       this.firstLoadComplete.set(true);
       return;
     }
@@ -110,10 +135,14 @@ export class InboxList implements OnInit {
       this.lastUpdatedAt.set(new Date());
       this.lastError.set(null);
       this.denied.set(false);
+      this.deniedCapability.set(null);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
           this.denied.set(true);
+          this.deniedCapability.set(
+            error.code === ApiErrorCode.INSUFFICIENT_CAPABILITY ? LIST_CAPABILITY : null,
+          );
           this.lastError.set(null);
         } else {
           this.lastError.set(error);

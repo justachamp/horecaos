@@ -43,9 +43,13 @@
         }
       </div>
     } @else if (denied()) {
-      <div class="inbox-list__denied" data-testid="inbox-denied">
-        <p class="q-body-sm">{{ 'inbox.denied' | t }}</p>
-      </div>
+      <!-- One denied sentence for the whole console, naming the capability and
+           who can grant it, rather than this screen's own line (ADR 0101). -->
+      <q-denied-state
+        [capability]="deniedCapability()"
+        [askKey]="deniedAskKey()"
+        data-testid="inbox-denied"
+      />
     } @else {
       <table class="inbox-list__table">
         <thead>
@@ -82,21 +86,21 @@
                 }
               </td>
               <td>
-                <span class="status-badge" [class.status-badge--attention]="row.needsReply">
-                  {{ stateLabel(row.state) }}
-                </span>
-                @if (row.needsReply) {
-                  <span class="q-caption inbox-list__attention-caption">{{
-                    'inbox.needsReply' | t
-                  }}</span>
-                }
+                <!-- «needs reply» is an overlay on the conversation state, not a
+                     state of its own — the same rule the order board's lateness
+                     follows (ADR 0101, X.15). The state word is unchanged by it. -->
+                <q-status-pill
+                  [label]="stateLabel(row.state)"
+                  [overlayLabel]="row.needsReply ? ('inbox.needsReply' | t) : null"
+                  overlayTone="danger"
+                />
               </td>
               <td class="q-tnum">{{ formatActivity(row) }}</td>
             </tr>
           } @empty {
             <tr class="inbox-list__empty-row">
               <td colspan="5">
-                <p class="q-body-sm" data-testid="inbox-empty">{{ emptyMessage() }}</p>
+                <q-empty-state titleKey="inbox.list.empty" data-testid="inbox-empty" />
               </td>
             </tr>
           }

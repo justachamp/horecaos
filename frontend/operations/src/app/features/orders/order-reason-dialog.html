@@ -1,51 +1,61 @@
-<div class="reason-dialog__backdrop" data-testid="order-reason-dialog">
-  <div class="reason-dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | t">
-    <h2 class="q-emphasis reason-dialog__title">{{ titleKey() | t }}</h2>
-
-    <label class="reason-dialog__field">
-      <span class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</span>
-      <input
-        type="text"
-        class="reason-dialog__input"
-        [value]="reasonCode()"
-        (input)="setReasonCode($any($event.target).value)"
-        [placeholder]="'orders.dialog.reasonCode.placeholder' | t"
-        [attr.aria-invalid]="reasonMissing() ? 'true' : null"
-        data-testid="order-reason-dialog-code"
-      />
-      @if (reasonMissing()) {
-        <span class="q-caption reason-dialog__error" data-testid="order-reason-dialog-required">{{
-          'orders.dialog.reasonRequired' | t
-        }}</span>
-      }
-    </label>
-
-    @if (noteEnabled()) {
-      <label class="reason-dialog__field">
-        <span class="q-body-sm">{{ 'orders.dialog.note.label' | t }}</span>
-        <textarea
-          class="reason-dialog__textarea"
-          rows="3"
-          [value]="note()"
-          (input)="setNote($any($event.target).value)"
-          data-testid="order-reason-dialog-note"
-        ></textarea>
-      </label>
+<!-- Chrome — backdrop, panel, heading, Escape, focus trap, focus restore — is
+     `q-modal` (ADR 0101). This template kept its fields, its validation and
+     every `data-testid` it had, which is what let its own spec prove the
+     migration rather than be rewritten alongside it. -->
+<q-modal
+  [title]="titleKey() | t"
+  [dismissible]="!busy()"
+  (dismiss)="close()"
+  data-testid="order-reason-dialog"
+>
+  <label class="reason-dialog__field">
+    <span class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</span>
+    <input
+      type="text"
+      class="reason-dialog__input q-body-sm"
+      [value]="reasonCode()"
+      (input)="setReasonCode($any($event.target).value)"
+      [placeholder]="'orders.dialog.reasonCode.placeholder' | t"
+      [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+      data-testid="order-reason-dialog-code"
+    />
+    @if (reasonMissing()) {
+      <span class="q-caption reason-dialog__error" data-testid="order-reason-dialog-required">{{
+        'orders.dialog.reasonRequired' | t
+      }}</span>
     }
+  </label>
 
-    <div class="reason-dialog__actions">
-      <button type="button" class="reason-dialog__dismiss" (click)="close()" [disabled]="busy()">
-        {{ 'orders.dialog.dismiss' | t }}
-      </button>
-      <button
-        type="button"
-        class="reason-dialog__confirm"
-        (click)="submit()"
-        [disabled]="busy()"
-        data-testid="order-reason-dialog-confirm"
-      >
-        {{ confirmLabelKey() | t }}
-      </button>
-    </div>
-  </div>
-</div>
+  @if (noteEnabled()) {
+    <label class="reason-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.note.label' | t }}</span>
+      <textarea
+        class="reason-dialog__textarea q-body-sm"
+        rows="3"
+        [value]="note()"
+        (input)="setNote($any($event.target).value)"
+        data-testid="order-reason-dialog-note"
+      ></textarea>
+    </label>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="reason-dialog__dismiss q-body-sm"
+      (click)="close()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="reason-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="order-reason-dialog-confirm"
+    >
+      {{ confirmLabelKey() | t }}
+    </button>
+  </ng-container>
+</q-modal>

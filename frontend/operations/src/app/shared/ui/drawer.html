@@ -1,0 +1,27 @@
+<div
+  class="q-overlay__backdrop q-drawer__backdrop"
+  [class.q-drawer__backdrop--start]="side() === 'start'"
+  (mousedown)="onBackdropPress($event)"
+  (click)="onBackdropClick($event)"
+  data-testid="q-drawer-backdrop"
+>
+  <div
+    #panel
+    class="q-overlay__panel q-drawer"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-labelledby]="titleId"
+    tabindex="-1"
+    data-testid="q-drawer"
+  >
+    <h2 class="q-emphasis q-overlay__title" [id]="titleId">{{ title() }}</h2>
+
+    <div class="q-drawer__body">
+      <ng-content />
+    </div>
+
+    <div class="q-overlay__actions">
+      <ng-content select="[qDrawerActions]" />
+    </div>
+  </div>
+</div>

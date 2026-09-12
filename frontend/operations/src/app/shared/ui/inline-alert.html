@@ -1,0 +1,39 @@
+<div
+  class="q-inline-alert"
+  [class.q-inline-alert--info]="severity() === 'info'"
+  [class.q-inline-alert--success]="severity() === 'success'"
+  [class.q-inline-alert--warning]="severity() === 'warning'"
+  [class.q-inline-alert--error]="severity() === 'error'"
+  [attr.role]="role()"
+  data-testid="q-inline-alert"
+>
+  <span class="q-body-sm q-inline-alert__message">
+    @if (messageKey(); as key) {
+      {{ key | t }}
+    } @else {
+      {{ text() }}
+    }
+  </span>
+
+  @if (reference(); as ref) {
+    <span
+      class="q-mono q-caption q-inline-alert__reference"
+      data-testid="q-inline-alert-reference"
+      >{{ ref }}</span
+    >
+  }
+
+  <ng-content select="[qInlineAlertActions]" />
+
+  @if (dismissible()) {
+    <button
+      type="button"
+      class="q-inline-alert__dismiss q-caption"
+      [attr.aria-label]="'ui.alert.dismiss' | t"
+      (click)="dismiss.emit()"
+      data-testid="q-inline-alert-dismiss"
+    >
+      <span aria-hidden="true">✕</span>
+    </button>
+  }
+</div>

@@ -1,12 +1,17 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 
 import { CursorState, firstPage, nextPage, resetOnFilterChange } from '../../core/api/page';
-import { ApiError } from '../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatDate } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DeniedState } from '../../shared/ui/denied-state';
+import { EmptyState } from '../../shared/ui/empty-state';
+import { InlineAlert } from '../../shared/ui/inline-alert';
+import { Toasts } from '../../shared/ui/toast';
 import { describeApiError } from '../orders/order-errors';
 import { CreateCustomerDialog, CreateCustomerSubmission } from './create-customer-dialog';
 import { customerStatusLabel } from './customer-status';
@@ -16,6 +21,9 @@ import { CustomerCounts, CustomerExportRow, CustomerSummary, CustomersApi } from
 type StatusFilter = 'ALL' | 'ACTIVE' | 'SUSPENDED' | 'ANONYMIZED' | 'CLOSED';
 
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
+
+/** The capability `CustomerController`'s list endpoint declares — see `Capability.CUSTOMER_READ`. */
+const LIST_CAPABILITY = 'CUSTOMER_READ';
 
 /**
  * 5.1 Customer list — the CRM grid.
@@ -34,7 +42,7 @@ const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-customers-page',
-  imports: [TPipe, RouterOutlet, CreateCustomerDialog],
+  imports: [TPipe, RouterOutlet, CreateCustomerDialog, InlineAlert, DeniedState, EmptyState],
   templateUrl: './customers-page.html',
   styleUrl: './customers-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,9 +53,24 @@ export class CustomersPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly toasts = inject(Toasts);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
+  /**
+   * `null` while the denial is only "this operator has no location in scope"
+   * (`CurrentLocation.denied()`) — the server was never asked, so no
+   * capability was ever checked, and `q-denied-state` must not name one. Set
+   * to {@link LIST_CAPABILITY} only once a real `CUSTOMER_READ` 403 comes
+   * back from {@link load}'s own request. See `q-denied-state`'s own doc for
+   * why the distinction matters: a manager granting the named capability does
+   * nothing for an operator who simply has no location assigned.
+   */
+  protected readonly deniedCapability = signal<string | null>(null);
+  /** Distinct copy for "no location assigned" versus a genuine capability denial. */
+  protected readonly deniedAskKey = computed<MessageKey>(() =>
+    this.deniedCapability() === null ? 'ui.denied.ask.noLocation' : 'ui.denied.ask',
+  );
   protected readonly loadError = signal<string | null>(null);
   protected readonly customers = signal<readonly CustomerSummary[]>([]);
   protected readonly docked = signal(false);
@@ -139,10 +162,14 @@ export class CustomersPage {
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());
+      // No request was made, so no capability was ever checked — see
+      // `deniedCapability`'s own doc for why this must stay `null` here.
+      this.deniedCapability.set(null);
       this.loading.set(false);
       return;
     }
     this.denied.set(false);
+    this.deniedCapability.set(null);
     this.pageState = firstPage();
     try {
       const page = await this.api.list(scope, this.pageState, this.filters());
@@ -153,7 +180,12 @@ export class CustomersPage {
         this.pageState = next;
       }
     } catch (error) {
-      this.loadError.set(this.describe(error));
+      if (error instanceof ApiError && error.code === ApiErrorCode.INSUFFICIENT_CAPABILITY) {
+        this.denied.set(true);
+        this.deniedCapability.set(LIST_CAPABILITY);
+      } else {
+        this.loadError.set(this.describe(error));
+      }
     } finally {
       this.loading.set(false);
     }
@@ -193,6 +225,11 @@ export class CustomersPage {
         displayName: submission.displayName || null,
       });
       this.createDialogOpen.set(false);
+      // Announced through the shell's toast host rather than in the dialog: the
+      // dialog is already closed by this line, and the navigation two lines
+      // below replaces the screen behind it (ADR 0101, row `X.17`). The
+      // sentence carries no phone and no name — ADR 0029.
+      this.toasts.show({ message: this.i18n.t('customers.create.done'), tone: 'success' });
       await this.load();
       await this.loadCounts();
       void this.router.navigate([accountId], { relativeTo: this.route });

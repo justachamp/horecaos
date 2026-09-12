@@ -57,24 +57,32 @@
       </select>
     </div>
 
+    <!-- `q-inline-alert` picks the live-region role from the severity, so an
+         export failure interrupts a screen reader and an export *result* does
+         not (ADR 0101). Both used to be bare paragraphs, one of them with no
+         role at all. -->
     @if (exportError(); as message) {
-      <p class="q-body-sm error" role="alert">{{ message }}</p>
+      <q-inline-alert severity="error" [text]="message" />
     }
     @if (exportedRows(); as rows) {
-      <p class="q-body-sm export-notice">
-        {{ 'customers.export.done' | t: { count: rows.length } }}
-        <button type="button" class="link" (click)="dismissExportNotice()">
-          {{ 'customers.export.dismiss' | t }}
-        </button>
-      </p>
+      <q-inline-alert
+        severity="success"
+        [text]="'customers.export.done' | t: { count: rows.length }"
+        dismissible
+        (dismiss)="dismissExportNotice()"
+      />
     }
 
     @if (loading()) {
       <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
     } @else if (denied()) {
-      <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+      <q-denied-state
+        [capability]="deniedCapability()"
+        [askKey]="deniedAskKey()"
+        data-testid="customers-denied"
+      />
     } @else if (loadError(); as message) {
-      <p class="q-body-sm error" role="alert">{{ message }}</p>
+      <q-inline-alert severity="error" [text]="message" />
     } @else {
       <table class="table">
         <thead>
@@ -95,7 +103,9 @@
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="3">{{ 'customers.empty' | t }}</td>
+              <td class="empty" colspan="3">
+                <q-empty-state titleKey="customers.empty" data-testid="customers-empty" />
+              </td>
             </tr>
           }
         </tbody>

@@ -105,37 +105,11 @@
   font-size: 12px;
 }
 
+/* The empty row, the denied branch and the two notice bands are
+ * `q-empty-state`, `q-denied-state` and `q-inline-alert` now (ADR 0101); each
+ * brings its own padding and its own live-region role. */
 .empty {
-  color: var(--q-ink-subtle);
-  text-align: center;
-  padding: 20px;
-}
-
-.error {
-  color: var(--q-error-text);
-  background: var(--q-error-tint);
-  padding: 8px 12px;
-  border-radius: var(--q-radius);
-  max-width: 640px;
-  margin-top: 12px;
-}
-
-.denied {
-  color: var(--q-ink-muted);
-}
-
-.export-notice {
-  margin-top: 8px;
-}
-
-.link {
-  background: none;
-  border: none;
   padding: 0;
-  color: var(--q-primary);
-  cursor: pointer;
-  text-decoration: underline;
-  font: inherit;
 }
 
 .load-more {

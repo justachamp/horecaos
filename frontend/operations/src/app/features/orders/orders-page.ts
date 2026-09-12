@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { TPipe } from '../../core/i18n/t.pipe';
+import { SplitPane } from '../../shared/ui/split-pane';
 import { OrderQueue } from './order-queue';
 
 /**
@@ -25,7 +26,12 @@ import { OrderQueue } from './order-queue';
  *
  * The board is expected to shed its lower-value columns as the dock opens rather
  * than growing a horizontal scrollbar. That is the queue's job, not this
- * component's; the grid below simply guarantees the queue keeps a usable width.
+ * component's; `q-split-pane` simply guarantees the queue keeps a usable width.
+ *
+ * The layout itself is `q-split-pane` (ADR 0101) rather than a grid this file
+ * owns, which is what gives the split a drag handle and a width the `orders`
+ * section remembers between sessions. Four other sections carried a copy of
+ * the grid that used to be here.
  *
  * IA 1.4 (Drafts and abandoned carts) reaches the same dock through a header
  * link rather than the tab strip: a cart is not an order status, and putting
@@ -33,7 +39,7 @@ import { OrderQueue } from './order-queue';
  */
 @Component({
   selector: 'q-orders-page',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, OrderQueue],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, OrderQueue, SplitPane],
   templateUrl: './orders-page.html',
   styleUrl: './orders-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

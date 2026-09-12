@@ -18,6 +18,8 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ServiceStatus } from '../../shell/service-status';
+import { StatusPill } from '../../shared/ui/status-pill';
+import { Toasts } from '../../shared/ui/toast';
 import {
   DecisionIdRegistry,
   OrderActionResponse,
@@ -40,6 +42,7 @@ import {
   compareNewestFirst,
   compareOrderSeverity,
   computeOrderSeverity,
+  formatCountdown,
   formatSeverityCaption,
 } from './order-severity';
 import { orderStatusLabel } from './order-status';
@@ -112,7 +115,7 @@ interface RowDialogState {
  */
 @Component({
   selector: 'q-order-queue',
-  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog],
+  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog, StatusPill],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -124,6 +127,7 @@ export class OrderQueue implements OnInit {
   private readonly actionsApi = inject(OrderActionsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly serviceStatus = inject(ServiceStatus);
+  private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -307,6 +311,32 @@ export class OrderQueue implements OnInit {
     return formatSeverityCaption(severity, (key, values) => this.i18n.t(key, values));
   }
 
+  /**
+   * The status pill's lateness overlay — a marker beside the status word, never
+   * instead of it (ADR 0101, row `X.15`).
+   *
+   * Short on purpose: the full sentence is already under the order number, and
+   * a pill that carries «в очереди 1 ч 20 мин» is a pill that wraps the column.
+   * `AWAITING_APPROVAL_DEADLINE` shows its countdown rather than a word,
+   * because the number *is* the message at that tier.
+   *
+   * Derived per render from the same `OrderSeverity` the rail and the caption
+   * already use, so the three cannot disagree — which is precisely the gap this
+   * row names: "status and lateness read as two unrelated visual systems".
+   */
+  protected severityOverlay(severity: OrderSeverity): string | null {
+    switch (severity.level) {
+      case 'BLOCKED':
+        return this.i18n.t('orders.severity.pill.blocked');
+      case 'AWAITING_APPROVAL_DEADLINE':
+        return formatCountdown(severity.remainingMs ?? 0);
+      case 'NO_PROMISE_FALLBACK':
+        return this.i18n.t('orders.severity.pill.late');
+      case 'NORMAL':
+        return null;
+    }
+  }
+
   protected emptyMessage(): string {
     return this.activeTab() === 'attention'
       ? this.i18n.t('orders.queue.empty.attention')
@@ -484,6 +514,8 @@ export class OrderQueue implements OnInit {
             action: this.decisionActionLabel(result.effectiveAction),
           }),
         );
+      } else {
+        this.announceApplied();
       }
       void this.refresh();
     } catch (error) {
@@ -505,6 +537,7 @@ export class OrderQueue implements OnInit {
     this.setRowBusy(orderId, true);
     try {
       await firstValueFrom(request);
+      this.announceApplied();
       void this.refresh();
     } catch (error) {
       this.handleMutationError(orderId, error, { isDecision: false });
@@ -538,6 +571,23 @@ export class OrderQueue implements OnInit {
     if (notice.shouldReread) {
       void this.refresh();
     }
+  }
+
+  /**
+   * Says the mutation landed, in the one place the operator is certainly
+   * looking — the shell's toast host (ADR 0101, row `X.17`).
+   *
+   * Not a notice band, because the two settle paths that most need confirming
+   * are `Отменить` and `Отклонить`, and both close their dialog on success:
+   * a confirmation rendered inside a component that no longer exists is not a
+   * confirmation. The board itself re-reads a beat later, so this says only
+   * that something applied — the row is the record of *what*.
+   *
+   * No order number and no customer data in the text (ADR 0029): a toast is
+   * transient text on a terminal in a dining room.
+   */
+  private announceApplied(): void {
+    this.toasts.show({ message: this.i18n.t('orders.action.applied'), tone: 'success' });
   }
 
   private decisionActionLabel(effectiveAction: string): string {

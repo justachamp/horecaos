@@ -1,0 +1,42 @@
+<!-- Both regions exist from first paint, empty. A live region created at the
+     moment it gains content is often never announced — assistive technology
+     has to be watching it before the mutation happens. -->
+<div class="q-toasts" data-testid="q-toast-host">
+  <div class="q-toasts__region" role="alert" data-testid="q-toast-alerts">
+    @for (toast of alerts(); track toast.id) {
+      <div class="q-toast q-toast--error" data-testid="q-toast">
+        <span class="q-body-sm q-toast__message">{{ toast.message }}</span>
+        <button
+          type="button"
+          class="q-toast__dismiss q-caption"
+          [attr.aria-label]="dismissLabelKey | t"
+          (click)="dismiss(toast.id)"
+          data-testid="q-toast-dismiss"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+    }
+  </div>
+
+  <div class="q-toasts__region" role="status" aria-live="polite" data-testid="q-toast-statuses">
+    @for (toast of statuses(); track toast.id) {
+      <div
+        class="q-toast"
+        [class.q-toast--success]="toast.tone === 'success'"
+        data-testid="q-toast"
+      >
+        <span class="q-body-sm q-toast__message">{{ toast.message }}</span>
+        <button
+          type="button"
+          class="q-toast__dismiss q-caption"
+          [attr.aria-label]="dismissLabelKey | t"
+          (click)="dismiss(toast.id)"
+          data-testid="q-toast-dismiss"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+    }
+  </div>
+</div>

@@ -2694,4 +2694,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.callCentre.callLog.type.ENDED': 'Tugagan',
   'orders.callCentre.callLog.type.MISSED': 'O‘tkazib yuborilgan',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Uzatilgan',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
+  'ui.denied.capability': 'Yetishmayotgan huquq:',
+  'ui.denied.ask': 'Uni xodimlar rollarini tahrirlay oladigan rahbar bera oladi.',
+  'ui.denied.ask.noLocation': 'Menejerdan sizga joy biriktirishini soʻrang.',
+  'ui.locked.title': 'Joriy tarifga kirmagan',
+  'ui.locked.module': 'Modul:',
+  'ui.locked.ask': 'Uni tarifga hisob egasi qoʻsha oladi.',
+  'ui.alert.dismiss': 'Xabarni yopish',
+  'ui.toast.dismiss': 'Yopish',
+  'ui.splitPane.handle': 'Panel kengligini oʻzgartirish',
+
+  'orders.action.applied': 'Buyurtma yangilandi',
+  'customers.create.done': 'Mijoz yaratildi',
+
+  'orders.severity.pill.blocked': 'diqqat',
+  'orders.severity.pill.late': 'kechikmoqda',
 };

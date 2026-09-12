@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { Modal } from '../../shared/ui/modal';
 
 export interface OrderReasonSubmission {
   readonly reasonCode: string;
@@ -26,7 +27,7 @@ export interface OrderReasonSubmission {
  */
 @Component({
   selector: 'q-order-reason-dialog',
-  imports: [TPipe],
+  imports: [TPipe, Modal],
   templateUrl: './order-reason-dialog.html',
   styleUrl: './order-reason-dialog.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

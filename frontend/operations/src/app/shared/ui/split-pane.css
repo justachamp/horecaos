@@ -1,0 +1,64 @@
+:host {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+/* Grid, not flex, because the detail pane's width has to be *fixed* rather than
+ * content-derived — `orders-page.css` already carried this comment and the
+ * reason has not changed: a pane that resizes as its content loads makes the
+ * list beside it reflow mid-read, and the operator loses the row they were
+ * looking at. */
+.q-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0 0;
+  height: 100%;
+  min-width: 0;
+}
+
+.q-split--docked {
+  grid-template-columns: minmax(0, 1fr) auto var(--q-split-secondary);
+}
+
+.q-split__primary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Hairline elevation, never a shadow. The handle *is* the rule between the two
+ * panes, which is why the secondary has no border of its own. */
+.q-split__handle {
+  width: 5px;
+  background: var(--q-hairline);
+  background-clip: content-box;
+  border-inline: 2px solid transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.q-split:not(.q-split--docked) .q-split__handle,
+.q-split:not(.q-split--docked) .q-split__secondary {
+  display: none;
+}
+
+.q-split__handle:hover,
+.q-split--dragging .q-split__handle {
+  background-color: var(--q-primary);
+}
+
+.q-split__secondary {
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--q-canvas);
+}
+
+/* Below this the two panes together are narrower than the list alone needs, and
+ * the right answer is to stack rather than to squeeze. The five hand-written
+ * copies all shared this breakpoint; they no longer each own it. */
+@media (max-width: 1100px) {
+  .q-split--docked {
+    grid-template-columns: minmax(0, 1fr) auto minmax(280px, 38%);
+  }
+}

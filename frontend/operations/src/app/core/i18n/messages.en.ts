@@ -2701,6 +2701,33 @@ export const messagesEn = {
   'orders.callCentre.callLog.type.ENDED': 'Ended',
   'orders.callCentre.callLog.type.MISSED': 'Missed',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Transferred',
+
+  // --- shared/ui (ADR 0101) ----------------------------------------------
+  // The only keys in this catalogue owned by a component rather than by a
+  // screen. `ui.*` rather than a per-component namespace because there are
+  // nine components and they share four sentences between them.
+  'ui.denied.title': 'You do not have access to this',
+  'ui.denied.capability': 'Missing capability:',
+  'ui.denied.ask': 'A manager who can edit staff roles can grant it.',
+  'ui.denied.ask.noLocation': 'Ask a manager to assign you a location.',
+  'ui.locked.title': 'Not included in this plan',
+  'ui.locked.module': 'Module:',
+  'ui.locked.ask': 'The account owner can add it to the plan.',
+  'ui.alert.dismiss': 'Dismiss this message',
+  'ui.toast.dismiss': 'Dismiss',
+  'ui.splitPane.handle': 'Resize the detail pane',
+
+  // Announced after a mutation settles, by the toast host in the shell. No
+  // order number and no customer data: a toast is transient text on a shared
+  // terminal (ADR 0029).
+  'orders.action.applied': 'Order updated',
+  'customers.create.done': 'Customer created',
+
+  // The lateness overlay on the order board's status pill — a marker beside
+  // the status word, never instead of it. Short on purpose: the full sentence
+  // is already under the order number.
+  'orders.severity.pill.blocked': 'attention',
+  'orders.severity.pill.late': 'late',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */
