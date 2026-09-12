@@ -156,41 +156,59 @@
                       {{ actionLabel(row.order, action) }}
                     </button>
                   }
-                  @if (overflowActions(row.order).length > 0) {
-                    <div class="row-actions__overflow">
-                      <button
-                        type="button"
-                        class="row-actions__overflow-trigger"
-                        [disabled]="isRowBusy(row.order.orderId)"
-                        (click)="toggleOverflow(row.order.orderId, $event)"
-                        [attr.aria-label]="'orders.action.overflow' | t"
-                        [attr.aria-expanded]="openOverflowFor() === row.order.orderId"
-                        data-testid="order-row-overflow-trigger"
-                      >
-                        <span aria-hidden="true">⋯</span>
-                      </button>
-                      @if (openOverflowFor() === row.order.orderId) {
-                        <div
-                          class="row-actions__overflow-menu"
-                          data-testid="order-row-overflow-menu"
+                  <!-- §2.9: the overflow trigger renders on every row, terminal
+                       orders included — a closed actions[] never means there is
+                       nothing to do, only nothing left to mutate. Открыть and
+                       Копировать номер are client-only, capability-free reads
+                       (§2.9's general overflow list), so they lead every menu,
+                       terminal or not, ahead of whatever OrderActionsPolicy
+                       supplied for this status. -->
+                  <div class="row-actions__overflow">
+                    <button
+                      type="button"
+                      class="row-actions__overflow-trigger"
+                      [disabled]="isRowBusy(row.order.orderId)"
+                      (click)="toggleOverflow(row.order.orderId, $event)"
+                      [attr.aria-label]="'orders.action.overflow' | t"
+                      [attr.aria-expanded]="openOverflowFor() === row.order.orderId"
+                      data-testid="order-row-overflow-trigger"
+                    >
+                      <span aria-hidden="true">⋯</span>
+                    </button>
+                    @if (openOverflowFor() === row.order.orderId) {
+                      <div class="row-actions__overflow-menu" data-testid="order-row-overflow-menu">
+                        <button
+                          type="button"
+                          class="row-actions__overflow-item"
+                          (click)="openFromOverflow(row.order, $event)"
+                          data-testid="order-row-action-OPEN"
                         >
-                          @for (
-                            action of overflowActions(row.order);
-                            track action.action + (action.targetStatus ?? '')
-                          ) {
-                            <button
-                              type="button"
-                              class="row-actions__overflow-item"
-                              (click)="onActionClick(row.order, action, $event)"
-                              [attr.data-testid]="'order-row-action-' + action.action"
-                            >
-                              {{ actionLabel(row.order, action) }}
-                            </button>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
+                          {{ 'orders.action.open' | t }}
+                        </button>
+                        <button
+                          type="button"
+                          class="row-actions__overflow-item"
+                          (click)="copyOrderNumber(row.order, $event)"
+                          data-testid="order-row-action-COPY_NUMBER"
+                        >
+                          {{ 'orders.action.copyNumber' | t }}
+                        </button>
+                        @for (
+                          action of overflowActions(row.order);
+                          track action.action + (action.targetStatus ?? '')
+                        ) {
+                          <button
+                            type="button"
+                            class="row-actions__overflow-item"
+                            (click)="onActionClick(row.order, action, $event)"
+                            [attr.data-testid]="'order-row-action-' + action.action"
+                          >
+                            {{ actionLabel(row.order, action) }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
                 </div>
               </td>
             </tr>
