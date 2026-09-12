@@ -18,6 +18,12 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * <p>Read-only by design: the buckets are fixed per release so a chart drawn
  * last quarter keeps its meaning; a different set is a new version, not a
  * setting.
+ *
+ * <p>{@link ReportingController#slaBucketSet} is the tenant-readable twin
+ * (10.10c): same {@link SlaBucketSet}, same shape, over {@code
+ * REPORTING_READ} at {@code TENANT} scope rather than {@code PLATFORM_ADMIN}
+ * — settings.md 10.10 wants a tenant to see this version card and this class
+ * alone never let one.
  */
 @RestController
 @Tag(name = "Reference data", description = "The platform's own supported countries, locales and public holidays")

@@ -22,6 +22,7 @@ import uz.horecaos.platform.reporting.application.ReportQuery;
 import uz.horecaos.platform.reporting.application.ReportQueryService;
 import uz.horecaos.platform.reporting.domain.Grain;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
+import uz.horecaos.platform.reporting.domain.SlaBucketSet;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -117,6 +118,35 @@ public class ReportingController {
                                 bucket.shareBasisPoints()))
                         .toList(),
                 ProvenanceResponse.of(result.provenance())));
+    }
+
+    /**
+     * 10.10c: the version card settings.md 10.10 promises and never had. This
+     * mirrors {@link SlaBucketController}'s platform-admin read exactly —
+     * same {@link SlaBucketSet}, same shape — over {@link Capability#REPORTING_READ}
+     * at {@code TENANT} scope instead of {@code PLATFORM_ADMIN}, so a tenant
+     * can finally see which bucket definitions its own {@code /sla-buckets}
+     * distribution above was computed under, without being able to change
+     * them: the buckets are platform-fixed and versioned by ADR 0043, on
+     * purpose, and this endpoint states that rather than building the
+     * tenant-configurable boundary the frontend information architecture
+     * still promises at settings.md 1105/1325.
+     */
+    @GetMapping("/sla-bucket-set")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The elapsed-time buckets orders are reported in, and their version",
+            description = "Half-open intervals in minutes, exhaustive and fixed per version. "
+                    + "Read-only: ADR 0043 fixes the buckets platform-wide so a chart drawn "
+                    + "under one version keeps its meaning; this tenant can read the definition, "
+                    + "not edit it.")
+    public ResponseEntity<SlaBucketController.SlaBuckets> slaBucketSet(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(new SlaBucketController.SlaBuckets(
+                SlaBucketSet.VERSION,
+                SlaBucketSet.buckets().stream()
+                        .map(bucket -> new SlaBucketController.Bucket(
+                                bucket.code(), bucket.fromMinutes(), bucket.toMinutesExclusive()))
+                        .toList()));
     }
 
     @GetMapping("/preparation-time")
