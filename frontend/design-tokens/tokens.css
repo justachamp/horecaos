@@ -63,6 +63,16 @@ body {
 .q-data-lg  { font-size: 28px; font-weight: 300; line-height: 1.20; font-variant-numeric: tabular-nums; }
 .q-tnum     { font-variant-numeric: tabular-nums; }
 
+/* T23 — the wallboard's TV-distance step. The scale above tops out at 42px
+   (.q-display) for a screen read at arm's length; a wallboard hangs above the
+   pass and is read from several metres away, so a single rung sits above the
+   scale rather than the desk-distance top being stretched with an inline
+   style. q-wallboard-tile and the wallboard's own freshness stamp are its two
+   consumers — see frontend/operations/src/app/wallboard-shell/. Appended per
+   this file's own rule (see operations-gap-map.md's build notes): a token is
+   only ever appended here, never edited in place. */
+.q-display-tv { font-size: 128px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+
 /* Only transform and opacity animate. Console table data never animates. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

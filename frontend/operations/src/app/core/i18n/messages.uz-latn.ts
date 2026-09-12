@@ -1315,6 +1315,24 @@ export const messagesUzLatn: MessageCatalogue = {
   'today.operators.title': 'Operatorlar',
   'today.operators.notBuilt':
     'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
+
+  // ---- IA 0.1e / X/X.3 Devor taxtasi (wallboard-shell.ts) — T23 toʻlqini ----
+  'wallboard.title': 'Jonli taxta',
+  'wallboard.denied': 'Jonli taxtaga kirish huquqi yoʻq',
+  'wallboard.counters.inProgress': 'Jarayonda',
+  'wallboard.counters.cancelled': 'Bekor qilingan',
+  'wallboard.mix.source.title': 'Manba boʻyicha',
+  'wallboard.mix.type.title': 'Turi boʻyicha',
+  'wallboard.mix.empty': 'Jarayondagi buyurtmalar yoʻq',
+  'wallboard.branches.title': 'Filiallar boʻyicha yuklama',
+  'wallboard.branches.empty': 'Filiallar boʻyicha maʼlumot yoʻq',
+  'wallboard.branches.unavailable': 'Filiallar roʻyxatini yuklab boʻlmadi',
+  'wallboard.operators.notBuilt':
+    'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
+  'wallboard.fullscreen.enter': 'Toʻliq ekranga oʻtish',
+  'wallboard.freshness.loading': 'Ulanmoqda…',
+  'wallboard.freshness.seconds': '{seconds} soniya oldin yangilandi',
+  'wallboard.freshness.minutes': '{minutes} daqiqa oldin yangilandi',
   // Oshxona (2.1 Oshxona navbati, 2.5 Stop-roʻyxat) — 30-toʻlqin
   'kitchen.nav.label': 'Oshxona boʻlimlari',
   'kitchen.nav.queue': 'Navbat',

@@ -80,6 +80,14 @@ body {
 .q-data-lg  { font-size: 28px; font-weight: 300; line-height: 1.20; font-variant-numeric: tabular-nums; }
 .q-tnum     { font-variant-numeric: tabular-nums; }
 
+/* T23 — mirrors the TV-distance step added to the canonical
+   frontend/design-tokens/tokens.css. This copy has no regenerate script (see
+   ../README.md, "design-tokens/" — only control-plane's vendored copy is
+   checked by a script) so the wave that adds a step lands it here by hand too,
+   verified against the canonical file by eye, same as every other rule in
+   this file today. */
+.q-display-tv { font-size: 128px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+
 /* Only transform and opacity animate. Console table data never animates. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
